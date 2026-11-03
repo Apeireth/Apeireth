@@ -1,0 +1,23 @@
+{
+  "ok": true,
+  "failures": [],
+  "deferred": {
+    "mode": "deferred",
+    "pollute": 0,
+    "rows": 7,
+    "t_dom": 35.700000000186265,
+    "t_painted": 36.90000000037253,
+    "step": "already-windowized",
+    "errors": []
+  },
+  "sync": {
+    "mode": "sync",
+    "pollute": 0,
+    "rows": 7,
+    "t_dom": 18,
+    "t_painted": 28.40000000037253,
+    "step": "already-windowized",
+    "errors": []
+  },
+  "polluted": null
+}

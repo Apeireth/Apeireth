@@ -4,7 +4,7 @@
     "failures": [],
     "payload": "value=Some(\"a\");pos=None;checked=Some(false)",
     "g8_error_boundary_ok": true,
-    "g8_captured_error": "Unsupported: create_element() 失败：JsValue(InvalidCharacterError: Failed to execute 'createElement' on 'Document': The tag name provided ('') is not a valid name.\nInvalidCharacterError: Failed to execute 'createElement' on 'Document': The tag name provided ('') is not a valid name.\n    at http://127.0.0.1:39329/engine/pkg/p5b_harness.js:990:30\n    at handleError (http://127.0.0.1:39329/engine/pkg/p5b_harness.js:3276:18)\n    at __wbg_createElement_74049073a11f9c31 (http://127.0.0.1:39329/engine/pkg/p5b_harness.js:989:67)\n    at p5b_harness.wasm.<web_sys[3f0844a8ae53d195]::features::gen_Document::Document>::create_element::__wbg_createElement_74049073a11f9c31 externref shim (http://127.0.0.1:39329/engine/pkg/p5b_harness_bg.wasm:wasm-function[7290]:0x3ad8c5)\n    at p5b_harness.wasm.<web_sys[3f0844a8ae53d195]::features::gen_Document::Document>::create_element (http://127.0.0.1:39329/engine/pkg/p5b_harness_bg.wasm:wasm-function[6108]:0x3a0720)\n    at p5b_harness.wasm.<apeireth_ui_dom[5e09a18cf58f4121]::web::WebDom as apeireth_ui_dom[5e09a18cf58f4121]::dom::Dom>::create_element (http://127.0.0.1:39329/engine/pkg/p5b_harness_bg.wasm:wasm-function[3753]:0x359b18)\n    at p5b_harness.wasm.<apeireth_ui_dom[5e09a18cf58f4121]::renderer::Renderer<apeireth_ui_dom[5e09a18cf58f4121]::web::WebDom>>::mount_node (http://127.0.0.1:39329/engine/pkg/p5b_harness_bg.wasm:wasm-function[794]:0x135057)\n    at p5b_harness.wasm.<apeireth_ui_dom[5e09a18cf58f4121]::renderer::Renderer<apeireth_ui_dom[5e09a18cf58f4121]::web::WebDom>>::mount (http://127.0.0.1:39329/engine/pkg/p5b_harness_bg.wasm:wasm-function[2047]:0x2bd577)\n    at p5b_harness.wasm.<apeireth_ui_dom[5e09a18cf58f4121]::renderer::Renderer<apeireth_ui_dom[5e09a18cf58f4121]::web::WebDom>>::render_guarded (http://127.0.0.1:39329/engine/pkg/p5b_harness_bg.wasm:wasm-function[1548]:0x261fa7)\n    at p5b_harness.wasm.p5b_harness[6eeb4081362bc5a5]::l1_probe (http://127.0.0.1:39329/engine/pkg/p5b_harness_bg.wasm:wasm-function[675]:0xa657a))",
+    "g8_captured_error": "Unsupported: create_element() 失败：JsValue(InvalidCharacterError: Failed to execute 'createElement' on 'Document': The tag name provided ('') is not a valid name.\nInvalidCharacterError: Failed to execute 'createElement' on 'Document': The tag name provided ('') is not a valid name.\n    at http://127.0.0.1:41565/engine/pkg/p5b_harness.js:1063:30\n    at handleError (http://127.0.0.1:41565/engine/pkg/p5b_harness.js:3349:18)\n    at __wbg_createElement_74049073a11f9c31 (http://127.0.0.1:41565/engine/pkg/p5b_harness.js:1062:67)\n    at p5b_harness.wasm.<web_sys[3f0844a8ae53d195]::features::gen_Document::Document>::create_element::__wbg_createElement_74049073a11f9c31 externref shim (http://127.0.0.1:41565/engine/pkg/p5b_harness_bg.wasm:wasm-function[7305]:0x3afe2b)\n    at p5b_harness.wasm.<web_sys[3f0844a8ae53d195]::features::gen_Document::Document>::create_element (http://127.0.0.1:41565/engine/pkg/p5b_harness_bg.wasm:wasm-function[6119]:0x3a2bd9)\n    at p5b_harness.wasm.<apeireth_ui_dom[5e09a18cf58f4121]::web::WebDom as apeireth_ui_dom[5e09a18cf58f4121]::dom::Dom>::create_element (http://127.0.0.1:41565/engine/pkg/p5b_harness_bg.wasm:wasm-function[3757]:0x35bc58)\n    at p5b_harness.wasm.<apeireth_ui_dom[5e09a18cf58f4121]::renderer::Renderer<apeireth_ui_dom[5e09a18cf58f4121]::web::WebDom>>::mount_node (http://127.0.0.1:41565/engine/pkg/p5b_harness_bg.wasm:wasm-function[794]:0x1350c1)\n    at p5b_harness.wasm.<apeireth_ui_dom[5e09a18cf58f4121]::renderer::Renderer<apeireth_ui_dom[5e09a18cf58f4121]::web::WebDom>>::mount (http://127.0.0.1:41565/engine/pkg/p5b_harness_bg.wasm:wasm-function[2050]:0x2bf5d2)\n    at p5b_harness.wasm.<apeireth_ui_dom[5e09a18cf58f4121]::renderer::Renderer<apeireth_ui_dom[5e09a18cf58f4121]::web::WebDom>>::render_guarded (http://127.0.0.1:41565/engine/pkg/p5b_harness_bg.wasm:wasm-function[1549]:0x263903)\n    at p5b_harness.wasm.p5b_harness[6eeb4081362bc5a5]::l1_probe (http://127.0.0.1:41565/engine/pkg/p5b_harness_bg.wasm:wasm-function[675]:0xa65d4))",
     "g8_panic_hook": "installed",
     "engine_form": {
       "x": 8,
@@ -55,7 +55,7 @@
   },
   "deferredWindow": {
     "step1": {
-      "mount_millis": 0
+      "mount_millis": 1
     },
     "step2": {
       "ok": true,
@@ -70,32 +70,32 @@
     "failures": [],
     "width": 8,
     "depth": 4,
-    "elements": 37481,
+    "elements": 37480,
     "row_elements": 4681,
-    "mount_millis": 139,
-    "update_millis": 97,
+    "mount_millis": 134,
+    "update_millis": 91,
     "screen_rows": 22,
     "screen_nodes": 46,
     "screen_update_millis": 0.03,
     "screen_update_micros": 30,
-    "screen_clock_probe": 1793699797703,
+    "screen_clock_probe": 1793701708458,
     "screen_min_sample": 0.025,
-    "build_millis": 4,
+    "build_millis": 3,
     "compared_nodes": 42138,
     "written_nodes": 8
   },
   "realLoad": {
     "ok": true,
     "failures": [],
-    "mount_millis": 73,
-    "input_redraw_millis": 0.125,
-    "scroll_redraw_millis": 0.06,
-    "mounted_rows": 8,
+    "mount_millis": 62,
+    "input_redraw_millis": 0.1,
+    "scroll_redraw_millis": 0.055,
+    "mounted_rows": 7,
     "rows_millis": 0,
-    "guarded_millis": 1,
-    "window_millis": 72,
-    "window_plan_millis": 72,
-    "window_write_millis": 0,
+    "guarded_millis": 0,
+    "window_millis": 62,
+    "window_plan_millis": 61,
+    "window_write_millis": 1,
     "window_plan2_millis": 0,
     "rounds": 400
   },
@@ -104,8 +104,21 @@
     "failures": [],
     "rows_after_mount": 7,
     "rows_after_tick": 7,
+    "tick_redrawn": true,
+    "tick_scroll_seen": false,
+    "tick_window_error": null,
+    "tick_patch_error": null,
     "dump_mount": "row[行 0], row[行 1], row[行 2], row[行 3], row[行 4], row[行 5], row[行 6], vlist-spacer-after[]",
-    "dump_tick": "row[行 0], row[行 1], row[行 2], row[行 3], row[行 4], row[行 5], row[行 6], vlist-spacer-after[]"
+    "dump_tick": ""
+  },
+  "w0SyncProbe": {
+    "rows": 7,
+    "client_height": 200
+  },
+  "patchChildren": {
+    "after_mount": 3,
+    "after_clear": 0,
+    "after_refill": 3
   },
   "binding": {
     "ok": true,

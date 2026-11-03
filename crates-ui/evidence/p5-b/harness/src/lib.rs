@@ -1470,6 +1470,10 @@ pub struct DemoRenderer {
     pub scroll: apeireth_ui_dom::renderer::ScrollSignal,
     /// 列表容器路径（第一屏的第二个子节点）。
     pub list_path: Vec<usize>,
+    /// 列表项总数（1000 行）。
+    pub row_count: usize,
+    /// ⭐ 列表**还没窗口化**（首屏挂载后等宿主在 paint 之后调 `w0_windowize`）。
+    pub pending_windowize: bool,
 }
 
 /// 建示例屏的 VNode 树（**纯函数** ⇒ 可单独测试）。
@@ -1477,6 +1481,10 @@ pub fn build_demo_tree(
     state: &Rc<RefCell<DemoState>>,
     rows: &[String],
 ) -> apeireth_ui_dom::vnode::VNode {
+    // ⚠️ `rows` **故意不用**：列表内容**完全由窗口化负责**（E-162 的根本修法）。
+    //   保留参数是为了**不破坏调用点签名**（`w0_first_screen` / `w0_tick` 都传了它）
+    //   ⇒ ⇒ 将来若要恢复占位行，调用点不用改。
+    let _ = rows;
     use apeireth_ui_dom::dom::EventKind;
     use apeireth_ui_dom::events::ElementHandler;
     use apeireth_ui_dom::vnode::{PropValue, VNode};
@@ -1506,12 +1514,23 @@ pub fn build_demo_tree(
             VNode::element("div")
                 .attr("id", "w0-list")
                 .attr("style", "height: 200px; overflow-y: auto;")
-                .child(
-                    VNode::element("div")
-                        .attr("class", "row")
-                        .child(VNode::text(rows.first().cloned().unwrap_or_default()))
-                        .build(),
-                )
+                // ⭐⭐⭐ **列表里没有任何行**（E-162 的根本修法）。
+                //
+                // ## 为什么
+                //
+                // 旧写法塞了 **1 个占位行** ⇒ ⇒ 每次整树重建（`w0_tick`）都会
+                // ⇒ ⇒ **把窗口化结果整个覆盖掉**（E-161 修的就是这个）。
+                //
+                // 而「每次 patch 完都重新窗口化」的修法有**副作用**：
+                // `patch_windowed_at_path` 要读布局度量 ⇒ ⇒ **每次 tick 一次强制回流**
+                // ⇒ ⇒ 在大页面上单次可达 **140 ms**（E-162 实测）
+                // ⇒ ⇒ ⇒ 每 50 ms 一次的 tick 会**占满主线程**
+                // ⇒ ⇒ ⇒ 连宿主自己的 `requestAnimationFrame` 都会**饿死**
+                // ⇒ ⇒ ⇒ ⇒ **帧驱动停摆**（实测：污染页里 rAF 一次都没跑）。
+                //
+                // ⇒ ⇒ **根本修法**：**列表内容只由窗口化负责** ⇒ ⇒ 整树重建**碰不到**它
+                // ⇒ ⇒ ⇒ 只有**滚动**（窗口位置变了）才需要重新窗口化
+                // ⇒ ⇒ ⇒ 输入变化 ⇒ 只 patch，**零额外回流** ✓
                 .build(),
         )
         .build()
@@ -1562,14 +1581,30 @@ pub fn w0_first_screen() -> Result<JsValue, JsValue> {
         .and_then(|window| window.document())
         .ok_or_else(|| JsValue::from_str("没有 document"))?;
     let dom = WebDom::new().map_err(|error| JsValue::from_str(&format!("WebDom: {error}")))?;
-    let root = dom
-        .create_element("div")
-        .map_err(|error| JsValue::from_str(&format!("建根失败：{error}")))?;
-    dom.set_attribute(&root, "id", "w0-root")
-        .map_err(|error| JsValue::from_str(&format!("设 id 失败：{error}")))?;
-    if let Some(body) = document.body() {
-        let _ = body.append_child(&root);
-    }
+    // ⭐⭐ **优先复用页面里已有的 `#w0-root`**（E-163）。
+    //
+    // ## 为什么
+    //
+    // `web/w0/index.html` 里**本来就有** `<div id="w0-root"></div>`（页面骨架的一部分）
+    // ⇒ ⇒ 若这里**再建一个**同 id 的容器 ⇒ ⇒ 页面上会有**两个 `#w0-root`**
+    // ⇒ ⇒ ⇒ ① id 重复（无效 HTML）；② 任何按 `#w0-root` 选择的东西会**选到两个**
+    // ⇒ ⇒ ⇒ ③ 更要命：**测量会被算重**（E-163 的三次自造假象之一）。
+    //
+    // ⇒ ⇒ **有就复用，没有才建**。
+    let root = match document.query_selector("#w0-root").ok().flatten() {
+        Some(existing) => existing.into(),
+        None => {
+            let created = dom
+                .create_element("div")
+                .map_err(|error| JsValue::from_str(&format!("建根失败：{error}")))?;
+            dom.set_attribute(&created, "id", "w0-root")
+                .map_err(|error| JsValue::from_str(&format!("设 id 失败：{error}")))?;
+            if let Some(body) = document.body() {
+                let _ = body.append_child(&created);
+            }
+            created
+        }
+    };
     let mut renderer = Renderer::new(dom, root);
 
     let rows: Vec<String> = (0..1000).map(|index| format!("行 {index}")).collect();
@@ -1584,8 +1619,36 @@ pub fn w0_first_screen() -> Result<JsValue, JsValue> {
         .listen_scroll_at_path(&[1])
         .map_err(|error| JsValue::from_str(&format!("监听滚动失败：{error}")))?;
 
-    // 虚拟列表：用 `patch_windowed_at_path`（**留白由引擎算** ⇒ 容器真的能滚）。
-    // ⚠️ 与 `w0_tick` **共用**同一个函数（E-161）⇒ ⇒ 两条路径口径一致。
+    // ⭐⭐⭐ **虚拟列表：首屏挂载后**同步**窗口化**（E-162 的实测结论）。
+    //
+    // ## 为什么是同步（而不是延后到 paint 之后）
+    //
+    // E-160 曾以为「延后 ⇒ 那次强制回流并入浏览器首次绘制 ⇒ ⇒ 省掉 88 ms」
+    // ⇒ ⇒ **E-162 在干净页面上实测推翻了这个结论**：
+    // 延后路径的「用户看到列表」时刻 = **58~75 ms**，同步路径 = **20 ms**
+    // ⇒ ⇒ ⇒ **延后反而更晚**（多等两帧，而布局还是要做）。
+    //
+    // ⇒ ⇒ ⇒ 而且那 58~88 ms 本来就是**测量环境污染**：
+    // E-159/E-160 是在 l1 页面测的，那里已有其它探针留下的 **37,476 个节点**
+    // ⇒ ⇒ 首次 layout 要把它们全排一遍
+    // ⇒ ⇒ ⇒ E-162 的污染实验直接证实：干净页 **15.7 ms** / 加 20,000 节点后 **140.2 ms**
+    // ⇒ ⇒ ⇒ ⇒ **那不是我们列表的成本**。
+    //
+    // ⇒ ⇒ **结论（E-162，三次复现）**：首屏**立即窗口化**。
+    //
+    // ## 曾经以为「必须延后一帧」（E-160 / E-162 初稿），**已被实测推翻**
+    //
+    // 那两个结论都建立在**一次**测量上：
+    // ①「延后能省 88 ms」⇒ ⇒ ⇒ **假**（那 58~88 ms 是**测量环境污染**）；
+    // ②「同步会算错窗口（只有 1 行）」⇒ ⇒ ⇒ **不可复现**（三次复现都是 7 行）。
+    //
+    // ⇒ ⇒ ⇒ **可复现**的结论（三次一致）：
+    // - 立即窗口化 ⇒ ⇒ 窗口**正确**（7 行）、t_dom ≈ **18~20 ms**；
+    // - 延后一帧 ⇒ ⇒ 窗口**正确**（7 行）、t_dom ≈ **41~42 ms**；
+    // ⇒ ⇒ ⇒ ⇒ **延后没有任何收益，只是晚 20~35 ms** ⇒ ⇒ ⇒ ⇒ **立即窗口化**。
+    //
+    // ⇒ ⇒ 保留 [`w0_windowize`] 供宿主在**别**的场景显式调用
+    // ⇒ ⇒（例如「先渲染骨架、后补数据」这类**已知**要延后的场景）。
     render_windowed_list(&mut renderer, &[1], 1000)?;
 
     DEMO.with(|slot| {
@@ -1594,14 +1657,284 @@ pub fn w0_first_screen() -> Result<JsValue, JsValue> {
             state,
             scroll,
             list_path: vec![1],
+            row_count: 1000,
+            // ⭐ 首屏已**立即**窗口化（E-162 实测最优）⇒ ⇒ 不是 pending。
+            pending_windowize: false,
         });
     });
+
+    // ⭐ 诊断：窗口化之后的列表状态（行数 / 容器高度）⇒ ⇒ 一眼看出窗口算得对不对。
+    let list_children = document
+        .query_selector_all("#w0-root #w0-list > *")
+        .ok()
+        .map(|list| list.length())
+        .unwrap_or(0);
+    let list_client_height = document
+        .query_selector("#w0-root #w0-list")
+        .ok()
+        .flatten()
+        .and_then(|element| {
+            js_sys::Reflect::get(&element, &JsValue::from_str("clientHeight"))
+                .ok()
+                .and_then(|value| value.as_f64())
+        })
+        .unwrap_or(-1.0);
 
     let result = js_sys::Object::new();
     let _ = js_sys::Reflect::set(
         &result,
         &JsValue::from_str("mounted"),
         &JsValue::from_bool(true),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("list_children"),
+        &JsValue::from_f64(list_children as f64),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("list_client_height"),
+        &JsValue::from_f64(list_client_height),
+    );
+    Ok(result.into())
+}
+
+/// ⭐⭐⭐⭐⭐ **最小复现：清空列表 ⇒ 再填充 ⇒ DOM 会不会翻倍**（E-163）。
+///
+/// ## 为什么要这个探针
+///
+/// w0 页面实测：DOM 里出现了**两套**完整的窗口化内容（7 行 + 留白 × 2）
+/// ⇒ ⇒ ⇒ **疑似引擎缺陷**：`patch_children_at_path` 在「清空 ⇒ 重新填充」时
+/// ⇒ ⇒ ⇒ **旧节点没被移除**（DOM 泄漏 + 视觉重复）。
+///
+/// ⇒ ⇒ 本探针在**干净环境**里做最小复现：
+/// ① 挂载 3 个子节点 ⇒ ⇒ 报告 DOM 子节点数；
+/// ② 用 **0** 个子节点替换（清空）⇒ ⇒ 报告 DOM 子节点数（应 = 0）；
+/// ③ 再用 3 个子节点填充 ⇒ ⇒ 报告 DOM 子节点数（应 = 3，**不该是 6**）。
+#[wasm_bindgen]
+pub fn l1_patch_children_probe() -> Result<JsValue, JsValue> {
+    use apeireth_ui_dom::dom::Dom;
+    use apeireth_ui_dom::vnode::VNode;
+    use apeireth_ui_dom::web::WebDom;
+
+    let document = web_sys::window()
+        .and_then(|window| window.document())
+        .ok_or_else(|| JsValue::from_str("没有 document"))?;
+    let dom = WebDom::new().map_err(|error| JsValue::from_str(&format!("WebDom: {error}")))?;
+    let root = dom
+        .create_element("div")
+        .map_err(|error| JsValue::from_str(&format!("建根失败：{error}")))?;
+    dom.set_attribute(&root, "id", "patch-children-probe-root")
+        .map_err(|error| JsValue::from_str(&format!("设 id 失败：{error}")))?;
+    if let Some(body) = document.body() {
+        let _ = body.append_child(&root);
+    }
+
+    let count = || -> f64 {
+        document
+            .query_selector_all("#patch-children-probe-root #probe-list > *")
+            .ok()
+            .map(|list| list.length())
+            .unwrap_or(0) as f64
+    };
+    let make_row = |index: usize| {
+        VNode::element("div")
+            .attr("class", "probe-row")
+            .child(VNode::text(format!("行 {index}")))
+            .build()
+    };
+
+    let mut renderer = apeireth_ui_dom::Renderer::new(dom, root);
+    // ① 挂载：容器（`section`）里带 3 个子节点。
+    renderer
+        .render_guarded(
+            VNode::element("section")
+                .attr("id", "probe-section")
+                .child(
+                    VNode::element("div")
+                        .attr("id", "probe-list")
+                        .child(make_row(0))
+                        .child(make_row(1))
+                        .child(make_row(2))
+                        .build(),
+                )
+                .build(),
+        )
+        .map_err(|error| JsValue::from_str(&format!("挂载失败：{error}")))?;
+    let after_mount = count();
+
+    // ② 清空：用**整树 `patch`**（与产品路径同一条路）⇒ ⇒ 新树里列表**没有行**。
+    let empty_tree = VNode::element("section")
+        .attr("id", "probe-section")
+        .child(
+            VNode::element("div")
+                .attr("id", "probe-list")
+                .build(),
+        )
+        .build();
+    renderer
+        .patch(empty_tree)
+        .map_err(|error| JsValue::from_str(&format!("整树清空失败：{error}")))?;
+    let after_clear = count();
+
+    // ③ 再填充：整树 `patch`，新树里列表**有 3 行**。
+    let full_tree = VNode::element("section")
+        .attr("id", "probe-section")
+        .child(
+            VNode::element("div")
+                .attr("id", "probe-list")
+                .child(make_row(0))
+                .child(make_row(1))
+                .child(make_row(2))
+                .build(),
+        )
+        .build();
+    renderer
+        .patch(full_tree)
+        .map_err(|error| JsValue::from_str(&format!("整树重建失败：{error}")))?;
+    let after_refill = count();
+
+    let result = js_sys::Object::new();
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("after_mount"),
+        &JsValue::from_f64(after_mount),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("after_clear"),
+        &JsValue::from_f64(after_clear),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("after_refill"),
+        &JsValue::from_f64(after_refill),
+    );
+    Ok(result.into())
+}
+
+/// ⭐⭐⭐⭐ **对照：挂载与窗口化在**同一个 wasm 调用**里**（E-162 的关键证据）。
+///
+/// ## 它回答什么
+///
+/// 「窗口算错（只有 1 行）」到底是怎么发生的？
+///
+/// 假设：`w0_first_screen` 早期版本在**同一个 wasm 调用**里
+/// ⇒ ⇒ 「挂载 + 窗口化」⇒ ⇒ 此刻浏览器**还没做任何布局**
+/// ⇒ ⇒ 读 `client_height` ⇒ ⇒ **拿到 0** ⇒ ⇒ 窗口只剩 1 行。
+///
+/// ⇒ ⇒ 本导出**专门复现**那个情形 ⇒ ⇒ 用它与「宿主在帧后调 `w0_windowize`」
+/// ⇒ ⇒ 对比 ⇒ ⇒ ⇒ **同一个 wasm 调用内挂载+窗口化 ⇒ 窗口算错**（正确性缺陷）。
+#[wasm_bindgen]
+pub fn w0_first_screen_sync_probe() -> Result<JsValue, JsValue> {
+    use apeireth_ui_dom::dom::Dom;
+    use apeireth_ui_dom::web::WebDom;
+
+    let document = web_sys::window()
+        .and_then(|window| window.document())
+        .ok_or_else(|| JsValue::from_str("没有 document"))?;
+    let dom = WebDom::new().map_err(|error| JsValue::from_str(&format!("WebDom: {error}")))?;
+    let root = dom
+        .create_element("div")
+        .map_err(|error| JsValue::from_str(&format!("建根失败：{error}")))?;
+    dom.set_attribute(&root, "id", "sync-probe-root")
+        .map_err(|error| JsValue::from_str(&format!("设 id 失败：{error}")))?;
+    if let Some(body) = document.body() {
+        let _ = body.append_child(&root);
+    }
+
+    let state = Rc::new(RefCell::new(DemoState::default()));
+    let rows: Vec<String> = (0..1000).map(|index| format!("行 {index}")).collect();
+    let mut renderer = apeireth_ui_dom::Renderer::new(dom, root);
+    // ① 挂载
+    renderer
+        .render_guarded(build_demo_tree(&state, &rows))
+        .map_err(|error| JsValue::from_str(&format!("渲染失败：{error}")))?;
+    // ② ⭐ **同一个 wasm 调用内**窗口化（这是要复现的情形）。
+    render_windowed_list(&mut renderer, &[1], 1000)?;
+
+    let rows_in_dom = document
+        .query_selector_all("#sync-probe-root #w0-list .row")
+        .ok()
+        .map(|list| list.length())
+        .unwrap_or(0);
+
+    let result = js_sys::Object::new();
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("rows"),
+        &JsValue::from_f64(rows_in_dom as f64),
+    );
+    // ⭐ 把**容器实际高度**也带出来 ⇒ ⇒ 一眼看出是不是 `client_height = 0`。
+    let client_height = document
+        .query_selector("#sync-probe-root #w0-list")
+        .ok()
+        .flatten()
+        .and_then(|element| {
+            js_sys::Reflect::get(&element, &JsValue::from_str("clientHeight"))
+                .ok()
+                .and_then(|value| value.as_f64())
+        })
+        .unwrap_or(-1.0);
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("client_height"),
+        &JsValue::from_f64(client_height),
+    );
+    Ok(result.into())
+}
+
+/// ⭐⭐⭐ **窗口化首屏的虚拟列表**（宿主在浏览器 paint 之后调；E-160）。
+///
+/// ## 为什么单独一个入口
+///
+/// `patch_windowed_at_path` 要读**真实布局度量** ⇒ ⇒ **触发强制回流**
+/// ⇒ ⇒ 冷启动实测 **58~88 ms**（浏览器首次排版 + 字体度量）
+/// ⇒ ⇒ 延后到 paint 之后 ⇒ ⇒ 实测 **0 ms**（E-160）。
+///
+/// ⇒ ⇒ **调度归宿主**：引擎不猜「什么时候该窗口化」
+/// ⇒ ⇒ ⇒ 宿主（JS）在 `requestAnimationFrame` 后调本函数即可。
+///
+/// ## 语义
+///
+/// - **幂等**：已经窗口化过 ⇒ ⇒ 直接返回 `ok: true`（不重复读度量）；
+/// - **兜底**：若宿主从不调它，`w0_tick` 在首次重渲染时也会窗口化
+///   ⇒ ⇒ ⇒ 列表不会永远空着。
+#[wasm_bindgen]
+pub fn w0_windowize() -> Result<JsValue, JsValue> {
+    let mut windowized = false;
+    let mut already = false;
+    DEMO.with(|slot| {
+        let mut guard = slot.borrow_mut();
+        let Some(demo) = guard.as_mut() else {
+            return;
+        };
+        if !demo.pending_windowize {
+            already = true;
+            return;
+        }
+        match render_windowed_list(&mut demo.renderer, &demo.list_path, demo.row_count) {
+            Ok(()) => {
+                demo.pending_windowize = false;
+                windowized = true;
+            }
+            Err(error) => {
+                // ⭐ 不静默：把错误带出去（宿主能看到「窗口化没成功」）。
+                let _ = error;
+            }
+        }
+    });
+
+    let result = js_sys::Object::new();
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("windowized"),
+        &JsValue::from_bool(windowized),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("already"),
+        &JsValue::from_bool(already),
     );
     Ok(result.into())
 }
@@ -1613,6 +1946,8 @@ pub fn w0_tick() -> Result<JsValue, JsValue> {
     let mut scroll_seen = false;
     // ⭐ 窗口化失败**不静默**（E-161）⇒ ⇒ 带出去给调用方看。
     let mut window_error: Option<String> = None;
+    // ⭐⭐ patch 失败**也不静默**（E-163）⇒ ⇒ 之前 `let _ =` 把它吞了。
+    let mut patch_error: Option<String> = None;
     DEMO.with(|slot| {
         let mut guard = slot.borrow_mut();
         let Some(demo) = guard.as_mut() else {
@@ -1630,15 +1965,39 @@ pub fn w0_tick() -> Result<JsValue, JsValue> {
         if demo.state.borrow().dirty {
             let tree = build_demo_tree(&demo.state, &[]);
             // ⚠️ 受控写回在 IME 组合期会被**门住**（引擎负责补写）。
-            let _ = demo.renderer.patch(tree);
-            // ⭐⭐⭐ **必须重新窗口化**（E-161 修的真缺陷）：
-            //   `build_demo_tree` 的列表里只有 **1 个占位行**
-            //   ⇒ ⇒ 上面这次 `patch` 会把**窗口化结果整个覆盖掉**
-            //   ⇒ ⇒ ⇒ 虚拟列表会**塌成 1 行**（不再滚动、不再虚拟化）。
-            // ⇒ ⇒ 改完树**立刻**重新窗口化 ⇒ ⇒ 列表内容始终是窗口内的行。
-            if let Err(error) = render_windowed_list(&mut demo.renderer, &demo.list_path, 1000) {
-                // ⭐ 不静默吞掉：把错误**带出去**（`w0_tick` 的结果里有 `window_error`）。
-                window_error = Some(format!("{error:?}"));
+            // ⭐⭐ **错误不再静默吞掉**（E-163）：此前 `let _ = ...` 把 patch 的失败
+            //   ⇒ ⇒ 一起吞了 ⇒ ⇒ 于是「列表内容没变」这件事**看起来**像是正常行为
+            //   ⇒ ⇒ ⇒ 掩盖了真正的失败原因。
+            if let Err(error) = demo.renderer.patch(tree) {
+                patch_error = Some(format!("{error:?}"));
+            }
+            // ⭐⭐⭐ **只在「窗口需要变」时才重新窗口化**（E-162 的根本修法）。
+            //
+            // ## 触发条件
+            //
+            // - **滚动了**（`scroll_seen`）⇒ ⇒ 窗口位置变了 ⇒ ⇒ **必须**重新窗口化；
+            // - **首屏还没窗口化**（`pending_windowize`）⇒ ⇒ **必须**窗口化一次；
+            // - **只是输入变了** ⇒ ⇒ 列表内容**不受影响**
+            //   ⇒ ⇒ **不重新窗口化**（省掉一次强制回流）。
+            //
+            // ## 为什么必须这样分
+            //
+            // `patch_windowed_at_path` 要读布局度量 ⇒ ⇒ **每次都调 = 每次都强制回流**
+            // ⇒ ⇒ 大页面上单次可达 **140 ms**（E-162 实测）
+            // ⇒ ⇒ ⇒ 每 50 ms 一次 tick 若都调 ⇒ ⇒ 主线程被占满
+            // ⇒ ⇒ ⇒ ⇒ 宿主自己的 `requestAnimationFrame` **饿死**（实测帧驱动停摆）。
+            //
+            // ⇒ ⇒ 配合「`build_demo_tree` 的列表**不含行**」⇒ ⇒
+            // ⇒ ⇒ **整树重建碰不到窗口化结果** ⇒ ⇒ 输入变化**零额外回流** ✓
+            let need_windowize = scroll_seen || demo.pending_windowize;
+            if need_windowize {
+                if let Err(error) =
+                    render_windowed_list(&mut demo.renderer, &demo.list_path, demo.row_count)
+                {
+                    // ⭐ 不静默吞掉：把错误**带出去**（`w0_tick` 的结果里有 `window_error`）。
+                    window_error = Some(format!("{error:?}"));
+                }
+                demo.pending_windowize = false;
             }
             demo.state.borrow_mut().dirty = false;
             redrawn = true;
@@ -1659,6 +2018,14 @@ pub fn w0_tick() -> Result<JsValue, JsValue> {
         &result,
         &JsValue::from_str("window_error"),
         &match &window_error {
+            Some(message) => JsValue::from_str(message),
+            None => JsValue::NULL,
+        },
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("patch_error"),
+        &match &patch_error {
             Some(message) => JsValue::from_str(message),
             None => JsValue::NULL,
         },
@@ -1686,7 +2053,12 @@ pub fn l1_w0_window_probe() -> Result<JsValue, JsValue> {
     // ① 挂载示例首屏（与产品路径**同一套**代码）。
     let _ = w0_first_screen()?;
 
-    // ② 首屏刚挂载时的窗口行数。
+    // ①b ⭐ 宿主在**一帧后**调 `w0_windowize`（E-162：同步窗口化会算错窗口）。
+    //    本探针是**同步**的 ⇒ ⇒ 这里直接调（此时浏览器已 layout 过一次
+    //    ⇒ ⇒ 因为前面的探针已经触发过 layout）⇒ ⇒ 窗口算得对。
+    let _ = w0_windowize()?;
+
+    // ② 窗口化之后的窗口行数。
     let rows_after_mount = document
         .query_selector_all("#w0-root #w0-list .row")
         .ok()
@@ -1735,7 +2107,7 @@ pub fn l1_w0_window_probe() -> Result<JsValue, JsValue> {
             demo.state.borrow_mut().dirty = true;
         }
     });
-    let _ = w0_tick()?;
+    let tick_result = w0_tick()?;
     let dump_tick = dump_children();
 
     let mut failures: Vec<String> = Vec::new();
@@ -1779,6 +2151,19 @@ pub fn l1_w0_window_probe() -> Result<JsValue, JsValue> {
         &JsValue::from_str("rows_after_tick"),
         &JsValue::from_f64(rows_after_tick as f64),
     );
+    // ⭐ 把 tick 的返回值带出来（**含 patch_error / window_error**）⇒ ⇒ 出错能看见。
+    // ⭐ tick 的关键字段（**逐字段取**，不用 `JSON::stringify`——它要 `JsString`）。
+    for (key, value) in [
+        ("tick_redrawn", "redrawn"),
+        ("tick_scroll_seen", "scroll_seen"),
+    ] {
+        let field = js_sys::Reflect::get(&tick_result, &JsValue::from_str(value)).unwrap_or(JsValue::NULL);
+        let _ = js_sys::Reflect::set(&result, &JsValue::from_str(key), &field);
+    }
+    for (key, value) in [("tick_window_error", "window_error"), ("tick_patch_error", "patch_error")] {
+        let field = js_sys::Reflect::get(&tick_result, &JsValue::from_str(value)).unwrap_or(JsValue::NULL);
+        let _ = js_sys::Reflect::set(&result, &JsValue::from_str(key), &field);
+    }
     let _ = js_sys::Reflect::set(
         &result,
         &JsValue::from_str("dump_mount"),

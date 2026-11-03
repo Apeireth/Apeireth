@@ -100,6 +100,18 @@ try {
   results.w0Window = { ok: false, failures: [`W0 窗口化保持性探针抛错：${String(error)}`] };
 }
 try {
+  // ⭐ 对照：挂载与窗口化在**同一个 wasm 调用**里 ⇒ ⇒ 窗口可能算错（E-162）。
+  results.w0SyncProbe = p5b.w0_first_screen_sync_probe();
+} catch (error) {
+  results.w0SyncProbe = { error: `同步窗口化对照探针抛错：${String(error)}` };
+}
+try {
+  // ⭐⭐ 最小复现：清空 ⇒ 再填充 ⇒ DOM 会不会翻倍（E-163）。
+  results.patchChildren = p5b.l1_patch_children_probe();
+} catch (error) {
+  results.patchChildren = { error: `patch_children 最小复现抛错：${String(error)}` };
+}
+try {
   results.binding = p5b.l1_binding_probe();
 } catch (error) {
   results.binding = { ok: false, failures: [`绑定探针抛错：${String(error)}`] };
