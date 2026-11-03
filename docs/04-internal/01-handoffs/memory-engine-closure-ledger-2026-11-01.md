@@ -301,3 +301,28 @@ Class:           STATUS
 1. **推前跑 `clobber_check.py <远端基点树> <我的树>`**（仓外工具）；
 2. **验证要带 `--all-targets`**（`cargo clippy --all-targets` / `cargo test --workspace`）
    ⇒ ⇒ **`--lib` 绿不代表集成测试能编译**。
+
+### 10.8 🟢 **2026-11-03 续做：P2 生产接线收口**
+**远端 tip = `959d4cd49668`**
+
+| 交付 | 位置 | 说明 |
+|---|---|---|
+| ⭐ **水位按会话隔离**（修缺陷） | `consolidation_trigger.rs` | 原实现是**单个全局时间戳** ⇒ 一个会话整编会推进另一个会话的水位 ⇒ 后者**永远等不到新料 ⇒ 静默停止整编**（无任何报错）⇒ 改为按会话键（内存 `HashMap` / 文件 `{"sessions":{...}}`） |
+| **coordinator 挂驱动 + 统一入口** | `coordinator.rs` | `with_consolidation_trigger`（**缺省 = 无** ⇒ 行为一字不变）· `run_consolidation_at`（挂了走增量、没挂走**旧路径**） |
+| ⭐ **生产装配接上驱动** | `runtime-assembly/canonical/production.rs` | 水位文件 `<data_root>/memory/consolidation-watermark.json`（**跨进程持久化**）· **建不出目录 ⇒ 不挂 ⇒ 走旧路径**（不阻断启动）· **窗口 = 0**（时间闸留给既有 `APEIRETH_TUNE_CONSOLIDATION_CADENCE` 旋钮） |
+| **调用点改统一入口** | `runtime-assembly/canonical/cognitive.rs` | `run_consolidation(&session)` ⇒ `run_consolidation_at(&session, now)`（**失败语义沿用原样**） |
+| **新工具（仓外）** | `win_check.py` | 本地交叉编译复现「**只有 Windows 红**」的 CI 故障（GNU 目标 + `cargo check` + `--keep-going`） |
+
+**本地实测**：`cargo test -p apeireth-memory --lib` ⇒ **916 passed / 0 failed**；
+`cargo test -p apeireth-runtime-assembly` ⇒ 全绿；
+`clippy -p apeireth-memory -p apeireth-runtime-assembly --all-targets -- -D warnings` ⇒ 零警告；
+`audit_unwired --check` / `group_unwired_baseline --check` / `check_mod_files` / `check_dead_code` ⇒ 全绿。
+
+### 10.9 ⚠️ 纪律第 8 条：**同步远端时别把自己的改动弄丢**
+11-03 实测：我用「snapshot 提交（树 = 远端 tip）+ `reset --hard`」同步他的新提交
+⇒ ⇒ **snapshot 的树就是他的树** ⇒ ⇒ **我工作树里自己的改动被覆盖掉了**（提交还在，但工作树没了）。
+⇒ ⇒ **正确做法**（11-03 第二次做对了）：
+1. 先查「他这轮有没有动我要改的文件」（逐文件比 blob sha）；
+2. **他没动** ⇒ 直接 `git checkout <我的提交> -- <文件>` 套回来；
+3. **他动了** ⇒ 必须**重新打补丁**（不能整文件覆盖）；
+4. 套回来后**必须重跑测试**（他的新提交可能带别的改动）。
