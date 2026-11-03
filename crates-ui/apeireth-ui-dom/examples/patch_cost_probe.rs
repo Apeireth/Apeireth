@@ -82,12 +82,56 @@ fn build(
         .build()
 }
 
-/// 数**真实 DOM 节点**（`InMemoryDom` 的树形后端）。
+/// 数**真实 DOM 节点**（`InMemoryDom` 的树形后端）—— **含文本节点**。
 fn count_nodes(dom: &InMemoryDom, node: apeireth_ui_dom::dom::InMemoryNodeId) -> usize {
     let children = dom.children(&node).unwrap_or_default();
     let mut total = 1;
     for child in children {
         total += count_nodes(dom, child);
+    }
+    total
+}
+
+/// ⭐⭐⭐ 数**元素节点**（native **树内**口径）。
+///
+/// ⚠️ 与浏览器侧的**边界差异**（E-166 已查清，勿再误判）：
+/// - **native**：从**渲染树根**递归 ⇒ ⇒ 数的是**树内**元素；
+/// - **浏览器**：`document.querySelectorAll('*')` ⇒ ⇒ 数的是**整页**元素
+///   （树 + 页面骨架 `html`/`head`/`body`/`meta`/`script`/`title` 等）。
+///
+/// ⇒ ⇒ 实测（同一棵树 `8×4`）：native 树内 **37,458** / 浏览器整页 **37,477**
+/// ⇒ ⇒ **差 19 = 页面骨架元素** ⇒ ⇒ ⇒ **不是结构差异**。
+///
+/// ⇒ ⇒ ✅ **可比的口径是 `.perf-row` 计数**：两端都是 **4,681** ⇒ ⇒ **完全一致**
+/// ⇒ ⇒ ⇒ 树的**结构**两端相同 ⇒ ⇒ ⇒ 「每节点成本」的两端数字**可以互比**。
+///
+/// ## 为什么需要这个口径说明（E-166）
+///
+/// - 浏览器侧数的是 `document.querySelectorAll('*')` ⇒ ⇒ **只数元素**（**不含文本节点**）；
+/// - native 侧原先的 `count_nodes` ⇒ ⇒ **含文本节点**。
+///
+/// ⇒ ⇒ 两个数字**口径不同** ⇒ ⇒ **不能直接比** ⇒ ⇒ ⇒ 「37,458 vs 37,477」
+/// ⇒ ⇒ ⇒ 那个「接近」是**巧合**（两边各自的口径误差方向相反）⇒ ⇒ ⇒ **必须写清口径**。
+///
+/// ⇒ ⇒ 现在**两个口径都输出** ⇒ ⇒ 以后谁拿这两个数字对比，都不会再误判。
+fn count_rows(dom: &InMemoryDom, node: apeireth_ui_dom::dom::InMemoryNodeId) -> usize {
+    let children = dom.children(&node).unwrap_or_default();
+    let mut total = usize::from(
+        dom.tag(node).as_deref() == Some("div")
+            && dom.attribute(node, "class").as_deref() == Some("perf-row"),
+    );
+    for child in children {
+        total += count_rows(dom, child);
+    }
+    total
+}
+
+fn count_elements(dom: &InMemoryDom, node: apeireth_ui_dom::dom::InMemoryNodeId) -> usize {
+    let children = dom.children(&node).unwrap_or_default();
+    // `tag()` 返回 `Some` ⇒ 元素；`None` ⇒ 文本节点（**不计入元素数**）。
+    let mut total = usize::from(dom.tag(node).is_some());
+    for child in children {
+        total += count_elements(dom, child);
     }
     total
 }
@@ -113,11 +157,13 @@ fn main() {
     let mount_micros = start_mount.elapsed().as_micros();
 
     let nodes = count_nodes(renderer.dom(), root);
+    let elements = count_elements(renderer.dom(), root);
+    let rows = count_rows(renderer.dom(), root);
 
     println!("== native 侧 patch 成本（{WIDTH}×{DEPTH}）==");
     println!(
-        "挂载 = {} ms | 真实 DOM 节点 = {nodes}",
-        mount_micros / 1000
+        "挂载 = {} ms | 树内节点 = {nodes} | **树内元素 = {elements}** | **树内 .perf-row = {rows}**（浏览器侧 `.perf-row` 实测 4681 ⇒ 同口径）",
+        mount_micros / 1000,
     );
 
     let mut samples: Vec<u128> = Vec::with_capacity(REPEATS);
