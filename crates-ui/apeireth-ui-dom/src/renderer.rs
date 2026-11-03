@@ -724,6 +724,14 @@ impl<D: Dom> Renderer<D> {
                 MountedNode::Element(element) => {
                     element.children = next;
                     element.vnode.children = children;
+                    // ⭐⭐⭐ **自动标记「虚拟化接管」**（E-165）。
+                    //
+                    // 这个位置的子节点**由虚拟化负责**（窗口内容）
+                    // ⇒ ⇒ 后续**整树 `patch`** 遇到它 ⇒ ⇒ **跳过子节点差分**
+                    // ⇒ ⇒ ⇒ 窗口内容**不会被清空 / 覆盖**
+                    // ⇒ ⇒ ⇒ （E-164 的滚动位置丢失 / E-161 的窗口塌陷 ⇒ ⇒ 一起消失）
+                    // ⇒ ⇒ ⇒ **调用方不需要任何额外操作** ⇒ ⇒ 也不可能忘记。
+                    element.vnode.virtualized = true;
                 }
                 MountedNode::Fragment(fragment) => {
                     fragment.children = next;
@@ -1347,14 +1355,33 @@ impl<D: Dom> Renderer<D> {
                 // 元素的子节点 = **该元素的全部**子节点 ⇒ 尾部锚点 = `None`
                 // （子节点都挂在元素内部）。
                 // ⚠️ `children` 这一段**含递归** ⇒ 天然是大头候选。
-                let children = seg!(self, children, {
-                    self.patch_children(
-                        &old_element.dom,
-                        &old_element.children,
-                        &new_element.children,
-                        None,
-                    )?
-                });
+                //
+                // ⭐⭐⭐ **虚拟化接管 ⇒ 跳过子节点差分**（E-165）。
+                //
+                // 被标记的元素，其子节点由**虚拟化**负责（虚拟列表的窗口内容）
+                // ⇒ ⇒ 整树 patch 拿树里的内容去差分它会**清空**或**覆盖**窗口
+                // ⇒ ⇒ ⇒ 后果：① 内容高度塌陷 ⇒ ⇒ **浏览器把 `scrollTop` 夹回 0**
+                // ⇒ ⇒ ⇒ （E-164：用户的滚动位置丢失）；② 窗口塌成 1 行（E-161）。
+                //
+                // ⇒ ⇒ **原样保留已挂载的子节点** ⇒ ⇒ 两个后果一起消失。
+                //
+                // ⚠️ **双向判定**：新树里**或**旧树里**任一**标了 ⇒ ⇒ 都跳过。
+                //   理由：调用方建的树**通常不知道**哪些子树归虚拟化管
+                //   ⇒ ⇒ 而**已挂载树**记着（`patch_windowed_at_path` 自动打的标记）
+                //   ⇒ ⇒ ⇒ 以「旧树也标了」为准 ⇒ ⇒ **调用方零感知** ✓
+                let children = if new_element.virtualized || old_element.vnode.virtualized {
+                    // ⚠️ **不**动 DOM ⇒ ⇒ 只把已挂载的子节点带进新树。
+                    old_element.children.clone()
+                } else {
+                    seg!(self, children, {
+                        self.patch_children(
+                            &old_element.dom,
+                            &old_element.children,
+                            &new_element.children,
+                            None,
+                        )?
+                    })
+                };
                 // property 在**子节点之后**打（同挂载时的理由）。
                 seg!(self, props, {
                     self.patch_props(&old_element.dom, &old_element.vnode, new_element)?
@@ -2719,7 +2746,97 @@ mod tests {
         assert!(!signal.peek(), "click 不得触发滚动信号");
     }
 
-    /// ⭐⭐ **1k 行只挂窗口**（L1-G5 规模不变量）：挂载数 O(窗口)，不是 O(行数)。
+    /// ⭐⭐⭐ **虚拟化子树不被整树 patch 清空**（E-165）。
+    ///
+    /// ## 它锁住什么
+    ///
+    /// 虚拟列表的窗口内容**不是**树的一部分 ⇒ ⇒ 整树 `patch` 拿树里的内容
+    /// （通常是「空」或「占位行」）去差分它 ⇒ ⇒ ⇒ **清空 / 覆盖**窗口
+    /// ⇒ ⇒ ⇒ 后果：① 内容高度塌陷 ⇒ ⇒ **浏览器把 `scrollTop` 夹回 0**
+    /// ⇒ ⇒ ⇒ （E-164：滚动位置丢失）；② 窗口塌成 1 行（E-161）。
+    ///
+    /// ⇒ ⇒ **引擎级保证**：`patch_windowed_at_path` 之后
+    /// ⇒ ⇒ ⇒ **整树 patch 必须原样保留窗口内容** ⇒ ⇒ ⇒ 调用方**零感知**。
+    #[test]
+    fn virtualized_subtree_survives_whole_tree_patch() {
+        use crate::dom::{ElementBox, ScrollMetrics};
+        use crate::vnode::VNode;
+
+        let (mut renderer, root) = renderer_with_dom();
+        // ① 挂载：容器（列表区在 `[0]`）里**没有**行（模拟「树里列表是空的」）。
+        renderer
+            .mount(
+                VNode::element("div")
+                    .child(VNode::element("div").attr("id", "list").build())
+                    .build(),
+            )
+            .expect("挂载必须成功");
+        // ①b 注入度量（`InMemoryDom` 不实现真实测量 ⇒ 窗口计算需要它）。
+        //    ⚠️ **路径语义**：根 = **宿主根**；`root` 的子节点 = **已挂载树的根元素**
+        //    ⇒ ⇒ `node_at_path(&[0])` = **已挂载树根元素的第一个子节点** = `div#list`
+        //    ⇒ ⇒ 度量必须注在**那一个**节点上。
+        let mounted_root = renderer.dom().children(&root).expect("读子节点必须成功")[0];
+        let list_container = renderer
+            .dom()
+            .children(&mounted_root)
+            .expect("读子节点必须成功")[0];
+        renderer.dom().script_measurement(
+            list_container,
+            ElementBox::new(0.0, 0.0, 300.0, 300.0),
+            ScrollMetrics {
+                scroll_top: 0.0,
+                scroll_height: 40_000.0,
+                client_height: 300.0,
+            },
+        );
+
+        // ② 虚拟化写入窗口（3 行）。
+        let heights = vec![40.0_f64; 100];
+        renderer
+            .patch_windowed_at_path(&[0], &heights, 2, |index| {
+                VNode::element("div")
+                    .attr("class", "row")
+                    .child(VNode::text(format!("行 {index}")))
+                    .build()
+            })
+            .expect("窗口化必须成功");
+        let rows_after_window = renderer
+            .dom()
+            .children(&root)
+            .expect("读子节点必须成功")
+            .len();
+        assert_eq!(rows_after_window, 1, "窗口化后根下应有 1 个列表容器");
+        let list = renderer.dom().children(&root).expect("读子节点必须成功")[0];
+        let window_rows = renderer
+            .dom()
+            .children(&list)
+            .expect("读子节点必须成功")
+            .len();
+        assert!(window_rows > 0, "窗口化后列表里应有窗口行");
+
+        // ③ ⭐ **整树 patch**：新树里列表**依然是空的**（调用方不知道窗口内容）。
+        renderer
+            .patch(
+                VNode::element("div")
+                    .child(VNode::element("div").attr("id", "list").build())
+                    .build(),
+            )
+            .expect("整树 patch 必须成功");
+
+        // ④ ⭐ 窗口内容必须**原样保留**。
+        let list_after = renderer.dom().children(&root).expect("读子节点必须成功")[0];
+        let rows_after_patch = renderer
+            .dom()
+            .children(&list_after)
+            .expect("读子节点必须成功")
+            .len();
+        assert_eq!(
+            rows_after_patch, window_rows,
+            "⭐ 整树 patch 后窗口内容必须原样保留（{window_rows} → {rows_after_patch}）"
+        );
+    }
+
+    /// ⭐⭐ **1k 行只挂窗口**（L1-G5 规模不变量）：挂载数 O(窗口），不是 O(行数)。
     #[test]
     fn thousand_row_list_mounts_only_a_window() {
         use crate::dom::{ElementBox, ScrollMetrics};

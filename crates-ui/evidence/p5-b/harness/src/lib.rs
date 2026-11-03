@@ -1487,6 +1487,9 @@ thread_local! {
     static DEMO: RefCell<Option<DemoRenderer>> = const { RefCell::new(None) };
     /// ⭐ 诊断用：`w0_first_screen` 里「挂监听后立刻派发 scroll」的 `peek()` 结果。
     static SCROLL_PROBE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// ⭐⭐⭐ **E-165 验证开关**：树里的列表**只留容器、不输出窗口的行**
+    ///   ⇒ ⇒ 模拟「调用方完全不知道窗口内容」⇒ ⇒ 验证**引擎级保证**。
+    static BLANK_LIST: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 /// 示例屏的渲染器 + 状态（放一起，便于 tick 时一起用）。
@@ -1569,7 +1572,16 @@ fn build_list_node(state: &Rc<RefCell<DemoState>>) -> apeireth_ui_dom::vnode::VN
 
     let window = state.borrow().window;
     let mut children: Vec<VNode> = Vec::new();
-    if window.valid {
+    // ⭐⭐⭐ **E-165 验证开关**：把树里的列表**清空**（模拟「调用方不知道窗口内容」）
+    //   ⇒ ⇒ 若引擎的「虚拟化接管」保证生效 ⇒ ⇒ 整树 patch **不会**清空窗口
+    //   ⇒ ⇒ ⇒ 滚动位置**不会**丢。
+    // ⚠️ 生产上**不该**这样（树的列表是空的 ⇒ 引擎也认不出这是列表）
+    //   ⇒ ⇒ 这里只是**验证引擎级保证** ⇒ ⇒ 用环境变量开关。
+    // ⚠️⚠️ **「留空」= 容器还在、只是**不输出窗口的行**（E-165 的验证语义）。
+    //   ⇒ ⇒ 容器**必须**在树里（否则窗口化**无处可写**）
+    //   ⇒ ⇒ ⇒ 验证的是「**容器在、内容不在**」这一种真实形态。
+    let blank_list = BLANK_LIST.with(|slot| slot.get());
+    if window.valid && !blank_list {
         if window.offset > 0.0 {
             children.push(
                 VNode::element("div")
@@ -2122,6 +2134,12 @@ pub fn l1_scroll_signal_probe() -> Result<JsValue, JsValue> {
         &JsValue::from_bool(after),
     );
     Ok(result.into())
+}
+
+/// ⭐⭐⭐ **设置「树里的列表只留容器、不输出行」开关**（E-165 验证用；**仅测试**）。
+#[wasm_bindgen]
+pub fn w0_set_blank_list(blank: bool) {
+    BLANK_LIST.with(|slot| slot.set(blank));
 }
 
 /// ⭐⭐⭐⭐ **对照：挂载与窗口化在**同一个 wasm 调用**里**（E-162 的关键证据）。

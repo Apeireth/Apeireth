@@ -52,6 +52,12 @@ if (POLLUTE > 0) {
   document.body.appendChild(box);
 }
 
+// ⓪ ⭐⭐⭐ **E-165 验证开关**：`?blank=1` ⇒ ⇒ 树里的列表**故意留空**
+//   ⇒ ⇒ 模拟「调用方完全不知道窗口内容」⇒ ⇒ 验证**引擎级保证**。
+if (new URLSearchParams(location.search).has("blank")) {
+  p5b.w0_set_blank_list(true);
+}
+
 // ① 首屏挂载（**只挂容器**：虚拟列表延后到 paint 之后才窗口化）。
 // ⚠️⚠️ **只调一次**！此前诊断代码把它调了**两次**（try 块 + 赋值）
 //   ⇒ ⇒ 挂载了**两个** `#w0-root` ⇒ ⇒ 选择器 `#w0-root #w0-list > *`

@@ -5,8 +5,8 @@
     "mode": "deferred",
     "pollute": 0,
     "rows": 9,
-    "t_dom": 33,
-    "t_painted": 35.10000000055879,
+    "t_dom": 55.59999999997672,
+    "t_painted": 56,
     "step": "already-windowized",
     "errors": []
   },
@@ -14,8 +14,8 @@
     "mode": "sync",
     "pollute": 0,
     "rows": 9,
-    "t_dom": 18.100000000558794,
-    "t_painted": 23.799999999813735,
+    "t_dom": 20.599999999976717,
+    "t_painted": 20.900000000023283,
     "step": "already-windowized",
     "errors": []
   },

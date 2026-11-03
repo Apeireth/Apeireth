@@ -411,6 +411,33 @@ pub struct ElementVNode {
     pub handlers: Vec<(EventKind, ElementHandler)>,
     /// 子节点。
     pub children: Vec<VNode>,
+    /// ⭐⭐⭐ **此元素的子节点由「虚拟化」接管**（E-165）。
+    ///
+    /// ## 它解决什么
+    ///
+    /// 虚拟列表的**窗口内容**（行 + 前后留白）**不是**树的一部分
+    /// ⇒ ⇒ 它由 [`crate::renderer::Renderer::patch_windowed_at_path`] 单独写入
+    /// ⇒ ⇒ ⇒ 而**整树 `patch`** 会拿树里的内容去差分它
+    /// ⇒ ⇒ ⇒ ⇒ **两个后果（都实测过）**：
+    ///
+    /// ① 树里的列表是「空」⇒ ⇒ 整树 patch 把窗口内容**清空**
+    ///    ⇒ ⇒ 内容高度塌陷 ⇒ ⇒ **浏览器把 `scrollTop` 夹回 0**
+    ///    ⇒ ⇒ ⇒ **用户的滚动位置丢失**（E-164）；
+    /// ② 树里的列表是「占位行」⇒ ⇒ 整树 patch 把窗口内容**覆盖成 1 行**
+    ///    ⇒ ⇒ ⇒ **虚拟列表塌陷**（E-161）。
+    ///
+    /// ⇒ ⇒ **标记这个元素** ⇒ ⇒ 整树 patch 遇到它 ⇒ ⇒ **跳过子节点差分**
+    /// ⇒ ⇒ ⇒ **已挂载的窗口内容原样保留** ⇒ ⇒ ⇒ 两个后果**一起消失**。
+    ///
+    /// ## 用法
+    ///
+    /// - [`crate::renderer::Renderer::patch_windowed_at_path`] 会**自动**给该路径
+    ///   上的元素打上这个标记（⇒ ⇒ 后续整树 patch 自动跳过）；
+    /// - 手动打标记：`.virtualized()`（**自管窗口内容**时用）。
+    ///
+    /// ⚠️ 打了标记 ⇒ ⇒ 整树 patch **不会**更新该元素的子节点
+    /// ⇒ ⇒ ⇒ **窗口内容只能由虚拟化自己更新**（这正是意图）。
+    pub virtualized: bool,
 }
 
 impl ElementVNode {
@@ -425,7 +452,17 @@ impl ElementVNode {
             bindings: Vec::new(),
             handlers: Vec::new(),
             children: Vec::new(),
+            virtualized: false,
         }
+    }
+
+    /// ⭐⭐⭐ **标记：此元素的子节点由「虚拟化」接管**（E-165）。
+    ///
+    /// ⇒ ⇒ 整树 `patch` 遇到它 ⇒ ⇒ **跳过子节点差分** ⇒ ⇒ 已挂载内容原样保留
+    /// ⇒ ⇒ ⇒ 虚拟列表的窗口内容**不会被整树重建清空/覆盖**（E-161 / E-164 的病根）。
+    pub fn virtualized(mut self) -> Self {
+        self.virtualized = true;
+        self
     }
 
     /// ⭐ 追加一个 **property 双向绑定**（信号 ⇄ DOM property）。
