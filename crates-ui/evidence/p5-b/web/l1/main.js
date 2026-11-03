@@ -27,6 +27,17 @@ try {
 }
 // ⭐ 帧驱动验证：改信号（不调 flush）⇒ 等**下一帧** ⇒ DOM 应当自动更新。
 results.app.after_frame = { ok: false, failures: ["帧后探针未执行"] };
+
+// ⭐⭐ 「延后一帧再窗口化」实验（E-160）：
+//   ① 第一步（**同步**、此刻）：挂载容器但**不**窗口化；
+//   ② 第二步（**四帧后**，浏览器已 paint）：才窗口化 ⇒ ⇒ 量「延后后」的耗时
+//   ⇒ ⇒ 验证「88 ms 能否并入浏览器首次绘制」。
+try {
+  results.deferredWindow = { step1: p5b.l1_deferred_window_probe() };
+} catch (error) {
+  results.deferredWindow = { ok: false, failures: [`延后窗口化(第一步)抛错：${String(error)}`] };
+}
+
 requestAnimationFrame(() => {
   requestAnimationFrame(() => {
     try {
@@ -34,6 +45,20 @@ requestAnimationFrame(() => {
     } catch (error) {
       results.app.after_frame = { ok: false, failures: [`帧后探针抛错：${String(error)}`] };
     }
+    // ⭐ 延后窗口化的**第二步**：再多等两帧 ⇒ ⇒ 浏览器已 paint ⇒ ⇒ 再窗口化。
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        try {
+          results.deferredWindow.step2 = p5b.l1_deferred_window_probe_after_frame();
+        } catch (error) {
+          results.deferredWindow.step2 = {
+            ok: false,
+            failures: [`延后窗口化(第二步)抛错：${String(error)}`],
+          };
+        }
+      });
+    });
+
     let rendersAtDispose = 0;
     try {
       results.app.dispose = p5b.l1_app_dispose_probe();

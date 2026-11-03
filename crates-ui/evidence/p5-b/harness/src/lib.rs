@@ -1622,6 +1622,180 @@ pub fn w0_tick() -> Result<JsValue, JsValue> {
     Ok(result.into())
 }
 
+/// ⭐⭐⭐⭐ **「延后一帧再窗口化」实验探针**（2026-11-03；E-160）。
+///
+/// ## 它回答什么
+///
+/// E-159 定位到：首屏挂载的 88 ms 是**浏览器首次 layout**（读度量 ⇒ 强制回流）
+/// ⇒ ⇒ **冷 88 ms / 热 0 ms**。
+///
+/// ⭐ 关键问题：**这 88 ms 能不能避免？**
+///
+/// 假设：若宿主策略是「**先渲染容器，不窗口化**；等浏览器**画完一帧**后再窗口化」
+/// ⇒ ⇒ 那时浏览器**已经做过一次 layout** ⇒ ⇒ ⇒ 延后窗口化的那次度量读取
+/// ⇒ ⇒ ⇒ **应该接近 0** ⇒ ⇒ ⇒ ⇒ **88 ms 整个消失**（不是变快，是**并入**了
+/// ⇒ ⇒ ⇒ ⇒ 浏览器本来就要付的首次绘制代价）。
+///
+/// ## 两步用法（与 `l1_app_probe` / `_after_frame` 同模式）
+///
+/// 1. `l1_deferred_window_probe()` —— 挂载容器（**不**窗口化），返回挂载耗时；
+/// 2. JS 侧等一帧后调 `l1_deferred_window_probe_after_frame()` —— 窗口化并量耗时。
+#[wasm_bindgen]
+pub fn l1_deferred_window_probe() -> Result<JsValue, JsValue> {
+    // ⚠️ `Dom` trait 必须引（`create_element` / `set_attribute` 是 trait 方法）。
+    use apeireth_ui_dom::dom::Dom;
+    use apeireth_ui_dom::web::WebDom;
+
+    let document = web_sys::window()
+        .and_then(|window| window.document())
+        .ok_or_else(|| JsValue::from_str("没有 document"))?;
+    let now_ms = || js_sys::Date::now();
+
+    let dom = WebDom::new().map_err(|error| JsValue::from_str(&format!("WebDom: {error}")))?;
+    let root = dom
+        .create_element("div")
+        .map_err(|error| JsValue::from_str(&format!("建根失败：{error}")))?;
+    dom.set_attribute(&root, "id", "deferred-window-root")
+        .map_err(|error| JsValue::from_str(&format!("设 id 失败：{error}")))?;
+    if let Some(body) = document.body() {
+        let _ = body.append_child(&root);
+    }
+
+    let state = Rc::new(RefCell::new(DemoState::default()));
+    let rows: Vec<String> = (0..1000).map(|index| format!("行 {index}")).collect();
+
+    // ① 只挂载容器（**不**窗口化）⇒ ⇒ 浏览器尚未被迫做滚动容器的 layout。
+    let mount_start = now_ms();
+    let mut renderer = apeireth_ui_dom::Renderer::new(dom, root);
+    renderer
+        .render_guarded(build_demo_tree(&state, &rows))
+        .map_err(|error| JsValue::from_str(&format!("挂载失败：{error}")))?;
+    let mount_millis = now_ms() - mount_start;
+
+    // 把渲染器留在全局，**帧后**再用（窗口化要读真实度量）。
+    DEFERRED.with(|slot| {
+        *slot.borrow_mut() = Some(DeferredRenderer { renderer });
+    });
+
+    let result = js_sys::Object::new();
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("mount_millis"),
+        &JsValue::from_f64(mount_millis),
+    );
+    Ok(result.into())
+}
+
+/// ⭐⭐⭐⭐ **「延后一帧再窗口化」实验探针 · 帧后**（2026-11-03；E-160）。
+#[wasm_bindgen]
+pub fn l1_deferred_window_probe_after_frame() -> Result<JsValue, JsValue> {
+    use apeireth_ui_dom::vnode::VNode;
+
+    let now_ms = || js_sys::Date::now();
+    let mut failures: Vec<String> = Vec::new();
+
+    let mut measured = 0.0_f64;
+    DEFERRED.with(|slot| {
+        let mut guard = slot.borrow_mut();
+        let Some(deferred) = guard.as_mut() else {
+            failures.push(String::from("⚠️ 没找到延后窗口化的渲染器（第一步没跑？）"));
+            return;
+        };
+        let heights = vec![40.0_f64; 1000];
+        // ⭐ **窗口计算**（帧后）：这次读度量应该**很快**（浏览器已 layout 过）。
+        let plan_start = now_ms();
+        let plan = deferred
+            .renderer
+            .virtual_window_for(&[1], &heights, 2)
+            .map_err(|error| JsValue::from_str(&format!("窗口计算失败：{error}")));
+        let plan_millis = now_ms() - plan_start;
+        let Ok(plan) = plan else {
+            failures.push(String::from("窗口计算失败"));
+            return;
+        };
+        // 写入窗口行（spacer + 行）。
+        let write_start = now_ms();
+        let mut rows = Vec::new();
+        if plan.offset > 0.0 {
+            rows.push(
+                VNode::element("div")
+                    .attr("class", "vlist-spacer-before")
+                    .attr("style", format!("height: {}px", plan.offset))
+                    .build(),
+            );
+        }
+        for index in plan.first..=plan.last {
+            rows.push(
+                VNode::element("div")
+                    .attr("class", "row")
+                    .attr("style", "height: 40px")
+                    .child(VNode::text(format!("行 {index}")))
+                    .build(),
+            );
+        }
+        let total: f64 = heights.iter().sum();
+        let window_height: f64 = heights[plan.first..=plan.last].iter().sum();
+        let spacer_after = (total - plan.offset - window_height).max(0.0);
+        if spacer_after > 0.0 {
+            rows.push(
+                VNode::element("div")
+                    .attr("class", "vlist-spacer-after")
+                    .attr("style", format!("height: {spacer_after}px"))
+                    .build(),
+            );
+        }
+        let write_result = deferred.renderer.patch_children_at_path(&[1], rows);
+        let write_millis = now_ms() - write_start;
+        if write_result.is_err() {
+            failures.push(String::from("窗口写入失败"));
+        }
+        measured = plan_millis + write_millis;
+        DEFERRED_PLAN_MS.with(|slot| slot.set(plan_millis));
+        DEFERRED_WRITE_MS.with(|slot| slot.set(write_millis));
+    });
+
+    let result = js_sys::Object::new();
+    let failures_array = js_sys::Array::new();
+    for item in &failures {
+        failures_array.push(&JsValue::from_str(item));
+    }
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("ok"),
+        &JsValue::from_bool(failures.is_empty()),
+    );
+    let _ = js_sys::Reflect::set(&result, &JsValue::from_str("failures"), &failures_array);
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("deferred_millis"),
+        &JsValue::from_f64(measured),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("plan_millis"),
+        &JsValue::from_f64(DEFERRED_PLAN_MS.with(|slot| slot.get())),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("write_millis"),
+        &JsValue::from_f64(DEFERRED_WRITE_MS.with(|slot| slot.get())),
+    );
+    Ok(result.into())
+}
+
+/// 延后窗口化实验的渲染器暂存（线程局部单例）。
+struct DeferredRenderer {
+    renderer: apeireth_ui_dom::Renderer<apeireth_ui_dom::web::WebDom>,
+}
+
+thread_local! {
+    static DEFERRED: RefCell<Option<DeferredRenderer>> = const { RefCell::new(None) };
+    /// 帧后窗口计算的耗时（供结果对象读取）。
+    static DEFERRED_PLAN_MS: std::cell::Cell<f64> = const { std::cell::Cell::new(0.0) };
+    /// 帧后窗口写入的耗时。
+    static DEFERRED_WRITE_MS: std::cell::Cell<f64> = const { std::cell::Cell::new(0.0) };
+}
+
 /// ⭐⭐⭐ **真实负载基线探针**（2026-11-03；E-158）。
 ///
 /// ## 它测什么
