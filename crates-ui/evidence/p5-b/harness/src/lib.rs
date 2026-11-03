@@ -1669,7 +1669,6 @@ pub fn l1_real_load_probe() -> Result<JsValue, JsValue> {
 
     let mut renderer = apeireth_ui_dom::Renderer::new(dom, root);
     let state = Rc::new(RefCell::new(DemoState::default()));
-    let rows: Vec<String> = (0..1000).map(|index| format!("行 {index}")).collect();
 
     // ⭐ 窗口化渲染的闭包（**交互重渲染时也必须用它**）。
     //
@@ -1692,11 +1691,48 @@ pub fn l1_real_load_probe() -> Result<JsValue, JsValue> {
     };
 
     // 挂载：容器 + 窗口化列表（与 `w0_first_screen()` 同形）。
+    //
+    // ⭐⭐ **分段计时**（2026-11-03；E-159）：把 58 ms 拆成四段，
+    // ⇒ ⇒ 才能知道**该优化哪一段**（否则只有一个总数，无从下手）。
+    //
+    // ⚠️ 注意顺序：`build_demo_tree` 之前还有 `rows` 的构造（1000 个 String）
+    //   ⇒ ⇒ 那部分**不在**下面四段里 ⇒ ⇒ 单独量。
+    let rows_start = now_ms();
+    let rows: Vec<String> = (0..1000).map(|index| format!("行 {index}")).collect();
+    let rows_millis = now_ms() - rows_start;
+
+    // ① 首次挂载（`render_guarded`）：建 DOM + 写属性 + 写文本。
     let mount_start = now_ms();
     renderer
         .render_guarded(build_demo_tree(&state, &rows))
         .map_err(|error| JsValue::from_str(&format!("挂载失败：{error}")))?;
+    let guarded_millis = now_ms() - mount_start;
+
+    // ② 窗口化：**再拆两段**（E-159）：
+    //    ②a **窗口计算**（`virtual_window_for`：含真实 DOM 度量 ⇒ 触发 layout）
+    //    ②b **写入**（`patch_children_at_path`：写 spacer + 窗口行）
+    //    ⇒ ⇒ 两者相加应 ≈ 原来的 `window_millis` ⇒ ⇒ 定位到具体那一段。
+    let window_start = now_ms();
+    let window_plan_start = now_ms();
+    let _plan = renderer
+        .virtual_window_for(&[1], &heights, 2)
+        .map_err(|error| JsValue::from_str(&format!("窗口计算失败：{error}")))?;
+    let window_plan_millis = now_ms() - window_plan_start;
+
+    // ⭐ **再算一次**（热）：若第一次是「冷」代价 ⇒ ⇒ 第二次应接近 0
+    //   ⇒ ⇒ 就能区分「**每次**都慢」与「**只有第一次**慢」。
+    let window_plan2_start = now_ms();
+    let _plan2 = renderer
+        .virtual_window_for(&[1], &heights, 2)
+        .map_err(|error| JsValue::from_str(&format!("窗口计算(2)失败：{error}")))?;
+    let window_plan2_millis = now_ms() - window_plan2_start;
+
+    let window_write_start = now_ms();
     render_list(&mut renderer)?;
+    let window_write_millis = now_ms() - window_write_start;
+
+    let window_millis = now_ms() - window_start;
+
     let mount_millis = now_ms() - mount_start;
 
     // ② 输入后重渲染：改状态 ⇒ 重建树 ⇒ patch（**放大测量**：连做 N 次）。
@@ -1776,6 +1812,37 @@ pub fn l1_real_load_probe() -> Result<JsValue, JsValue> {
         &result,
         &JsValue::from_str("mounted_rows"),
         &JsValue::from_f64(mounted_rows as f64),
+    );
+    // ⭐ 分段计时（E-159）：挂载这一段拆成「构造行数据 / 首次挂载 / 窗口化」。
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("rows_millis"),
+        &JsValue::from_f64(rows_millis),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("guarded_millis"),
+        &JsValue::from_f64(guarded_millis),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("window_millis"),
+        &JsValue::from_f64(window_millis),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("window_plan_millis"),
+        &JsValue::from_f64(window_plan_millis),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("window_write_millis"),
+        &JsValue::from_f64(window_write_millis),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("window_plan2_millis"),
+        &JsValue::from_f64(window_plan2_millis),
     );
     let _ = js_sys::Reflect::set(
         &result,
