@@ -409,6 +409,12 @@ jobs:
         shell: bash
         run: python -m unittest discover -s scripts -p test_secret_scan.py
 
+      - name: Verify YAML duplicate-key guard contracts
+        shell: bash
+        # 2026-11-03: 严格 YAML 重复键守卫的自测（**守卫自己坏掉 = 把病放回去**）。
+        # 该病已复发三轮（YAML 同层重复键 ⇒ GitHub 拒解析整个 workflow ⇒ 0 job 秒红）。
+        run: python -m unittest discover -s scripts -p test_yaml_duplicate_keys.py
+
       - name: "Secret scan: working tree (scan-all)"
         shell: pwsh
         run: pwsh scripts/secret-scan.ps1 -Mode scan-all
