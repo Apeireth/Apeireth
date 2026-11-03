@@ -897,7 +897,7 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/convergence_memory.rs
       - crates/engine/runtime-assembly/tests/profile_memory_authorization.rs
-    verified_at: 5c74f955e62cebcb1979fb3606e804d9fb10d73c
+    verified_at: 0255bceb6dbf4e5ec45d2b6680a8d4e5315cc394
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test profile_memory_authorization --locked -j 2 && cargo test -p apeireth-runtime-assembly --test convergence_memory --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"

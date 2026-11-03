@@ -3,7 +3,7 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: 13c77ca878e634c32792b61acf2b194d8651e1d7d0b1da78730b27263adbe4d4
+claims_sha256: fd4e901cd562057538b14b1dced1996dcad10eca7e576a654c297a24602954dd
 claims_total: 48
 items:
   - id: "rt.provider_router"
@@ -98,7 +98,7 @@ items:
         - "crates/engine/runtime-assembly/tests/convergence_mcp.rs"
       claims_id: "tool.mcp_bridge"
     gaps:
-      - "能力矩阵未出现开关 APEIRETH_ENABLE_MCP（待补）"
+      []
   - id: "tool.voice_speak"
     capability: "发声工具面（系统 TTS 合成即播 + 播放纪律 + 账本）"
     implemented:
@@ -228,7 +228,7 @@ items:
         - "crates/adapters/cli/src/egress_command.rs"
       claims_id: "sec.egress_gate"
     gaps:
-      - "能力矩阵未出现开关 APEIRETH_ENABLE_EGRESS_GATE（待补）"
+      []
   - id: "mem.lesson_object"
     capability: "教训对象（四拍状态机：经历→候选→新场景验证→撤回留痕）"
     implemented:
@@ -352,7 +352,7 @@ items:
         - "crates/engine/runtime-assembly/src/sqlite_session.rs"
       claims_id: "sec.storage_envelope_crypto"
     gaps:
-      - "能力矩阵未出现开关 APEIRETH_ENABLE_SESSION_SEAL（待补）"
+      []
   - id: "gov.chain_skeleton"
     capability: "R8-A 治理链六段骨架 + R8-B2 生产单入口（每次治理评估过 chain.run）"
     implemented:
