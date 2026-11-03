@@ -1263,7 +1263,7 @@ docs/status/security-audit-acceptance-2026-10-31.md,L1,7,静态安全审计 —�
 docs/status/security-audit-verification-low-2026-10-31.md,L1,7,安全审计复核（低危 / 信息级 + 2 条待验）—— 2026-10-31,2026-10-31,现行,2,保留,
 docs/status/security-audit-verification-medium-2026-10-31.md,L1,7,安全审计复核 · 6 条 medium 发现（2026-10-31）—— 逐条对照当前代码,2026-10-31,现行,2,保留,
 docs/status/spec-batch-status.md,L1,4,设计稿批次看板（B0–B4 / D0–D5）—— **当前实施到哪儿**,2026-10-28,现行,7,保留,
-docs/status/unwired-ledger.md,L1,3,未接线台账（能力齐全但没接电）,2026-10-23,现行,11,保留,
+docs/status/unwired-ledger.md,L1,3,未接线台账（能力齐全但没接电）,2026-10-23,现行,12,保留,
 docs/status/verification-signoff-ruling-2026-10-30.md,L1,4,挂账与签核问项 —— **裁定**（2026-10-30）,2026-10-30,现行,3,保留,
 docs/status/workline-registry.md,L1,4,工作线登记表（工作线 ↔ 设计稿 ↔ **进度页** ↔ 守卫）,2026-10-28,现行,5,保留,
 docs/verification-ladder.md,L3,4,Apeireth Verification Ladder (L0–L5),2026-08-27,现行,0,保留,

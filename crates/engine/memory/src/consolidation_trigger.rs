@@ -166,8 +166,14 @@ impl ConsolidationPolicy {
     }
 
     /// 设置「单轮最多处理多少条新情节」。
+    ///
+    /// ⚠️ **为什么叫 `with_batch_limit` 而不是 `with_max_episodes`**：
+    /// 记忆 crate 里**已有**一个同名方法（`memory_materializer::with_max_episodes`），
+    /// 而它**是真的零引用（孤儿）** ⇒ ⇒ 若本类型也叫 `with_max_episodes`，
+    /// 孤儿符号基线会因**同名遮蔽**把它误判成「已不再孤儿」
+    /// ⇒ ⇒ **造成一次「假的债减少」** ⇒ ⇒ ⇒ 改用不撞名的名字。
     #[must_use]
-    pub fn with_max_episodes(mut self, max_episodes: usize) -> Self {
+    pub fn with_batch_limit(mut self, max_episodes: usize) -> Self {
         self.max_episodes = max_episodes;
         self
     }
@@ -525,7 +531,7 @@ mod tests {
         let (driver, _watermark) = trigger(
             ConsolidationPolicy::new(86_400)
                 .with_min_episodes(1)
-                .with_max_episodes(2),
+                .with_batch_limit(2),
         );
         let outcome = driver
             .run("s1", &episodes(9, 1_000), 2_000, None)
