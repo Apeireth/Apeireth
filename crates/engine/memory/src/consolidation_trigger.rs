@@ -32,7 +32,7 @@ use apeireth_core::kernel::memory::Episode;
 use crate::consolidation::{
     ConsolidationReport, MemoryConsolidationJob, MemoryConsolidationOutput,
 };
-use crate::memory_governance::MemoryGovernanceStore;
+use crate::memory_governance::{MemoryGovernanceStatus, MemoryGovernanceStore};
 use crate::MemoryError;
 
 /// 整编窗口的**幂等水位**：记住「上次整编到哪个时刻」。
@@ -353,8 +353,26 @@ impl ConsolidationTrigger {
 
         let (output, report) = match governance {
             Some(store) => {
+                // ⚠️ **2026-11-02 自查发现并修掉的真问题**：报告原先在「全部情节」上算，
+                // 而只有「产物」走了治理过滤 ⇒ ⇒ 若调用方传入的列表里含**已遗忘**的情节，
+                // 那条内容就可能**又被提炼成洞察** ⇒ ⇒ **违反遗忘权**（忘了还能被读出来）。
+                // ⇒ 修法分两半，**各司其职**：
+                //   · **产物**照旧收**全部**素材 ⇒ 由 `consolidate_governed` 自己做遗忘判定，
+                //     并把被丢弃的记进 `output.discarded`（**这个账要留着**，调用方要知道丢了什么）；
+                //   · **报告**只用**治理可见**的子集 ⇒ ⇒ 遗忘内容不会被重新提炼成洞察。
+                let visible: Vec<Episode> = fresh
+                    .iter()
+                    .filter(|episode| {
+                        store
+                            .get_governed(&episode.id)
+                            .ok()
+                            .flatten()
+                            .is_none_or(|state| state.status != MemoryGovernanceStatus::Forgotten)
+                    })
+                    .cloned()
+                    .collect();
                 let output = self.job.consolidate_governed(session_id, &fresh, store)?;
-                let report = self.job.consolidate(session_id, &fresh);
+                let report = self.job.consolidate(session_id, &visible);
                 (output, report)
             }
             None => {
@@ -576,6 +594,54 @@ mod tests {
                     "仅存的一条应被提升：{:?}",
                     output.promoted
                 );
+            }
+            ConsolidationOutcome::Skipped { .. } => unreachable!(),
+        }
+    }
+
+    #[test]
+    fn forgotten_episodes_never_reach_the_report() {
+        // ⚠️ **2026-11-02 自查发现的真问题**：给了治理库时，报告原先在「全部情节」上算
+        // ⇒ ⇒ **被遗忘的情节内容会被重新提炼成洞察** ⇒ ⇒ 违反遗忘权。
+        // ⇒ ⇒ 现在产物与报告都只用「治理可见」的子集。
+        let store = crate::SqliteMemoryStore::open_in_memory().expect("open store");
+        let all = episodes(4, 1_000);
+        for item in &all {
+            crate::EpisodeStore::put_episode(&store, item).expect("put episode");
+        }
+        // 把第 1 条标记为已遗忘，且它的内容里带可被提炼的关键词
+        let secret = Episode {
+            id: "secret".to_string(),
+            timestamp: 1_000,
+            role: "user".to_string(),
+            content: "error: this secret was forgotten and must not resurface".to_string(),
+            session_id: "s1".to_string(),
+        };
+        crate::EpisodeStore::put_episode(&store, &secret).expect("put secret");
+        store
+            .forget_episode("secret", Some("用户要求遗忘"), 0)
+            .expect("forget");
+
+        let mut material = all.clone();
+        material.push(secret.clone());
+
+        let (driver, _watermark) = trigger(ConsolidationPolicy::new(86_400).with_min_episodes(1));
+        let outcome = driver
+            .run("s1", &material, 2_000, Some(&store))
+            .expect("run");
+        assert!(outcome.consolidated());
+        match outcome {
+            ConsolidationOutcome::Consolidated { output, report, .. } => {
+                assert!(
+                    output.discarded.iter().any(|id| id == "secret"),
+                    "已遗忘的条目应被丢弃"
+                );
+                for insight in &report.extracted_insights {
+                    assert!(
+                        !insight.contains("secret"),
+                        "被遗忘内容不该出现在洞察里：{insight}"
+                    );
+                }
             }
             ConsolidationOutcome::Skipped { .. } => unreachable!(),
         }

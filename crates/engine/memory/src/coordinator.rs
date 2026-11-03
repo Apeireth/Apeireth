@@ -20,6 +20,7 @@ use apeireth_plugin::preference::PreferenceStore;
 
 use crate::access_history::ActivationSource;
 use crate::consolidation::{ConsolidationReport, MemoryConsolidationJob};
+use crate::consolidation_trigger::{ConsolidationOutcome, ConsolidationTrigger};
 use crate::context_compiler::{ClosedWorldContextCompiler, SelectedMemoryAccess};
 use crate::continuity_state::{ContinuityCompressor, ContinuityState};
 use crate::cross_diary_wiring::{self, CrossDiaryLimits};
@@ -1117,6 +1118,40 @@ impl MemoryCoordinator {
             .consolidate_governed_episodes(session_id, &episodes))
     }
 
+    /// **带水位的增量整编**：只整「上次整编之后」的新情节，同一窗口只整一次。
+    ///
+    /// 与 [`Self::run_consolidation`] 的差别（**这是本方法存在的理由**）：
+    /// - `run_consolidation` 每次都取**最近 100 条**重新整编 ⇒ ⇒ 老素材被反复重算；
+    /// - 本方法按 [`ConsolidationTrigger`] 的**窗口水位**取**新料**，且
+    ///   **同一窗口第二次调用直接跳过** ⇒ ⇒ 「夜里整编一次」的语义成立；
+    /// - **窗口没到 / 新料不够 ⇒ 不整编、也不推进水位**（不白等一整夜）。
+    ///
+    /// ⚠️ **老方法一字未改** ⇒ ⇒ 现有调用方（`runtime-assembly` 的 `cognitive.rs`）
+    /// **零影响**；要换成增量语义，调用方**多传一个 trigger** 即可。
+    ///
+    /// - `now_sec`：本轮时刻（**epoch 秒**，与 `Episode.timestamp` 一致）；
+    /// - `trigger`：窗口水位与策略（**由调用方持有** ⇒ ⇒ 水位可以跨进程持久化）。
+    pub fn run_consolidation_incremental(
+        &self,
+        session_id: &str,
+        now_sec: i64,
+        trigger: &ConsolidationTrigger,
+    ) -> Result<ConsolidationOutcome, MemoryError> {
+        // 取料上限跟策略走（至少 100 条，与老方法同量级）⇒ ⇒ 窗口内的新料不会被截断。
+        let limit = trigger.policy().max_episodes.max(100);
+        let governed = self
+            .governance
+            .governed_recent_episodes(session_id, limit)
+            .map_err(|error| MemoryError::Invalid(error.to_string()))?;
+        let episodes: Vec<Episode> = governed.into_iter().map(|item| item.episode).collect();
+        trigger.run(
+            session_id,
+            &episodes,
+            now_sec,
+            Some(self.governance.as_ref()),
+        )
+    }
+
     /// Forget an episode via the governance sidecar.
     pub fn forget_episode(
         &self,
@@ -1313,6 +1348,87 @@ where
 mod tests {
     use super::*;
     use crate::layers::MemoryLayerKind;
+
+    /// 增量整编入口的三个关键行为：**整编一次** / **窗口内跳过** / **只整新料**。
+    #[test]
+    fn incremental_consolidation_runs_once_per_window_and_only_on_new_material() {
+        use crate::consolidation_trigger::{
+            ConsolidationOutcome, ConsolidationPolicy, ConsolidationTrigger,
+            InMemoryConsolidationWatermark,
+        };
+        use std::sync::Arc;
+
+        const SESSION: &str = "incremental-consolidation-session";
+        let coordinator = coordinator();
+        let watermark = Arc::new(InMemoryConsolidationWatermark::new());
+        let trigger = ConsolidationTrigger::new(
+            ConsolidationPolicy::new(86_400).with_min_episodes(2),
+            Arc::clone(&watermark) as Arc<dyn crate::consolidation_trigger::ConsolidationWatermark>,
+        );
+
+        // 首批 3 条（内容含 "fixed:" ⇒ 可被提炼成洞察）
+        for index in 0..3 {
+            coordinator
+                .writeback_episode(&Episode {
+                    id: format!("ep-inc-{index}"),
+                    timestamp: 1_000 + index,
+                    role: "user".to_string(),
+                    content: format!("fixed: 首批成果 {index}"),
+                    session_id: SESSION.to_string(),
+                })
+                .expect("writeback");
+        }
+
+        // 第一轮：整编
+        let first = coordinator
+            .run_consolidation_incremental(SESSION, 2_000, &trigger)
+            .expect("first run");
+        assert!(first.consolidated(), "第一轮该整编：{first:?}");
+        assert_eq!(first.episode_count(), 3);
+
+        // 第二轮：同一窗口内 ⇒ 跳过（不重复整编）
+        let second = coordinator
+            .run_consolidation_incremental(SESSION, 2_000 + 600, &trigger)
+            .expect("second run");
+        assert!(!second.consolidated(), "窗口内不该重复整编：{second:?}");
+
+        // 新增 2 条 ⇒ 窗口到期后只整新料
+        for index in 0..2 {
+            coordinator
+                .writeback_episode(&Episode {
+                    id: format!("ep-inc-late-{index}"),
+                    timestamp: 100_000 + index,
+                    role: "user".to_string(),
+                    content: format!("fixed: 后来的成果 {index}"),
+                    session_id: SESSION.to_string(),
+                })
+                .expect("writeback");
+        }
+        let third = coordinator
+            .run_consolidation_incremental(SESSION, 200_000, &trigger)
+            .expect("third run");
+        assert!(third.consolidated(), "窗口到期后该整编：{third:?}");
+        assert_eq!(third.episode_count(), 2, "只该整新料");
+        match third {
+            ConsolidationOutcome::Consolidated { report, .. } => {
+                assert!(
+                    report
+                        .extracted_insights
+                        .iter()
+                        .all(|item| !item.contains("首批成果")),
+                    "老素材不该再被提炼"
+                );
+                assert!(
+                    report
+                        .extracted_insights
+                        .iter()
+                        .any(|item| item.contains("后来的成果")),
+                    "新素材该被提炼"
+                );
+            }
+            ConsolidationOutcome::Skipped { .. } => unreachable!(),
+        }
+    }
 
     /// 检索会话 (固定 ⇒ 时间探针固定 ⇒ 结果可复现).
     const SESSION: &str = "wiki-wiring-session";

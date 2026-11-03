@@ -394,7 +394,6 @@ pub mod continuity_state;
 pub mod coordinator;
 pub mod extraction;
 pub mod facade;
-pub mod quality_drift;
 // V4-b 记忆保鲜回路 (保鲜三件套: 散列增量门 / 可恢复摄取队列 / 增量折入)。
 pub mod freshness;
 pub mod layers;
@@ -404,6 +403,9 @@ pub mod persona_store_sqlite;
 pub mod reconciler;
 pub mod retrieval_pipeline;
 // V4-c 检索维度自进化 (证据账 + 有界调权内核 + 生效值落地槽)。
+/// **主体 → 会话**归属映射的**写侧**（2026-11-01 安全审计 P1 收口）。
+pub mod principal_sessions;
+pub mod quality_drift;
 pub mod retrieval_tuning;
 pub mod robustness_metrics;
 pub mod scope;
