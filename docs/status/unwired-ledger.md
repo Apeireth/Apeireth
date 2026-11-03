@@ -1183,7 +1183,19 @@ quota（`check_quota`）仍是桩，但都返**显式错误码**（不 panic、�
 
 ### 5.5 待判 31 条 —— 人工过筛结论
 
-**A 类（真缺口）16 条** —— 每个都缺一个**具体接线点**，不是「整块没写」：
+> ⚠️ **口径纪律（2026-11-03 补）**：本节是**过筛时的快照**，**§5.x 各小节才是权威**
+> （它们记录了每条的**落地证据**）⇒ ⇒ **两处不一致时以 §5.x 为准，并回来改本节**。
+> ⇒ ⇒ **本节的「A 类计数」只统计「本表里还没标 ✅/🔶/🔁 的行」**
+> ⇒ ⇒ 改本表时**必须同步改计数**（否则下一个读它的人会拿它当清单）。
+> ⚠️ 实测：2026-11-03 复核时发现 `three_tier_vault` 那行**停在更早的状态**（与 §5.5v 矛盾）
+> ⇒ ⇒ **本节的行必须随 §5.x 一起更新**（这与「欠项也要定期核实销账」是同一条纪律）。
+
+**A 类（真缺口）2 条** —— 每个都缺一个**具体接线点**，不是「整块没写」
+（⚠️ **计数口径（2026-11-03 重新实测）**：只数**本表里还没标 ✅/🔶/🔁 的行**；
+本表共 18 行（16 条 + 2 条补录），已标状态 **16** 行 ⇒ ⇒ **真缺口 = 2 条**
+（`continuation.rs` 的「自动续跑」语义〔owner 裁定·产品决策〕+ `speech_arbiter.rs` 的全双工装配〔依赖 WS 面〕）。
+⇒ ⇒ ⚠️ **此前写的「16 条」是把「表里的行数」当成了「缺口数」** ⇒ 已按实测改正
+⇒ ⇒ 这正是上面那条纪律要防的：**计数必须实测，不能凭印象**。
 
 | 模块 | 缺的能力 | 接线点 |
 |---|---|---|
@@ -1195,7 +1207,7 @@ quota（`check_quota`）仍是桩，但都返**显式错误码**（不 panic、�
 | `crates/engine/memory/src/milestone.rs` | 关系里程碑写入/查询（v1 REAL、v2 库级 0 接线） | ✅ **已修**：新增 `SqliteMilestoneStore`（关系史跨重启存活，此前只有内存版）+ `MilestoneRecorder`（**幂等**记录面）+ 接进 `PartnerBondModule`：`TurnStart` 记**初见**（幂等）、`AfterTurn` 阶段**真跃迁**时记一条（`Bond::evolve` 的阈值推进是确定性的）。未注入存储 ⇒ 零记录（零行为变化）。其余类型（首次分享/情绪共鸣/决策/冲突/修复）需语义判定，本批**不猜** |
 | `crates/engine/memory/src/partner_store_sqlite.rs` | 伙伴/羁绊记录**跨重启持久化** | ✅ **已修**：装配换成 `SqlitePartnerStore`（与认知库同一份库）；顺带修 `ensure_schema` 从不被调用导致「能编译但用不了」（`no such table: partner_records`） |
 | `crates/engine/memory/src/query_expand.rs` | 混合检索前的同义/关键词簇查询扩展 | ✅ **已修**：接在检索主路径（`coordinator.rs`），做成**召回增强**而非替换查询 —— 只在主查询召回不足 `limit` 时补跑扩展并按 id 并集去重（同 id 取更高分）。原因：打分是各项之和（BM25 无查询长度归一化），直接替换查询会让「同义词匹配多」的文档压过精确匹配 ⇒ 加词提召回不该降精度 |
-| `crates/engine/memory/src/three_tier_vault.rs` | 无向量 TOC 树索引 + 逐层树路由 | README 已当已交付能力宣称 |
+| `crates/engine/memory/src/three_tier_vault.rs` | 无向量 TOC 树索引 + 逐层树路由 | ✅ **已修**（owner 裁定 D-4，2026-10-25，详见 **§5.5v**）：接成**用户知识库**（`<data>/wiki/**/*.md`）—— 语料层另做一套（**不改** `three_tier_vault` 本身：它的 `byte_range` 只覆盖标题行、`route_query` 按空白分词 ⇒ 中文整句退化）⇒ `wiki_corpus.rs` 自带 CJK bigram 分词 + 区间推导 ⇒ 检索接线在 `coordinator.rs`（`MemoryCoordinator::with_wiki_root` ⇒ 命中节**只读附加**到 `wiki_sections`）⇒ 上下文面在 `context_compiler.rs`（渲染成 `[wiki:<路径>]` 行，排**所有记忆条目之后**，装不下就跳过）。**PRODUCTION WIRED**（生产路径已接线并有测试）；**不是 DEFAULT ENABLED**（默认无语料 ⇒ 零行为变化）。⚠️ **2026-11-03 修正**：本行此前**停留在更早的状态**（「README 已当已交付能力宣称」）⇒ 与 §5.5v **自相矛盾** ⇒ 已按 §5.5v 补齐 |
 | `crates/engine/memory/src/universal_forget.rs` | **被遗忘权**：按 principal 全库遗忘事务 | ✅ **已修**（PR #90）：网关删用户现在**连记忆一起删**（先清记忆再落用户表；记忆面拒绝 ⇒ 硬失败 409） |
 | `crates/engine/provider/src/reasoning_adapter.rs` | 推理字段归一化下发 + 转发前剥离 reasoning | ✅ **已修**：`openai_chat::parse_response_with_reasoning` 接进 OpenAI 兼容 provider 的 `adapt_response`（12 别名 → 前置 `<think>` 块）。**默认关**（`APEIRETH_REASONING_ENABLED`，模块自带既有开关，不新增 env 名）⇒ 关时逐字节零变化。关键顺序：**先归一化、后判空** —— 否则「推理模型烧光预算、content 空 + finish_reason=length」会误判成空壳响应（其实手上有内容）。Anthropic 的 `type:thinking` 块结构不同，未接（如实标注） |
 | `crates/foundation/governance/src/rate_limit.rs` | 按 (capability,session) 分/时滑窗 + 四阶信任 + 黑名单 | ✅ **已修**：限流 hook 挂进生产治理链（授权之后、内容风险之前），**默认挂载**（配额内完全放行、零行为变化；超限才拒）。默认挂载而非「默认关 + env 开关」：env 棘轮只减不增已满额，且「默认关」等于这闸依然没接电 |
