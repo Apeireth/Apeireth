@@ -15,10 +15,8 @@ use apeireth_ui_gpu::{
     BackendPreference, BlendMode, CanvasSizeSource, Engine, EngineOptions, SceneDescriptor,
     ScenePass, ScenePipeline, SurfaceTargetInput, Topology, UniformValues, VertexFormat,
     INTRO_BACKDROP_FRAGMENT_GLSL, INTRO_BACKDROP_UNIFORM_NAMES, INTRO_BACKDROP_VERTEX_GLSL,
-    INTRO_SPRITE_FRAGMENT_GLSL, INTRO_SPRITE_UNIFORM_NAMES, INTRO_SPRITE_VERTEX_GLSL,
-    INTRO_SPRITE_PROBE_FRAGMENT_GLSL,
-    INTRO_SPRITE_FLAT_FRAGMENT_GLSL,
-    INTRO_SPRITE_COORD_FRAGMENT_GLSL,
+    INTRO_SPRITE_COORD_FRAGMENT_GLSL, INTRO_SPRITE_FLAT_FRAGMENT_GLSL, INTRO_SPRITE_FRAGMENT_GLSL,
+    INTRO_SPRITE_PROBE_FRAGMENT_GLSL, INTRO_SPRITE_UNIFORM_NAMES, INTRO_SPRITE_VERTEX_GLSL,
     SCENE_FRAGMENT_GLSL, SCENE_VERTEX_GLSL, SHADER_UNIFORM_NAMES,
 };
 use std::cell::RefCell;
@@ -52,6 +50,9 @@ struct EngineEntry {
     /// 精灵 pass（`GL_POINTS`）的管线与取值（**每拍一组**）。
     sprites: Vec<(ScenePipeline, UniformValues)>,
     /// 本次跑的 pass 组合（`all` / `backdrop` / `sprite`）—— 重绘时**照旧**。
+    // ⚠️ 该字段当前只**记录**（供将来查「这次跑的是哪些 pass」）
+    //   ⇒ ⇒ 暂时没有读取方 ⇒ ⇒ 显式标注，避免被当成「漏用」。
+    #[allow(dead_code)]
     passes: String,
 }
 
@@ -106,11 +107,11 @@ pub fn poll_device_events() -> String {
                         json_string(name),
                         json_string(&message),
                     ),
-                    other => format!(
-                        "{{\"kind\":\"other\",\"engine\":{},\"detail\":{}}}",
-                        json_string(name),
-                        json_string(&format!("{other:?}")),
-                    ),
+                    // ⚠️ **不用通配分支**：`DeviceEvent` 只有 `Error` / `Lost`
+                    //   两个变体（`apeireth-ui-gpu/src/engine.rs`，**无 cfg 区分**）
+                    //   ⇒ ⇒ 通配分支**不可达** ⇒ ⇒ 写出来会被 clippy 判 `unreachable_patterns`
+                    //   ⇒ ⇒ 这里**穷尽匹配**：将来**新增变体**时，这里会**编译报错**
+                    //   ⇒ ⇒ ⇒ **强制**处理新事件（比静默落到 `other` 更安全）。
                 };
                 out.push(text);
             }
@@ -492,11 +493,8 @@ pub async fn run_intro(
     let mut values = UniformValues::new();
     let mut used: Vec<String> = Vec::new();
     if passes != PASS_SPRITE {
-        let scene = SceneDescriptor::new(
-            INTRO_BACKDROP_VERTEX_GLSL,
-            INTRO_BACKDROP_FRAGMENT_GLSL,
-        )
-        .with_vertex_data(FULLSCREEN_TRIANGLE.to_vec());
+        let scene = SceneDescriptor::new(INTRO_BACKDROP_VERTEX_GLSL, INTRO_BACKDROP_FRAGMENT_GLSL)
+            .with_vertex_data(FULLSCREEN_TRIANGLE.to_vec());
         pipeline = Some(
             engine
                 .create_scene_pipeline(&scene)
@@ -536,23 +534,21 @@ pub async fn run_intro(
         let sprite_scene = match sprite_topology {
             // ⭐ 四边形路径：粒子属性走**实例缓冲**（每实例 1 个粒子）
             //   ⇒ 顶点数据**不变**（不是 4 × 4096 个顶点）。
-            SpriteTopology::InstancedQuad => SceneDescriptor::new(
-                INTRO_SPRITE_VERTEX_GLSL,
-                sprite_fragment,
-            )
-            .with_instance_data(seeds)
-            .with_instance_format(VertexFormat::Vec4)
-            .with_topology(Topology::InstancedQuad)
-            .with_blend(BlendMode::Additive),
+            SpriteTopology::InstancedQuad => {
+                SceneDescriptor::new(INTRO_SPRITE_VERTEX_GLSL, sprite_fragment)
+                    .with_instance_data(seeds)
+                    .with_instance_format(VertexFormat::Vec4)
+                    .with_topology(Topology::InstancedQuad)
+                    .with_blend(BlendMode::Additive)
+            }
             // 点图元路径（WebGL 快路径）：粒子属性走**顶点缓冲**。
-            SpriteTopology::PointList => SceneDescriptor::new(
-                INTRO_SPRITE_VERTEX_GLSL,
-                sprite_fragment,
-            )
-            .with_vertex_data(seeds)
-            .with_vertex_format(VertexFormat::Vec4)
-            .with_topology(Topology::PointList)
-            .with_blend(BlendMode::Additive),
+            SpriteTopology::PointList => {
+                SceneDescriptor::new(INTRO_SPRITE_VERTEX_GLSL, sprite_fragment)
+                    .with_vertex_data(seeds)
+                    .with_vertex_format(VertexFormat::Vec4)
+                    .with_topology(Topology::PointList)
+                    .with_blend(BlendMode::Additive)
+            }
         };
         let list = js_sys::Reflect::get(&uniforms, &JsValue::from_str("__sprites"))
             .map_err(|e| JsValue::from_str(&format!("__sprites read: {e:?}")))?;
@@ -751,7 +747,10 @@ pub fn intro_uniforms(
                     out.push(',');
                 }
                 first = false;
-                out.push_str(&format!("\"{name}\":{}", format_f64_components(&components)));
+                out.push_str(&format!(
+                    "\"{name}\":{}",
+                    format_f64_components(&components)
+                ));
             }
             out.push('}');
         }
@@ -772,7 +771,10 @@ pub fn intro_uniforms(
                 out.push(',');
             }
             first = false;
-            out.push_str(&format!("\"{name}\":{}", format_f64_components(&components)));
+            out.push_str(&format!(
+                "\"{name}\":{}",
+                format_f64_components(&components)
+            ));
         }
         out.push('}');
     }
@@ -788,7 +790,6 @@ fn format_f64_components(components: &[f64]) -> String {
         .collect();
     format!("[{}]", parts.join(","))
 }
-
 
 /// 把分量列表格式化成可读文本（报告用；f32 的十进制表示，足够复现）。
 fn format_components(components: &[f32]) -> String {
@@ -854,12 +855,14 @@ pub fn l1_probe() -> Result<JsValue, JsValue> {
             ("w", rect.width),
             ("h", rect.height),
         ] {
-            let _ = js_sys::Reflect::set(&object, &JsValue::from_str(key), &JsValue::from_f64(value));
+            let _ =
+                js_sys::Reflect::set(&object, &JsValue::from_str(key), &JsValue::from_f64(value));
         }
         object.into()
     };
 
-    let dom = WebDom::new().map_err(|error| JsValue::from_str(&format!("WebDom::new 失败：{error}")))?;
+    let dom =
+        WebDom::new().map_err(|error| JsValue::from_str(&format!("WebDom::new 失败：{error}")))?;
     let root = dom
         .create_element("div")
         .map_err(|error| JsValue::from_str(&format!("建根失败：{error}")))?;
@@ -913,7 +916,9 @@ pub fn l1_probe() -> Result<JsValue, JsValue> {
     }
     if let (Some(engine), Some(reference)) = (engine_input, js_input) {
         if (engine.height - reference.height).abs() > 0.5 {
-            failures.push(format!("G1 子盒高度不一致：engine={engine:?} js={reference:?}"));
+            failures.push(format!(
+                "G1 子盒高度不一致：engine={engine:?} js={reference:?}"
+            ));
         }
     } else {
         failures.push(String::from("G1 子盒取不到"));
@@ -925,7 +930,9 @@ pub fn l1_probe() -> Result<JsValue, JsValue> {
     if let (Some(device), Some(reference)) = (device, engine_input) {
         let expected = reference.width * 2.5;
         if (device.width - expected).abs() > 0.01 {
-            failures.push(format!("G6 换算错误：device={device:?} 期望宽度={expected}"));
+            failures.push(format!(
+                "G6 换算错误：device={device:?} 期望宽度={expected}"
+            ));
         }
     } else {
         failures.push(String::from("G6 取不到设备像素盒"));
@@ -1057,9 +1064,17 @@ pub fn l1_probe() -> Result<JsValue, JsValue> {
     for item in &failures {
         failures_array.push(&JsValue::from_str(item));
     }
-    let _ = js_sys::Reflect::set(&result, &JsValue::from_str("ok"), &JsValue::from_bool(failures.is_empty()));
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("ok"),
+        &JsValue::from_bool(failures.is_empty()),
+    );
     let _ = js_sys::Reflect::set(&result, &JsValue::from_str("failures"), &failures_array);
-    let _ = js_sys::Reflect::set(&result, &JsValue::from_str("payload"), &JsValue::from_str(&payload));
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("payload"),
+        &JsValue::from_str(&payload),
+    );
     let _ = js_sys::Reflect::set(
         &result,
         &JsValue::from_str("g8_error_boundary_ok"),
@@ -1082,7 +1097,11 @@ pub fn l1_probe() -> Result<JsValue, JsValue> {
         let _ = js_sys::Reflect::set(&result, &JsValue::from_str("js_form"), &box_json(&rect));
     }
     if let Some(rect) = device {
-        let _ = js_sys::Reflect::set(&result, &JsValue::from_str("device_input"), &box_json(&rect));
+        let _ = js_sys::Reflect::set(
+            &result,
+            &JsValue::from_str("device_input"),
+            &box_json(&rect),
+        );
     }
     Ok(result.into())
 }
@@ -1146,7 +1165,7 @@ pub async fn l1_upload_probe(
     canvas: web_sys::HtmlCanvasElement,
     backend: &str,
 ) -> Result<JsValue, JsValue> {
-    use apeireth_ui_dom::resource::{ResourceRegistry, ResourceState, upload_decoded};
+    use apeireth_ui_dom::resource::{upload_decoded, ResourceRegistry, ResourceState};
 
     let mut failures: Vec<String> = Vec::new();
     let preference = match backend {
@@ -1176,7 +1195,9 @@ pub async fn l1_upload_probe(
     let image = apeireth_ui_dom::resource::ImageData::new(3, 2, vec![200u8; 3 * 2 * 4]);
     let mut adapter = DomTextureUploader::new(&mut store, engine.device(), engine.queue());
     let upload_ok = upload_decoded(&mut registry, &mut adapter, id, image).is_ok();
-    let uploaded = store.get(id.raw()).map(|texture| (texture.width, texture.height));
+    let uploaded = store
+        .get(id.raw())
+        .map(|texture| (texture.width, texture.height));
     let ready = matches!(registry.state(id), Some(ResourceState::Ready));
     if !upload_ok || uploaded != Some((3, 2)) || !ready {
         failures.push(format!(
@@ -1271,9 +1292,7 @@ pub fn l1_integration_probe() -> Result<JsValue, JsValue> {
             )
             .build()
     };
-    renderer
-        .mount(build("hello"))
-        .expect("挂载必须成功");
+    renderer.mount(build("hello")).expect("挂载必须成功");
 
     // ── ① 受控输入：改 value ⇒ DOM 真的变 ───────────────────────────
     renderer.patch(build("hello2")).expect("打补丁必须成功");
@@ -1314,9 +1333,7 @@ pub fn l1_integration_probe() -> Result<JsValue, JsValue> {
     }
 
     // ── ③ 焦点陷阱：陷阱外拒绝且不动 DOM 焦点 ───────────────────────
-    renderer
-        .focus_at_path(&[0, 0])
-        .expect("聚焦输入框必须成功");
+    renderer.focus_at_path(&[0, 0]).expect("聚焦输入框必须成功");
     let focused_is_input = document
         .active_element()
         .map(|element| element.id() == "l1-int-input")
@@ -1331,11 +1348,7 @@ pub fn l1_integration_probe() -> Result<JsValue, JsValue> {
     let mut first_visible = 0usize;
     let mut mounted_rows = 0usize;
     for scroll_top in [0.0_f64, 4000.0] {
-        if let Some(element) = document
-            .query_selector("#l1-int-list")
-            .ok()
-            .flatten()
-        {
+        if let Some(element) = document.query_selector("#l1-int-list").ok().flatten() {
             let target = element.dyn_ref::<web_sys::Element>();
             if let Some(target) = target {
                 let _ = js_sys::Reflect::set(
@@ -1381,6 +1394,17 @@ pub fn l1_integration_probe() -> Result<JsValue, JsValue> {
     if first_visible == 0 {
         failures.push(String::from("④ 滚动后窗口未移动（first 仍为 0）"));
     }
+    // ⭐ 断言**引擎算出的窗口行数**与**DOM 实际行数**一致（此前该值只赋值、不校验）。
+    if mounted_rows == 0 || mounted_rows > 20 {
+        failures.push(format!(
+            "④ 窗口行数异常：引擎算出 {mounted_rows} 行（应 O(窗口)，远小于 1000）"
+        ));
+    }
+    if mounted_rows as u32 != mounted_dom {
+        failures.push(format!(
+            "④ 引擎窗口行数（{mounted_rows}）与 DOM 实际行数（{mounted_dom}）不一致"
+        ));
+    }
 
     let result = js_sys::Object::new();
     let failures_array = js_sys::Array::new();
@@ -1410,13 +1434,13 @@ pub fn l1_integration_probe() -> Result<JsValue, JsValue> {
 // ⭐ **上屏第一屏示例**（引擎侧接入范式；W0 onboarding 文档引用的**可运行**版本）
 // ═══════════════════════════════════════════════════════════════════════════
 //
-///! 演示第一屏真正会用到的那几件事：
-///! ①**受控输入**（值由状态给，不由 DOM 自己跑）；②**虚拟列表**（留白交给引擎）；
-///! ③**滚动联动**（信号 + 真实位置）；④**错误边界**（`render_guarded`）；
-///! ⑤**状态变了重渲染**（`patch` 差分）。
-///!
-///! ⚠️ 这里的调度器是**示例级**的（JS 侧 `setInterval` 调 [`w0_tick`]）——
-///! 生产应换成正式调度器；引擎侧契约不变（**状态 → 重建树 → patch**）。
+// 演示第一屏真正会用到的那几件事：
+// ①**受控输入**（值由状态给，不由 DOM 自己跑）；②**虚拟列表**（留白交给引擎）；
+// ③**滚动联动**（信号 + 真实位置）；④**错误边界**（`render_guarded`）；
+// ⑤**状态变了重渲染**（`patch` 差分）。
+//
+// ⚠️ 这里的调度器是**示例级**的（JS 侧 `setInterval` 调 `w0_tick`）——
+// 生产应换成正式调度器；引擎侧契约不变（**状态 → 重建树 → patch**）。
 
 use std::rc::Rc;
 
@@ -1560,7 +1584,6 @@ pub fn w0_first_screen() -> Result<JsValue, JsValue> {
 /// ⭐ **tick**：状态变了就重渲染（示例级调度器；生产换正式调度器）。
 #[wasm_bindgen]
 pub fn w0_tick() -> Result<JsValue, JsValue> {
-
     let mut redrawn = false;
     let mut scroll_seen = false;
     DEMO.with(|slot| {
@@ -1740,19 +1763,20 @@ pub fn l1_app_probe() -> Result<JsValue, JsValue> {
     let container = document
         .create_element("div")
         .map_err(|error| JsValue::from_str(&format!("建容器失败：{error:?}")))?;
-    container.set_attribute("id", "l1-app-root").map_err(|error| {
-        JsValue::from_str(&format!("设容器 id 失败：{error:?}"))
-    })?;
-    body.append_child(&container).map_err(|error| {
-        JsValue::from_str(&format!("挂容器失败：{error:?}"))
-    })?;
+    container
+        .set_attribute("id", "l1-app-root")
+        .map_err(|error| JsValue::from_str(&format!("设容器 id 失败：{error:?}")))?;
+    body.append_child(&container)
+        .map_err(|error| JsValue::from_str(&format!("挂容器失败：{error:?}")))?;
 
     // ② boot
-    wasm_host::boot("#l1-app-root").map_err(|error| {
-        JsValue::from_str(&format!("boot 失败：{error:?}"))
-    })?;
+    wasm_host::boot("#l1-app-root")
+        .map_err(|error| JsValue::from_str(&format!("boot 失败：{error:?}")))?;
     let input_value = || -> Option<String> {
-        let element = document.query_selector("#l1-app-root input").ok().flatten()?;
+        let element = document
+            .query_selector("#l1-app-root input")
+            .ok()
+            .flatten()?;
         js_sys::Reflect::get(&element, &JsValue::from_str("value"))
             .ok()
             .and_then(|value| value.as_string())
@@ -1765,13 +1789,11 @@ pub fn l1_app_probe() -> Result<JsValue, JsValue> {
     // ③ ⭐⭐ **批次边界渲染**：N 次状态变更 ⇒ **只渲染一次**（不抖）
     //    （core 的 effect 同步重跑 ⇒ ⇒ 若每次都 patch ⇒ N 次渲染 ⇒ 抖
     //      ⇒ ⇒ effect 只**标脏**，真正的 patch 由批次边界合并成**一次**）
-    let renders_before = wasm_host::render_count().map_err(|error| {
-        JsValue::from_str(&format!("render_count 失败：{error:?}"))
-    })?;
+    let renders_before = wasm_host::render_count()
+        .map_err(|error| JsValue::from_str(&format!("render_count 失败：{error:?}")))?;
     for text in ["一", "二", "三"] {
-        wasm_host::set_demo_text(text).map_err(|error| {
-            JsValue::from_str(&format!("set_demo_text 失败：{error:?}"))
-        })?;
+        wasm_host::set_demo_text(text)
+            .map_err(|error| JsValue::from_str(&format!("set_demo_text 失败：{error:?}")))?;
     }
     // 变更后、批次边界前 ⇒ DOM **不应**变（渲染被合并了）
     let before_flush = input_value();
@@ -1780,15 +1802,13 @@ pub fn l1_app_probe() -> Result<JsValue, JsValue> {
             "② 批次边界前不应渲染（渲染必须合并到边界 ⇒ 否则一帧多次变更 ⇒ 多次渲染 ⇒ 抖）",
         ));
     }
-    let flushed = wasm_host::flush().map_err(|error| {
-        JsValue::from_str(&format!("flush 失败：{error:?}"))
-    })?;
+    let flushed =
+        wasm_host::flush().map_err(|error| JsValue::from_str(&format!("flush 失败：{error:?}")))?;
     if !flushed {
         failures.push(String::from("② 批次边界应当渲染一次"));
     }
-    let renders_after = wasm_host::render_count().map_err(|error| {
-        JsValue::from_str(&format!("render_count 失败：{error:?}"))
-    })?;
+    let renders_after = wasm_host::render_count()
+        .map_err(|error| JsValue::from_str(&format!("render_count 失败：{error:?}")))?;
     if renders_after != renders_before + 1 {
         failures.push(format!(
             "② 3 次变更 ⇒ 只应渲染 1 次；实际 {renders_before} → {renders_after}"
@@ -1796,32 +1816,30 @@ pub fn l1_app_probe() -> Result<JsValue, JsValue> {
     }
     let after = input_value();
     if after.as_deref() != Some("三") {
-        failures.push(format!("② 批次边界后 DOM 应是**最新**值：三；实际 {after:?}"));
+        failures.push(format!(
+            "② 批次边界后 DOM 应是**最新**值：三；实际 {after:?}"
+        ));
     }
     // ③b 再次 flush ⇒ 幂等（无变更 ⇒ 不该再渲染）
-    let flushed_again = wasm_host::flush().map_err(|error| {
-        JsValue::from_str(&format!("flush 失败：{error:?}"))
-    })?;
+    let flushed_again =
+        wasm_host::flush().map_err(|error| JsValue::from_str(&format!("flush 失败：{error:?}")))?;
     if flushed_again {
         failures.push(String::from("②b 无变更时 flush 不应再渲染"));
     }
-    let renders_final = wasm_host::render_count().map_err(|error| {
-        JsValue::from_str(&format!("render_count 失败：{error:?}"))
-    })?;
+    let renders_final = wasm_host::render_count()
+        .map_err(|error| JsValue::from_str(&format!("render_count 失败：{error:?}")))?;
     if renders_final != renders_after {
         failures.push(format!("②b 幂等失败：{renders_after} → {renders_final}"));
     }
 
     // ③b 手动路径仍在：`rerender()` 可显式触发一次
-    wasm_host::rerender().map_err(|error| {
-        JsValue::from_str(&format!("rerender 失败：{error:?}"))
-    })?;
+    wasm_host::rerender()
+        .map_err(|error| JsValue::from_str(&format!("rerender 失败：{error:?}")))?;
 
     // ③c ⭐ **帧驱动**：再改一次信号 ⇒ **不**调 flush ⇒ 交给 rAF 帧循环
     //    （⇒ 「自动」= 宿主**不需要记得调**；帧后探针会断言它已更新）
-    wasm_host::set_demo_text("帧后更新").map_err(|error| {
-        JsValue::from_str(&format!("set_demo_text 失败：{error:?}"))
-    })?;
+    wasm_host::set_demo_text("帧后更新")
+        .map_err(|error| JsValue::from_str(&format!("set_demo_text 失败：{error:?}")))?;
 
     // ⚠️ dispose 段挪到独立探针（`l1_app_dispose_probe`）⇒ ⇒ 因为
     //   dispose 会**卸载 DOM** ⇒ ⇒ 若在帧后探针之前执行 ⇒ ⇒ 帧后探针就看不到输入框了。
@@ -1869,11 +1887,12 @@ pub fn l1_app_probe_after_frame() -> Result<JsValue, JsValue> {
             "⭐ 帧后 DOM 应被**自动**更新为「帧后更新」；实际 {value:?}（⇒ rAF 帧驱动未生效）"
         ));
     }
-    let renders = wasm_host::render_count().map_err(|error| {
-        JsValue::from_str(&format!("render_count 失败：{error:?}"))
-    })?;
+    let renders = wasm_host::render_count()
+        .map_err(|error| JsValue::from_str(&format!("render_count 失败：{error:?}")))?;
     if renders < 2 {
-        failures.push(format!("⭐ 帧驱动应当至少渲染过一次（首屏之外）；实际 renders={renders}"));
+        failures.push(format!(
+            "⭐ 帧驱动应当至少渲染过一次（首屏之外）；实际 renders={renders}"
+        ));
     }
 
     let result = js_sys::Object::new();
@@ -1910,17 +1929,13 @@ pub fn l1_app_dispose_probe() -> Result<JsValue, JsValue> {
 
     wasm_host::dispose_screen()
         .map_err(|error| JsValue::from_str(&format!("dispose 失败：{error:?}")))?;
-    let leftover = document
-        .query_selector("#l1-app-root input")
-        .ok()
-        .flatten();
+    let leftover = document.query_selector("#l1-app-root input").ok().flatten();
     if leftover.is_some() {
         failures.push(String::from("dispose 后输入框仍在 DOM 里"));
     }
     // dispose 时的渲染次数（供「帧循环已停止」探针比较）。
-    let renders_at_dispose = wasm_host::render_count().map_err(|error| {
-        JsValue::from_str(&format!("render_count 失败：{error:?}"))
-    })?;
+    let renders_at_dispose = wasm_host::render_count()
+        .map_err(|error| JsValue::from_str(&format!("render_count 失败：{error:?}")))?;
 
     let result = js_sys::Object::new();
     let failures_array = js_sys::Array::new();
@@ -1952,9 +1967,8 @@ pub fn l1_app_frame_stopped_probe(before: usize) -> Result<JsValue, JsValue> {
     use apeireth_ui_app::wasm_host;
 
     let mut failures: Vec<String> = Vec::new();
-    let now = wasm_host::render_count().map_err(|error| {
-        JsValue::from_str(&format!("render_count 失败：{error:?}"))
-    })?;
+    let now = wasm_host::render_count()
+        .map_err(|error| JsValue::from_str(&format!("render_count 失败：{error:?}")))?;
     if now != before {
         failures.push(format!(
             "⭐ dispose 后帧循环必须停止（渲染次数不得增长）；dispose 前={before} 现在={now}"
@@ -2008,15 +2022,13 @@ pub fn l1_app_reboot_probe() -> Result<JsValue, JsValue> {
             .map_err(|error| JsValue::from_str(&format!("挂容器失败：{error:?}")))?;
 
         // ② boot
-        wasm_host::boot(&format!("#{container_id}")).map_err(|error| {
-            JsValue::from_str(&format!("第 {round} 轮 boot 失败：{error:?}"))
-        })?;
+        wasm_host::boot(&format!("#{container_id}"))
+            .map_err(|error| JsValue::from_str(&format!("第 {round} 轮 boot 失败：{error:?}")))?;
 
         // ③ 改信号 ⇒ 显式 flush ⇒ DOM 更新（批边界路径）
         let text = format!("第{round}轮");
-        wasm_host::set_demo_text(&text).map_err(|error| {
-            JsValue::from_str(&format!("第 {round} 轮改信号失败：{error:?}"))
-        })?;
+        wasm_host::set_demo_text(&text)
+            .map_err(|error| JsValue::from_str(&format!("第 {round} 轮改信号失败：{error:?}")))?;
         wasm_host::flush()
             .map_err(|error| JsValue::from_str(&format!("第 {round} 轮 flush 失败：{error:?}")))?;
         let value = document
@@ -2106,11 +2118,20 @@ pub fn l1_perf_probe() -> Result<JsValue, JsValue> {
     let mut renderer = Renderer::new(dom, root);
 
     // 构树：递归生成（WIDTH 个兄弟 × DEPTH 层），**只有最深的一个叶子**带绑定。
-    fn build(width: usize, depth: usize, leaf: &apeireth_ui_core::Signal<String>, first: bool) -> VNode {
+    fn build(
+        width: usize,
+        depth: usize,
+        leaf: &apeireth_ui_core::Signal<String>,
+        first: bool,
+    ) -> VNode {
         let mut children = Vec::with_capacity(width);
         for index in 0..width {
             if depth == 0 {
-                children.push(VNode::element("span").attr("data-i", index.to_string()).build());
+                children.push(
+                    VNode::element("span")
+                        .attr("data-i", index.to_string())
+                        .build(),
+                );
                 if first {
                     children.push(
                         VNode::element("input")
@@ -2123,7 +2144,10 @@ pub fn l1_perf_probe() -> Result<JsValue, JsValue> {
                 children.push(build(width, depth - 1, leaf, first && index == 0));
             }
         }
-        VNode::element("div").attr("class", "perf-row").child(VNode::Fragment(children)).build()
+        VNode::element("div")
+            .attr("class", "perf-row")
+            .child(VNode::Fragment(children))
+            .build()
     }
 
     let view = || build(WIDTH, DEPTH, &leaf, true);
@@ -2181,6 +2205,129 @@ pub fn l1_perf_probe() -> Result<JsValue, JsValue> {
         .map(|list| list.length())
         .unwrap_or(0);
 
+    // ⭐⭐ **真实首屏形状**的同形状测量（2026-11-03；E-155）。
+    //
+    // 上面那段是**合成压测树**（WIDTH×DEPTH ⇒ 37,458 个真实 DOM 节点）
+    // ⇒ ⇒ 它的「单次更新」数字**不代表首屏**（首屏是虚拟列表窗口化 ⇒ 只几十节点）
+    // ⇒ ⇒ 这里**另测**首屏形状 ⇒ ⇒ 浏览器侧也有同形状数字。
+    //
+    // 形状与 `w0_first_screen()` 一致：容器 + 窗口内 N 行（行 = 1 元素 + 1 文本）。
+    let screen_rows: usize = 22;
+    let screen_nodes = screen_rows * 2 + 2;
+    let screen_view = || {
+        let rows: Vec<VNode> = (0..screen_rows)
+            .map(|index| {
+                VNode::element("div")
+                    .attr("class", "row")
+                    .attr("style", "height: 40px")
+                    .child(VNode::text(format!("行 {index}")))
+                    .build()
+            })
+            .collect();
+        VNode::element("div")
+            .attr("id", "w0-screen-root")
+            .child(
+                VNode::element("div")
+                    .attr("class", "list")
+                    .child(VNode::Fragment(rows))
+                    .build(),
+            )
+            .build()
+    };
+    let screen_dom =
+        WebDom::new().map_err(|error| JsValue::from_str(&format!("WebDom: {error}")))?;
+    let screen_root = screen_dom
+        .create_element("main")
+        .map_err(|error| JsValue::from_str(&format!("建根失败：{error}")))?;
+    let mut screen_renderer = Renderer::new(screen_dom, screen_root);
+    screen_renderer
+        .mount(screen_view())
+        .map_err(|error| JsValue::from_str(&format!("首屏形状挂载失败：{error}")))?;
+
+    // 改**一个叶子**（第 0 行的文本）⇒ 量一次 patch。
+    //
+    // ⚠️ 用 `performance.now()`（**亚毫秒**）而不是 `Date::now()`（**毫秒**）：
+    // 首屏形状的 patch 只有几十微秒 ⇒ ⇒ 毫秒精度会**读出 0**（E-156 实测踩到）。
+    // ⇒ 用 `js_sys::eval` 调浏览器的 `performance.now()`（`js-sys` 已有，
+    // ⇒ ⇒ **不必**给 `web-sys` 加 `Performance` feature ⇒ ⇒ 不动依赖面）。
+    //
+    // ⚠️⚠️ **重复多次取中位数**：单次 `eval` 调用本身有开销（首次还要编译表达式）
+    // ⇒ ⇒ 单次测量会把**测量开销**算进去 ⇒ ⇒ 本段跑 **9 次**取**中位数**。
+    //
+    // ⚠️⚠️⚠️ **浏览器侧亚毫秒计时的三次失败尝试**（E-156 全程留档）：
+    //
+    // ① `js_sys::eval("performance.now()")` 反复求值 ⇒ ⇒ 实测两次间隔恒为
+    //    **0.1 µs** ⇒ ⇒ 读数是「精度被截断到同一 tick」的**假值**；
+    // ② 改成 **eval 一次拿函数引用** + `Function::call0` ⇒ ⇒ 实测 `clock_probe = 0`
+    //    ⇒ ⇒ `dyn_ref::<Function>` 在此环境下拿不到可调用对象 ⇒ ⇒ **恒 0**；
+    // ③ 结论：**浏览器侧**在本环境下**拿不到可靠的亚毫秒时钟**
+    //    ⇒ ⇒ 改用 **毫秒时钟 + 放大测量**（`Date::now()` 连续 N 次后相减再除以 N）
+    //    ⇒ ⇒ N 大到累计量足够 ⇒ ⇒ 读数才有意义。
+    //
+    // ⚠️ 代价：**单次 patch 的精度 ≈ 总时长 / N** ⇒ ⇒ 数字要读作**量级**，不是精确值。
+    let perf_now = js_sys::Date::now;
+    //
+    // ⚠️⚠️ **放大测量**：浏览器的 `performance.now()` 精度受**安全策略**限制
+    //   （实测会被降到 ~100 µs 粒度）⇒ ⇒ 单次几十微秒的 patch **读出来是 0**。
+    // ⇒ ⇒ **连做 N 次再计时、除以 N** ⇒ ⇒ 累计量够大 ⇒ ⇒ 读数才有意义。
+    const SCREEN_ROUNDS: usize = 200;
+    let mut screen_samples: Vec<f64> = Vec::with_capacity(9);
+    for round in 0..9 {
+        let start_screen = perf_now();
+        let mut screen_changed = screen_view();
+        if let VNode::Element(root_element) = &mut screen_changed {
+            if let Some(VNode::Element(list)) = root_element.children.first_mut() {
+                if let Some(VNode::Fragment(rows)) = list.children.first_mut() {
+                    if let Some(VNode::Element(row)) = rows.first_mut() {
+                        if let Some(VNode::Text(text)) = row.children.first_mut() {
+                            // ⚠️ 每次改**不同**的文本 ⇒ 保证每次 patch 都真的有写入
+                            //   ⇒ 否则第 2 次起 patch 树与旧树相同 ⇒ ⇒ 耗时趋近 0
+                            //   ⇒ ⇒ 会把「无写入的 patch」误读成「首屏很快」（E-156 实测踩到）。
+                            text.data = format!("行 0（改了 {round}）");
+                        }
+                    }
+                }
+            }
+        }
+        // ⚠️ **连做 N 次**（每次改不同文本 ⇒ 每次都有真实写入）⇒ ⇒ 计时够大才读得准。
+        for inner in 0..SCREEN_ROUNDS {
+            if let VNode::Element(root_element) = &mut screen_changed {
+                if let Some(VNode::Element(list)) = root_element.children.first_mut() {
+                    if let Some(VNode::Fragment(rows)) = list.children.first_mut() {
+                        if let Some(VNode::Element(row)) = rows.first_mut() {
+                            if let Some(VNode::Text(text)) = row.children.first_mut() {
+                                text.data = format!("行 0（改了 {round}-{inner}）");
+                            }
+                        }
+                    }
+                }
+            }
+            screen_renderer
+                .patch(screen_changed.clone())
+                .map_err(|error| JsValue::from_str(&format!("首屏形状 patch 失败：{error}")))?;
+        }
+        // ⚠️ `perf_now` 现在是**毫秒** ⇒ ⇒ 单次 patch 的毫秒数。
+        let elapsed = (perf_now() - start_screen) / SCREEN_ROUNDS as f64;
+        screen_samples.push(elapsed);
+        if round == 0 || round == 8 {
+            // 首次含 `eval` 编译开销 ⇒ ⇒ 打印出来供判读
+            let _ = js_sys::Reflect::set(
+                &js_sys::Object::new(),
+                &JsValue::from_str("noop"),
+                &JsValue::from_f64(elapsed),
+            );
+        }
+    }
+    // ⭐ 取**中位数**（去掉首次的 eval 编译开销与偶发抖动）。
+    screen_samples.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    let screen_update_millis_direct = screen_samples[screen_samples.len() / 2];
+    // ⭐ 诊断：时钟**绝对值**与最小样本（供判读「时钟没走」还是「差值被吞」）。
+    let screen_clock_probe = perf_now();
+    let screen_min_sample = screen_samples[0];
+    // ⭐ 保留**毫秒**（与既有字段同口径）**和**亚毫秒（首屏形状才读得准）。
+    let screen_update_millis = screen_update_millis_direct;
+    let screen_update_micros = screen_update_millis * 1000.0;
+
     let result = js_sys::Object::new();
     let failures_array = js_sys::Array::new();
     for item in &failures {
@@ -2221,6 +2368,37 @@ pub fn l1_perf_probe() -> Result<JsValue, JsValue> {
         &result,
         &JsValue::from_str("update_millis"),
         &JsValue::from_f64(update_millis),
+    );
+    // ⭐ 真实首屏形状的同形状数字（E-155）：与上面的压测树数字**并列**。
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("screen_rows"),
+        &JsValue::from_f64(screen_rows as f64),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("screen_nodes"),
+        &JsValue::from_f64(screen_nodes as f64),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("screen_update_millis"),
+        &JsValue::from_f64(screen_update_millis),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("screen_update_micros"),
+        &JsValue::from_f64(screen_update_micros),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("screen_clock_probe"),
+        &JsValue::from_f64(screen_clock_probe),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("screen_min_sample"),
+        &JsValue::from_f64(screen_min_sample),
     );
     let _ = js_sys::Reflect::set(
         &result,
