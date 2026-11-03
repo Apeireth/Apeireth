@@ -95,7 +95,7 @@
 | **编排 (Orchestration)** | `orch.worktree_sandbox` | `apeireth-orchestration::worktree_sandbox` | `TddStateMachine::record_test_result()` | Git Worktree 物理隔离 + TDD 原子回滚 |
 | **编排 (Orchestration)** | `orch.async_context` | `apeireth-orchestration::async_context` | `AsyncContextPipeline::assemble_prompt_context()` | 四层异步数组隔离 (Ephemeral/Durable/Summary/HUD) |
 | **编排 (Orchestration)** | `orch.speech_arbiter` | `apeireth-orchestration::speech_arbiter` | `SpeechOutputArbiter::arbitrate()` | FIFO 排队 / TTL 淘汰 / 抢占打断 |
-| **编排 (Orchestration)** | `orch.prompt_cache` | `apeireth-orchestration::prompt_stabilizer`| `assemble_messages()` | 字节级前缀固定 + 单点环境注入 |
+| **编排 (Orchestration)** | ~~`orch.prompt_cache`~~ | **⚠️ 已归档（不在生产）** | ~~`apeireth-orchestration::prompt_stabilizer`~~（现于 `legacy/archived/prompt-stabilizer/`） | ~~`assemble_messages()`~~ | **不作为能力宣称**：owner 2026-10-20 裁定归档（ADR-0007 / R7-4a，理由：**无生产消费点**，5 个公开项全 export-only）⇒ 生产**不存在**该能力；现行上下文/前缀稳定的单管线在 `apeireth-orchestration::context_budget` |
 | **编排 (Orchestration)** | `orch.care_potential` | `apeireth-orchestration::care_potential_field`| `CarePotentialField::step()` | 连续关怀势能微分方程 + 深夜/挫败量子跃迁 + 三阶克制共情动作 |
 | **编排 (Orchestration)** | `orch.cognitive_scheduler`| `apeireth-orchestration::cognitive_quota_scheduler`| `CognitiveQuotaScheduler::schedule_next()` | 多维认知配额 Q + PIP 优先级继承 + 抢占快照压栈 |
 | **编排 (Orchestration)** | `orch.lineage_spawning` | `apeireth-orchestration::lineage_spawning` | `LineageSpawningOrchestrator::spawn_progeny()` | 跨代教养协议 + Ed25519 表观遗传同构 + 三阶段晋级 |
@@ -126,7 +126,7 @@
 | **网关 (Gateway)** | `gw.duplex_ws` | `apeireth-gateway::duplex_gateway` | `DuplexFrame`, `SentenceDivider` | **协议契约已定义（类型 + 测试），HTTP 服务端未接线**：gateway 无 ws 依赖、无 `/v1/ws` 路由，能力面板自报 `voice.duplex available=false, reason=not_assembled`（审计修 A-04） |
 | **网关 (Gateway)** | `gw.ember_hud` | `apeireth-gateway::ember_hud_driver` | `EmberHudDriver::synthesize_uniforms()` | 4.0s 生理呼吸三次正弦波 + 暗角微光 + WGSL 着色器 |
 | **协议 (Protocol)** | `proto.p2p_mesh` | `apeireth-protocol::p2p_mesh` | `P2pMeshController`, `MeshPacket` | **明文 mesh**：报文编解码 + 对端注册表；无 Noise 握手、无洋葱多层封装（`payload_hex` 为十六进制明文，`payload_len_hex` 仅为长度非校验和，`packet_id` 不保证唯一/不防重放）；真加密在 v2.1 roadmap（审计修 A-05） |
-| **感知 (Perception)** | `perc.minimax_tts` | `apeireth-perception::voice::minimax_tts`| `synthesize_stream()` | 128kbps 32kHz 音频流 + 3D PAD 情感调制 |
+| **感知 (Perception)** | ~~`perc.minimax_tts`~~ | **⚠️ 已归档（不在生产）** ~~`apeireth-perception::voice::minimax_tts`~~（crate 已于 2026-10-20 整包归档到 `legacy/archived/perception/`） | ~~`synthesize_stream()`~~ | **不作为能力宣称**：ADR-0005 §3 R4b（owner 授权）归档，理由 = **零依赖者 ⇒ 不可达代码**（全仓无 crate 依赖 `apeireth-perception`）⇒ 该 crate **不参与 workspace 构建**；发声面另在 `apeireth-voice` / `tool.voice_speak` |
 
 > **状态标注**：本节保留库级能力契约与历史实现索引；是否 PRODUCTION WIRED、DEFAULT ENABLED 或当前可用，必须以运行时 `/v1/apeireth/capabilities` 为准。当前 runtime kernel 只保留机制与抽象端口；具体认知、工具、Organ、SQLite 装配位于 `apeireth-runtime-assembly`。canonical 网关的 chat SSE 当前为缓冲成帧（完整 canonical 完成路径结束后返回帧与 `[DONE]`），非逐 token 增量流式；Activity SSE 的生命周期事件则来自 Runtime Event Spine。没有真实 production backend 的能力保持 `supported=false`。
 

@@ -471,6 +471,20 @@
       ]
     },
     {
+      "id": "check-matrix-module-paths",
+      "path": "scripts/check_matrix_module_paths.py",
+      "kind": "guard",
+      "is_guard": true,
+      "blocking": true,
+      "invocation": [
+        "python3 scripts/check_matrix_module_paths.py"
+      ],
+      "ci_workflows": [],
+      "has_baseline": false,
+      "notes": "能力矩阵模块路径守卫（2026-11-03 加，防「矩阵宣称了不存在的模块」）",
+      "flags": []
+    },
+    {
       "id": "check-mod-files",
       "path": "scripts/check_mod_files.py",
       "kind": "guard",

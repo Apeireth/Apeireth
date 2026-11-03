@@ -66,6 +66,21 @@
       "note": "严格 YAML 重复键守卫（GitHub 遇重复键会拒解析整个 workflow ⇒ 0 job 秒红；PyYAML/Ruby 静默取最后一个键 ⇒ 常规自检查不出）"
     },
     {
+      "id": "matrix-module-paths",
+      "cmd": [
+        "python3",
+        "scripts/check_matrix_module_paths.py"
+      ],
+      "scope": [
+        "docs"
+      ],
+      "blocking": true,
+      "required": true,
+      "env": "python",
+      "timeout": 120,
+      "note": "能力矩阵的模块路径必须**真实存在**（矩阵是对外的能力宣称 ⇒ 指到不存在的模块 = 说谎）"
+    },
+    {
       "id": "doc-caliber",
       "cmd": [
         "python3",

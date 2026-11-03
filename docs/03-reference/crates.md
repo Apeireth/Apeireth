@@ -13,7 +13,7 @@ the product workspace.
 | `apeireth-plugin` | `crates/foundation/plugin` | Plugin lifecycle, capability descriptors, registries, and provider/tool contracts |
 | `apeireth-governance` | `crates/foundation/governance` | Allow, deny, approval, OWASP ASI-01 工具描述投毒审计 (`tool_desc_audit`)、外部不可信内容信封包裹与逃逸中和 (`untrusted_mark`)、8 类 PII 检测与 `EnvSecret` 行解析 (`input_security`)、4 阶信任多尺度滑动窗口限流 (`rate_limit`) |
 | `apeireth-credentials` | `crates/foundation/credentials` | `SecretString` / `SecretBuf` 内存零化 (Zeroize)、Fail-closed 凭据审批门控 (`CredentialGate`)、Keyring/Env 解析 |
-| `apeireth-orchestration` | `crates/foundation/orchestration` | Multi-agent coordination, 7 Advisor 结构化辩论协议 (`council`)、双 AI 发言权仲裁机 (`speech_arbiter`)、Prompt Cache 字节级稳定器 (`prompt_stabilizer`) 与环境自适应状态机 (`ambient_context`) |
+| `apeireth-orchestration` | `crates/foundation/orchestration` | Multi-agent coordination, 7 Advisor 结构化辩论协议 (`council`)、双 AI 发言权仲裁机 (`speech_arbiter`) 与环境自适应状态机 (`ambient_context`)（⚠️ **Prompt Cache 字节级稳定器** (`prompt_stabilizer`) 已于 2026-10-20 归档到 `legacy/archived/`，**生产不存在**该能力 —— ADR-0007 / R7-4a） |
 
 ## Engine
 
