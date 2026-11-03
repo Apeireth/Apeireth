@@ -1800,7 +1800,8 @@ async fn native_chat(
     //（宁可归属不可判定, 也不要错归属 ⇒ 误删风险）。
     // ⚠️ **旁路**: 写失败 ⇒ 记审计、**不阻断主流程**。
     if let Err(error) = crate::principal_attribution::record_principal_attribution(
-        domain.as_ref().map(|Extension(context)| context),
+        &state,
+        identity.as_ref().map(|Extension(identity)| identity),
         session,
     ) {
         eprintln!("[principal-attribution] 归属登记失败 (旁路, 不阻断请求): {error}");

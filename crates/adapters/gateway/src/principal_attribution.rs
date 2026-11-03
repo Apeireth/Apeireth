@@ -25,19 +25,44 @@
 use apeireth_core::kernel::SessionId;
 use apeireth_runtime::canonical::principal_sessions;
 
+use crate::client_tokens::ClientIdentity;
+use crate::panels::GatewayState;
+
 /// 登记本次会话的**主体归属**（**旁路**：失败不阻断请求）。
 ///
-/// * 无域上下文 / 无 `user_id` ⇒ **不登记**（返回 `false`）。
-/// * 未装入写面实现 ⇒ **不登记**（返回 `false`）。
-/// * 写失败 ⇒ 返回 `Err`（真因如实）⇒ 调用方记审计。
+/// # 主体取自哪里（**这是本函数的要害**）
+///
+/// 主体 = **令牌条目绑定的 `user_id`**（`state.client_tokens.entry_for(client).user_id`）。
+///
+/// ⇒ **不是**域 id（`DomainContext::user_id()`）—— 因为：
+/// * 令牌**有** `user_id` 绑定 ⇒ 域 = 该 user_id 的域（碰巧一样）；
+/// * 令牌**无** `user_id` 绑定 ⇒ 域解析**回落到默认域** ⇒ `user_id()` = **"default"**
+///   ⇒ ⇒ 若拿它当主体 ⇒ **所有无绑定请求都归到 `"default"` 一个主体**
+///   ⇒ ⇒ 不同用户的 episode 混在一起 ⇒ ⇒ **误删风险**。
+///
+/// ⇒ ⇒ **无 `user_id` 绑定 ⇒ 不登记**（fail-closed：宁可归属不可判定，也不要错归属）。
+///
+/// # 其它不登记的情形
+///
+/// * 未装入写面实现 ⇒ 不登记（返回 `false`）；
+/// * 没有客户端身份 ⇒ 不登记。
+///
+/// # 失败口径
+///
+/// 写失败 ⇒ 返回 `Err`（真因如实）⇒ 调用方**记审计**，**不阻断主流程**。
 pub fn record_principal_attribution(
-    domain: Option<&crate::domain_context::DomainContext>,
+    state: &GatewayState,
+    identity: Option<&ClientIdentity>,
     session: SessionId,
 ) -> Result<bool, String> {
-    let Some(context) = domain else {
+    let Some(identity) = identity else {
         return Ok(false);
     };
-    let Some(user_id) = context.user_id() else {
+    let Some(spec) = state.client_tokens.entry_for(&identity.client) else {
+        return Ok(false);
+    };
+    let Some(user_id) = spec.user_id.as_deref() else {
+        // **无 user_id 绑定 ⇒ 不登记**（理由见上）。
         return Ok(false);
     };
     if user_id.trim().is_empty() {

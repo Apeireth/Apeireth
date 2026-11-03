@@ -73,3 +73,19 @@ pub fn record_principal_session(principal_id: &str, session_id: &str) -> Result<
     recorder.record(principal_id, session_id)?;
     Ok(true)
 }
+
+/// 卸下写面实现（回到「未装入 ⇒ 不登记」）。
+///
+/// # 为什么需要
+///
+/// 写面是**进程级**槽 ⇒ 测试里装入后**必须能卸下** ⇒ 否则
+/// **同进程内其它用例会继承这个假写面**（跨用例污染 ⇒ 顺序敏感 ⇒ 偶发红）。
+///
+/// ⇒ 装配面正常流程**不需要**它（进程生命周期内装一次即可）⇒
+/// ⇒ 本函数是给**测试隔离**与**热重装**用的。
+pub fn clear_principal_session_recorder() {
+    let mut slot = RECORDER
+        .write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    *slot = None;
+}
