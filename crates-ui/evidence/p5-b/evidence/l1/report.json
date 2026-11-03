@@ -4,7 +4,7 @@
     "failures": [],
     "payload": "value=Some(\"a\");pos=None;checked=Some(false)",
     "g8_error_boundary_ok": true,
-    "g8_captured_error": "Unsupported: create_element() 失败：JsValue(InvalidCharacterError: Failed to execute 'createElement' on 'Document': The tag name provided ('') is not a valid name.\nInvalidCharacterError: Failed to execute 'createElement' on 'Document': The tag name provided ('') is not a valid name.\n    at http://127.0.0.1:43399/engine/pkg/p5b_harness.js:968:30\n    at handleError (http://127.0.0.1:43399/engine/pkg/p5b_harness.js:3250:18)\n    at __wbg_createElement_74049073a11f9c31 (http://127.0.0.1:43399/engine/pkg/p5b_harness.js:967:67)\n    at p5b_harness.wasm.<web_sys[3f0844a8ae53d195]::features::gen_Document::Document>::create_element::__wbg_createElement_74049073a11f9c31 externref shim (http://127.0.0.1:43399/engine/pkg/p5b_harness_bg.wasm:wasm-function[7288]:0x3ac8e3)\n    at p5b_harness.wasm.<web_sys[3f0844a8ae53d195]::features::gen_Document::Document>::create_element (http://127.0.0.1:43399/engine/pkg/p5b_harness_bg.wasm:wasm-function[6105]:0x39f6ef)\n    at p5b_harness.wasm.<apeireth_ui_dom[5e09a18cf58f4121]::web::WebDom as apeireth_ui_dom[5e09a18cf58f4121]::dom::Dom>::create_element (http://127.0.0.1:43399/engine/pkg/p5b_harness_bg.wasm:wasm-function[3748]:0x35895d)\n    at p5b_harness.wasm.<apeireth_ui_dom[5e09a18cf58f4121]::renderer::Renderer<apeireth_ui_dom[5e09a18cf58f4121]::web::WebDom>>::mount_node (http://127.0.0.1:43399/engine/pkg/p5b_harness_bg.wasm:wasm-function[793]:0x135025)\n    at p5b_harness.wasm.<apeireth_ui_dom[5e09a18cf58f4121]::renderer::Renderer<apeireth_ui_dom[5e09a18cf58f4121]::web::WebDom>>::mount (http://127.0.0.1:43399/engine/pkg/p5b_harness_bg.wasm:wasm-function[2042]:0x2bc52f)\n    at p5b_harness.wasm.<apeireth_ui_dom[5e09a18cf58f4121]::renderer::Renderer<apeireth_ui_dom[5e09a18cf58f4121]::web::WebDom>>::render_guarded (http://127.0.0.1:43399/engine/pkg/p5b_harness_bg.wasm:wasm-function[1545]:0x261436)\n    at p5b_harness.wasm.p5b_harness[6eeb4081362bc5a5]::l1_probe (http://127.0.0.1:43399/engine/pkg/p5b_harness_bg.wasm:wasm-function[674]:0xa6535))",
+    "g8_captured_error": "Unsupported: create_element() 失败：JsValue(InvalidCharacterError: Failed to execute 'createElement' on 'Document': The tag name provided ('') is not a valid name.\nInvalidCharacterError: Failed to execute 'createElement' on 'Document': The tag name provided ('') is not a valid name.\n    at http://127.0.0.1:39329/engine/pkg/p5b_harness.js:990:30\n    at handleError (http://127.0.0.1:39329/engine/pkg/p5b_harness.js:3276:18)\n    at __wbg_createElement_74049073a11f9c31 (http://127.0.0.1:39329/engine/pkg/p5b_harness.js:989:67)\n    at p5b_harness.wasm.<web_sys[3f0844a8ae53d195]::features::gen_Document::Document>::create_element::__wbg_createElement_74049073a11f9c31 externref shim (http://127.0.0.1:39329/engine/pkg/p5b_harness_bg.wasm:wasm-function[7290]:0x3ad8c5)\n    at p5b_harness.wasm.<web_sys[3f0844a8ae53d195]::features::gen_Document::Document>::create_element (http://127.0.0.1:39329/engine/pkg/p5b_harness_bg.wasm:wasm-function[6108]:0x3a0720)\n    at p5b_harness.wasm.<apeireth_ui_dom[5e09a18cf58f4121]::web::WebDom as apeireth_ui_dom[5e09a18cf58f4121]::dom::Dom>::create_element (http://127.0.0.1:39329/engine/pkg/p5b_harness_bg.wasm:wasm-function[3753]:0x359b18)\n    at p5b_harness.wasm.<apeireth_ui_dom[5e09a18cf58f4121]::renderer::Renderer<apeireth_ui_dom[5e09a18cf58f4121]::web::WebDom>>::mount_node (http://127.0.0.1:39329/engine/pkg/p5b_harness_bg.wasm:wasm-function[794]:0x135057)\n    at p5b_harness.wasm.<apeireth_ui_dom[5e09a18cf58f4121]::renderer::Renderer<apeireth_ui_dom[5e09a18cf58f4121]::web::WebDom>>::mount (http://127.0.0.1:39329/engine/pkg/p5b_harness_bg.wasm:wasm-function[2047]:0x2bd577)\n    at p5b_harness.wasm.<apeireth_ui_dom[5e09a18cf58f4121]::renderer::Renderer<apeireth_ui_dom[5e09a18cf58f4121]::web::WebDom>>::render_guarded (http://127.0.0.1:39329/engine/pkg/p5b_harness_bg.wasm:wasm-function[1548]:0x261fa7)\n    at p5b_harness.wasm.p5b_harness[6eeb4081362bc5a5]::l1_probe (http://127.0.0.1:39329/engine/pkg/p5b_harness_bg.wasm:wasm-function[675]:0xa657a))",
     "g8_panic_hook": "installed",
     "engine_form": {
       "x": 8,
@@ -60,9 +60,9 @@
     "step2": {
       "ok": true,
       "failures": [],
-      "deferred_millis": 1,
+      "deferred_millis": 0,
       "plan_millis": 0,
-      "write_millis": 1
+      "write_millis": 0
     }
   },
   "perf": {
@@ -72,32 +72,40 @@
     "depth": 4,
     "elements": 37481,
     "row_elements": 4681,
-    "mount_millis": 137,
-    "update_millis": 89,
+    "mount_millis": 139,
+    "update_millis": 97,
     "screen_rows": 22,
     "screen_nodes": 46,
-    "screen_update_millis": 0.025,
-    "screen_update_micros": 25,
-    "screen_clock_probe": 1793699570650,
+    "screen_update_millis": 0.03,
+    "screen_update_micros": 30,
+    "screen_clock_probe": 1793699797703,
     "screen_min_sample": 0.025,
-    "build_millis": 3,
+    "build_millis": 4,
     "compared_nodes": 42138,
     "written_nodes": 8
   },
   "realLoad": {
     "ok": true,
     "failures": [],
-    "mount_millis": 59,
-    "input_redraw_millis": 0.105,
-    "scroll_redraw_millis": 0.055,
+    "mount_millis": 73,
+    "input_redraw_millis": 0.125,
+    "scroll_redraw_millis": 0.06,
     "mounted_rows": 8,
     "rows_millis": 0,
     "guarded_millis": 1,
-    "window_millis": 58,
-    "window_plan_millis": 58,
+    "window_millis": 72,
+    "window_plan_millis": 72,
     "window_write_millis": 0,
     "window_plan2_millis": 0,
     "rounds": 400
+  },
+  "w0Window": {
+    "ok": true,
+    "failures": [],
+    "rows_after_mount": 7,
+    "rows_after_tick": 7,
+    "dump_mount": "row[行 0], row[行 1], row[行 2], row[行 3], row[行 4], row[行 5], row[行 6], vlist-spacer-after[]",
+    "dump_tick": "row[行 0], row[行 1], row[行 2], row[行 3], row[行 4], row[行 5], row[行 6], vlist-spacer-after[]"
   },
   "binding": {
     "ok": true,

@@ -95,6 +95,11 @@ try {
   results.realLoad = { ok: false, failures: [`真实负载基线探针抛错：${String(error)}`] };
 }
 try {
+  results.w0Window = p5b.l1_w0_window_probe();
+} catch (error) {
+  results.w0Window = { ok: false, failures: [`W0 窗口化保持性探针抛错：${String(error)}`] };
+}
+try {
   results.binding = p5b.l1_binding_probe();
 } catch (error) {
   results.binding = { ok: false, failures: [`绑定探针抛错：${String(error)}`] };

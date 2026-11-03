@@ -1517,6 +1517,40 @@ pub fn build_demo_tree(
         .build()
 }
 
+/// ⭐⭐⭐ **虚拟列表的窗口化渲染**（**首屏与 tick 共用** ⇒ ⇒ 两条路径口径一致）。
+///
+/// ## 为什么必须共用（E-161 修的真缺陷）
+///
+/// `build_demo_tree` 生成的列表里只有 **1 个占位行**（`rows.first()`）
+/// ⇒ ⇒ 首屏挂载后用 `patch_windowed_at_path` 把它换成**窗口化内容**
+/// （窗口内的行 + 前后留白）。
+///
+/// ⚠️⚠️ **原缺陷**：`w0_tick` 用 `build_demo_tree` 重建整棵树 ⇒ ⇒ 列表又变回
+/// **1 个占位行** ⇒ ⇒ `patch` 把窗口化结果**整个覆盖掉**
+/// ⇒ ⇒ ⇒ **虚拟列表在第一次交互（输入/滚动）后就塌成 1 行**
+/// ⇒ ⇒ ⇒ 用户看到的列表**不再滚动、不再虚拟化**。
+///
+/// ⇒ ⇒ 修法：**每次改完树都要重新窗口化** ⇒ ⇒ ⇒ 抽成本函数 ⇒ ⇒ 两条路径共用
+/// ⇒ ⇒ ⇒ 口径一致，不会再出现「一条路径窗口化、另一条不」的偏差。
+fn render_windowed_list(
+    renderer: &mut apeireth_ui_dom::Renderer<apeireth_ui_dom::web::WebDom>,
+    list_path: &[usize],
+    item_count: usize,
+) -> Result<(), JsValue> {
+    use apeireth_ui_dom::vnode::VNode;
+    let heights = vec![40.0_f64; item_count];
+    renderer
+        .patch_windowed_at_path(list_path, &heights, 2, |index| {
+            VNode::element("div")
+                .attr("class", "row")
+                .attr("style", "height: 40px")
+                .child(VNode::text(format!("行 {index}")))
+                .build()
+        })
+        .map_err(|error| JsValue::from_str(&format!("窗口化失败：{error}")))?;
+    Ok(())
+}
+
 /// ⭐ **挂载示例屏**（浏览器入口）。
 #[wasm_bindgen]
 pub fn w0_first_screen() -> Result<JsValue, JsValue> {
@@ -1551,17 +1585,8 @@ pub fn w0_first_screen() -> Result<JsValue, JsValue> {
         .map_err(|error| JsValue::from_str(&format!("监听滚动失败：{error}")))?;
 
     // 虚拟列表：用 `patch_windowed_at_path`（**留白由引擎算** ⇒ 容器真的能滚）。
-    let heights = vec![40.0_f64; 1000];
-    renderer
-        .patch_windowed_at_path(&[1], &heights, 2, |index| {
-            use apeireth_ui_dom::vnode::VNode;
-            VNode::element("div")
-                .attr("class", "row")
-                .attr("style", "height: 40px")
-                .child(VNode::text(format!("行 {index}")))
-                .build()
-        })
-        .map_err(|error| JsValue::from_str(&format!("窗口化失败：{error}")))?;
+    // ⚠️ 与 `w0_tick` **共用**同一个函数（E-161）⇒ ⇒ 两条路径口径一致。
+    render_windowed_list(&mut renderer, &[1], 1000)?;
 
     DEMO.with(|slot| {
         *slot.borrow_mut() = Some(DemoRenderer {
@@ -1586,6 +1611,8 @@ pub fn w0_first_screen() -> Result<JsValue, JsValue> {
 pub fn w0_tick() -> Result<JsValue, JsValue> {
     let mut redrawn = false;
     let mut scroll_seen = false;
+    // ⭐ 窗口化失败**不静默**（E-161）⇒ ⇒ 带出去给调用方看。
+    let mut window_error: Option<String> = None;
     DEMO.with(|slot| {
         let mut guard = slot.borrow_mut();
         let Some(demo) = guard.as_mut() else {
@@ -1604,6 +1631,15 @@ pub fn w0_tick() -> Result<JsValue, JsValue> {
             let tree = build_demo_tree(&demo.state, &[]);
             // ⚠️ 受控写回在 IME 组合期会被**门住**（引擎负责补写）。
             let _ = demo.renderer.patch(tree);
+            // ⭐⭐⭐ **必须重新窗口化**（E-161 修的真缺陷）：
+            //   `build_demo_tree` 的列表里只有 **1 个占位行**
+            //   ⇒ ⇒ 上面这次 `patch` 会把**窗口化结果整个覆盖掉**
+            //   ⇒ ⇒ ⇒ 虚拟列表会**塌成 1 行**（不再滚动、不再虚拟化）。
+            // ⇒ ⇒ 改完树**立刻**重新窗口化 ⇒ ⇒ 列表内容始终是窗口内的行。
+            if let Err(error) = render_windowed_list(&mut demo.renderer, &demo.list_path, 1000) {
+                // ⭐ 不静默吞掉：把错误**带出去**（`w0_tick` 的结果里有 `window_error`）。
+                window_error = Some(format!("{error:?}"));
+            }
             demo.state.borrow_mut().dirty = false;
             redrawn = true;
         }
@@ -1618,6 +1654,140 @@ pub fn w0_tick() -> Result<JsValue, JsValue> {
         &result,
         &JsValue::from_str("scroll_seen"),
         &JsValue::from_bool(scroll_seen),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("window_error"),
+        &match &window_error {
+            Some(message) => JsValue::from_str(message),
+            None => JsValue::NULL,
+        },
+    );
+    Ok(result.into())
+}
+
+/// ⭐⭐⭐⭐ **W0 首屏窗口化保持性探针**（2026-11-03；E-161）。
+///
+/// ## 它查什么
+///
+/// 怀疑：`w0_tick()` 用 `build_demo_tree(&state, &[])` 重建整棵树
+/// ⇒ ⇒ 那棵树的列表里只有 **1 个空行**（`rows.first()` 是 `None` ⇒ 空的）
+/// ⇒ ⇒ ⇒ **`patch` 会覆盖掉 `patch_windowed_at_path` 的窗口化结果**
+/// ⇒ ⇒ ⇒ 虚拟列表在首次 tick 之后**塌成 1 行**。
+///
+/// ⇒ ⇒ 若属实 ⇒ ⇒ **上屏第一屏的参考实现是坏的**（虚拟列表根本没生效）
+/// ⇒ ⇒ ⇒ 而这**不是**性能问题，是**功能缺陷**。
+#[wasm_bindgen]
+pub fn l1_w0_window_probe() -> Result<JsValue, JsValue> {
+    let document = web_sys::window()
+        .and_then(|window| window.document())
+        .ok_or_else(|| JsValue::from_str("没有 document"))?;
+
+    // ① 挂载示例首屏（与产品路径**同一套**代码）。
+    let _ = w0_first_screen()?;
+
+    // ② 首屏刚挂载时的窗口行数。
+    let rows_after_mount = document
+        .query_selector_all("#w0-root #w0-list .row")
+        .ok()
+        .map(|list| list.length())
+        .unwrap_or(0);
+
+    // ③ 跑一次 tick —— 见下方（**先置脏**，否则是假阴性）。
+
+    // ④ tick 之后的窗口行数。
+    let rows_after_tick = document
+        .query_selector_all("#w0-root #w0-list .row")
+        .ok()
+        .map(|list| list.length())
+        .unwrap_or(0);
+
+    // ⭐ 诊断：把 `#w0-list` 的**子节点结构**（类名 + 文本前 12 字）列出来
+    //   ⇒ ⇒ 一眼看出 tick 之后**剩下的是什么**（spacer？行？混合？）。
+    let dump_children = || -> String {
+        let mut parts: Vec<String> = Vec::new();
+        // ⚠️ 用 `query_selector_all("#w0-list > *")` 取**直接子节点**
+        //   （`Element::children()` 需要 `web-sys` 的 `HtmlElement` feature
+        //   ⇒ ⇒ 不为此加 feature ⇒ ⇒ **依赖面不动**）。
+        if let Ok(children) = document.query_selector_all("#w0-root #w0-list > *") {
+            for index in 0..children.length() {
+                if let Some(child) = children.item(index) {
+                    // ⚠️ `item()` 返回 `Node`（不是 `Element`）⇒ ⇒ 用 `Reflect` 取属性
+                    //   （避免为此引入 `Element` 转换与新 feature）。
+                    let class = js_sys::Reflect::get(&child, &JsValue::from_str("className"))
+                        .ok()
+                        .and_then(|value| value.as_string())
+                        .unwrap_or_default();
+                    let text = js_sys::Reflect::get(&child, &JsValue::from_str("textContent"))
+                        .ok()
+                        .and_then(|value| value.as_string())
+                        .unwrap_or_default();
+                    let short: String = text.chars().take(12).collect();
+                    parts.push(format!("{class}[{short}]"));
+                }
+            }
+        }
+        parts.join(", ")
+    };
+    let dump_mount = dump_children();
+    DEMO.with(|slot| {
+        if let Some(demo) = slot.borrow().as_ref() {
+            demo.state.borrow_mut().dirty = true;
+        }
+    });
+    let _ = w0_tick()?;
+    let dump_tick = dump_children();
+
+    let mut failures: Vec<String> = Vec::new();
+    if rows_after_mount < 2 {
+        failures.push(format!(
+            "首屏刚挂载时窗口行数 = {rows_after_mount}（应 O(窗口) ⇒ ≥ 2）"
+        ));
+    }
+    if rows_after_tick < 2 {
+        failures.push(format!(
+            "⭐ **tick 之后窗口行数 = {rows_after_tick}** ⇒ ⇒ 虚拟列表**被覆盖塌陷**了"
+        ));
+    }
+    // ⭐⭐ **防回归的强断言**：tick 之后行数必须与**挂载后**一致
+    //   ⇒ ⇒ 「窗口化被整树重建覆盖」这类缺陷**必然被抓到**
+    //   ⇒ ⇒ （只断言「≥ 2」会放过「从 7 行塌成 3 行」这种部分塌陷）。
+    if rows_after_tick != rows_after_mount {
+        failures.push(format!(
+            "⭐ **tick 之后窗口行数（{rows_after_tick}）与挂载后（{rows_after_mount}）不一致**             ⇒ ⇒ 整树重建**覆盖了窗口化结果**"
+        ));
+    }
+
+    let result = js_sys::Object::new();
+    let failures_array = js_sys::Array::new();
+    for item in &failures {
+        failures_array.push(&JsValue::from_str(item));
+    }
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("ok"),
+        &JsValue::from_bool(failures.is_empty()),
+    );
+    let _ = js_sys::Reflect::set(&result, &JsValue::from_str("failures"), &failures_array);
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("rows_after_mount"),
+        &JsValue::from_f64(rows_after_mount as f64),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("rows_after_tick"),
+        &JsValue::from_f64(rows_after_tick as f64),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("dump_mount"),
+        &JsValue::from_str(&dump_mount),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("dump_tick"),
+        &JsValue::from_str(&dump_tick),
     );
     Ok(result.into())
 }

@@ -170,6 +170,30 @@ renderer.set_metrics_status(MetricsStatus::Ready);
 > ⚠ 度量未定时 `virtual_window_for` 会**显式拒绝**（返回 `Undecidable`）
 > ⇒ ⇒ 这是**故意的**：宁可不窗口化，也别用错误度量算出的窗口（会造成布局跳动）。
 
+### 2.5+ ⭐⭐ 虚拟列表：**每次改完树都要重新窗口化**（E-161 修的真缺陷）
+
+⚠️⚠️ **「整树重建」模式与「虚拟列表」不兼容**，除非你知道「列表区域由窗口化管」。
+
+```rust
+// ⚠️ 反例（E-161 的真缺陷）：树里塞了占位行 ⇒ ⇒ patch 会覆盖窗口化结果
+let tree = build_demo_tree(&state, &[]);   // 列表里只有 1 个占位行
+renderer.patch(tree)?;                      // ⭐ 把 7 行 + 留白 覆盖成 1 行！
+
+// ✅ 正例：改完树**立刻**重新窗口化
+renderer.patch(tree)?;
+render_windowed_list(&mut renderer, &[1], 1000)?;   // ← 抽成共用函数，两条路径一致
+```
+> ⇒ ⇒ 症状：虚拟列表**在第一次交互（输入/滚动）后塌成 1 行**
+> ⇒ ⇒ 用户看到列表**不再滚动、不再虚拟化**。
+> ⇒ ⇒ 参考实现：`crates-ui/evidence/p5-b/harness/src/lib.rs` 的 `render_windowed_list()`
+> （**首屏与 tick 共用**）与 `w0_tick()`（改完树**立刻**重新窗口化）。
+> ⇒ ⇒ 防回归断言：`l1_w0_window_probe` 断言「tick 前后窗口行数**完全一致**」。
+
+⚠️ **另一条**（E-159/E-160，已验证）：**别在挂载后立刻读布局度量**
+⇒ ⇒ `patch_windowed_at_path` 内部要读 `scrollTop`/`clientHeight`
+⇒ ⇒ **触发强制回流** ⇒ ⇒ 冷启动实测 **58~88 ms**（浏览器首次排版 + 字体度量）。
+⇒ ⇒ 延后到浏览器 paint 之后再窗口化 ⇒ ⇒ 实测 **0 ms** ⇒ ⇒ **净省一次回流**。
+
 ### 2.6 「这一屏没跳」怎么自证
 
 ```rust
