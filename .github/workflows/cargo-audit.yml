@@ -145,7 +145,6 @@ jobs:
           echo "cargo audit: 0 未忽略 advisory"
 
       - name: Convert JSON report to SARIF (R66)
-        if: always()
         # 语义对齐 GitHub `github/codeql-action` SARIF schema + qdrant-spark audit SARIF 转换模式.
         # 0 引新 dep; 走 python3 (GitHub Actions ubuntu-latest 默认带).
         # CI fix 2026-09: cargo-audit 0.22 的 JSON 里 vulnerabilities.found 是布尔值
@@ -159,6 +158,16 @@ jobs:
         # 报 `Path does not exist: audit-report.sarif` 二次失败 (PR #64 run 40058519140 实测),
         # 与 workflow 注释里「报告已先落盘, 上传步骤用 if: always() 保证失败时也留证据」相悖。
         # audit-report.json 在审计失败时同样已落盘, 故本步必须 always 跑, 让 SARIF 照常产出并上传。
+        #
+        # ⚠️ 2026-11-03 修「**YAML 重复键** ⇒ 整个文件被 GitHub 拒解析 ⇒ **0 job 秒红**」:
+        # 本 step 之前有**两处** `if: always()`（step 名之后一处、注释块之后一处）
+        # ⇒ YAML 同层重复键 ⇒ GitHub 报
+        #   `Invalid workflow file: ... (Line: 162, Col: 9): 'if' is already defined`
+        # ⇒ ⇒ **一个 job 都创建不出来** ⇒ run 立刻失败（不是审计失败）。
+        # ⇒ 现只保留**下面注释块之后**的那一处（语义等价：同一步两行重复键本就不可能同时生效）。
+        # ⇒ 溯源：这是**第三次复发**（`7146f4ad` 引入 → 两次各修一轮；
+        #   `50576a88` 与 `981e9fe7` 各自加了一行 → `62f33288` 合并时位置不同 ⇒ git 看不见冲突 ⇒ 又生出重复键）
+        # ⇒ ⇒ 已加**严格 YAML 重复键门禁**（`scripts/check_yaml_duplicate_keys.py`）防复发。
         if: always()
         run: |
           python3 - <<'PYEOF'

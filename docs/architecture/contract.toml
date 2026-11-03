@@ -361,6 +361,16 @@ timeout = 300
 note = "9 类文档强制结构 + 存量棘轮"
 
 [[ci_gates.gate]]
+id = "yaml-duplicate-keys"
+cmd = ["python3", "scripts/check_yaml_duplicate_keys.py"]
+stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
+scope = ["ci"]
+blocking = true
+required = true
+timeout = 120
+note = "严格 YAML 重复键守卫（GitHub 遇重复键会拒解析整个 workflow ⇒ 0 job 秒红；PyYAML/Ruby 静默取最后一个键 ⇒ 常规自检查不出）"
+
+[[ci_gates.gate]]
 id = "doc-caliber"
 cmd = ["python3", "scripts/check_doc_caliber.py"]
 stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活

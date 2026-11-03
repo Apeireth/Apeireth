@@ -634,6 +634,25 @@
       "flags": []
     },
     {
+      "id": "check-yaml-duplicate-keys",
+      "path": "scripts/check_yaml_duplicate_keys.py",
+      "kind": "guard",
+      "is_guard": true,
+      "blocking": true,
+      "invocation": [
+        "python3 scripts/check_yaml_duplicate_keys.py"
+      ],
+      "ci_workflows": [],
+      "has_baseline": false,
+      "notes": "严格 YAML 重复键守卫（2026-11-03 加，防 cargo-audit.yml 那类病复发）",
+      "flags": [
+        "--check",
+        "--help",
+        "--path",
+        "-h"
+      ]
+    },
+    {
       "id": "cosign-sign-all",
       "path": "scripts/release/cosign-sign-all.sh",
       "kind": "generator",
