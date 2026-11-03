@@ -1622,6 +1622,169 @@ pub fn w0_tick() -> Result<JsValue, JsValue> {
     Ok(result.into())
 }
 
+/// ⭐⭐⭐ **真实负载基线探针**（2026-11-03；E-158）。
+///
+/// ## 它测什么
+///
+/// §8 的性能数字此前都来自**合成压测树**（37,476 节点）⇒ ⇒ E-155 已更正：
+/// **真实首屏**是**虚拟列表窗口化**（只几十节点）⇒ ⇒ 首屏**没有卡点**。
+///
+/// ⭐ 本探针量的是**真实用户交互路径**的三段耗时：
+///
+/// | 段 | 是什么 | 为什么重要 |
+/// |---|---|---|
+/// | `mount_millis` | 首屏**首次挂载**（含 1000 行虚拟列表的窗口化计算） | 用户看到的**第一帧** |
+/// | `input_redraw_millis` | 改**输入框**后的一次重渲染（真实 `input` 事件驱动） | 最常见的交互 |
+/// | `scroll_redraw_millis` | **滚动**后的一次重渲染（真实 `scroll` 事件驱动） | 列表场景的核心交互 |
+///
+/// ## 为什么用**放大测量**
+///
+/// 浏览器侧**拿不到可靠的亚毫秒时钟**（E-156 实测：`performance.now()` 反复
+/// `eval` 读数恒为 0.1 µs；函数引用法恒为 0）⇒ ⇒ 改用**毫秒时钟 + 连做 N 次后除以 N**
+/// ⇒ ⇒ 累计量够大 ⇒ ⇒ 读数才有意义（⚠️ 精度为**量级**）。
+#[wasm_bindgen]
+pub fn l1_real_load_probe() -> Result<JsValue, JsValue> {
+    use apeireth_ui_dom::dom::Dom;
+    use apeireth_ui_dom::vnode::VNode;
+    use apeireth_ui_dom::web::WebDom;
+
+    let mut failures: Vec<String> = Vec::new();
+    let document = web_sys::window()
+        .and_then(|window| window.document())
+        .ok_or_else(|| JsValue::from_str("没有 document"))?;
+
+    // ⚠️ 毫秒时钟（浏览器侧无可靠亚毫秒时钟 ⇒ E-156）。
+    let now_ms = || js_sys::Date::now();
+
+    // ① 首屏挂载：容器 + 1000 行虚拟列表（**窗口化** ⇒ DOM 里只有窗口内的行）。
+    let dom = WebDom::new().map_err(|error| JsValue::from_str(&format!("WebDom: {error}")))?;
+    let root = dom
+        .create_element("div")
+        .map_err(|error| JsValue::from_str(&format!("建根失败：{error}")))?;
+    dom.set_attribute(&root, "id", "real-load-root")
+        .map_err(|error| JsValue::from_str(&format!("设 id 失败：{error}")))?;
+    if let Some(body) = document.body() {
+        let _ = body.append_child(&root);
+    }
+
+    let mut renderer = apeireth_ui_dom::Renderer::new(dom, root);
+    let state = Rc::new(RefCell::new(DemoState::default()));
+    let rows: Vec<String> = (0..1000).map(|index| format!("行 {index}")).collect();
+
+    // ⭐ 窗口化渲染的闭包（**交互重渲染时也必须用它**）。
+    //
+    // ⚠️⚠️ **踩过的坑**：最初只在**挂载时**调 `patch_windowed_at_path`，
+    //   交互重渲染却用 `build_demo_tree` ⇒ ⇒ 那棵树里含**1 行占位行**
+    //   ⇒ ⇒ **覆盖掉了窗口化结果** ⇒ ⇒ DOM 里只剩 1 行
+    //   ⇒ ⇒ 数字完全失真（且断言没抓到 ⇒ 因为「1 行」也满足 `> 0`）。
+    //   ⇒ ⇒ ⇒ 现在**所有**列表渲染都走这个闭包 ⇒ ⇒ 窗口化不会被覆盖。
+    let heights = vec![40.0_f64; 1000];
+    let render_list = |renderer: &mut apeireth_ui_dom::Renderer<WebDom>| {
+        renderer
+            .patch_windowed_at_path(&[1], &heights, 2, |index| {
+                VNode::element("div")
+                    .attr("class", "row")
+                    .attr("style", "height: 40px")
+                    .child(VNode::text(format!("行 {index}")))
+                    .build()
+            })
+            .map_err(|error| JsValue::from_str(&format!("窗口化失败：{error}")))
+    };
+
+    // 挂载：容器 + 窗口化列表（与 `w0_first_screen()` 同形）。
+    let mount_start = now_ms();
+    renderer
+        .render_guarded(build_demo_tree(&state, &rows))
+        .map_err(|error| JsValue::from_str(&format!("挂载失败：{error}")))?;
+    render_list(&mut renderer)?;
+    let mount_millis = now_ms() - mount_start;
+
+    // ② 输入后重渲染：改状态 ⇒ 重建树 ⇒ patch（**放大测量**：连做 N 次）。
+    const INPUT_ROUNDS: usize = 200;
+    let input_start = now_ms();
+    for round in 0..INPUT_ROUNDS {
+        state.borrow_mut().name = format!("名字 {round}");
+        state.borrow_mut().dirty = true;
+        let tree = build_demo_tree(&state, &rows);
+        renderer
+            .patch(tree)
+            .map_err(|error| JsValue::from_str(&format!("输入重渲染失败：{error}")))?;
+        // ⚠️ 必须**再窗口化一次**（否则被上一步的占位行覆盖）。
+        render_list(&mut renderer)?;
+    }
+    let input_redraw_millis = (now_ms() - input_start) / INPUT_ROUNDS as f64;
+
+    // ③ 滚动后重渲染：改滚动位置 ⇒ 重建树 ⇒ patch（同样放大）。
+    const SCROLL_ROUNDS: usize = 200;
+    let scroll_start = now_ms();
+    for round in 0..SCROLL_ROUNDS {
+        state.borrow_mut().scroll_top = (round % 100) as f64 * 40.0;
+        state.borrow_mut().dirty = true;
+        let tree = build_demo_tree(&state, &rows);
+        renderer
+            .patch(tree)
+            .map_err(|error| JsValue::from_str(&format!("滚动重渲染失败：{error}")))?;
+        // ⚠️ 同上：必须**再窗口化一次**。
+        render_list(&mut renderer)?;
+    }
+    let scroll_redraw_millis = (now_ms() - scroll_start) / SCROLL_ROUNDS as f64;
+
+    // 断言：首屏挂载后**窗口内**才有行（**不是** 1000 行）⇒ ⇒ 虚拟列表真的在起作用。
+    // ⚠️ 行容器是 `build_demo_tree` 自己建的 **`#w0-list`**（不是我的根节点）
+    //   ⇒ ⇒ 选择器必须指向它 ⇒ ⇒ 否则统计到 0。
+    let mounted_rows = document
+        .query_selector_all("#w0-list .row")
+        .ok()
+        .map(|list| list.length())
+        .unwrap_or(0);
+    // ⚠️ 断言**收紧**：容器 200px / 行高 40px ⇒ 窗口约 5 行（+overscan 2）
+    //   ⇒ ⇒ **必须 ≥ 2 行** ⇒ ⇒ 「1 行」这种「窗口化被覆盖」的情况**要被抓到**
+    //   ⇒ ⇒ （此前 `> 0` 的断言让「1 行」蒙混过关 ⇒ 数字失真却没报错）。
+    if !(2..=40).contains(&mounted_rows) {
+        failures.push(format!(
+            "首屏窗口化异常：DOM 行数 = {mounted_rows}（应 O(窗口)，远小于 1000）"
+        ));
+    }
+
+    let result = js_sys::Object::new();
+    let failures_array = js_sys::Array::new();
+    for item in &failures {
+        failures_array.push(&JsValue::from_str(item));
+    }
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("ok"),
+        &JsValue::from_bool(failures.is_empty()),
+    );
+    let _ = js_sys::Reflect::set(&result, &JsValue::from_str("failures"), &failures_array);
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("mount_millis"),
+        &JsValue::from_f64(mount_millis),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("input_redraw_millis"),
+        &JsValue::from_f64(input_redraw_millis),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("scroll_redraw_millis"),
+        &JsValue::from_f64(scroll_redraw_millis),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("mounted_rows"),
+        &JsValue::from_f64(mounted_rows as f64),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("rounds"),
+        &JsValue::from_f64((INPUT_ROUNDS + SCROLL_ROUNDS) as f64),
+    );
+    Ok(result.into())
+}
+
 /// ⭐⭐⭐⭐ **双向绑定探针**（垂直切片 Signal 环的浏览器端到端证据）。
 ///
 /// 在**真实浏览器**里验证：
