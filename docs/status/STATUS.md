@@ -18,7 +18,7 @@
 | `gap.memory_update` | PRODUCTION WIRED | ON | - | `5c74f955e62c` | 2026-11-20 |
 | `gap.prompt_stabilizer_unwired` | NOT IMPLEMENTED | - | - | `c9251271` | 2026-11-20 |
 | `sec.linux_containment` | IMPLEMENTED | - | - | `3a286761015c` | 2026-11-20 |
-| `sec.gateway_tls` | PRODUCTION WIRED | OFF | `APEIRETH_TLS_CERT` | `7635b32bcc97` | 2026-11-20 |
+| `sec.gateway_tls` | PRODUCTION WIRED | OFF | `APEIRETH_TLS_CERT` | `c78fca54373b` | 2026-11-20 |
 | `sec.storage_envelope_crypto` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_SESSION_SEAL` | `5c74f955e62c` | 2026-11-20 |
 | `gov.chain_skeleton` | PRODUCTION WIRED | ON | - | `5c74f955e62c` | 2026-11-20 |
 | `gov.chain_hook_adapter` | PRODUCTION WIRED | ON | - | `7635b32bcc97` | 2026-11-20 |
@@ -47,8 +47,8 @@
 | `bio.capacity` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_SELF_STATUS` | `4041ea70` | 2026-11-20 |
 | `rt.registered_module_v1` | PRODUCTION WIRED | ON | - | `5426b821b049` | 2026-11-28 |
 | `rt.owned_agents` | IMPLEMENTED | - | - | `7635b32bcc97` | 2026-11-20 |
-| `mem.registered_namespace` | IMPLEMENTED | - | - | `5c74f955e62c` | 2026-11-20 |
-| `rt.desktop_managed_main` | PRODUCTION WIRED | ON | - | `7635b32bcc97` | 2026-11-20 |
+| `mem.registered_namespace` | IMPLEMENTED | - | - | `0255bceb6dbf` | 2026-11-20 |
+| `rt.desktop_managed_main` | PRODUCTION WIRED | ON | - | `c78fca54373b` | 2026-11-20 |
 | `rt.module_execution_contract` | IMPLEMENTED | OFF | - | `5c74f955e62c` | 2026-11-20 |
 | `rt.system_one_internal` | IMPLEMENTED | OFF | - | `5c74f955e62c` | 2026-11-20 |
 | `rt.module_messages` | IMPLEMENTED | OFF | - | `5392e56c3218` | 2026-11-20 |
