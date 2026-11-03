@@ -90,7 +90,7 @@ claims:
       - crates/capabilities/tools/src/mcp_bridge/catalog.rs
       - crates/engine/runtime-assembly/tests/production_mcp_factory.rs
       - crates/engine/runtime-assembly/tests/convergence_mcp.rs
-    verified_at: 5c74f955e62cebcb1979fb3606e804d9fb10d73c
+    verified_at: 2a388454d17cb8dd9d1bb9b427cada2d1adbc4eb
     verify_cmd: "cargo test -p apeireth-tools-canonical mcp_bridge"
     owner: tools
     next_review: "2026-11-20"
@@ -586,7 +586,7 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/bio_observation_cells.rs
       - crates/engine/runtime-assembly/tests/bio_cognitive_wiring.rs
-    verified_at: 4041ea70
+    verified_at: 2a388454d17cb8dd9d1bb9b427cada2d1adbc4eb
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_observation_cells"
     owner: organ
     next_review: "2026-11-20"
@@ -651,7 +651,7 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/bio_cognitive_wiring.rs
       - crates/engine/runtime-assembly/tests/bio_observation_cells.rs
-    verified_at: 4041ea70
+    verified_at: 2a388454d17cb8dd9d1bb9b427cada2d1adbc4eb
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_cognitive_wiring"
     owner: organ
     next_review: "2026-11-20"
@@ -825,7 +825,7 @@ claims:
       - crates/adapters/cli/tests/gateway_panels.rs
       - crates/engine/runtime-assembly/tests/production_cognitive_v1.rs
       - crates/engine/runtime-assembly/tests/profile_memory_authorization.rs
-    verified_at: 5426b821b0493f9a811fe3c097c8e4967d5c787d
+    verified_at: 2a388454d17cb8dd9d1bb9b427cada2d1adbc4eb
     verify_cmd: "cargo test -p apeireth-runtime --test registry_runtime_v1 --locked && cargo test -p apeireth-runtime-assembly --test capability_modules_v1 --locked"
     owner: runtime
     next_review: "2026-11-28"
@@ -897,7 +897,7 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/convergence_memory.rs
       - crates/engine/runtime-assembly/tests/profile_memory_authorization.rs
-    verified_at: 0255bceb6dbf4e5ec45d2b6680a8d4e5315cc394
+    verified_at: 2a388454d17cb8dd9d1bb9b427cada2d1adbc4eb
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test profile_memory_authorization --locked -j 2 && cargo test -p apeireth-runtime-assembly --test convergence_memory --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"

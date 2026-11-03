@@ -292,6 +292,34 @@ async fn a_request_without_a_user_id_registers_nothing() {
 }
 
 #[tokio::test]
+async fn a_cross_domain_claim_is_refused_and_leaves_no_attribution() {
+    let (_guard, recorded) = RecorderGuard::install();
+    let state = harness("cross-domain").await;
+    let router = canonical_router_with_state(state);
+
+    // ALICE 的令牌却自称 `user-bob` 的域 ⇒ 域门**恒定拒帧**
+    // （`domain_forbidden`「自称域与凭据域不符」）。
+    let response = router
+        .oneshot(chat_request(ALICE_TOKEN, Some("user-bob")))
+        .await
+        .expect("请求");
+    let status = response.status();
+    let body = String::from_utf8_lossy(&response.into_body().collect().await.unwrap().to_bytes())
+        .to_string();
+
+    assert_eq!(
+        status,
+        axum::http::StatusCode::FORBIDDEN,
+        "自称他人域必须是 403 恒定拒帧：{body}"
+    );
+    assert!(
+        recorded.calls().is_empty(),
+        "**被拒的请求不得留下任何归属痕迹**（登记点必须留在域门之后）：{:?}",
+        recorded.calls()
+    );
+}
+
+#[tokio::test]
 async fn registration_is_not_lost_when_the_turn_fails() {
     let (_guard, recorded) = RecorderGuard::install();
     let state = harness("turn-fails").await;
