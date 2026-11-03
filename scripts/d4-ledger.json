@@ -3,15 +3,15 @@
   "spec": "docs/01-architecture/memory-knowledge-depth-system-spec.md §8 B0-c",
   "board": "docs/status/spec-batch-status.md",
   "source": "scripts/audit_unwired_modules.py",
-  "module_count": 50,
+  "module_count": 51,
   "candidate_count": 22,
   "measured_count": 3,
   "not_measurable_count": 1,
-  "left_pool_count": 0,
+  "left_pool_count": 2,
   "by_layer": {
     "D4": 8,
     "D3": 3,
-    "—": 23,
+    "—": 24,
     "D5": 7,
     "D1": 3,
     "D0": 2,
@@ -241,7 +241,7 @@
       "delta_recall": null,
       "delta_grounded": null,
       "measure_note": null,
-      "status": "pending"
+      "status": "left-pool"
     },
     {
       "module": "vector_rebuild",
@@ -378,6 +378,20 @@
       "produces": "Score",
       "measurable_by": "not-applicable",
       "note": "考卷基线（评估基建）",
+      "delta_recall": null,
+      "delta_grounded": null,
+      "measure_note": null,
+      "status": "left-pool"
+    },
+    {
+      "module": "quality_drift",
+      "loc": 323,
+      "layer": "—",
+      "kind": "eval",
+      "consumes": "TextAndRanking",
+      "produces": "Score",
+      "measurable_by": "not-applicable",
+      "note": "在线质量漂移监控（EMA 基线 + 2σ 连击告警；评估基建）",
       "delta_recall": null,
       "delta_grounded": null,
       "measure_note": null,

@@ -23,7 +23,7 @@ Author: lead
 |---|---|
 | `d0_hash_chain` · D0 保真：哈希链 | **在写入路径** |
 | `d4_default` · D4 姿态（默认关？） | **生产已接 · **默认关**** |
-| `d4_modules` · B0-c 候选池模块数 | **50** |
+| `d4_modules` · B0-c 候选池模块数 | **51** |
 | `d4_candidates` · B0-c 可测候选数 | **22** |
 | `d4_measured` · B0-c 已测行数 | **3** |
 | `d4_not_measurable` · B0-c 测法无效行数 | **1** |

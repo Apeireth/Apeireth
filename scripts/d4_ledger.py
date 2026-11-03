@@ -288,6 +288,20 @@ CLASSIFICATION: dict[str, dict[str, str]] = {
         "measurable_by": "not-applicable",
         "note": "§6.1 十八项指标（评估基建）",
     },
+    # 2026-11-02 补：记忆线新模块 `quality_drift`（在线质量漂移监控）落台账。
+    # 分类依据（照模块自己的文档 + 同类模块口径）：
+    # * 它消费的是**检索质量指标**（`recall@k`/`ndcg@k`）⇒ `consumes: TextAndRanking`；
+    # * 产出的是**漂移判定**（EMA 基线 + 2σ 连击告警）⇒ `produces: Score`
+    #   （与 `quality_metrics` / `robustness_metrics` 同类：评估基建的分数面）；
+    # * **不参与排序** ⇒ `measurable_by: not-applicable`、`layer: —`（与另两个 eval 同）。
+    "quality_drift": {
+        "layer": "—",
+        "kind": "eval",
+        "consumes": "TextAndRanking",
+        "produces": "Score",
+        "measurable_by": "not-applicable",
+        "note": "在线质量漂移监控（EMA 基线 + 2σ 连击告警；评估基建）",
+    },
     "robustness_metrics": {
         "layer": "—",
         "kind": "eval",

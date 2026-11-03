@@ -69,8 +69,8 @@
       "loc": 4159
     },
     "crates/engine/memory": {
-      "files": 178,
-      "loc": 79232
+      "files": 179,
+      "loc": 79557
     },
     "crates/engine/organ": {
       "files": 33,
@@ -94,7 +94,7 @@
     },
     "crates/foundation/core": {
       "files": 28,
-      "loc": 14556
+      "loc": 14564
     },
     "crates/foundation/credentials": {
       "files": 10,
