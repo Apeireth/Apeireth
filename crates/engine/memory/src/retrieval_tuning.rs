@@ -265,6 +265,16 @@ pub struct EvidenceTally {
     pub negative: u64,
 }
 
+/// **一条质量样本至少要多少条证据**（不足 ⇒ 不产生样本）。
+///
+/// ⚠️ **为什么要有这个下限**：一条证据的命中率只能是 0 或 1 ⇒ ⇒ 噪声极大
+/// ⇒ ⇒ 单条证据足以触发「连续偏离」告警 ⇒ ⇒ **假告警**。
+/// ⇒ ⇒ 至少要 3 条 ⇒ 命中率才有分辨力（1/3、2/3、3/3）。
+pub const MIN_QUALITY_SAMPLE_EVIDENCE: usize = 3;
+
+/// **命中率指标名**（漂移监控器里的指标名 ⇒ ⇒ 跨批次可比）。
+pub const RETRIEVAL_HIT_RATE_METRIC: &str = "retrieval/hit_rate";
+
 /// 有界权重: 基线锚定 + 走廊夹紧 + 固定小步 (防震荡的物理边界)。
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct BoundedWeight {
@@ -323,6 +333,10 @@ pub struct RetrievalTuningEngine {
     tally: BTreeMap<String, EvidenceTally>,
     history: Vec<RetrievalTuningRecord>,
     next_seq: u64,
+    /// **可选**的检索质量漂移监控（见 [`crate::quality_drift::QualityDriftMonitor`]）。
+    ///
+    /// ⚠️ **缺省 = 无** ⇒ ⇒ 引擎行为**一字不变** ⇒ ⇒ 监控是**显式**的挂载。
+    quality_drift: Option<crate::quality_drift::QualityDriftMonitor>,
 }
 
 impl Default for RetrievalTuningEngine {
@@ -339,6 +353,37 @@ impl RetrievalTuningEngine {
 
     /// 以给定评分权重为基线起步 (走廊锚定在基线上)。
     pub fn with_baseline(baseline: MemoryRankingConfig) -> Self {
+        let mut engine = Self::with_baseline_inner(baseline);
+        engine.quality_drift = None;
+        engine
+    }
+
+    /// 挂上**检索质量漂移监控**（**生产消费点**）。
+    ///
+    /// 每批证据到达时，引擎会算一个**命中率**样本
+    /// （`正信号 / (正信号 + 负信号)`）喂给监控器 ⇒ ⇒ 监控器据此判断
+    /// 「检索质量是不是在漂移」（连续多批偏离才告警）。
+    ///
+    /// ⚠️ **样本口径**：
+    /// - **一批一条样本**（不是每条证据一条）⇒ ⇒ 噪声可控；
+    /// - **没有任何证据的批次不产生样本**（无信号时**不猜**）⇒ ⇒
+    ///   监控器**不会**把「没数据」当成「质量差」。
+    #[must_use]
+    pub fn with_quality_drift(
+        mut self,
+        monitor: crate::quality_drift::QualityDriftMonitor,
+    ) -> Self {
+        self.quality_drift = Some(monitor);
+        self
+    }
+
+    /// 当前挂着的漂移监控器（没挂 ⇒ `None`）。
+    #[must_use]
+    pub fn quality_drift(&self) -> Option<&crate::quality_drift::QualityDriftMonitor> {
+        self.quality_drift.as_ref()
+    }
+
+    fn with_baseline_inner(baseline: MemoryRankingConfig) -> Self {
         let mut dimensions = BTreeMap::new();
         for (dimension, value) in [
             (RetrievalDimension::Semantic, baseline.semantic_weight),
@@ -360,6 +405,7 @@ impl RetrievalTuningEngine {
             tally: BTreeMap::new(),
             history: Vec::new(),
             next_seq: 1,
+            quality_drift: None,
         }
     }
 
@@ -426,7 +472,40 @@ impl RetrievalTuningEngine {
                 records.push(record);
             }
         }
+        self.record_quality_sample(evidence);
         records
+    }
+
+    /// **喂一个质量样本给漂移监控器**（生产消费点）。
+    ///
+    /// 样本 = **命中率** = `正信号 / (正信号 + 负信号)`（**一批一条**）。
+    ///
+    /// ⚠️ **口径纪律**（三条，都是防「假告警」）：
+    /// - **没有任何证据 ⇒ 不产生样本** ⇒ ⇒ 「没数据」**不等于**「质量差」；
+    /// - **证据不足 [`MIN_QUALITY_SAMPLE_EVIDENCE`] ⇒ 不产生样本**
+    ///   ⇒ ⇒ 一条证据的命中率只能是 0 或 1 ⇒ ⇒ 噪声极大 ⇒ ⇒ 不让单条证据触发告警；
+    /// - **样本时刻取批里最后一条证据的时刻**（引擎不读时钟 ⇒ 时刻由证据携带）。
+    fn record_quality_sample(&mut self, evidence: &[TuningEvidence]) {
+        let Some(monitor) = self.quality_drift.as_mut() else {
+            return;
+        };
+        let positive = evidence
+            .iter()
+            .filter(|item| item.signal == EvidenceSignal::Positive)
+            .count();
+        let negative = evidence
+            .iter()
+            .filter(|item| item.signal == EvidenceSignal::Negative)
+            .count();
+        let total = positive + negative;
+        if total < MIN_QUALITY_SAMPLE_EVIDENCE {
+            return;
+        }
+        let Some(at_epoch_ms) = evidence.iter().map(|item| item.at_epoch_ms).max() else {
+            return;
+        };
+        let hit_rate = positive as f64 / total as f64;
+        monitor.record(at_epoch_ms / 1_000, &[hit_rate]);
     }
 
     /// 观察单条证据 (批量观察的便捷口)。
@@ -645,6 +724,42 @@ mod tests {
             EvidenceSignal::Positive => TuningEvidence::positive(id, dimension, 1_000),
             EvidenceSignal::Negative => TuningEvidence::negative(id, dimension, 1_000),
         }
+    }
+
+    /// **生产消费点的测试**：证据批次 ⇒ 命中率样本 ⇒ 漂移监控器看得见。
+    #[test]
+    fn quality_drift_monitor_sees_hit_rate_samples_from_evidence_batches() {
+        use crate::quality_drift::QualityDriftMonitor;
+
+        let monitor = QualityDriftMonitor::new(&[RETRIEVAL_HIT_RATE_METRIC], 0.05, 2.0, 3);
+        let mut engine = RetrievalTuningEngine::new().with_quality_drift(monitor);
+
+        // ① 证据不足（2 条）⇒ **不产生样本** ⇒ ⇒ 监控器看不到任何采样
+        engine.observe_batch(&[
+            evidence(EvidenceSignal::Positive, "m1", None),
+            evidence(EvidenceSignal::Negative, "m2", None),
+        ]);
+        let monitor = engine.quality_drift().expect("monitor attached");
+        assert_eq!(monitor.observed(), 0, "证据不足 ⇒ 不该产生样本");
+
+        // ② 3 条证据（全正）⇒ 命中率 1.0 ⇒ 一个样本
+        engine.observe_batch(&[
+            evidence(EvidenceSignal::Positive, "m1", None),
+            evidence(EvidenceSignal::Positive, "m2", None),
+            evidence(EvidenceSignal::Positive, "m3", None),
+        ]);
+        let monitor = engine.quality_drift().expect("monitor attached");
+        assert_eq!(monitor.observed(), 1, "够证据 ⇒ 该有一个样本");
+        assert_eq!(monitor.metrics(), [RETRIEVAL_HIT_RATE_METRIC]);
+
+        // ③ 混批（2 正 1 负）⇒ 命中率 2/3
+        engine.observe_batch(&[
+            evidence(EvidenceSignal::Positive, "m4", None),
+            evidence(EvidenceSignal::Negative, "m5", None),
+            evidence(EvidenceSignal::Positive, "m6", None),
+        ]);
+        let monitor = engine.quality_drift().expect("monitor attached");
+        assert_eq!(monitor.observed(), 2);
     }
 
     #[test]

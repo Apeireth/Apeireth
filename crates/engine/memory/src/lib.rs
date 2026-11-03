@@ -420,6 +420,7 @@ pub mod retrieval_pipeline;
 /// ⇒ ⇒ 冲突解法：**两个都留**（各自保留注释）。
 pub mod principal_sessions;
 pub mod quality_drift;
+pub use quality_drift::{QualityDriftMonitor, QualitySample};
 pub mod retrieval_tuning;
 pub mod robustness_metrics;
 pub mod scope;
