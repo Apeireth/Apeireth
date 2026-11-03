@@ -394,7 +394,6 @@ pub mod continuity_state;
 pub mod coordinator;
 pub mod extraction;
 pub mod facade;
-pub mod quality_drift;
 // V4-b 记忆保鲜回路 (保鲜三件套: 散列增量门 / 可恢复摄取队列 / 增量折入)。
 pub mod freshness;
 pub mod layers;
@@ -411,7 +410,12 @@ pub mod retrieval_pipeline;
 /// ⇒ ⇒ 本地与 CI 立刻 `E0432: unresolved import apeireth_memory::principal_sessions`
 /// ⇒ ⇒ **连带所有门禁全红**（编译失败 ⇒ 每个 workflow 都挂）
 /// ⇒ ⇒ 所以这里**补回**，并在下面留一行注释提醒：**改 `lib.rs` 时要用合并，不要整树覆盖**。
+///
+/// 2026-11-03 合并：记忆线的 `9ff0f312`（"恢复被我覆盖的模块声明"）也补了这一行
+/// ⇒ ⇒ **两边都要**（`principal_sessions` 是我的归属写面，`quality_drift` 是他们的漂移监控）
+/// ⇒ ⇒ 冲突解法：**两个都留**（各自保留注释）。
 pub mod principal_sessions;
+pub mod quality_drift;
 pub mod retrieval_tuning;
 pub mod robustness_metrics;
 pub mod scope;
