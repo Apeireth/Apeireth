@@ -1453,43 +1453,14 @@ pub struct DemoState {
     pub dirty: bool,
     /// 列表滚动位置（由引擎从真实 DOM 读，不缓存）。
     pub scroll_top: f64,
-    /// ⭐⭐⭐ **当前虚拟窗口**（首行 / 末行 / 前留白 / 总高）。
-    ///
-    /// ## 为什么需要
-    ///
-    /// 整树 `patch` 会把列表区域**按新树的内容**替换 ⇒ ⇒ 若新树里列表**没有行**
-    /// ⇒ ⇒ 列表被**清空** ⇒ ⇒ 内容高度塌陷 ⇒ ⇒ **浏览器把 `scrollTop` 夹回 0**
-    /// ⇒ ⇒ ⇒ 用户的滚动位置**丢失**（E-164 实测：滚到 4000 ⇒ ⇒ 立刻变 0）。
-    ///
-    /// ⇒ ⇒ **窗口存进状态** ⇒ ⇒ `build_demo_tree` 输出**当前窗口的行**
-    /// ⇒ ⇒ ⇒ 整树 patch 的列表差分 = 「旧窗口 vs 同一窗口」⇒ ⇒ **不变**
-    /// ⇒ ⇒ ⇒ ⇒ **`scrollTop` 不再被夹回 0** ✓
-    pub window: WindowState,
 }
 
-/// ⭐⭐⭐ **虚拟窗口的状态**（列表内容的唯一真源）。
-#[derive(Default, Clone, Copy)]
-pub struct WindowState {
-    /// 窗口首行下标。
-    pub first: usize,
-    /// 窗口末行下标（**含**）。
-    pub last: usize,
-    /// 前留白高度（px）。
-    pub offset: f64,
-    /// 全表总高度（px）。
-    pub total: f64,
-    /// 窗口**有效**（还没算过 ⇒ ⇒ 首屏要先算一次）。
-    pub valid: bool,
-}
 
 thread_local! {
     /// 渲染器（示例屏单例）。
     static DEMO: RefCell<Option<DemoRenderer>> = const { RefCell::new(None) };
     /// ⭐ 诊断用：`w0_first_screen` 里「挂监听后立刻派发 scroll」的 `peek()` 结果。
     static SCROLL_PROBE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-    /// ⭐⭐⭐ **E-165 验证开关**：树里的列表**只留容器、不输出窗口的行**
-    ///   ⇒ ⇒ 模拟「调用方完全不知道窗口内容」⇒ ⇒ 验证**引擎级保证**。
-    static BLANK_LIST: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 /// 示例屏的渲染器 + 状态（放一起，便于 tick 时一起用）。
@@ -1542,79 +1513,29 @@ pub fn build_demo_tree(
                 )
                 .build(),
         )
-        .child(build_list_node(state))
+        .child(build_list_node())
         .build()
 }
 
-/// ⭐⭐⭐⭐ **列表容器 + 当前窗口的内容**（E-164 的根本修法）。
+/// ⭐⭐⭐⭐ **列表容器**（E-165：内容**交给虚拟化**）。
 ///
-/// ## 它解决什么
+/// ## 为什么树里**只有容器、没有行**
 ///
-/// 整树 `patch` 会把列表区域**按新树的内容**替换。
+/// 引擎的「虚拟化接管」保证（E-165）：`patch_windowed_at_path` 会**自动**给该容器
+/// 打上 `virtualized` 标记 ⇒ ⇒ ⇒ **整树 `patch` 会跳过它的子节点差分**
+/// ⇒ ⇒ ⇒ 已挂载的窗口内容**原样保留** ⇒ ⇒ ⇒ 两件事一起消失：
+/// ① 整树重建**清空**窗口 ⇒ ⇒ 滚动位置不再丢（E-164）；
+/// ② 整树重建**覆盖**窗口 ⇒ ⇒ 虚拟列表不再塌陷（E-161）。
 ///
-/// - **旧写法（占位行）**：列表里只有 **1 个占位行**
-///   ⇒ ⇒ 整树 patch 把窗口化结果**整个覆盖掉**（E-161）⇒ ⇒ 虚拟列表塌成 1 行；
-/// - **E-163 的写法（列表无行）**：列表**空着**
-///   ⇒ ⇒ 整树 patch 把列表**清空** ⇒ ⇒ 内容高度塌陷
-///   ⇒ ⇒ ⇒ **浏览器把 `scrollTop` 夹回 0** ⇒ ⇒ 用户的滚动位置**丢失**
-///   ⇒ ⇒ ⇒ （E-164 实测：滚到 4000 ⇒ ⇒ 下一个 tick 后立刻变 0）。
+/// ⇒ ⇒ 所以树里**不需要**再带一份窗口内容 ⇒ ⇒ ⇒
+/// ⇒ ⇒ ⇒ 「树与 state 同步窗口」那套机制（E-163 的补丁）**已删**。
 ///
-/// ⇒ ⇒ **正解**：列表内容 = **当前窗口**（存在 `state.window` 里）
-/// ⇒ ⇒ ⇒ 整树 patch 的列表差分 = 「旧窗口 vs 同一窗口」⇒ ⇒ **不变**
-/// ⇒ ⇒ ⇒ ⇒ **`scrollTop` 不再被夹回 0** ✓
-///
-/// ## 窗口没算过时
-///
-/// `state.window.valid == false` ⇒ ⇒ **输出空列表**（首屏还没窗口化）
-/// ⇒ ⇒ 首屏挂载后再调一次窗口化 ⇒ ⇒ 窗口被写回 state ⇒ ⇒ 之后整树 patch 就稳定了。
-fn build_list_node(state: &Rc<RefCell<DemoState>>) -> apeireth_ui_dom::vnode::VNode {
+/// ⚠️ 容器**必须**在树里（否则 `patch_windowed_at_path` 的路径找不到父节点）。
+fn build_list_node() -> apeireth_ui_dom::vnode::VNode {
     use apeireth_ui_dom::vnode::VNode;
-
-    let window = state.borrow().window;
-    let mut children: Vec<VNode> = Vec::new();
-    // ⭐⭐⭐ **E-165 验证开关**：把树里的列表**清空**（模拟「调用方不知道窗口内容」）
-    //   ⇒ ⇒ 若引擎的「虚拟化接管」保证生效 ⇒ ⇒ 整树 patch **不会**清空窗口
-    //   ⇒ ⇒ ⇒ 滚动位置**不会**丢。
-    // ⚠️ 生产上**不该**这样（树的列表是空的 ⇒ 引擎也认不出这是列表）
-    //   ⇒ ⇒ 这里只是**验证引擎级保证** ⇒ ⇒ 用环境变量开关。
-    // ⚠️⚠️ **「留空」= 容器还在、只是**不输出窗口的行**（E-165 的验证语义）。
-    //   ⇒ ⇒ 容器**必须**在树里（否则窗口化**无处可写**）
-    //   ⇒ ⇒ ⇒ 验证的是「**容器在、内容不在**」这一种真实形态。
-    let blank_list = BLANK_LIST.with(|slot| slot.get());
-    if window.valid && !blank_list {
-        if window.offset > 0.0 {
-            children.push(
-                VNode::element("div")
-                    .attr("class", "vlist-spacer-before")
-                    .attr("style", format!("height: {}px", window.offset))
-                    .build(),
-            );
-        }
-        for index in window.first..=window.last {
-            children.push(
-                VNode::element("div")
-                    .attr("class", "row")
-                    .attr("style", "height: 40px")
-                    .child(VNode::text(format!("行 {index}")))
-                    .build(),
-            );
-        }
-        let window_height = (window.last - window.first + 1) as f64 * 40.0;
-        let spacer_after = (window.total - window.offset - window_height).max(0.0);
-        if spacer_after > 0.0 {
-            children.push(
-                VNode::element("div")
-                    .attr("class", "vlist-spacer-after")
-                    .attr("style", format!("height: {spacer_after}px"))
-                    .build(),
-            );
-        }
-    }
-
     VNode::element("div")
         .attr("id", "w0-list")
         .attr("style", "height: 200px; overflow-y: auto;")
-        .child(VNode::Fragment(children))
         .build()
 }
 
@@ -1635,13 +1556,12 @@ fn build_list_node(state: &Rc<RefCell<DemoState>>) -> apeireth_ui_dom::vnode::VN
 /// ⇒ ⇒ ⇒ 口径一致，不会再出现「一条路径窗口化、另一条不」的偏差。
 fn render_windowed_list(
     renderer: &mut apeireth_ui_dom::Renderer<apeireth_ui_dom::web::WebDom>,
-    state: &Rc<RefCell<DemoState>>,
     list_path: &[usize],
     item_count: usize,
 ) -> Result<(), JsValue> {
     use apeireth_ui_dom::vnode::VNode;
     let heights = vec![40.0_f64; item_count];
-    let plan = renderer
+    renderer
         .patch_windowed_at_path(list_path, &heights, 2, |index| {
             VNode::element("div")
                 .attr("class", "row")
@@ -1650,16 +1570,6 @@ fn render_windowed_list(
                 .build()
         })
         .map_err(|error| JsValue::from_str(&format!("窗口化失败：{error}")))?;
-    // ⭐⭐⭐ **窗口写回状态**（E-164）：树里要带**同一个窗口**
-    //   ⇒ ⇒ 整树 patch 的列表差分 = 「旧窗口 vs 同一窗口」⇒ ⇒ 不变
-    //   ⇒ ⇒ ⇒ **`scrollTop` 不再被夹回 0** ✓
-    state.borrow_mut().window = WindowState {
-        first: plan.first,
-        last: plan.last,
-        offset: plan.offset,
-        total: heights.iter().sum(),
-        valid: true,
-    };
     Ok(())
 }
 
@@ -1742,7 +1652,7 @@ pub fn w0_first_screen() -> Result<JsValue, JsValue> {
     //
     // ⇒ ⇒ 保留 [`w0_windowize`] 供宿主在**别**的场景显式调用
     // ⇒ ⇒（例如「先渲染骨架、后补数据」这类**已知**要延后的场景）。
-    render_windowed_list(&mut renderer, &state, &[1], 1000)?;
+    render_windowed_list(&mut renderer, &[1], 1000)?;
     // ⭐⭐ **诊断（E-164）**：监听挂上之后**立刻**派发一次 `scroll` ⇒ ⇒ 看 `peek()`。
     //   ⇒ ⇒ 与「窗口化之前」那次对比 ⇒ ⇒ 定位是「挂上就没生效」
     //   ⇒ ⇒ 还是「窗口化把监听弄丢了」。
@@ -2136,12 +2046,6 @@ pub fn l1_scroll_signal_probe() -> Result<JsValue, JsValue> {
     Ok(result.into())
 }
 
-/// ⭐⭐⭐ **设置「树里的列表只留容器、不输出行」开关**（E-165 验证用；**仅测试**）。
-#[wasm_bindgen]
-pub fn w0_set_blank_list(blank: bool) {
-    BLANK_LIST.with(|slot| slot.set(blank));
-}
-
 /// ⭐⭐⭐⭐ **对照：挂载与窗口化在**同一个 wasm 调用**里**（E-162 的关键证据）。
 ///
 /// ## 它回答什么
@@ -2180,7 +2084,7 @@ pub fn w0_first_screen_sync_probe() -> Result<JsValue, JsValue> {
         .render_guarded(build_demo_tree(&state, &rows))
         .map_err(|error| JsValue::from_str(&format!("渲染失败：{error}")))?;
     // ② ⭐ **同一个 wasm 调用内**窗口化（这是要复现的情形）。
-    render_windowed_list(&mut renderer, &state, &[1], 1000)?;
+    render_windowed_list(&mut renderer, &[1], 1000)?;
 
     let rows_in_dom = document
         .query_selector_all("#sync-probe-root #w0-list .row")
@@ -2242,7 +2146,7 @@ pub fn w0_windowize() -> Result<JsValue, JsValue> {
             already = true;
             return;
         }
-        match render_windowed_list(&mut demo.renderer, &demo.state, &demo.list_path, demo.row_count) {
+        match render_windowed_list(&mut demo.renderer, &demo.list_path, demo.row_count) {
             Ok(()) => {
                 demo.pending_windowize = false;
                 windowized = true;
@@ -2307,12 +2211,9 @@ pub fn w0_tick() -> Result<JsValue, JsValue> {
             // ⇒ ⇒ ⇒ **只在滚动时**才做（输入变化**不**触发 ⇒ ⇒ 零额外回流）。
             let need_windowize = scroll_seen || demo.pending_windowize;
             if need_windowize {
-                if let Err(error) = render_windowed_list(
-                    &mut demo.renderer,
-                    &demo.state,
-                    &demo.list_path,
-                    demo.row_count,
-                ) {
+                if let Err(error) =
+                    render_windowed_list(&mut demo.renderer, &demo.list_path, demo.row_count)
+                {
                     // ⭐ 不静默吞掉：把错误**带出去**（`w0_tick` 的结果里有 `window_error`）。
                     window_error = Some(format!("{error:?}"));
                 }
