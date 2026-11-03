@@ -2103,7 +2103,10 @@ impl MemoryWritebackModule {
                     if !skip_round {
                         if let Some(coord) = &self.coordinator {
                             ran_any = true;
-                            match coord.run_consolidation(&session) {
+                            // ⚠️ 2026-11-03 记忆线：改走**统一入口** ⇒
+                            // 装了整编驱动 ⇒ 走「只整新料 + 同窗口只整一次」的增量语义；
+                            // 没装 ⇒ 走**一字未改**的旧路径 ⇒ ⇒ 装配方不升级 = 行为不变。
+                            match coord.run_consolidation_at(&session, now) {
                                 Ok(report) => {
                                     for insight in report.extracted_insights {
                                         let episode = Episode {

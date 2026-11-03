@@ -41,16 +41,21 @@ use crate::MemoryError;
 /// ⚠️ 本仓 ms/seconds 混用，**这里刻意用秒**，并在名字里写明（`*_sec`）。
 pub trait ConsolidationWatermark: Send + Sync {
     /// 上次整编的时刻（epoch 秒）；从未整编过 ⇒ `None`。
-    fn last_consolidated_sec(&self) -> Result<Option<i64>, MemoryError>;
+    ///
+    /// ⚠️ **`key` = 会话标识**（2026-11-03 自查发现并修掉的设计缺陷）：
+    /// 原实现是**单个全局时间戳** ⇒ ⇒ **一个会话整编会把另一个会话的水位也推进**
+    /// ⇒ ⇒ 后者**永远等不到新料**（它的情节全部早于水位）⇒ ⇒ **静默停止整编**。
+    /// ⇒ ⇒ 水位**必须按会话隔离**。
+    fn last_consolidated_sec(&self, key: &str) -> Result<Option<i64>, MemoryError>;
 
     /// 记录本次整编的时刻（epoch 秒）。
-    fn mark_consolidated_sec(&self, at_sec: i64) -> Result<(), MemoryError>;
+    fn mark_consolidated_sec(&self, key: &str, at_sec: i64) -> Result<(), MemoryError>;
 }
 
 /// 进程内水位（确定性测试 / 无库装配）。
 #[derive(Debug, Default)]
 pub struct InMemoryConsolidationWatermark {
-    state: Mutex<Option<i64>>,
+    state: Mutex<std::collections::HashMap<String, i64>>,
 }
 
 impl InMemoryConsolidationWatermark {
@@ -62,27 +67,28 @@ impl InMemoryConsolidationWatermark {
 }
 
 impl ConsolidationWatermark for InMemoryConsolidationWatermark {
-    fn last_consolidated_sec(&self) -> Result<Option<i64>, MemoryError> {
+    fn last_consolidated_sec(&self, key: &str) -> Result<Option<i64>, MemoryError> {
         let guard = self
             .state
             .lock()
             .map_err(|_| MemoryError::Poisoned("consolidation watermark".to_string()))?;
-        Ok(*guard)
+        Ok(guard.get(key).copied())
     }
 
-    fn mark_consolidated_sec(&self, at_sec: i64) -> Result<(), MemoryError> {
+    fn mark_consolidated_sec(&self, key: &str, at_sec: i64) -> Result<(), MemoryError> {
         let mut guard = self
             .state
             .lock()
             .map_err(|_| MemoryError::Poisoned("consolidation watermark".to_string()))?;
-        *guard = Some(at_sec);
+        guard.insert(key.to_string(), at_sec);
         Ok(())
     }
 }
 
 /// 文件后端水位（一个 JSON 文件）—— 便于「夜里跑一次」的**进程外**持久化。
 ///
-/// 格式：`{"last_consolidated_sec": 1735689600}`；文件不存在 ⇒ **从未整编过**（`None`），
+/// 格式：`{"sessions": {"<会话>": 1735689600}}`（**按会话隔离** ⇒ 一个会话的整编
+/// 不会影响另一个）；文件不存在 ⇒ **从未整编过**（`None`），
 /// **不是错误**（⇒ ⇒ 第一次跑不会因「文件缺失」失败）。
 #[derive(Debug, Clone)]
 pub struct FileConsolidationWatermark {
@@ -104,23 +110,41 @@ impl FileConsolidationWatermark {
 }
 
 impl ConsolidationWatermark for FileConsolidationWatermark {
-    fn last_consolidated_sec(&self) -> Result<Option<i64>, MemoryError> {
+    fn last_consolidated_sec(&self, key: &str) -> Result<Option<i64>, MemoryError> {
+        Ok(self.read_all()?.get(key).copied())
+    }
+
+    fn mark_consolidated_sec(&self, key: &str, at_sec: i64) -> Result<(), MemoryError> {
+        let mut all = self.read_all()?;
+        all.insert(key.to_string(), at_sec);
+        let payload = serde_json::json!({ "sessions": all });
+        std::fs::write(&self.path, payload.to_string()).map_err(MemoryError::Io)
+    }
+}
+
+impl FileConsolidationWatermark {
+    /// 读出「会话 → 上次整编时刻」的整张表（文件不存在 ⇒ 空表，**不是错误**）。
+    fn read_all(&self) -> Result<std::collections::BTreeMap<String, i64>, MemoryError> {
         match std::fs::read_to_string(&self.path) {
             Ok(text) => {
                 let value: serde_json::Value =
                     serde_json::from_str(&text).map_err(MemoryError::Json)?;
-                Ok(value
-                    .get("last_consolidated_sec")
-                    .and_then(serde_json::Value::as_i64))
+                let sessions = value.get("sessions").and_then(serde_json::Value::as_object);
+                let mut out = std::collections::BTreeMap::new();
+                if let Some(map) = sessions {
+                    for (name, at) in map {
+                        if let Some(at) = at.as_i64() {
+                            out.insert(name.clone(), at);
+                        }
+                    }
+                }
+                Ok(out)
             }
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                Ok(std::collections::BTreeMap::new())
+            }
             Err(error) => Err(MemoryError::Io(error)),
         }
-    }
-
-    fn mark_consolidated_sec(&self, at_sec: i64) -> Result<(), MemoryError> {
-        let payload = serde_json::json!({ "last_consolidated_sec": at_sec });
-        std::fs::write(&self.path, payload.to_string()).map_err(MemoryError::Io)
     }
 }
 
@@ -267,6 +291,21 @@ pub struct ConsolidationTrigger {
 }
 
 impl ConsolidationTrigger {
+    /// **生产便利构造**：进程内水位 + 给定窗口（秒）。
+    ///
+    /// ⚠️ **进程内水位** ⇒ 进程重启后水位归零 ⇒ ⇒ 「第一次整编会重整一遍」。
+    /// ⇒ ⇒ **跨重启的夜间整编**请用 [`FileConsolidationWatermark`]。
+    ///
+    /// - `window_sec`：窗口长度（秒）；`0` ⇒ **不设时间闸**
+    ///   ⇒ ⇒ 只剩「只整新料」这一条语义（适合「由外部节奏旋钮管时间」的装配）。
+    #[must_use]
+    pub fn in_memory(window_sec: i64) -> Self {
+        Self::new(
+            ConsolidationPolicy::new(window_sec),
+            Arc::new(InMemoryConsolidationWatermark::new()),
+        )
+    }
+
     /// 构造驱动（策略 + 水位）。
     #[must_use]
     pub fn new(policy: ConsolidationPolicy, watermark: Arc<dyn ConsolidationWatermark>) -> Self {
@@ -284,11 +323,13 @@ impl ConsolidationTrigger {
     }
 
     /// 只看「窗口是否到期」（不涉及情节条数）⇒ 调用方可在夜里**先问一句**再决定要不要跑。
-    pub fn should_run(&self, now_sec: i64) -> Result<bool, MemoryError> {
+    ///
+    /// - `session_id`：会话标识（**水位按会话隔离** ⇒ 不同会话互不影响）。
+    pub fn should_run(&self, session_id: &str, now_sec: i64) -> Result<bool, MemoryError> {
         if !self.policy.enabled {
             return Ok(false);
         }
-        match self.watermark.last_consolidated_sec()? {
+        match self.watermark.last_consolidated_sec(session_id)? {
             Some(last) => Ok(now_sec.saturating_sub(last) >= self.policy.window_sec),
             None => Ok(true),
         }
@@ -317,7 +358,7 @@ impl ConsolidationTrigger {
             });
         }
 
-        let last = self.watermark.last_consolidated_sec()?;
+        let last = self.watermark.last_consolidated_sec(session_id)?;
         if let Some(last) = last {
             let elapsed = now_sec.saturating_sub(last);
             if elapsed < self.policy.window_sec {
@@ -381,7 +422,7 @@ impl ConsolidationTrigger {
             }
         };
 
-        self.watermark.mark_consolidated_sec(now_sec)?;
+        self.watermark.mark_consolidated_sec(session_id, now_sec)?;
 
         Ok(ConsolidationOutcome::Consolidated {
             window_from_sec: last,
@@ -444,7 +485,7 @@ mod tests {
         assert!(outcome.consolidated());
         assert_eq!(outcome.episode_count(), 5);
         assert_eq!(
-            watermark.last_consolidated_sec().expect("watermark"),
+            watermark.last_consolidated_sec("s1").expect("watermark"),
             Some(2_000)
         );
     }
@@ -467,7 +508,7 @@ mod tests {
             })
         );
         assert_eq!(
-            watermark.last_consolidated_sec().expect("watermark"),
+            watermark.last_consolidated_sec("s1").expect("watermark"),
             Some(2_000)
         );
     }
@@ -511,7 +552,7 @@ mod tests {
             Some(&SkipReason::NotEnoughEpisodes { have: 2, need: 8 })
         );
         assert_eq!(
-            watermark.last_consolidated_sec().expect("watermark"),
+            watermark.last_consolidated_sec("s1").expect("watermark"),
             None,
             "料不够不该推进水位"
         );
@@ -528,7 +569,10 @@ mod tests {
             .run("s1", &episodes(9, 1_000), 2_000, None)
             .expect("run");
         assert_eq!(outcome.skip_reason(), Some(&SkipReason::Disabled));
-        assert_eq!(watermark.last_consolidated_sec().expect("watermark"), None);
+        assert_eq!(
+            watermark.last_consolidated_sec("s1").expect("watermark"),
+            None
+        );
     }
 
     #[test]
@@ -560,12 +604,12 @@ mod tests {
     #[test]
     fn should_run_reflects_the_window_only() {
         let (driver, _watermark) = trigger(ConsolidationPolicy::new(100).with_min_episodes(50));
-        assert!(driver.should_run(1_000).expect("should_run"));
+        assert!(driver.should_run("s1", 1_000).expect("should_run"));
         driver
             .run("s1", &episodes(60, 1_000), 1_000, None)
             .expect("run");
-        assert!(!driver.should_run(1_050).expect("should_run"));
-        assert!(driver.should_run(1_100).expect("should_run"));
+        assert!(!driver.should_run("s1", 1_050).expect("should_run"));
+        assert!(driver.should_run("s1", 1_100).expect("should_run"));
     }
 
     #[test]
@@ -648,6 +692,49 @@ mod tests {
     }
 
     #[test]
+    fn watermarks_are_isolated_per_session() {
+        // ⚠️ **2026-11-03 自查发现并修掉的设计缺陷**：水位原先是**单个全局时间戳**
+        // ⇒ ⇒ 一个会话整编 ⇒ **另一个会话的水位也被推进**
+        // ⇒ ⇒ 后者的情节全部早于水位 ⇒ ⇒ **永远等不到新料 ⇒ 静默停止整编**。
+        // ⇒ ⇒ 现在水位**按会话隔离** ⇒ 本测试钉住这一点。
+        let (driver, watermark) = trigger(ConsolidationPolicy::new(86_400).with_min_episodes(1));
+
+        // 会话 A 先整编（把水位推到 2_000）
+        let a = vec![episode("a-1", 1_500, "user", "fixed: A 素材")];
+        assert!(driver
+            .run("session-a", &a, 2_000, None)
+            .expect("run a")
+            .consolidated());
+
+        // 会话 B 的水位**必须仍是「从未整编过」** ⇒ ⇒ B 照样能整编
+        assert_eq!(
+            watermark
+                .last_consolidated_sec("session-b")
+                .expect("watermark b"),
+            None,
+            "会话 B 的水位不该被会话 A 影响"
+        );
+        let b = vec![episode("b-1", 1_500, "user", "fixed: B 素材")];
+        assert!(
+            driver
+                .run("session-b", &b, 2_100, None)
+                .expect("run b")
+                .consolidated(),
+            "会话 B 应能独立整编"
+        );
+
+        // A 的水位是 2_000，B 的是 2_100 ⇒ ⇒ 互不覆盖
+        assert_eq!(
+            watermark.last_consolidated_sec("session-a").expect("a"),
+            Some(2_000)
+        );
+        assert_eq!(
+            watermark.last_consolidated_sec("session-b").expect("b"),
+            Some(2_100)
+        );
+    }
+
+    #[test]
     fn file_watermark_round_trips_and_missing_file_means_never_run() {
         let dir =
             std::env::temp_dir().join(format!("consolidation-watermark-{}", std::process::id()));
@@ -657,19 +744,19 @@ mod tests {
 
         let watermark = FileConsolidationWatermark::new(&path);
         assert_eq!(
-            watermark.last_consolidated_sec().expect("missing file"),
+            watermark.last_consolidated_sec("s1").expect("missing file"),
             None
         );
-        watermark.mark_consolidated_sec(1_234).expect("write");
+        watermark.mark_consolidated_sec("s1", 1_234).expect("write");
         assert_eq!(
-            watermark.last_consolidated_sec().expect("read"),
+            watermark.last_consolidated_sec("s1").expect("read"),
             Some(1_234)
         );
 
         // 另一个实例读同一个文件 ⇒ 进程外持久化成立
         let reopened = FileConsolidationWatermark::new(&path);
         assert_eq!(
-            reopened.last_consolidated_sec().expect("reopen"),
+            reopened.last_consolidated_sec("s1").expect("reopen"),
             Some(1_234)
         );
 

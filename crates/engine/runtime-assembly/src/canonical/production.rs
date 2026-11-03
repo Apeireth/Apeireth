@@ -12,8 +12,9 @@ use std::sync::Mutex;
 use apeireth_core::kernel::Clock;
 use apeireth_guard::hook::SharedImmuneMemory;
 use apeireth_memory::{
-    AccessHistoryActivationSource, ContextWindowManager, EmbeddingProvider, MemoryCoordinator,
-    MemoryExtractor, MemoryGovernanceStore, MemoryMaterializer, MemoryMaterializerPort,
+    AccessHistoryActivationSource, ConsolidationPolicy, ConsolidationTrigger, ContextWindowManager,
+    EmbeddingProvider, FileConsolidationWatermark, MemoryCoordinator, MemoryExtractor,
+    MemoryGovernanceStore, MemoryMaterializer, MemoryMaterializerPort,
     MemoryTypedMaterializationSink, ProactiveRecallPolicy, ScopedMemoryBackend,
     SqliteAccessHistoryStore, TypedMemoryRecallSource, TypedRecallIdentity,
 };
@@ -1512,6 +1513,27 @@ impl ProductionModules {
             }
             if config.memory_injection {
                 coordinator = coordinator.with_memory_injection_format();
+            }
+            // 记忆线（2026-11-03）：接上**夜间整编驱动** ⇒
+            // 「只整新料 + 同一窗口只整一次」⇒ ⇒ 老素材不再被反复重整编。
+            // ⚠️ **水位跨进程持久化**（文件）⇒ ⇒ 进程重启后**不会**把老料重整一遍。
+            // ⚠️ **窗口 = 0** ⇒ **不设时间闸**（时间节奏仍由既有的
+            // `APEIRETH_TUNE_CONSOLIDATION_CADENCE` 旋钮管）⇒ ⇒ 只剩「只整新料」这一条语义。
+            // ⚠️ **装不上驱动 ⇒ 走旧路径**（`run_consolidation_at` 的降级分支）⇒ ⇒ 不阻断启动。
+            let watermark_path = default_data_root()
+                .join("memory")
+                .join("consolidation-watermark.json");
+            if std::fs::create_dir_all(
+                watermark_path
+                    .parent()
+                    .unwrap_or_else(|| std::path::Path::new(".")),
+            )
+            .is_ok()
+            {
+                coordinator = coordinator.with_consolidation_trigger(ConsolidationTrigger::new(
+                    ConsolidationPolicy::new(0).with_min_episodes(1),
+                    Arc::new(FileConsolidationWatermark::new(watermark_path)),
+                ));
             }
             if let Some(pref) = &backends.preferences {
                 coordinator = coordinator.with_preferences(Arc::clone(pref));
