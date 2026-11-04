@@ -8,14 +8,17 @@
 //! 「记录已知流向」就只是一句承诺**。本命令是那个「可查」的最小实现 ——
 //! 与 `apeireth exposure report`（暴露面体检）、`apeireth lessons`（教训）同族。
 //!
-//! 只读：零写。账本本体在 `APEIRETH_DATA_DIR`/`~/.apeireth` 下 `egress-ledger.jsonl`。
+//! 读多写一：`ledger` / `impact` 只读零写；`outcome` 是本族**唯一写面**
+//! （后果回填，append-only —— 历史事件不被改写）。
+//! 账本体在 `APEIRETH_DATA_DIR`/`~/.apeireth` 下 `egress-ledger.jsonl` /
+//! `impact-ledger.jsonl` / `consequence-ledger.jsonl`。
 
 use std::path::PathBuf;
 
 use apeireth_runtime_assembly::egress_ledger::EgressLedger;
 
-/// 用法帧。
-pub const USAGE: &str = "apeireth egress ledger [--path <LEDGER_JSONL>] [--limit <N>] [--json]\napeireth egress impact [--path <IMPACT_JSONL>] [--limit <N>] [--json]\n\n  ledger = 出域账本（观测面：判定 / 对象类型 / 指纹 / 目的地 / 用途）。\n  impact = 问责账本（责任面：授权 / 可逆性 / 影响谁 / 后果）。\n  两个账本**都零真值**：只有指涉 id，没有内容原文。\n  缺省 path = 数据根（APEIRETH_DATA_DIR 或默认目录）下的 egress-ledger.jsonl / impact-ledger.jsonl。";
+/// 用法帧（三个动词都列全 —— 漏一个动词，用错的人就少了参照）。
+pub const USAGE: &str = "apeireth egress ledger [--path <LEDGER_JSONL>] [--limit <N>] [--json]\napeireth egress impact [--path <IMPACT_JSONL>] [--limit <N>] [--json]\napeireth egress outcome [--path <CONSEQUENCE_JSONL>] [--json] <ACTION_ID> <confirmed|failed>\n\n  ledger = 出域账本（观测面：判定 / 对象类型 / 指纹 / 目的地 / 用途）。\n  impact = 问责账本（责任面：授权 / 可逆性 / 影响谁 / 后果）。\n  outcome = 后果回填（**唯一写面**：把外部行动的结果 confirmed / failed 追加进后果账本）。\n  两个只读账本**都零真值**：只有指涉 id，没有内容原文。\n  旗标：--path = 账本路径；--limit = 显示条数（ledger / impact）；--json = JSON 输出（布尔旗标，不带值）。\n  位置参数：只有 outcome 要 <ACTION_ID> <confirmed|failed>；ledger / impact 不收位置参数。\n  未知旗标一律拒绝（不静默忽略）；`--` 之后的词一律当位置参数。\n  缺省 path = 数据根（APEIRETH_DATA_DIR 或默认目录）下的 egress-ledger.jsonl / impact-ledger.jsonl / consequence-ledger.jsonl。";
 
 /// 命令入口（数据根 = 默认数据目录）。
 pub fn run_egress(args: &[String]) -> Result<String, String> {
@@ -34,20 +37,23 @@ pub fn run_egress_at(data_root: &std::path::Path, args: &[String]) -> Result<Str
         "outcome" => return run_outcome(data_root, rest),
         _ => return Err(format!("unknown egress command: {verb}\n{USAGE}")),
     }
+    // 旗标：白名单式扫描 —— 认识的按类型取，不认识的**拒绝即帧**（不静默忽略）。
+    let scanned = scan_args(rest, &LEDGER_FLAGS, "ledger")?;
+    reject_positional(&scanned, "ledger")?;
     // 路径：--path 显式优先；否则走数据根（`APEIRETH_DATA_DIR` 或默认目录）。
     // **不新增独立 env** —— env 名数有棘轮（160 上限，只减不增），
     // 且账本位置属于「数据根」语义，不该另开一个开关。
-    let path = match parse_arg(rest, "--path") {
+    let path = match scanned.value("--path") {
         Some(raw) => PathBuf::from(raw),
         None => data_root.join("egress-ledger.jsonl"),
     };
-    let limit = match parse_arg(rest, "--limit") {
+    let limit = match scanned.value("--limit") {
         Some(raw) => raw
             .parse::<usize>()
             .map_err(|_| format!("--limit 需要一个非负整数: {raw}"))?,
         None => 50,
     };
-    let json = rest.iter().any(|arg| arg == "--json");
+    let json = scanned.has("--json");
 
     let ledger = EgressLedger::new(Some(path.clone()));
     let mut entries = ledger.entries();
@@ -106,17 +112,19 @@ pub fn run_egress_at(data_root: &std::path::Path, args: &[String]) -> Result<Str
 ///
 /// **只读零写**，**零真值**（只指涉 id，不带内容）。
 pub fn run_impact(data_root: &std::path::Path, rest: &[String]) -> Result<String, String> {
-    let path = match parse_arg(rest, "--path") {
+    let scanned = scan_args(rest, &IMPACT_FLAGS, "impact")?;
+    reject_positional(&scanned, "impact")?;
+    let path = match scanned.value("--path") {
         Some(raw) => PathBuf::from(raw),
         None => data_root.join("impact-ledger.jsonl"),
     };
-    let limit = match parse_arg(rest, "--limit") {
+    let limit = match scanned.value("--limit") {
         Some(raw) => raw
             .parse::<usize>()
             .map_err(|_| format!("--limit 需要一个非负整数: {raw}"))?,
         None => 50,
     };
-    let json = rest.iter().any(|arg| arg == "--json");
+    let json = scanned.has("--json");
 
     let ledger =
         apeireth_runtime_assembly::accountability::AccountabilityLedger::new(Some(path.clone()));
@@ -183,32 +191,27 @@ pub fn run_impact(data_root: &std::path::Path, rest: &[String]) -> Result<String
 /// 2. **状态机把关** —— 已确认的事实不能被退回 `unknown`（`record` 会拒绝）；
 /// 3. **append-only** —— 每次回填追加一条事件，历史不被改写。
 pub fn run_outcome(data_root: &std::path::Path, rest: &[String]) -> Result<String, String> {
-    let path = match parse_arg(rest, "--path") {
-        Some(raw) => PathBuf::from(raw),
-        None => data_root.join("consequence-ledger.jsonl"),
-    };
+    // 旗标：白名单式扫描 —— 布尔旗标**不吞**后面的词（`--json` 不带值），
+    // 带值旗标缺值 ⇒ 报「缺值」，未知旗标 ⇒ 指名拒绝。
+    let scanned = scan_args(rest, &OUTCOME_FLAGS, "outcome")?;
     // 位置参数：<ACTION_ID> <confirmed|failed>
     //
     // ⚠️ 不能只按「不以 -- 开头」过滤：`--path <value>` 的**值**也不以 -- 开头，
     // 会被误当位置参数（我第一版就是这么错的，测试抓到）。
-    // 正确做法：遇到 `--xxx` 就跳过它和它的值。
-    let mut positional: Vec<&String> = Vec::new();
-    let mut index = 0;
-    while index < rest.len() {
-        if rest[index].starts_with("--") {
-            index += 2; // 跳过旗标名 + 它的值
-            continue;
-        }
-        positional.push(&rest[index]);
-        index += 1;
-    }
-    let (action_id, outcome_label) = match positional.as_slice() {
+    // 也不能「见到 --xxx 就跳过它和它的值」：布尔旗标（`--json`）没有值，
+    // 那样会把位置参数吞掉（`--json act-1 confirmed` 只剩一个位置参数）。
+    // 正确做法：**按旗标类型**判定 —— 带值旗标吃下一个词，布尔旗标什么都不吃。
+    let (action_id, outcome_label) = match scanned.positional.as_slice() {
         [action_id, outcome] => (action_id.as_str(), outcome.as_str()),
         _ => {
             return Err(format!(
                 "outcome 需要两个位置参数：<ACTION_ID> <confirmed|failed>\n{USAGE}"
             ))
         }
+    };
+    let path = match scanned.value("--path") {
+        Some(raw) => PathBuf::from(raw),
+        None => data_root.join("consequence-ledger.jsonl"),
     };
     let outcome = match outcome_label {
         "confirmed" => apeireth_runtime_assembly::accountability::Outcome::Confirmed,
@@ -219,24 +222,31 @@ pub fn run_outcome(data_root: &std::path::Path, rest: &[String]) -> Result<Strin
             ))
         }
     };
+    let source = apeireth_runtime_assembly::consequence::OutcomeSource::UserConfirmed;
     let mut tracker =
         apeireth_runtime_assembly::consequence::ConsequenceTracker::with_ledger(path.clone());
     let now_ms = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis() as i64)
         .unwrap_or(0);
-    if !tracker.record(
-        action_id,
-        outcome,
-        apeireth_runtime_assembly::consequence::OutcomeSource::UserConfirmed,
-        now_ms,
-    ) {
+    if !tracker.record(action_id, outcome, source, now_ms) {
         return Err(format!(
             "回填被拒：行动 `{action_id}` 的当前后果是 `{}`，不能改成 `{}` \
              （已确认的事实不能被抹掉）",
             tracker.current_outcome(action_id).label(),
             outcome.label()
         ));
+    }
+    if scanned.has("--json") {
+        let payload = serde_json::json!({
+            "action_id": action_id,
+            "outcome": outcome.label(),
+            "source": source.label(),
+            "at_ms": now_ms,
+            "ledger": path.display().to_string(),
+        });
+        return serde_json::to_string_pretty(&payload)
+            .map_err(|error| format!("后果回填序列化失败: {error}"));
     }
     Ok(format!(
         "已回填：行动 {action_id} 的后果 = {}（来源：用户确认）\n账本：{}",
@@ -245,19 +255,154 @@ pub fn run_outcome(data_root: &std::path::Path, rest: &[String]) -> Result<Strin
     ))
 }
 
-/// 取 `--<name>` 后的值（最后一个出现者生效）。
-fn parse_arg(args: &[String], name: &str) -> Option<String> {
-    let mut found = None;
+/// 旗标白名单（每个动词一份）。
+///
+/// 白名单式扫描 = **不认识的旗标一律拒绝**：
+/// - 带值旗标（`--path` / `--limit`）：后面必须跟一个值；缺值 ⇒ 报「缺值」
+///   （旧实现是「静默回落默认账本」—— 用户以为读的是指定文件，其实在读默认文件）；
+/// - 布尔旗标（`--json`）：**不带值**，也**不吞**后面的词；
+/// - `--` 之后的词一律当位置参数（想传以 `-` 开头的字面量时用它）。
+struct FlagSpec {
+    /// 带值旗标：`--name <VALUE>`。
+    value: &'static [&'static str],
+    /// 布尔旗标：`--name`（不带值）。
+    boolean: &'static [&'static str],
+}
+
+impl FlagSpec {
+    /// 本动词认识的旗标（人读列表，用于错误帧）。
+    fn known(&self) -> String {
+        self.value
+            .iter()
+            .chain(self.boolean.iter())
+            .copied()
+            .collect::<Vec<_>>()
+            .join(" / ")
+    }
+}
+
+/// `ledger` 的旗标白名单。
+const LEDGER_FLAGS: FlagSpec = FlagSpec {
+    value: &["--path", "--limit"],
+    boolean: &["--json"],
+};
+
+/// `impact` 的旗标白名单。
+const IMPACT_FLAGS: FlagSpec = FlagSpec {
+    value: &["--path", "--limit"],
+    boolean: &["--json"],
+};
+
+/// `outcome` 的旗标白名单（没有 `--limit`：回填只写一条事件）。
+const OUTCOME_FLAGS: FlagSpec = FlagSpec {
+    value: &["--path"],
+    boolean: &["--json"],
+};
+
+/// 扫描结果。
+struct Scanned {
+    /// 带值旗标取值（同名时**最后一个**出现者生效）。
+    values: Vec<(&'static str, String)>,
+    /// 命中的布尔旗标。
+    boolean: Vec<&'static str>,
+    /// 位置参数（`--` 之后的词也在内）。
+    positional: Vec<String>,
+}
+
+impl Scanned {
+    /// 取带值旗标的取值（最后一个出现者生效）。
+    fn value(&self, name: &str) -> Option<&str> {
+        self.values
+            .iter()
+            .rev()
+            .find(|(flag, _)| *flag == name)
+            .map(|(_, value)| value.as_str())
+    }
+
+    /// 布尔旗标是否命中。
+    fn has(&self, name: &str) -> bool {
+        self.boolean.iter().any(|flag| *flag == name)
+    }
+}
+
+/// 在白名单里找旗标名（返回静态名，便于结果里带走 `'static` 生命周期）。
+fn find_flag(flags: &'static [&'static str], arg: &str) -> Option<&'static str> {
+    flags.iter().copied().find(|flag| *flag == arg)
+}
+
+/// 白名单式扫描旗标 —— **拒绝即帧**。
+///
+/// 旧实现是「静默忽略」：未知的 `--xxx` 直接跳过（用户拼错旗标也照样成功），
+/// `--path` 缺值时静默回落默认账本。这里改成逐词判定：认识的按类型取，
+/// 不认识的立刻报错并**指名旗标**。
+fn scan_args(args: &[String], spec: &FlagSpec, verb: &str) -> Result<Scanned, String> {
+    let mut scanned = Scanned {
+        values: Vec::new(),
+        boolean: Vec::new(),
+        positional: Vec::new(),
+    };
     let mut index = 0;
+    let mut literal_only = false;
     while index < args.len() {
-        if args[index] == name {
-            found = args.get(index + 1).cloned();
-            index += 2;
+        let arg = args[index].as_str();
+        if literal_only {
+            // `--` 之后不做旗标解析：一律当位置参数。
+            scanned.positional.push(arg.to_string());
+            index += 1;
             continue;
         }
+        if arg == "--" {
+            literal_only = true;
+            index += 1;
+            continue;
+        }
+        if arg.len() > 1 && arg.starts_with('-') {
+            if let Some(flag) = find_flag(spec.boolean, arg) {
+                // 布尔旗标不带值 ⇒ **不吞**后面的词。
+                scanned.boolean.push(flag);
+                index += 1;
+                continue;
+            }
+            if let Some(flag) = find_flag(spec.value, arg) {
+                // 值的位置上**没有词** ⇒ 缺值；位置上**又是另一个长旗标** ⇒ 也是缺值
+                // （`--path --json` 不能把 `--json` 当路径）。
+                let value = match args.get(index + 1).map(|value| value.as_str()) {
+                    None => {
+                        return Err(format!(
+                            "{flag} 缺值：带值旗标要跟一个值（如 {flag} <VALUE>）"
+                        ))
+                    }
+                    Some(value) if value.starts_with("--") => {
+                        return Err(format!(
+                            "{flag} 缺值：后面的 `{value}` 是旗标，不是值（如 {flag} <VALUE>）"
+                        ))
+                    }
+                    Some(value) => value,
+                };
+                scanned.values.push((flag, value.to_string()));
+                index += 2;
+                continue;
+            }
+            return Err(format!(
+                "未知旗标 {arg}（{verb} 只认 {}）；若要传以 - 开头的字面量，请先用 `--` 结束旗标解析",
+                spec.known()
+            ));
+        }
+        scanned.positional.push(arg.to_string());
         index += 1;
     }
-    found
+    Ok(scanned)
+}
+
+/// `ledger` / `impact` 不收位置参数（多写了要报错，不静默吞掉）。
+fn reject_positional(scanned: &Scanned, verb: &str) -> Result<(), String> {
+    match scanned.positional.as_slice() {
+        [] => Ok(()),
+        extra => Err(format!(
+            "{verb} 不接受位置参数（收到: {}）",
+            extra.join(" / ")
+        )),
+    }
 }
 
 #[cfg(test)]
