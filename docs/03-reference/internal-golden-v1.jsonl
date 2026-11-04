@@ -214,7 +214,7 @@
 {"id": "ig-v1-214", "query": "接线台账每项带哪些逐行证据字段？", "expect_ids": ["doc:67b89e957ca1"], "expect_fragments": ["production_sites"], "tags": ["guard"]}
 {"id": "ig-v1-215", "query": "工作线登记表自称是什么？", "expect_ids": ["doc:6832385b0663"], "expect_fragments": ["认领清单"], "tags": ["registry"]}
 {"id": "ig-v1-216", "query": "重挖题有个什么坑会让分数虚高？", "expect_ids": ["doc:685755ddff56"], "expect_fragments": ["重挖题的分数是在更简单的题上拿的"], "tags": ["measurement"]}
-{"id": "ig-v1-217", "query": "推理内容 provider 的开关环境变量叫什么？", "expect_ids": ["doc:69ffc46c0e3b"], "expect_fragments": ["APEIRETH_REASONIN"], "tags": ["wiring"]}
+{"id": "ig-v1-217", "query": "推理内容 provider 的开关环境变量叫什么？", "expect_ids": ["doc:5ea897242214"], "expect_fragments": ["APEIRETH_REASONIN"], "tags": ["wiring"], "notes": "权威登记在 `docs/architecture/env-registry.toml`；原 id 属 04-internal 重排前的路径（`315bcff1`）⇒ id 变、内容未变。"}
 {"id": "ig-v1-218", "query": "continuation 安全子集为什么不自动重放？", "expect_ids": ["doc:6bae272538f1"], "expect_fragments": ["不自动重放"], "tags": ["safety"]}
 {"id": "ig-v1-219", "query": "路线图的用途是给谁的？", "expect_ids": ["doc:6f1844fcff8b"], "expect_fragments": ["给「下一个动手的人」"], "tags": ["route"]}
 {"id": "ig-v1-220", "query": "用户说三年前时参照时间应该怎么改？", "expect_ids": ["doc:6f5e0e9ffd5f"], "expect_fragments": ["参照时间应该改成 3 年前"], "tags": ["wiring", "anchor"]}
