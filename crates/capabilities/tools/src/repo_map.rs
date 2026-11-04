@@ -1,4 +1,4 @@
-//! Aider-inspired AST Symbol Extraction & Personalized PageRank Repo Map.
+//! AST Symbol Extraction & Personalized PageRank Repo Map.
 //!
 //! # Architecture
 //!
