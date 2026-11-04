@@ -46,6 +46,7 @@ pub mod form_controls;
 pub mod icon;
 pub mod icon_data;
 pub mod json;
+pub mod modal;
 pub mod num;
 pub mod registry;
 pub mod tool_card;
