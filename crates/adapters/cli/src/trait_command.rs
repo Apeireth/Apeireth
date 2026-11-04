@@ -25,6 +25,8 @@ use apeireth_runtime_assembly::{
 };
 use serde_json::json;
 
+use crate::flags;
+
 /// 用法说明 (未知动作/坏参数一律报真因 + 用法)。
 pub const USAGE: &str = "apeireth trait report\n\
      apeireth trait lock <slider>\n\
@@ -70,15 +72,15 @@ pub fn run_trait_at(paths: &TraitGrowthPaths, args: &[String]) -> Result<String,
 
 /// `report` 动作: 只认 `--json` 一个布尔旗标; 位置参数一律是多余参数。
 fn report_action(paths: &TraitGrowthPaths, rest: &[String]) -> Result<String, String> {
-    let scanned = scan_flags("report", "只认 --json", true, rest)?;
-    if let Some(extra) = scanned.positional.first() {
+    let scanned = scan_flags("report", "--json", true, rest)?;
+    if let Some(extra) = scanned.positionals.first() {
         return Err(format!(
             "trait report 多余参数: {extra} (report 只接受 --json)\n{USAGE}"
         ));
     }
     let facts = TraitGrowthFacts::read(paths)?;
     let report = TraitReport::build(&facts.records, &facts.locks, facts.values, now_epoch_ms());
-    if scanned.json {
+    if scanned.has("--json") {
         render_report_json(&report, facts.skipped, paths)
     } else {
         Ok(render_report(&report, facts.skipped, paths))
@@ -91,8 +93,8 @@ fn slider_action(
     action: &str,
     rest: &[String],
 ) -> Result<String, String> {
-    let scanned = scan_flags(action, "只接受一个滑杆名 (不收旗标)", false, rest)?;
-    match scanned.positional.as_slice() {
+    let scanned = scan_flags(action, "", false, rest)?;
+    match scanned.positionals.as_slice() {
         [slider] => set_lock_at(paths, slider, action == "lock"),
         [] => Err(format!(
             "trait: unknown action usage: {action:?} 需要一个滑杆名 (<slider>)\n{USAGE}"
@@ -104,15 +106,21 @@ fn slider_action(
     }
 }
 
-/// 旗标扫描结果 (布尔旗标不带值; 位置参数含 `--` 之后的词)。
-struct Scanned {
-    /// `--json` 是否命中。
-    json: bool,
-    /// 位置参数 (`--` 之后的词也在内)。
-    positional: Vec<String>,
-}
+/// `trait report` 的旗标白名单 (`--json` 是布尔旗标: 不带值、不吞后面的词)。
+const REPORT_FLAGS: flags::FlagSpec = flags::FlagSpec {
+    value: &[],
+    boolean: &["--json"],
+    meta_as_positional: false,
+};
 
-/// 白名单式旗标扫描 —— **拒绝即帧**。
+/// `trait lock` / `unlock` 的旗标白名单 (这两个动作不收旗标)。
+const NO_FLAGS: flags::FlagSpec = flags::FlagSpec {
+    value: &[],
+    boolean: &[],
+    meta_as_positional: false,
+};
+
+/// 白名单式旗标扫描 —— **拒绝即帧**（判据在 crate 级共享模块 [`crate::flags`]）。
 ///
 /// 两条纪律 (与 `apeireth egress` 同款):
 /// 1. 认识的按类型取: 布尔旗标 (`--json`) **不吞**后面的词;
@@ -124,32 +132,21 @@ fn scan_flags(
     known: &str,
     json_allowed: bool,
     args: &[String],
-) -> Result<Scanned, String> {
-    let mut scanned = Scanned {
-        json: false,
-        positional: Vec::new(),
+) -> Result<flags::Scan, String> {
+    let command = format!("trait {action}");
+    let spec = if json_allowed {
+        &REPORT_FLAGS
+    } else {
+        &NO_FLAGS
     };
-    let mut index = 0;
-    while index < args.len() {
-        let arg = args[index].as_str();
-        if arg == "--" {
-            scanned.positional.extend(args[index + 1..].iter().cloned());
-            break;
-        }
-        if arg.len() > 1 && arg.starts_with('-') {
-            if json_allowed && arg == "--json" {
-                scanned.json = true;
-                index += 1;
-                continue;
-            }
-            return Err(format!(
-                "trait {action} 未知旗标: {arg} ({action} {known})\n{USAGE}"
-            ));
-        }
-        scanned.positional.push(arg.to_string());
-        index += 1;
-    }
-    Ok(scanned)
+    flags::scan(args, spec).map_err(|error| {
+        error.frame(
+            flags::Style::Zh,
+            &flags::FrameContext::new(&command, flags::UnknownNoun::Flag)
+                .with_usage(USAGE)
+                .with_known(known),
+        )
+    })
 }
 
 /// 锁定/解锁 (显式动作): 写锁定档并回报当前四杆锁定态。

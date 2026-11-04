@@ -20,9 +20,18 @@ use apeireth_tools_canonical::exposure_audit::{
     run_exposure_audit, BindingProbe, BindingSurface, ExposureAuditConfig,
 };
 
+use crate::flags;
+
 /// 本面的用法帧 (错误即帧: 参数错 = 带用法的正式通道)。
 pub const USAGE: &str =
     "Usage:\n  apeireth exposure report [--json] [--out <PATH>] [--bundle <BUNDLE>]";
+
+/// 本面的旗标白名单 (`--json` 是布尔旗标: 不带值、不吞后面的词)。
+const EXPOSURE_FLAGS: flags::FlagSpec = flags::FlagSpec {
+    value: &["--out", "--bundle"],
+    boolean: &["--json"],
+    meta_as_positional: false,
+};
 
 /// `apeireth exposure` 入口 (env 解析数据根)。
 pub fn run_exposure(args: &[String]) -> Result<String, String> {
@@ -44,36 +53,26 @@ pub fn run_exposure_on(config: &ExposureAuditConfig, args: &[String]) -> Result<
     if verb != "report" {
         return Err(format!("unknown exposure command: {verb}\n{USAGE}"));
     }
-    let mut json = false;
+    let known = EXPOSURE_FLAGS.known();
+    let context = flags::FrameContext::new("exposure report", flags::UnknownNoun::Flag)
+        .with_usage(USAGE)
+        .with_known(&known);
+    let scanned = flags::scan(rest, &EXPOSURE_FLAGS)
+        .map_err(|error| error.frame(flags::Style::En, &context))?;
+    // 本面不收位置参数 (报告是唯一产出物, 没有「多余的话」这一说)。
+    if let Some(error) = scanned.extra_positional() {
+        return Err(error.frame(flags::Style::En, &context));
+    }
+    let json = scanned.has("--json");
     let mut out: Option<PathBuf> = None;
     let mut bundle: Option<PathBuf> = None;
-    let mut index = 0;
-    while index < rest.len() {
-        match rest[index].as_str() {
-            "--json" => json = true,
-            "--out" | "--bundle" => {
-                let flag = rest[index].clone();
-                index += 1;
-                let Some(value) = rest.get(index) else {
-                    return Err(format!("exposure report {flag} requires a value\n{USAGE}"));
-                };
-                let value = checked_flag_value(&flag, value)?;
-                if flag == "--out" {
-                    out = Some(out_target(value)?);
-                } else {
-                    bundle = Some(PathBuf::from(value));
-                }
-            }
-            flag if flag.starts_with("--") => {
-                return Err(format!("unknown exposure report argument: {flag}\n{USAGE}"));
-            }
-            value => {
-                return Err(format!(
-                    "unknown exposure report argument: {value}\n{USAGE}"
-                ));
-            }
-        }
-        index += 1;
+    if let Some(raw) = scanned.value("--out") {
+        let value = checked_flag_value("--out", raw)?;
+        out = Some(out_target(value)?);
+    }
+    if let Some(raw) = scanned.value("--bundle") {
+        let value = checked_flag_value("--bundle", raw)?;
+        bundle = Some(PathBuf::from(value));
     }
 
     let mut config = config.clone();
@@ -101,6 +100,10 @@ pub fn run_exposure_on(config: &ExposureAuditConfig, args: &[String]) -> Result<
 /// 以 `-` 开头的值会被读成另一个旗标 —— 落档就会写出「看起来像旗标」的
 /// 文件名 (`--out --json` ⇒ 写出名为 `--json` 的文件)。错误即帧: 点名旗标、
 /// 点名值、说清为什么拒, 并带用法帧。
+///
+/// 口径分档: 本闸比 crate 级共享档 ([`crate::flags::is_flag_like`]) **严一档** ——
+/// 共享档只把「旗标形态」当缺值 (负数是合法值), 本面是**落档**面 (值直接变成
+/// 文件名), 故负数 (`-1`) 与单个 `-` 也一并拒。
 fn checked_flag_value<'a>(flag: &str, value: &'a str) -> Result<&'a str, String> {
     let trimmed = value.trim();
     if trimmed.is_empty() {
@@ -108,7 +111,7 @@ fn checked_flag_value<'a>(flag: &str, value: &'a str) -> Result<&'a str, String>
             "exposure report {flag} requires a non-empty value (值不能为空)\n{USAGE}"
         ));
     }
-    if trimmed.starts_with('-') {
+    if flags::starts_with_dash(trimmed) {
         return Err(format!(
             "exposure report {flag} value must not start with '-': '{value}' \
              (值以 '-' 开头会被读成另一个旗标)\n{USAGE}"

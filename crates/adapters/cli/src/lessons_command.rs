@@ -23,6 +23,7 @@ use std::path::PathBuf;
 use apeireth_memory::SqliteMemoryStore;
 use apeireth_memory::{LessonScope, LessonStatus};
 
+use crate::flags;
 use crate::COGNITIVE_DB_ENV;
 
 /// 用法帧。
@@ -120,55 +121,39 @@ struct Flags {
     status: Option<String>,
 }
 
+/// 本命令的旗标白名单（三个带值旗标；本命令不收布尔旗标）。
+const LESSONS_FLAGS: flags::FlagSpec = flags::FlagSpec {
+    value: &["--db", "--scope", "--status"],
+    boolean: &[],
+    meta_as_positional: false,
+};
+
 /// 旗标解析：未知旗标 / 缺值 / 重复旗标 一律拒绝即帧。
+///
+/// 判据（旗标形态 / 缺值 / `--` 分隔）走 crate 级共享模块
+/// [`crate::flags`]；本命令只留自己的措辞（「未知参数」—— 旗标与位置词类
+/// 同称）与用法帧。
 fn parse_flags(args: &[String]) -> Result<Flags, String> {
-    let mut flags = Flags::default();
-    let mut index = 0usize;
-    while index < args.len() {
-        let name = args[index].clone();
-        match name.as_str() {
-            "--db" => {
-                let value = take_value(args, &mut index, &name)?;
-                set_once(&mut flags.db, &name, value)?;
-            }
-            "--scope" => {
-                let value = take_value(args, &mut index, &name)?;
-                set_once(&mut flags.scope, &name, value)?;
-            }
-            "--status" => {
-                let value = take_value(args, &mut index, &name)?;
-                set_once(&mut flags.status, &name, value)?;
-            }
-            other => return Err(format!("lessons 未知参数: {other}\n{USAGE}")),
+    let known = LESSONS_FLAGS.known();
+    let scanned = flags::scan(args, &LESSONS_FLAGS).map_err(|error| {
+        error.frame(
+            flags::Style::Zh,
+            &flags::FrameContext::new("lessons", flags::UnknownNoun::Argument)
+                .with_usage(USAGE)
+                .with_known(&known),
+        )
+    })?;
+    // 同一旗标只允许给一次（重复即拒，不静默取最后一个）。
+    for name in ["--db", "--scope", "--status"] {
+        if scanned.count(name) > 1 {
+            return Err(format!("lessons 重复参数: {name}\n{USAGE}"));
         }
-        index += 1;
     }
-    Ok(flags)
-}
-
-/// 取旗标取值：缺值 / 取值其实是另一个旗标 一律拒绝即帧（报「缺值」而非「未知参数」）。
-fn take_value(args: &[String], index: &mut usize, name: &str) -> Result<String, String> {
-    *index += 1;
-    let Some(value) = args.get(*index) else {
-        return Err(format!(
-            "lessons {name} 缺值（旗标后必须跟一个取值）\n{USAGE}"
-        ));
-    };
-    if value.starts_with("--") {
-        return Err(format!(
-            "lessons {name} 缺值（下一项是旗标 {value}，不是取值）\n{USAGE}"
-        ));
-    }
-    Ok(value.clone())
-}
-
-/// 同一旗标只允许给一次（重复即拒，不静默取最后一个）。
-fn set_once(slot: &mut Option<String>, name: &str, value: String) -> Result<(), String> {
-    if slot.is_some() {
-        return Err(format!("lessons 重复参数: {name}\n{USAGE}"));
-    }
-    *slot = Some(value);
-    Ok(())
+    Ok(Flags {
+        db: scanned.value("--db").map(str::to_string),
+        scope: scanned.value("--scope").map(str::to_string),
+        status: scanned.value("--status").map(str::to_string),
+    })
 }
 
 /// 认知库解析（`--db` > 环境变量 > CLI 默认库）。

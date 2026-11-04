@@ -13,9 +13,10 @@ pub mod canonical_approval;
 pub mod care_heartbeat;
 // B6 会话/记忆静态加密（隐患 #6）密钥面：engine `apeireth_storage::crypto` 的 CLI 出口（密钥丢失 = 显式不可恢复）。
 pub mod crypto_keys;
-// V5-b 暴露面体检 CLI 面 (只读零写; 与 `tool.exposure_audit` 同一内核两出口)。
 pub mod egress_command;
+// V5-b 暴露面体检 CLI 面 (只读零写; 与 `tool.exposure_audit` 同一内核两出口).
 pub mod exposure;
+pub mod flags; // crate 级旗标判据 (CLI 参数层单一真源: 五处旗标扫描共用同一判据).
 pub mod gateway_panels;
 pub mod governance_chain;
 pub mod keyring_bootstrap;
@@ -58,8 +59,7 @@ use apeireth_runtime_assembly::canonical::BioApprovalSocialSource;
 use apeireth_runtime_assembly::{canonical::production::BioProbeSlots, SqliteSessionStore};
 use apeireth_tools_canonical::{FetchConfig, TrustedShellConfig, APPLY_PATCH_CAPABILITY_ID};
 
-/// One persistent SQLite database is shared by the cognitive backends.
-/// `APEIRETH_COGNITIVE_DB` may override the path; Judge remains opt-in.
+/// One persistent SQLite database is shared by the cognitive backends; `APEIRETH_COGNITIVE_DB` may override the path; Judge remains opt-in.
 const COGNITIVE_DB_ENV: &str = "APEIRETH_COGNITIVE_DB";
 const SESSION_DB_ENV: &str = "APEIRETH_SESSION_DB";
 const COGNITIVE_JUDGE_ENV: &str = "APEIRETH_COGNITIVE_JUDGE";

@@ -17,6 +17,8 @@ use std::path::PathBuf;
 
 use apeireth_runtime_assembly::egress_ledger::EgressLedger;
 
+use crate::flags;
+
 /// 用法帧（三个动词都列全 —— 漏一个动词，用错的人就少了参照）。
 pub const USAGE: &str = "apeireth egress ledger [--path <LEDGER_JSONL>] [--limit <N>] [--json]\napeireth egress impact [--path <IMPACT_JSONL>] [--limit <N>] [--json]\napeireth egress outcome [--path <CONSEQUENCE_JSONL>] [--json] <ACTION_ID> <confirmed|failed>\n\n  ledger = 出域账本（观测面：判定 / 对象类型 / 指纹 / 目的地 / 用途）。\n  impact = 问责账本（责任面：授权 / 可逆性 / 影响谁 / 后果）。\n  outcome = 后果回填（**唯一写面**：把外部行动的结果 confirmed / failed 追加进后果账本）。\n  两个只读账本**都零真值**：只有指涉 id，没有内容原文。\n  旗标：--path = 账本路径；--limit = 显示条数（ledger / impact）；--json = JSON 输出（布尔旗标，不带值）。\n  位置参数：只有 outcome 要 <ACTION_ID> <confirmed|failed>；ledger / impact 不收位置参数。\n  未知旗标一律拒绝（不静默忽略）；`--` 之后的词一律当位置参数。\n  缺省 path = 数据根（APEIRETH_DATA_DIR 或默认目录）下的 egress-ledger.jsonl / impact-ledger.jsonl / consequence-ledger.jsonl。";
 
@@ -201,7 +203,7 @@ pub fn run_outcome(data_root: &std::path::Path, rest: &[String]) -> Result<Strin
     // 也不能「见到 --xxx 就跳过它和它的值」：布尔旗标（`--json`）没有值，
     // 那样会把位置参数吞掉（`--json act-1 confirmed` 只剩一个位置参数）。
     // 正确做法：**按旗标类型**判定 —— 带值旗标吃下一个词，布尔旗标什么都不吃。
-    let (action_id, outcome_label) = match scanned.positional.as_slice() {
+    let (action_id, outcome_label) = match scanned.positionals.as_slice() {
         [action_id, outcome] => (action_id.as_str(), outcome.as_str()),
         _ => {
             return Err(format!(
@@ -262,141 +264,51 @@ pub fn run_outcome(data_root: &std::path::Path, rest: &[String]) -> Result<Strin
 ///   （旧实现是「静默回落默认账本」—— 用户以为读的是指定文件，其实在读默认文件）；
 /// - 布尔旗标（`--json`）：**不带值**，也**不吞**后面的词；
 /// - `--` 之后的词一律当位置参数（想传以 `-` 开头的字面量时用它）。
-struct FlagSpec {
-    /// 带值旗标：`--name <VALUE>`。
-    value: &'static [&'static str],
-    /// 布尔旗标：`--name`（不带值）。
-    boolean: &'static [&'static str],
-}
-
-impl FlagSpec {
-    /// 本动词认识的旗标（人读列表，用于错误帧）。
-    fn known(&self) -> String {
-        self.value
-            .iter()
-            .chain(self.boolean.iter())
-            .copied()
-            .collect::<Vec<_>>()
-            .join(" / ")
-    }
-}
-
+///
+/// 判据与措辞走 crate 级共享模块 [`crate::flags`]（白名单类型即共享的
+/// [`flags::FlagSpec`]）—— 本面只保留自己的动词名与用法帧。
 /// `ledger` 的旗标白名单。
-const LEDGER_FLAGS: FlagSpec = FlagSpec {
+const LEDGER_FLAGS: flags::FlagSpec = flags::FlagSpec {
     value: &["--path", "--limit"],
     boolean: &["--json"],
+    meta_as_positional: false,
 };
 
 /// `impact` 的旗标白名单。
-const IMPACT_FLAGS: FlagSpec = FlagSpec {
+const IMPACT_FLAGS: flags::FlagSpec = flags::FlagSpec {
     value: &["--path", "--limit"],
     boolean: &["--json"],
+    meta_as_positional: false,
 };
 
 /// `outcome` 的旗标白名单（没有 `--limit`：回填只写一条事件）。
-const OUTCOME_FLAGS: FlagSpec = FlagSpec {
+const OUTCOME_FLAGS: flags::FlagSpec = flags::FlagSpec {
     value: &["--path"],
     boolean: &["--json"],
+    meta_as_positional: false,
 };
 
-/// 扫描结果。
-struct Scanned {
-    /// 带值旗标取值（同名时**最后一个**出现者生效）。
-    values: Vec<(&'static str, String)>,
-    /// 命中的布尔旗标。
-    boolean: Vec<&'static str>,
-    /// 位置参数（`--` 之后的词也在内）。
-    positional: Vec<String>,
-}
-
-impl Scanned {
-    /// 取带值旗标的取值（最后一个出现者生效）。
-    fn value(&self, name: &str) -> Option<&str> {
-        self.values
-            .iter()
-            .rev()
-            .find(|(flag, _)| *flag == name)
-            .map(|(_, value)| value.as_str())
-    }
-
-    /// 布尔旗标是否命中。
-    fn has(&self, name: &str) -> bool {
-        self.boolean.iter().any(|flag| *flag == name)
-    }
-}
-
-/// 在白名单里找旗标名（返回静态名，便于结果里带走 `'static` 生命周期）。
-fn find_flag(flags: &'static [&'static str], arg: &str) -> Option<&'static str> {
-    flags.iter().copied().find(|flag| *flag == arg)
-}
-
-/// 白名单式扫描旗标 —— **拒绝即帧**。
+/// 白名单式扫描旗标 —— **拒绝即帧**（判据在 crate 级共享模块 [`crate::flags`]）。
 ///
 /// 旧实现是「静默忽略」：未知的 `--xxx` 直接跳过（用户拼错旗标也照样成功），
-/// `--path` 缺值时静默回落默认账本。这里改成逐词判定：认识的按类型取，
+/// `--path` 缺值时静默回落默认账本。这里逐词判定：认识的按类型取，
 /// 不认识的立刻报错并**指名旗标**。
-fn scan_args(args: &[String], spec: &FlagSpec, verb: &str) -> Result<Scanned, String> {
-    let mut scanned = Scanned {
-        values: Vec::new(),
-        boolean: Vec::new(),
-        positional: Vec::new(),
-    };
-    let mut index = 0;
-    let mut literal_only = false;
-    while index < args.len() {
-        let arg = args[index].as_str();
-        if literal_only {
-            // `--` 之后不做旗标解析：一律当位置参数。
-            scanned.positional.push(arg.to_string());
-            index += 1;
-            continue;
-        }
-        if arg == "--" {
-            literal_only = true;
-            index += 1;
-            continue;
-        }
-        if arg.len() > 1 && arg.starts_with('-') {
-            if let Some(flag) = find_flag(spec.boolean, arg) {
-                // 布尔旗标不带值 ⇒ **不吞**后面的词。
-                scanned.boolean.push(flag);
-                index += 1;
-                continue;
-            }
-            if let Some(flag) = find_flag(spec.value, arg) {
-                // 值的位置上**没有词** ⇒ 缺值；位置上**又是另一个长旗标** ⇒ 也是缺值
-                // （`--path --json` 不能把 `--json` 当路径）。
-                let value = match args.get(index + 1).map(|value| value.as_str()) {
-                    None => {
-                        return Err(format!(
-                            "{flag} 缺值：带值旗标要跟一个值（如 {flag} <VALUE>）"
-                        ))
-                    }
-                    Some(value) if value.starts_with("--") => {
-                        return Err(format!(
-                            "{flag} 缺值：后面的 `{value}` 是旗标，不是值（如 {flag} <VALUE>）"
-                        ))
-                    }
-                    Some(value) => value,
-                };
-                scanned.values.push((flag, value.to_string()));
-                index += 2;
-                continue;
-            }
-            return Err(format!(
-                "未知旗标 {arg}（{verb} 只认 {}）；若要传以 - 开头的字面量，请先用 `--` 结束旗标解析",
-                spec.known()
-            ));
-        }
-        scanned.positional.push(arg.to_string());
-        index += 1;
-    }
-    Ok(scanned)
+fn scan_args(args: &[String], spec: &flags::FlagSpec, verb: &str) -> Result<flags::Scan, String> {
+    let known = spec.known();
+    // 本族的旗标错误帧**不带用法帧**: 用法帧里自带「未知旗标一律拒绝」那句,
+    // 挂在缺值错误后面会让人误以为「缺值」也是未知旗标 —— 措辞归位。
+    flags::scan(args, spec).map_err(|error| {
+        error.frame(
+            flags::Style::Zh,
+            &flags::FrameContext::new(&format!("egress {verb}"), flags::UnknownNoun::Flag)
+                .with_known(&known),
+        )
+    })
 }
 
 /// `ledger` / `impact` 不收位置参数（多写了要报错，不静默吞掉）。
-fn reject_positional(scanned: &Scanned, verb: &str) -> Result<(), String> {
-    match scanned.positional.as_slice() {
+fn reject_positional(scanned: &flags::Scan, verb: &str) -> Result<(), String> {
+    match scanned.positionals.as_slice() {
         [] => Ok(()),
         extra => Err(format!(
             "{verb} 不接受位置参数（收到: {}）",
