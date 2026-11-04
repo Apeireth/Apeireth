@@ -290,7 +290,15 @@ pub struct Renderer<D: Dom> {
     /// ⭐ **焦点栈 + 陷阱**（L1-G3 接线）：焦点策略在引擎内，后端只负责真的挪焦点。
     focus: FocusTracker,
     /// 焦点 id → 子节点路径（陷阱与恢复都按路径表达，避免引入第二套编号）。
-    focus_paths: std::collections::HashMap<FocusId, Vec<usize>>,
+    /// ⭐⭐⭐ **焦点 id ⇒ 身份段**（E-169）。
+    ///
+    /// ## 为什么不再存「路径」
+    ///
+    /// 存路径 ⇒ ⇒ 重排后路径**过期** ⇒ ⇒ 「恢复焦点」会落到**旧位置**的元素
+    /// ⇒ ⇒ ⇒ **焦点还是会丢**（哪怕 id 本身稳定了）⇒ ⇒ ⇒ 必须存**身份**。
+    ///
+    /// ⇒ ⇒ 存**身份段** ⇒ ⇒ 用时**反解**当前路径 ⇒ ⇒ ⇒ 重排后**找回同一个逻辑元素** ✓
+    focus_paths: std::collections::HashMap<FocusId, Vec<IdentitySegment>>,
     /// ⭐ **待补写的属性写回**（IME 组合期间被推迟的那些）。
     ///
     /// ## 为什么必须留队列（而不是"推迟就丢掉"）
@@ -547,11 +555,109 @@ impl<D: Dom> Renderer<D> {
         &self.focus
     }
 
-    /// ⭐ 打开**焦点陷阱**：只有这些路径允许获得焦点（弹层/对话框打开时用）。
+    /// ⭐⭐⭐ **稳定焦点 id**（E-169）：按「**身份路径**」派生，而不是按**位置路径**。
+    ///
+    /// ## 问题（E-169 修）
+    ///
+    /// 旧口径是 `path_id(path)` = **子节点下标**的哈希 ⇒ ⇒ **位置**决定身份
+    /// ⇒ ⇒ 列表重排 / 条件块插入 / 前面插一个兄弟
+    /// ⇒ ⇒ ⇒ 同一个逻辑元素的 `FocusId` **变了** ⇒ ⇒ 焦点**认不出**它 ⇒ ⇒ **焦点丢失**。
+    ///
+    /// ## 口径
+    ///
+    /// 沿路径逐段取身份：**该元素有 `key` ⇒ ⇒ 用 `key`**；**没有 ⇒ ⇒ 用下标**。
+    ///
+    /// ⇒ ⇒ **键控列表重排 ⇒ ⇒ 焦点 id 不变** ✓
+    /// ⇒ ⇒ **完全无键控 ⇒ ⇒ 与旧口径逐值相同**（零行为变化）✓
+    ///
+    /// ## 取不到挂载树时
+    ///
+    /// 挂载树为空（还没挂载）⇒ ⇒ **退回** [`path_id`]（纯位置）
+    /// ⇒ ⇒ 与旧口径一致 ⇒ ⇒ 不引入未定义行为。
+    pub fn identity_id(&self, path: &[usize]) -> FocusId {
+        match self.identity_segments(path) {
+            Some(segments) if !segments.is_empty() => identity_segments_id(&segments),
+            _ => path_id(path),
+        }
+    }
+
+    /// ⭐⭐⭐ 沿路径收集「**身份段**」（E-169）。
+    ///
+    /// 每段：**该元素有 `key` ⇒ ⇒ 用 `key`**；**没有 ⇒ ⇒ 用下标**。
+    ///
+    /// ⇒ ⇒ 这份「身份」**跟着数据走** ⇒ ⇒ 重排后**仍能反解出当前路径**。
+    fn identity_segments(&self, path: &[usize]) -> Option<Vec<IdentitySegment>> {
+        let root = self.tree.as_ref()?;
+        let mut segments: Vec<IdentitySegment> = Vec::with_capacity(path.len());
+        let mut cursor = root;
+        for index in path {
+            let children = match cursor {
+                MountedNode::Element(element) => &element.children,
+                MountedNode::Fragment(fragment) => &fragment.children,
+                MountedNode::Text(_) => return None,
+            };
+            let child = children.get(*index)?;
+            segments.push(match child.key_ref() {
+                Some(key) => IdentitySegment::from_key(key),
+                None => IdentitySegment::Index(*index),
+            });
+            cursor = child;
+        }
+        Some(segments)
+    }
+
+    /// ⭐⭐⭐ **按身份段反解当前路径**（E-169）。
+    ///
+    /// ## 为什么需要
+    ///
+    /// 焦点 id 稳定了，但**路径**会随重排变 ⇒ ⇒ 只存路径的话
+    /// ⇒ ⇒ 「恢复焦点」会落到**旧位置**的元素上 ⇒ ⇒ **焦点还是会丢**。
+    ///
+    /// ⇒ ⇒ 存**身份段**，用时**反解** ⇒ ⇒ ⇒ 重排后照样找回**同一个逻辑元素** ✓
+    ///
+    /// ## 反解口径
+    ///
+    /// - `Key` 段 ⇒ ⇒ 在**当前**子节点里**按 key 找**（重排后仍找得到）✓
+    /// - `Index` 段 ⇒ ⇒ 直接用下标（**无 key ⇒ 身份就是位置** ⇒ 位置变了就是另一个元素）
+    fn resolve_identity_path(&self, segments: &[IdentitySegment]) -> Option<Vec<usize>> {
+        let root = self.tree.as_ref()?;
+        let mut path: Vec<usize> = Vec::with_capacity(segments.len());
+        let mut cursor = root;
+        for segment in segments {
+            let children = match cursor {
+                MountedNode::Element(element) => &element.children,
+                MountedNode::Fragment(fragment) => &fragment.children,
+                MountedNode::Text(_) => return None,
+            };
+            let index = match segment {
+                IdentitySegment::Index(index) => *index,
+                IdentitySegment::Key(tagged) => {
+                    children.iter().position(|child| match child.key_ref() {
+                        Some(key) => matches!(
+                            IdentitySegment::from_key(key),
+                            IdentitySegment::Key(other) if other == *tagged
+                        ),
+                        None => false,
+                    })?
+                }
+            };
+            path.push(index);
+            cursor = children.get(index)?;
+        }
+        Some(path)
+    }
+
+    /// 打开**焦点陷阱**：只有这些路径允许获得焦点（弹层/对话框打开时用）。
     pub fn open_focus_trap(&mut self, paths: &[&[usize]]) {
-        let ids: Vec<FocusId> = paths.iter().map(|path| path_id(path)).collect();
+        let mut ids: Vec<FocusId> = Vec::with_capacity(paths.len());
         for path in paths {
-            self.focus_paths.insert(path_id(path), path.to_vec());
+            let segments = self.identity_segments(path);
+            let id = match &segments {
+                Some(segments) if !segments.is_empty() => identity_segments_id(segments),
+                _ => path_id(path),
+            };
+            ids.push(id);
+            self.focus_paths.insert(id, segments.unwrap_or_default());
         }
         self.focus.open_trap(ids);
     }
@@ -566,14 +672,16 @@ impl<D: Dom> Renderer<D> {
     /// 顺序很重要：**先过陷阱判定**，再动 DOM
     /// ⇒ ⇒ 否则越界时浏览器已经挪了焦点，再报错也回不去。
     pub fn focus_at_path(&mut self, path: &[usize]) -> Result<(), DomError> {
-        let id = path_id(path);
+        let id = self.identity_id(path);
         if !self.focus.allows(id) {
             return Err(DomError::Unsupported(String::from(
                 "焦点陷阱拒绝：目标不在允许集合内",
             )));
         }
         let node = self.node_at_path(path)?;
-        self.focus_paths.insert(id, path.to_vec());
+        // ⭐ 存**身份段**（不是路径）⇒ ⇒ 重排后仍能反解（E-169）。
+        let segments = self.identity_segments(path).unwrap_or_default();
+        self.focus_paths.insert(id, segments);
         self.focus
             .focus(id)
             .map_err(|_| DomError::Unsupported(String::from("焦点栈拒绝")))?;
@@ -585,9 +693,11 @@ impl<D: Dom> Renderer<D> {
         let Some(id) = self.focus.current() else {
             return Ok(false);
         };
-        let Some(path) = self.focus_paths.get(&id).cloned() else {
+        let Some(segments) = self.focus_paths.get(&id).cloned() else {
             return Ok(false);
         };
+        // ⭐ **按身份反解当前路径**（E-169）⇒ ⇒ 重排后落点仍是**同一个逻辑元素**。
+        let path = self.resolve_identity_path(&segments).unwrap_or_default();
         let node = self.node_at_path(&path)?;
         self.focus.blur();
         self.dom.blur(&node)?;
@@ -599,9 +709,11 @@ impl<D: Dom> Renderer<D> {
         let Some(id) = self.focus.restore_previous() else {
             return Ok(None);
         };
-        let Some(path) = self.focus_paths.get(&id).cloned() else {
+        let Some(segments) = self.focus_paths.get(&id).cloned() else {
             return Ok(None);
         };
+        // ⭐ **按身份反解当前路径**（E-169）⇒ ⇒ 弹层关闭后**回到同一个逻辑元素**。
+        let path = self.resolve_identity_path(&segments).unwrap_or_default();
         let node = self.node_at_path(&path)?;
         self.dom.focus(&node)?;
         Ok(Some(path))
@@ -2370,6 +2482,15 @@ impl ScrollSignal {
 ///
 /// 用路径求 id 而不是另发编号：**一个概念一套编号**
 /// ⇒ ⇒ 焦点、事件 `target_path`、测量路径三者可以直接互相转换。
+///
+/// ⚠️ **纯路径 ⇒ ⇒ 重排即漂移**（E-169 修）。
+///
+/// 路径是**位置**（第几个子节点）⇒ ⇒ 列表重排 / 条件块插入 / 前面插一个兄弟
+/// ⇒ ⇒ 同一个逻辑元素的路径就变了 ⇒ ⇒ **焦点 id 跟着变**
+/// ⇒ ⇒ ⇒ 焦点在「数据变了」时**丢失**（不是被抢走，是**认不出了**）。
+///
+/// ⇒ ⇒ 修法见 [`Renderer::identity_id`]：**有 key 的祖先用 key 段**，
+/// ⇒ ⇒ ⇒ 只有**没有 key** 的位置才用下标 ⇒ ⇒ ⇒ 键控列表重排时焦点 id **不变**。
 fn path_id(path: &[usize]) -> FocusId {
     let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
     for index in path {
@@ -2377,6 +2498,66 @@ fn path_id(path: &[usize]) -> FocusId {
         hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
     }
     hash
+}
+
+/// 身份段 ⇒ `FocusId`（FNV-1a）。
+fn identity_segments_id(segments: &[IdentitySegment]) -> FocusId {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for segment in segments {
+        segment.hash_into(&mut hash);
+    }
+    hash
+}
+
+/// 身份段：**有 key 用 key，没 key 用位置下标**（E-169）。
+///
+/// ## 为什么这样切
+///
+/// - **有 key** ⇒ ⇒ 该元素的身份由**数据**决定 ⇒ ⇒ 数据重排时身份**跟着数据走** ⇒ ⇒ **稳定**；
+/// - **没 key** ⇒ ⇒ 只能靠**位置** ⇒ ⇒ 与旧行为一致（不引入回归）。
+///
+/// ⇒ ⇒ ⇒ 全键控的列表 ⇒ ⇒ 焦点 id **完全不受重排影响**；
+/// ⇒ ⇒ ⇒ 完全没键控的树 ⇒ ⇒ 焦点 id **与今天完全相同**（零行为变化）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum IdentitySegment {
+    /// 该元素带 `key`（身份由数据决定）。
+    ///
+    /// ⚠️ 存的是「**带判别式**」的字符串 ⇒ ⇒ `Key::Str("1")` 与 `Key::Int(1)`
+    /// ⇒ ⇒ **不会**渲染成同一串 ⇒ ⇒ 不会撞出同一个哈希值。
+    Key(String),
+    /// 该元素无 `key`（身份由位置决定）。
+    Index(usize),
+}
+
+impl IdentitySegment {
+    /// 从 [`crate::vnode::Key`] 构造身份段（**带判别式**）。
+    fn from_key(key: &crate::vnode::Key) -> Self {
+        let tagged = match key {
+            crate::vnode::Key::Str(text) => format!("s:{text}"),
+            crate::vnode::Key::Int(value) => format!("i:{value}"),
+            crate::vnode::Key::Uint(value) => format!("u:{value}"),
+        };
+        IdentitySegment::Key(tagged)
+    }
+
+    fn hash_into(&self, hash: &mut u64) {
+        match self {
+            IdentitySegment::Key(key) => {
+                // ⭐ 与 `Index` 用**不同的前缀** ⇒ ⇒ 避免
+                // 「key 段」与「下标段」撞出同一个哈希值。
+                *hash ^= 0x9e37_79b9_7f4a_7c15_u64;
+                *hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+                for byte in key.as_bytes() {
+                    *hash ^= u64::from(*byte);
+                    *hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+                }
+            }
+            IdentitySegment::Index(index) => {
+                *hash ^= *index as u64 + 1;
+                *hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -3303,6 +3484,120 @@ mod tests {
         let root = dom.create_element("main").expect("建节点必须成功");
         let renderer = Renderer::new(dom, root);
         (renderer, root)
+    }
+
+    /// ⭐⭐⭐ **稳定焦点 id：键控列表重排后焦点 id 不变**（E-169）。
+    ///
+    /// ## 它锁住什么
+    ///
+    /// 旧口径 `path_id` = **子节点下标**的哈希 ⇒ ⇒ 身份由**位置**决定
+    /// ⇒ ⇒ 重排 ⇒ ⇒ 同一个逻辑元素的 id **变了** ⇒ ⇒ **焦点认不出它**。
+    #[test]
+    fn keyed_focus_id_survives_reorder() {
+        let (mut renderer, _root) = renderer_with_dom();
+        // 挂载：ul > li(key=a) / li(key=b)
+        renderer
+            .mount(
+                VNode::element("ul")
+                    .child(keyed_item("a", "A"))
+                    .child(keyed_item("b", "B"))
+                    .build(),
+            )
+            .expect("挂载必须成功");
+        // ⭐ 路径相对**挂载树根**（= ul 本身）⇒ ⇒ li(a) 的路径 = [0]
+        let id_before = renderer.identity_id(&[0]);
+
+        // ⭐ 重排：li(b) 提到前面 ⇒ li(a) 的**位置**从 0 变成 1
+        renderer
+            .patch(
+                VNode::element("ul")
+                    .child(keyed_item("b", "B"))
+                    .child(keyed_item("a", "A"))
+                    .build(),
+            )
+            .expect("重排必须成功");
+        // 重排后 li(a) 在第 1 位 ⇒ ⇒ 路径 = [1]（**位置变了**）
+        let id_after = renderer.identity_id(&[1]);
+
+        assert_eq!(
+            id_before, id_after,
+            "⭐ 键控列表重排后，同一逻辑元素的焦点 id 必须不变（位置变了但身份没变）"
+        );
+        // ⭐ 反过来：**位置**相同但**身份**不同 ⇒ ⇒ id 必须不同（不能撞）
+        let other = renderer.identity_id(&[0]);
+        assert_ne!(
+            id_after, other,
+            "⭐ 不同 key 的元素必须有不同的焦点 id（不能撞车）"
+        );
+    }
+
+    /// ⭐⭐ **无键控时与旧口径逐值相同**（E-169 的零行为变化保证）。
+    #[test]
+    fn unkeyed_focus_id_matches_legacy_path_hash() {
+        let (mut renderer, _root) = renderer_with_dom();
+        renderer
+            .mount(
+                VNode::element("ul")
+                    .child(VNode::element("li").child(VNode::text("A")).build())
+                    .child(VNode::element("li").child(VNode::text("B")).build())
+                    .build(),
+            )
+            .expect("挂载必须成功");
+        // 全部无 key ⇒ ⇒ 身份段全是 `Index` ⇒ ⇒ 哈希与旧 `path_id` 口径相同。
+        assert_eq!(
+            renderer.identity_id(&[1]),
+            path_id(&[1]),
+            "⭐ 完全无键控时，焦点 id 必须与旧口径逐值相同（零行为变化）"
+        );
+    }
+
+    /// ⭐⭐⭐ **重排后恢复焦点落点仍在同一逻辑元素**（E-169）。
+    ///
+    /// 只锁「id 不变」不够 ⇒ ⇒ **路径**也会过期 ⇒ ⇒ 必须能按身份**反解**。
+    #[test]
+    fn restore_focus_after_reorder_lands_on_same_logical_element() {
+        let (mut renderer, root) = renderer_with_dom();
+        renderer
+            .mount(
+                VNode::element("ul")
+                    .child(keyed_item("a", "A"))
+                    .child(keyed_item("b", "B"))
+                    .build(),
+            )
+            .expect("挂载必须成功");
+        // ① 先聚焦 li(b)（路径 [1]）⇒ ⇒ 栈底有「前一个焦点」
+        renderer.focus_at_path(&[1]).expect("聚焦 li(b) 必须成功");
+        // ② 再聚焦 li(a)（路径 [0]）⇒ ⇒ 栈里 previous = li(b)
+        renderer.focus_at_path(&[0]).expect("聚焦 li(a) 必须成功");
+
+        // ⭐ 重排：li(a) 挪到第 1 位、li(b) 挪到第 0 位
+        renderer
+            .patch(
+                VNode::element("ul")
+                    .child(keyed_item("b", "B"))
+                    .child(keyed_item("a", "A"))
+                    .build(),
+            )
+            .expect("重排必须成功");
+
+        // ⭐ 恢复焦点 ⇒ ⇒ 应回到 **li(b)** ⇒ ⇒ 但它的**新路径**是 [0]（旧路径是 [1]）
+        let landed = renderer
+            .restore_focus()
+            .expect("恢复必须成功")
+            .expect("必须有落点");
+        assert_eq!(
+            landed,
+            vec![0],
+            "⭐ 重排后恢复焦点必须落在**当前**的同一逻辑元素上（反解身份段）"
+        );
+        // ⭐ 落点节点的文本必须是 "B"（真的是 li(b)，不是 li(a)）
+        let ul = renderer.dom().children(&root).expect("读子节点必须成功")[0];
+        let landed_node = renderer.dom().children(&ul).expect("读子节点必须成功")[0];
+        assert_eq!(
+            renderer.dom().text_content(landed_node),
+            "B",
+            "⭐ 落点必须真的是 li(b)（key=b），不是 li(a)"
+        );
     }
 
     /// 带 key 的列表项。

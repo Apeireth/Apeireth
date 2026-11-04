@@ -529,6 +529,34 @@ impl Dom for WebDom {
             }
             if let Some(keyboard) = event.dyn_ref::<KeyboardEvent>() {
                 dom_event = dom_event.with_key(keyboard.key());
+                // ⭐⭐⭐ **键盘事件的修饰键**（E-169 补）。
+                //
+                // ## 为什么必须在这里填（2026-11-04 修）
+                //
+                // 此前修饰键**只在 `MouseEvent` 分支内**填（见下方）
+                // ⇒ ⇒ **纯键盘事件的 `shift_key()` / `ctrl_key()` 恒为 `false`**
+                // ⇒ ⇒ ⇒ 应用**无法区分 `Enter` 与 `Shift+Enter`**
+                // ⇒ ⇒ ⇒⇒ r10 要求的「Enter 与 Shift+Enter 的区分」在引擎层**不可实现**
+                // ⇒ ⇒ ⇒ （典型用途：输入框「Enter 提交 / Shift+Enter 换行」）
+                //
+                // ⇒ ⇒ 现在键盘分支**自己**填 ⇒ ⇒ 两类事件**各自**取自己的修饰键。
+                dom_event = dom_event
+                    .with_modifiers(
+                        keyboard.ctrl_key(),
+                        keyboard.shift_key(),
+                        keyboard.meta_key(),
+                    )
+                    .with_alt_key(keyboard.alt_key());
+            }
+            // ⭐⭐⭐ **IME 组合期标记**（E-169 补）：「这次事件发生时是否在组合」。
+            //
+            // ⇒ ⇒ 中文输入法组合期里用户按 `Enter` 是「**确认候选**」⇒ ⇒ **不是**「提交」
+            // ⇒ ⇒ 应用要判 `event.is_composing()` 才不会**误发**（r10 §5.2 硬要求）。
+            //
+            // ⚠️ 取值口径：`KeyboardEvent.isComposing` 是**事件发生那一刻**的组合态
+            // ⇒ ⇒ 正是我们要的「历史事实」⇒ ⇒ 与 `Dom::is_composing()`（当前状态）互补。
+            if let Some(keyboard) = event.dyn_ref::<KeyboardEvent>() {
+                dom_event = dom_event.with_is_composing(keyboard.is_composing());
             }
             // ⭐ **复选框/单选的 `checked`**（G2）：`change` 事件里 `checked` 是布尔 property
             // ⇒ ⇒ 填进载荷，处理器不必回读 DOM（与 `target_value` 同一理由）。

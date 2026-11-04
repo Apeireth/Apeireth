@@ -129,6 +129,25 @@ pub struct DomEvent {
     pointer_id: Option<i32>,
     /// IME 组合数据（`compositionend` 的 `data`；其它事件为 `None`）。
     composition_data: Option<String>,
+    /// ⭐⭐⭐ **事件发生时是否处于 IME 组合期**（E-169 补）。
+    ///
+    /// ## 为什么必须有这个载荷（2026-11-04 补）
+    ///
+    /// 中文输入法在组合期里，用户按 `Enter` 是「**确认候选**」⇒ ⇒ **不是**「提交」；
+    /// 而应用收到 `keydown(Enter)` 时，若**无法区分**这两种 Enter
+    /// ⇒ ⇒ 就会在「选词确认」时**误发一次提交**（把半成品拼音发出去）。
+    ///
+    /// ⇒ ⇒ 引擎此前只做「**组合期不打断输入**」（`Dom::is_composing()` ⇒
+    /// ⇒ 组合期不写回 `value`/`checked`，延后补写）⇒ ⇒ **输入不会被冲掉** ✓
+    /// ⇒ ⇒ 但「**不误发送**」这一半**做不了** ⇒ ⇒ 因为**事件里没有这个信息**
+    /// ⇒ ⇒ ⇒ 应用**无从判断** ⇒ ⇒⇒ r10 要求的「中文 IME 合成期不误发送」不成立。
+    ///
+    /// ⇒ ⇒ 现在把它放进**事件载荷** ⇒ ⇒ 应用可以直接判
+    /// ⇒ ⇒ `event.is_composing()` ⇒ ⇒ 「这次 Enter 是选词还是提交」。
+    ///
+    /// ⚠️ 口径：`false` = **不在**组合期；`true` = **正在**组合。
+    /// ⚠️ 非键盘事件（如 `pointerdown`）通常也是 `false`。
+    is_composing: bool,
     propagation_stopped: Cell<bool>,
     default_prevented: Cell<bool>,
 }
@@ -152,6 +171,7 @@ impl DomEvent {
             button: None,
             pointer_id: None,
             composition_data: None,
+            is_composing: false,
             propagation_stopped: Cell::new(false),
             default_prevented: Cell::new(false),
         }
@@ -297,6 +317,32 @@ impl DomEvent {
         self
     }
 
+    /// ⭐⭐⭐ **事件发生时是否处于 IME 组合期**（`true` = 正在组合）。
+    ///
+    /// ## 怎么用（中文输入法的关键判据）
+    ///
+    /// ```text
+    /// // ⭐ 组合期的 Enter 是「确认候选」，**不是**「提交」
+    /// if event.key() == Some("Enter") && !event.is_composing() {
+    ///     submit();
+    /// }
+    /// ```
+    ///
+    /// ⇒ ⇒ 不加这个判断 ⇒ ⇒ **选词时会误提交**（把半成品拼音发出去）。
+    ///
+    /// ⚠️ 与 [`crate::dom::Dom::is_composing`] 的区别：后者问的是「**现在**是不是在组合」
+    /// （用于写回门控）⇒ ⇒ 本方法是「**这个事件**发生时是不是在组合」
+    /// ⇒ ⇒ **两者口径不同，都要看**（事件是历史事实，`is_composing()` 是当前状态）。
+    pub fn is_composing(&self) -> bool {
+        self.is_composing
+    }
+
+    /// 设置 IME 组合期标记（构造器）。
+    pub fn with_is_composing(mut self, composing: bool) -> Self {
+        self.is_composing = composing;
+        self
+    }
+
     /// 设置 Alt 键状态。
     pub fn with_alt_key(mut self, pressed: bool) -> Self {
         self.alt_key = pressed;
@@ -439,6 +485,69 @@ mod tests {
             | EventKind::CompositionStart
             | EventKind::CompositionEnd => {}
         }
+    }
+
+    /// ⭐⭐⭐ **IME 组合期标记**在事件载荷里（E-169）。
+    ///
+    /// ## 它锁住什么
+    ///
+    /// 中文输入法组合期里用户按 `Enter` 是「**确认候选**」⇒ ⇒ **不是**「提交」
+    /// ⇒ ⇒ 应用必须能判 ⇒ ⇒ 载荷里必须有「**这个事件发生时**是否在组合」。
+    ///
+    /// ⇒ ⇒ 没有这个载荷 ⇒ ⇒ 应用**无从判断** ⇒ ⇒ **选词时误提交**。
+    #[test]
+    fn composing_flag_is_carried_in_the_event_payload() {
+        let event = DomEvent::new(EventKind::KeyDown, vec![0, 0])
+            .with_key("Enter")
+            .with_is_composing(true);
+        assert!(
+            event.is_composing(),
+            "⭐ 组合期标记必须能进事件载荷（否则 IME 选词会误提交）"
+        );
+        // ⭐ 默认**不是**组合期（不能默认 true ⇒ 那会让所有 Enter 都不提交）
+        let plain = DomEvent::new(EventKind::KeyDown, vec![0, 0]).with_key("Enter");
+        assert!(
+            !plain.is_composing(),
+            "⭐ 默认必须是「不在组合期」（默认 true ⇒ 提交功能会全废）"
+        );
+        // ⭐ 可显式置否
+        let cleared = DomEvent::new(EventKind::KeyDown, vec![0, 0])
+            .with_key("Enter")
+            .with_is_composing(true)
+            .with_is_composing(false);
+        assert!(!cleared.is_composing(), "⭐ 组合期标记必须可显式置否");
+    }
+
+    /// ⭐⭐⭐ **键盘事件的修饰键**必须能被填进载荷（E-169）。
+    ///
+    /// ## 它锁住什么
+    ///
+    /// 旧口径下修饰键**只在鼠标分支填** ⇒ ⇒ 键盘事件的 `shift_key()` 恒 `false`
+    /// ⇒ ⇒ **Enter 与 Shift+Enter 不可区分** ⇒ ⇒ 「Enter 提交 / Shift+Enter 换行」做不了。
+    #[test]
+    fn keyboard_modifiers_are_carried_in_the_event_payload() {
+        let event = DomEvent::new(EventKind::KeyDown, vec![0])
+            .with_key("Enter")
+            .with_modifiers(false, true, false)
+            .with_alt_key(false);
+        assert!(
+            event.shift_key(),
+            "⭐ 键盘事件的 shift 必须能被填进载荷（否则 Enter/Shift+Enter 不可区分）"
+        );
+        assert!(!event.ctrl_key(), "⭐ ctrl 必须独立于 shift");
+        assert!(!event.meta_key(), "⭐ meta 必须独立于 shift");
+        assert!(!event.alt_key(), "⭐ alt 必须独立于 shift");
+
+        // ⭐ **Shift+Enter** 与 **Enter** 必须能区分开
+        let plain_enter = DomEvent::new(EventKind::KeyDown, vec![0])
+            .with_key("Enter")
+            .with_modifiers(false, false, false)
+            .with_alt_key(false);
+        assert_ne!(
+            plain_enter.shift_key(),
+            event.shift_key(),
+            "⭐ Enter 与 Shift+Enter 必须可区分"
+        );
     }
 
     #[test]

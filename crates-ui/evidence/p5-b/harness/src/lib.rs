@@ -1474,7 +1474,6 @@ pub struct DemoState {
     pub scroll_top: f64,
 }
 
-
 thread_local! {
     /// 渲染器（示例屏单例）。
     static DEMO: RefCell<Option<DemoRenderer>> = const { RefCell::new(None) };
@@ -1675,18 +1674,13 @@ pub fn w0_first_screen() -> Result<JsValue, JsValue> {
     // ⭐⭐ **诊断（E-164）**：监听挂上之后**立刻**派发一次 `scroll` ⇒ ⇒ 看 `peek()`。
     //   ⇒ ⇒ 与「窗口化之前」那次对比 ⇒ ⇒ 定位是「挂上就没生效」
     //   ⇒ ⇒ 还是「窗口化把监听弄丢了」。
-    if let Some(container) = document
-        .query_selector("#w0-root #w0-list")
-        .ok()
-        .flatten()
-    {
+    if let Some(container) = document.query_selector("#w0-root #w0-list").ok().flatten() {
         if let Ok(event) = web_sys::Event::new("scroll") {
             let _ = container.dispatch_event(&event);
         }
     }
-    let scroll_peek_after_windowize = DEMO.with(|slot| {
-        slot.borrow().as_ref().map(|demo| demo.scroll.peek())
-    });
+    let scroll_peek_after_windowize =
+        DEMO.with(|slot| slot.borrow().as_ref().map(|demo| demo.scroll.peek()));
     SCROLL_PROBE.set(scroll_peek_after_windowize.unwrap_or(false));
 
     DEMO.with(|slot| {
@@ -1804,11 +1798,7 @@ pub fn l1_patch_children_probe() -> Result<JsValue, JsValue> {
     // ② 清空：用**整树 `patch`**（与产品路径同一条路）⇒ ⇒ 新树里列表**没有行**。
     let empty_tree = VNode::element("section")
         .attr("id", "probe-section")
-        .child(
-            VNode::element("div")
-                .attr("id", "probe-list")
-                .build(),
-        )
+        .child(VNode::element("div").attr("id", "probe-list").build())
         .build();
     renderer
         .patch(empty_tree)
@@ -1860,7 +1850,6 @@ pub fn l1_patch_children_probe() -> Result<JsValue, JsValue> {
 /// ②收到了，但 `w0_tick` 没据此重新窗口化。
 ///
 /// ⇒ ⇒ 本探针直接读 `ScrollSignal::peek()` ⇒ ⇒ **区分这两种可能**。
-#[wasm_bindgen]
 pub fn l1_scroll_signal_probe() -> Result<JsValue, JsValue> {
     let document = web_sys::window()
         .and_then(|window| window.document())
@@ -1890,7 +1879,11 @@ pub fn l1_scroll_signal_probe() -> Result<JsValue, JsValue> {
                         VNode::element("div")
                             .attr("id", "min-scroll-list")
                             .attr("style", "height: 100px; overflow-y: auto;")
-                            .child(VNode::element("div").attr("style", "height: 5000px").build())
+                            .child(
+                                VNode::element("div")
+                                    .attr("style", "height: 5000px")
+                                    .build(),
+                            )
                             .build(),
                     )
                     .build(),
@@ -1935,10 +1928,7 @@ pub fn l1_scroll_signal_probe() -> Result<JsValue, JsValue> {
             .unwrap_or(false)
     });
     // ② 挂一个**独立的**滚动监听器（在同一个列表容器上）。
-    let container = document
-        .query_selector("#w0-root #w0-list")
-        .ok()
-        .flatten();
+    let container = document.query_selector("#w0-root #w0-list").ok().flatten();
     let Some(container) = container else {
         return Err(JsValue::from_str("找不到 #w0-list"));
     };
@@ -2062,6 +2052,154 @@ pub fn l1_scroll_signal_probe() -> Result<JsValue, JsValue> {
         &JsValue::from_str("peek_after"),
         &JsValue::from_bool(after),
     );
+    Ok(result.into())
+}
+
+/// ⭐⭐⭐ **键盘语义浏览器探针**（E-169）。
+///
+/// ## 它验什么
+///
+/// 缺陷 ① 的修复点**在 `web.rs`**（浏览器侧）⇒ ⇒ **native 单测测不到**
+/// ⇒ ⇒ 必须**真实浏览器 + 真实派发**才验得住。
+///
+/// 1. **键盘事件的修饰键**：真实派发 `keydown`（Shift / 无 Shift）
+///    ⇒ ⇒ 引擎收到的 `shift_key()` 必须**分别是 true / false**
+///    ⇒ ⇒ ⇒ 旧口径（修饰键只在 MouseEvent 分支填）这里**恒为 false** ⇒ ⇒ **必红**；
+/// 2. **IME 组合期标记**：真实派发带 `isComposing` 的 `keydown`
+///    ⇒ ⇒ 引擎收到的 `is_composing()` 必须**为 true** ⇒ ⇒ ⇒ 应用才能判
+///    ⇒ ⇒ ⇒ 「这次 Enter 是选词还是提交」（r10 §5.2）。
+#[wasm_bindgen]
+pub fn l1_keyboard_semantics_probe() -> Result<JsValue, JsValue> {
+    use apeireth_ui_dom::dom::{Dom, EventKind};
+    use apeireth_ui_dom::events::ElementHandler;
+    use apeireth_ui_dom::vnode::VNode;
+    use apeireth_ui_dom::web::WebDom;
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    let document = web_sys::window()
+        .and_then(|window| window.document())
+        .ok_or_else(|| JsValue::from_str("没有 document"))?;
+
+    // ⓪ 建一个**独立**的挂载点（不碰页面上其它探针的状态 ⇒ ⇒ 不互相污染）
+    let dom = WebDom::new().map_err(|error| JsValue::from_str(&format!("WebDom: {error}")))?;
+    let root = dom
+        .create_element("div")
+        .map_err(|error| JsValue::from_str(&format!("建根失败：{error}")))?;
+    dom.set_attribute(&root, "id", "kbd-semantics-root")
+        .map_err(|error| JsValue::from_str(&format!("设 id 失败：{error}")))?;
+    if let Some(body) = document.body() {
+        let _ = body.append_child(&root);
+    }
+
+    // ⓪⓪ 记录引擎收到的载荷
+    /// 引擎收到的一次键盘事件摘要：`(key, shift, ctrl, is_composing)`。
+    type KeyEventSeen = (String, bool, bool, bool);
+
+    let seen: Rc<RefCell<Option<KeyEventSeen>>> = Rc::new(RefCell::new(None));
+    let sink = seen.clone();
+    let handler = ElementHandler::new(move |event| {
+        *sink.borrow_mut() = Some((
+            event.key().unwrap_or_default().to_owned(),
+            event.shift_key(),
+            event.ctrl_key(),
+            event.is_composing(),
+        ));
+    });
+
+    let mut renderer = apeireth_ui_dom::Renderer::new(dom, root);
+    renderer
+        .render_guarded(
+            VNode::element("section")
+                .child(
+                    VNode::element("input")
+                        .attr("id", "kbd-semantics-input")
+                        .handler(EventKind::KeyDown, handler)
+                        .build(),
+                )
+                .build(),
+        )
+        .map_err(|error| JsValue::from_str(&format!("挂载失败：{error}")))?;
+
+    let input = document
+        .query_selector("#kbd-semantics-root #kbd-semantics-input")
+        .ok()
+        .flatten()
+        .ok_or_else(|| JsValue::from_str("找不到探针输入框"))?;
+
+    // ⓫ 造一个键盘事件（`KeyboardEventInit` ⇒ ⇒ 能设 `shiftKey` 与 `isComposing`）
+    let make_key_event =
+        |shift: bool, composing: bool| -> Result<web_sys::KeyboardEvent, JsValue> {
+            let init = web_sys::KeyboardEventInit::new();
+            init.set_key("Enter");
+            init.set_code("Enter");
+            init.set_bubbles(true);
+            init.set_cancelable(true);
+            init.set_shift_key(shift);
+            init.set_ctrl_key(false);
+            init.set_meta_key(false);
+            init.set_alt_key(false);
+            init.set_is_composing(composing);
+            web_sys::KeyboardEvent::new_with_keyboard_event_init_dict("keydown", &init)
+                .map_err(|error| JsValue::from_str(&format!("建键盘事件失败：{error:?}")))
+        };
+
+    // ① 派发**不带** Shift 的 `keydown(Enter)`
+    let plain = make_key_event(false, false)?;
+    input.dispatch_event(&plain)?;
+    let plain_seen = seen.borrow().clone();
+
+    // ② 派发**带** Shift 的 `keydown(Enter)`
+    let shifted = make_key_event(true, false)?;
+    input.dispatch_event(&shifted)?;
+    let shifted_seen = seen.borrow().clone();
+
+    // ③ 派发**组合期**的 `keydown(Enter)`（`isComposing = true`）
+    //    ⇒ ⇒ 模拟中文输入法「选词确认」那一刻 ⇒ ⇒ 引擎必须看到 `is_composing = true`
+    let composing_event = make_key_event(false, true)?;
+    input.dispatch_event(&composing_event)?;
+    let composing_seen = seen.borrow().clone();
+
+    // ⓷ 组装结果（**零 serde**：用 `js_sys::Object` + `Reflect::set`）
+    let result = js_sys::Object::new();
+    let set = |key: &str, value: JsValue| {
+        let _ = js_sys::Reflect::set(&result, &JsValue::from_str(key), &value);
+    };
+    match &plain_seen {
+        Some((key, shift, ctrl, composing)) => {
+            set("plain_key", JsValue::from_str(key));
+            set("plain_shift", JsValue::from_bool(*shift));
+            set("plain_ctrl", JsValue::from_bool(*ctrl));
+            set("plain_composing", JsValue::from_bool(*composing));
+        }
+        None => set("plain_missing", JsValue::from_bool(true)),
+    }
+    match &shifted_seen {
+        Some((key, shift, ctrl, composing)) => {
+            set("shifted_key", JsValue::from_str(key));
+            set("shifted_shift", JsValue::from_bool(*shift));
+            set("shifted_ctrl", JsValue::from_bool(*ctrl));
+            set("shifted_composing", JsValue::from_bool(*composing));
+        }
+        None => set("shifted_missing", JsValue::from_bool(true)),
+    }
+    match &composing_seen {
+        Some((key, shift, ctrl, composing)) => {
+            set("composing_key", JsValue::from_str(key));
+            set("composing_flag", JsValue::from_bool(*composing));
+            let _ = (shift, ctrl);
+        }
+        None => set("composing_missing", JsValue::from_bool(true)),
+    }
+    // ⭐ 判据：**Shift 版必须带 shift=true**，**无 Shift 版必须带 shift=false**
+    //   ⇒ ⇒ 旧口径（修饰键只在 MouseEvent 分支填）⇒ ⇒ 两个都是 false ⇒ ⇒ **必红**。
+    let ok = plain_seen.is_some()
+        && shifted_seen.is_some()
+        && composing_seen.is_some()
+        && plain_seen.as_ref().is_some_and(|item| !item.1)
+        && shifted_seen.as_ref().is_some_and(|item| item.1)
+        && composing_seen.as_ref().is_some_and(|item| item.3);
+    set("ok", JsValue::from_bool(ok));
     Ok(result.into())
 }
 
@@ -2422,11 +2560,16 @@ pub fn l1_w0_window_probe() -> Result<JsValue, JsValue> {
         ("tick_redrawn", "redrawn"),
         ("tick_scroll_seen", "scroll_seen"),
     ] {
-        let field = js_sys::Reflect::get(&tick_result, &JsValue::from_str(value)).unwrap_or(JsValue::NULL);
+        let field =
+            js_sys::Reflect::get(&tick_result, &JsValue::from_str(value)).unwrap_or(JsValue::NULL);
         let _ = js_sys::Reflect::set(&result, &JsValue::from_str(key), &field);
     }
-    for (key, value) in [("tick_window_error", "window_error"), ("tick_patch_error", "patch_error")] {
-        let field = js_sys::Reflect::get(&tick_result, &JsValue::from_str(value)).unwrap_or(JsValue::NULL);
+    for (key, value) in [
+        ("tick_window_error", "window_error"),
+        ("tick_patch_error", "patch_error"),
+    ] {
+        let field =
+            js_sys::Reflect::get(&tick_result, &JsValue::from_str(value)).unwrap_or(JsValue::NULL);
         let _ = js_sys::Reflect::set(&result, &JsValue::from_str(key), &field);
     }
     let _ = js_sys::Reflect::set(

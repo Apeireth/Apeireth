@@ -129,6 +129,8 @@ def main() -> int:
     app = report.get("app") or {}
     binding = report.get("binding") or {}
     integration = report.get("integration") or {}
+    # ⭐⭐⭐ 键盘语义（E-169）：Enter vs Shift+Enter 可区分？IME 组合期可识别？
+    keyboard = report.get("keyboardSemantics") or {}
     dom_ok = bool(dom.get("ok"))
     upload_ok = bool(upload.get("ok"))
     # ⭐ 宿主段有三个子判定：主段 + **帧后**（rAF 帧驱动）+ **销毁**（DOM 卸载）
@@ -149,6 +151,7 @@ def main() -> int:
     )
     binding_ok = bool(binding.get("ok"))
     integration_ok = bool(integration.get("ok"))
+    keyboard_ok = bool(keyboard.get("ok"))
     if not dom_ok:
         print(f"❌ DOM 探针失败项：{dom.get('failures')}", file=sys.stderr)
     if not upload_ok:
@@ -166,6 +169,14 @@ def main() -> int:
         print(f"❌ 绑定探针失败项：{binding.get('failures')}", file=sys.stderr)
     if not integration_ok:
         print(f"❌ 集成探针失败项：{integration.get('failures')}", file=sys.stderr)
+    if not keyboard_ok:
+        print(
+            f"❌ 键盘语义探针失败项：{keyboard.get('failures')} "
+            f"（plain_shift={keyboard.get('plain_shift')} "
+            f"shifted_shift={keyboard.get('shifted_shift')} "
+            f"composing_flag={keyboard.get('composing_flag')}）",
+            file=sys.stderr,
+        )
     if not perf_ok:
         print(f"❌ 规模基线探针失败项：{perf.get('failures')}", file=sys.stderr)
     if not real_load_ok:
@@ -178,11 +189,13 @@ def main() -> int:
         and app_ok
         and binding_ok
         and integration_ok
+        and keyboard_ok
     ):
         return 1
     print(
         "✅ L1 浏览器探针全过（G1 测量 / G2 载荷 / G3 焦点与 IME / G6 缩放 / "
-        "G8 错误边界与 panic hook / G7 纹理上传端到端 / 双向绑定 / 组合集成 / 产品宿主）"
+        "G8 错误边界与 panic hook / G7 纹理上传端到端 / 双向绑定 / 组合集成 / "
+        "键盘语义（Enter vs Shift+Enter + IME 组合期）/ 产品宿主）"
     )
     return 0
 

@@ -32,6 +32,18 @@ apeireth-ui-scene = { path = "../../../apeireth-ui-scene" }
 wasm-bindgen = "=0.2.129"
 wasm-bindgen-futures = "=0.4.79"
 js-sys = "=0.3.106"
-web-sys = { version = "=0.3.106", features = ["HtmlCanvasElement", "Window", "console"] }
+web-sys = { version = "=0.3.106", features = [
+  "HtmlCanvasElement",
+  "Window",
+  "console",
+  # ⭐ E-169：键盘语义浏览器探针需要真实构造 `KeyboardEvent`
+  #   （含 `shiftKey` / `isComposing` ⇒ ⇒ 验「Enter 与 Shift+Enter 可区分」）。
+  "KeyboardEvent",
+  "KeyboardEventInit",
+  "EventTarget",
+  "Element",
+  "HtmlElement",
+  "HtmlInputElement",
+] }
 
 [workspace]

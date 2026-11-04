@@ -123,6 +123,12 @@ try {
   results.binding = { ok: false, failures: [`绑定探针抛错：${String(error)}`] };
 }
 try {
+  // ⭐⭐⭐ 键盘语义探针：Enter 与 Shift+Enter 可区分？IME 组合期可识别？（E-169）
+  results.keyboardSemantics = p5b.l1_keyboard_semantics_probe();
+} catch (error) {
+  results.keyboardSemantics = { ok: false, failures: [`键盘语义探针抛错：${String(error)}`] };
+}
+try {
   results.integration = p5b.l1_integration_probe();
 } catch (error) {
   results.integration = { ok: false, failures: [`集成探针抛错：${String(error)}`] };
