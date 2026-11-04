@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>Apeireth WebKitGTK 引擎探针</title>
+<style>
+  body { font: 14px/1.6 system-ui, sans-serif; margin: 16px; background: #101418; color: #dfe6ee; }
+  #app-root { padding: 8px; border: 1px solid #2b3440; border-radius: 6px; }
+  pre { background: #0b0e12; padding: 10px; border-radius: 6px; overflow: auto; max-height: 60vh; }
+</style>
+</head>
+<body>
+<div id="app-root">探针运行中…</div>
+<pre id="out">等待 wasm 加载…</pre>
+<script>
+// ⭐⭐⭐ WebKitGTK 侧探针：验「引擎在**非 Chromium** 内核里也能正常工作」。
+//
+// ## ⭐ 为什么用**经典 script**而不是 `type="module"`
+//
+// 第一版用 `type="module"` + **顶层 await** ⇒ ⇒ 在 WebKitGTK 里**整段脚本不执行**
+// ⇒ ⇒ ⇒ 现象是「页面加载了（title 正确）但探针毫无动静」
+// ⇒ ⇒ ⇒ 根因：WebKit 的 module script 对**顶层 await** 的支持晚于 Chromium
+// ⇒ ⇒ ⇒ **教训**：跨内核取证 ⇒ ⇒ 「能加载」≠「能执行」⇒ ⇒ 必须**逐步回传**才能定位。
+//
+// ⇒ ⇒ 现在用**经典 script + async 函数**（不用顶层 await、不用 import() 的顶层 await）
+// ⇒ ⇒ wasm 用**动态 import()**（在 async 函数里 ⇒ ⇒ 允许）。
+//
+// ## 验什么
+//
+// ① 引擎能否在 WebKitGTK 里挂载 DOM；
+// ② 键盘语义（Enter vs Shift+Enter、IME 组合期标记）—— E-169；
+// ③ 焦点与模态（Tab 走引擎、焦点陷阱）—— E-174。
+//
+// ⚠️ **本探针自己写的 DOM 不算引擎证据** ⇒ ⇒ 判据全在**引擎侧探针**返回的字段上。
+
+// ⭐⭐ 诊断：把阶段写进 **location.hash** ⇒ ⇒ Rust 侧读 `window.url()` 就能看到
+//   ⇒ ⇒ （`window.title()` 读的是**窗口**标题 ⇒ ⇒ 上一版诊断**无效** ⇒ ⇒ 换通道）
+function markStage(tag) {
+  try { location.hash = String(tag); } catch (error) { /* 忽略 */ }
+}
+markStage('script-ran');
+var out = document.getElementById('out');
+var results = { stage: 'start' };
+// ⭐⭐ 捕获 `console.error` ⇒ ⇒ 引擎的「监听器摘除失败」诊断（E-176）在这里显形。
+var consoleErrors = [];
+(function () {
+  var original = console.error;
+  console.error = function () {
+    var parts = [];
+    for (var i = 0; i < arguments.length; i++) { parts.push(String(arguments[i])); }
+    consoleErrors.push(parts.join(' '));
+    original.apply(console, arguments);
+  };
+})();
+markStage('script-ran');
+window.__WEBKIT_PROBE_ERRORS__ = [];
+window.addEventListener('error', function (e) {
+  // ⭐⭐ 抓**栈** ⇒ ⇒ 栈顶会指出是**哪个 glue 函数**调用了已失效的闭包
+  //   ⇒ ⇒ ⇒ 这比「猜」快得多（归因靠实测，不靠推理）。
+  var stack = (e.error && e.error.stack) ? String(e.error.stack) : 'no-stack';
+  window.__WEBKIT_PROBE_ERRORS__.push(String(e.message) + ' | ' + stack);
+});
+
+// ⭐ 回传通道：Tauri 2 的 `eval` 只执行不回传 ⇒ ⇒ 唯一可靠通道是 **IPC command**。
+// ⭐⭐⭐ 回传通道 = **location.hash**。
+//
+// ## 为什么不用 IPC
+//
+// Tauri 2 的 ACL **默认不允许调用应用自定义 command**（除非在 `permissions/` 里
+// 专门定义并授权）⇒ ⇒ 一开始 `invoke('save_result')` **被静默拒绝**
+// ⇒ ⇒ ⇒ 现象：页面**正常跑完**、但 Rust 侧**永远等不到结果**。
+//
+// ⇒ ⇒ 而 `location.hash` **已实测可用**（Rust 侧读 `window.url()` 能看到）⇒ ⇒
+// ⇒ ⇒ 于是用它当回传通道 ⇒ ⇒ 无需动 ACL ⇒ ⇒ ⇒ **零权限、零配置**。
+function report() {
+  var text = JSON.stringify(results);
+  out.textContent = text;
+  try {
+    // ⭐ 结果可能很长 ⇒ ⇒ 放 **hash**（URL 片段）⇒ ⇒ Rust 侧读 `window.url()` 取回。
+    location.hash = 'result=' + encodeURIComponent(text);
+  } catch (error) {
+    // 忽略（诊断用）
+  }
+}
+
+async function main() {
+  report();                                   // ① 先报「页面活了」
+  results.stage = 'loading-wasm';
+  report();
+  try {
+    var mod = await import('./engine/pkg/p5b_harness.js');
+    await mod.default();
+    var p5b = mod;
+    results.stage = 'wasm-ready';
+    report();
+
+    try { results.keyboardSemantics = p5b.l1_keyboard_semantics_probe(); }
+    catch (error) { results.keyboardSemantics = { ok: false, failures: ['键盘语义探针抛错：' + String(error)] }; }
+    report();
+
+    try { results.focusModal = p5b.l1_focus_modal_probe(); }
+    catch (error) { results.focusModal = { ok: false, failures: ['焦点与模态探针抛错：' + String(error)] }; }
+    report();
+
+    // ⭐ 分步：看 error 是**哪一步**产生的（Chromium 侧不报 ⇒ ⇒ 跨内核差异）
+    var errBefore = window.__WEBKIT_PROBE_ERRORS__.length;
+    try { results.dom = p5b.l1_probe(); }
+    catch (error) { results.dom = { ok: false, failures: ['DOM 探针抛错：' + String(error)] }; }
+    results.errors_from_dom = window.__WEBKIT_PROBE_ERRORS__.slice(errBefore);
+
+
+
+    results.userAgent = navigator.userAgent;
+    results.errors = window.__WEBKIT_PROBE_ERRORS__;
+    results.consoleErrors = consoleErrors;
+    results.ok = !!(results.keyboardSemantics && results.keyboardSemantics.ok)
+      && !!(results.focusModal && results.focusModal.ok)
+      && !!(results.dom && results.dom.ok);
+    results.summary = {
+      keyboardSemantics: !!(results.keyboardSemantics && results.keyboardSemantics.ok),
+      focusModal: !!(results.focusModal && results.focusModal.ok),
+      dom: !!(results.dom && results.dom.ok),
+    };
+    results.stage = 'done';
+  } catch (error) {
+    results.ok = false;
+    results.fatal = String(error);
+    results.stage = 'fatal';
+  }
+  report();
+}
+
+main();
+</script>
+</body>
+</html>

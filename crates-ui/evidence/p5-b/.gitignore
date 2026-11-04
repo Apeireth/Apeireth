@@ -14,3 +14,9 @@ harness/web/public/engine/
 # ⇒ 本地「harness/node_modules → 生产前端/node_modules」这个链接会被提交进仓
 # （2026-10-24 实测踩到：提交了指向本机绝对路径的死链）。
 node_modules
+
+# ⭐ WebKitGTK 取证装置（E-175）：wasm 产物**不入仓**（由脚本运行时生成）。
+webkit/shell/web/engine/pkg/
+# ⭐ Tauri 的 schema **生成物**（每次构建都会重写 ⇒ ⇒ 入库必漂移）。
+webkit/shell/gen/
+
