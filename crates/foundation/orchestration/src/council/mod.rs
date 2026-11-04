@@ -124,11 +124,6 @@ impl QuorumGate {
         &self.accumulator
     }
 
-    /// Mutable view for recording signals and tuning the accumulator.
-    pub fn accumulator_mut(&mut self) -> &mut QuorumAccumulator {
-        &mut self.accumulator
-    }
-
     /// Record one quorum signal at `now_ms`.
     ///
     /// Recording is intentionally independent of [`Self::is_enabled`]: evidence
