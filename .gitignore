@@ -227,6 +227,8 @@ crates/apeireth-integration-e2e/.*.log
 # 文档治理门禁（2026-10-23 文档治理批）：链接完整性 + 索引分层校验器，必须入库
 !scripts/docs_links.py
 !scripts/docs_index.py
+# fast gate 回归测试（verify_changed 影响面口径）：stdlib unittest，必须入库
+!scripts/tests/*.py
 
 # TP20-S5 (2026-08-18 主人拍板): 发布期供应链验证工具链
 # 边界: tools/ 是 cargo install --root 落地点 (per crate, 二进制 ~100MB+),

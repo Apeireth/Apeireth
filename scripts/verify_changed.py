@@ -16,6 +16,10 @@
 口径:
 - 改动 .rs 映射到最近 Cargo.toml 所属 crate；Cargo.toml/Lock 改动 = 全 workspace。
 - 受影响 = 改动 crate + 传递闭包（反向依赖）——依赖方的测试可能暴露接口破坏。
+- 受影响范围只取**根 workspace member**（`cargo metadata` 的 workspace_members 口径）；
+  registry 第三方依赖包一律不计入（它们不是 member，`cargo check -p` 也无法解析）。
+- 改动全落在根 workspace 之外（如独立 workspace 目录）⇒ 报「无受影响 member」并跳过
+  cargo 阶段（退出码 0），不做全量退化。
 - test 优先 `cargo nextest run`（per-test 超时/并行/机器可读），无 nextest 回退 `cargo test`。
 - arch_guard（架构契约守卫）先跑：默认 report-only，`--arch-strict` 升格拦截；详见 docs/architecture/。
 - 退出码 = 任一阶段失败即 1；日志全量保留在 --log 指向文件。
@@ -43,20 +47,25 @@ def _run(cmd: list[str], log_path: Path, append: bool = True) -> int:
     return proc.returncode
 
 
-def _run_capture(cmd: list[str]) -> tuple[int, str]:
+def _run_capture(cmd: list[str]) -> tuple[int, str, str]:
+    """执行命令并**分开**捕获 stdout / stderr。
+
+    必须分开：并发占用 package cache 锁时 cargo 会把等待提示写到 stderr，
+    若与 stdout 拼接，JSON 解析会被尾部噪声打断（"Extra data" 解析失败）。
+    """
     proc = subprocess.run(cmd, cwd=str(ROOT), capture_output=True, text=True, encoding="utf-8", errors="replace")
-    return proc.returncode, (proc.stdout or "") + (proc.stderr or "")
+    return proc.returncode, (proc.stdout or ""), (proc.stderr or "")
 
 
 def changed_files(base: str | None, files: str | None) -> list[str]:
     if files:
         return [item.strip().replace("\\", "/") for item in files.split(",") if item.strip()]
     if base:
-        code, out = _run_capture(["git", "diff", "--name-only", f"{base}...HEAD"])
+        code, out, err = _run_capture(["git", "diff", "--name-only", f"{base}...HEAD"])
     else:
-        code, out = _run_capture(["git", "status", "--porcelain"])
+        code, out, err = _run_capture(["git", "status", "--porcelain"])
         if code != 0:
-            raise SystemExit(f"git status failed: {out}")
+            raise SystemExit(f"git status failed: {out}{err}")
         parsed: list[str] = []
         for line in out.splitlines():
             if not line.strip():
@@ -68,26 +77,38 @@ def changed_files(base: str | None, files: str | None) -> list[str]:
             parsed.append(path.replace("\\", "/"))
         return parsed
     if code != 0:
-        raise SystemExit(f"git diff failed: {out}")
+        raise SystemExit(f"git diff failed: {out}{err}")
     return [line.strip() for line in out.splitlines() if line.strip()]
 
 
 def load_metadata() -> dict:
-    code, out = _run_capture(["cargo", "metadata", "--format-version", "1"])
+    code, out, err = _run_capture(["cargo", "metadata", "--format-version", "1"])
     if code != 0:
-        raise SystemExit(f"cargo metadata failed: {out[:2000]}")
+        raise SystemExit(f"cargo metadata failed: {(out + err)[:2000]}")
     return json.loads(out)
 
 
-def build_index(meta: dict):
+def build_index(meta: dict) -> tuple[dict[str, dict], list[str]]:
+    """建立 manifest 路径 → 包 的索引，并取出根 workspace 的 member package id。
+
+    member 集合以 `cargo metadata` 的 `workspace_members` 为准——它是「根 workspace
+    成员」的唯一权威口径；registry 第三方依赖包不在其中（它们没有 member 身份，
+    `cargo check -p <name>` 也无法解析）。
+    """
     by_manifest: dict[str, dict] = {}
-    roots: list[str] = []
     for pkg in meta["packages"]:
         manifest = Path(pkg["manifest_path"]).resolve()
         by_manifest[str(manifest).lower()] = pkg
-        if manifest.parent == ROOT:
-            roots.append(pkg["id"])
-    return by_manifest, roots
+    member_ids = list(meta.get("workspace_members") or [])
+    return by_manifest, member_ids
+
+
+def member_names(meta: dict, member_ids: list[str] | None = None) -> set[str]:
+    """根 workspace member 的包名集合。"""
+    if member_ids is None:
+        member_ids = list(meta.get("workspace_members") or [])
+    id_to_name = {p["id"]: p["name"] for p in meta["packages"]}
+    return {id_to_name[i] for i in member_ids if i in id_to_name}
 
 
 def crate_for_path(path: str, by_manifest: dict[str, dict]) -> dict | None:
@@ -100,16 +121,34 @@ def crate_for_path(path: str, by_manifest: dict[str, dict]) -> dict | None:
     return None
 
 
-def affected_packages(seed_ids: list[str], meta: dict, all_workspace: bool) -> list[str]:
+def affected_packages(
+    seed_ids: list[str],
+    meta: dict,
+    all_workspace: bool,
+    member_ids: list[str] | None = None,
+) -> list[str]:
+    """算出受影响的**根 workspace member** 包名（已排序）。
+
+    口径：
+    - `all_workspace=True`（根 Cargo.toml / Cargo.lock 改动）⇒ 全部 member；
+    - `seed_ids` 为空（改动全落在根 workspace 之外）⇒ 空集——不做全量退化；
+    - 否则 = seed + 反向依赖闭包，且结果只保留 member（闭包途中遇到的
+      registry 第三方依赖包一律剔除）。
+    """
     packages = meta["packages"]
-    nodes = meta.get("resolve", {}).get("nodes", [])
-    if all_workspace or not seed_ids:
-        return sorted({p["name"] for p in packages})
+    if member_ids is None:
+        member_ids = list(meta.get("workspace_members") or [])
+    member_set = set(member_ids)
+    id_to_name = {p["id"]: p["name"] for p in packages}
+    if all_workspace:
+        return sorted({id_to_name[i] for i in member_set if i in id_to_name})
+    if not seed_ids:
+        return []
+    nodes = (meta.get("resolve") or {}).get("nodes") or []
     reverse: dict[str, set[str]] = {p["id"]: set() for p in packages}
     for node in nodes:
         for dep in node.get("dependencies", []):
             reverse.setdefault(dep, set()).add(node["id"])
-    id_to_name = {p["id"]: p["name"] for p in packages}
     seen: set[str] = set()
     stack = list(seed_ids)
     while stack:
@@ -118,7 +157,7 @@ def affected_packages(seed_ids: list[str], meta: dict, all_workspace: bool) -> l
             continue
         seen.add(current)
         stack.extend(reverse.get(current, set()))
-    return sorted(id_to_name[i] for i in seen if i in id_to_name)
+    return sorted({id_to_name[i] for i in seen if i in member_set and i in id_to_name})
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -162,7 +201,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     meta = load_metadata()
-    by_manifest, _roots = build_index(meta)
+    by_manifest, member_ids = build_index(meta)
     seed_ids: list[str] = []
     all_workspace = False
     for path in rust_files:
@@ -173,22 +212,44 @@ def main(argv: list[str] | None = None) -> int:
         if pkg:
             seed_ids.append(pkg["id"])
 
-    pkgs = affected_packages(sorted(set(seed_ids)), meta, all_workspace)
+    seeds = sorted(set(seed_ids))
+    pkgs = affected_packages(seeds, meta, all_workspace, member_ids)
     print(f"changed rust files: {len(rust_files)}; affected crates: {len(pkgs)}")
     for pkg in pkgs:
         print(f"  - {pkg}")
+
+    if not pkgs:
+        # 无可验证的 member crate：明确说明 + 跳过 cargo 阶段（退出码 0），
+        # 不按「全量」退化（那会把 registry 第三方包名喂给 cargo check -p）。
+        if all_workspace:
+            print("no affected workspace crate (root workspace exposes no member package)")
+        elif not seeds:
+            print("no affected workspace crate (changes are outside the root workspace)")
+        else:
+            print("no affected workspace crate (changed packages are not root workspace members)")
+        print("cargo stages skipped: nothing to verify in the root workspace.")
+        if args.dry_run:
+            print("dry-run: no command executed.")
+            return 0
+        print()
+        print(f"log: {log_path}")
+        print("FAST GATE PASSED")
+        return 0
+
     if args.dry_run:
         print("dry-run: no command executed.")
         return 0
 
-    pkg_args = [arg for pkg in pkgs for arg in ("-p", pkg)]
+    # -p 的包名只允许来自根 workspace member 集合（member 之外的名字 cargo 无法解析）
+    member_set = member_names(meta, member_ids)
+    pkg_args = [arg for pkg in pkgs if pkg in member_set for arg in ("-p", pkg)]
     stages: list[tuple[str, list[str]]] = []
     if not args.no_check:
         stages.append(("check", ["cargo", "check", "--locked", "--all-targets", *pkg_args]))
     if not args.no_clippy:
         stages.append(("clippy", ["cargo", "clippy", "--locked", "--all-targets", *pkg_args, "--", "-D", "warnings"]))
     if not args.no_test:
-        code, _ = _run_capture(["cargo", "nextest", "--version"])
+        code, _out, _err = _run_capture(["cargo", "nextest", "--version"])
         if code == 0:
             stages.append(("test(nextest)", ["cargo", "nextest", "run", "--locked", *pkg_args]))
         else:
