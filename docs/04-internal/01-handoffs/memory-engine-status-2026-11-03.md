@@ -59,11 +59,21 @@ Author: deputy
 
 ## 五、还差什么（**未完成清单**）
 
-> ⚠️ **另有一处阻塞 CI 的并发缺陷**（**不在记忆线** ⇒ 已报备总指挥，见看板一百七十一节）：
-> `crates/engine/runtime/src/canonical/principal_sessions.rs` 的写面是**进程级单槽**
-> ⇒ ⇒ **并行用例互相顶替 / 误杀 / 串数据** ⇒ ⇒
-> `principal_attribution_e2e` **并行红、串行绿**（决定性证据）。
-> ⇒ ⇒ **不在记忆线范围** ⇒ ⇒ 我**只报备、不擅自改**（且我试改过一次 ⇒ 发现假设不完整 ⇒ **已撤回**）。
+> ⚠️ **另有一处阻塞 CI 的并发缺陷（2026-11-04 复核：仍未修）**
+> **不在记忆线** ⇒ 已报备总指挥（看板一百七十一节）⇒ ⇒ 我**只报备、不擅自改**。
+>
+> - **位置**：`crates/engine/runtime/src/canonical/principal_sessions.rs`
+>   ⇒ 写面是**进程级单槽**（`static RECORDER: RwLock<Option<Arc<dyn …>>>`）
+>   ⇒ ⇒ **并行用例互相顶替 / 误杀 / 串数据**；
+> - **症状**：`crates/adapters/gateway/tests/principal_attribution_e2e.rs`
+>   ⇒ **并行跑 2 failed / 串行跑 4 passed**（决定性证据 ⇒ 并发缺陷）；
+> - **影响面（2026-11-04 实测收敛）**：`cargo test --workspace --locked`
+>   ⇒ **全仓只有这一个文件红**（2 个用例）⇒ ⇒ **其余全绿**；
+> - **状态**：截至远端 tip `db744eba6755`（11-03 14:14）⇒ **槽仍是单槽 ⇒ 缺陷仍在**；
+> - **修法（已报备）**：A 串行化该测试文件（一行，CI 立刻绿）／B 写面槽改栈式（治本，推荐）／C 按线程隔离。
+>
+> ⇒ ⇒ **接手者第一件事**：跑一遍 `cargo test --workspace --locked`
+> ⇒ ⇒ 若仍是这 2 个红 ⇒ **不是新问题** ⇒ 按上面三个修法选一个即可。
 
 
 | # | 事项 | 归属 | 状态 |
