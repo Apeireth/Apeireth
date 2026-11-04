@@ -582,7 +582,8 @@ async fn tampering_parameters_after_approval_is_refused_at_the_execution_boundar
 async fn tampering_timeout_after_approval_is_refused_at_the_execution_boundary() {
     run_tamper_case(
         |approval| {
-            approval.continuation.tool_calls[0].arguments["timeout_ms"] = serde_json::json!(999_999);
+            approval.continuation.tool_calls[0].arguments["timeout_ms"] =
+                serde_json::json!(999_999);
         },
         "parameters",
     )
