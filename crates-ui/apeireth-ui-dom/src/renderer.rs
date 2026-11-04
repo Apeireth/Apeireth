@@ -2836,6 +2836,84 @@ mod tests {
         );
     }
 
+    /// ⭐⭐⭐ **自管窗口内容的调用方**：手动 `.virtualized()` 标记 ⇒ ⇒ 整树 patch
+    /// **保留其子节点**、**但属性差分照常生效**（E-165 补测）。
+    ///
+    /// ## 它锁住什么
+    ///
+    /// E-165 的引擎保证是「`virtualized` 标记 ⇒ ⇒ 整树 patch **跳过子节点差分**」。
+    /// 但**跳过的是子节点** ⇒ ⇒ ⇒ **属性 / 处理器 / 绑定**的差分路径**必须照旧**
+    /// ⇒ ⇒ ⇒ 否则会出现「子节点保住了，但元素自己的 `class` 改不动」的**静默缺陷**。
+    ///
+    /// ⇒ ⇒ 本测：标记元素 ⇒ ⇒ 整树 patch 改它的 `class` ⇒ ⇒ **属性要变**
+    /// ⇒ ⇒ 且它的**子节点要原样保留**。
+    #[test]
+    fn manually_marked_virtualized_element_keeps_children_but_updates_attributes() {
+        use crate::dom::{ElementBox, ScrollMetrics};
+        use crate::vnode::VNode;
+
+        let (mut renderer, root) = renderer_with_dom();
+        renderer
+            .mount(
+                VNode::element("div")
+                    .child(
+                        VNode::element("div")
+                            .attr("id", "list")
+                            .attr("class", "before")
+                            .child(VNode::element("span").attr("class", "row").build())
+                            .build(),
+                    )
+                    .build(),
+            )
+            .expect("挂载必须成功");
+        let mounted_root = renderer.dom().children(&root).expect("读子节点必须成功")[0];
+        let list = renderer
+            .dom()
+            .children(&mounted_root)
+            .expect("读子节点必须成功")[0];
+        renderer.dom().script_measurement(
+            list,
+            ElementBox::new(0.0, 0.0, 300.0, 300.0),
+            ScrollMetrics {
+                scroll_top: 0.0,
+                scroll_height: 40_000.0,
+                client_height: 300.0,
+            },
+        );
+
+        // ① 整树 patch：列表元素**手动标记** `.virtualized()`，
+        //    它的 `class` **要改**（「before」→「after」）。
+        renderer
+            .patch(
+                VNode::element("div")
+                    .child(
+                        VNode::element("div")
+                            .attr("id", "list")
+                            .attr("class", "after")
+                            // ⭐ 子节点**故意不给**（模拟「自管窗口内容」的调用方）
+                            .virtualized()
+                            .build(),
+                    )
+                    .build(),
+            )
+            .expect("整树 patch 必须成功");
+
+        // ② 属性差分**照常生效**（标记只影响子节点）。
+        assert_eq!(
+            renderer.dom().attribute(list, "class").as_deref(),
+            Some("after"),
+            "⭐ 标记元素的 class 差分必须照常生效（标记只该影响子节点）"
+        );
+        // ③ 子节点**原样保留**（不被清空）。
+        let kept = renderer.dom().children(&list).expect("读子节点必须成功");
+        assert_eq!(
+            kept.len(),
+            1,
+            "⭐ 标记元素的子节点必须原样保留（实际 {} 个）",
+            kept.len()
+        );
+    }
+
     /// ⭐⭐ **1k 行只挂窗口**（L1-G5 规模不变量）：挂载数 O(窗口），不是 O(行数)。
     #[test]
     fn thousand_row_list_mounts_only_a_window() {

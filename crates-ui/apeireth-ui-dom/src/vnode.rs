@@ -663,6 +663,25 @@ impl ElementBuilder {
         }
     }
 
+    /// ⭐⭐⭐ **标记：此元素的子节点由「虚拟化」接管**（E-165）。
+    ///
+    /// ## 什么时候需要它
+    ///
+    /// - 用 [`crate::renderer::Renderer::patch_windowed_at_path`] / `patch_windowed`
+    ///   ⇒ ⇒ **不需要**（引擎**自动**打标记）⇒ ⇒ **别重复标**；
+    /// - **自己管窗口内容**（不走引擎的虚拟列表 API，自己往容器里塞行）
+    ///   ⇒ ⇒ **需要**手动标 ⇒ ⇒ 否则整树 `patch` 会把窗口内容**清空 / 覆盖**
+    ///   ⇒ ⇒ ⇒ （E-161 窗口塌陷 / E-164 滚动位置丢失）。
+    ///
+    /// ## 语义
+    ///
+    /// 整树 `patch` 遇到它 ⇒ ⇒ **跳过它的子节点差分** ⇒ ⇒ 已挂载内容原样保留。
+    /// ⇒ ⇒ ⚠️ **只影响子节点**：属性 / 处理器 / 绑定的差分**照常生效**。
+    pub fn virtualized(mut self) -> Self {
+        self.node = self.node.virtualized();
+        self
+    }
+
     /// ⭐ 追加一个 **property 双向绑定**（信号 ⇄ DOM property）。
     pub fn bind(mut self, binding: crate::binding::Binding) -> Self {
         self.node = self.node.bind(binding);
