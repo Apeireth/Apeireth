@@ -10,7 +10,7 @@ use apeireth_runtime::ApprovalDecision;
 
 fn print_help() {
     println!(
-        "apeireth\n\nUsage:\n  apeireth session\n  apeireth chat <PROMPT> [--model MODEL] [--session SESSION]\n  apeireth onboard [--tier casual|pro] [--show | --reset]\n  apeireth approve --session SESSION --approval APPROVAL\n  apeireth reject --session SESSION --approval APPROVAL [--reason REASON]\n  apeireth cancel --session SESSION --approval APPROVAL [--reason REASON]\n  apeireth gateway serve [--bind ADDR] [--port PORT] [--pid-file PATH]\n  apeireth user add --user-id ID --role owner|member|guest [--clients NAME[,NAME...]] [--domain DOMAIN] [--token TOKEN]\n  apeireth user list [--token TOKEN]\n  apeireth user role --user-id ID --role owner|member|guest [--token TOKEN]\n  apeireth user remove --user-id ID [--token TOKEN]\n  apeireth backup export <DIR>\n  apeireth backup restore <BUNDLE> [--to <ROOT>]\n  apeireth backup verify <BUNDLE>\n    apeireth crypto wrap --partition <ID> --keys <FILE> --recovery-out <FILE>\n  apeireth crypto recovery-export --keys <FILE> --out <FILE>\n  apeireth crypto unlock --keys <FILE> [--recovery <FILE>]\napeireth exposure report [--json] [--out <PATH>] [--bundle <BUNDLE>]\n  apeireth trait report\n  apeireth trait lock <SLIDER>\n  apeireth trait unlock <SLIDER>\n\nOptions:\n  -h, --help       Show this help\n  -V, --version    Show the version\n\nEnvironment:\n  APEIRETH_LISTEN  gateway serve 绑定地址 (缺省 127.0.0.1; --bind 显式旗标优先)\n  APEIRETH_GATEWAY_TOKEN  全 API 面令牌门 (缺省回环; 非回环绑定必须设令牌)"
+        "apeireth\n\nUsage:\n  apeireth session\n  apeireth chat <PROMPT> [--model MODEL] [--session SESSION]\n  apeireth onboard [--tier casual|pro] [--show | --reset]\n  apeireth approve --session SESSION --approval APPROVAL\n  apeireth reject --session SESSION --approval APPROVAL [--reason REASON]\n  apeireth cancel --session SESSION --approval APPROVAL [--reason REASON]\n  apeireth dream [--session SESSION] [--limit N] [--date YYYY-MM-DD]\n  apeireth council <TOPIC>\n  apeireth subagent <TITLE> [--payload JSON]\n  apeireth nightwatch [--session SESSION] [--limit N] [--watch] [--idle SECS] [--cooldown SECS] [--interval SECS]\n  apeireth lessons [--db PATH] [--scope SCOPE] [--status STATUS]\n  apeireth egress ledger|impact|outcome [--path PATH] [--limit N] [--json]\n  apeireth gateway serve [--bind ADDR] [--port PORT] [--pid-file PATH]\n  apeireth user add --user-id ID --role owner|member|guest [--clients NAME[,NAME...]] [--domain DOMAIN] [--token TOKEN]\n  apeireth user list [--token TOKEN]\n  apeireth user role --user-id ID --role owner|member|guest [--token TOKEN]\n  apeireth user remove --user-id ID [--token TOKEN]\n  apeireth backup export <DIR>\n  apeireth backup restore <BUNDLE> [--to <ROOT>]\n  apeireth backup verify <BUNDLE>\n  apeireth crypto wrap --partition <ID> --keys <FILE> --recovery-out <FILE>\n  apeireth crypto recovery-export --keys <FILE> --out <FILE>\n  apeireth crypto unlock --keys <FILE> [--recovery <FILE>]\n  apeireth exposure report [--json] [--out <PATH>] [--bundle <BUNDLE>]\n  apeireth trait report [--json]\n  apeireth trait lock <SLIDER>\n  apeireth trait unlock <SLIDER>\n\nOptions:\n  -h, --help       Show this help (leading position only: apeireth --help / apeireth chat --help)\n  -V, --version    Show the version (leading position only: apeireth --version)\n  --               End flag parsing: every following word is a positional argument\n\nNotes:\n  Unknown flags are refused (never silently treated as text); to pass a word that\n  starts with '-', put it after `--` (e.g. apeireth chat -- --modle gpt-4 hello).\n\nEnvironment:\n  APEIRETH_LISTEN  gateway serve 绑定地址 (缺省 127.0.0.1; --bind 显式旗标优先)\n  APEIRETH_GATEWAY_TOKEN  全 API 面令牌门 (缺省回环; 非回环绑定必须设令牌)"
     );
 }
 
@@ -126,26 +126,76 @@ fn run_gateway(bind: String, port: u16, pid_file: Option<std::path::PathBuf>) ->
     }
 }
 
+// ---------------------------------------------------------------------------
+// 旗标扫描口径 (main.rs 单一真源; 与 exposure / egress / lessons 同族纪律):
+// - `--` 之后一律位置参数 (不解析成旗标);
+// - 未知旗标 → 拒绝即帧 (指出旗标名 + `--` 分隔提示), 不静默吞成正文;
+// - 悬空旗标 / 旗标值本身像旗标 → 报「缺值」, 不报「未知参数」;
+// - `--help` / `-h` / `--version` / `-V` 只在首参数位生效 (首参数位之外当正文,
+//   所以 `apeireth chat how --help` 的正文照发模型, 不被帮助吞掉)。
+// ---------------------------------------------------------------------------
+
+/// token 像旗标吗 (以 '-' 开头, 非单个 '-', 非负数)。
+fn is_flag_like(token: &str) -> bool {
+    token.starts_with('-')
+        && token.len() > 1
+        && !token[1..].starts_with(|c: char| c.is_ascii_digit())
+}
+
+/// 元旗标 (只在首参数位生效; 其他位置 = 正文, 不吞正文)。
+fn is_meta_flag(token: &str) -> bool {
+    matches!(token, "--help" | "-h" | "--version" | "-V")
+}
+
+/// 未知参数错误帧: 旗标指名 + `--` 分隔提示; 位置词类直报 (不是旗标)。
+fn unknown_arg_frame(command: &str, token: &str) -> String {
+    if is_flag_like(token) {
+        format!(
+            "{command}: unknown flag: {token}\n{command}: hint: a word starting with '-' must follow `--` (e.g. apeireth {command} -- {token})"
+        )
+    } else {
+        format!("{command}: unknown argument: {token}")
+    }
+}
+
+/// 取带值旗标的值: 缺失 / 值本身像旗标 → 报「缺值」。
+fn take_flag_value<'a>(
+    args: &'a [String],
+    index: &mut usize,
+    command: &str,
+    flag: &str,
+) -> Result<&'a String, String> {
+    *index += 1;
+    match args.get(*index) {
+        Some(value) if !is_flag_like(value) => Ok(value),
+        _ => Err(format!("{command} {flag} requires a value")),
+    }
+}
+
 fn parse_chat(args: &[String]) -> Result<(String, Option<String>, Option<String>), String> {
     let mut prompt = Vec::new();
     let mut model = None;
     let mut session = None;
     let mut index = 0;
+    let mut literal_only = false;
     while index < args.len() {
-        match args[index].as_str() {
+        let token = args[index].as_str();
+        if literal_only {
+            // `--` 之后不做旗标解析: 一律当正文。
+            prompt.push(token);
+            index += 1;
+            continue;
+        }
+        match token {
+            "--" => literal_only = true,
             "--model" => {
-                index += 1;
-                model = args.get(index).cloned();
-                if model.is_none() {
-                    return Err("chat --model requires a value".into());
-                }
+                model = Some(take_flag_value(args, &mut index, "chat", "--model")?.clone());
             }
             "--session" => {
-                index += 1;
-                session = args.get(index).cloned();
-                if session.is_none() {
-                    return Err("chat --session requires a value".into());
-                }
+                session = Some(take_flag_value(args, &mut index, "chat", "--session")?.clone());
+            }
+            value if is_flag_like(value) && !is_meta_flag(value) => {
+                return Err(unknown_arg_frame("chat", value));
             }
             value => prompt.push(value),
         }
@@ -168,27 +218,15 @@ fn parse_approval(
     while index < args.len() {
         match args[index].as_str() {
             "--session" => {
-                index += 1;
-                session = args.get(index).cloned();
-                if session.is_none() {
-                    return Err(format!("{command} --session requires a value"));
-                }
+                session = Some(take_flag_value(args, &mut index, command, "--session")?.clone());
             }
             "--approval" => {
-                index += 1;
-                approval = args.get(index).cloned();
-                if approval.is_none() {
-                    return Err(format!("{command} --approval requires a value"));
-                }
+                approval = Some(take_flag_value(args, &mut index, command, "--approval")?.clone());
             }
             "--reason" => {
-                index += 1;
-                reason = args.get(index).cloned();
-                if reason.is_none() {
-                    return Err(format!("{command} --reason requires a value"));
-                }
+                reason = Some(take_flag_value(args, &mut index, command, "--reason")?.clone());
             }
-            value => return Err(format!("unknown {command} argument: {value}")),
+            value => return Err(unknown_arg_frame(command, value)),
         }
         index += 1;
     }
@@ -212,16 +250,10 @@ fn parse_dream(args: &[String]) -> Result<(Option<String>, usize, Option<String>
     while index < args.len() {
         match args[index].as_str() {
             "--session" => {
-                index += 1;
-                session = Some(
-                    args.get(index)
-                        .ok_or("dream --session requires a value")?
-                        .clone(),
-                );
+                session = Some(take_flag_value(args, &mut index, "dream", "--session")?.clone());
             }
             "--limit" => {
-                index += 1;
-                let raw = args.get(index).ok_or("dream --limit requires a value")?;
+                let raw = take_flag_value(args, &mut index, "dream", "--limit")?;
                 limit = raw
                     .parse::<usize>()
                     .map_err(|_| "dream --limit must be a positive integer".to_string())?;
@@ -230,14 +262,9 @@ fn parse_dream(args: &[String]) -> Result<(Option<String>, usize, Option<String>
                 }
             }
             "--date" => {
-                index += 1;
-                date = Some(
-                    args.get(index)
-                        .ok_or("dream --date requires a value YYYY-MM-DD")?
-                        .clone(),
-                );
+                date = Some(take_flag_value(args, &mut index, "dream", "--date")?.clone());
             }
-            other => return Err(format!("dream: unknown argument {other}")),
+            other => return Err(unknown_arg_frame("dream", other)),
         }
         index += 1;
     }
@@ -304,8 +331,25 @@ mod dream_parse_tests {
 }
 
 /// `apeireth council "<议题>"` 议题解析 (决策环节 D: 显式咨询 = 显式授权)。
+/// 旗标口径: 未知旗标拒绝 (不静默吞成议题), `--` 之后一律位置参数。
 fn parse_council_topic(args: &[String]) -> Result<String, String> {
-    let topic = args.join(" ").trim().to_string();
+    let mut words: Vec<&str> = Vec::new();
+    let mut index = 0;
+    let mut literal_only = false;
+    while index < args.len() {
+        let token = args[index].as_str();
+        if literal_only {
+            words.push(token);
+        } else if token == "--" {
+            literal_only = true;
+        } else if is_flag_like(token) && !is_meta_flag(token) {
+            return Err(unknown_arg_frame("council", token));
+        } else {
+            words.push(token);
+        }
+        index += 1;
+    }
+    let topic = words.join(" ").trim().to_string();
     if topic.is_empty() {
         return Err("council requires a non-empty topic".to_string());
     }
@@ -353,22 +397,26 @@ mod council_parse_tests {
 }
 
 /// `apeireth subagent "<标题>" [--payload <JSON>]` 解析 (长程任务 = 显式命令授权)。
+/// 旗标口径: 未知旗标拒绝, `--` 之后一律位置参数。
 fn parse_subagent(args: &[String]) -> Result<(String, Option<String>), String> {
     let mut title_words: Vec<String> = Vec::new();
     let mut payload: Option<String> = None;
     let mut index = 0;
+    let mut literal_only = false;
     while index < args.len() {
-        match args[index].as_str() {
+        let token = args[index].as_str();
+        if literal_only {
+            title_words.push(token.to_string());
+            index += 1;
+            continue;
+        }
+        match token {
+            "--" => literal_only = true,
             "--payload" => {
-                index += 1;
-                payload = Some(
-                    args.get(index)
-                        .ok_or("subagent --payload requires a JSON value")?
-                        .clone(),
-                );
+                payload = Some(take_flag_value(args, &mut index, "subagent", "--payload")?.clone());
             }
-            other if other.starts_with("--") => {
-                return Err(format!("subagent: unknown argument {other}"));
+            other if is_flag_like(other) && !is_meta_flag(other) => {
+                return Err(unknown_arg_frame("subagent", other));
             }
             other => title_words.push(other.to_string()),
         }
@@ -471,18 +519,11 @@ fn parse_nightwatch(args: &[String]) -> Result<NightwatchOptions, String> {
     while index < args.len() {
         match args[index].as_str() {
             "--session" => {
-                index += 1;
-                options.session = Some(
-                    args.get(index)
-                        .ok_or("nightwatch --session requires a value")?
-                        .clone(),
-                );
+                options.session =
+                    Some(take_flag_value(args, &mut index, "nightwatch", "--session")?.clone());
             }
             "--limit" => {
-                index += 1;
-                let raw = args
-                    .get(index)
-                    .ok_or("nightwatch --limit requires a value")?;
+                let raw = take_flag_value(args, &mut index, "nightwatch", "--limit")?;
                 options.limit = raw
                     .parse::<usize>()
                     .map_err(|_| "nightwatch --limit must be a positive integer".to_string())?;
@@ -492,10 +533,7 @@ fn parse_nightwatch(args: &[String]) -> Result<NightwatchOptions, String> {
             }
             "--watch" => options.watch = true,
             "--idle" => {
-                index += 1;
-                let raw = args
-                    .get(index)
-                    .ok_or("nightwatch --idle requires a value")?;
+                let raw = take_flag_value(args, &mut index, "nightwatch", "--idle")?;
                 options.idle_secs = raw
                     .parse::<i64>()
                     .map_err(|_| "nightwatch --idle must be an integer (seconds)".to_string())?;
@@ -504,10 +542,7 @@ fn parse_nightwatch(args: &[String]) -> Result<NightwatchOptions, String> {
                 }
             }
             "--cooldown" => {
-                index += 1;
-                let raw = args
-                    .get(index)
-                    .ok_or("nightwatch --cooldown requires a value")?;
+                let raw = take_flag_value(args, &mut index, "nightwatch", "--cooldown")?;
                 options.cooldown_secs = raw.parse::<i64>().map_err(|_| {
                     "nightwatch --cooldown must be an integer (seconds)".to_string()
                 })?;
@@ -516,10 +551,7 @@ fn parse_nightwatch(args: &[String]) -> Result<NightwatchOptions, String> {
                 }
             }
             "--interval" => {
-                index += 1;
-                let raw = args
-                    .get(index)
-                    .ok_or("nightwatch --interval requires a value")?;
+                let raw = take_flag_value(args, &mut index, "nightwatch", "--interval")?;
                 options.interval_secs = raw
                     .parse::<u64>()
                     .map_err(|_| "nightwatch --interval must be a positive integer".to_string())?;
@@ -527,7 +559,7 @@ fn parse_nightwatch(args: &[String]) -> Result<NightwatchOptions, String> {
                     return Err("nightwatch --interval must be >= 1".to_string());
                 }
             }
-            other => return Err(format!("nightwatch: unknown argument {other}")),
+            other => return Err(unknown_arg_frame("nightwatch", other)),
         }
         index += 1;
     }
@@ -663,14 +695,13 @@ fn parse_onboard(args: &[String]) -> Result<OnboardAction, String> {
             "--show" => show = true,
             "--reset" => reset = true,
             "--tier" => {
-                index += 1;
-                let raw = args.get(index).ok_or("onboard --tier requires a value")?;
+                let raw = take_flag_value(args, &mut index, "onboard", "--tier")?;
                 tier = Some(
                     UserTier::parse_answer(raw)
                         .ok_or_else(|| format!("onboard --tier 无效（casual/pro）: {raw}"))?,
                 );
             }
-            other => return Err(format!("onboard: unknown argument {other}")),
+            other => return Err(unknown_arg_frame("onboard", other)),
         }
         index += 1;
     }
@@ -839,13 +870,29 @@ fn main() -> ExitCode {
     if args.is_empty() {
         return run_session();
     }
-    if args.iter().any(|arg| arg == "--help" || arg == "-h") {
-        print_help();
-        return ExitCode::SUCCESS;
+    // D1 口径: 元旗标只在首参数位生效 (不再扫全部 argv —— 否则子命令正文被帮助吞掉)。
+    match args[0].as_str() {
+        "--help" | "-h" => {
+            print_help();
+            return ExitCode::SUCCESS;
+        }
+        "--version" | "-V" => {
+            println!("apeireth {}", env!("CARGO_PKG_VERSION"));
+            return ExitCode::SUCCESS;
+        }
+        _ => {}
     }
-    if args.iter().any(|arg| arg == "--version" || arg == "-V") {
-        println!("apeireth {}", env!("CARGO_PKG_VERSION"));
-        return ExitCode::SUCCESS;
+    // 子命令级帮助/版本: 动词首参数位 (apeireth chat --help / apeireth chat --version)。
+    match args.get(1).map(String::as_str) {
+        Some("--help") | Some("-h") => {
+            print_help();
+            return ExitCode::SUCCESS;
+        }
+        Some("--version") | Some("-V") => {
+            println!("apeireth {}", env!("CARGO_PKG_VERSION"));
+            return ExitCode::SUCCESS;
+        }
+        _ => {}
     }
     if args[0] == "session" {
         return run_session();
@@ -993,6 +1040,12 @@ fn main() -> ExitCode {
         "gateway" if args.get(1).map(String::as_str) == Some("serve") => {
             // 绑定地址口径 (W2-②): --bind 显式旗标 > env APEIRETH_LISTEN >
             // 回环缺省 (127.0.0.1, fail-closed 默认仅本机)。
+            if args.get(2).map(String::as_str) == Some("--help")
+                || args.get(2).map(String::as_str) == Some("-h")
+            {
+                print_help();
+                return ExitCode::SUCCESS;
+            }
             let mut bind: Option<String> = None;
             let mut port = 8080;
             let mut pid_file: Option<std::path::PathBuf> = None;
@@ -1000,14 +1053,14 @@ fn main() -> ExitCode {
             while index < args.len() {
                 if args[index] == "--bind" {
                     index += 1;
-                    let Some(value) = args.get(index) else {
+                    let Some(value) = args.get(index).filter(|value| !is_flag_like(value)) else {
                         eprintln!("gateway serve --bind requires a value");
                         return ExitCode::FAILURE;
                     };
                     bind = Some(value.clone());
                 } else if args[index] == "--port" {
                     index += 1;
-                    let Some(value) = args.get(index) else {
+                    let Some(value) = args.get(index).filter(|value| !is_flag_like(value)) else {
                         eprintln!("gateway serve --port requires a value");
                         return ExitCode::FAILURE;
                     };
@@ -1020,7 +1073,7 @@ fn main() -> ExitCode {
                     };
                 } else if args[index] == "--pid-file" {
                     index += 1;
-                    let Some(value) = args.get(index) else {
+                    let Some(value) = args.get(index).filter(|value| !is_flag_like(value)) else {
                         eprintln!("gateway serve --pid-file requires a value");
                         return ExitCode::FAILURE;
                     };
@@ -1031,6 +1084,9 @@ fn main() -> ExitCode {
                     pid_file = Some(std::path::PathBuf::from(value));
                 } else {
                     eprintln!("unknown gateway argument: {}", args[index]);
+                    eprintln!(
+                        "gateway serve: hint: a word starting with '-' must follow `--` (e.g. apeireth gateway serve -- --bind)"
+                    );
                     print_help();
                     return ExitCode::FAILURE;
                 }
@@ -1144,5 +1200,36 @@ mod tests {
         assert!(parse_approval("approve", &["--session".into(), "s1".into()]).is_err());
         assert!(parse_approval("approve", &["--approval".into(), "a1".into()]).is_err());
         assert!(parse_approval("approve", &["--unknown".into(), "val".into()]).is_err());
+    }
+
+    #[test]
+    fn test_flag_discipline_is_uniform() {
+        // D1: 元旗标只在首参数位生效; 出现在正文之后 = 正文 (不吞正文)。
+        let (prompt, _, _) = parse_chat(&["how".into(), "--help".into()]).unwrap();
+        assert_eq!(prompt, "how --help");
+        // D1b: `--` 之后的词一律当位置参数。
+        let (prompt, _, _) = parse_chat(&["--".into(), "-h".into()]).unwrap();
+        assert_eq!(prompt, "-h");
+        // D8 / D12: 未知旗标拒绝即帧 (不静默吞成正文 / 议题)。
+        let chat_error =
+            parse_chat(&["--modle".into(), "gpt-4".into(), "hello".into()]).unwrap_err();
+        assert!(
+            chat_error.contains("--modle") && chat_error.contains("`--`"),
+            "{chat_error}"
+        );
+        let council_error = parse_council_topic(&["--foo".into(), "bar".into()]).unwrap_err();
+        assert!(council_error.contains("--foo"), "{council_error}");
+        // 旗标值像旗标 → 报「缺值」, 不报「未知参数」。
+        let value_error =
+            parse_chat(&["--model".into(), "--session".into(), "x".into()]).unwrap_err();
+        assert!(
+            value_error.contains("--model requires a value"),
+            "{value_error}"
+        );
+        // `--` 之后的议题照收 (单空格拼接语义不变)。
+        assert_eq!(
+            parse_council_topic(&["--".into(), "--foo".into()]).unwrap(),
+            "--foo"
+        );
     }
 }
