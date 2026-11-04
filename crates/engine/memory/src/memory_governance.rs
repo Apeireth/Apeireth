@@ -608,34 +608,6 @@ impl SqliteMemoryStore {
     pub fn read_governed_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<GovernedEpisode> {
         read_governed_row(row)
     }
-
-    pub fn ensure_governance(
-        &self,
-        episode_id: &str,
-    ) -> Result<(MemoryGovernanceStatus, bool, i64), MemoryGovernanceError> {
-        let conn = self.conn()?;
-        ensure_governance_on_conn(&conn, episode_id)
-    }
-
-    pub fn fetch_governed(
-        &self,
-        episode_id: &str,
-    ) -> Result<Option<GovernedEpisode>, MemoryGovernanceError> {
-        let conn = self.conn()?;
-        fetch_governed_on_conn(&conn, episode_id)
-    }
-
-    pub fn governance_cas_failure(
-        &self,
-        episode_id: &str,
-        expected_rev: i64,
-    ) -> MemoryGovernanceError {
-        let conn = match self.conn() {
-            Ok(c) => c,
-            Err(e) => return MemoryGovernanceError::Invalid(e.to_string()),
-        };
-        cas_failure_on_conn(&conn, episode_id, expected_rev)
-    }
 }
 
 impl MemoryGovernanceStore for SqliteMemoryStore {
