@@ -1,21 +1,21 @@
 # Apeireth 维护指南（v2 工程重构线, 2026-08-27）
 
-> **现状 (2026-10-06 对账)**：本文为 v2 维护指南。当前基线：默认分支 `main`、**18-crate 工作区**（2026-09-04 抽出 runtime-assembly 后 13→17；2026-10-06 协作者批新增 `crates/engine/guard` 后 17→18）、workspace.version `2.0.0-rc.1`；v2 下一步见根 [ROADMAP.md](../../ROADMAP.md) §4。历史注：tag `v2.0.0-alpha.1` @ `d6910cf7` 时代为 13-crate。
+> **现状 (2026-11-04 工具链面口径对齐)**：本文为 v2 维护指南。当前基线：默认分支 `main`、**workspace = 31 members（30 crates + bench harness）**（crate 数真源 = [AGENTS.md](../../AGENTS.md) §3；历史口径：2026-09-04 抽出 runtime-assembly 后 13→17、2026-10-06 协作者批新增 `crates/engine/guard` 后 17→18 —— 本文 §2 模块地图即 2026-10-06 的 18-crate 对账快照，**不是**现行清单）、workspace.version `2.0.0-rc.5`（真源 = 根 [Cargo.toml](../../Cargo.toml) `[workspace.package].version`）；v2 下一步见根 [ROADMAP.md](../../ROADMAP.md) §4。历史注：tag `v2.0.0-alpha.1` @ `d6910cf7` 时代为 13-crate。
 
 ```
 [Document-Meta]
 Document:        maintenance-guide.md
 Version:         Manual-Rev-N (v2 重写)
-Last-Modified:   2026-09-12
-Status:          🟢 活跃 (v2 18-crate)
+Last-Modified:   2026-11-04
+Status:          🟢 活跃 (v2, 31 members)
 ```
 
 > 给谁看：维护代码的人（人或 AI）。先读 [ARCHITECTURE.md](../../ARCHITECTURE.md) 顶层，再读 [architecture.md](../01-architecture/architecture.md) 详细归属，再来这份。
-> 读法：§1 概念词典（澄清易混词）→ §2 18-crate 模块地图 → §3 维护流程 → §4 进程封装 → §5 v1 时代的"现在不这样做" → §6 不漂移承诺。
+> 读法：§1 概念词典（澄清易混词）→ §2 模块地图（2026-10-06 对账快照）→ §3 维护流程 → §4 进程封装 → §5 v1 时代的"现在不这样做" → §8 不漂移承诺。
 
 ---
 
-## 1. 概念词典（v2 18-crate 语境）
+## 1. 概念词典（v2 语境）
 
 ### 1.1 能力栈（v2 一句话定义）
 
@@ -54,15 +54,19 @@ v1 时代的三层交付模型（模块/套件/插件）已**弃用**——v2 �
 9 哲学锚（per [philosophy.md](../01-architecture/philosophy.md)）必穿透：S-1 北极星 / S-2 实事求是 / S-3 质量工程化 / O-1 安全优先 / O-2 走在前人 / O-3 干到底 / O-4 接手 / O-5 不假装 / O-6 永远追求最优。
 
 3 不漂移（per [ROADMAP.md](../../ROADMAP.md) §5 + conventions/03-adr.md）：
-- **0 触碰** 3 项不可变脊柱（Self-Disable 判定 / L0 HA 物理隔离 / 13 键 verdict cache 语义）
-- **随 release 推进** workspace.version（当前 2.0.0-rc.1, 2026-08-30 RC1 发布起 per 6b81c210；旧 "1.2.0 双轴制" 已终结，workspace 轴 = 产品轴）
+- **0 触碰** 3 项不可变脊柱（Self-Disable 判定 / L0 HA 物理隔离 / 14 键 verdict cache 语义；现行 14 键 = PHL-01..08，历史「13 键」为 2026-10-11 PHL-08 之前口径，per [AGENTS.md](../../AGENTS.md) §3）
+- **随 release 推进** workspace.version（当前 2.0.0-rc.5, 真源 = 根 `Cargo.toml` `[workspace.package].version`；旧 "1.2.0 双轴制" 已终结，workspace 轴 = 产品轴）
 - **0 改** R11 baseline 3 值（0.8682/0.8532/0.906）
 
 ---
 
-## 2. 18-crate 模块地图（v2 当前真实，2026-10-06 对账更新）
+## 2. 模块地图（2026-10-06 对账快照，18-crate 历史口径）
 
-来源：根 `Cargo.toml` members（18）+ [`ARCHITECTURE.md`](../../ARCHITECTURE.md) + `cargo metadata --no-deps` 实测依赖边（2026-09-05；2026-10-06 对账补 `apeireth-guard`，其依赖边取自 `crates/engine/guard/Cargo.toml`）。
+> **快照说明**：本节是 **2026-10-06 对账时**的 18-crate 模块地图，按「历史不追溯改写」保留原值。
+> **现行成员清单真源** = 根 `Cargo.toml` `members` + [AGENTS.md](../../AGENTS.md) §3（现 31 members）；
+> 本节表格**不得**当作现行 crate 清单读，新增/下线 crate 后请按新成员数重做对账。
+
+来源：根 `Cargo.toml` members（2026-10-06 对账时为 18）+ [`ARCHITECTURE.md`](../../ARCHITECTURE.md) + `cargo metadata --no-deps` 实测依赖边（2026-09-05；2026-10-06 对账补 `apeireth-guard`，其依赖边取自 `crates/engine/guard/Cargo.toml`）。
 
 ### 2.1 Foundation（6 crate, 稳定契约层）
 
@@ -104,7 +108,7 @@ v1 时代的三层交付模型（模块/套件/插件）已**弃用**——v2 �
 | `apeireth-cli` | `apeireth session / chat / gateway serve` 三命令入口 | 走 `build_canonical_runtime_from_env`，**已挂 GovernancePipeline = `PermissionGovernanceHook + CredentialDisclosureHook + PromptInjectionHook`**（upstream `873d2857`）；MaxRounds 结构性，AuditHashChain 按部署需要挂 |
 | `apeireth-sdk` | **stub 模式**：6 工具白名单 + 鉴权 5 组件 + WS 8 帧协议类型已就位；真实 HTTP/WS 走 `unimplemented!()` 守门；R21 真接 | 真实用户 = R21 后才出现 |
 
-### 2.5 依赖 DAG（`cargo metadata --no-deps` 实测，18 crate，2026-09-05 + 2026-10-06 对账）
+### 2.5 依赖 DAG（`cargo metadata --no-deps` 实测，18 crate 历史口径，2026-09-05 + 2026-10-06 对账）
 
 ```
 foundation/
@@ -139,18 +143,28 @@ adapters/
 
 ## 3. 维护流程（v2 日常操作）
 
-### 3.1 本地反馈环（CI 1:1 复刻）
+### 3.1 本地反馈环
 
-来源：根 [Makefile](../../Makefile)。
+来源：根 [Makefile](../../Makefile)。**全量门禁的唯一执行器** = `pwsh scripts/gate_full.ps1 -FailIfBusy`
+（= `make gate-full`）；全量基线数字与口径真源 = [test-baseline.md](../03-reference/test-baseline.md) §1，
+**本文件只引用、不抄写数字**。
 
 ```bash
-make check       # cargo check --workspace --all-targets
-make test        # cargo test --workspace --all-targets --locked (全量实测 5360 passed / 0 failed / 22 ignored，190 suites，2026-10-13 口径)
+make check       # cargo check --workspace --all-targets --locked
+make test        # cargo test --workspace --all-targets --locked --no-fail-fast -j 2 (本地单次全量)
+make clippy      # cargo clippy --workspace --all-targets --locked -- -D warnings
 make fmt         # cargo fmt --all
-make ci          # make ci-build + ci-test + ci-release (一键)
+make gate-full   # pwsh scripts/gate_full.ps1 -FailIfBusy (唯一全量执行器: test + clippy + fmt,
+                 #   图像家族 11 crate 拆出独立跑; 全量数字见 test-baseline.md §1)
+make ci          # make ci-build + ci-test + ci-release (rust.yml 主编译/测试两步 + 本地 release 构建)
 ```
 
-约束：本地 `make ci` exit 0 → push 后 GitHub Actions 必绿（同源）。任 1 个 exit != 0 → 不要推。
+约束（如实口径）：`make ci` exit 0 **只说明本地这几条命令通过**，**不等于** push 后 GitHub Actions 必绿——
+rust.yml 另有本地 `make ci` 不覆盖的步骤（legacy 依赖检查 / 3 OS 矩阵 / 进程隔离与治理链专项测试 /
+8 硬墙守门 job / secret-scan）。任 1 个 exit != 0 → 不要推。
+
+口径分工（两条并行口径，勿混用）：`AGENTS.md` §5 = 交付前三件套裸命令；`test-baseline.md` §1 = 全量门禁
+唯一执行器 + 基线数字真源。本地要跑全量门禁 → 走 `make gate-full`。
 
 ### 3.2 提交纪律
 
@@ -184,7 +198,8 @@ make ci          # make ci-build + ci-test + ci-release (一键)
 2. 对照 [ARCHITECTURE.md](../../ARCHITECTURE.md) "Ownership boundaries" 表确认职责
 3. **不要碰** deprecated / frozen 标记（v1 字段在源码里仍存但有 `#[deprecated]` 注释）
 4. 改公共 API → `grep` 全部构造点（[team-work-doc.md](team-work-doc.md) §2.4 红线 4）
-5. `make ci` 绿 + `cargo doc` 无新 warning
+5. 全量门禁绿：`make gate-full`（`pwsh scripts/gate_full.ps1 -FailIfBusy`）exit 0 + `cargo doc` 无新 warning
+   （唯一全量执行器与基线口径见 [test-baseline.md](../03-reference/test-baseline.md) §1）
 
 ---
 
@@ -214,7 +229,7 @@ make ci          # make ci-build + ci-test + ci-release (一键)
 
 ### 4.3 ProcessSupervisor（v1 计划，v2 **P5 排期**）
 
-`ProcessSupervisor` + 进程树快照模型 + 跨进程血缘追踪，**当前不在 18-crate 工作区**。见 [ROADMAP.md](../../ROADMAP.md) §4 P5。R**发明"我们用 supervisor 做 X"——明确不在 scope。
+`ProcessSupervisor` + 进程树快照模型 + 跨进程血缘追踪，**当前不在现行 31 members 工作区内**。见 [ROADMAP.md](../../ROADMAP.md) §4 P5。R**发明"我们用 supervisor 做 X"——明确不在 scope。
 
 ---
 
@@ -236,18 +251,19 @@ make ci          # make ci-build + ci-test + ci-release (一键)
 | `on_unload` 撤销 v1 授权 pack | `bridge.packs.revoke_by_name(...)` | R**做（v2 governance 接管授权——P0 接线） | 责任分离 |
 | 让 plugin 自己做拒绝逻辑 | `if user_is_bad { return Err(...) }` | `CapabilityDescriptor.with_metadata("risk", ...)` + governance 闸 | policy 不该散在 plugin |
 | `crates/apeireth-*` 顶层 crate 名 | `crates/apeireth-companion/` | `crates/foundation|engine|capabilities|adapters/<name>/` + `apeireth-*` package | 顶层目录按责任分组（foundation/engine/capabilities/adapters），package 名仍 `apeireth-*` |
-| 测试用 `cargo test --workspace` 全量 | 团队协作无脑跑全量 | `cargo test -p <your_crate> -j 4`（per [team-work-doc.md](team-work-doc.md) §2.2） | Windows 页文件易耗尽 |
+| 测试用 `cargo test --workspace` 全量 | 团队协作无脑跑全量 | `cargo test -p <your_crate> -j 4`（per [team-work-doc.md](team-work-doc.md) §2.2）；确需全量门禁走唯一执行器 `pwsh scripts/gate_full.ps1 -FailIfBusy`（per [test-baseline.md](../03-reference/test-baseline.md) §1） | Windows 页文件易耗尽 |
 
 ---
 
-## 7. CI 门禁清单（13 个 workflow，1:1 复刻到本地）
+## 7. CI 门禁清单（现存 33 个 workflow；本地只复刻可本地化的部分）
 
-来源：`.github/workflows/*.yml` + 根 [Makefile](../../Makefile) `make ci`。
+来源：`.github/workflows/*.yml`（2026-11-04 实测 33 个）+ 根 [Makefile](../../Makefile) `make ci`。
+下表列**主要门禁 workflow**，非全量枚举；表中「本地复刻命令」只列**本地可执行**的部分。
 
 | workflow | 触发 | 本地复刻命令 |
 | | | |
-| `rust.yml` | push main + PR | `cargo nextest run --workspace --profile ci --locked` + 13 键测试契约守门 |
-| `rust-lint.yml` | push main + PR | `cargo clippy --workspace --all-targets --locked -- -D warnings` + fmt |
+| `rust.yml` | push main + PR | `cargo build --workspace --tests --locked`（line 71）+ `cargo nextest run --workspace --profile ci --locked`（line 75）+ 14 键契约守门（守门在 CI 内跑，本地不复刻） |
+| `rust-lint.yml` | push main + PR | `cargo clippy --workspace --all-targets --locked -- -D warnings` + fmt（该 workflow 另带 `-A` 放行项，与 AGENTS.md §5 严格口径不同） |
 | `miri.yml` | push main | `cargo +nightly miri test -p apeireth-core` 等 |
 | `rustdoc.yml` | push main | `cargo +nightly doc -Dwarnings` |
 | `cargo-audit.yml` | push main + 周 cron | `cargo audit` |
@@ -256,19 +272,21 @@ make ci          # make ci-build + ci-test + ci-release (一键)
 | `m2b-xv-isolation.yml` | push main | M2B 三 OS 进程隔离（CI runner，3 OS 跑） |
 | `m2c-xv-shell-validation.yml` | push main | M2C shell 验证（3 OS） |
 | `m3a-canonical-fetch.yml` | push main | M3A 受控 fetch（3 OS） |
-| `protocol-handlers.yml` | push main | protocol 集成测试 |
-| `ci-fix.yml` | push main | CI 防御（hygiene） |
 | `companion-desktop-ci.yml` | push companion-desktop/** + PR touch 它 | 前端独立 CI |
 
-本地 `make ci`（build + nextest + release build）=CI 三个核心 job 一致；其它 workflow 的 OS-specific 步骤仅 CI runner 上跑。
+本地 `make ci` = rust.yml `rust-tests` job 的**编译 + 测试主命令**（line 71 / line 75）+ 本地 release 构建，
+**单 OS**、**不等于** rust.yml 全量 job。本地**不覆盖**：legacy 依赖检查（`scripts/check_no_legacy_deps.py`）、
+3 OS 矩阵 + Linux 系统库、canonical 进程隔离集成测试（line 78）、治理链演练（line 82）、8 硬墙守门 job、
+secret-scan（scan-all + scan-history）；其余 workflow 的 OS-specific / nightly 步骤仅 CI runner 上跑。
+`make ci-release`（`cargo build --release --workspace --locked`）在 rust.yml 中**无对应 step**，是本地 release 前置构建。
 
 ### 8. 不漂移承诺
 
 来源：conventions/10-locked.md（已 R119 形式撤销，原意保留）+ ROADMAP §5。
 
 **0 触碰**：
-- 3 项不可变脊柱（Self-Disable 判定 / L0 HA 物理隔离 / 13 键 verdict cache 语义）——见 governance + core/src/philosophy.rs
-- workspace.version 2.0.0-rc.1（2026-08-30 RC1 发布起；旧 1.2.0 双轴制终结，根 [ROADMAP.md](../../ROADMAP.md) §3）
+- 3 项不可变脊柱（Self-Disable 判定 / L0 HA 物理隔离 / 14 键 verdict cache 语义；历史「13 键」为 2026-10-11 PHL-08 之前口径）——见 governance + core/src/philosophy.rs
+- workspace.version 2.0.0-rc.5（真源 = 根 `Cargo.toml` `[workspace.package].version`；旧 1.2.0 双轴制终结，根 [ROADMAP.md](../../ROADMAP.md) §3）
 
 **0 改**：
 - R11 baseline 3 值（0.8682/0.8532/0.906，per [11-baseline.md](../../docs/archive/conventions/11-baseline.md)）——仅守，代码不在当前工作区，约束在 git 历史
@@ -284,11 +302,13 @@ make ci          # make ci-build + ci-test + ci-release (一键)
 
 ## 9. 一句话
 
-**v2 18-crate 工作区 = 单一事实源（PluginManager）+ 单一执行入口（Runtime::execute）+ 单一进程边界（ProcessExecutor）+ 单一协议抽象（NormalizedRequest/Response）+ 单一工具 trait（ToolCapability）+ 单一插件 trait（Plugin 4 方法）+ 单一凭据契约（CredentialResolver）+ 单一决策 trait（GovernanceHook + Allow/Deny/RequireApproval 三态）。**其它任何"创新点"都先回到这 8 个"单一"过一遍。
+**v2 工作区 = 单一事实源（PluginManager）+ 单一执行入口（Runtime::execute）+ 单一进程边界（ProcessExecutor）+ 单一协议抽象（NormalizedRequest/Response）+ 单一工具 trait（ToolCapability）+ 单一插件 trait（Plugin 4 方法）+ 单一凭据契约（CredentialResolver）+ 单一决策 trait（GovernanceHook + Allow/Deny/RequireApproval 三态）。**其它任何"创新点"都先回到这 8 个"单一"过一遍。
 
 ---
 
-_本指南 v2 重写 (2026-08-27)，2026-09-12 对账更新 crate 数为 17、2026-10-06 对账更新为 18（新增 `crates/engine/guard`）：取代 v1 `apeireth-companion` 维护手册（`crates/apeireth-companion` 模块地图 → 现 18-crate foundation|engine|capabilities|adapters 分组）；v2 维护的 = PluginManager 唯一注册点 + 8 哲学锚穿透 + 3 不漂移承诺。v2 下一步（governance 接线 / core drain / 记忆实现）见根 ROADMAP §4。_
+_本指南 v2 重写 (2026-08-27)，2026-09-12 对账更新 crate 数为 17、2026-10-06 对账更新为 18（新增 `crates/engine/guard`）：取代 v1 `apeireth-companion` 维护手册（`crates/apeireth-companion` 模块地图 → 18-crate foundation|engine|capabilities|adapters 分组）；v2 维护的 = PluginManager 唯一注册点 + 8 哲学锚穿透 + 3 不漂移承诺。v2 下一步（governance 接线 / core drain / 记忆实现）见根 ROADMAP §4。_
+
+_2026-11-04 工具链面口径对齐批（不追溯改写 §2 历史快照）：版本轴 `2.0.0-rc.1` → `2.0.0-rc.5`、crate 数口径 → `31 members`（真源 = [AGENTS.md](../../AGENTS.md) §3）、键集口径 13 键 → 14 键、测试数字改为引用 [test-baseline.md](../03-reference/test-baseline.md) §1（不再抄写）、全量门禁改为指向唯一执行器 `pwsh scripts/gate_full.ps1 -FailIfBusy`（`make gate-full`）、`make ci` 覆盖范围改为如实口径（不再宣称 push 后必绿）。_
 ## worktree 台账（2026-10-16 建，建议书 P1-2）
 
 | worktree | 分支 | 用途 | 回收条件 |
