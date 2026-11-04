@@ -3,7 +3,7 @@
 ```
 [Document-Meta]
 Document:        docs/04-internal/01-handoffs/engine-line-capability-request-2026-11-01.md
-Version:         1.0
+Version:         1.1
 Last-Modified:   2026-11-01
 Status:          🟡 待引擎线答复（owner 已认可需求；答复后升 v2.0 回填矩阵）
 Author:          总工程师（lead）· 前端视觉总攻线
@@ -42,6 +42,11 @@ Author:          总工程师（lead）· 前端视觉总攻线
 | 备注 | 限制条件（如仅 native 可测、仅单测覆盖） |
 
 **硬要求**：每个"已实现"都要有可复核证据；**没测过就写"未实测"**，不许用"应该可以"。
+
+**Windows 验收车道（2026-11-04 owner 追加）**：矩阵每一项原语还必须附一行——
+**在 Windows 真机上验过没有 / DPI 几档 / 真实 GPU 还是软件渲染 / 证据路径**。
+验收车道定义见 [`../engine-windows-validation-lane.md`](../engine-windows-validation-lane.md)
+（CI 观察车道 + 真机矩阵 + 证据格式）。**没有登记的真机 ⇒ 一律写"未实测"。**
 
 ### ② 最小垂直切片（一条能跑通的链路 + 验证）
 

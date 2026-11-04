@@ -282,6 +282,56 @@ jobs:
             -printf '  %f  %s bytes\n' 2>/dev/null || echo "  （本批无 .wasm 产物）"
 
   # =========================================================================
+  # 5.5 Windows 原生车道（**观察态 · 不阻塞**）—— Windows 特有的编译/测试问题
+  # =========================================================================
+  # 为什么加：引擎的**验收基线是 Windows**（WebView2），但 native 四道门禁
+  # 都在 ubuntu 上跑 ⇒ Windows 特有的编译失败 / 测试失败（路径分隔符、文件
+  # 操作、字体与区域设置差异）**要等到真机才暴露** ⇒ 提前在 hosted runner 上
+  # 暴露一次，成本低得多。
+  #
+  # ⚠️ **本 job 故意不阻塞**（continue-on-error）：首次加入时 Windows 上很可能
+  # 有既存的失败（与本次改动无关）。⇒ 先当"观察车道"跑一段时间，把既存问题
+  # 归零后，再由引擎线决定是否提为阻塞门禁。**不阻塞 ≠ 已通过**。
+  #
+  # 覆盖范围：只跑 native 测试（wasm 编译门禁在 ubuntu 上的 wasm job 里）；
+  # **不含**真机验收（Tauri 内嵌 WebView2 / DPI 125/150 / 真实 GPU / IME /
+  # 帧率 / 内存）—— 那些需要一台登记过的真实 Windows 机器，见
+  # docs/04-internal/engine-windows-validation-lane.md。
+  windows-native:
+    name: cargo test (crates-ui, windows-native, 观察态)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    continue-on-error: true
+    defaults:
+      run:
+        working-directory: crates-ui
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo (crates-ui)
+        uses: Swatinym/rust-cache@v2
+        with:
+          workspaces: 'crates-ui -> target'
+
+      - name: cargo test (crates-ui, windows-native)
+        shell: pwsh
+        run: |
+          cargo test --workspace --locked 2>&1 | Tee-Object -FilePath windows-native-test.log
+          exit $LASTEXITCODE
+
+      - name: 上传测试日志（失败时）
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-native-test-log
+          path: crates-ui/windows-native-test.log
+          if-no-files-found: warn
+
+  # =========================================================================
   # 6. 依赖治理门禁 — 4 类 check 全绿（bans / licenses / sources / advisories）
   # =========================================================================
   # crates-ui 是独立 workspace ⇒ 主仓的 cargo-deny.yml **只扫主 workspace**
