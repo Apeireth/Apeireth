@@ -6,7 +6,7 @@
     },
     "crates/adapters/gateway": {
       "files": 36,
-      "loc": 19399
+      "loc": 19437
     },
     "crates/adapters/sdk": {
       "files": 22,
@@ -18,11 +18,11 @@
     },
     "crates/capabilities/tools": {
       "files": 131,
-      "loc": 88304
+      "loc": 88388
     },
     "crates/engine/guard": {
       "files": 28,
-      "loc": 14508
+      "loc": 14734
     },
     "crates/engine/image/algo": {
       "files": 128,
@@ -70,7 +70,7 @@
     },
     "crates/engine/memory": {
       "files": 179,
-      "loc": 80254
+      "loc": 80745
     },
     "crates/engine/organ": {
       "files": 33,
@@ -86,7 +86,7 @@
     },
     "crates/engine/runtime-assembly": {
       "files": 82,
-      "loc": 44190
+      "loc": 44252
     },
     "crates/engine/storage": {
       "files": 27,
@@ -102,7 +102,7 @@
     },
     "crates/foundation/governance": {
       "files": 24,
-      "loc": 15075
+      "loc": 15154
     },
     "crates/foundation/orchestration": {
       "files": 54,

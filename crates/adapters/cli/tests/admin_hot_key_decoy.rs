@@ -15,9 +15,13 @@
 use std::sync::{Arc, Mutex};
 
 use apeireth_core::kernel::{Clock, Timestamp, VirtualClock};
-use apeireth_governance::AllowAll;
+use apeireth_governance::{AllowAll, UserTable};
 use apeireth_provider::canonical_openai_compatible::OpenAiCompatibleProviderPlugin;
 use apeireth_runtime::canonical::{InMemorySessionStore, Runtime};
+
+mod common;
+
+use common::{owner_record, ANONYMOUS_CLIENT};
 
 const OLD_KEY: &str = "sk-real-old-key-1234567890";
 const DECOY_KEY: &str = "sk-decoy-00000000000";
@@ -120,6 +124,9 @@ async fn decoy_hot_key_reaches_the_next_provider_request() {
     let _g_backend = EnvGuard::remove("APEIRETH_KEYRING_BACKEND");
     let _g_token = EnvGuard::remove("APEIRETH_GATEWAY_TOKEN");
     let _g_model = EnvGuard::remove("APEIRETH_MODEL");
+    // TLS 面旋钮不在场 (服务面解析 TLS 材料: 设了半套即拒启动) ⇒ 本用例走明文面。
+    let _g_tls_cert = EnvGuard::remove("APEIRETH_TLS_CERT");
+    let _g_tls_key = EnvGuard::remove("APEIRETH_TLS_KEY");
 
     let server = RecordingServer::start(SUCCESS_BODY).await;
 
@@ -151,10 +158,23 @@ async fn decoy_hot_key_reaches_the_next_provider_request() {
 
     let mut services = apeireth_gateway::GatewayServices::default();
     services.credentials = apeireth_cli::keyring_bootstrap::build_keyring_credential_writer();
+
+    // 角色面**激活** (P0-1 · 2026-11-04 管理面 fail-closed): 热更入口
+    // `/v1/admin/config` 属管理面 (要求 `UserCapability::AdminControl`) ⇒
+    // 角色面未激活时一律 403 ⇒ 本用例要测的是**热更后的出站 api_key**, 角色门
+    // 的前置条件由这里显式装上: owner 绑定本用例的过门署名名 (env 单令牌面
+    // 未设、客户端令牌表为空 ⇒ 未设防口径的过门署名名恒为 `anonymous`)。
+    let users = UserTable::new(vec![owner_record("owner-1", &[ANONYMOUS_CLIENT])]);
+    users.validate().expect("valid user table");
+    let mut state = apeireth_gateway::build_gateway_state_with_services(runtime, services);
+    state.user_access = apeireth_gateway::UserAccess::from_table(users);
+
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
-    tokio::spawn(apeireth_gateway::serve_canonical_with_services(
-        listener, runtime, services,
+    tokio::spawn(apeireth_gateway::serve_state_with_shutdown(
+        listener,
+        state,
+        std::future::pending::<()>(),
     ));
     let base = format!("http://{addr}");
     let client = reqwest::Client::new();

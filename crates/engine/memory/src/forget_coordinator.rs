@@ -26,7 +26,8 @@ use crate::universal_forget::{
     resolve_access_permit, verify_permit_against_history, AccessGuardStatus, GuardDecision,
 };
 use crate::{
-    MemoryError, MemoryGovernanceError, MemoryGovernanceStore, MemoryResult, SqliteMemoryStore,
+    MemoryError, MemoryGovernanceError, MemoryGovernanceStatus, MemoryGovernanceStore,
+    MemoryResult, SqliteMemoryStore,
 };
 
 /// 协调遗忘请求：roots 为遗忘根集；`approval_id` 引用上游已通过的审批工件
@@ -42,7 +43,14 @@ pub struct CoordinatedForget {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CoordinatedForgetReport {
     /// P1: 闭包中走 episode sidecar 的明文根/节点。
+    ///
+    /// ⚠️ **只收「真的已遗忘」的节点** ⇒ ⇒ 报告**不谎报**「明文已遗忘」。
     pub plaintext_forgotten: Vec<DerivedRef>,
+    /// P1: **明文侧没忘成的**节点（如实带出 ⇒ 调用方看得见「这次没存上」）。
+    ///
+    /// 例如治理账里**查无此条**（`NotFound`）⇒ 明文**根本没被忘掉**。
+    #[serde(default)]
+    pub plaintext_failed: Vec<DerivedRef>,
     /// P2: 全部闭包节点已入持久化遗忘集（V10 标记）。
     pub derived_marked: Vec<DerivedRef>,
     /// P3: 已删除的执行态注册行（调用方据此清 runtime 活体工件）。
@@ -192,20 +200,33 @@ impl SqliteMemoryStore {
 
         // ③ P1 明文: 闭包中 kind=episode 的节点走守卫版 forget_episode
         //    (governance sidecar, 默认检索排除 — 产品路径).
+        //
+        // ⚠️ **不许谎报「明文已遗忘」**（0 装诚实，对外报告即承诺）：
+        // - `Ok` ⇒ 真的忘掉了 ⇒ 进 `plaintext_forgotten`；
+        // - `AlreadyForgotten` ⇒ 明文侧**确实**已是 forgotten ⇒ 也进
+        //   `plaintext_forgotten`（不是谎报：状态属实）；
+        // - `NotFound`（治理账里**查无此条**）⇒ 明文**根本没被忘掉** ⇒
+        //   **不许**进 `plaintext_forgotten` ⇒ 如实记进 `plaintext_failed`
+        //   （不阻断整体遗忘，但自验会因此不过 ⇒ 对外不谎报）。
         let mut plaintext_forgotten: Vec<DerivedRef> = Vec::new();
+        let mut plaintext_failed: Vec<DerivedRef> = Vec::new();
         for node in &closure.nodes {
             if node.kind == "episode" {
                 let permit = permit
                     .as_ref()
                     .ok_or_else(|| MemoryError::Invalid("访问史守卫未放行: 缺少 permit".into()))?;
                 match self.forget_episode_guarded(&node.id, Some(&req.reason), 0, permit.clone()) {
-                    Ok(_) => {}
-                    // 治理态原因 (不存在 / 已遗忘) 与既有语义一致: 不阻断整体遗忘.
-                    Err(MemoryGovernanceError::NotFound(_))
-                    | Err(MemoryGovernanceError::AlreadyForgotten(_)) => {}
+                    Ok(_) => plaintext_forgotten.push(DerivedRef::new(&node.kind, &node.id)),
+                    // 已经遗忘 ⇒ 明文侧**确实**已遗忘 ⇒ 如实计入.
+                    Err(MemoryGovernanceError::AlreadyForgotten(_)) => {
+                        plaintext_forgotten.push(DerivedRef::new(&node.kind, &node.id));
+                    }
+                    // 治理态原因 (不存在) 与既有语义一致: 不阻断整体遗忘, 但**不许**谎报.
+                    Err(MemoryGovernanceError::NotFound(_)) => {
+                        plaintext_failed.push(DerivedRef::new(&node.kind, &node.id));
+                    }
                     Err(error) => return Err(MemoryError::Invalid(error.to_string())),
                 }
-                plaintext_forgotten.push(DerivedRef::new(&node.kind, &node.id));
             }
         }
 
@@ -268,7 +289,9 @@ impl SqliteMemoryStore {
         // ⑥ 行为契约自验 ("遗忘后 = 从未观察" 的回归断言, 内建不假装):
         //    a) 执行态清单对根集为空;
         //    b) 根集全部在持久遗忘集;
-        //    c) 持久遗忘集覆盖闭包全部节点.
+        //    c) 持久遗忘集覆盖闭包全部节点;
+        //    d) **明文侧**: 闭包里每条 episode 节点在治理账里**真的是 forgotten**
+        //       （旧实现**不校验明文侧** ⇒ 明文没忘掉也能「自验通过」⇒ 对外谎报）。
         let inventory_empty = self
             .research_execution_state_inventory(&req.roots)?
             .items
@@ -279,10 +302,21 @@ impl SqliteMemoryStore {
             .nodes
             .iter()
             .all(|n| persisted.contains(&DerivedRef::new(&n.kind, &n.id)));
-        let verified = inventory_empty && roots_marked && closure_covered;
+        let plaintext_verified = closure
+            .nodes
+            .iter()
+            .filter(|node| node.kind == "episode")
+            .all(|node| {
+                matches!(
+                    self.get_governed(&node.id),
+                    Ok(Some(governed)) if governed.status == MemoryGovernanceStatus::Forgotten
+                )
+            });
+        let verified = inventory_empty && roots_marked && closure_covered && plaintext_verified;
 
         Ok(CoordinatedForgetReport {
             plaintext_forgotten,
+            plaintext_failed,
             derived_marked,
             execution_state_cleared: cleared,
             closure,
@@ -429,6 +463,51 @@ mod tests {
             .research_execution_state_inventory(&[DerivedRef::new("episode", "ep-1")])
             .unwrap();
         assert!(inv.items.is_empty());
+    }
+
+    /// **明文侧遗忘失败 ⇒ 报告不许谎报「明文已遗忘」+ 自验必须不过**（对外不谎报）。
+    ///
+    /// ⚠️ 构造：治理账里**查无此条**（故意不写 episode 行）⇒ 明文段拿到
+    /// `NotFound` ⇒ 明文**根本没被忘掉** ⇒ 旧实现会照样把它塞进
+    /// `plaintext_forgotten` 并让自验通过 ⇒ ⇒ 对外谎报。
+    #[tokio::test]
+    async fn a_failed_plaintext_forget_is_reported_honestly() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("coordinator-plaintext-fail.sqlite");
+        let s = SqliteMemoryStore::open(&path).unwrap();
+        let access =
+            SqliteAccessHistoryStore::new(SqliteConnectionPool::open(&path).await.unwrap(), 32);
+        access.ensure_schema().await.unwrap();
+        // ⚠️ 故意**不写** episode 行 ⇒ 治理面查无此条 ⇒ 明文忘不掉。
+        // 但访问史必须有（守卫纪律: 先记访问史, 再忘记）⇒ 否则整体拒绝, 走不到明文段.
+        record_access(&access, "ep-missing").await;
+
+        let report = s
+            .research_coordinated_forget(&CoordinatedForget {
+                roots: vec![DerivedRef::new("episode", "ep-missing")],
+                reason: "用户要求".into(),
+                approval_id: "apv-1".into(),
+            })
+            .unwrap();
+
+        assert!(
+            !report
+                .plaintext_forgotten
+                .contains(&DerivedRef::new("episode", "ep-missing")),
+            "明文侧没忘成 ⇒ 不得进 plaintext_forgotten: {:?}",
+            report.plaintext_forgotten
+        );
+        assert!(
+            report
+                .plaintext_failed
+                .contains(&DerivedRef::new("episode", "ep-missing")),
+            "失败必须如实带出: {:?}",
+            report.plaintext_failed
+        );
+        assert!(
+            !report.behavior_contract_verified,
+            "明文侧失败 ⇒ 自验不得通过（不许对外谎报）"
+        );
     }
 
     /// 访问史纪律 (G1): episode 目标没有真实访问史 ⇒ **整体拒绝**, 一条都不销毁.

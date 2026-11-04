@@ -1319,8 +1319,17 @@ impl MemoryRecallModule {
 
     /// V4-c 真接信号面: 把一轮召回的**注入回执**喂给自进化接线层 (回执 =
     /// 后续使用证据的唯一真值面; 无接线层 = 调权关, 什么都不做)。
-    fn feed_retrieval_tuning(&self, selected: &apeireth_memory::SelectedMemoryAccess) {
+    ///
+    /// ⚠️ **会话维度**（多会话串扰修复）：生效检索权重按**会话**分桶 ⇒ ⇒
+    /// 调权落地必须装进**本会话的桶** ⇒ ⇒ 这里进**会话作用域**（作用域内
+    /// `install_effective` 落进当前会话的桶）⇒ ⇒ A 会话调权不会改 B 的排序。
+    fn feed_retrieval_tuning(
+        &self,
+        session_key: &str,
+        selected: &apeireth_memory::SelectedMemoryAccess,
+    ) {
         if let Some(wire) = &self.retrieval_tuning {
+            let _scope = apeireth_memory::retrieval_tuning::enter_session_scope(session_key);
             wire.record_injection_round(&selected.selected_attribution, self.now_epoch_ms());
         }
     }
@@ -1504,7 +1513,7 @@ impl BehaviorModule for MemoryRecallModule {
                         // 真接信号: 本轮召回选中了候选 = 命中, 全空 = 未命中。
                         self.feed_retrieval_signal(!selected.selected_candidate_ids.is_empty());
                         // V4-c: 注入回执喂证据账 (选中集为空的轮按空轮报)。
-                        self.feed_retrieval_tuning(&selected);
+                        self.feed_retrieval_tuning(&session, &selected);
                         if let Some(recorder) = &self.access_recorder {
                             recorder.record_selected(&source_session, &selected);
                         }
@@ -2464,30 +2473,43 @@ impl BehaviorModule for ReflexionModule {
 #[derive(Debug, Default)]
 pub struct JudgeObservations {
     by_session: Mutex<BTreeMap<SessionId, JudgeResult>>,
+    /// 锁**中毒**次数（**明确记录**：中毒 ≠ 静默恢复 ⇒ 面板/自述可读）。
+    ///
+    /// ⚠️ 旧实现是 `.lock().expect("judge observations mutex")` ⇒ ⇒ **一次中毒
+    /// ⇒ 此后每个回合都 panic**（一个模块的失误升级成整轮的崩溃）。
+    /// ⇒ ⇒ 现在与同文件其它锁一致：**中毒即恢复**（取回内部数据继续跑），
+    /// 但**明确计数** ⇒ 不静默、也不每回合 panic。
+    poisoned_locks: AtomicU64,
 }
 
 impl JudgeObservations {
+    /// 取锁：**中毒即恢复 + 明确记录中毒**（与同文件 [`lock_or_recover`] 同策略）。
+    fn lock(&self) -> std::sync::MutexGuard<'_, BTreeMap<SessionId, JudgeResult>> {
+        match self.by_session.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => {
+                self.poisoned_locks.fetch_add(1, Ordering::Relaxed);
+                poisoned.into_inner()
+            }
+        }
+    }
+
+    /// 锁中毒恢复次数（**明确记录**，不静默）。
+    pub fn poisoned_locks(&self) -> u64 {
+        self.poisoned_locks.load(Ordering::Relaxed)
+    }
+
     fn clear(&self, session: &SessionId) {
-        self.by_session
-            .lock()
-            .expect("judge observations mutex")
-            .remove(session);
+        self.lock().remove(session);
     }
 
     fn record(&self, session: SessionId, result: JudgeResult) {
-        self.by_session
-            .lock()
-            .expect("judge observations mutex")
-            .insert(session, result);
+        self.lock().insert(session, result);
     }
 
     /// Read the current-turn result, if Judge ran successfully.
     pub fn get(&self, session: &SessionId) -> Option<JudgeResult> {
-        self.by_session
-            .lock()
-            .expect("judge observations mutex")
-            .get(session)
-            .cloned()
+        self.lock().get(session).cloned()
     }
 }
 
@@ -5135,5 +5157,45 @@ mod tests {
             summary.last_move()
         );
         let _ = std::fs::remove_file(&log);
+    }
+
+    /// **锁中毒后仍可继续**（Judge 观察面）。
+    ///
+    /// 旧实现是 `.lock().expect("judge observations mutex")` ⇒ ⇒ 一次中毒
+    /// ⇒ 此后**每个回合**都 panic ⇒ ⇒ 一个模块的失误升级成整轮崩溃。
+    /// ⇒ ⇒ 现在：中毒即恢复（继续跑）+ **明确记录**中毒次数。
+    #[test]
+    fn a_poisoned_judge_observations_lock_keeps_the_turn_going() {
+        let observations = Arc::new(JudgeObservations::default());
+        let session = SessionId::new();
+
+        // 制造中毒: 持锁线程 panic（锁被 poison）。
+        {
+            let poisoned = Arc::clone(&observations);
+            let outcome = std::thread::spawn(move || {
+                let _guard = poisoned.by_session.lock().expect("lock before poisoning");
+                panic!("poison the judge observations mutex");
+            })
+            .join();
+            assert!(outcome.is_err(), "持锁线程确实 panic 了（制造中毒）");
+        }
+
+        // 中毒后: **不 panic** + 仍能读写。
+        let result = JudgeResult {
+            score: 0.5,
+            verdict: JudgeVerdict::Pass,
+            critique: String::new(),
+        };
+        observations.record(session, result.clone());
+        assert_eq!(observations.get(&session), Some(result));
+        observations.clear(&session);
+        assert_eq!(observations.get(&session), None);
+
+        // 中毒被**明确记录**（不静默恢复）。
+        assert!(
+            observations.poisoned_locks() >= 1,
+            "锁中毒必须被计数（明确记录）: {}",
+            observations.poisoned_locks()
+        );
     }
 }

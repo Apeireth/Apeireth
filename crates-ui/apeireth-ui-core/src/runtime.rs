@@ -1988,4 +1988,67 @@ mod tests {
             "外来运行时的信号不得驱动本运行时的 effect（幽灵输入的结构条件）"
         );
     }
+
+    /// 用户 effect 体 panic ⇒ **不得**把运行时永久卡在 flush 态。
+    ///
+    /// 【为什么这条是硬要求】`flushing` 是 flush 的**重入闸门**：flush 期间
+    /// `request_flush` 直接短路（新待办由本轮循环接管）⇒ ⇒ 若 effect 体 panic
+    /// 后 `flushing` 没复位 ⇒ 此后**每一次写入**都被这道闸门短路 ⇒ ⇒ **永远
+    /// 不再有 flush** ⇒ UI **永久静默冻结**（没有报错，界面只是再也不动）。
+    ///
+    /// ⇒ 复位必须由 **RAII 守卫**（[`FlushGuard`]）在 panic 展开时完成 ⇒
+    /// 这条测试锁住的正是「panic 之后仍能再次 flush」这一行为。
+    #[test]
+    fn a_panicking_effect_does_not_freeze_the_runtime() {
+        let host = Rc::new(OneShotHost::new());
+        let runtime = Runtime::new();
+        runtime.set_host_scheduler(host.clone());
+        let value = runtime.signal(0u32);
+
+        // 会 panic 的 effect（模拟用户 effect 体抛错）⇒ **只抛一次**，
+        // 免得后续 flush 再次 panic 掩盖「还能不能 flush」这一断言。
+        let panic_once = Rc::new(Cell::new(true));
+        let watched = value.clone();
+        let trigger = panic_once.clone();
+        runtime.effect(move || {
+            let _ = watched.get();
+            if trigger.get() {
+                trigger.set(false);
+                panic!("用户 effect 体 panic（回归测试的故意行为）");
+            }
+        });
+
+        // ① flush 途中 panic ⇒ 向外传播（引擎**不**吞用户 panic）。
+        let result = catch_unwind(AssertUnwindSafe(|| runtime.flush()));
+        assert!(
+            result.is_err(),
+            "用户 effect 体的 panic 必须向外传播（不得被静默吞掉）"
+        );
+
+        // ② panic 之后：写入必须**再次**向宿主请求 flush
+        //    （`flushing` 若没复位 ⇒ `request_flush` 短路 ⇒ 永久冻结）。
+        let runs = Rc::new(Cell::new(0));
+        let counter = runs.clone();
+        let watched = value.clone();
+        runtime.effect(move || {
+            let _ = watched.get();
+            counter.set(counter.get() + 1);
+        });
+
+        value.set(1);
+        assert_eq!(
+            host.queued(),
+            1,
+            "effect panic 之后写入必须再次请求 flush（否则 UI 永久静默冻结）"
+        );
+        assert!(
+            host.run_one(),
+            "宿主队列里必须有 flush 任务（panic 之后运行时必须仍可 flush）"
+        );
+        assert_eq!(
+            runs.get(),
+            1,
+            "panic 之后的 flush 必须仍能执行 effect（运行时没被卡在 flush 态）"
+        );
+    }
 }

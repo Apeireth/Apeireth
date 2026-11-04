@@ -123,6 +123,31 @@ fn merge_candidates_by_id(
     merged
 }
 
+/// 单条 episode 的**治理判定**（三态 ⇒ **fail-closed**）。
+///
+/// # 为什么不能只写 `if let Ok(Some(gov)) = …`
+///
+/// 旧写法把「**治理查询失败**（`Err`）」与「**查无治理记录**（`Ok(None)`）」、
+/// 「**有治理记录**（`Ok(Some(..))`）」压成同一件事 ⇒ ⇒ 查询出错时**整段过滤
+/// 逻辑被跳过** ⇒ ⇒ 被标记为 `Forgotten` 的 episode **仍然进入召回**
+/// （应当被过滤掉）。
+///
+/// ⇒ ⇒ 现在三态分开，**`Err` 一律 fail-closed**（不可判定 ⇒ 过滤掉），
+/// **绝不**把「查不出来」当「没有治理 ⇒ 放行」。
+#[derive(Debug, Clone)]
+enum GovernanceDecision {
+    /// 治理查询**失败** ⇒ 不可判定 ⇒ **fail-closed**（过滤掉）。
+    Undecidable,
+    /// **查无治理记录**（该 episode 在治理账里没有行）。
+    ///
+    /// 存量行口径 = 默认 `active`（见 `memory_governance` 的 V6 sidecar 语义）
+    /// ⇒ ⇒ 普通召回面放行；**精确授权面**要求「显式的 `Active` 治理记录」
+    /// ⇒ ⇒ 这一面不放行（与既有语义一致）。
+    Ungoverned,
+    /// 有治理记录 ⇒ 按 `status` 判。
+    Governed(GovernedEpisode),
+}
+
 impl MemoryCoordinator {
     /// Create a new memory coordinator with core backend and governance store.
     pub fn new(
@@ -286,6 +311,47 @@ impl MemoryCoordinator {
         self.governance.as_ref()
     }
 
+    /// 读单条 episode 的治理判定（**一次查询** ⇒ 过滤与 override 用同一份事实）。
+    ///
+    /// ⚠️ **`Err` ≠ `Ok(None)`**：`Err` = 查询失败（不可判定）⇒ ⇒ 交给
+    /// [`Self::governance_allows`] 做 **fail-closed** 判定。
+    fn governance_decision(&self, episode_id: &str) -> GovernanceDecision {
+        match self.governance.get_governed(episode_id) {
+            Ok(Some(governed)) => GovernanceDecision::Governed(governed),
+            Ok(None) => GovernanceDecision::Ungoverned,
+            Err(_) => GovernanceDecision::Undecidable,
+        }
+    }
+
+    /// 治理判定 ⇒ 该 episode **是否允许进入召回**。
+    ///
+    /// # 三种口径（逐条说清「Err 的含义是什么」）
+    ///
+    /// | 治理查询结果 | 普通召回面 | 精确授权面（`exact_scope_authorization`） |
+    /// |---|---|---|
+    /// | `Err`（查询失败 ⇒ 不可判定） | **不放行**（fail-closed） | **不放行** |
+    /// | `Ok(None)`（查无治理记录） | 放行（存量行 = 默认 active） | **不放行**（要求显式 `Active` 记录） |
+    /// | `Ok(Some(gov))` 且 `status == Active` | 放行 | 放行 |
+    /// | `Ok(Some(gov))` 且 `status == Forgotten` | **不放行** | **不放行** |
+    ///
+    /// ⇒ ⇒ **唯一的行为变化**是普通召回面遇到 `Err` 时不再放行（旧实现把
+    /// 查询失败当「无治理 ⇒ 放行」⇒ 被遗忘的条目会漏回来）。
+    fn governance_allows(decision: &GovernanceDecision, exact_scope_authorization: bool) -> bool {
+        match decision {
+            // 治理查询失败 ⇒ 不可判定 ⇒ **fail-closed**（过滤掉）。
+            GovernanceDecision::Undecidable => false,
+            // 查无治理记录 ⇒ 普通面放行（存量行默认 active）；精确授权面不放行。
+            GovernanceDecision::Ungoverned => !exact_scope_authorization,
+            GovernanceDecision::Governed(governed) => {
+                if exact_scope_authorization {
+                    governed.status == MemoryGovernanceStatus::Active
+                } else {
+                    governed.status != MemoryGovernanceStatus::Forgotten
+                }
+            }
+        }
+    }
+
     /// Reference to the underlying memory backend.
     pub fn backend(&self) -> &dyn MemoryBackend {
         self.backend.as_ref()
@@ -362,17 +428,11 @@ impl MemoryCoordinator {
                     .rev()
                     .take((query.limit * 4).max(32))
                 {
-                    if query.exact_scope_authorization
-                        && !matches!(self.governance.get_governed(&ep.id), Ok(Some(gov)) if gov.status == MemoryGovernanceStatus::Active)
-                    {
+                    // 治理判定（**fail-closed**：查不出来 = 不可判定 = 过滤掉）。
+                    let decision = self.governance_decision(&ep.id);
+                    if !Self::governance_allows(&decision, query.exact_scope_authorization) {
                         governance_filtered += 1;
                         continue;
-                    }
-                    if let Ok(Some(gov)) = self.governance.get_governed(&ep.id) {
-                        if gov.status == MemoryGovernanceStatus::Forgotten {
-                            governance_filtered += 1;
-                            continue;
-                        }
                     }
                     let (scope, provenance) = self.episode_scope_metadata(ep);
                     if !scope.is_visible_in(&query.visible_scopes) {
@@ -423,9 +483,9 @@ impl MemoryCoordinator {
                 };
                 if let Ok(scoped_episodes) = scoped.query_candidates(&candidate_query) {
                     for ep in scoped_episodes {
-                        if query.exact_scope_authorization
-                            && !matches!(self.governance.get_governed(&ep.id), Ok(Some(gov)) if gov.status == MemoryGovernanceStatus::Active)
-                        {
+                        // 治理判定（**fail-closed**：查不出来 = 不可判定 = 过滤掉）。
+                        let decision = self.governance_decision(&ep.id);
+                        if !Self::governance_allows(&decision, query.exact_scope_authorization) {
                             governance_filtered += 1;
                             continue;
                         }
@@ -434,16 +494,10 @@ impl MemoryCoordinator {
                             governance_filtered += 1;
                             continue;
                         }
-                        if let Ok(Some(gov)) = self.governance.get_governed(&ep.id) {
-                            if gov.status == MemoryGovernanceStatus::Forgotten {
-                                governance_filtered += 1;
-                                continue;
-                            }
-                        }
                         let mut content = ep.content.clone();
                         let mut importance = 0.5;
-                        if let Ok(Some(gov)) = self.governance.get_governed(&ep.id) {
-                            if let Some(c_override) = gov.content_override {
+                        if let GovernanceDecision::Governed(gov) = &decision {
+                            if let Some(c_override) = gov.content_override.clone() {
                                 content = c_override;
                             }
                             if gov.protected {
@@ -486,9 +540,9 @@ impl MemoryCoordinator {
                 .recent_episodes(&query.session_id, (query.limit * 8).max(64))
             {
                 for ep in raw_eps {
-                    if query.exact_scope_authorization
-                        && !matches!(self.governance.get_governed(&ep.id), Ok(Some(gov)) if gov.status == MemoryGovernanceStatus::Active)
-                    {
+                    // 治理判定（**fail-closed**：查不出来 = 不可判定 = 过滤掉）。
+                    let decision = self.governance_decision(&ep.id);
+                    if !Self::governance_allows(&decision, query.exact_scope_authorization) {
                         governance_filtered += 1;
                         continue;
                     }
@@ -497,16 +551,10 @@ impl MemoryCoordinator {
                         governance_filtered += 1;
                         continue;
                     }
-                    if let Ok(Some(gov)) = self.governance.get_governed(&ep.id) {
-                        if gov.status == MemoryGovernanceStatus::Forgotten {
-                            governance_filtered += 1;
-                            continue;
-                        }
-                    }
                     let mut content = ep.content.clone();
                     let mut importance = 0.5;
-                    if let Ok(Some(gov)) = self.governance.get_governed(&ep.id) {
-                        if let Some(c_override) = gov.content_override {
+                    if let GovernanceDecision::Governed(gov) = &decision {
+                        if let Some(c_override) = gov.content_override.clone() {
                             content = c_override;
                         }
                         if gov.protected {
@@ -816,6 +864,11 @@ impl MemoryCoordinator {
         vector_source: Option<StaticVectorCandidateSource>,
         now_ms: i64,
     ) -> Result<MemoryRecallResult, MemoryError> {
+        // ⚠️ **会话维度**（多会话串扰修复）：生效检索权重按**会话**分桶 ⇒ ⇒
+        // 本次召回必须在自己的会话作用域里读生效值（否则会读到别的会话的
+        // 调权结果）。作用域覆盖整个排序段（管线里的 `entry_salience` 也
+        // 在作用域内读）。
+        let _session_scope = crate::retrieval_tuning::enter_session_scope(&query.session_id);
         let mut candidates = candidates;
         if let Some(source) = &self.activation_source {
             for candidate in &mut candidates {
@@ -1686,6 +1739,189 @@ mod tests {
         );
 
         std::fs::remove_dir_all(&root).expect("cleanup wiki root");
+    }
+
+    /// 治理查询的**探针替身**：只改 `get_governed` 的返回，其余方法原样转交。
+    ///
+    /// ⚠️ 用途：把「**查不到**」的两种含义分开测 ——
+    /// `Err`（查询失败 ⇒ 不可判定）vs `Ok(None)`（查无治理记录）。
+    enum GovernanceProbeMode {
+        /// 查询失败（`Err`）。
+        Failing,
+        /// 查无治理记录（`Ok(None)`）。
+        Missing,
+        /// 有治理记录且已遗忘（`Ok(Some(..))` + `Forgotten`）。
+        Forgotten,
+    }
+
+    struct GovernanceProbe {
+        inner: Arc<dyn MemoryGovernanceStore>,
+        mode: GovernanceProbeMode,
+    }
+
+    impl GovernanceProbe {
+        fn new(inner: Arc<dyn MemoryGovernanceStore>, mode: GovernanceProbeMode) -> Self {
+            Self { inner, mode }
+        }
+    }
+
+    impl MemoryGovernanceStore for GovernanceProbe {
+        fn get_governed(
+            &self,
+            episode_id: &str,
+        ) -> Result<Option<GovernedEpisode>, MemoryGovernanceError> {
+            match &self.mode {
+                GovernanceProbeMode::Failing => Err(MemoryGovernanceError::Invalid(
+                    "governance query failed (probe)".into(),
+                )),
+                GovernanceProbeMode::Missing => Ok(None),
+                GovernanceProbeMode::Forgotten => Ok(Some(GovernedEpisode {
+                    episode: Episode {
+                        id: episode_id.to_string(),
+                        timestamp: 1_800_000_000,
+                        role: "user".to_string(),
+                        content: String::new(),
+                        session_id: SESSION.to_string(),
+                    },
+                    status: MemoryGovernanceStatus::Forgotten,
+                    protected: false,
+                    content_override: None,
+                    revision: 1,
+                    updated_at: None,
+                    updated_by: None,
+                    forgotten_at: Some(1),
+                })),
+            }
+        }
+
+        fn update_episode_content(
+            &self,
+            episode_id: &str,
+            new_content: &str,
+            updated_by: Option<&str>,
+            expected_rev: i64,
+        ) -> Result<GovernedEpisode, MemoryGovernanceError> {
+            self.inner
+                .update_episode_content(episode_id, new_content, updated_by, expected_rev)
+        }
+
+        fn forget_episode(
+            &self,
+            episode_id: &str,
+            reason: Option<&str>,
+            expected_rev: i64,
+        ) -> Result<GovernedEpisode, MemoryGovernanceError> {
+            self.inner.forget_episode(episode_id, reason, expected_rev)
+        }
+
+        fn protect_episode(
+            &self,
+            episode_id: &str,
+            expected_rev: i64,
+        ) -> Result<GovernedEpisode, MemoryGovernanceError> {
+            self.inner.protect_episode(episode_id, expected_rev)
+        }
+
+        fn unprotect_episode(
+            &self,
+            episode_id: &str,
+            expected_rev: i64,
+        ) -> Result<GovernedEpisode, MemoryGovernanceError> {
+            self.inner.unprotect_episode(episode_id, expected_rev)
+        }
+
+        fn governed_recent_episodes(
+            &self,
+            session_id: &str,
+            n: usize,
+        ) -> Result<Vec<GovernedEpisode>, MemoryGovernanceError> {
+            self.inner.governed_recent_episodes(session_id, n)
+        }
+
+        fn governed_query(
+            &self,
+            q: &crate::EpisodeQuery,
+        ) -> Result<Vec<GovernedEpisode>, MemoryGovernanceError> {
+            self.inner.governed_query(q)
+        }
+    }
+
+    /// 建一个**带治理探针**的检索器（探针只影响 `get_governed`）。
+    fn coordinator_with_governance_probe(mode: GovernanceProbeMode) -> MemoryCoordinator {
+        let store = Arc::new(crate::fresh_store());
+        let backend = store.clone();
+        let governance: Arc<dyn MemoryGovernanceStore> =
+            Arc::new(GovernanceProbe::new(store, mode));
+        MemoryCoordinator::new(backend, governance)
+    }
+
+    /// 写一条**能被召回**的记忆（正文含检索标记 ⇒ 不治理也会命中）。
+    fn seed_marker_episode(coordinator: &MemoryCoordinator, id: &str) {
+        coordinator
+            .writeback_episode(&Episode {
+                id: id.to_string(),
+                timestamp: 1_800_000_000,
+                role: "user".to_string(),
+                content: format!("{MARKER} 治理面探针"),
+                session_id: SESSION.to_string(),
+            })
+            .expect("writeback episode");
+    }
+
+    /// **治理查询失败 ⇒ 该 episode 不得进召回**（fail-closed 回归）。
+    ///
+    /// 旧实现把 `Err` 当成「无治理 ⇒ 放行」⇒ ⇒ 被遗忘的条目会漏回召回面。
+    #[test]
+    fn a_failing_governance_query_keeps_the_episode_out_of_recall() {
+        let coordinator = coordinator_with_governance_probe(GovernanceProbeMode::Failing);
+        seed_marker_episode(&coordinator, "ep-governance-probe-failing");
+
+        let recalled = recall(&coordinator);
+
+        assert!(
+            recalled.items.is_empty(),
+            "治理查询失败 ⇒ 不可判定 ⇒ 该 episode 不得进召回: {:?}",
+            recalled.items
+        );
+        assert!(
+            recalled.governance_filtered >= 1,
+            "被治理面过滤掉的条目必须计数（可观测）: {}",
+            recalled.governance_filtered
+        );
+    }
+
+    /// **查无治理记录（`Ok(None)`）⇒ 仍然放行**（存量行默认 active 的既有口径）。
+    ///
+    /// ⇒ ⇒ 钉住「查不到」的两种含义被**分开**处理：`Err` 过滤 / `Ok(None)` 放行。
+    #[test]
+    fn a_missing_governance_record_still_reaches_the_recall() {
+        let coordinator = coordinator_with_governance_probe(GovernanceProbeMode::Missing);
+        seed_marker_episode(&coordinator, "ep-governance-probe-missing");
+
+        let recalled = recall(&coordinator);
+
+        assert!(
+            !recalled.items.is_empty(),
+            "查无治理记录 ≠ 查询失败 ⇒ 不得误伤正常条目: {:?}",
+            recalled.items
+        );
+        assert_eq!(recalled.governance_filtered, 0, "没有任何治理面过滤发生");
+    }
+
+    /// **已遗忘 ⇒ 不得进召回**（既有语义，回归钉住）。
+    #[test]
+    fn a_forgotten_episode_never_reaches_the_recall() {
+        let coordinator = coordinator_with_governance_probe(GovernanceProbeMode::Forgotten);
+        seed_marker_episode(&coordinator, "ep-governance-probe-forgotten");
+
+        let recalled = recall(&coordinator);
+
+        assert!(
+            recalled.items.is_empty(),
+            "被遗忘的 episode 不得进召回: {:?}",
+            recalled.items
+        );
+        assert!(recalled.governance_filtered >= 1);
     }
 }
 

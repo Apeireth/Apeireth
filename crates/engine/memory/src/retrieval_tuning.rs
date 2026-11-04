@@ -640,12 +640,71 @@ impl TargetEvidence {
     }
 }
 
-/// 进程内生效值 override (调权落地点)。
+/// 进程内生效值 override（**按会话分桶**）。
 ///
 /// 接线层在每次移动后 [`install_effective`], 检索排序使用点经
 /// [`effective_ranking_or`] / [`entry_salience`] 实时取值 —— 调整真生效,
 /// 不装学习。无 override 时回落调用方传入值/零显著性。
-static EFFECTIVE: std::sync::Mutex<Option<EffectiveRanking>> = std::sync::Mutex::new(None);
+///
+/// # 为什么按会话分桶（而不是一个进程级单槽）
+///
+/// 旧实现是 `static EFFECTIVE: Mutex<Option<EffectiveRanking>>` ⇒ ⇒ **进程级、
+/// 无 session 维度** ⇒ ⇒ A 会话调完权，B 会话**立刻**吃到同一份权重 ⇒ ⇒
+/// **多会话串扰**（一个会话的检索行为改变另一个会话的排序）。
+///
+/// ⇒ ⇒ 现在按 `session key` **分桶**：A 的调权只进 A 的桶 ⇒ ⇒ 两个会话
+/// 各调各的，**互不影响**（可测的隔离语义见
+/// `two_sessions_do_not_share_their_effective_ranking`）。
+///
+/// ⚠️ **加锁不解决串扰** ⇒ ⇒ 这里的隔离靠的是**分桶**，不是锁。
+static EFFECTIVE: std::sync::Mutex<BTreeMap<String, EffectiveRanking>> =
+    std::sync::Mutex::new(BTreeMap::new());
+
+/// 进程级**默认桶**键（没有会话作用域的调用落在这里 ⇒ 旧口径保持不变）。
+const DEFAULT_SESSION_KEY: &str = "\u{0}default";
+
+thread_local! {
+    /// 当前**会话作用域**栈（嵌套安全）：作用域内的生效值读写按会话分桶。
+    static ACTIVE_SESSION_KEYS: std::cell::RefCell<Vec<String>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// 会话作用域守卫（**panic 安全**：Drop 时弹栈 ⇒ 不会把作用域泄漏给后续调用）。
+#[derive(Debug)]
+pub struct SessionScopeGuard {
+    _private: (),
+}
+
+impl Drop for SessionScopeGuard {
+    fn drop(&mut self) {
+        ACTIVE_SESSION_KEYS.with(|keys| {
+            keys.borrow_mut().pop();
+        });
+    }
+}
+
+/// 进入**会话作用域**：作用域内的生效值读写**按会话分桶**（多会话不串扰）。
+///
+/// # 为什么需要「作用域」而不是到处传 session id
+///
+/// 生效值的**读取点**在检索管线内部（`entry_salience`），那条路径**拿不到**
+/// 会话 id ⇒ ⇒ 用一个**作用域**把「当前会话」带进去（作用域内读到的桶 =
+/// 当前会话的桶）。
+///
+/// ⚠️ 作用域是**线程局部**的 ⇒ ⇒ 只覆盖**同步**代码段（检索管线是同步的），
+/// 跨 `await` 不保持 ⇒ ⇒ 调用点必须**紧贴**读写点。
+#[must_use]
+pub fn enter_session_scope(session_key: &str) -> SessionScopeGuard {
+    ACTIVE_SESSION_KEYS.with(|keys| {
+        keys.borrow_mut().push(session_key.to_string());
+    });
+    SessionScopeGuard { _private: () }
+}
+
+/// 当前会话作用域的键（没有作用域 ⇒ `None`）。
+fn active_session_key() -> Option<String> {
+    ACTIVE_SESSION_KEYS.with(|keys| keys.borrow().last().cloned())
+}
 
 /// 生效检索排序状态: 层权重 + 条目显著性表。
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -657,47 +716,95 @@ pub struct EffectiveRanking {
 }
 
 /// 安装当前生效检索排序 (调权后调用)。
+///
+/// ⚠️ **会话维度**：有会话作用域 ⇒ 装进**该会话的桶**；没有 ⇒ 装进进程级
+/// 默认桶（旧口径不变 ⇒ 既有调用点照旧可用）。
 pub fn install_effective(value: EffectiveRanking) {
-    let mut slot = EFFECTIVE
+    let key = active_session_key().unwrap_or_else(|| DEFAULT_SESSION_KEY.to_string());
+    install_effective_for_session(&key, value);
+}
+
+/// 按**会话**安装生效检索排序（显式会话维度 ⇒ 不依赖作用域）。
+pub fn install_effective_for_session(session_key: &str, value: EffectiveRanking) {
+    let mut slots = EFFECTIVE
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
-    *slot = Some(value);
+    slots.insert(session_key.to_string(), value);
 }
 
 /// 清除生效 override (回落调用方传入值; 测试与重置用)。
+///
+/// ⚠️ 清**全部桶**（进程级重置口径）。
 pub fn clear_effective() {
-    let mut slot = EFFECTIVE
+    let mut slots = EFFECTIVE
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
-    *slot = None;
+    slots.clear();
+}
+
+/// 按**会话**清除生效 override。
+pub fn clear_effective_for_session(session_key: &str) {
+    let mut slots = EFFECTIVE
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    slots.remove(session_key);
 }
 
 /// 读生效层权重: 有 override 取 override, 否则取调用方传入值 (零改动回落)。
+///
+/// ⚠️ **会话维度**：有会话作用域 ⇒ 读**该会话的桶**（没有则回落进程级默认桶）。
 pub fn effective_ranking_or(fallback: MemoryRankingConfig) -> MemoryRankingConfig {
-    EFFECTIVE
+    let key = active_session_key().unwrap_or_else(|| DEFAULT_SESSION_KEY.to_string());
+    effective_ranking_or_for_session(&key, fallback)
+}
+
+/// 按**会话**读生效层权重：**会话桶 → 进程级默认桶 → 调用方传入值**。
+///
+/// ⇒ ⇒ 会话桶在场时**只看自己** ⇒ ⇒ 两个会话各装各的 ⇒ ⇒ 互不影响。
+pub fn effective_ranking_or_for_session(
+    session_key: &str,
+    fallback: MemoryRankingConfig,
+) -> MemoryRankingConfig {
+    let slots = EFFECTIVE
         .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .as_ref()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    slots
+        .get(session_key)
+        .or_else(|| slots.get(DEFAULT_SESSION_KEY))
         .map(|effective| effective.ranking)
         .unwrap_or(fallback)
 }
 
 /// 读条目显著性 (无 override / 未调条目 = 0)。
 pub fn entry_salience(memory_id: &str) -> f64 {
-    EFFECTIVE
+    let key = active_session_key().unwrap_or_else(|| DEFAULT_SESSION_KEY.to_string());
+    entry_salience_for_session(&key, memory_id)
+}
+
+/// 按**会话**读条目显著性（会话桶 → 进程级默认桶 → 0）。
+pub fn entry_salience_for_session(session_key: &str, memory_id: &str) -> f64 {
+    let slots = EFFECTIVE
         .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .as_ref()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    slots
+        .get(session_key)
+        .or_else(|| slots.get(DEFAULT_SESSION_KEY))
         .and_then(|effective| effective.salience.get(memory_id).copied())
         .unwrap_or(0.0)
 }
 
 /// 生效 override 是否在场 (诊断/自述用)。
 pub fn effective_installed() -> bool {
-    EFFECTIVE
+    let key = active_session_key().unwrap_or_else(|| DEFAULT_SESSION_KEY.to_string());
+    effective_installed_for_session(&key)
+}
+
+/// 按**会话**看生效 override 是否在场（含进程级默认桶的回落）。
+pub fn effective_installed_for_session(session_key: &str) -> bool {
+    let slots = EFFECTIVE
         .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .is_some()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    slots.contains_key(session_key) || slots.contains_key(DEFAULT_SESSION_KEY)
 }
 
 /// 测试隔离: 生效 override 是**进程级全局槽**, 同一测试进程里凡触碰该槽的
@@ -998,5 +1105,74 @@ mod tests {
         clear_effective();
         assert_eq!(effective_ranking_or(fallback), fallback);
         assert_eq!(entry_salience("mem-j"), 0.0);
+    }
+
+    /// **两个会话各装各的生效权重 ⇒ 互不影响**（多会话串扰回归）。
+    ///
+    /// 旧实现是**进程级单槽** ⇒ A 装完 B 立刻读到同一份 ⇒ ⇒ 串扰。
+    /// 现在按会话分桶 ⇒ ⇒ 各自的桶只装自己的。
+    #[test]
+    fn two_sessions_do_not_share_their_effective_ranking() {
+        let _guard = lock_effective();
+        clear_effective();
+
+        let mut engine_a = RetrievalTuningEngine::new();
+        engine_a.observe(&evidence(
+            EvidenceSignal::Positive,
+            "mem-a",
+            Some(RetrievalDimension::Semantic),
+        ));
+        let mut engine_b = RetrievalTuningEngine::new();
+        engine_b.observe(&evidence(
+            EvidenceSignal::Negative,
+            "mem-b",
+            Some(RetrievalDimension::Lexical),
+        ));
+
+        install_effective_for_session("session-a", engine_a.effective());
+        install_effective_for_session("session-b", engine_b.effective());
+
+        let fallback = MemoryRankingConfig::default();
+        let ranking_a = effective_ranking_or_for_session("session-a", fallback);
+        let ranking_b = effective_ranking_or_for_session("session-b", fallback);
+        assert_eq!(ranking_a, engine_a.ranking(), "A 读自己的桶");
+        assert_eq!(ranking_b, engine_b.ranking(), "B 读自己的桶");
+        assert_ne!(
+            ranking_a, ranking_b,
+            "两个会话的检索权重必须互不影响（不许串扰）"
+        );
+
+        // 条目显著性同样按会话隔离.
+        assert!((entry_salience_for_session("session-a", "mem-a") - ENTRY_STEP).abs() < 1e-12);
+        assert_eq!(
+            entry_salience_for_session("session-b", "mem-a"),
+            0.0,
+            "B 不得吃到 A 的条目显著性"
+        );
+
+        // 会话作用域内读到的也是**自己**的桶（作用域 = 当前会话）。
+        {
+            let _scope = enter_session_scope("session-a");
+            assert_eq!(effective_ranking_or(fallback), engine_a.ranking());
+        }
+        {
+            let _scope = enter_session_scope("session-b");
+            assert_eq!(effective_ranking_or(fallback), engine_b.ranking());
+        }
+
+        // 清一个会话的桶**不许**影响另一个会话.
+        clear_effective_for_session("session-a");
+        assert_eq!(
+            effective_ranking_or_for_session("session-b", fallback),
+            engine_b.ranking(),
+            "清 A 的桶不得动 B"
+        );
+        assert_eq!(
+            effective_ranking_or_for_session("session-a", fallback),
+            fallback,
+            "A 的桶已被清空 ⇒ 回落调用方传入值"
+        );
+
+        clear_effective();
     }
 }

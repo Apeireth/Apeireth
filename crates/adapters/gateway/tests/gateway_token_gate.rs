@@ -11,8 +11,9 @@ use std::sync::{Arc, Mutex};
 
 use apeireth_gateway::{
     build_gateway_state_with_services, canonical_router_with_state, AuditCommand, GatewayServices,
-    GatewayState, GatewayTokenGate,
+    GatewayState, GatewayTokenGate, UserAccess,
 };
+use apeireth_governance::{UserRecord, UserTable};
 use apeireth_runtime::canonical::Runtime;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
@@ -66,6 +67,12 @@ struct Harness {
 }
 
 /// One gateway assembly with an explicit gate mode (no env mutation).
+///
+/// 角色面为什么**激活** (P0-1 · 2026-11-04): 本文件用 `/v1/admin/config` 当
+/// 敏感面探针, 而管理面要求 `AdminControl` 档 ⇒ 角色面未激活时管理面
+/// fail-closed 403 ⇒ 本文件要测的是**令牌门**三态语义, 不是角色门 ⇒ 角色面
+/// 显式装上, 且把过门署名名 (env 面单令牌 = `env`; 未设防口径 = `anonymous`)
+/// 绑给一名 owner, 让管理面可达。
 async fn harness(gate: GatewayTokenGate) -> Harness {
     let runtime = Arc::new(Runtime::builder().build().await.unwrap());
     let audit = Arc::new(RecordingAudit::default());
@@ -75,7 +82,23 @@ async fn harness(gate: GatewayTokenGate) -> Harness {
     };
     let mut state = build_gateway_state_with_services(runtime, services);
     state.token_gate = gate;
+    state.user_access = UserAccess::from_table(owner_table());
     Harness { state, audit }
+}
+
+/// 一名 owner, 绑定本文件用到的两个过门署名名。
+fn owner_table() -> UserTable {
+    let users = UserTable::new(vec![UserRecord {
+        user_id: "user-owner".to_string(),
+        role: "owner".to_string(),
+        client_names: vec![
+            GatewayTokenGate::ENV_FACE_CLIENT_NAME.to_string(),
+            "anonymous".to_string(),
+        ],
+        domain: None,
+    }]);
+    users.validate().expect("valid user table");
+    users
 }
 
 fn admin_get(token: Option<&str>) -> Request<Body> {

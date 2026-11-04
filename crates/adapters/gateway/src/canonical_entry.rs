@@ -31,7 +31,7 @@ use tower_http::cors::AllowOrigin;
 use crate::admin::{admin_config_get, admin_config_update, GatewayRuntimeConfig};
 use crate::client_tokens::{
     client_name_binds, record_session_client, record_user_action, ClientIdentity, UserContext,
-    CLIENT_NAME_CLAIM_HEADER,
+    CLIENT_NAME_CLAIM_HEADER, USER_ACTION_AUDIT_EVENT,
 };
 use crate::error_frame::{ErrorCode, ErrorFrame};
 use crate::events::{events_handler, EventBus, GatewayEvent, RuntimeObservationSink};
@@ -1107,7 +1107,7 @@ fn required_user_capability(method: &axum::http::Method, path: &str) -> Option<U
 /// 角色门判「你能不能」。
 ///
 /// - **角色面未激活** (未注入用户表) = 兼容路径: W2-② 行为逐字不变,
-///   不新增拒绝面 (零回归口径);
+///   不新增拒绝面 (零回归口径) —— **但管理面例外** (见下);
 /// - **角色面激活**: 过门客户端名 → 令牌→用户→角色链 → 治理层 role 权限矩阵;
 ///   写面/管理面/审批面对**未绑定用户** fail-closed 拒 (403 `permission_denied`);
 ///   每次裁决 (allow/deny) 落一行 `gateway.user_action` 审计 (user/role/action)。
@@ -1115,12 +1115,51 @@ fn required_user_capability(method: &axum::http::Method, path: &str) -> Option<U
 /// 角色只来自令牌绑定的解析链 ([`crate::client_tokens::resolve_user_identity`]),
 /// 请求无法自称角色 —— 成员冒名 owner 在这里无从发生 (自称客户端名另有
 /// name↔token 绑定校验, 在令牌门内已拒)。
+///
+/// # P0-1 管理面 fail-closed (2026-11-04 · 网关管理面零认证 ⇒ 凭据外泄)
+///
+/// **角色面未激活 ≠ 管理面放行。** 角色面未激活时没有「谁」可判, 管理面
+/// 端点 (要求 [`UserCapability::AdminControl`] 者) 一律 **403 拒**。
+///
+/// 理由 (为什么这条不能吃「零回归」豁免): 管理面能热改 provider `base_url`
+/// (见 [`crate::admin`]: 只校验「https 或环回 http」, **无 host allowlist**)
+/// ⇒ 下一次模型调用把**真实 API key** 发往攻击者服务器
+/// (`apeireth_provider::canonical_openai_compatible` 的 `bearer_auth(key.expose())`)。
+/// ⇒ 管理面的风险等级与普通端点**不同** (普通端点最多读/写会话数据,
+/// 管理面能**外泄凭据**) ⇒ 「零回归」口径不适用于**能外泄凭据的面**。
+///
+/// 范围 (刻意最小): 只拒**要求 `AdminControl` 的端点**
+/// (判定复用 [`required_user_capability`])。其余端点逐字不变 ——
+/// GET/HEAD ⇒ 能力 `None` ⇒ 放行; 写面 (`Write`) ⇒ 维持现状 (仍放行)。
 async fn require_user_capability(
     State(state): State<GatewayState>,
     mut request: Request,
     next: Next,
 ) -> Response {
+    let endpoint = request.uri().path().to_string();
     if !state.user_access.is_active() {
+        // 管理面 fail-closed: 角色面未激活 ⇒ 无人可担 `AdminControl` ⇒ 拒。
+        if required_user_capability(request.method(), &endpoint)
+            == Some(UserCapability::AdminControl)
+        {
+            state.observations.buffer_audit(
+                USER_ACTION_AUDIT_EVENT,
+                Some(format!(
+                    "user=unbound role=unbound action={} endpoint={endpoint} decision=deny \
+                     reason=user_role_surface_inactive",
+                    UserCapability::AdminControl.label()
+                )),
+            );
+            return ErrorFrame::response(
+                StatusCode::FORBIDDEN,
+                ErrorCode::PermissionDenied,
+                format!(
+                    "role gate refused {endpoint}: the user role surface is not active \
+                     (admin plane is fail-closed)"
+                ),
+            )
+            .into_response();
+        }
         request.extensions_mut().insert(UserContext::unbound());
         return next.run(request).await;
     }
@@ -1131,7 +1170,6 @@ async fn require_user_capability(
         .unwrap_or_else(|| ClientIdentity::UNATTRIBUTED.to_string());
     let user = state.user_access.identity(&client, &state.client_tokens);
     let context = UserContext { user };
-    let endpoint = request.uri().path().to_string();
     if let Some(capability) = required_user_capability(request.method(), &endpoint) {
         let allowed = context.allows(capability);
         // V2-c 域标注: 授权裁决 = 行为域 (行为者所在域)。

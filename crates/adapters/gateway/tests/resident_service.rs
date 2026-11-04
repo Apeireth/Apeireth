@@ -13,8 +13,9 @@ use std::sync::{Arc, Mutex};
 use apeireth_gateway::{
     build_gateway_state_with_services, canonical_router_with_state, claim_slot, read_slot,
     serve_state_with_shutdown, AuditCommand, GatewayServices, GatewayState, GatewayTokenGate,
-    ResidentError, ResidentRecord,
+    ResidentError, ResidentRecord, UserAccess,
 };
+use apeireth_governance::{UserRecord, UserTable};
 use apeireth_runtime::canonical::Runtime;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
@@ -288,7 +289,27 @@ async fn harness_with_gate(gate: GatewayTokenGate) -> Harness {
     };
     let mut state = build_gateway_state_with_services(runtime, services);
     state.token_gate = gate;
+    // 角色面**激活** (P0-1 · 2026-11-04): 停机端点属管理面 (`AdminControl`
+    // 档), 角色面未激活 ⇒ 管理面 fail-closed 403 ⇒ 本文件要测的是**令牌门**
+    // 三态语义, 角色门的前置条件由这里显式装上 (owner 绑定两个过门署名名:
+    // env 面单令牌 = `env`, 未设防口径 = `anonymous`)。
+    state.user_access = UserAccess::from_table(owner_table());
     Harness { state, audit }
+}
+
+/// 一名 owner, 绑定本文件用到的两个过门署名名。
+fn owner_table() -> UserTable {
+    let users = UserTable::new(vec![UserRecord {
+        user_id: "user-owner".to_string(),
+        role: "owner".to_string(),
+        client_names: vec![
+            GatewayTokenGate::ENV_FACE_CLIENT_NAME.to_string(),
+            "anonymous".to_string(),
+        ],
+        domain: None,
+    }]);
+    users.validate().expect("valid user table");
+    users
 }
 
 fn shutdown_post(token: Option<&str>) -> Request<Body> {

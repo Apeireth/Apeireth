@@ -4,6 +4,13 @@ This index lists the current root Cargo workspace (30 members = 29 product crate
 Tauri shell is documented with the frontend, and `legacy/` is excluded from
 the product workspace.
 
+**Outside this index — independent workspace `crates-ui/`**: a *separate* Cargo workspace
+(not one of the 30 members; no dependency edge to or from the root workspace) with
+**1 crate**, `apeireth-ui-core` — a pure reactive core (signals / derived / effects /
+scheduling, 0 external dependencies). Scope = IMPLEMENTED, **no production frontend
+consumer** (ADR-0021, owner 2026-10-29; own CI `ui-core-ci.yml`). Contract registration:
+`docs/architecture/contract.toml` `[[workspace.independent_workspaces]]`.
+
 ## Foundation
 
 | Package | Path | Responsibility |

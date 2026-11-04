@@ -5,10 +5,12 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use apeireth_gateway::{
-    canonical_router_with_panels, AuditDto, EpisodeDto, EpisodeMutationDto, GrantDto,
-    GrantMutationDto, GraphEdgeDto, GraphNodeDto, MemoryGraphDto, OrganDto, PanelData,
-    SessionSummaryDto, ToolDto, TraceDetailDto, TraceSpanDto, TraceSummaryDto,
+    build_gateway_state, canonical_router_with_state, AuditDto, EpisodeDto, EpisodeMutationDto,
+    GatewayTokenGate, GrantDto, GrantMutationDto, GraphEdgeDto, GraphNodeDto, MemoryGraphDto,
+    OrganDto, PanelData, SessionSummaryDto, ToolDto, TraceDetailDto, TraceSpanDto, TraceSummaryDto,
+    UserAccess,
 };
+use apeireth_governance::{UserRecord, UserTable};
 use apeireth_runtime::canonical::Runtime;
 use async_trait::async_trait;
 use axum::body::Body;
@@ -340,10 +342,33 @@ async fn body_json(response: axum::response::Response) -> serde_json::Value {
         .unwrap_or_else(|e| panic!("status={status} body={text:?} parse_err={e}"))
 }
 
+/// 一份**带激活角色面**的装配 (P0-1 · 2026-11-04): 面板族的管理面
+/// (`/v1/panel/grants/revoke`) 要求 `AdminControl` 档, 角色面未激活 ⇒ 管理面
+/// fail-closed 403 ⇒ 本文件要钉的是**面板路由契约**, 角色门的前置条件由这里
+/// 显式装上 (owner 绑定未设防口径的过门署名名 `anonymous`)。
+fn router_with_panels(runtime: Arc<Runtime>, panels: Option<Arc<dyn PanelData>>) -> axum::Router {
+    let mut state = build_gateway_state(runtime, panels);
+    state.token_gate = GatewayTokenGate::UnprotectedDefault;
+    state.user_access = UserAccess::from_table(owner_table());
+    canonical_router_with_state(state)
+}
+
+/// 一名 owner, 绑定未设防口径的过门署名名。
+fn owner_table() -> UserTable {
+    let users = UserTable::new(vec![UserRecord {
+        user_id: "user-owner".to_string(),
+        role: "owner".to_string(),
+        client_names: vec!["anonymous".to_string()],
+        domain: None,
+    }]);
+    users.validate().expect("valid user table");
+    users
+}
+
 #[tokio::test]
 async fn panel_routes_serve_contract_shapes() {
     let runtime = Arc::new(Runtime::builder().build().await.unwrap());
-    let router = canonical_router_with_panels(runtime, Some(Arc::new(MockPanels::new())));
+    let router = router_with_panels(runtime, Some(Arc::new(MockPanels::new())));
 
     let sessions = body_json(
         router
@@ -704,7 +729,7 @@ async fn panel_routes_serve_contract_shapes() {
 #[tokio::test]
 async fn panel_routes_degrade_to_501_without_backends() {
     let runtime = Arc::new(Runtime::builder().build().await.unwrap());
-    let router = canonical_router_with_panels(runtime, None);
+    let router = router_with_panels(runtime, None);
 
     let response = router
         .clone()
@@ -817,7 +842,7 @@ async fn panel_routes_degrade_to_501_without_backends() {
 async fn update_episode_route_rewrites_content_and_records_who_changed_it() {
     let runtime = Arc::new(Runtime::builder().build().await.unwrap());
     let panels = Arc::new(MockPanels::new());
-    let router = canonical_router_with_panels(runtime, Some(panels.clone() as Arc<dyn PanelData>));
+    let router = router_with_panels(runtime, Some(panels.clone() as Arc<dyn PanelData>));
 
     let response = router
         .oneshot(

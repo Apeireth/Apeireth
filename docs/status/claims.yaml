@@ -128,7 +128,7 @@ claims:
     tests:
       - crates/capabilities/tools/src/egress.rs
       - crates/capabilities/tools/src/fetch.rs
-    verified_at: 5c74f955e62cebcb1979fb3606e804d9fb10d73c
+    verified_at: 19648f4f31ff7b5e6cb7528eee809b9a886e45e7
     verify_cmd: "cargo test -p apeireth-tools-canonical --lib egress"
     owner: capabilities
     next_review: "2026-12-01"
@@ -289,7 +289,7 @@ claims:
       - crates/adapters/cli/src/lib.rs
     tests:
       - crates/adapters/gateway/tests/tls_serve.rs
-    verified_at: c78fca54373b5af754b515eb5b999152b6539d05
+    verified_at: 19648f4f31ff7b5e6cb7528eee809b9a886e45e7
     verify_cmd: "cargo test -p apeireth-gateway --test tls_serve"
     owner: gateway
     next_review: "2026-11-20"
@@ -586,7 +586,7 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/bio_observation_cells.rs
       - crates/engine/runtime-assembly/tests/bio_cognitive_wiring.rs
-    verified_at: 2a388454d17cb8dd9d1bb9b427cada2d1adbc4eb
+    verified_at: 19648f4f31ff7b5e6cb7528eee809b9a886e45e7
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_observation_cells"
     owner: organ
     next_review: "2026-11-20"
@@ -651,7 +651,7 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/bio_cognitive_wiring.rs
       - crates/engine/runtime-assembly/tests/bio_observation_cells.rs
-    verified_at: 2a388454d17cb8dd9d1bb9b427cada2d1adbc4eb
+    verified_at: 19648f4f31ff7b5e6cb7528eee809b9a886e45e7
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_cognitive_wiring"
     owner: organ
     next_review: "2026-11-20"
@@ -897,7 +897,7 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/convergence_memory.rs
       - crates/engine/runtime-assembly/tests/profile_memory_authorization.rs
-    verified_at: 2a388454d17cb8dd9d1bb9b427cada2d1adbc4eb
+    verified_at: 19648f4f31ff7b5e6cb7528eee809b9a886e45e7
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test profile_memory_authorization --locked -j 2 && cargo test -p apeireth-runtime-assembly --test convergence_memory --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
@@ -923,7 +923,7 @@ claims:
       - crates/engine/runtime-assembly/tests/managed_main.rs
       - crates/engine/runtime-assembly/tests/production_cognitive_v1.rs
       - crates/engine/runtime-assembly/tests/portable_host.rs
-    verified_at: c78fca54373b5af754b515eb5b999152b6539d05
+    verified_at: 19648f4f31ff7b5e6cb7528eee809b9a886e45e7
     verify_cmd: "cargo test -p apeireth-cli --test canonical_cli_bootstrap --test care_heartbeat_host --locked -j 2 && cargo test -p apeireth-runtime-assembly --test managed_main --test production_cognitive_v1 --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
@@ -1031,7 +1031,7 @@ claims:
     tests:
       - crates/engine/memory/src/retrieval_pipeline.rs
       - crates/engine/memory/src/coordinator.rs
-    verified_at: d7d24823ed76333b06f1ee46bfdcbc31b3daa6b1
+    verified_at: 19648f4f31ff7b5e6cb7528eee809b9a886e45e7
     verify_cmd: "cargo test -p apeireth-memory --lib"
     owner: memory
     next_review: "2026-12-04"
@@ -1046,7 +1046,7 @@ claims:
       - crates/engine/memory/tests/golden_injection2.rs
     tests:
       - crates/engine/memory/tests/golden_injection2.rs
-    verified_at: d7d24823ed76333b06f1ee46bfdcbc31b3daa6b1
+    verified_at: 19648f4f31ff7b5e6cb7528eee809b9a886e45e7
     verify_cmd: "cargo test -p apeireth-memory --test golden_injection2"
     owner: memory
     next_review: "2026-12-04"

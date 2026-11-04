@@ -9,8 +9,8 @@
 > **0 触碰**其它任何文件；原件迁档与留桩由整合线负责，本批**不动原件**。
 >
 > **口径纪律**（沿用仓内现行口径，见 [AGENTS.md](../../../AGENTS.md)）：
-> - 四级口径：`IMPLEMENTED`（代码存在）≠ `PRODUCTION WIRED`（接主路径）≠
->   `DEFAULT ENABLED`（默认开）≠ `HARDWARE VALIDATED`（真机验证），定义见
+> - 四级口径：口径阶梯 `IMPLEMENTED`（代码存在）< `PRODUCTION WIRED`（接主路径）< `HARDWARE VALIDATED`（真机验证）；
+>   **`DEFAULT ENABLED`（默认开）不是一级**，是横切属性（默认开/关，与阶梯正交），定义见
 >   [system-capabilities.md](../../01-architecture/system-capabilities.md) 头部。
 > - **现行真源只引用不抄写数字**：测试基线 [test-baseline.md](../../03-reference/test-baseline.md)、
 >   能力声明 [claims.yaml](../../status/claims.yaml)、架构契约

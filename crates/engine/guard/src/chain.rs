@@ -90,8 +90,26 @@ pub struct ResourceNode {
 pub struct DataNode {
     pub id: String,
     pub source: SourceClass,
+    /// **首个** sink class（兼容字段：旧数据/旧消费者按它读）。
     pub sink: Option<SinkClass>,
+    /// **全部** sink class（一个动作可能有多条出向 sink ⇒ 只留首个会**漏报**）。
+    ///
+    /// ⚠️ 旧实现只存 `sink_classes.first()` ⇒ ⇒ 「读私有文件 → 出网」这类
+    /// **多 sink** 场景**检测不到**（漏报）。⇒ ⇒ 全集留在这里，下游判定用全集。
+    #[serde(default)]
+    pub sinks: Vec<SinkClass>,
     pub label: String,
+}
+
+impl DataNode {
+    /// 该节点的**全部** sink class（旧数据只有 `sink` ⇒ 回落到它）。
+    pub fn sink_classes(&self) -> Vec<SinkClass> {
+        if self.sinks.is_empty() {
+            self.sink.into_iter().collect()
+        } else {
+            self.sinks.clone()
+        }
+    }
 }
 
 /// Node variants in the behavior graph.
@@ -262,12 +280,20 @@ impl BehaviorChain {
         // Add data nodes & edges
         for src_class in &obs.source_classes {
             let data_id = format!("data_{:?}_{}", src_class, self.nodes.len());
-            let sink_class = obs.sink_classes.first().copied();
+            // ⚠️ **全部** sink class 都要留（只留首个 ⇒ 多 sink 场景**漏报**）。
+            let sink_classes = obs.sink_classes.clone();
+            let sink_class = sink_classes.first().copied();
+            let label = match sink_classes.len() {
+                0 => format!("{src_class:?}->None"),
+                1 => format!("{src_class:?}->{:?}", sink_classes[0]),
+                _ => format!("{src_class:?}->{sink_classes:?}"),
+            };
             self.nodes.push(BehaviorNode::Data(DataNode {
                 id: data_id.clone(),
                 source: *src_class,
                 sink: sink_class,
-                label: format!("{:?}->{:?}", src_class, sink_class),
+                sinks: sink_classes,
+                label,
             }));
             self.edges.push(BehaviorEdge {
                 from: data_id,
@@ -355,6 +381,9 @@ impl BehaviorChain {
     }
 
     /// Check whether a sensitive source was read prior to an external sink write.
+    ///
+    /// ⚠️ **用 sink 全集判定**（旧实现只看 `sink_classes.first()` ⇒ ⇒ 多 sink
+    /// 场景「读私有文件 → 出网」**漏报**）。
     pub fn has_sensitive_source_to_external_sink(&self) -> bool {
         let mut saw_sensitive_source = false;
         for node in &self.nodes {
@@ -370,10 +399,9 @@ impl BehaviorChain {
                         saw_sensitive_source = true;
                     }
                     if saw_sensitive_source
-                        && matches!(
-                            data.sink,
-                            Some(SinkClass::ExternalNetwork | SinkClass::ShellExecution)
-                        )
+                        && data.sink_classes().iter().any(|sink| {
+                            matches!(sink, SinkClass::ExternalNetwork | SinkClass::ShellExecution)
+                        })
                     {
                         return true;
                     }
@@ -516,5 +544,96 @@ impl ActionNode {
                     OperationClass::NetworkSend | OperationClass::Publish
                 )
             })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::observation::DataSensitivity;
+
+    fn observation(
+        source_classes: Vec<SourceClass>,
+        sink_classes: Vec<SinkClass>,
+    ) -> SafetyObservation {
+        SafetyObservation {
+            trace_id: "trace-multi-sink".to_string(),
+            request_id: "req-1".to_string(),
+            session_id: "session-1".to_string(),
+            stage: "pre_dispatch".to_string(),
+            capability_id: "fs.read".to_string(),
+            tool_name: "read_file".to_string(),
+            resource_classes: vec![ResourceClass::FilesystemWorkspace],
+            source_classes,
+            sink_classes,
+            permission_scope: "workspace".to_string(),
+            approval_state: "not_required".to_string(),
+            argument_shape: "path=<redacted>".to_string(),
+            redacted_argument_features: serde_json::json!({}),
+            result_class: None,
+            result_size_bucket: None,
+            retry_count: 0,
+            denied_before: false,
+            prior_actions: Vec::new(),
+            external_effect: false,
+            operation_class: OperationClass::Read,
+            operation_classes: vec![OperationClass::Read],
+            descriptor_source: crate::semantics::DescriptorSource::Canonical,
+            data_sensitivity: DataSensitivity::WorkspacePrivate,
+            persistent_effect: false,
+            destructive_effect: false,
+            requires_network: false,
+            may_access_credentials: false,
+            effect_fingerprint: String::new(),
+        }
+    }
+
+    /// **多 sink 不得漏报**（旧实现只存首个 sink ⇒ 「读私有文件 → 出网」漏报）。
+    #[test]
+    fn a_data_node_with_two_sinks_still_detects_the_external_egress() {
+        let mut chain = BehaviorChain::new("session-1", "trace-multi-sink");
+        // ⚠️ 出网 sink **不是首个** ⇒ 旧实现只看 `first()` ⇒ 漏报。
+        chain.add_action(
+            &observation(
+                vec![SourceClass::PrivateFile],
+                vec![SinkClass::WorkspaceFile, SinkClass::ExternalNetwork],
+            ),
+            0,
+        );
+
+        // 数据节点**留全集**（两个 sink 都在）。
+        let sinks: Vec<Vec<SinkClass>> = chain
+            .nodes
+            .iter()
+            .filter_map(|node| match node {
+                BehaviorNode::Data(data) => Some(data.sink_classes()),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            sinks.iter().any(|all| all.len() == 2),
+            "Data 节点必须留全部 sink class: {sinks:?}"
+        );
+        assert!(
+            chain.has_sensitive_source_to_external_sink(),
+            "多 sink ⇒ 私有源 → 出网必须被发现（原先漏报）"
+        );
+    }
+
+    /// 单 sink 的既有语义不变（回归钉住：写工作区文件不算出网）。
+    #[test]
+    fn a_single_sink_data_node_keeps_its_behavior() {
+        let mut chain = BehaviorChain::new("session-1", "trace-single-sink");
+        chain.add_action(
+            &observation(
+                vec![SourceClass::PrivateFile],
+                vec![SinkClass::WorkspaceFile],
+            ),
+            0,
+        );
+        assert!(
+            !chain.has_sensitive_source_to_external_sink(),
+            "写工作区文件不算出网"
+        );
     }
 }

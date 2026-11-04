@@ -7,6 +7,10 @@
 # 每条字段: name / default / layer / owner / purpose / level / status
 #   level  : PRODUCTION WIRED | IMPLEMENTED | NOT IMPLEMENTED | UNCLASSIFIED（R3a 起步占位）
 #   status : current | migrated | deprecated
+#   default: 该 env **未设**时、它所控能力的默认状态（"on" / "off"；非布尔旋钮写 "n/a"）。
+#            必须与源码默认值一致（ADR-0004 R3b 验收项 4）⇒ **默认开的能力登记 "on"**
+#            （记忆核心族：偏好学习 / 主动召回 / 记忆注入 / 只读工具面），
+#            `APEIRETH_DISABLE_*` 逃生门登记 "off" = 逃生门本身默认不拉下（能力仍默认开）。
 # 纪律: 新增开关必须先登记（默认关 + 关时零变化测试），否则 arch_guard W3 违规；
 #       deprecated 的开关不得再出现在 src（R3c 守卫收紧）。
 # 生成/播种: 效率线维护（R3a）；格式由架构线定（ADR-0004），变更需 ADR。
@@ -674,7 +678,7 @@ evidence = "direct:crates/adapters/cli/src/lib.rs:77;direct:crates/adapters/cli/
 
 [[entries]]
 name = "APEIRETH_ENABLE_LOCAL_READ_TOOLS"
-default = "off"
+default = "on"
 layer = "adapters"
 owner = "apeireth-cli"
 purpose = "Legacy opt-in for the local filesystem and search tools. Accepted for compatibility; the tools are granted by default no"
@@ -694,7 +698,7 @@ evidence = "direct:crates/adapters/cli/src/lib.rs:183;direct:crates/adapters/cli
 
 [[entries]]
 name = "APEIRETH_ENABLE_MEMORY_INJECTION"
-default = "off"
+default = "on"
 layer = "adapters"
 owner = "apeireth-cli"
 purpose = "2026-10-06 W2 记忆闭环批: 反幻觉注入格式 / 每轮记忆整理 / 失败闭环"
@@ -764,7 +768,7 @@ evidence = "direct:crates/adapters/cli/src/lib.rs:208;direct:crates/adapters/cli
 
 [[entries]]
 name = "APEIRETH_ENABLE_PREFERENCE_LEARNING"
-default = "off"
+default = "on"
 layer = "adapters"
 owner = "apeireth-cli"
 purpose = "偏好学习装配旋钮 (记忆核心族, **默认开**): 开启时 `cognitive.preference_learning`"
@@ -774,7 +778,7 @@ evidence = "direct:crates/adapters/cli/src/lib.rs:185;direct:crates/adapters/cli
 
 [[entries]]
 name = "APEIRETH_ENABLE_PROACTIVE_RECALL"
-default = "off"
+default = "on"
 layer = "adapters"
 owner = "apeireth-cli"
 purpose = "(默认开 + 逃生门)、语义向量阶段 (真实现 + opt-in, 词法回退兜底)"

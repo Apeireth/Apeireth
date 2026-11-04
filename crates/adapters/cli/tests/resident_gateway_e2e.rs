@@ -9,6 +9,10 @@
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
+mod common;
+
+use common::{activate_role_surface, ANONYMOUS_CLIENT, ENV_CLIENT};
+
 const TOKEN: &str = "loopback-token-0123456789abcdef";
 
 fn bin_path() -> std::path::PathBuf {
@@ -155,6 +159,13 @@ fn second_start_refuses_with_an_explicit_already_running_error() {
 /// 优雅停机收尾 (真进程): 令牌门下的 `/v1/admin/shutdown` 触发后, 网关必须
 /// 写下收尾审计 (`gateway.shutdown`) 并落盘到审计档案、释放 PID 文件, 然后
 /// 以成功码退出。这也是服务脚本 stop 路径的执行契约。
+///
+/// # 前置条件 (P0-1 · 2026-11-04 管理面 fail-closed)
+///
+/// 停机端点属**管理面** (要求 `UserCapability::AdminControl`) ⇒ 角色面未激活
+/// (数据目录无 `users.json`) 时一律 403 ⇒ 本用例要测的是**优雅停机的收尾
+/// 契约**, 角色门的前置条件由这里显式装上: owner 绑本用例的过门署名名
+/// (env 单令牌面 = `env`; 未设防口径 = `anonymous`)。
 #[test]
 fn graceful_shutdown_endpoint_stops_the_process_and_frees_the_slot() {
     let bin = bin_path();
@@ -172,6 +183,8 @@ fn graceful_shutdown_endpoint_stops_the_process_and_frees_the_slot() {
         let slot = dir.join("gateway.pid");
         let data_dir = dir.join("data");
         fs_err::create_dir_all(&data_dir).unwrap();
+        // 角色面激活 (管理面前置条件): owner 在册, 绑两个过门署名名。
+        activate_role_surface(&data_dir, "owner-1", &[ENV_CLIENT, ANONYMOUS_CLIENT]);
         let port = free_port().await;
         let endpoint = format!("http://127.0.0.1:{port}");
 
@@ -192,7 +205,8 @@ fn graceful_shutdown_endpoint_stops_the_process_and_frees_the_slot() {
                 .env("APEIRETH_DATA_DIR", &data_dir)
                 .env("APEIRETH_SESSION_DB", data_dir.join("sessions.sqlite3"))
                 .env("APEIRETH_COGNITIVE_DB", data_dir.join("cognitive.sqlite3"))
-                .env("APEIRETH_GATEWAY_TOKEN", TOKEN),
+                .env("APEIRETH_GATEWAY_TOKEN", TOKEN)
+                .env_remove("APEIRETH_GATEWAY_TOKENS"),
         );
 
         // 就绪探针。

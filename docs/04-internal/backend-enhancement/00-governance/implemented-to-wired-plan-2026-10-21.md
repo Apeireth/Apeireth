@@ -11,7 +11,7 @@
 
 ### 0.1 四级口径（../../01-architecture/system-capabilities.md 头部）
 
-`IMPLEMENTED`（代码存在）→ `PRODUCTION WIRED`（接入 canonical 运行时主路径）→ `DEFAULT ENABLED`（无需 opt-in 即开启）→ `HARDWARE VALIDATED`（真机验证）。四级不等价；**不得跨级宣称**（AGENTS.md §1 双向诚实）。
+`NOT IMPLEMENTED`（缺口）→ `IMPLEMENTED`（代码存在）→ `PRODUCTION WIRED`（接入 canonical 运行时主路径）→ `HARDWARE VALIDATED`（真机验证）；**`DEFAULT ENABLED` 不是一级**，是横切属性（默认开/关，与阶梯正交——可以 PRODUCTION WIRED 而默认关）。阶梯不等价；**不得跨级宣称**（AGENTS.md §1 双向诚实）。
 
 ### 0.2 wiring.yaml 的 production_refs 是路径启发式，不是调用点证据（关键结论）
 

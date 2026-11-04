@@ -15,10 +15,14 @@
 > * ⇒ ⇒ 但若 claims 里的声明**与本表打架** ⇒ ⇒ **以 claims 为准**（并回来改本表）
 >   —— 这与本表「**指到不存在的模块 = 对外说谎**」的门禁
 >   （`scripts/check_matrix_module_paths.py`）是同一条纪律。
+> * ⇒ ⇒ **2026-11-04 复测（文档真源批）**：上一条里的「30 / 11」是 2026-11-03 的历史口径，
+>   **保留不改**；按可复算口径复测 = §1.1 表内标「已实证 / PRODUCTION WIRED」共 **37 行**
+>   （全文同口径 43 行），其中行内显式点到 claims id 的 **15 行**
+>   （本次新增 TLS 行 `sec.gateway_tls` = 新增 1 行）。
 
 ---
 
-## 0. 当前生产投影（唯一事实源）
+## 0. 当前生产投影（接线状态清单）
 
 生产 Desktop 不把本表当作运行时状态。实际的 `supported`、`available`、
 `reason` 来自 `/v1/apeireth/capabilities`；工具来自 `CapabilityRegistry`，
@@ -48,18 +52,22 @@
 
 ### 0.1 测试基线（审计修 A-03 / C-01）
 
-徽章（Tests）链接本文件，其数字以此处为据；**单一真源**见
-[test-baseline.md](test-baseline.md)（口径定义与历史口径也在那里）。
+徽章（Tests）链接本文件；**测试数字的单一真源**是
+[test-baseline.md](test-baseline.md) §1（口径定义与历史口径也在那里），
+本表只转述该处现行值、**不另立真源**；**对外承诺口径**（落在哪一级 / 默认开否）
+以 [claims.yaml](../status/claims.yaml) 为准（见本文件头部「与 `claims.yaml` 的分工」）。
 
 | 项 | 值 |
 |---|---|
 | 命令 | `cargo test --workspace --all-targets --locked --no-fail-fast` |
-| 结果 | **336 套件 / 9075 passed / 0 product-failed（1 环境敏感 D27，复跑绿）/ 52 ignored**（2026-10-20 生物机制族 W3.4 总装批全量实测，历史口径；现行单一真源 §1 = **341 套件 / 8570 passed / 0 failed / 51 ignored**（2026-10-21），见 [test-baseline.md](test-baseline.md) §1） |
-| 日期 | 2026-10-20 |
+| 结果 | **341 套件 / 8570 passed / 0 failed / 51 ignored**（main 264 套件 / 6263 passed / 19 ignored + image 家族 77 套件 / 2307 passed / 32 ignored） |
+| 日期 | 2026-10-21 |
 | 工具链 | rustc 1.97.1 (8bab26f4f 2026-07-14) / cargo 1.97.1 / rustup 1.29.1；MSVC 14.44.35207 + Windows SDK 10.0.26100.0 |
 
-> 22 ignored 全部为需真 API key / 真硬件的 live E2E，CI 默认不跑；数字逐批增长，以
-> test-baseline.md 最近一次全量实测为准。
+> 51 ignored 全部为需真 API key / 真硬件的 live E2E，CI 默认不跑；数字逐批增长，以
+> test-baseline.md §1 最近一次全量实测为准。
+> 历史口径（2026-10-20 的 336 套件 / 9075 passed / 1 failed / 52 ignored 等）见
+> [test-baseline.md](test-baseline.md) §3，本表不抄写。
 
 ### 0.2 默认能力表（审计修 A-10）
 
@@ -168,10 +176,10 @@
 | **工具 (Capabilities)** | `tool.sheet_ops`（创作工具面 K3 · 表格操作） | `apeireth-tools-canonical::sheet_ops` + `runtime-assembly::canonical::{tool_modules::SheetOpsModule, self_status_source::sheet_ops_status_probe}` | 受控读写族（读：CSV + xlsx；写：仅 CSV）：读面 `read`（表头 + 行预览，超预览上限显式 `truncated` 不冒充全量）/ `summary`（行列数/列名/逐列类型猜测 `int/float/text/mixed/empty`）/ `filter`（闭合谓词 `eq/ne/lt/lte/gt/gte/contains`，eq/ne 双侧数值走数值相等否则文本相等）/ `sort`（稳定排序 `asc/desc`，空值恒排最后）/ `aggregate`（`sum/avg/count/min/max` 按列）/ `formula`（四则 + 括号计算列，新列追加原文不改）+ 写面 `export_csv`（规范 CSV 再序列化，方言归一）；变换动作（filter/sort/formula）带 `output` 即写面落新文件、不带即内存预览；受控面 = 工作区限域（词法+现实双检，缺席目标也做包含判定）+ 敏感面拒（凭据帧同读工具）+ 字节/数据行/列数三层上限（防炸弹表，宁拒不截）+ 创建类原子写（`storage_atomic` 原子替换，只创建不覆盖，目标已存在拒绝即帧）+ 参数矩阵拒绝即帧；数值精度口径 = f64 如实（`0.1+0.2` 回真值 `0.30000000000000004`，不静默取整）、**NaN/inf 零产出**（除零/溢出拒绝即帧）、`NaN`/`inf`/溢出词面按文本；语义钉死 = 空值恒不匹配/恒排最后、类型混拒绝即帧（不静默跳行）、空聚合 sum=0 如实带 `count:0` 而 avg/min/max 拒绝、参差行/重名列/坏词面拒绝即帧；写面**双重约束** = `file_write` 唯一写总闸（关 = 拒写不拒读）+ 每次写人批（无自动放行档）；**xlsx 读入已接**（创作面补齐批 2026-10-18：`.xlsx` 后缀词面判定，容器读端复用 `doc_ops` 已报备 ZIP 读端，sharedString/inlineStr/数值格三形态 + 字符串结果格 `t="str"`；公式格口径钉死 = 一律取缓存值不重算、共享公式不展开、`formula_cells` 计数如实标注、无缓存值公式格拒绝即帧；稀疏格网缺格补空、越宽拒绝即帧）；**写面出 CSV 与 xlsx**（`export_xlsx` = 最小单 sheet：inlineStr/数值格、无公式/多工作表/样式、XML 1.0 非法字符与不支持面显式拒绝，不冒充）；0 新外部依赖 | 已实证（K3 批测试钉死：工具面单元 7 例 + 集成 23 例 + 自述创作节 1 例 + 装配级 4 例 = 35 例，真 fixture CSV 六件，详见 `crates/capabilities/tools/src/sheet_ops.rs` / `crates/capabilities/tools/tests/sheet_ops.rs` / `crates/engine/runtime-assembly/tests/sheet_ops_face.rs`；创作面补齐批 2026-10-18 新增 xlsx 读面行为钉 = 三形态读 / 公式口径 / 坏容器坏格拒 / 解压预算与行列上限 / 导出规范 CSV，实测数字以 `docs/03-reference/test-baseline.md` 为准，本批不代改真源） | 工具 + 设置旋钮 + 自审（创作节） |
 | **记忆 (Memory)** | 随手记（Quick Capture，C 轴入口面） | `frontend/companion-desktop/src/features/quick/quick-capture.ts` → `POST /v1/memory/append` 同源缝 | 一键记条→未整理原料入记忆流：`[随手记 #N] <原文>（来源 capture）`，条目一等字段 `{seq, text, at, source:'capture', protected:false}`；纯采集零 token、零模型调用 | 已实证（[quick-capture-delivery.md](../04-internal/backend-enhancement/quick-capture-delivery.md)） | 快捷窗（随手记面板） |
 | **运行时 (Runtime)** | 配额三维（`tokens` / `tool_steps` / `cost_micros`） | `apeireth-runtime::canonical::quota` + `orchestration::CognitiveQuota` 账本 | env `APEIRETH_QUOTA_MAX_{TOKENS,TOOL_STEPS,COST_MICROS}`（None=不设限）→ 会话账本记账 → 四检查点 `check` 超限即帧 `BudgetExhausted{dimension,limit,consumed}`；单价来源=H-P1 画像表（缺价不编价） | 已实证（[A-quota-real-interface.md](../04-internal/backend-enhancement/02-axes/A-quota-real-interface.md) P1/P2 实施记录；深度维**暂无接口**如实） | 设置旋钮 + 仪表 + 自审 |
-| **网关 (Gateway)** | 全 API 面令牌门（三态） | `apeireth-gateway::canonical_entry`（`GatewayTokenGate`）+ `client_tokens` + `remote_access` | env `APEIRETH_GATEWAY_TOKEN(S)` + `client-tokens.json` 任一在场=强制 Bearer 恒定时间校验全端点（仅 `/health` 豁免）；两面皆空=放行+警告+审计；`none`=明示不设防留痕；非回环绑定无令牌拒启动（fail-closed） | 已实证（W1-③ + W2-② 交付记录，[E-threat-model.md](../04-internal/backend-enhancement/E-threat-model.md) G10/G4 处置注） | 设置旋钮 |
-| **网关 (Gateway)** | 远程 TLS 传输面 | `apeireth-gateway::remote_access` | `APEIRETH_TLS_CERT`/`APEIRETH_TLS_KEY` 只触发「仍是明文」警告+审计，**不硬造 TLS** | **接口桩**（显式未接线） | —（接线前无面） |
+| **网关 (Gateway)** | 全 API 面令牌门（三态） | `apeireth-gateway::canonical_entry`（`GatewayTokenGate`）+ `client_tokens` + `remote_access` | env `APEIRETH_GATEWAY_TOKEN(S)` + `client-tokens.json` 任一在场=强制 Bearer 恒定时间校验全端点（仅 `/health` 豁免）；两面皆空=放行+警告+审计（**但管理面另有一闸**：要求 `AdminControl` 档的端点见治理·角色门行，角色面未激活时 **fail-closed 403**）；`none`=明示不设防留痕；非回环绑定无令牌拒启动（fail-closed） | 已实证（W1-③ + W2-② 交付记录，[E-threat-model.md](../04-internal/backend-enhancement/E-threat-model.md) G10/G4 处置注） | 设置旋钮 |
+| **网关 (Gateway)** | 远程 TLS 传输面 | `apeireth-gateway::remote_access` + `apeireth-gateway::canonical_entry` | `APEIRETH_TLS_CERT`/`APEIRETH_TLS_KEY` 指向 PEM ⇒ **真加载**证书链 + 私钥（含配对校验）并构造 `rustls::ServerConfig`；服务面走 TLS listener（`tokio_rustls::TlsAcceptor`）。**fail-closed**：文件缺失 / PEM 损坏 / 证书私钥不配对 / 半套配置 ⇒ 拒绝启动并如实报错，**绝不静默降级明文**；不设这两枚旋钮 = 明文回环缺省不变（旧「只警告、流量照旧明文」的接口桩语义已随接线退役） | **PRODUCTION WIRED**（默认 OFF：两枚 env 旋钮在场才启用；状态三态 + 审计事件 `gateway.tls_enabled`；claim `sec.gateway_tls`） | 设置旋钮 |
 | **编排 (Orchestration)** | daemon 化 / 多客户端会话复用 | `deploy/` 服务·计划任务脚本 + `apeireth-gateway` 会话路由（W2-①/W2-③） | 常驻占位+优雅停机收尾；并发会话路由（`/v1/apeireth/events?session=` 每客户端独立订阅、同会话扇出）+ 同会话写排队+审计（账本零交叠）+ 会话归属审计 + 面板读快照 | 已实证（[W2-3-multi-client-session-reuse.md](../04-internal/backend-enhancement/04-delivery/home-W-axis-delivery.md)；daemon 见 [F-server-form.md](../04-internal/backend-enhancement/02-axes/F-server-form.md) 现状） | 待上屏（运维面无 UI） |
-| **治理 (Governance)** | 用户域数据门 / 角色门（多用户） | `apeireth-core::user_domain` + `runtime-assembly::domain_plane` + `governance::user_access` + `gateway::{domain_context,client_tokens}` | `users/<id>/` 每户一域+三面分库（会话/记忆/配额账本）+跨域拒绝即帧；`owner/member/guest` 冻结角色词表+24 格权限矩阵+令牌→用户→角色链+管理面 `apeireth user`（owner 门） | 已实证（[W3-1-multi-user-data-isolation.md](../04-internal/backend-enhancement/04-delivery/home-W-axis-delivery.md) / [W3-2-user-identity-roles.md](../04-internal/backend-enhancement/04-delivery/home-W-axis-delivery.md)） | 自审（域节）+ 待上屏（域/用户管理仅 CLI） |
+| **治理 (Governance)** | 用户域数据门 / 角色门（多用户） | `apeireth-core::user_domain` + `runtime-assembly::domain_plane` + `governance::user_access` + `gateway::{domain_context,client_tokens}` | `users/<id>/` 每户一域+三面分库（会话/记忆/配额账本）+跨域拒绝即帧；`owner/member/guest` 冻结角色词表+24 格权限矩阵+令牌→用户→角色链+管理面 `apeireth user`（owner 门）；**HTTP 管理面**（`/v1/admin/*` + 面板族管理面 `/v1/panel/{users,domains,grants/revoke}`）走 `AdminControl` 档（owner 专属），**角色面未激活**（未注入 `users.json`）⇒ 该族端点一律 **fail-closed 403** `permission_denied` + 一行 `gateway.user_action` 审计（`reason=user_role_surface_inactive`）；读面/写面逐字不变（零回归兼容路径不动）—— 管理面能热改 provider `base_url` ⇒ 能外泄真实 API key ⇒ 不适用「零回归」兼容口径 | 已实证（[W3-1-multi-user-data-isolation.md](../04-internal/backend-enhancement/04-delivery/home-W-axis-delivery.md) / [W3-2-user-identity-roles.md](../04-internal/backend-enhancement/04-delivery/home-W-axis-delivery.md)；管理面 fail-closed 批 2026-11-04 钉在 `crates/adapters/gateway/tests/admin_plane_fail_closed.rs`） | 自审（域节）+ 待上屏（域/用户管理仅 CLI） |
 | **观测 (Observability)** | `metrics.read`（`GET /v1/panel/metrics`） | `apeireth-runtime::canonical::metrics` + `apeireth-gateway::panel_metrics` | 回合一收束一拍 `TurnMetrics` → 会话/全局两层窗口聚合（`{count,mean,p50,p95,sum}` 最近秩分位）；`schema_version:1`、`retention:"in_process_rolling"`（进程内环形不落盘）；空态显式 `"—"`（null 不冒充 0）；过 W2-② 令牌门 | 已实证（[G-observability.md](../04-internal/backend-enhancement/G-observability.md) P1 交付记录，21 项测试） | 待上屏（仪表/驾驶舱 CACHE·BUDGET 面板与遥测条待前端消费批） |
 | **安全 (Security)** | 模型出网闸（`sec.egress_gate`） | `apeireth-runtime::canonical::egress_gate` + `provider` + `runtime-assembly::{egress_gate,egress_ledger,accountability,notification_duty,consequence}` | 上下文→provider 边界的**出网闸**：出境**脱敏** + **fail-closed 拒绝**；授权策略可由 env 直接给 JSON；与问责面共用同一开关 | **PRODUCTION WIRED**（默认关 `APEIRETH_ENABLE_EGRESS_GATE=1` 才装配；账本面 `apeireth egress` 只读可查） | env 开关；出网账本（CLI 可查） |
 | **安全 (Security)** | 会话/记忆静态信封加密（`sec.storage_envelope_crypto`） | `apeireth-storage::crypto` + `runtime-assembly::canonical::session_seal` + `sqlite_session` + `cli::crypto_keys` | B6 库级：分区 DEK / **AES-256-GCM 密封字段** / KEK 双槽包裹 / 恢复件 / 密钥丢失边界；盲索引与 `SqliteFieldSink` 接缝有库内测试；B6-2a：`sessions.data` 试点封缄（`SealedField` 与 `SqliteFieldSink` 同格式，读路径双兼容：密文解封 / 明文旧行照读 / 篡改硬错误） | **PRODUCTION WIRED**（默认关 `APEIRETH_ENABLE_SESSION_SEAL=1` + `APEIRETH_SESSION_SEAL_KEY_FILE`（0600）；开关开而**密钥缺失 = 启动失败**；密钥出口 `apeireth crypto unlock --out` 已交付）。**未接线**：`memory_items` / `episodes` 等其余 P0 列、桌面 keychain 锚定、批量迁移 CLI（惰性迁移已生效） | env 开关；`apeireth crypto` 密钥面（CLI） |

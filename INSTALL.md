@@ -3,6 +3,7 @@
 > **性质**: 接手团队第一份必读——三平台安装（Windows / Linux / macOS）+ 验证步骤。
 > **依据**: 我们 2026-07-31 "开干前补齐 4 件套" + rust-toolchain.toml 锁定 Rust 1.97.1 stable。
 > **当前基线**: 默认分支 `main`、**workspace = 30 members（29 crates + bench harness；2026-10-20 perception 归档后口径）**（v2.0.0-rc.4；2026-10-18 许可搬运线 image 家族 +11 后口径）；测试基线**单一真源**见 [docs/03-reference/test-baseline.md](docs/03-reference/test-baseline.md)（2026-10-18 全量 `-j 2` 口径在该文件，本文不抄写数字），历史口径见 CHANGELOG；`legacy/` 不参与构建。
+> **独立 workspace（如实备案）**：`crates-ui/` 是**独立** Cargo workspace（**不计入**上面 30 members、与根 workspace 无依赖边），含 **1 个 crate** `apeireth-ui-core`（纯响应式内核，0 外部依赖）；范围 = IMPLEMENTED、**尚无生产前端消费点**（ADR-0021，owner 2026-10-29；自带独立 CI `ui-core-ci.yml`）⇒ 安装/构建主产品**不需要**它。
 
 ---
 

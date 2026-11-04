@@ -19,8 +19,11 @@
 use std::sync::Arc;
 
 use apeireth_core::kernel::{Clock, VirtualClock};
-use apeireth_gateway::canonical_router;
-use apeireth_governance::AllowAll;
+use apeireth_gateway::{
+    build_gateway_state_with_services, canonical_router_with_state, GatewayServices,
+    GatewayTokenGate, UserAccess,
+};
+use apeireth_governance::{AllowAll, UserRecord, UserTable};
 use apeireth_runtime::canonical::{InMemorySessionStore, Runtime};
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
@@ -34,15 +37,38 @@ fn frozen_clock() -> Arc<dyn Clock> {
     ))
 }
 
-async fn runtime() -> Runtime {
-    Runtime::builder()
-        .with_clock(frozen_clock())
-        .with_session_store(Arc::new(InMemorySessionStore::new()))
-        .with_governance(Arc::new(AllowAll))
-        .with_default_model("test-model")
-        .build()
-        .await
-        .expect("runtime")
+/// 一份**带激活角色面**的网关装配 (P0-1 · 2026-11-04)。
+///
+/// 停机端点属管理面 (`AdminControl` 档), 角色面未激活 ⇒ 管理面 fail-closed
+/// 403 ⇒ 本文件要测的是**跨源闸**, 角色门的前置条件由这里显式装上 (owner
+/// 绑定未设防口径的过门署名名 `anonymous`)。
+async fn router() -> axum::Router {
+    let runtime = Arc::new(
+        Runtime::builder()
+            .with_clock(frozen_clock())
+            .with_session_store(Arc::new(InMemorySessionStore::new()))
+            .with_governance(Arc::new(AllowAll))
+            .with_default_model("test-model")
+            .build()
+            .await
+            .expect("runtime"),
+    );
+    let mut state = build_gateway_state_with_services(runtime, GatewayServices::default());
+    state.token_gate = GatewayTokenGate::UnprotectedDefault;
+    state.user_access = UserAccess::from_table(owner_table());
+    canonical_router_with_state(state)
+}
+
+/// 一名 owner, 绑定未设防口径的过门署名名。
+fn owner_table() -> UserTable {
+    let users = UserTable::new(vec![UserRecord {
+        user_id: "user-owner".to_string(),
+        role: "owner".to_string(),
+        client_names: vec!["anonymous".to_string()],
+        domain: None,
+    }]);
+    users.validate().expect("valid user table");
+    users
 }
 
 fn shutdown_request(origin: Option<&str>) -> Request<Body> {
@@ -58,7 +84,7 @@ fn shutdown_request(origin: Option<&str>) -> Request<Body> {
 
 #[tokio::test]
 async fn foreign_origin_cannot_trigger_state_change() {
-    let router = canonical_router(Arc::new(runtime().await));
+    let router = router().await;
     let response = router
         .oneshot(shutdown_request(Some("https://evil.example")))
         .await
@@ -78,7 +104,7 @@ async fn local_origins_are_allowed_through_the_origin_gate() {
         "tauri://localhost",
         "http://tauri.localhost",
     ] {
-        let router = canonical_router(Arc::new(runtime().await));
+        let router = router().await;
         let response = router
             .oneshot(shutdown_request(Some(origin)))
             .await
@@ -94,7 +120,7 @@ async fn local_origins_are_allowed_through_the_origin_gate() {
 #[tokio::test]
 async fn requests_without_origin_header_are_allowed() {
     // CLI / 服务端 / 脚本等**非浏览器**客户端本来就没有 Origin 头 ⇒ 必须照常工作。
-    let router = canonical_router(Arc::new(runtime().await));
+    let router = router().await;
     let response = router
         .oneshot(shutdown_request(None))
         .await

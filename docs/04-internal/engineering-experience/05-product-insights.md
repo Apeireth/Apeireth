@@ -31,7 +31,7 @@
 【洞察】内测用户判词"工具在清单 ≠ 能产出结果"：清单/设置页/名册是**声明面**，能产出结果是**证据面**，两者之间隔着"接线、默认开、真机验"三道门。工程侧的同构病灶是"写完代码就算交付"——库级实现了、没进生产装配；接了线、默认关；默认开了、没真机验过。用户不看过程，只看结果，所以这条判词天然就是验收口径。
 
 【制度化落点】四级口径阶梯 + 证据链三件：
-1. **四级口径**（[system-capabilities.md](../../01-architecture/system-capabilities.md) 头注）：`IMPLEMENTED（代码存在）≠ PRODUCTION WIRED（接入生产主路径）≠ DEFAULT ENABLED（无需 opt-in）≠ HARDWARE VALIDATED（真机验证）`——一切能力自述先报自己在哪一级；
+1. **四级口径**（[system-capabilities.md](../../01-architecture/system-capabilities.md) 头注）：口径阶梯 = `NOT IMPLEMENTED < IMPLEMENTED（代码存在）< PRODUCTION WIRED（接入生产主路径）< HARDWARE VALIDATED（真机验证）`；**`DEFAULT ENABLED` 不是一级**，是横切属性（默认开/关，与阶梯正交）——一切能力自述先报自己在阶梯哪一级 + 默认开否；
 2. **证据链**：[claims-evidence-matrix.md](../00-governance/claims-evidence-matrix.md)（每条对外声明 → 证据 → 等级）、[live-verification-ledger.md](../live-verification-ledger.md)（"什么测过、什么没测"唯一权威，写"已验证"前先查）、差距审计两级化（"库级已实现但未接生产装配"〔四级口径术语引用〕与"真缺口"分开记账）；
 3. **抓假账先例**：接线假账靠**生产调用点实证**抓出（某输出脱敏函数全仓只有定义+导出、零生产调用——IMPLEMENTED ≠ PRODUCTION WIRED 当场现形，随后真接线）。
 

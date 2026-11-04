@@ -6,6 +6,10 @@
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
+mod common;
+
+use common::{activate_role_surface, ANONYMOUS_CLIENT, ENV_CLIENT};
+
 const TOKEN: &str = "remote-face-token-0123456789abcdef";
 
 fn bin_path() -> std::path::PathBuf {
@@ -253,6 +257,13 @@ fn broken_client_token_configuration_refuses_to_open() {
 
 /// 带令牌的非回环绑定可启动; 全 API 面令牌门在远程面上照常执行 (无令牌调
 /// chat = 401); 停机后审计档案留 `gateway.remote_bind mode=enforced` 事实。
+///
+/// # 前置条件 (P0-1 · 2026-11-04 管理面 fail-closed)
+///
+/// 停机端点属**管理面** (要求 `UserCapability::AdminControl`) ⇒ 角色面未激活
+/// (数据目录无 `users.json`) 时一律 403 ⇒ 本用例要测的是**远程绑定面**,
+/// 角色门的前置条件由这里显式装上: owner 绑本用例的过门署名名 (env 单令牌
+/// 面 = `env`; 未设防口径 = `anonymous`)。
 #[tokio::test(flavor = "multi_thread")]
 async fn non_loopback_bind_with_a_token_serves_behind_the_gate_and_keeps_the_audit() {
     let bin = bin_path();
@@ -264,6 +275,8 @@ async fn non_loopback_bind_with_a_token_serves_behind_the_gate_and_keeps_the_aud
     let slot = dir.join("gateway.pid");
     let data_dir = dir.join("data");
     fs_err::create_dir_all(&data_dir).unwrap();
+    // 角色面激活 (管理面前置条件): owner 在册, 绑两个过门署名名。
+    activate_role_surface(&data_dir, "owner-1", &[ENV_CLIENT, ANONYMOUS_CLIENT]);
     let port = free_port().await;
     let endpoint = format!("http://127.0.0.1:{port}");
 
@@ -326,6 +339,17 @@ async fn non_loopback_bind_with_a_token_serves_behind_the_gate_and_keeps_the_aud
 
 /// 逃生阀 `none` = 明示可裸奔: 非回环绑定放行启动, 但**留审计** (`mode=
 /// declared_none` + 装配期声明痕); 无令牌调用也放行 (门体不设防)。
+///
+/// # 前置条件 (P0-1 · 2026-11-04 管理面 fail-closed)
+///
+/// 停机端点属**管理面** (要求 `UserCapability::AdminControl`) ⇒ 角色面未激活
+/// 时一律 403 ⇒ 本用例要测的是**逃生阀的放行与留痕**, 角色门的前置条件由
+/// 这里显式装上。
+///
+/// 逃生阀下过门署名名恒为 `anonymous` (门体不设防 ⇒ 每次放行落
+/// `ClientIdentity::anonymous()`) ⇒ owner 绑 `anonymous` 即是本用例调用方
+/// 的身份。另注: 逃生阀与**客户端令牌表互斥** (配置矛盾拒开) ⇒ 逃生阀口径
+/// 下没有别的过门署名名可绑。
 #[tokio::test(flavor = "multi_thread")]
 async fn non_loopback_escape_valve_runs_but_leaves_the_audit_trace() {
     let bin = bin_path();
@@ -337,6 +361,8 @@ async fn non_loopback_escape_valve_runs_but_leaves_the_audit_trace() {
     let slot = dir.join("gateway.pid");
     let data_dir = dir.join("data");
     fs_err::create_dir_all(&data_dir).unwrap();
+    // 角色面激活 (管理面前置条件): owner 绑逃生阀口径的过门署名名 `anonymous`。
+    activate_role_surface(&data_dir, "owner-1", &[ANONYMOUS_CLIENT]);
     let port = free_port().await;
     let endpoint = format!("http://127.0.0.1:{port}");
 
