@@ -97,7 +97,7 @@ orphan with_date  # G4  日记族（`DailyNote`）**未接生产**（生产侧�
 orphan with_deep_risk_floor  # G4
 orphan with_envelope_budget  # G4
 orphan with_foreign_keys  # G4
-orphan with_importance_weight  # G4
+orphan with_importance_weight  # G4  ⭐ **会被调优引擎覆盖**：调优层已按维度设 `importance_weight`（`retrieval_tuning.rs:527`）⇒ ⇒ 本旋钮只在「调优尚无该维度权重」时生效（兜底路径）⇒ ⇒ 零引用是**覆盖关系**的结果，不是没实现
 orphan with_journal_mode  # G4
 orphan with_metrics_window  # G4
 orphan with_min_candidate_score  # G4  主动召回族已接生产；这条是**候选分数门槛**旋钮 ⇒ ⇒ 生产用 `ProactiveRecallPolicy` 的默认门槛 ⇒ ⇒ 零引用是「默认策略未显式调它」的结果（旋钮存在但未拧）
@@ -164,14 +164,14 @@ orphan nervous_system_from_frame  # G6
 orphan not_wired_reason  # G6
 orphan outbound_budget  # G6
 orphan put_default  # G6
-orphan query_as_of  # G6
-orphan query_with_time_range  # G6
+orphan query_as_of  # G6  宿主 `TemporalGraphStore` **已接生产**（`adapters/cli/src/lib.rs:2003`）⇒ ⇒ 本条是 `query(&TemporalGraphQuery::new(as_of_ms))` 的**一行便利包装** ⇒ ⇒ **正名已在 `query`** ⇒ ⇒ 零引用是「有正名、包装未用」的结果
+orphan query_with_time_range  # G6  溯源族已接生产；本条是**溯源时间区间**查询（与「事实 as-of」是**两套时间轴**：区间 vs 时点）⇒ ⇒ 零引用是「另一条时间轴的读面」的结果；与 `query_as_of` **不构成同义**
 orphan rebind  # G6
 orphan recent_actions  # G6
 orphan reconnect_attempts  # G6
 orphan remove_job  # G6
 orphan repetition_policy  # G6
-orphan retrieve_with_reranker  # G6
+orphan retrieve_with_reranker  # G6  **完整能力**（非包装）：带 `MemoryReranker` 适配器 + 失败回退 + `status.reranked` 标记 ⇒ ⇒ 生产有 `DeterministicReranker`（保序）⇒ ⇒ 零引用是「**默认不传 reranker**（保序即默认）」的结果 ⇒ ⇒ 该面留着 = 将来可挂模型重排而不改检索主干
 orphan sdk_method_names  # G6
 orphan set_quiet_threshold  # G6  睡眠周期族（`SleepCycle`）**未接生产**（唯一提及在 `foundation/core/src/clock.rs` 的**注释**里）⇒ ⇒ 零引用是族级结果
 orphan shard_count  # G6
