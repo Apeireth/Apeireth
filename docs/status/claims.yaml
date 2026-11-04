@@ -271,7 +271,7 @@ claims:
       - crates/capabilities/tools/src/process/mod.rs
     tests:
       - crates/capabilities/tools/tests/process_executor.rs
-    verified_at: 3a286761015cba58cfbaa6d7a5b5464a0dbb32f0
+    verified_at: fb4953decd207b5305e361411903964f158c4b13
     verify_cmd: "cargo test -p apeireth-tools-canonical --test process_executor"
     owner: tools
     next_review: "2026-11-20"
@@ -825,7 +825,7 @@ claims:
       - crates/adapters/cli/tests/gateway_panels.rs
       - crates/engine/runtime-assembly/tests/production_cognitive_v1.rs
       - crates/engine/runtime-assembly/tests/profile_memory_authorization.rs
-    verified_at: 2a388454d17cb8dd9d1bb9b427cada2d1adbc4eb
+    verified_at: fb4953decd207b5305e361411903964f158c4b13
     verify_cmd: "cargo test -p apeireth-runtime --test registry_runtime_v1 --locked && cargo test -p apeireth-runtime-assembly --test capability_modules_v1 --locked"
     owner: runtime
     next_review: "2026-11-28"
