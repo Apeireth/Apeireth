@@ -8,6 +8,9 @@
 //! 诚实口径: 只测本地面 (凭据文件分布/明文风险点/本机监听/备份排除项/绑定
 //! 完整性); 外网暴露面 (公网入口可达性) 显式「未测」。
 //!
+//! 旗标值形态校验: `--out` / `--bundle` 的值先过形态闸 (非空 + 不得以 `-`
+//! 开头), 闸在体检与落档之前 —— 拒时一个字节都不落。
+//!
 //! W3-② 绑定一致性的判定真源在装载面 (`UserAccess::load` 的拒开语义), 本面只
 //! 消费判定结果 —— 令牌值零采集, 报告只出计数与绑定名。
 
@@ -54,13 +57,9 @@ pub fn run_exposure_on(config: &ExposureAuditConfig, args: &[String]) -> Result<
                 let Some(value) = rest.get(index) else {
                     return Err(format!("exposure report {flag} requires a value\n{USAGE}"));
                 };
-                if value.trim().is_empty() {
-                    return Err(format!(
-                        "exposure report {flag} requires a non-empty value\n{USAGE}"
-                    ));
-                }
+                let value = checked_flag_value(&flag, value)?;
                 if flag == "--out" {
-                    out = Some(PathBuf::from(value));
+                    out = Some(out_target(value)?);
                 } else {
                     bundle = Some(PathBuf::from(value));
                 }
@@ -95,6 +94,39 @@ pub fn run_exposure_on(config: &ExposureAuditConfig, args: &[String]) -> Result<
         }
         None => Ok(body),
     }
+}
+
+/// 旗标值的形态闸 (值层先于任何副作用): 值不得为空、不得以 `-` 开头。
+///
+/// 以 `-` 开头的值会被读成另一个旗标 —— 落档就会写出「看起来像旗标」的
+/// 文件名 (`--out --json` ⇒ 写出名为 `--json` 的文件)。错误即帧: 点名旗标、
+/// 点名值、说清为什么拒, 并带用法帧。
+fn checked_flag_value<'a>(flag: &str, value: &'a str) -> Result<&'a str, String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Err(format!(
+            "exposure report {flag} requires a non-empty value (值不能为空)\n{USAGE}"
+        ));
+    }
+    if trimmed.starts_with('-') {
+        return Err(format!(
+            "exposure report {flag} value must not start with '-': '{value}' \
+             (值以 '-' 开头会被读成另一个旗标)\n{USAGE}"
+        ));
+    }
+    Ok(value)
+}
+
+/// `--out` 的落档目标校验: 报告落档要文件路径 —— 目标已是目录即明确拒。
+fn out_target(value: &str) -> Result<PathBuf, String> {
+    let path = PathBuf::from(value);
+    if path.is_dir() {
+        return Err(format!(
+            "exposure report --out target is a directory: '{}' (报告落档需要文件路径)\n{USAGE}",
+            path.display()
+        ));
+    }
+    Ok(path)
 }
 
 /// W3-② 绑定一致性的探测口 (真源 = 装载面的拒开语义; 令牌值零采集)。
@@ -171,6 +203,33 @@ mod tests {
             s(&["report", "--bundle"]),
         ] {
             let error = run_exposure_on(&config, &args).expect_err("must refuse");
+            assert!(error.contains("Usage:"), "错误即帧带用法: {error}");
+        }
+    }
+
+    /// 旗标形状的值 (以 `-` 开头) 与空值一律拒: 点名旗标 + 点名值 + 说清拒因。
+    #[test]
+    fn flag_shaped_and_empty_flag_values_refuse_with_a_named_reason() {
+        let config = ExposureAuditConfig::new("data");
+        for (flag, value) in [
+            ("--out", "--json"),
+            ("--out", "-"),
+            ("--out", "--"),
+            ("--bundle", "--json"),
+            ("--bundle", "-x"),
+        ] {
+            let args = s(&["report", flag, value]);
+            let error = run_exposure_on(&config, &args).expect_err("必须拒绝");
+            assert!(error.contains(flag), "点名旗标: {error}");
+            assert!(error.contains(value), "点名值: {error}");
+            assert!(error.contains("'-'"), "说清拒因: {error}");
+            assert!(error.contains("Usage:"), "错误即帧带用法: {error}");
+        }
+        for (flag, value) in [("--out", ""), ("--bundle", "   ")] {
+            let args = s(&["report", flag, value]);
+            let error = run_exposure_on(&config, &args).expect_err("必须拒绝");
+            assert!(error.contains(flag), "点名旗标: {error}");
+            assert!(error.contains("non-empty"), "说清拒因: {error}");
             assert!(error.contains("Usage:"), "错误即帧带用法: {error}");
         }
     }
