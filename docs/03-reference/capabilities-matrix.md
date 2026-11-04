@@ -36,8 +36,8 @@
 | 项 | 值 |
 |---|---|
 | 命令 | `cargo test --workspace --all-targets --locked --no-fail-fast` |
-| 结果 | **336 套件 / 9075 passed / 0 product-failed（1 环境敏感 D27，复跑绿）/ 52 ignored**（2026-10-20 生物机制族 W3.4 总装批全量实测，历史口径；现行单一真源 §1 = **341 套件 / 8570 passed / 0 failed / 51 ignored**（2026-10-21），见 [test-baseline.md](test-baseline.md) §1） |
-| 日期 | 2026-10-20 |
+| 结果 | **361 套件 / 8996 passed / 0 failed / 51 ignored**（单一真源 [test-baseline.md](test-baseline.md)） |
+| 日期 | 2026-11-05 |
 | 工具链 | rustc 1.97.1 (8bab26f4f 2026-07-14) / cargo 1.97.1 / rustup 1.29.1；MSVC 14.44.35207 + Windows SDK 10.0.26100.0 |
 
 > 22 ignored 全部为需真 API key / 真硬件的 live E2E，CI 默认不跑；数字逐批增长，以
@@ -166,7 +166,7 @@
 | **生物机制 (Bio)** | `bio.ritual`（SG-22 仪式→关怀） | `apeireth-organ::ritual` + `care::ritual_candidate` + `runtime-assembly::canonical::ritual_state_store` + `ritual_tools` | `plan_rituals → Due/DueSoft → 候选 → care 纪律管道`；`ritual_state.json`（StoredDoc v1 + 原子写）存每 kind 状态；cli 供给读 store；完成事件源 = `tool.ritual_done`/`tool.ritual_skip`（用户明确确认后调用，不推断不打卡） | **PRODUCTION WIRED（默认关，复用 `APEIRETH_ENABLE_BIO_CARE_CANDIDATES` + care 数据目录；缺目录拒绝注册）；工具面为唯一生产写者，显式 `record_ritual_done/skip` 注入口保留（并用无跨实例锁，如实）** | env 开关；自述格已接（`BioMechanismKind::Ritual`：`ritual_state.json` 只读快照，状态数/计划决策/可行动数） |
 | **生物机制 (Bio)** | `bio.quorum`（SG-24 群体感应→审议门） | `apeireth-orchestration::{quorum,council}` + `runtime-assembly::canonical::orchestrator` | `QuorumAccumulator → QuorumGate → decide_with_invoker_gated`；Hold/Cooldown 不召开不伪造否决 | **PRODUCTION WIRED（默认关 `APEIRETH_ENABLE_QUORUM_GATE`）**；含 guard 免疫外部 Conflict 源 | env 开关；`last_quorum_trace` 门账 |
 | **生物机制 (Bio)** | `bio.lifecycle`（SG-18 生命周期） | `apeireth-orchestration::lifecycle` + `runtime-assembly::canonical::bio_lifecycle`/`bio_production_wiring` | `LifecycleLedger` 5 态（Newborn→Trial→Mature→Retiring→Retired）；真实工具结果经 `nervous.bridge` → `NervousBus` 订阅驱动记账（R1b-2b；桥做结果名→调用名回退）、`AfterTurn` 只 evaluate | **PRODUCTION WIRED（默认关 `APEIRETH_ENABLE_BIO_LIFECYCLE`，装配根注册；关=不构造不注册不读时钟）**；观测 probe 已接（迟绑定槽：W3.6 备槽 + R1b-2b 接线，wired）；持久化 `lifecycle_state.json`（StoredDoc v1，坏档拒开；目录缺省=纯内存） | env 开关；`bio_lifecycle_state()` 只读句柄 |
-| **生物机制 (Bio)** | `bio.ecosystem_health`（SG-25 生态健康） | `apeireth-tools-canonical::ecosystem_health` | `ToolProfile`/`EcosystemConfig` → `analyze` 纯函数（多样性/冗余/重叠/失调/建议） | **PRODUCTION WIRED（默认关，观测面）**：`tool_taxonomy` 策展表（40 条 id/名→13 类标签，代码内常量快照真源；未覆盖工具如实计 untagged）+ `tool_ecosystem_probe` 经 `BioProbeSlots` 迟绑定接入既有 `APEIRETH_ENABLE_BIO_SELF_STATUS`，本格为 Wave 4 前观测面 8/14 之一（Wave 4 后全族 12/14）；完整 taxonomy 合同（工具声明携带标签）仍 **B 类 ADR 前置**，未做 | 无 |
+| **生物机制 (Bio)** | `bio.ecosystem_health`（SG-25 生态健康） | `apeireth-tools-canonical::ecosystem_health` | `ToolProfile`/`EcosystemConfig` → `analyze` 纯函数（多样性/冗余/重叠/失调/建议） | **PRODUCTION WIRED（默认关，观测面）**：`tool_taxonomy` 策展表（**57 条能力 id → 13 类标签**，代码内常量快照真源；**键 = 能力 id**（`tool.…` 全量形态），划分为**已注册工具面 53 条 + 动态能力族根 1 条**（`tool.mcp`，成员随服务器发现而变）+ **库级保留面 3 条**（`LIBRARY_LEVEL_FACES`，未注册为工具但被生产策略分类器按 id 引用）；**完整性闸门从生产注册面派生**（两向断言：表里每条都对上真实注册的能力 id + 每个已注册能力 id 都在表里），非手抄清单；未覆盖工具如实计 untagged）+ `tool_ecosystem_probe` 经 `BioProbeSlots` 迟绑定接入既有 `APEIRETH_ENABLE_BIO_SELF_STATUS`，本格为 Wave 4 前观测面 8/14 之一（Wave 4 后全族 12/14）；完整 taxonomy 合同（工具声明携带标签）仍 **B 类 ADR 前置**，未做 | 无 |
 | **生物机制 (Bio)** | `bio.capacity`（SG-26 承载力→自述格） | `apeireth-orchestration::capacity` + `runtime-assembly::canonical::self_status_source::capacity_bio_probe` | `capacity_bio_probe(queue,limit)` 读与 `tool.task_board` 同一任务队列；`capabilities.bio_mechanisms` 子对象 | **PRODUCTION WIRED（默认关 `APEIRETH_ENABLE_BIO_SELF_STATUS`）**；观测面已接 **14/14 格**（容量 + 练习场 + 迟绑定 12：免疫/心跳/审议门/痛觉/再生/工具生态/生命周期/调质/昼夜/仪式/上下文装配/社会修复）；聚合面见 `capabilities.nervous_system`（ADR-0003，observed 由 `bio_mechanisms` 同源推导）；行为面未接的能力（social_repair 写 prompt、homeostasis 真实体征扩展等）按各格 gaps 如实标注 | env 开关；`tool.self_status` `capabilities.bio_mechanisms` |
 
 ---
