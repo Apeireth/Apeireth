@@ -830,6 +830,40 @@ mod macos_tests {
             .spawn()
             .expect("spawn the executor-role process");
 
+        // ⚠️ **必须把管道读干**（2026-11-04 CI 实测修）。
+        //
+        // 现象：CI 上「子进程必须出现在进程表里」失败，且角色进程是
+        // **「已退出: exit status: 0」**（正常退出，不是被杀）⇒ ⇒ 它的输出**没被读**。
+        //
+        // 机制：角色进程的 stdout/stderr 是 `Stdio::piped()` 起的，而本测试**从不读**
+        // ⇒ ⇒ 它一旦写入超过**管道缓冲**（默认 64 KiB）⇒ ⇒ **写阻塞**
+        // ⇒ ⇒ 子进程起不来 / 角色进程提前结束 ⇒ ⇒ 「子进程不在进程表里」。
+        //
+        // ⇒ 修法：spawn 后**立刻**起两个后台线程读干它们（永不写阻塞），
+        // 并且失败时把读到的内容带进 panic ⇒ 下次 CI 红不用再猜。
+        let (role_stdout_tx, role_stdout_rx) = std::sync::mpsc::channel::<String>();
+        let (role_stderr_tx, role_stderr_rx) = std::sync::mpsc::channel::<String>();
+        if let Some(stdout) = role.stdout.take() {
+            let tx = role_stdout_tx.clone();
+            std::thread::spawn(move || {
+                use std::io::Read;
+                let mut buffer = Vec::new();
+                let mut stdout = stdout;
+                let _ = stdout.read_to_end(&mut buffer);
+                let _ = tx.send(String::from_utf8_lossy(&buffer).to_string());
+            });
+        }
+        if let Some(stderr) = role.stderr.take() {
+            let tx = role_stderr_tx.clone();
+            std::thread::spawn(move || {
+                use std::io::Read;
+                let mut buffer = Vec::new();
+                let mut stderr = stderr;
+                let _ = stderr.read_to_end(&mut buffer);
+                let _ = tx.send(String::from_utf8_lossy(&buffer).to_string());
+            });
+        }
+
         // 等 executor 起好的子进程出现在进程表里 (命令行含唯一 sleep 标记)。
         let child_pid = match wait_for_pid_containing(
             &format!("sleep {SLEEP_MARKER}"),
@@ -844,8 +878,15 @@ mod macos_tests {
                     Ok(None) => "角色进程仍在跑（⇒ 问题在子进程侧）".to_string(),
                     Err(error) => format!("角色进程状态取不到: {error}"),
                 };
+                // 把角色进程的输出带出来（读线程可能还没结束 ⇒ 用超时拿）
+                let drain = |rx: std::sync::mpsc::Receiver<String>| {
+                    rx.recv_timeout(Duration::from_millis(500))
+                        .unwrap_or_default()
+                };
+                let role_out = drain(role_stdout_rx);
+                let role_err = drain(role_stderr_rx);
                 panic!(
-                        "the executor's child must show up in the process table\n                         角色进程: {role_state}\n进程表快照:\n{}",
+                        "the executor's child must show up in the process table\n                         角色进程: {role_state}\n角色 stdout:\n{role_out}\n角色 stderr:\n{role_err}\n进程表快照:\n{}",
                         process_table_snapshot()
                     );
             }
