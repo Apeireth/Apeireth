@@ -135,13 +135,12 @@ pub use presence::{
 
 pub use canonical_entry::{
     build_gateway_state, build_gateway_state_with_services, canonical_router,
-    canonical_router_with_panels, canonical_router_with_services, canonical_router_with_state,
-    execute_chat, execute_chat_attributed, resolve_approval, resolve_approval_attributed,
-    serve_canonical, serve_canonical_with_services, serve_state_with_shutdown,
-    serve_state_with_tls, serve_with_shutdown, CanonicalApprovalRequest, CanonicalChatOutcome,
-    CanonicalChatRequest, CanonicalChatResponse, CanonicalEntryError, CanonicalExecutionEvent,
-    CanonicalPendingApproval, GateVerdict, GatewayTokenGate, SessionAttribution,
-    UNAUTHENTICATED_PROBE_PATHS,
+    canonical_router_with_services, canonical_router_with_state, execute_chat,
+    execute_chat_attributed, resolve_approval, resolve_approval_attributed, serve_canonical,
+    serve_canonical_with_services, serve_state_with_shutdown, serve_state_with_tls,
+    serve_with_shutdown, CanonicalApprovalRequest, CanonicalChatOutcome, CanonicalChatRequest,
+    CanonicalChatResponse, CanonicalEntryError, CanonicalExecutionEvent, CanonicalPendingApproval,
+    GateVerdict, GatewayTokenGate, SessionAttribution, UNAUTHENTICATED_PROBE_PATHS,
 };
 
 pub use client_tokens::{

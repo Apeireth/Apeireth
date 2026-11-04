@@ -657,18 +657,9 @@ pub fn build_gateway_state_with_services(
 
 /// Build the production HTTP router around one long-lived canonical runtime.
 ///
-/// Panel routes answer `501 unsupported` while no [`PanelData`] is attached —
-/// see [`canonical_router_with_panels`].
+/// Panel routes answer `501 unsupported` while no [`PanelData`] is attached.
 pub fn canonical_router(runtime: Arc<Runtime>) -> Router {
     canonical_router_with_services(runtime, GatewayServices::default())
-}
-
-/// Build the production router with optional panel/introspection backends.
-pub fn canonical_router_with_panels(
-    runtime: Arc<Runtime>,
-    panels: Option<Arc<dyn PanelData>>,
-) -> Router {
-    canonical_router_with_state(build_gateway_state(runtime, panels))
 }
 
 /// Build the production router over explicit bounded-context gateway ports.
