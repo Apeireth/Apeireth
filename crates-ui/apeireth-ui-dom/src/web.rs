@@ -148,6 +148,22 @@ impl WebDom {
     }
 
     /// 标记**整棵子树**已被引擎摘除（与内存后端同口径 ⇒ T6 真被强制）。
+    /// 摘除**整棵子树**（引擎侧记账：被摘除的节点再写入 ⇒ `NodeDetached`）。
+    ///
+    /// ## ⚠️ 为什么**这里不摘监听器**（2026-11-05 的一次**实测教训**）
+    ///
+    /// 曾试过「摘除时一并 `remove_listeners`」⇒ ⇒ **WebKitGTK 侧直接把页面跑挂了**
+    /// ⇒ ⇒ 机制：`remove_listeners` 会 **drop** 掉 wasm 侧的 `Closure`
+    /// ⇒ ⇒ 若该闭包**正在执行**（事件处理过程中移除节点）
+    /// ⇒ ⇒ ⇒ wasm-bindgen 直接 **panic**：
+    /// ⇒ ⇒ ⇒ 「closure invoked recursively or after being dropped」
+    /// ⇒ ⇒ ⇒ wasm 实例 trap ⇒ ⇒ 页面**停在探针中途**（实测 `stage=wasm-ready`）。
+    ///
+    /// ⇒ ⇒ ⇒ **就地 drop 闭包是不安全的** ⇒ ⇒ 任何「摘除时清理监听器」的方案
+    /// ⇒ ⇒ ⇒ 都必须**延后 drop**（等事件派发结束后再释放）⇒ ⇒ ⇒ **未做**。
+    ///
+    /// ⇒ ⇒ ⇒ ⇒ 当前口径：监听器**随 `WebDom` 一起释放**（`WebDom` drop ⇒ ⇒ 闭包 drop）
+    /// ⇒ ⇒ ⇒ ⇒ 而 `WebDom` 的生命周期由**调用方**管 ⇒ ⇒ ⇒ 这是**调用方责任**。
     fn mark_subtree_detached(&self, node: &Node) {
         self.mark_detached(node);
         let children = node.child_nodes();
@@ -194,6 +210,34 @@ impl WebDom {
         node.dyn_ref::<Element>().ok_or_else(|| {
             DomError::Unsupported(String::from("该节点不是元素节点（属性只能写在元素上）"))
         })
+    }
+}
+
+impl Drop for WebDom {
+    fn drop(&mut self) {
+        // ① document 级：composition 监听器（**必须先摘**，否则 document 上留死闭包）。
+        for (name, callback) in [
+            (
+                "compositionstart",
+                self.composition_closures.0.as_ref().unchecked_ref(),
+            ),
+            (
+                "compositionend",
+                self.composition_closures.1.as_ref().unchecked_ref(),
+            ),
+        ] {
+            let _ = self
+                .document
+                .remove_event_listener_with_callback(name, callback);
+        }
+        // ② 元素级：把表里所有监听器摘掉（JS 侧）⇒ ⇒ 随表 drop 的 `Closure` 才安全。
+        let drained = self.listeners.borrow_mut().drain_all();
+        for (_kind, listener) in drained {
+            let _ = listener.node.remove_event_listener_with_callback(
+                listener.kind.as_str(),
+                listener.closure.as_ref().unchecked_ref(),
+            );
+        }
     }
 }
 
@@ -625,10 +669,21 @@ impl Dom for WebDom {
         };
         let removed = self.listeners.borrow_mut().remove_node(&id);
         for (_kind, listener) in removed {
-            let _ = listener.node.remove_event_listener_with_callback(
+            let outcome = listener.node.remove_event_listener_with_callback(
                 listener.kind.as_str(),
                 listener.closure.as_ref().unchecked_ref(),
             );
+            // ⭐⭐⭐ **诊断**（E-176）：摘除失败 ⇒ ⇒ JS 侧监听器**还挂着**
+            //   ⇒ ⇒ 而 wasm 侧的 `Closure` 会被 drop ⇒ ⇒ ⇒ 之后事件派发
+            //   ⇒ ⇒ ⇒ wasm-bindgen 抛「closure invoked recursively or after being dropped」。
+            //   ⇒ ⇒ ⇒ **跨内核实测**：Chromium 下**从不**失败；WebKitGTK 下**会**失败。
+            if let Err(error) = outcome {
+                let message = format!(
+                    "⭐ 监听器摘除失败（事件类型={}）：{error:?}",
+                    listener.kind.as_str()
+                );
+                web_sys::console::error_1(&JsValue::from_str(&message));
+            }
         }
         Ok(())
     }
@@ -644,10 +699,15 @@ impl Dom for WebDom {
         };
         let removed = self.listeners.borrow_mut().remove_kind(&id, kind);
         if let Some(listener) = removed {
-            let _ = node.remove_event_listener_with_callback(
+            let outcome = node.remove_event_listener_with_callback(
                 kind.as_str(),
                 listener.closure.as_ref().unchecked_ref(),
             );
+            // ⭐⭐⭐ **诊断**（E-176）：同上 ⇒ ⇒ 失败必须**看得见**，不能静默。
+            if let Err(error) = outcome {
+                let message = format!("⭐ 监听器摘除失败（事件类型={}）：{error:?}", kind.as_str());
+                web_sys::console::error_1(&JsValue::from_str(&message));
+            }
         }
         Ok(())
     }

@@ -75,6 +75,25 @@ impl<K: Eq + Hash, V> ListenerTable<K, V> {
         }
     }
 
+    /// ⭐⭐⭐ **取出全部记录并清空表**（E-176）。
+    ///
+    /// ## 为什么需要
+    ///
+    /// 后端（`WebDom`）要把自己在 DOM 上挂的**所有**监听器摘干净 ⇒ ⇒
+    /// ⇒ 但表里没有「遍历全部」的接口 ⇒ ⇒ ⇒ `remove_node` 需要逐个节点 id。
+    ///
+    /// ⇒ ⇒ ⇒ 所以补这个「一次性取出全部」的口子 ⇒ ⇒ ⇒
+    /// ⇒ ⇒⇒ 供 [`crate::web::WebDom`] 的 `Drop` 使用。
+    pub fn drain_all(&mut self) -> Vec<(EventKind, V)> {
+        let mut out = Vec::new();
+        for (_node, by_kind) in self.by_node.drain() {
+            for (kind, value) in by_kind {
+                out.push((kind, value));
+            }
+        }
+        out
+    }
+
     /// 监听器总条数。
     pub fn len(&self) -> usize {
         self.by_node.values().map(HashMap::len).sum()
