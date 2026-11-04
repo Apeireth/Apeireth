@@ -745,9 +745,76 @@ impl<D: Dom> Renderer<D> {
         self.modal_layers.last()
     }
 
+    /// ⭐⭐⭐⭐ **按 Esc 关闭最上层模态**（E-177）。
+    ///
+    /// ## 为什么要有这一步（`has_modal` / `top_modal` 存在**不够**）
+    ///
+    /// E-171 给了「有没有模态层」的**判据** ⇒ ⇒ 但**谁来按 Esc 关闭**？
+    /// ⇒ ⇒ 应用层若每写一个弹层都手写一遍「接 keydown ⇒ 判 Esc ⇒ 调 `close_modal`」
+    /// ⇒ ⇒ ⇒ **漏一次** ⇒ ⇒⇒ Esc 就不生效 ⇒ ⇒⇒ 而这种漏**极难查**
+    /// ⇒ ⇒⇒ （表现为「这个弹层按 Esc 关不掉，但别的能关」）。
+    ///
+    /// ⇒ ⇒ ⇒ 本方法把「Esc ⇒ 关闭最上层模态」收成**一个调用**
+    /// ⇒ ⇒ ⇒ 与 `open_modal` / `close_modal` **同族** ⇒ ⇒ ⇒ 口径统一。
+    ///
+    /// ## 口径
+    ///
+    /// - **不在 IME 组合期**才生效（组合期的 Esc 是候选取消，不是关弹层）
+    ///   ⇒ ⇒ 用 [`crate::events::DomEvent::is_composing`] 判；
+    /// - **没有模态层** ⇒ ⇒ 返回 `Ok(None)`（**不**误拦 Esc）
+    ///   ⇒ ⇒ ⇒ Esc 继续交给浏览器 / 应用自己处理；
+    /// - **有模态层** ⇒ ⇒ 关掉**最上层** ⇒ ⇒ 返回**焦点归还**到的路径
+    ///   ⇒ ⇒ ⇒ 与 [`Self::close_modal`] 同一返回口径。
+    pub fn close_top_modal_on_escape(
+        &mut self,
+        event: &mut crate::events::DomEvent,
+    ) -> Result<Option<Vec<usize>>, DomError> {
+        // ⭐ 只处理 Esc。
+        if event.key() != Some("Escape") {
+            return Ok(None);
+        }
+        // ⭐ IME 组合期不关（组合期的 Esc 是「取消候选」）。
+        if event.is_composing() {
+            return Ok(None);
+        }
+        // ⭐ 没有模态层 ⇒ ⇒ **不拦**（让 Esc 继续走它该去的地方）。
+        if !self.has_modal() {
+            return Ok(None);
+        }
+        // ⭐⭐ 关掉最上层 ⇒ ⇒ 焦点归还（与 `close_modal` 同一口径）。
+        let restored = self.close_modal()?;
+        // ⭐⭐⭐ **拦掉这次 Esc**（默认已被阻止）⇒ ⇒ 浏览器不会另有反应
+        //   ⇒ ⇒ ⇒ 且**应用层不必**再自己 `prevent_default`。
+        event.prevent_default();
+        Ok(restored)
+    }
+
     /// ⭐ **有没有模态层**（E-171）⇒ ⇒ Esc 的「该不该拦」判据。
     pub fn has_modal(&self) -> bool {
         !self.modal_layers.is_empty()
+    }
+
+    /// ⭐⭐⭐ **当前焦点的路径**（E-177）。
+    ///
+    /// ## 为什么需要这个访问器
+    ///
+    /// 应用层常要回答「焦点现在在哪」⇒ ⇒ 例如：
+    /// - 弹层打开时**记住**初始焦点（关掉时归还）；
+    /// - 判断「Tab 之后焦点有没有跑出弹层」（**陷阱自检**）；
+    /// - 表单提交时**定位**当前聚焦的控件。
+    ///
+    /// ⇒ ⇒ ⇒ 而 `focus_paths` / `resolve_identity_path` 都是**私有**的
+    /// ⇒ ⇒⇒ ⇒ 跨 crate 的调用方（组件层 / 应用层）**拿不到**焦点路径
+    /// ⇒ ⇒⇒ ⇒ 所以补这个**只读**访问器。
+    ///
+    /// ## 口径
+    ///
+    /// 返回**当前**路径（相对渲染根）⇒ ⇒ `None` ⇒ 没有焦点 / 焦点已丢失。
+    pub fn current_focus_path(&self) -> Option<Vec<usize>> {
+        self.focus
+            .current()
+            .and_then(|id| self.focus_paths.get(&id).cloned())
+            .and_then(|segments| self.resolve_identity_path(&segments))
     }
 
     /// ⭐⭐⭐⭐ **可聚焦顺序**（E-171）：从**挂载树**收集，**DOM 顺序**。
@@ -3355,6 +3422,118 @@ mod tests {
     /// ⭐⭐⭐ **模态编排：开 → 关 ⇒ 焦点归还**（E-171）。
     ///
     /// ## 它锁住什么
+    ///
+    /// 旧口径要**四个**调用（开陷阱 / 聚焦 / 关陷阱 / 归还）⇒ ⇒ 漏一个
+    /// ⇒ ⇒ 要么**焦点永久锁死**，要么**焦点丢失** ⇒ ⇒ ⇒ 收成**一对**方法后，
+    /// 这两类漏调**结构上不可能**。
+    /// ⭐⭐⭐⭐ **Esc 关最上层模态**（E-177）。
+    ///
+    /// ## 它锁住什么
+    ///
+    /// 「Esc ⇒ 关闭最上层模态 ⇒ 焦点归还」这条**一体**链路
+    /// ⇒ ⇒ 应用层**不必**每写一个弹层都手写一遍 Esc 接线。
+    #[test]
+    fn escape_closes_the_top_modal_and_restores_focus() {
+        let (mut renderer, _root) = renderer_with_dom();
+        renderer
+            .mount(
+                VNode::element("div")
+                    .child(
+                        VNode::element("button")
+                            .attr("id", "opener")
+                            .child(VNode::text("开"))
+                            .build(),
+                    )
+                    .child(
+                        VNode::element("div")
+                            .attr("id", "dialog")
+                            .child(
+                                VNode::element("button")
+                                    .attr("id", "ok")
+                                    .child(VNode::text("好"))
+                                    .build(),
+                            )
+                            .build(),
+                    )
+                    .build(),
+            )
+            .expect("挂载必须成功");
+        renderer.focus_at_path(&[0, 0]).expect("聚焦必须成功");
+        renderer
+            .open_modal(&[&[1, 0]], &[1], Some(&[1, 0]))
+            .expect("开模态必须成功");
+
+        // ① Esc ⇒ ⇒ 关掉模态 ⇒ ⇒ 焦点归还到「开」按钮
+        let mut event = crate::events::DomEvent::new(crate::dom::EventKind::KeyDown, Vec::new())
+            .with_key("Escape");
+        let restored = renderer
+            .close_top_modal_on_escape(&mut event)
+            .expect("Esc 处理必须成功")
+            .expect("⭐ Esc 必须关掉模态并归还焦点");
+        assert_eq!(restored, vec![0, 0], "⭐ 焦点必须归还到「开」按钮");
+        assert!(!renderer.has_modal(), "⭐ 模态层必须已关闭");
+    }
+
+    /// ⭐⭐⭐ **没有模态层时 Esc 不拦**（E-177）。
+    ///
+    /// ⇒ ⇒ Esc 应当继续交给浏览器 / 应用自己处理 ⇒ ⇒ **不得**被引擎吞掉。
+    #[test]
+    fn escape_without_a_modal_is_not_swallowed() {
+        let (mut renderer, _root) = renderer_with_dom();
+        renderer
+            .mount(VNode::element("div").build())
+            .expect("挂载必须成功");
+        let mut event = crate::events::DomEvent::new(crate::dom::EventKind::KeyDown, Vec::new())
+            .with_key("Escape");
+        let restored = renderer
+            .close_top_modal_on_escape(&mut event)
+            .expect("Esc 处理必须成功");
+        assert!(
+            restored.is_none(),
+            "⭐ 没有模态层 ⇒ ⇒ 不该关闭任何东西（Esc 不得被吞）"
+        );
+    }
+
+    /// ⭐⭐⭐ **IME 组合期的 Esc 不关弹层**（E-177）。
+    ///
+    /// ⇒ ⇒ 组合期的 Esc 是「取消候选」⇒ ⇒ **不是**「关弹层」
+    /// ⇒ ⇒⇒ 误关 ⇒ ⇒ 用户的输入**白丢**。
+    #[test]
+    fn escape_during_ime_composition_does_not_close_the_modal() {
+        let (mut renderer, _root) = renderer_with_dom();
+        renderer
+            .mount(
+                VNode::element("div")
+                    .child(VNode::element("button").attr("id", "opener").build())
+                    .child(
+                        VNode::element("div")
+                            .attr("id", "dialog")
+                            .child(VNode::element("button").attr("id", "ok").build())
+                            .build(),
+                    )
+                    .build(),
+            )
+            .expect("挂载必须成功");
+        renderer
+            .open_modal(&[&[1, 0]], &[1], Some(&[1, 0]))
+            .expect("开模态必须成功");
+        let mut event = crate::events::DomEvent::new(crate::dom::EventKind::KeyDown, Vec::new())
+            .with_key("Escape")
+            .with_is_composing(true);
+        let restored = renderer
+            .close_top_modal_on_escape(&mut event)
+            .expect("Esc 处理必须成功");
+        assert!(
+            restored.is_none(),
+            "⭐ IME 组合期的 Esc **不得**关掉弹层（否则用户输入白丢）"
+        );
+        assert!(
+            renderer.has_modal(),
+            "⭐ 模态层必须**仍在**（组合期 Esc 不关）"
+        );
+    }
+
+    /// ⭐⭐⭐ **开模态 ⇒ ⇒ 关模态 ⇒ ⇒ 焦点归还**（E-171）。
     ///
     /// 旧口径要**四个**调用（开陷阱 / 聚焦 / 关陷阱 / 归还）⇒ ⇒ 漏一个
     /// ⇒ ⇒ 要么**焦点永久锁死**，要么**焦点丢失** ⇒ ⇒ ⇒ 收成**一对**方法后，
