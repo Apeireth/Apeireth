@@ -299,6 +299,17 @@ pub struct Renderer<D: Dom> {
     ///
     /// ⇒ ⇒ 存**身份段** ⇒ ⇒ 用时**反解**当前路径 ⇒ ⇒ ⇒ 重排后**找回同一个逻辑元素** ✓
     focus_paths: std::collections::HashMap<FocusId, Vec<IdentitySegment>>,
+
+    /// ⭐⭐⭐ **模态层栈**（E-171）。
+    ///
+    /// ## 为什么是**栈**而不是单个集合
+    ///
+    /// [`FocusTracker`] 的陷阱是**一个**允许集合 ⇒ ⇒ 弹层 A 上再开弹层 B
+    /// ⇒ ⇒ B 的允许集合会**覆盖** A 的 ⇒ ⇒ ⇒ 关掉 B 之后，**A 的陷阱没了**
+    /// ⇒ ⇒ ⇒ 焦点可以跑到 A 之外 ⇒ ⇒ ⇒ **嵌套弹层必错**。
+    ///
+    /// ⇒ ⇒ 这里存**每一层**的允许集合 ⇒ ⇒ 关掉一层 ⇒ ⇒ 还原**下面那层**。
+    modal_layers: Vec<ModalLayer>,
     /// ⭐ **待补写的属性写回**（IME 组合期间被推迟的那些）。
     ///
     /// ## 为什么必须留队列（而不是"推迟就丢掉"）
@@ -428,6 +439,7 @@ impl<D: Dom> Renderer<D> {
             measurement_scale: MeasurementScale::IDENTITY,
             focus: FocusTracker::new(),
             focus_paths: std::collections::HashMap::new(),
+            modal_layers: Vec::new(),
             pending_value_writes: Vec::new(),
             deferred_value_writes: 0,
         }
@@ -645,6 +657,146 @@ impl<D: Dom> Renderer<D> {
             cursor = children.get(index)?;
         }
         Some(path)
+    }
+
+    /// ⭐⭐⭐ **打开一层模态**（E-171）：**一个调用**完成「设陷阱 + 聚焦初值」。
+    ///
+    /// ## 为什么要有这个一体化的 API
+    ///
+    /// 旧口径要调**四个**方法：`open_focus_trap` → `focus_at_path` → … →
+    /// `close_focus_trap` → `restore_focus` ⇒ ⇒ **漏一个**的后果各不相同：
+    /// - 漏 `close_focus_trap` ⇒ ⇒ **焦点被永久锁死**（用户 Tab 不出去）；
+    /// - 漏 `restore_focus` ⇒ ⇒ **焦点丢失**（关掉弹层后焦点掉到 body）。
+    ///
+    /// ⇒ ⇒ ⇒ 把它收成**一对**方法（开 / 关）⇒ ⇒ 漏不掉。
+    ///
+    /// ## 嵌套
+    ///
+    /// ⇒ ⇒ 每层**压栈** ⇒ ⇒ 关掉一层 ⇒ ⇒ 还原**下面那层**的陷阱
+    /// ⇒ ⇒ ⇒ 嵌套弹层**不会**互相破坏。
+    pub fn open_modal(
+        &mut self,
+        allowed: &[&[usize]],
+        anchor: &[usize],
+        initial_focus: Option<&[usize]>,
+    ) -> Result<(), DomError> {
+        let ids: Vec<FocusId> = allowed.iter().map(|path| self.identity_id(path)).collect();
+        // ⭐ 压栈 ⇒ ⇒ 关掉时能还原下面那层。
+        self.modal_layers.push(ModalLayer {
+            allowed: ids.clone(),
+            anchor: anchor.to_vec(),
+        });
+        // ⭐ 本层的允许集合 = **本层** ∪ **下面那层**（嵌套时下面那层仍要有效）。
+        let mut effective = ids;
+        if let Some(below) = self.modal_layers.iter().rev().nth(1) {
+            effective.extend(below.allowed.iter().copied());
+        }
+        self.focus.open_trap(effective);
+        if let Some(initial) = initial_focus {
+            self.focus_at_path(initial)?;
+        }
+        Ok(())
+    }
+
+    /// ⭐⭐⭐ **关掉最上层模态**（E-171）：**一个调用**完成「关陷阱 + 归还焦点」。
+    ///
+    /// ## 返回
+    ///
+    /// `Ok(None)` ⇒ ⇒ **没有模态层**（调用方不该调这个）。
+    /// `Ok(Some(path))` ⇒ ⇒ 焦点**归还**到的路径。
+    pub fn close_modal(&mut self) -> Result<Option<Vec<usize>>, DomError> {
+        if self.modal_layers.pop().is_none() {
+            return Ok(None);
+        }
+        // ⭐ 还原**下面那层**的陷阱（没有下面那层 ⇒ ⇒ 彻底放开）。
+        match self.modal_layers.last() {
+            Some(layer) => {
+                let allowed = layer.allowed.clone();
+                self.focus.open_trap(allowed);
+            }
+            None => self.focus.close_trap(),
+        }
+        // ⭐ 归还焦点（弹层打开前那个元素）。
+        self.restore_focus()
+    }
+
+    /// ⭐ **当前最上层模态**（E-171）⇒ ⇒ 应用据此判「Esc 要不要关弹层」。
+    pub fn top_modal(&self) -> Option<&ModalLayer> {
+        self.modal_layers.last()
+    }
+
+    /// ⭐ **有没有模态层**（E-171）⇒ ⇒ Esc 的「该不该拦」判据。
+    pub fn has_modal(&self) -> bool {
+        !self.modal_layers.is_empty()
+    }
+
+    /// ⭐⭐⭐ **可聚焦顺序**（E-171）：从**挂载树**收集，**DOM 顺序**。
+    ///
+    /// ## 为什么引擎自己收集
+    ///
+    /// 浏览器的 `Tab` 只按 DOM 顺序 ⇒ ⇒ **不知道**引擎的焦点陷阱
+    /// ⇒ ⇒ ⇒ 陷阱在浏览器里**其实并不成立**（用户按 Tab 会跳出弹层）
+    /// ⇒ ⇒ ⇒ 引擎必须自己算一份「可 Tab 序列」。
+    ///
+    /// ⚠️ **已知简化**：**不读**计算样式 ⇒ ⇒ `display:none` 的元素**仍会被列入**
+    /// ⇒ ⇒ ⇒ 真实场景需要宿主提供「是否可见」查询（**未做**）。
+    pub fn focus_order(&self) -> crate::keyboard::FocusOrder {
+        let mut order = crate::keyboard::FocusOrder::default();
+        let Some(root) = self.tree.as_ref() else {
+            return order;
+        };
+        let mut path: Vec<usize> = Vec::new();
+        collect_focusable(root, &mut path, &mut order);
+        order
+    }
+
+    /// ⭐⭐⭐ **Tab 导航**（E-171）：在**可聚焦顺序**里移动焦点，**尊重陷阱**。
+    ///
+    /// ## 返回
+    ///
+    /// `Ok(true)` ⇒ ⇒ **移动了** ⇒ ⇒ 调用方**应该** `prevent_default`
+    /// ⇒ ⇒ ⇒ 否则浏览器的原生 Tab 会**再走一次**（⇒ ⇒ 焦点跳两步）。
+    /// `Ok(false)` ⇒ ⇒ **没动**（序列为空 / 陷阱内一个都没有）⇒ ⇒ **不要** `prevent_default`。
+    pub fn focus_next(&mut self, shift: bool) -> Result<bool, DomError> {
+        let order = self.focus_order();
+        let current_path = self
+            .focus
+            .current()
+            .and_then(|id| self.focus_paths.get(&id).cloned())
+            .and_then(|segments| self.resolve_identity_path(&segments));
+        // ⭐ 闭包**不能捕获 `self`**（`&dyn Fn` 要求 `'static`）⇒ ⇒
+        //   ⇒ 允许集合改用**路径**（不是 id）⇒ ⇒ 闭包只捕获这个 Vec ⇒ ⇒ 无借用冲突。
+        let allowed_paths: Option<Vec<Vec<usize>>> = self.modal_layers.last().map(|layer| {
+            // ⭐ `focus_paths` 存的是**身份段** ⇒ ⇒ 这里要**反解**成当前路径。
+            let mut paths: Vec<Vec<usize>> = layer
+                .allowed
+                .iter()
+                .filter_map(|id| self.focus_paths.get(id))
+                .filter_map(|segments| self.resolve_identity_path(segments))
+                .collect();
+            if let Some(below) = self.modal_layers.iter().rev().nth(1) {
+                for id in &below.allowed {
+                    if let Some(path) = self
+                        .focus_paths
+                        .get(id)
+                        .and_then(|segments| self.resolve_identity_path(segments))
+                    {
+                        paths.push(path);
+                    }
+                }
+            }
+            paths
+        });
+        let allowed = move |path: &[usize]| match &allowed_paths {
+            None => true,
+            Some(paths) => paths.iter().any(|item| item.as_slice() == path),
+        };
+        let Some(next) = order.next(current_path.as_deref(), shift, Some(&allowed)) else {
+            return Ok(false);
+        };
+        let path = next.path.clone();
+        self.focus_at_path(&path)?;
+        Ok(true)
     }
 
     /// 打开**焦点陷阱**：只有这些路径允许获得焦点（弹层/对话框打开时用）。
@@ -2478,6 +2630,15 @@ impl ScrollSignal {
     }
 }
 
+/// ⭐⭐⭐ **模态层**（E-171）：一层弹层的焦点约束。
+#[derive(Debug, Clone)]
+pub struct ModalLayer {
+    /// 本层允许获得焦点的路径（空 = 本层不额外限制 ⇒ ⇒ 只受**下面那层**约束）。
+    pub allowed: Vec<FocusId>,
+    /// 本层的**标识路径**（用于日志与「关掉哪一层」的判据）。
+    pub anchor: Vec<usize>,
+}
+
 /// 子节点路径 ⇒ 稳定 `FocusId`（FNV-1a）。
 ///
 /// 用路径求 id 而不是另发编号：**一个概念一套编号**
@@ -2498,6 +2659,62 @@ fn path_id(path: &[usize]) -> FocusId {
         hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
     }
     hash
+}
+
+/// ⭐⭐⭐ **遍历挂载树收集可聚焦元素**（E-171）⇒ ⇒ **DOM 顺序**。
+///
+/// ## 判定口径
+///
+/// 标签 + `tabindex` + `disabled` ⇒ ⇒ 见 [`crate::keyboard::is_focusable`]。
+///
+/// ## 路径口径
+///
+/// 从**挂载树根**起算 ⇒ ⇒ 与 [`Renderer::focus_at_path`] **同一口径** ✓
+/// ⇒ ⇒ ⇒ 收集到的路径可以直接拿去聚焦。
+fn collect_focusable<D: Dom>(
+    node: &MountedNode<D>,
+    path: &mut Vec<usize>,
+    order: &mut crate::keyboard::FocusOrder,
+) {
+    let children = match node {
+        MountedNode::Element(element) => &element.children,
+        MountedNode::Fragment(fragment) => &fragment.children,
+        MountedNode::Text(_) => return,
+    };
+    if let MountedNode::Element(element) = node {
+        // ⭐ 读标签与相关属性（**只读**，不分配字符串副本以外的东西）。
+        let tag = element.vnode.tag.as_str();
+        let tabindex = element
+            .vnode
+            .attrs
+            .iter()
+            .find(|(name, _)| name == "tabindex")
+            .and_then(|(_, value)| match value {
+                AttrValue::Text(text) => text.trim().parse::<i64>().ok(),
+                AttrValue::Bool(_) => None,
+            });
+        let disabled = element
+            .vnode
+            .attrs
+            .iter()
+            .any(|(name, value)| name == "disabled" && matches!(value, AttrValue::Bool(true)));
+        if crate::keyboard::is_focusable(tag, tabindex, disabled) {
+            let item = crate::keyboard::Focusable {
+                path: path.clone(),
+                tabbable: tabindex.is_none_or(|index| index >= 0),
+            };
+            if item.tabbable {
+                order.tabbable.push(item);
+            } else {
+                order.focusable_only.push(item);
+            }
+        }
+    }
+    for (index, child) in children.iter().enumerate() {
+        path.push(index);
+        collect_focusable(child, path, order);
+        path.pop();
+    }
 }
 
 /// 身份段 ⇒ `FocusId`（FNV-1a）。
@@ -3092,6 +3309,215 @@ mod tests {
             1,
             "⭐ 标记元素的子节点必须原样保留（实际 {} 个）",
             kept.len()
+        );
+    }
+
+    /// ⭐⭐⭐ **模态编排：开 → 关 ⇒ 焦点归还**（E-171）。
+    ///
+    /// ## 它锁住什么
+    ///
+    /// 旧口径要**四个**调用（开陷阱 / 聚焦 / 关陷阱 / 归还）⇒ ⇒ 漏一个
+    /// ⇒ ⇒ 要么**焦点永久锁死**，要么**焦点丢失** ⇒ ⇒ ⇒ 收成**一对**方法后，
+    /// 这两类漏调**结构上不可能**。
+    #[test]
+    fn modal_open_then_close_restores_focus() {
+        let (mut renderer, _root) = renderer_with_dom();
+        renderer
+            .mount(
+                VNode::element("div")
+                    .child(
+                        VNode::element("button")
+                            .attr("id", "opener")
+                            .child(VNode::text("开"))
+                            .build(),
+                    )
+                    .child(
+                        VNode::element("div")
+                            .attr("id", "dialog")
+                            .child(
+                                VNode::element("button")
+                                    .attr("id", "ok")
+                                    .child(VNode::text("好"))
+                                    .build(),
+                            )
+                            .build(),
+                    )
+                    .build(),
+            )
+            .expect("挂载必须成功");
+        // ① 焦点落在「开」按钮（路径 [0,0]）
+        renderer.focus_at_path(&[0, 0]).expect("聚焦必须成功");
+        // ② 开模态：只允许弹层里的按钮获得焦点，初始焦点落在它上面
+        renderer
+            .open_modal(&[&[1, 0]], &[1], Some(&[1, 0]))
+            .expect("开模态必须成功");
+        assert!(renderer.has_modal(), "⭐ 应当有模态层");
+        assert_eq!(
+            renderer.top_modal().map(|layer| layer.anchor.clone()),
+            Some(vec![1])
+        );
+        // ③ 关模态 ⇒ ⇒ 焦点**归还**到「开」按钮
+        let restored = renderer
+            .close_modal()
+            .expect("关模态必须成功")
+            .expect("必须有落点");
+        assert_eq!(
+            restored,
+            vec![0, 0],
+            "⭐ 关模态后焦点必须归还到打开前的元素"
+        );
+        assert!(!renderer.has_modal(), "⭐ 模态层应已弹出");
+    }
+
+    /// ⭐⭐⭐ **嵌套模态：关掉内层 ⇒ ⇒ 外层的陷阱**仍然有效**（E-171）。
+    ///
+    /// ## 为什么这条重要
+    ///
+    /// [`FocusTracker`] 的陷阱只有**一个**集合 ⇒ ⇒ 若不压栈
+    /// ⇒ ⇒ 内层弹层的允许集合会**覆盖**外层 ⇒ ⇒ ⇒ 关掉内层后**外层不再锁焦**
+    /// ⇒ ⇒ ⇒ 用户能 Tab 出外层弹层。
+    #[test]
+    fn nested_modals_restore_the_outer_trap() {
+        let (mut renderer, _root) = renderer_with_dom();
+        renderer
+            .mount(
+                VNode::element("div")
+                    .child(
+                        VNode::element("button")
+                            .attr("id", "outer-btn")
+                            .child(VNode::text("外"))
+                            .build(),
+                    )
+                    .child(
+                        VNode::element("div")
+                            .attr("id", "inner-btn")
+                            .child(
+                                VNode::element("button")
+                                    .attr("id", "deep")
+                                    .child(VNode::text("深"))
+                                    .build(),
+                            )
+                            .build(),
+                    )
+                    .build(),
+            )
+            .expect("挂载必须成功");
+        // ① 外层模态：只允许 [0,0]
+        renderer
+            .open_modal(&[&[0, 0]], &[0], None)
+            .expect("开外层必须成功");
+        // ② 内层模态：只允许 [1,0]
+        renderer
+            .open_modal(&[&[1, 0]], &[1], None)
+            .expect("开内层必须成功");
+        // ③ 关掉内层 ⇒ ⇒ 外层的陷阱**必须**还在
+        renderer.close_modal().expect("关内层必须成功");
+        assert!(renderer.has_modal(), "⭐ 外层模态应仍在");
+        let allowed = &renderer.top_modal().expect("应有外层").allowed;
+        let outer_id = renderer.identity_id(&[0, 0]);
+        assert!(
+            allowed.contains(&outer_id),
+            "⭐ 关掉内层后，外层的允许集合必须被还原"
+        );
+        // ⭐ 外层之外的元素**必须**被拒绝（陷阱仍生效）
+        let outside = renderer.identity_id(&[1, 0]);
+        assert!(
+            !allowed.contains(&outside),
+            "⭐ 外层之外的元素不得在外层允许集合里"
+        );
+        renderer.close_modal().expect("关外层必须成功");
+    }
+
+    /// ⭐⭐⭐ **Tab 导航在真实树上按 DOM 顺序移动**（E-171）。
+    #[test]
+    fn tab_navigation_follows_dom_order() {
+        let (mut renderer, _root) = renderer_with_dom();
+        renderer
+            .mount(
+                VNode::element("div")
+                    .child(
+                        VNode::element("button")
+                            .attr("id", "b1")
+                            .child(VNode::text("1"))
+                            .build(),
+                    )
+                    .child(
+                        VNode::element("span")
+                            .attr("id", "not-focusable")
+                            .child(VNode::text("x"))
+                            .build(),
+                    )
+                    .child(VNode::element("input").attr("id", "b2").build())
+                    .build(),
+            )
+            .expect("挂载必须成功");
+        // ⭐ 可聚焦顺序：button（路径 [0]）→ input（路径 [2]）⇒ ⇒ span **被跳过**
+        let order = renderer.focus_order();
+        let paths: Vec<Vec<usize>> = order
+            .tabbable
+            .iter()
+            .map(|item| item.path.clone())
+            .collect();
+        assert_eq!(
+            paths,
+            vec![vec![0usize], vec![2usize]],
+            "⭐ span 不可聚焦 ⇒ 必须被跳过"
+        );
+        // ① 第一次 Tab：没有当前焦点 ⇒ ⇒ 落到第一个
+        assert!(renderer.focus_next(false).expect("Tab 必须成功"));
+        assert_eq!(
+            renderer.focus_tracker().current(),
+            Some(renderer.identity_id(&[0]))
+        );
+        // ② 第二次 Tab ⇒ ⇒ 落到第二个
+        assert!(renderer.focus_next(false).expect("Tab 必须成功"));
+        assert_eq!(
+            renderer.focus_tracker().current(),
+            Some(renderer.identity_id(&[2]))
+        );
+        // ③ Shift+Tab ⇒ ⇒ 回到第一个
+        assert!(renderer.focus_next(true).expect("Shift+Tab 必须成功"));
+        assert_eq!(
+            renderer.focus_tracker().current(),
+            Some(renderer.identity_id(&[0]))
+        );
+    }
+
+    /// ⭐⭐⭐ **Tab 导航尊重模态陷阱**：陷阱外的元素**到不了**（E-171）。
+    ///
+    /// ## 为什么这条是「E-171 的核心」
+    ///
+    /// 浏览器的原生 `Tab` **不知道**引擎的陷阱 ⇒ ⇒ 引擎必须自己接管
+    /// ⇒ ⇒ ⇒ 否则「焦点陷阱」在浏览器里**只是**挡住了引擎自己的调用。
+    #[test]
+    fn tab_navigation_respects_the_modal_trap() {
+        let (mut renderer, _root) = renderer_with_dom();
+        renderer
+            .mount(
+                VNode::element("div")
+                    .child(
+                        VNode::element("button")
+                            .attr("id", "inside")
+                            .child(VNode::text("内"))
+                            .build(),
+                    )
+                    .child(
+                        VNode::element("button")
+                            .attr("id", "outside")
+                            .child(VNode::text("外"))
+                            .build(),
+                    )
+                    .build(),
+            )
+            .expect("挂载必须成功");
+        // 模态只允许 [0]
+        renderer
+            .open_modal(&[&[0]], &[0], None)
+            .expect("开模态必须成功");
+        // Tab ⇒ ⇒ 陷阱内只有一个可聚焦元素 ⇒ ⇒ **没有下一个**
+        assert!(
+            !renderer.focus_next(false).expect("Tab 必须成功"),
+            "⭐ 陷阱内只有一个可聚焦元素 ⇒ ⇒ Tab **不该**移动（调用方据此不 prevent_default）"
         );
     }
 

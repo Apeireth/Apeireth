@@ -131,6 +131,8 @@ pub mod dom;
 pub mod events;
 /// ⭐ 焦点 / IME / a11y 通道（L1-G3）。
 pub mod focus;
+/// ⭐⭐⭐ **键盘语义层**（Esc / Tab 顺序 / 方向键游标，E-171）。
+pub mod keyboard;
 pub mod keyed;
 /// ⭐ 布局位移（CLS）观测（L1-G7 的 CLS 部分）。
 pub mod layout_shift;
