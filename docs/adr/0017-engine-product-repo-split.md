@@ -581,7 +581,11 @@ note = "私有护城河 = 本仓内的私有插件包（实现引擎既有 4 个
 
 **⭐ 私有仓 wasm 胶水版本互斥（2026-11-04 实测发现并修复）**：私有仓 app crate 原钉 `wasm-bindgen =0.2.106` / `wasm-bindgen-futures =0.4.46` / `wasm-bindgen-test =0.3.46`，而它自己钉 `js-sys =0.3.106`。crates.io API 实测的传递约束：`js-sys 0.3.106` 要求 **`wasm-bindgen =0.2.129`**；`wasm-bindgen-futures 0.4.46` 要求 `wasm-bindgen =0.2.96`；`wasm-bindgen-test 0.3.46` 要求 `wasm-bindgen =0.2.96`。⇒ **2 处互斥，私有仓 cargo 解析必然失败**（确定性冲突，无需实跑即可判定）。已改为与引擎 rev `63349883` 完全一致的一组：**`wasm-bindgen =0.2.129` / `wasm-bindgen-futures =0.4.79` / `wasm-bindgen-test =0.3.79`**（实测 `wasm-bindgen-test 0.3.79` 要求 `wasm-bindgen =0.2.129` + `wasm-bindgen-futures =0.4.79` ⇒ 三件精确对齐，0 互斥）。**私有仓当时尚无任何提交 ⇒ 该修复无历史负担**（改动落在其首个 commit 前）。
 
-**⚠️ crates.io 侧双通道口径（待 owner 明确）**：crates.io 上 `apeireth-ui*` 6 个 crate 停在 **`2.0.0-rc.5`**（2026-11-01 发布，基线 = 主仓 `16d0a680`，即**重建前的旧代码**），而私有仓消费的是引擎线 rev `63349883`（`ui-engine-w0`，含 `ui-app` / `ui-scene` / `ui-time` 三个主仓尚未有的 crate）。⇒ **同一引擎有两个版本口径**（rc.5 vs SHA）。三条路：① 重建期 crates.io 侧**冻结在 rc.5**（占名 + 早期可用），W2/W3 稳定后发 rc.6 统一（**推荐**）；② 私有仓改用 crates.io 版本依赖（牺牲迭代速度）；③ 私有仓双写（复杂，不取）。
+**⚠️ crates.io 侧双通道口径 —— owner 裁决（2026-11-04）**：**重建期冻结 rc.5**。crates.io 上的 `apeireth-ui*` 6 个 crate 停在 **`2.0.0-rc.5`**（2026-11-01 发布，基线 = 主仓 `16d0a680`，即**重建前的旧代码**），而私有仓消费的是引擎线 rev `63349883`（`ui-engine-w0`，含 `ui-app` / `ui-scene` / `ui-time` 三个主仓尚未有的 crate）⇒ **同一引擎两个版本口径**（rc.5 vs SHA）。
+
+- **裁决内容**：重建期 crates.io 侧**冻结在 `2.0.0-rc.5`**（占名 + 早期可用；**rc.5 = 重建前的历史快照，不是「当前最新版」**）；前端重建完成（W2 立骨 / W3 稳态）后发 **rc.6** 统一口径。
+- ⭐ **冻结已技术执行**：`scripts/publish-engine-crates.sh` **默认只发根 workspace** ⇒ crates-ui 必须显式 `--with-crates-ui` / `--crates-ui-only` 才会被碰到 ⇒ **冻结不靠人记得**。契约 §[[workspace.repos]] `product-ui` 段的 `publish_freeze = "crates-ui @ 2.0.0-rc.5"` 同步登记。
+- **不取的两条路**：② 私有仓改用 crates.io 版本依赖（牺牲引擎迭代速度 —— publish 只在「要发版给外部用户」时才必要）；③ 双写（复杂，无收益）。
 ⇒ 附带效应：等前端分支合并回主仓，主仓 `crates-ui/` 会多出 `ui-app` / `ui-scene` / `ui-time` ⇒ 契约 engine 段清单要更新，且**新守卫会立刻报**「可发布但未登记」（这三个 crate `publish` 未设 ⇒ 默认 true）⇒ 合并时须同步处理。
 
 ### 10.5 下一步

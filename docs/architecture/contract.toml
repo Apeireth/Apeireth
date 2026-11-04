@@ -107,6 +107,15 @@ note = "owner 2026-11-04 路线 A 裁定的落地仓（r10 设计在自研引擎
 #   代价: 引擎更新要显式改 SHA（私有仓 CHANGELOG 记一行）—— 这是有意的摩擦，不是缺陷。
 cross_repo_dep = "git+rev(exact-sha)"
 
+# crates-ui 发布冻结（owner 2026-11-04 裁决）:
+#   重建期 crates.io 侧的 apeireth-ui* **冻结在 2.0.0-rc.5**（占名 + 早期可用;
+#   rc.5 = 重建前的历史快照, 非"当前最新版"）。
+#   **技术执行**: scripts/publish-engine-crates.sh 默认只发根 workspace ⇒ crates-ui
+#   必须显式 --with-crates-ui / --crates-ui-only 才会被碰到 ⇒ 冻结不靠人记得。
+#   解除条件: 前端重建完成（W2 立骨 / W3 稳态）⇒ 发 rc.6 统一口径 + 撤掉本冻结 + 同步
+#   契约 crates-ui 的可发布清单（届时 crates-ui/ 会多出 ui-app / ui-scene / ui-time）。
+publish_freeze = "crates-ui @ 2.0.0-rc.5"
+
 [locked]
 # 只引用, 不复制数值; 守卫检查契约批不触碰这些文件。
 nine_anchors = "crates/foundation/core/src/eight_anchors.rs"

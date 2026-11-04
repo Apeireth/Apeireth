@@ -1,5 +1,9 @@
 # apeireth-ui-gpu
 
+> **⚠️ 版本状态（2026-11-04 owner 裁决）**：crates.io 上的 `2.0.0-rc.5` 是**前端重建前的历史快照**
+> （占名 + 早期可用），**不是「当前最新版」**。重建期 crates.io 侧**冻结在 rc.5**；前端重建完成后
+> 发 `rc.6` 统一口径。当前开发主线见私有仓 `Apeireth/ui-desktop` 消费的引擎线 rev（精确 SHA 锚定）。
+
 Apeireth 全栈纯 Rust 前端引擎的 **GPU 桥**：GLSL 前置变换 + uniform 绑定表 + 双后端渲染入口（状态 → 像素）。
 
 ## 在引擎里的位置

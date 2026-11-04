@@ -24,6 +24,12 @@
 #   scripts/publish-engine-crates.sh --allow-dirty            # 允许工作树不干净（慎用）
 #   scripts/publish-engine-crates.sh --root-only              # 只发根 workspace（跳过 crates-ui）
 #   scripts/publish-engine-crates.sh --crates-ui-only         # 只发 crates-ui 独立 workspace
+#   scripts/publish-engine-crates.sh --with-crates-ui         # 两个 workspace 都发（**解冻开关**）
+#
+# ⚠️ crates-ui 冻结口径（owner 2026-11-04 裁决）: 重建期 crates.io 侧的 `apeireth-ui*`
+#    **冻结在 2.0.0-rc.5**（占名 + 早期可用; rc.5 = 重建前的历史快照）⇒ **默认只发根
+#    workspace**, crates-ui 必须显式 `--with-crates-ui` / `--crates-ui-only` 才会被碰到。
+#    解除条件: 前端重建完成（W2 立骨 / W3 稳态）⇒ 发 rc.6 统一口径, 并同步撤掉本冻结。
 #
 # 环境:
 #   CARGO_REGISTRY_TOKEN   crates.io API token（**必填**, 缺失即中止）
@@ -63,6 +69,7 @@ MODE="publish"           # publish | check | dry-run-only | print-order
 FROM_CRATE=""
 ALLOW_DIRTY=0
 ROOT_ONLY=0              # --root-only: 只发根 workspace（跳过 crates-ui）
+WITH_UI=0                # --with-crates-ui: **显式**连 crates-ui 一起发（解冻开关）
 UI_ONLY=0                # --crates-ui-only: 只发 crates-ui 独立 workspace（跳过根 workspace）
 
 usage() { sed -n '2,45p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
@@ -75,6 +82,7 @@ while [[ $# -gt 0 ]]; do
     --from)          FROM_CRATE="$2"; shift ;;
     --allow-dirty)   ALLOW_DIRTY=1 ;;
     --root-only)     ROOT_ONLY=1 ;;
+    --with-crates-ui) WITH_UI=1 ;;
     --crates-ui-only) UI_ONLY=1 ;;
     -h|--help)       usage; exit 0 ;;
     *) echo "未知参数: $1" >&2; usage >&2; exit 2 ;;
@@ -162,7 +170,13 @@ if [[ $UI_ONLY -eq 1 ]]; then
 else
   ORDER_ROOT="$(compute_order Cargo.toml root)"
 fi
-ORDER_UI="$(compute_order "$CRATES_UI_DIR/Cargo.toml" ui)"
+# --print-order 是只读诊断 ⇒ 两个 workspace 的顺序都算（不受冻结影响）;
+# 真发布时才按冻结口径决定要不要碰 crates-ui。
+if [[ $UI_ONLY -eq 1 || $WITH_UI -eq 1 || "$MODE" == "print-order" ]]; then
+  ORDER_UI="$(compute_order "$CRATES_UI_DIR/Cargo.toml" ui)"
+else
+  ORDER_UI=""
+fi
 
 # --- 彩排用临时 patch（不落盘）---------------------------------------------
 patch_flags() {
@@ -297,6 +311,9 @@ fi
 
 if [[ $ROOT_ONLY -eq 1 ]]; then
   echo "=== --root-only: 跳过 crates-ui 6 个库 crate ===" | tee -a "$LOG"
+elif [[ $UI_ONLY -eq 0 && $WITH_UI -eq 0 ]]; then
+  echo "=== crates-ui 冻结中（owner 2026-11-04 裁决）: 跳过 crates-ui 6 个库 crate ===" \
+       "（解冻需显式 --with-crates-ui; 解除条件 = 前端重建完成后发 rc.6）===" | tee -a "$LOG"
 else
   while IFS=$'\t' read -r crate dir; do
     [[ -z "$crate" ]] && continue
