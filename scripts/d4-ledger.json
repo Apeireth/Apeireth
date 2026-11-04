@@ -160,6 +160,20 @@
       "status": "out-of-scope"
     },
     {
+      "module": "forget_coordinator",
+      "loc": 613,
+      "layer": "D5",
+      "kind": "infra",
+      "consumes": "Text",
+      "produces": "Gap",
+      "measurable_by": "not-applicable",
+      "note": "遗忘协调（D-9 基建）",
+      "delta_recall": null,
+      "delta_grounded": null,
+      "measure_note": null,
+      "status": "out-of-scope"
+    },
+    {
       "module": "streams",
       "loc": 587,
       "layer": "D1",
@@ -196,20 +210,6 @@
       "produces": "Gap",
       "measurable_by": "not-applicable",
       "note": "召回缺口诊断 Hit/RankedOut/NotInPool（评估基建）",
-      "delta_recall": null,
-      "delta_grounded": null,
-      "measure_note": null,
-      "status": "out-of-scope"
-    },
-    {
-      "module": "forget_coordinator",
-      "loc": 534,
-      "layer": "D5",
-      "kind": "infra",
-      "consumes": "Text",
-      "produces": "Gap",
-      "measurable_by": "not-applicable",
-      "note": "遗忘协调（D-9 基建）",
       "delta_recall": null,
       "delta_grounded": null,
       "measure_note": null,
