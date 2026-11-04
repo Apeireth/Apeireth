@@ -562,6 +562,28 @@ note = "私有护城河 = 本仓内的私有插件包（实现引擎既有 4 个
 
 **当前口径**：crates.io 实际可发 **32 个**（全部 `2.0.0-rc.5`）；明确不发 **6 个**（4 adapter 私有产品面 + `ui-demo` 试点应用 + `bench-harness` bench-only；另有 2 个 fuzz crate 在独立 workspace，`publish = false`）。
 
+### 10.4.2 S4/S5 的实际落地形态（2026-11-04）—— 私有仓已建立，跨仓走 git + 精确 SHA
+
+**事实**：owner 2026-11-04 裁定「路线 A」（引擎投影 + 宿主 CSS 承担布局/动效），并由前端**引擎线建立了私有仓 `Apeireth/ui-desktop`**（`crates/apeireth-desktop-ui`，wasm32 应用层，r10 设计落地）。
+
+**⚠️ 落地形态与本 ADR §4 的原计划不同**（原计划 = `git filter-repo` 拆历史 + 跨仓改写为 crates.io 版本依赖）：
+
+| | 原计划（S4/S5） | **实际落地** |
+|---|---|---|
+| 产品侧历史 | filter-repo 拆出来 | **不迁历史** —— 新私有仓从零建（应用层无历史包袱） |
+| 跨仓依赖 | crates.io **版本**依赖 | **`git` + 精确 commit SHA** 依赖 |
+| 引擎迭代门槛 | 每次引擎改动要 publish 才能被产品用 | **无 publish 门槛**（SHA 直接指 commit） |
+| 可复现性 | 版本号语义 | **SHA 锚定** ⇒ 同一份代码在不同时间构建出同一结果 |
+
+**为什么这个变体更好**（且不违反本 ADR 的任何条款）：① 引擎迭代不必等 publish 门槛 —— publish 只在「要发版给外部用户」时才必要；② SHA 锁满足「每个数字必须可复核」；③ 依赖方向**单向**（私有 → 公开**不会**发生）⇒ 私有性不被打破 —— 私有仓根 manifest 已把这条论证写进代码注释。**代价**：引擎更新要显式改 SHA（私有仓 CHANGELOG 记一行）—— 这是有意的摩擦，不是缺陷。
+
+⇒ **S4/S5 实质已完成**（以「新私有仓 + SHA 依赖」形式，比原计划更轻）。契约 §[[workspace.repos]] 已登记第三段 `product-ui`。
+
+**⭐ 私有仓 wasm 胶水版本互斥（2026-11-04 实测发现并修复）**：私有仓 app crate 原钉 `wasm-bindgen =0.2.106` / `wasm-bindgen-futures =0.4.46` / `wasm-bindgen-test =0.3.46`，而它自己钉 `js-sys =0.3.106`。crates.io API 实测的传递约束：`js-sys 0.3.106` 要求 **`wasm-bindgen =0.2.129`**；`wasm-bindgen-futures 0.4.46` 要求 `wasm-bindgen =0.2.96`；`wasm-bindgen-test 0.3.46` 要求 `wasm-bindgen =0.2.96`。⇒ **2 处互斥，私有仓 cargo 解析必然失败**（确定性冲突，无需实跑即可判定）。已改为与引擎 rev `63349883` 完全一致的一组：**`wasm-bindgen =0.2.129` / `wasm-bindgen-futures =0.4.79` / `wasm-bindgen-test =0.3.79`**（实测 `wasm-bindgen-test 0.3.79` 要求 `wasm-bindgen =0.2.129` + `wasm-bindgen-futures =0.4.79` ⇒ 三件精确对齐，0 互斥）。**私有仓当时尚无任何提交 ⇒ 该修复无历史负担**（改动落在其首个 commit 前）。
+
+**⚠️ crates.io 侧双通道口径（待 owner 明确）**：crates.io 上 `apeireth-ui*` 6 个 crate 停在 **`2.0.0-rc.5`**（2026-11-01 发布，基线 = 主仓 `16d0a680`，即**重建前的旧代码**），而私有仓消费的是引擎线 rev `63349883`（`ui-engine-w0`，含 `ui-app` / `ui-scene` / `ui-time` 三个主仓尚未有的 crate）。⇒ **同一引擎有两个版本口径**（rc.5 vs SHA）。三条路：① 重建期 crates.io 侧**冻结在 rc.5**（占名 + 早期可用），W2/W3 稳定后发 rc.6 统一（**推荐**）；② 私有仓改用 crates.io 版本依赖（牺牲迭代速度）；③ 私有仓双写（复杂，不取）。
+⇒ 附带效应：等前端分支合并回主仓，主仓 `crates-ui/` 会多出 `ui-app` / `ui-scene` / `ui-time` ⇒ 契约 engine 段清单要更新，且**新守卫会立刻报**「可发布但未登记」（这三个 crate `publish` 未设 ⇒ 默认 true）⇒ 合并时须同步处理。
+
 ### 10.5 下一步
 
 1. **owner**：注册 crates.io 账号（组织 `Apeireth`）→ 创建 API token → 交给施工线（手册 [docs/04-internal/engine-publish-runbook.md](../04-internal/engine-publish-runbook.md) §2）。

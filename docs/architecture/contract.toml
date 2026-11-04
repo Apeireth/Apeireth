@@ -89,6 +89,24 @@ consumes = "engine"
 adr = "docs/adr/0017-engine-product-repo-split.md"
 note = "私有护城河 = 本仓内的私有插件包（实现引擎既有 4 个扩展点，不 fork 引擎）"
 
+[[workspace.repos]]
+id = "product-ui"
+visibility = "private"
+crates = ["apeireth-desktop-ui"]
+paths = []                      # 不在本仓（独立私有仓 Apeireth/ui-desktop）
+publish = "none"
+consumes = "engine"
+adr = "docs/adr/0017-engine-product-repo-split.md"
+note = "owner 2026-11-04 路线 A 裁定的落地仓（r10 设计在自研引擎上的 wasm32 落地应用）"
+# 跨仓依赖机制（S5 实现变体，2026-11-04 实测落地）:
+#   私有仓通过 `git = https://github.com/Apeireth/Apeireth.git` + **精确 commit SHA**
+#   消费公开主仓的 crates-ui/，**不走 crates.io 版本依赖**。
+#   理由: ① 引擎迭代不必等 publish 门槛（publish 只在「要发版给外部用户」时才必要）；
+#         ② SHA 锁 ⇒ 构建可复现（分支会动 ⇒ 同一份代码在不同时间构建出不同结果）；
+#         ③ 依赖方向单向（私有 → 公开不会发生）⇒ 私有性不被打破。
+#   代价: 引擎更新要显式改 SHA（私有仓 CHANGELOG 记一行）—— 这是有意的摩擦，不是缺陷。
+cross_repo_dep = "git+rev(exact-sha)"
+
 [locked]
 # 只引用, 不复制数值; 守卫检查契约批不触碰这些文件。
 nine_anchors = "crates/foundation/core/src/eight_anchors.rs"
