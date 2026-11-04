@@ -1194,6 +1194,24 @@ quota（`check_quota`）仍是桩，但都返**显式错误码**（不 panic、�
 
 ### 5.5 待判 31 条 —— 人工过筛结论
 
+### 2026-11-04 增补：CI 积压根治（PR 侧 `paths` 过滤）
+
+> ⭐ **CI 积压的根因不是 `concurrency`**（它只对 RUNNING 去重、对 QUEUED 无效），
+> 而是 **PR 侧没有 `paths` 过滤** ⇒ ⇒ 每个 push 都触发**全部** workflow
+> ⇒ ⇒ 含最重的 OS matrix / Coverage / Kani / Miri ⇒ ⇒ runner 排队 ⇒ ⇒ 积压。
+>
+> ⇒ ⇒ 已在 **9 个重 workflow** 的 PR 侧加 `paths`（`crates/**` · `Cargo.toml` ·
+> `Cargo.lock` · `rust-toolchain.toml` · `.cargo/**` · `fuzz/**` ·
+> `frontend/**/src-tauri/**` · frontend 包清单 · 该 workflow 自身）
+> ⇒ ⇒ **纯文档/台账改动不再触发重门禁**；代码/依赖/工具链改动**照跑**。
+>
+> ⚠️ **一次性成本**：改 workflow **自身文件**必然匹配 paths ⇒ ⇒ **加 paths 的那一批
+> 仍会跑满** ⇒ ⇒ 效果要从**下一批**（纯文档改动）才看得出来。
+>
+> ⚠️ **流程纪律**：每次 push 之后顺手跑一次
+> `cancel_superseded_runs.py`（取消**过时 sha** 的 queued run）
+> ⇒ ⇒ 否则积压只增不减（实测曾堆到 74 个）。
+
 > ⚠️ **口径纪律（2026-11-03 补）**：本节是**过筛时的快照**，**§5.x 各小节才是权威**
 > （它们记录了每条的**落地证据**）⇒ ⇒ **两处不一致时以 §5.x 为准，并回来改本节**。
 > ⇒ ⇒ **本节的「A 类计数」只统计「本表里还没标 ✅/🔶/🔁 的行」**
