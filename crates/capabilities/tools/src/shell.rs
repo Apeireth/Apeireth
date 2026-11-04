@@ -142,20 +142,21 @@ impl TrustedShellConfig {
     }
 }
 
+/// 工具调用参数 (未知字段拒绝)。
 #[derive(Debug, Deserialize)]
-struct ShellParams {
-    command: String,
-    cwd: Option<String>,
-    timeout_ms: Option<u64>,
+#[serde(deny_unknown_fields)]
+pub struct ShellParams {
+    pub command: String,
+    pub cwd: Option<String>,
+    pub timeout_ms: Option<u64>,
 }
 
 const SHELL_FROZEN_VERSION: u32 = 1;
 
 /// The exact, versioned execution inputs frozen at approval time.
 ///
-/// This is Shell's own payload schema. Runtime treats it as opaque
-/// `serde_json::Value`; Shell owns deserialization and must execute these
-/// fields — and only these fields — when resuming an approved operation.
+/// This is Shell's own payload schema. Runtime treats it as opaque `serde_json::Value`; Shell owns
+/// deserialization and must execute these fields — and only these fields — when resuming an approved operation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ShellFrozenInvocation {
     version: u32,
@@ -363,9 +364,8 @@ impl ShellTool {
         Ok(vars)
     }
 
-    /// W1 §2.4 (2026-10-10): 沙箱开关决定隔离要求集 —— 开 = 在历史集之上**要求**
-    /// 文件+网络隔离 Enforced (AppContainer 实施; 平台无能力即拒绝执行, 绝不裸跑),
-    /// 关 = 维持历史要求集。
+    /// W1 §2.4 (2026-10-10): 沙箱开关决定隔离要求集 —— 开 = 在历史集之上**要求**文件+网络隔离
+    /// Enforced (AppContainer 实施; 平台无能力即拒绝执行, 绝不裸跑), 关 = 维持历史要求集。
     fn isolation_requirements_for(sandbox: bool) -> IsolationRequirement {
         let base = Self::base_isolation_requirements();
         if sandbox {

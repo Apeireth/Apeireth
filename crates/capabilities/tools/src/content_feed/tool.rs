@@ -18,11 +18,10 @@
 //! 受控拉取 → 结构化摘要 → UntrustedEnvelope (L2 封套披露语义) → EpisodeSink 同源写入
 //! ```
 //!
-//! 工具结果**只含元数据** (订阅 id / 来源 URL / 条数 / episode id / 成败真因),
-//! 不含任何拉取到的标题/正文 —— 内容只在记忆流里, 日后经 L2 检索披露
-//! (封套) 进提示词。摘要与 episode 内容之间的隔离由
-//! [`apeireth_orchestration::untrusted_envelope`] 承载 (固定警示头 + 显式
-//! 边界 + 边界伪造转义)。
+//! 工具结果**只含元数据** (订阅 id / 来源 URL / 条数 / episode id / 成败真因), 不含任何拉取到的
+//! 标题/正文 —— 内容只在记忆流里, 日后经 L2 检索披露 (封套) 进提示词。摘要与 episode 内容之间的
+//! 隔离由 [`apeireth_orchestration::untrusted_envelope`] 承载 (固定警示头 + 显式边界 +
+//! 边界伪造转义)。
 //!
 //! # 入记忆流 (EpisodeSink 同源, 未保护记忆)
 //!
@@ -231,16 +230,17 @@ impl ContentFeedConfig {
     }
 }
 
-/// 拉取面参数 (动作 + 可选 id / url / kind)。
+/// 拉取面参数 (动作 + 可选 id / url / kind; 未知字段拒绝)。
 #[derive(Debug, Deserialize)]
-struct ContentFeedParams {
-    action: String,
+#[serde(deny_unknown_fields)]
+pub struct ContentFeedParams {
+    pub action: String,
     #[serde(default)]
-    id: Option<String>,
+    pub id: Option<String>,
     #[serde(default)]
-    url: Option<String>,
+    pub url: Option<String>,
     #[serde(default)]
-    kind: Option<String>,
+    pub kind: Option<String>,
 }
 
 /// 冻结的订阅快照 (pull 审批载荷: 人批的就是这批 URL)。

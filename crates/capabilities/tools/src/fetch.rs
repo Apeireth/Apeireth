@@ -153,9 +153,11 @@ impl FetchConfig {
     }
 }
 
+/// 工具调用参数 (未知字段拒绝)。
 #[derive(Debug, Deserialize)]
-struct FetchParams {
-    url: String,
+#[serde(deny_unknown_fields)]
+pub struct FetchParams {
+    pub url: String,
 }
 
 /// The exact, versioned execution inputs frozen at approval time.
@@ -345,10 +347,9 @@ impl FetchTool {
             .with_name("fetch");
         }
 
-        // Reconstruct the transport from the frozen declarative policy and
-        // bounds. DNS is intentionally not frozen: the actual connection is
-        // still resolved and revalidated at execution time by the controlled
-        // transport.
+        // Reconstruct the transport from the frozen declarative policy and bounds. DNS is
+        // intentionally not frozen: the actual connection is still resolved and revalidated at
+        // execution time by the controlled transport.
         let egress = ControlledEgress::new(frozen.egress_policy.clone())
             .with_timeout(Duration::from_millis(frozen.timeout_ms))
             .with_max_response_bytes(frozen.max_response_bytes)
@@ -365,10 +366,9 @@ impl FetchTool {
         user_agent: Option<&str>,
         url: &str,
     ) -> ToolResult {
-        // Process-local scheduling: cache lookup happens before the network;
-        // the rate limiter consumes quota before the request is issued (the
-        // quota is spent whether or not the remote succeeds, matching the
-        // baseline semantics).
+        // Process-local scheduling: cache lookup happens before the network; the rate
+        // limiter consumes quota before the request is issued (the quota is spent whether or
+        // not the remote succeeds, matching the baseline semantics).
         let cache = self.config.response_cache();
         if let Some(cache) = cache {
             if let Some(cached) = cache.get(url) {
