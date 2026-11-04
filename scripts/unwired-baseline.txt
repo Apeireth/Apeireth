@@ -57,36 +57,33 @@
 # --- G1（0 条）：集成测试辅助 API。保留合理，但**不应增长**。
 
 
-# --- G3（28 条）：生物 / 认知 / 编排的**观测与查询 API**。生物族默认关 ⇒ 打开前不会走到。
+# --- G3（25 条）：生物 / 认知 / 编排的**观测与查询 API**。生物族默认关 ⇒ 打开前不会走到。
 
-orphan bio_care_assembly_from_env  # G3
-orphan bio_circadian_wiring_from_env  # G3
-orphan bio_lifecycle_module_from_env_value  # G3
-orphan deviation  # G3
-orphan disarm  # G3
-orphan engine_mut  # G3
-orphan entity_mut  # G3
-orphan graph_snapshot  # G3
-orphan load_graph  # G3
-orphan mcts_search  # G3
-orphan mine_and_load  # G3
-orphan mood_trend  # G3
-orphan no_bio_care_inputs  # G3
-orphan recall_by_mood  # G3
-orphan record_tool_result  # G3
-orphan set_last_hold  # G3
-orphan should_suppress  # G3
-orphan state_mut  # G3
-orphan stop_all  # G3
-orphan to_prompt  # G3
-orphan with_attrs  # G3
-orphan with_deadline  # G3
-orphan with_llm_proposer  # G3
-orphan with_material_source  # G3
-orphan with_miner  # G3
-orphan with_quorum_gate_probe  # G3
-orphan with_system_markers  # G3
-orphan with_task_type  # G3
+orphan bio_care_assembly_from_env  # G3  生物族默认关（`APEIRETH_ENABLE_BIO_CARE_CANDIDATES=1` 才开 ⇒ fail-closed）⇒ 关着走不到 ⇒ 零引用是设计如此
+orphan bio_circadian_wiring_from_env  # G3  生物族默认关（`APEIRETH_ENABLE_BIO_CIRCADIAN` 才开）⇒ 零引用是设计如此
+orphan bio_lifecycle_module_from_env_value  # G3  生物族默认关（`APEIRETH_ENABLE_BIO_LIFECYCLE=1` 才开 ⇒ fail-closed）⇒ 零引用是设计如此
+orphan deviation  # G3  organ 族未接生产（实测 `apeireth_organ::` 仅现于 tests/）⇒ 零引用是「族未接线」的结果，不是「没实现」
+orphan disarm  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线
+orphan graph_snapshot  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线
+orphan load_graph  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线
+orphan mcts_search  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线
+orphan mine_and_load  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线
+orphan mood_trend  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线
+orphan no_bio_care_inputs  # G3  生物族默认关 ⇒ 零引用是设计如此
+orphan recall_by_mood  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线
+orphan record_tool_result  # G3  生物族默认关 ⇒ 零引用是设计如此
+orphan set_last_hold  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线
+orphan should_suppress  # G3  生物族默认关 ⇒ 零引用是设计如此
+orphan stop_all  # G3  生物/器官编排面默认关 ⇒ 零引用是设计如此
+orphan to_prompt  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线
+orphan with_attrs  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线
+orphan with_deadline  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线
+orphan with_llm_proposer  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线
+orphan with_material_source  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线
+orphan with_miner  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线
+orphan with_quorum_gate_probe  # G3  生物族默认关 ⇒ 零引用是设计如此
+orphan with_system_markers  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线
+orphan with_task_type  # G3  认知编排面默认关 ⇒ 零引用是设计如此
 
 # --- G4（31 条）：**注入点 / 探测口**（`with_*`）。生产装配走 `install_*`。
 
@@ -122,26 +119,25 @@ orphan with_task_scope  # G4
 orphan with_user_agent  # G4
 orphan with_voices_error  # G4
 
-# --- G5（2 条）：**待判**：其余。逐条要人回答「真没人调，还是判据看不见」。**还债从这里开始。**
+# --- G5（4 条）：**待判**：其余。逐条要人回答「真没人调，还是判据看不见」。**还债从这里开始。**
 
 orphan forget_principal_with_permit  # G5
 orphan research_coordinated_forget_with_permit  # G5
+orphan doc_ops_capability_shared  # G5  ⚠️ 2026-11-04 级联：删 `doc_ops_capability`（零调用点）后失去唯一调用者 ⇒ ⇒ 待判：**「不带 live 策略槽」这个装配变体还要不要**（生产用 `_shared_with_slot`）
+orphan sheet_ops_capability_shared  # G5  ⚠️ 2026-11-04 级联：删 `sheet_ops_capability`（零调用点）后失去唯一调用者 ⇒ ⇒ 待判：**「不带 live 策略槽」这个装配变体还要不要**（生产用 `_shared_with_slot`）
 
-# --- G6（71 条）：**冗余 API 表面 / 宿主入口**：同一能力有**主路径在用**，这些是并行入口或便利包装；或设计上是给宿主/外部调用的公开 API。已逐条核查（见 `unwired-debt-taxonomy-2026-10-24.md` 与 `unwired-debt-audit-2026-10-24.md`）。
+# --- G6（66 条）：**冗余 API 表面 / 宿主入口**：同一能力有**主路径在用**，这些是并行入口或便利包装；或设计上是给宿主/外部调用的公开 API。已逐条核查（见 `unwired-debt-taxonomy-2026-10-24.md` 与 `unwired-debt-audit-2026-10-24.md`）。
 
 orphan with_used  # G6
 orphan with_len  # G6
 orphan constrain_to_trusted  # G6
 orphan decompose_default  # G6
-orphan doc_ops_capability  # G6
 orphan extract_experience_from_episode  # G6
 orphan save_to_cluster  # G6
 orphan serve_canonical  # G6
-orphan sheet_ops_capability  # G6
 orphan trait_locks_path  # G6
 orphan validate_schedule  # G6
 orphan recall_with_policy  # G6
-orphan accumulator_mut  # G6
 orphan active_profile  # G6
 orphan adapt_gate  # G6
 orphan add_action  # G6
@@ -155,8 +151,6 @@ orphan dispatch_gateway_serve  # G6
 orphan ensure_governance  # G6
 orphan execute_streaming  # G6
 orphan explicit_allow_list  # G6
-orphan extract_features  # G6
-orphan extract_features_v2  # G6
 orphan family_enforced  # G6
 orphan fetch_governed  # G6
 orphan get_for_subject  # G6
@@ -203,6 +197,6 @@ orphan skill_distill_capability  # G6
 
 # --- G7（3 条）：**owner 裁定不接**（有意保留，不是遗漏）：W1 IM 通道（2026-10-23 裁定暂缓）、W5 哲学拦截层（2026-10-24 裁定不接）。保留代码是有意的 —— 解冻条件写在 `docs/status/unwired-ledger.md`。
 
-orphan im_router  # G7
-orphan closure_of  # G7
-orphan verdict_keys_for_principle  # G7
+orphan im_router  # G7  owner 裁定不接（W1 IM 通道，2026-10-23 裁定暂缓）⇒ 有意保留，不是遗漏
+orphan closure_of  # G7  owner 裁定不接（W5 哲学向）⇒ 有意保留，不是遗漏
+orphan verdict_keys_for_principle  # G7  owner 裁定不接（W5 哲学向）⇒ 有意保留，不是遗漏

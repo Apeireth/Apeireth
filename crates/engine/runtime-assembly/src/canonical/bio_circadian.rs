@@ -337,11 +337,6 @@ impl BioCircadianGate {
         &self.state
     }
 
-    /// 门状态 (可变; 宿主注入睡眠压力等显式输入)。
-    pub fn state_mut(&mut self) -> &mut CircadianGateState {
-        &mut self.state
-    }
-
     /// 显式注入睡眠压力 (便捷口, 等价 `state_mut().set_pressure`)。
     pub fn set_pressure(&mut self, pressure: SleepPressure) {
         self.state.set_pressure(pressure);

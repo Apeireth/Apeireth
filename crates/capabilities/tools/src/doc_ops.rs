@@ -4574,11 +4574,6 @@ pub fn doc_ops_pipeline_with_slot(
     )
 }
 
-/// 组装生产工具面: 受控读写族 + 五段流水线 (模型侧一个能力)。
-pub fn doc_ops_capability(config: DocOpsConfig) -> Arc<dyn ToolCapability> {
-    doc_ops_capability_shared(config, DocOpsCounters::new())
-}
-
 /// 组装生产工具面 + 共享计数器 (自述创作节与工具面同一真值源)。
 pub fn doc_ops_capability_shared(
     config: DocOpsConfig,

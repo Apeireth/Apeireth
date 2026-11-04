@@ -472,17 +472,6 @@ impl BehaviorChain {
         }
         saw_delete && saw_external
     }
-
-    /// Summarize chain features for ML readiness and data recording.
-    pub fn extract_features(&self) -> serde_json::Value {
-        serde_json::to_value(crate::features::AgentChainFeatureV1::from_chain(self))
-            .unwrap_or_else(|_| serde_json::json!({"schema_version": "AgentChainFeatureV1"}))
-    }
-
-    pub fn extract_features_v2(&self) -> serde_json::Value {
-        serde_json::to_value(crate::features_v2::AgentChainFeatureV2::from_chain(self))
-            .unwrap_or_else(|_| serde_json::json!({"schema_version": "AgentChainFeatureV2"}))
-    }
 }
 
 impl ActionNode {
