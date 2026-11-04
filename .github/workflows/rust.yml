@@ -22,6 +22,22 @@ on:
   push:
     branches: [main, feature/cognitive-infrastructure-vnext, feature/memory-v2.2-production-completion]
   pull_request:
+    # ⭐ **paths 过滤**（2026-11-04 加）：CI 积压的根因是**PR 侧无过滤**
+    # ⇒ ⇒ 每个 push 都触发全部 34 个 workflow（含 Kani / Miri / Coverage / OS matrix）
+    # ⇒ ⇒ GitHub runner 排队 ⇒ ⇒ 积压 32 个。
+    # ⇒ ⇒ 纯文档/台账改动**不触发**本 workflow（它守的是代码）
+    # ⇒ ⇒ 代码 / 依赖 / 工具链 / 本 workflow 自身的改动**照跑**。
+    paths:
+      - 'crates/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'rust-toolchain.toml'
+      - '.cargo/**'
+      - 'fuzz/**'
+      - 'frontend/**/src-tauri/**'
+      - 'frontend/**/package.json'
+      - 'frontend/**/pnpm-lock.yaml'
+      - '.github/workflows/rust.yml'
     branches: ['**']
   workflow_dispatch:
 
