@@ -3,8 +3,8 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: 655cfe6996337b870ec0ba8bb1d21ed563aa5c554a4957a45385c407757edee2
-claims_total: 48
+claims_sha256: b57da8c4ae05151cbe05d1c2b215caf5c256b77ce69259d7b3630e4ff8c5c8d0
+claims_total: 50
 items:
   - id: "rt.provider_router"
     capability: "跨 provider fallback + 健康态（运行时路由）"
@@ -1249,3 +1249,37 @@ items:
       claims_id: "rt.mesh_local_worker"
     gaps:
       - "未达 PRODUCTION WIRED：Optional portable Host composition, fixed configured loopback UDP peer only. Lifecycle-owned worker calls its registered Internal exchange through the…"
+  - id: "mem.retrieval_ranking"
+    capability: "检索排序契约（混合打分：BM25 词面 + 向量 + coverage 权重 0.5）"
+    implemented:
+      sources:
+        - "crates/engine/memory/src/retrieval_pipeline.rs"
+        - "crates/engine/memory/src/coordinator.rs"
+    wired:
+      production_refs:
+        - "crates/engine/memory/src/coordinator.rs"
+        - "crates/engine/memory/src/retrieval_pipeline.rs"
+    default_enabled: true
+    validated:
+      tests:
+        - "crates/engine/memory/src/retrieval_pipeline.rs"
+        - "crates/engine/memory/src/coordinator.rs"
+      claims_id: "mem.retrieval_ranking"
+    gaps:
+      []
+  - id: "mem.injection_contract"
+    capability: "注入契约（召回片段按预算硬上限截断，预算不可超）"
+    implemented:
+      sources:
+        - "crates/engine/memory/src/coordinator.rs"
+        - "crates/engine/memory/tests/golden_injection2.rs"
+    wired:
+      production_refs:
+        - "crates/engine/memory/src/coordinator.rs"
+    default_enabled: true
+    validated:
+      tests:
+        - "crates/engine/memory/tests/golden_injection2.rs"
+      claims_id: "mem.injection_contract"
+    gaps:
+      []

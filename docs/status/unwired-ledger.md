@@ -227,7 +227,16 @@
 >   ⇒ ⇒ **仍非生产消费** ⇒ ⇒ **剩余缺口 = 「把 4 个 MCP 工具注册进工具面」**
 >   ⇒ ⇒ ⚠️ **那是 `crates/capabilities/tools` 的区**（工具清单 = 产品契约）⇒ ⇒ **需总指挥拍板**
 >   ⇒ ⇒ 原判「A 类真缺口（库级 IMPLEMENTED，生产零消费）」的**理由已变**
->   （**不是「没实现」，是「实现好了但没注册进工具面」**）⇒ ⇒ 分类待他裁决后更新
+>   （**不是「没实现」，是「实现好了但没注册进工具面」**）
+   ⇒ ⇒ **✅ 总指挥裁决（2026-11-04）**：**分类 = B 类「实现完成 · 待注册进工具面」**
+   ⇒ ⇒ **不是 A 类真缺口**（库侧实现已完成，且 11-03 已修三处假实现 + 两处数据打通）
+   ⇒ ⇒ **拍板：注册进工具面**（工具清单 = 产品契约 ⇒ 决策人是我）
+   ⇒ ⇒ 注册点 = `crates/engine/runtime-assembly/src/canonical/production.rs`
+   的 `collect_tool_module(...)`（工具模块 push 进 `Vec<Arc<dyn Plugin>>`）
+   ⇒ ⇒ 依赖方向可行：`apeireth-tools-canonical` 不依赖 `apeireth-memory`，
+   而 `apeireth-memory` 不依赖 tools ⇒ ⇒ **tools → memory 不构成环**
+   ⇒ ⇒ ⚠️ **当前状态 =「已拍板 · 待实施」**（注册实现**尚未**完成）
+   ⇒ ⇒ ⚠️ **不许**写成「已接线」⇒ ⇒ 这是「口径不许超前于事实」的纪律
 >   （模块自述指向 v2 plan §9.5 的「拆独立 crate」计划）；
 > - `online_calibration::AdaptiveBaseline` ⇒ 库外 **0** 且**只有 `lib.rs` 重导出**（无真实消费者）
 >   ⇒ ⇒ **A 类真缺口**（库级 IMPLEMENTED，零真实消费）；

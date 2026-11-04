@@ -1019,3 +1019,35 @@ claims:
     owner: runtime
     next_review: "2026-11-20"
     notes: "Optional portable Host composition, fixed configured loopback UDP peer only. Lifecycle-owned worker calls its registered Internal exchange through the same deterministic Dispatcher/System One gate before each bind/send/receive. Public connect acknowledges the existing Host-scheduled task; it does not authorize arbitrary user-delegated destinations. Accepted/Handle/status, private packet isolation, authorized status Event, Main-stop independence, module drain/new generation, Deny/unavailable/no datagram and reply correlation use real Runtime/socket tests with scripted supervision. Plaintext software correlation is not cryptographic authentication/encryption. No live selected model, external device/LAN/NAT/discovery or durable job recovery validation; no default/universal protection claim. C01/C02 and D35 remain open. See ale-system-one-p4-2026-10-30.md.；2026-10-30 CI 修复复核：普通消息期限不再从短原生 socket 超时倍乘，原生策略与 Host 上限保留；丢包 fixture 不补发旧回复，回归核验闭合错误与同一实例/Session 的后续成功。原生回归超时保持，定向零重试重复运行、普通定向测试及 workspace 全量 test/clippy/fmt 本地通过；默认 OFF/Partial 保留，远端平台结果另验收。"
+
+  - id: mem.retrieval_ranking
+    title: "检索排序契约（混合打分：BM25 词面 + 向量 + coverage 权重 0.5）"
+    level: PRODUCTION WIRED
+    default: "ON"
+    switch_env: null
+    sources:
+      - crates/engine/memory/src/retrieval_pipeline.rs
+      - crates/engine/memory/src/coordinator.rs
+    tests:
+      - crates/engine/memory/src/retrieval_pipeline.rs
+      - crates/engine/memory/src/coordinator.rs
+    verified_at: d7d24823ed76333b06f1ee46bfdcbc31b3daa6b1
+    verify_cmd: "cargo test -p apeireth-memory --lib"
+    owner: memory
+    next_review: "2026-12-04"
+    notes: "总指挥 2026-11-04 登记（记忆线收口清单 §6 报备的口径缺位）。生产路径：tool.memory.retrieve → MemoryCoordinator::recall（coordinator.rs:685）→ HybridRetrievalPipeline；coverage 以固定权重 0.5 参与打分（retrieval_pipeline.rs:137，COVERAGE_WEIGHT 常量在 :469），与 BM25 词面分、向量源共同构成混合排序。⚠️ 此前该契约在真源里无记录 ⇒ 「coverage 接进生产排序」这条成果查不到。"
+  - id: mem.injection_contract
+    title: "注入契约（召回片段按预算硬上限截断，预算不可超）"
+    level: PRODUCTION WIRED
+    default: "ON"
+    switch_env: null
+    sources:
+      - crates/engine/memory/src/coordinator.rs
+      - crates/engine/memory/tests/golden_injection2.rs
+    tests:
+      - crates/engine/memory/tests/golden_injection2.rs
+    verified_at: d7d24823ed76333b06f1ee46bfdcbc31b3daa6b1
+    verify_cmd: "cargo test -p apeireth-memory --test golden_injection2"
+    owner: memory
+    next_review: "2026-12-04"
+    notes: "总指挥 2026-11-04 登记（记忆线收口清单 §6 报备的口径缺位）。注入侧的可核验契约 = 注入预算为**硬上限**（golden_injection2.rs 的 total_budget_is_a_hard_cap 等用例）；片段取窗口内的正文子串，不得改写。⚠️ 此前该契约在真源里无记录。"

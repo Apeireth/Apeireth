@@ -53,6 +53,8 @@
 | `rt.system_one_internal` | IMPLEMENTED | OFF | - | `5c74f955e62c` | 2026-11-20 |
 | `rt.module_messages` | IMPLEMENTED | OFF | - | `5392e56c3218` | 2026-11-20 |
 | `rt.mesh_local_worker` | IMPLEMENTED | OFF | - | `5c74f955e62c` | 2026-11-20 |
+| `mem.retrieval_ranking` | PRODUCTION WIRED | ON | - | `d7d24823ed76` | 2026-12-04 |
+| `mem.injection_contract` | PRODUCTION WIRED | ON | - | `d7d24823ed76` | 2026-12-04 |
 
 ## 使用
 
