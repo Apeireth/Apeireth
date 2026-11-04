@@ -17,8 +17,7 @@
 //! # 0 装诚实
 //! - 生命周期模块**不新增 `ModuleFamily` 变体**：env 开也只注册模块，不上
 //!   构造探针统计（构造点不上报，避免为单一模块膨胀族枚举）；
-//! - 状态仅进程内（无持久化）；`bio_lifecycle_probe` 未注册进 self_status
-//!   （Lead 后续）；无 live E2E；
+//! - 状态仅进程内（无持久化）；`bio_lifecycle_probe` 未注册进 self_status（Lead 后续）；无 live E2E；
 //! - 迟绑定槽只存**只读句柄**：槽空 = 该格 `null` + 真因「未接线」，不编值；
 //!   槽填 = 与生产同源句柄（guard 同一份免疫账 / care 生产者同一状态闭包 /
 //!   organ 模块同一门账 / runtime 只读快照）。**不新增开关、不做 I/O 写**。
@@ -935,10 +934,11 @@ mod tests {
         assert!(slots.is_empty(), "未武装 = fill 一律 no-op");
     }
 
-    /// ⑫ 默认关：开关关时自述帧与「只挂观测面、不注册任何 probe」逐字节一致，
-    /// 且迟绑定读取口一次都不被调用（槽没被 fill，registry 也没启用）。
+    /// ⑫ 默认关：开关关时自述帧逐字节不变（只挂观测面、不注册任何 probe；槽没被 fill，
+    /// registry 也没启用）；`tuning` 段读进程级全局生效值槽 ⇒ 持槽串行锁，防并行用例污染断言。
     #[test]
     fn bio_switch_off_keeps_the_frame_identical_and_never_reads() {
+        let _global = crate::canonical::self_tuning_wire::lock_tuning_global();
         let reads = Arc::new(AtomicUsize::new(0));
         let counting = {
             let reads = Arc::clone(&reads);

@@ -252,21 +252,28 @@ pub fn consolidation_cadence_turns() -> u64 {
     }
 }
 
+/// 生效值 override 是**进程级全局槽** ([`install_effective_values`] /
+/// [`clear_effective_overrides`]): 同一测试进程里凡触碰该槽的用例必须串行,
+/// 否则「装上 override→断言即时生效」的窗口会被并行用例的清理/重装打断
+/// (实测 flake: 断言读到别人清掉/换掉的槽值)。测试隔离用锁, 不改产品语义。
+///
+/// **跨模块共用** (仅测试编译): 自述帧里的 `tuning` 段也读该槽 ⇒ 读侧
+/// (帧比对用例) 与写侧 (装/清 override 的用例) 必须同持这一把锁, 否则帧比对
+/// 读到并行用例换掉的槽值 (实测 flake: `preset` 从 `balanced` 变 `custom`)。
+#[cfg(test)]
+pub(crate) static TUNING_GLOBAL_GUARD: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// 取生效值槽的跨模块串行锁 (仅测试编译; 持锁期间该槽不被并行用例改动)。
+#[cfg(test)]
+pub(crate) fn lock_tuning_global() -> std::sync::MutexGuard<'static, ()> {
+    TUNING_GLOBAL_GUARD
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// 生效值 override 是**进程级全局槽** ([`install_effective_values`] /
-    /// [`clear_effective_overrides`]): 同一测试进程里凡触碰该槽的用例必须串行,
-    /// 否则「装上 override→断言即时生效」的窗口会被并行用例的清理/重装打断
-    /// (实测 flake: 断言读到别人清掉/换掉的槽值)。测试隔离用锁, 不改产品语义。
-    static TUNING_GLOBAL_GUARD: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-    fn lock_tuning_global() -> std::sync::MutexGuard<'static, ()> {
-        TUNING_GLOBAL_GUARD
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-    }
 
     #[test]
     fn tuning_log_lands_beside_session_db() {
