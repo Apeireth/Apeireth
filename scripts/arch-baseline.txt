@@ -300,7 +300,7 @@ size crates/capabilities/tools/src/external.rs 2672
 size crates/capabilities/tools/src/git_write.rs 1256
 size crates/capabilities/tools/src/image_ops.rs 2233
 size crates/capabilities/tools/src/process/mod.rs 1233
-size crates/capabilities/tools/src/process/windows.rs 1448
+size crates/capabilities/tools/src/process/windows.rs 1463
 size crates/capabilities/tools/src/proposal.rs 1232
 size crates/capabilities/tools/src/recon/dotnet.rs 1233
 size crates/capabilities/tools/src/recon/yara.rs 1954
