@@ -1059,6 +1059,20 @@ impl<D: Dom> Renderer<D> {
         item: impl Fn(usize) -> VNode,
     ) -> Result<crate::virtual_list::VirtualPlan, DomError> {
         let plan = self.virtual_window_for(path, item_heights, overscan)?;
+        // ⭐⭐⭐ **空高度向量 ⇒ ⇒ 直接返回空计划**（E-172 修）。
+        //
+        // ## 为什么必须在这里挡（**不是**在 `plan_virtual_window` 里）
+        //
+        // `plan_virtual_window` 对空向量返回 `first = 0, last = 0`
+        // ⇒ ⇒ 看起来「正常」⇒ ⇒ 但下面 `sanitized[plan.first..=plan.last]`
+        // ⇒ ⇒ 在**空向量**上就是 `sanitized[0..=0]` ⇒ ⇒ ⇒ **越界 panic**。
+        //
+        // ⇒ ⇒ ⇒ 而「空列表」是**正常业务状态**（筛选后没有结果 / 数据还没来）
+        // ⇒ ⇒ ⇒ 它**不该**让整个渲染崩掉 ⇒ ⇒ ⇒ 这里显式挡掉。
+        if item_heights.is_empty() {
+            self.patch_children_at_path(path, Vec::new())?;
+            return Ok(plan);
+        }
         let sanitized: Vec<f64> = item_heights
             .iter()
             .map(|height| {
@@ -1122,6 +1136,12 @@ impl<D: Dom> Renderer<D> {
         item: impl Fn(usize) -> VNode,
     ) -> Result<crate::virtual_list::VirtualPlan, DomError> {
         let plan = self.virtual_window_for(&[], item_heights, overscan)?;
+        // ⭐⭐⭐ **空高度向量 ⇒ ⇒ 直接返回空计划**（E-172 修，根变体同款）。
+        //   ⇒ ⇒ 理由见 `patch_windowed_at_path` 里的同款注释。
+        if item_heights.is_empty() {
+            self.patch_children_at_path(&[], Vec::new())?;
+            return Ok(plan);
+        }
         let sanitized: Vec<f64> = item_heights
             .iter()
             .map(|height| {
@@ -3519,6 +3539,65 @@ mod tests {
             !renderer.focus_next(false).expect("Tab 必须成功"),
             "⭐ 陷阱内只有一个可聚焦元素 ⇒ ⇒ Tab **不该**移动（调用方据此不 prevent_default）"
         );
+    }
+
+    /// ⭐⭐⭐ **空列表不 panic**（E-172）。
+    ///
+    /// ## 这条缺陷是谁发现的
+    ///
+    /// ⇒ ⇒ L2 虚拟列表组件的施工者（子代理）在**接线时**撞到
+    /// ⇒ ⇒ 「引擎侧 `patch_windowed_at_path` 对空高度向量会 panic」
+    /// ⇒ ⇒ ⇒ **组件层**不该修**引擎层** ⇒ ⇒ ⇒ 报回引擎线。
+    ///
+    /// ## 缺陷原貌
+    ///
+    /// `plan_virtual_window` 对空向量返回 `first = 0, last = 0`（**看起来正常**）
+    /// ⇒ ⇒ 但 `sanitized[plan.first..=plan.last]` 在**空向量**上
+    /// ⇒ ⇒ 就是 `sanitized[0..=0]` ⇒ ⇒⇒ **越界 panic**。
+    ///
+    /// ## 为什么这条重要
+    ///
+    /// 「空列表」是**正常业务状态**（筛选后没有结果 / 数据还没来）
+    /// ⇒ ⇒ ⇒ 它**不该**让整个渲染崩掉。
+    #[test]
+    fn empty_height_vector_does_not_panic() {
+        let (mut renderer, _root) = renderer_with_dom();
+        renderer
+            .mount(
+                VNode::element("div")
+                    .child(
+                        VNode::element("div")
+                            .attr("class", "vlist")
+                            .child(VNode::element("div").attr("class", "row").build())
+                            .build(),
+                    )
+                    .build(),
+            )
+            .expect("挂载必须成功");
+        // ⭐⭐ 度量未注入 ⇒ ⇒ 引擎**显式拒绝**（`NotImplemented`）⇒ ⇒ **不猜窗口**
+        //   ⇒ ⇒ 这条才是 0 装口径（度量未就绪 ≠ 空列表）。
+        let refused =
+            renderer.patch_windowed_at_path(&[0], &[], 0, |_| VNode::element("div").build());
+        assert!(
+            matches!(refused, Err(DomError::NotImplemented)),
+            "⭐ 度量未就绪时必须显式拒绝（不得 panic、也不得猜）"
+        );
+
+        // ⭐⭐ 注入度量 ⇒ ⇒ 空高度向量 ⇒ ⇒ **不得 panic**（修复前是越界 panic）
+        let container = renderer.node_for_path(&[0]).expect("容器必须可定位");
+        renderer.dom().script_measurement(
+            container,
+            ElementBox::new(0.0, 0.0, 200.0, 200.0),
+            crate::dom::ScrollMetrics {
+                scroll_top: 0.0,
+                scroll_height: 0.0,
+                client_height: 200.0,
+            },
+        );
+        let plan = renderer
+            .patch_windowed_at_path(&[0], &[], 0, |_| VNode::element("div").build())
+            .expect("空列表必须优雅返回，而不是 panic");
+        assert_eq!(plan.count, 0, "⭐ 空列表的窗口应当是空的");
     }
 
     /// ⭐⭐ **1k 行只挂窗口**（L1-G5 规模不变量）：挂载数 O(窗口），不是 O(行数)。
