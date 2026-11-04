@@ -117,7 +117,7 @@ claims:
     tests:
       - crates/capabilities/tools/src/egress.rs
       - crates/capabilities/tools/src/fetch.rs
-    verified_at: 357e9780
+    verified_at: 85c18d41
     verify_cmd: "cargo test -p apeireth-tools-canonical --lib egress"
     owner: capabilities
     next_review: "2026-12-01"
@@ -134,7 +134,7 @@ claims:
       - crates/capabilities/tools/src/observed_gate.rs
     tests:
       - crates/capabilities/tools/src/object_access.rs
-    verified_at: 357e9780
+    verified_at: 85c18d41
     verify_cmd: "cargo test -p apeireth-tools-canonical --lib object_access"
     owner: capabilities
     next_review: "2026-12-01"
@@ -152,7 +152,7 @@ claims:
       - crates/engine/runtime-assembly/src/canonical/self_status_source.rs
     tests:
       - crates/capabilities/tools/src/exposure_audit/mod.rs
-    verified_at: 357e9780
+    verified_at: 85c18d41
     verify_cmd: "cargo test -p apeireth-tools-canonical --lib exposure_audit"
     owner: capabilities
     next_review: "2026-12-01"
@@ -187,7 +187,7 @@ claims:
       - crates/capabilities/tools/src/accountability_view.rs
       - crates/foundation/governance/src/authorization.rs
       - crates/adapters/cli/src/egress_command.rs
-    verified_at: 357e9780
+    verified_at: 85c18d41
     verify_cmd: "cargo test -p apeireth-runtime --lib egress && cargo test -p apeireth-runtime-assembly --lib egress_gate"
     owner: runtime
     next_review: "2026-12-01"
@@ -209,7 +209,7 @@ claims:
     tests:
       - crates/engine/memory/src/lesson.rs
       - crates/adapters/cli/src/lessons_command.rs
-    verified_at: 357e9780
+    verified_at: 85c18d41
     verify_cmd: "cargo test -p apeireth-memory --lib lesson && cargo test -p apeireth-cli --lib lessons_command"
     owner: memory
     next_review: "2026-12-01"

@@ -10,11 +10,11 @@
 | `tool.task_board` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_TASK_BOARD` | `357e9780` | 2026-11-20 |
 | `tool.mcp_bridge` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_MCP` | `357e9780` | 2026-11-20 |
 | `tool.voice_speak` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_VOICE_SPEAK` | `357e9780` | 2026-11-20 |
-| `sec.egress_control` | PRODUCTION WIRED | ON | - | `357e9780` | 2026-12-01 |
-| `sec.object_access` | PRODUCTION WIRED | ON | - | `357e9780` | 2026-12-01 |
-| `sec.exposure_audit` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_EXPOSURE_AUDIT` | `357e9780` | 2026-12-01 |
-| `sec.egress_gate` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_EGRESS_GATE` | `357e9780` | 2026-12-01 |
-| `mem.lesson_object` | PRODUCTION WIRED | ON | - | `357e9780` | 2026-12-01 |
+| `sec.egress_control` | PRODUCTION WIRED | ON | - | `85c18d41` | 2026-12-01 |
+| `sec.object_access` | PRODUCTION WIRED | ON | - | `85c18d41` | 2026-12-01 |
+| `sec.exposure_audit` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_EXPOSURE_AUDIT` | `85c18d41` | 2026-12-01 |
+| `sec.egress_gate` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_EGRESS_GATE` | `85c18d41` | 2026-12-01 |
+| `mem.lesson_object` | PRODUCTION WIRED | ON | - | `85c18d41` | 2026-12-01 |
 | `gap.memory_update` | PRODUCTION WIRED | ON | - | `357e9780` | 2026-11-20 |
 | `gap.prompt_stabilizer_unwired` | NOT IMPLEMENTED | - | - | `357e9780` | 2026-11-20 |
 | `sec.linux_containment` | IMPLEMENTED | - | - | `357e9780` | 2026-11-20 |
