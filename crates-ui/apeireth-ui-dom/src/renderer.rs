@@ -310,6 +310,10 @@ pub struct Renderer<D: Dom> {
     ///
     /// ⇒ ⇒ 这里存**每一层**的允许集合 ⇒ ⇒ 关掉一层 ⇒ ⇒ 还原**下面那层**。
     modal_layers: Vec<ModalLayer>,
+
+    /// ⭐⭐⭐ **键盘导航已装载**（E-174，幂等判据）。
+    keyboard_navigation_installed: bool,
+
     /// ⭐ **待补写的属性写回**（IME 组合期间被推迟的那些）。
     ///
     /// ## 为什么必须留队列（而不是"推迟就丢掉"）
@@ -440,6 +444,7 @@ impl<D: Dom> Renderer<D> {
             focus: FocusTracker::new(),
             focus_paths: std::collections::HashMap::new(),
             modal_layers: Vec::new(),
+            keyboard_navigation_installed: false,
             pending_value_writes: Vec::new(),
             deferred_value_writes: 0,
         }
@@ -448,6 +453,21 @@ impl<D: Dom> Renderer<D> {
     /// 读后端。
     pub fn dom(&self) -> &D {
         &self.dom
+    }
+
+    /// ⭐ **根节点**（E-174 的键盘导航装置要往它上面挂 `keydown`）。
+    pub fn root_node(&self) -> D::Node {
+        self.root.clone()
+    }
+
+    /// ⭐⭐⭐ **键盘导航是否已装载**（E-174，幂等判据）。
+    pub fn keyboard_navigation_installed(&self) -> bool {
+        self.keyboard_navigation_installed
+    }
+
+    /// ⭐⭐⭐ **标记「键盘导航已装载」**（E-174，供装置内部使用）。
+    pub fn mark_keyboard_navigation_installed(&mut self) {
+        self.keyboard_navigation_installed = true;
     }
 
     /// 读挂载容器。
@@ -730,7 +750,7 @@ impl<D: Dom> Renderer<D> {
         !self.modal_layers.is_empty()
     }
 
-    /// ⭐⭐⭐ **可聚焦顺序**（E-171）：从**挂载树**收集，**DOM 顺序**。
+    /// ⭐⭐⭐⭐ **可聚焦顺序**（E-171）：从**挂载树**收集，**DOM 顺序**。
     ///
     /// ## 为什么引擎自己收集
     ///

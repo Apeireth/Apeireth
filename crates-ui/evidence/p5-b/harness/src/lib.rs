@@ -1850,6 +1850,187 @@ pub fn l1_patch_children_probe() -> Result<JsValue, JsValue> {
 /// ②收到了，但 `w0_tick` 没据此重新窗口化。
 ///
 /// ⇒ ⇒ 本探针直接读 `ScrollSignal::peek()` ⇒ ⇒ **区分这两种可能**。
+/// ⭐⭐⭐ **焦点与模态浏览器探针**（E-171 / E-172）。
+///
+/// ## 它验什么
+///
+/// E-171 的键盘语义层**全部在引擎侧**（`focus_order` / `focus_next` / `open_modal`）
+/// ⇒ ⇒ **native 单测测不到「真实浏览器 + 真实 keydown」这条路**
+/// ⇒ ⇒ 必须**真实浏览器 + 真实派发**才验得住。
+///
+/// 1. **Tab 导航**：真实派发 `keydown(Tab)` ⇒ ⇒ 引擎的 `focus_next` 把焦点移到下一个
+///    可聚焦元素 ⇒ ⇒ 断言「焦点**真的动了**」（`document.activeElement` 逐字比对）；
+/// 2. **Shift+Tab 反向**：真实派发带 Shift 的 Tab ⇒ ⇒ 焦点往回走；
+/// 3. **模态陷阱**：开模态（只允许弹层里的元素）⇒ ⇒ Tab ⇒ ⇒ 焦点**不得**跳出弹层；
+/// 4. **空列表窗口化不 panic**（E-172）：空高度向量 ⇒ ⇒ **优雅返回**而不是崩。
+#[wasm_bindgen]
+pub fn l1_focus_modal_probe() -> Result<JsValue, JsValue> {
+    use apeireth_ui_dom::dom::Dom;
+    use apeireth_ui_dom::vnode::VNode;
+    use apeireth_ui_dom::web::WebDom;
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    let document = web_sys::window()
+        .and_then(|window| window.document())
+        .ok_or_else(|| JsValue::from_str("没有 document"))?;
+
+    // ⓪ 建**独立**挂载点（不碰页面其它探针的状态 ⇒ ⇒ 不互相污染）
+    let dom = WebDom::new().map_err(|error| JsValue::from_str(&format!("WebDom: {error}")))?;
+    let root = dom
+        .create_element("div")
+        .map_err(|error| JsValue::from_str(&format!("建根失败：{error}")))?;
+    dom.set_attribute(&root, "id", "focus-modal-root")
+        .map_err(|error| JsValue::from_str(&format!("设 id 失败：{error}")))?;
+    if let Some(body) = document.body() {
+        let _ = body.append_child(&root);
+    }
+
+    // ⓪⓪ 引擎放进 `Rc<RefCell<>>` ⇒ ⇒ 事件处理器能拿到 `&mut`。
+    let renderer_cell: Rc<RefCell<apeireth_ui_dom::Renderer<WebDom>>> =
+        Rc::new(RefCell::new(apeireth_ui_dom::Renderer::new(dom, root)));
+    renderer_cell
+        .borrow_mut()
+        .render_guarded(
+            VNode::element("div")
+                .child(
+                    VNode::element("button")
+                        .attr("id", "fm-b1")
+                        .attr("class", "fm-btn")
+                        .child(VNode::text("B1"))
+                        .build(),
+                )
+                .child(
+                    VNode::element("span")
+                        .attr("id", "fm-skip")
+                        .child(VNode::text("不可聚焦"))
+                        .build(),
+                )
+                .child(
+                    VNode::element("input")
+                        .attr("id", "fm-b2")
+                        .attr("class", "fm-btn")
+                        .build(),
+                )
+                .child(
+                    VNode::element("div")
+                        .attr("id", "fm-modal")
+                        .child(
+                            VNode::element("button")
+                                .attr("id", "fm-inside")
+                                .attr("class", "fm-btn")
+                                .child(VNode::text("内"))
+                                .build(),
+                        )
+                        .build(),
+                )
+                .build(),
+        )
+        .map_err(|error| JsValue::from_str(&format!("挂载失败：{error}")))?;
+
+    // ⭐⭐⭐ 装载**引擎的键盘导航装置**（E-174）⇒ ⇒ Tab 从此**走引擎**
+    //   ⇒ ⇒ 浏览器的原生 Tab **不再插手** ⇒ ⇒ 焦点陷阱才在真实浏览器里成立。
+    let installed = apeireth_ui_dom::keyboard::KeyNavigation::install(renderer_cell.clone())
+        .map_err(|error| JsValue::from_str(&format!("装载键盘导航失败：{error}")))?;
+
+    // ⓫ 派发辅助：真实 `KeyboardEvent`（带 Shift / 不带）
+    let make_key = |key: &str, shift: bool| -> Result<web_sys::KeyboardEvent, JsValue> {
+        let init = web_sys::KeyboardEventInit::new();
+        init.set_key(key);
+        init.set_code(key);
+        init.set_bubbles(true);
+        init.set_cancelable(true);
+        init.set_shift_key(shift);
+        web_sys::KeyboardEvent::new_with_keyboard_event_init_dict("keydown", &init)
+            .map_err(|error| JsValue::from_str(&format!("建键盘事件失败：{error:?}")))
+    };
+
+    // 读当前焦点（真实 `document.activeElement`）
+    let active_id = || -> String {
+        document
+            .active_element()
+            .map(|element| element.id())
+            .unwrap_or_default()
+    };
+
+    // ① 初始焦点在第一个按钮（路径 [0,0]）
+    renderer_cell
+        .borrow_mut()
+        .focus_at_path(&[0])
+        .map_err(|error| JsValue::from_str(&format!("聚焦失败：{error}")))?;
+    let focus_after_first = active_id();
+
+    // ② 派发 Tab ⇒ ⇒ 引擎应把焦点移到下一个可聚焦元素（跳过 span ⇒ ⇒ 落到 input）
+    let tab_event = make_key("Tab", false)?;
+    let first_button = document
+        .query_selector("#focus-modal-root #fm-b1")
+        .ok()
+        .flatten()
+        .ok_or_else(|| JsValue::from_str("找不到第一个按钮"))?;
+    first_button.dispatch_event(&tab_event)?;
+    let focus_after_tab = active_id();
+
+    // ③ 派发 Shift+Tab ⇒ ⇒ 焦点往回走（回到第一个按钮）
+    let shift_tab_event = make_key("Tab", true)?;
+    first_button.dispatch_event(&shift_tab_event)?;
+    let focus_after_shift_tab = active_id();
+
+    // ④⭐ 开模态（只允许弹层里的按钮）⇒ ⇒ Tab ⇒ ⇒ 焦点**不得**跳出弹层
+    renderer_cell
+        .borrow_mut()
+        .open_modal(&[&[3, 0]], &[3], Some(&[3, 0]))
+        .map_err(|error| JsValue::from_str(&format!("开模态失败：{error}")))?;
+    let modal_tab_event = make_key("Tab", false)?;
+    let inside = document
+        .query_selector("#focus-modal-root #fm-inside")
+        .ok()
+        .flatten()
+        .ok_or_else(|| JsValue::from_str("找不到弹层按钮"))?;
+    inside.dispatch_event(&modal_tab_event)?;
+    let focus_in_modal = active_id();
+
+    // ⑤ 关模态 ⇒ ⇒ 焦点归还
+    let restored = renderer_cell.borrow_mut().close_modal().ok().flatten();
+    let focus_after_close = active_id();
+
+    // ⑥⭐ 空列表窗口化（E-172）：空高度向量 ⇒ ⇒ **优雅返回**而不是崩
+    let empty_window_ok = {
+        let mut guard = renderer_cell.borrow_mut();
+        guard
+            .patch_windowed_at_path(&[3], &[], 0, |_| VNode::element("div").build())
+            .is_ok()
+    };
+
+    // ⓷ 组装结果
+    let result = js_sys::Object::new();
+    let set = |key: &str, value: JsValue| {
+        let _ = js_sys::Reflect::set(&result, &JsValue::from_str(key), &value);
+    };
+    set("installed", JsValue::from_bool(installed));
+    set("focus_after_first", JsValue::from_str(&focus_after_first));
+    set("focus_after_tab", JsValue::from_str(&focus_after_tab));
+    set(
+        "focus_after_shift_tab",
+        JsValue::from_str(&focus_after_shift_tab),
+    );
+    set("focus_in_modal", JsValue::from_str(&focus_in_modal));
+    set("focus_after_close", JsValue::from_str(&focus_after_close));
+    set("modal_restored", JsValue::from_bool(restored.is_some()));
+    set("empty_window_ok", JsValue::from_bool(empty_window_ok));
+
+    // ⭐ 判据
+    let ok = installed
+        && focus_after_first == "fm-b1"      // ① 初始焦点在第一个按钮
+        && focus_after_tab == "fm-b2"       // ② Tab ⇒ ⇒ 跳到 input（跳过 span）
+        && focus_after_shift_tab == "fm-b1" // ③ Shift+Tab ⇒ ⇒ 回到第一个
+        && focus_in_modal == "fm-inside"    // ④ 模态内 Tab ⇒ ⇒ 焦点**留在**弹层里
+        && focus_after_close == "fm-b1"     // ⑤ 关模态 ⇒ ⇒ 焦点归还
+        && empty_window_ok; // ⑥ 空列表不崩
+    set("ok", JsValue::from_bool(ok));
+    Ok(result.into())
+}
+
+#[wasm_bindgen]
 pub fn l1_scroll_signal_probe() -> Result<JsValue, JsValue> {
     let document = web_sys::window()
         .and_then(|window| window.document())

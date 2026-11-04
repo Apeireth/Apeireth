@@ -131,6 +131,8 @@ def main() -> int:
     integration = report.get("integration") or {}
     # ⭐⭐⭐ 键盘语义（E-169）：Enter vs Shift+Enter 可区分？IME 组合期可识别？
     keyboard = report.get("keyboardSemantics") or {}
+    # ⭐⭐⭐ 焦点与模态（E-174）：Tab 走引擎？焦点陷阱在真实浏览器里成立？
+    focus_modal = report.get("focusModal") or {}
     dom_ok = bool(dom.get("ok"))
     upload_ok = bool(upload.get("ok"))
     # ⭐ 宿主段有三个子判定：主段 + **帧后**（rAF 帧驱动）+ **销毁**（DOM 卸载）
@@ -152,6 +154,7 @@ def main() -> int:
     binding_ok = bool(binding.get("ok"))
     integration_ok = bool(integration.get("ok"))
     keyboard_ok = bool(keyboard.get("ok"))
+    focus_modal_ok = bool(focus_modal.get("ok"))
     if not dom_ok:
         print(f"❌ DOM 探针失败项：{dom.get('failures')}", file=sys.stderr)
     if not upload_ok:
@@ -177,6 +180,16 @@ def main() -> int:
             f"composing_flag={keyboard.get('composing_flag')}）",
             file=sys.stderr,
         )
+    if not focus_modal_ok:
+        print(
+            f"❌ 焦点与模态探针失败项：{focus_modal.get('failures')} "
+            f"（first={focus_modal.get('focus_after_first')} "
+            f"tab={focus_modal.get('focus_after_tab')} "
+            f"shift={focus_modal.get('focus_after_shift_tab')} "
+            f"modal={focus_modal.get('focus_in_modal')} "
+            f"close={focus_modal.get('focus_after_close')}）",
+            file=sys.stderr,
+        )
     if not perf_ok:
         print(f"❌ 规模基线探针失败项：{perf.get('failures')}", file=sys.stderr)
     if not real_load_ok:
@@ -190,12 +203,14 @@ def main() -> int:
         and binding_ok
         and integration_ok
         and keyboard_ok
+        and focus_modal_ok
     ):
         return 1
     print(
         "✅ L1 浏览器探针全过（G1 测量 / G2 载荷 / G3 焦点与 IME / G6 缩放 / "
         "G8 错误边界与 panic hook / G7 纹理上传端到端 / 双向绑定 / 组合集成 / "
-        "键盘语义（Enter vs Shift+Enter + IME 组合期）/ 产品宿主）"
+        "键盘语义（Enter vs Shift+Enter + IME 组合期）/ "
+        "焦点与模态（Tab 走引擎 + 焦点陷阱）/ 产品宿主）"
     )
     return 0
 

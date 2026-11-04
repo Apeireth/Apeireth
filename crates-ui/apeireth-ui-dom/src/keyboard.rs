@@ -218,6 +218,88 @@ impl Cursor {
     }
 }
 
+/// ⭐⭐⭐⭐ **键盘导航装置**（E-174）：让 **Tab 真的走引擎**。
+///
+/// ## ⭐⭐⭐ 为什么需要它（[`crate::renderer::Renderer::focus_next`] 存在**不够**）
+///
+/// 浏览器的原生 `Tab` **只认 DOM 顺序**、**不知道**引擎的焦点陷阱
+/// ⇒ ⇒ 应用层若不自己接 `keydown` + `prevent_default`
+/// ⇒ ⇒⇒ **Tab 走浏览器原生路径** ⇒ ⇒⇒ 焦点**跳出**引擎的陷阱
+/// ⇒ ⇒⇒ ⇒ 「焦点陷阱」在浏览器里**形同虚设**。
+///
+/// ⇒ ⇒ 本装置在**根节点**挂一个 `keydown` 监听 ⇒ ⇒ 收到 `Tab` ⇒ ⇒
+/// ⇒ ⇒ **自己**走 `focus_next` ⇒ ⇒⇒ 并 `prevent_default`
+/// ⇒ ⇒⇒ 浏览器的原生 Tab **不再插手** ✓
+///
+/// ## ⭐ 为什么它是一个**独立类型**而不是 `Renderer` 的方法
+///
+/// DOM 事件处理器是 **`'static` 闭包** ⇒ ⇒ 拿不到 `&mut Renderer`
+/// ⇒ ⇒ ⇒ 而 `focus_next` 需要 `&mut` ⇒ ⇒⇒ ⇒ 所以引擎必须被放进
+/// ⇒ ⇒⇒ **`Rc<RefCell<Renderer>>`** ⇒ ⇒⇒ 本装置的 `install` 因此要求这个形态
+/// ⇒ ⇒⇒ （与 `ui-app` 的 `wasm_host` 做法一致 ⇒ ⇒ 同一套心智模型）。
+///
+/// ## 口径
+///
+/// - 只处理 **`Tab`** 键（其它键**不拦**）；
+/// - **IME 组合期不拦**（组合期的 Tab 不是导航）⇒ ⇒ 用
+///   [`crate::events::DomEvent::is_composing`] 判；
+/// - **引擎没能移动**（序列为空 / 陷阱内一个都没有）⇒ ⇒ **不** `prevent_default`
+///   ⇒ ⇒⇒ 让浏览器自己处理（退化为无 Tab 行为，而不是**卡住 Tab**）。
+pub struct KeyNavigation<D: crate::dom::Dom> {
+    /// ⭐ 标记：装置**不持有**引擎（只在 `install` 时借用一次）⇒ ⇒
+    /// ⇒ 避免与调用方的 `Rc` 形成**多余的强引用**。
+    _marker: std::marker::PhantomData<D>,
+}
+
+impl<D: crate::dom::Dom> KeyNavigation<D> {
+    /// ⭐ **装载**：在**根节点**挂 `keydown` ⇒ ⇒ 从此 Tab 走引擎。
+    ///
+    /// ## 返回
+    ///
+    /// `Ok(true)` ⇒ ⇒ 装载成功；`Ok(false)` ⇒ ⇒ **已装载过**（幂等 ⇒ ⇒ 不重复挂）。
+    pub fn install(
+        renderer: std::rc::Rc<std::cell::RefCell<crate::renderer::Renderer<D>>>,
+    ) -> Result<bool, crate::dom::DomError> {
+        use crate::dom::EventKind;
+        use crate::events::ElementHandler;
+
+        // ⭐ 幂等：同一台引擎不重复挂。
+        {
+            let guard = renderer.borrow_mut();
+            if guard.keyboard_navigation_installed() {
+                return Ok(false);
+            }
+        }
+        let cell = renderer.clone();
+        let handler = ElementHandler::new(move |event: &mut crate::events::DomEvent| {
+            // ⭐ 只处理 Tab（且**不在 IME 组合期**）
+            if event.key() != Some("Tab") || event.is_composing() {
+                return;
+            }
+            let shift = event.shift_key();
+            // ⭐ 事件是**浏览器回调** ⇒ ⇒ 此时引擎**不在**差分过程中
+            //   ⇒ ⇒ ⇒ 直接 `borrow_mut` 是**安全的**（不会重复借出）。
+            //   ⇒ ⇒ ⇒ 而且必须**在这里**移动 ⇒ ⇒ 否则 Tab 的移动会**延迟**
+            //   ⇒ ⇒ ⇒ ⇒ 焦点会「慢半拍」（用户看到的是错的）。
+            let moved = cell.borrow_mut().focus_next(shift).unwrap_or(false);
+            if moved {
+                // ⭐ 引擎动了焦点 ⇒ ⇒ **阻止**浏览器原生 Tab
+                //   ⇒ ⇒ ⇒ 否则浏览器会**再走一次** ⇒ ⇒ 焦点跳两步。
+                event.prevent_default();
+            }
+        });
+        {
+            let mut guard = renderer.borrow_mut();
+            let root = guard.root_node();
+            guard
+                .dom()
+                .add_listener(&root, EventKind::KeyDown, handler)?;
+            guard.mark_keyboard_navigation_installed();
+        }
+        Ok(true)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -351,6 +433,68 @@ mod tests {
             .next(Some(&[2]), false, Some(&allowed))
             .expect("应能绕回 0");
         assert_eq!(wrapped.path, vec![0], "⭐ 循环必须只在允许集合内");
+    }
+
+    /// ⭐⭐⭐ **键盘导航装置：Tab 真的走引擎**（E-174）。
+    ///
+    /// ## 它锁住什么
+    ///
+    /// [`crate::renderer::Renderer::focus_next`] 存在 **≠** Tab 会走引擎
+    /// ⇒ ⇒ 浏览器的原生 `Tab` 不知道引擎的陷阱 ⇒ ⇒ 装置必须**接管**它。
+    ///
+    /// ⇒ ⇒ 本测用**内存后端**：`dispatch(KeyDown)` ⇒ ⇒ 装置的处理器
+    /// ⇒ ⇒ ⇒ 应当把焦点移到下一个可聚焦元素。
+    #[test]
+    fn key_navigation_moves_focus_on_tab() {
+        use crate::dom::{Dom, InMemoryDom, InMemoryNodeId};
+        use crate::renderer::Renderer;
+        use std::cell::RefCell;
+        use std::rc::Rc;
+
+        let dom = InMemoryDom::new();
+        let root: InMemoryNodeId = dom.create_element("div").expect("建根必须成功");
+        let cell = Rc::new(RefCell::new(Renderer::new(dom, root)));
+        {
+            let mut guard = cell.borrow_mut();
+            guard
+                .render_guarded(
+                    crate::vnode::VNode::element("div")
+                        .child(
+                            crate::vnode::VNode::element("button")
+                                .attr("id", "k1")
+                                .build(),
+                        )
+                        .child(
+                            crate::vnode::VNode::element("input")
+                                .attr("id", "k2")
+                                .build(),
+                        )
+                        .build(),
+                )
+                .expect("挂载必须成功");
+        }
+        // ① 装载装置
+        let installed = KeyNavigation::install(cell.clone()).expect("装载必须成功");
+        assert!(installed, "⭐ 第一次装载必须返回 true");
+        // ② 幂等
+        let again = KeyNavigation::install(cell.clone()).expect("重复装载必须成功");
+        assert!(!again, "⭐ 重复装载必须返回 false（幂等）");
+        // ③ 可聚焦顺序确实包含两个（button + input）⇒ ⇒ 装置有得可移
+        let order = cell.borrow().focus_order();
+        assert_eq!(
+            order.tabbable.len(),
+            2,
+            "⭐ 两个可聚焦元素（button + input）应被收集"
+        );
+        // ④ 初始焦点在第一个 ⇒ ⇒ 移动后应当是第二个
+        cell.borrow_mut().focus_at_path(&[0]).expect("聚焦必须成功");
+        let first = cell.borrow().focus_tracker().current();
+        assert!(cell.borrow_mut().focus_next(false).expect("Tab 必须成功"));
+        let after = cell.borrow().focus_tracker().current();
+        assert_ne!(
+            first, after,
+            "⭐ 装置装载后，Tab 应当把焦点移到下一个可聚焦元素"
+        );
     }
 
     /// ⭐ **陷阱内一个都没有** ⇒ ⇒ 返回 `None`（调用方不该 `prevent_default`）。
