@@ -45,6 +45,7 @@ use apeireth_tools_canonical::{
 };
 
 use super::care_heartbeat::CareHeartbeatStatus;
+use super::nervous_switchboard::{BioSwitch, NervousSwitchboard};
 use super::production::ProductionModulesConfig;
 use super::session::Session;
 use super::{execute::MAX_TOOL_CALLS_PER_ROUND, runtime::DEFAULT_MAX_ROUNDS};
@@ -438,13 +439,11 @@ pub struct ProductionSelfStatusSource {
     device_presence: Option<StatusProbe<apeireth_tools_canonical::DevicePresenceStatus>>,
     /// 创作节真值探测口 (创作工具面 K3 · 表格操作): 进程内计数 (同一计数器)。
     sheet_ops: Option<StatusProbe<apeireth_tools_canonical::SheetOpsStatus>>,
-    /// 设备受控执行节真值探测口 (K 轴 L3/L4): 控制计数/最近动作 (工具面同一
-    /// 执行核心同一状态账)。
+    /// 设备受控执行节真值探测口 (K 轴 L3/L4): 控制计数/最近动作 (工具面同一执行核心同一状态账)。
     device_control:
         Option<StatusProbe<apeireth_tools_canonical::device::device_control::DeviceControlStatus>>,
-    /// 生物机制族只读聚合观测面 (W3.2): `None` = 本组装面未挂该观测面,
-    /// 渲染面省略 `capabilities.bio_mechanisms` 子对象 (旧帧形状不变);
-    /// 挂上后按开关采集已注册 probe 的只读值 (默认关, 关时 `mechanisms: null`)。
+    /// 生物机制族只读聚合观测面 (W3.2): `None` = 未挂该观测面 (渲染面省略
+    /// `capabilities.bio_mechanisms` 子对象, 旧帧形状不变); 挂上后按开关采集已注册 probe 的只读值。
     bio_mechanisms: Option<BioMechanismRegistry>,
 }
 
@@ -544,50 +543,42 @@ impl ProductionSelfStatusSource {
         self
     }
 
-    /// 接入双引擎关怀节探测口 (V3-a): 规则数/下次触发/最近关怀, 每次自述现
-    /// 探测 (真值如实)。
+    /// 接入双引擎关怀节探测口 (V3-a): 规则数/下次触发/最近关怀, 每次自述现探测 (真值如实)。
     #[must_use]
     pub fn with_care_probe(mut self, probe: StatusProbe<CareStatus>) -> Self {
         self.care = Some(probe);
         self
     }
 
-    /// 接入备份节探测口 (G5): 最近备份时间/清单件数真值, 每次自述现探测
-    /// (尚无备份显式 null + 原因, 不编时间)。
+    /// 接入备份节探测口 (G5): 最近备份时间/清单件数真值, 每次自述现探测 (尚无备份显式 null + 原因, 不编时间)。
     #[must_use]
     pub fn with_backup_probe(mut self, probe: StatusProbe<BackupStatus>) -> Self {
         self.backup = Some(probe);
         self
     }
 
-    /// 接入任务节探测口 (V6-a): 任务队列分态计数真值, 每次自述现探测
-    /// (只回计数不回任务正文)。
+    /// 接入任务节探测口 (V6-a): 任务队列分态计数真值, 每次自述现探测 (只回计数不回任务正文)。
     #[must_use]
     pub fn with_task_board_probe(mut self, probe: StatusProbe<TaskBoardStatus>) -> Self {
         self.task_board = Some(probe);
         self
     }
 
-    /// 接入语音节探测口 (V3-b): 账本数/最近说话/嗓名, 每次自述现探测
-    /// (与发声工具同一本语句账本; 摘录口径不回全文)。
+    /// 接入语音节探测口 (V3-b): 账本数/最近说话/嗓名, 每次自述现探测 (与发声工具同一本语句账本, 不回全文)。
     #[must_use]
     pub fn with_voice_probe(mut self, probe: StatusProbe<VoiceStatus>) -> Self {
         self.voice = Some(probe);
         self
     }
 
-    /// 接入提案节探测口 (自主度第一小步): 待审数/分态计数/最近提案, 每次自述
-    /// 现探测 (与 `tool.proposal_draft` 工具面同一本提案账, 只回计数与标题不回
-    /// 正文)。
+    /// 接入提案节探测口 (自主度第一小步): 待审数/分态计数/最近提案, 每次自述现探测 (与 `tool.proposal_draft` 同一本提案账, 只回计数与标题)。
     #[must_use]
     pub fn with_proposal_probe(mut self, probe: StatusProbe<ProposalStatus>) -> Self {
         self.proposal = Some(probe);
         self
     }
 
-    /// 接入人格节探测口 (`self_status_persona`, V4-a): 信念/边界/偏好/张力
-    /// 计数 + 最后整编真值, 每次自述现探测 (只计数不回内容; 与人格层落库面
-    /// 同一真值源)。
+    /// 接入人格节探测口 (`self_status_persona`, V4-a): 信念/边界/偏好/张力计数 + 最后整编真值, 每次自述现探测 (只计数不回内容; 与人格层落库面同源)。
     #[must_use]
     pub fn with_persona_probe(
         mut self,
@@ -597,25 +588,21 @@ impl ProductionSelfStatusSource {
         self
     }
 
-    /// 接入性格节真值探测口 (裁定 ④⑤): 四杆锁定态 + 最近移动, 每次自述现
-    /// 探测 (与 `tool.trait_report` 同一成长计既有账; 缺源/读失败显式 null +
-    /// 原因, 不编锁态/移动史)。
+    /// 接入性格节真值探测口 (裁定 ④⑤): 四杆锁定态 + 最近移动, 每次自述现探测 (与 `tool.trait_report` 同一成长计既有账; 缺源显式 null + 原因, 不编锁态)。
     #[must_use]
     pub fn with_trait_growth_probe(mut self, probe: StatusProbe<TraitStatus>) -> Self {
         self.trait_growth = Some(probe);
         self
     }
 
-    /// 接入创作节探测口 (创作工具面 W1): 最近操作计数, 每次自述现探测 (与
-    /// `tool.image_ops` 工具面同一计数器, 只计数不回路径)。
+    /// 接入创作节探测口 (创作工具面 W1): 最近操作计数, 每次自述现探测 (与 `tool.image_ops` 同一计数器, 只计数不回路径)。
     #[must_use]
     pub fn with_image_ops_probe(mut self, probe: StatusProbe<ImageOpsStatus>) -> Self {
         self.image_ops = Some(probe);
         self
     }
 
-    /// 接入创作节探测口 (创作工具面 W2 · 文档操作): 进程内计数, 每次自述
-    /// 现探测 (与 `tool.doc_ops` 工具面同一计数器, 只计数不回路径)。
+    /// 接入创作节探测口 (创作工具面 W2 · 文档操作): 进程内计数, 每次自述现探测 (与 `tool.doc_ops` 同一计数器, 只计数不回路径)。
     #[must_use]
     pub fn with_doc_ops_probe(
         mut self,
@@ -625,8 +612,7 @@ impl ProductionSelfStatusSource {
         self
     }
 
-    /// 接入在场节探测口 (K 轴 L1 在场感知): 设备数/白名单数/最近感知, 每次
-    /// 自述现探测 (与 `tool.device_sense` 工具面同一本设备表同一进程内计数)。
+    /// 接入在场节探测口 (K 轴 L1 在场感知): 设备数/白名单数/最近感知, 每次自述现探测 (与 `tool.device_sense` 同一本设备表同一进程内计数)。
     #[must_use]
     pub fn with_device_presence_probe(
         mut self,
@@ -636,8 +622,7 @@ impl ProductionSelfStatusSource {
         self
     }
 
-    /// 接入创作节探测口 (创作工具面 K3 · 表格操作): 进程内计数, 每次自述
-    /// 现探测 (与 `tool.sheet_ops` 工具面同一计数器, 只计数不回路径)。
+    /// 接入创作节探测口 (创作工具面 K3 · 表格操作): 进程内计数, 每次自述现探测 (与 `tool.sheet_ops` 同一计数器, 只计数不回路径)。
     #[must_use]
     pub fn with_sheet_ops_probe(
         mut self,
@@ -647,9 +632,7 @@ impl ProductionSelfStatusSource {
         self
     }
 
-    /// 接入设备受控执行节探测口 (K 轴 L3/L4 受控执行): 控制计数/最近动作,
-    /// 每次自述现探测 (与 `tool.device_control` 工具面同一执行核心同一状态账,
-    /// 只回计数与动作标签不回参数正文)。
+    /// 接入设备受控执行节探测口 (K 轴 L3/L4 受控执行): 控制计数/最近动作, 每次自述现探测 (与 `tool.device_control` 同一执行核心同一状态账, 只回计数与动作标签)。
     #[must_use]
     pub fn with_device_control_probe(
         mut self,
@@ -1063,6 +1046,7 @@ impl SelfStatusSource for ProductionSelfStatusSource {
 /// 能力名册投影: 把**实际用于装配的** [`ProductionModulesConfig`] 与注入槽
 /// 存在性投影成开关全表 (真实生效值, 非配置文本), 外加组装根补充行
 /// (例如授权层的 `local_read_tools` 旋钮)。
+/// 补行批 (2026-11-04): 4 类「装配后才存在」的族 —— 侦察 / 外部适配器 / 游戏练习场 / 仪式完成; 后两族键名带 `_registered` = **已注册 ≠ 可调用** (治理无 grant, 调用恒拒)。
 ///
 /// 本地文件工具行按**实际注册条件**取值 (配置开启且工作区根已注入才算生效),
 /// 名册不复述"配置说开"而注册没成的事实。同一口径延伸到挂在别的槽上的
@@ -1073,10 +1057,10 @@ impl SelfStatusSource for ProductionSelfStatusSource {
 /// 本函数再 AND 上游槽 (自学习挂记忆召回, 类型化召回挂记忆协调器, 检索调权
 /// 挂记忆召回), 与配置行同口径。
 ///
-/// MCP 外部工具桥一行的自报语义 (如实): 桥已装配**且**有可用服务器配置
-/// 才算外部工具面生效 —— 已启用但无服务器配置 = 无外部工具 (照实 false);
-/// 服务器配置的折叠由组装根在 [`super::production::ProductionModules::build`]
-/// 完成 (配置坏 = 拒开, 语义不变)。
+/// MCP 外部工具桥一行的自报语义 (如实): 本行 = **桥 / 配置面已装配**, **不是**
+/// 外部工具面可用 —— 外部工具面在生产未接线 (发现 / 登记 / 授权三环零生产
+/// 调用点), 故本行 true 与外部工具数零关系。服务器配置的折叠由组装根在
+/// [`super::production::ProductionModules::build`] 完成 (配置坏 = 拒开, 语义不变)。
 pub fn roster_from_config(
     config: &ProductionModulesConfig,
     workspace_root_present: bool,
@@ -1085,6 +1069,13 @@ pub fn roster_from_config(
     typed_recall: bool,
     extras: &[CapabilitySwitch],
 ) -> Vec<CapabilitySwitch> {
+    // 生物开关 (ADR-0009 D3 单入口): `ProductionModulesConfig` 无生物开关字段,
+    // 名册读装配根**同一张开关表** (与装配逐项一致); 解析失败 = 全关 (fail-closed)。
+    let bio_board = NervousSwitchboard::from_env().ok();
+    let bio_on = |switch: BioSwitch| bio_board.as_ref().is_some_and(|b| b.switch_enabled(switch));
+    let (bio_play, bio_care) = (bio_on(BioSwitch::Play), bio_on(BioSwitch::CareCandidates));
+    // 仪式完成面的装配条件 = 族总闸开 **且** 关怀数据目录已注入 (无处落盘 = 不注册)。
+    let ritual_registered = bio_care && config.care_schedule.is_some();
     let mut roster = vec![
         CapabilitySwitch::new("filesystem", config.filesystem && workspace_root_present),
         CapabilitySwitch::new("search", config.search && workspace_root_present),
@@ -1187,7 +1178,7 @@ pub fn roster_from_config(
             "worktree_apply",
             config.worktree_apply && config.file_write && workspace_root_present,
         ),
-        CapabilitySwitch::new("mcp", config.mcp),
+        CapabilitySwitch::new("mcp", config.mcp), // 名册 mcp 行 = 桥 / 配置面，不是外部工具面
         // 书→技能沉淀 (I1): 写面按实际注册条件取值 (开关 + `file_write` 唯一写
         // 总闸 + 工作区根 + 技能库目录齐备才算生效, fail-closed); 只读检索按
         // (开关 + 技能库目录) 取值, 不依赖写总闸。
@@ -1265,6 +1256,15 @@ pub fn roster_from_config(
         // 挂记忆召回模块 (`with_retrieval_tuning`): 召回缺席时注入回执面无处
         // 供给, 名册照实 false (接线事实 AND 上游槽)。
         CapabilitySwitch::new("retrieval_tuning", retrieval_tuning && config.memory_recall),
+        // 补行批 (2026-11-04): 4 类「装配后才存在」的族 —— 侦察 (`tool.recon.*`,
+        // 9 件) 与外部适配器 (`tool.external.*`, 10 件) 按**实际注册条件**取值;
+        // 游戏练习场 (`tool.play_*`, 4 件) 与仪式完成 (`tool.ritual_done/skip`,
+        // 2 件) 是**已注册 ≠ 可调用** (治理面无 grant, 模型调用恒拒), 名册只报
+        // 注册事实, 不冒充可调 (键名带 `_registered` 后缀即此义)。
+        CapabilitySwitch::new("recon", config.recon.is_some() && workspace_root_present),
+        CapabilitySwitch::new("external", config.external.is_some()),
+        CapabilitySwitch::new("play_registered", bio_play && workspace_root_present),
+        CapabilitySwitch::new("ritual_registered", ritual_registered),
     ];
     roster.extend(extras.iter().cloned());
     roster.sort_by(|a, b| a.name.cmp(&b.name));
