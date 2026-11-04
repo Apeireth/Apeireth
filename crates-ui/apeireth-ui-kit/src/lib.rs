@@ -42,6 +42,7 @@
 pub mod badge;
 pub mod button;
 pub mod card;
+pub mod form_controls;
 pub mod icon;
 pub mod icon_data;
 pub mod json;
@@ -49,6 +50,7 @@ pub mod num;
 pub mod registry;
 pub mod tool_card;
 pub mod tool_grid;
+pub mod virtual_list;
 // 本面（工具卡面批二）的图标数据**生成物**（由 harness 的抽取脚本产出）。
 pub mod icons_tool_grid;
 // ── 并行迁移面（模块声明**预置**，各面施工线**只填自己的模块文件**）──
