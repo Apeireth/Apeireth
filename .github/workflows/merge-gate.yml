@@ -61,6 +61,14 @@ jobs:
         with:
           python-version: '3.12'
 
+      # ⚠️ `setup-python` 装的解释器**不带 PyYAML**（系统 python3 有，它没有）
+      # ⇒ ⇒ 任何 `import yaml` 的门禁在 CI 上**必然退出码 2**
+      # ⇒ ⇒ 实测红的两个：`verify-ledger`（既有门禁 ⇒ merge-gate 本来就红）
+      # 与 `yaml-duplicate-keys`（2026-11-03 新加）。
+      # ⇒ 装法照抄 `docs-truth.yml`（同一套依赖 ⇒ 每个 workflow 一致）。
+      - name: Install Python deps (PyYAML)
+        run: python -m pip install --quiet pyyaml
+
       # ① 裁决输入：契约里的门禁登记表（唯一真源）
       - name: 门禁登记表（契约 [ci_gates]）
         run: |

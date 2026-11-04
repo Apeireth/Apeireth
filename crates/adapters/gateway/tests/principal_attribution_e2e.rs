@@ -56,6 +56,11 @@ impl Recorded {
     fn calls(&self) -> Vec<(String, String)> {
         self.calls.lock().expect("记录锁").clone()
     }
+
+    /// 清空已记录（**合并成单个顺序用例**后，场景之间必须互不污染）。
+    fn clear(&self) {
+        self.calls.lock().expect("记录锁").clear();
+    }
 }
 
 impl PrincipalSessionRecorder for Recorded {
@@ -234,111 +239,130 @@ fn chat_request(token: &str, domain: Option<&str>) -> Request<Body> {
 }
 
 // ---------------------------------------------------------------------------
-// 用例
+// 用例（**单个顺序用例** —— 见下方「为什么不能并行」）
 // ---------------------------------------------------------------------------
 
+/// ⭐ **为什么 4 个场景合并成 1 个用例**（2026-11-04 CI 实测失败 ⇒ 本地偶发过）
+///
+/// 写面是**进程级**槽（`apeireth_runtime::canonical::principal_sessions`）
+/// ⇒ ⇒ 4 个 `#[tokio::test]` **并行**跑时，
+/// 一个用例的 RAII `Drop`（卸下写面）会把**另一个正在跑的用例**的写面卸掉
+/// ⇒ ⇒ 那个用例看到「零次登记」⇒ ⇒ **CI 上失败、本地偶发过**（顺序敏感）。
+///
+/// ⇒ ⇒ 合并成**单个顺序用例** ⇒ 场景之间**顺序执行** ⇒ 无并发 ⇒ 无竞态
+/// ⇒ ⇒ 且**不引入新依赖**（不划算：本仓 env/依赖面都受棘轮约束）。
 #[tokio::test]
-async fn a_domain_request_registers_the_principal_of_the_session() {
+async fn principal_attribution_end_to_end() {
     let (_guard, recorded) = RecorderGuard::install();
-    let state = harness("domain-request").await;
-    let router = canonical_router_with_state(state);
 
-    let response = router
-        .oneshot(chat_request(ALICE_TOKEN, Some("user-alice")))
-        .await
-        .expect("请求");
-    let status = response.status();
-    let body = String::from_utf8_lossy(
-        &response
-            .into_body()
-            .collect()
+    // ── 场景 A：有 user_id 绑定 ⇒ **恰好登记一次**（主体 = 令牌的 user_id）──
+    {
+        recorded.clear();
+        let state = harness("domain-request").await;
+        let router = canonical_router_with_state(state);
+
+        let response = router
+            .oneshot(chat_request(ALICE_TOKEN, Some("user-alice")))
             .await
-            .unwrap()
-            .to_bytes()
-            .as_ref(),
-    )
-    .to_string();
-    let calls = recorded.calls();
-    assert_eq!(
-        calls.len(),
-        1,
-        "带域的请求应当**恰好登记一次**（不多不少）：{calls:?} / status={status} / body={body}"
-    );
-    assert_eq!(
-        calls[0].0, "user-alice",
-        "主体必须是**令牌绑定的 user_id**（不是客户端署名键）：{calls:?}"
-    );
-    assert!(!calls[0].1.trim().is_empty(), "会话 id 不得为空：{calls:?}");
-}
-
-#[tokio::test]
-async fn a_request_without_a_user_id_registers_nothing() {
-    let (_guard, recorded) = RecorderGuard::install();
-    let state = harness("no-user-id").await;
-    let router = canonical_router_with_state(state);
-
-    let response = router
-        .oneshot(chat_request(STRANGER_TOKEN, None))
-        .await
-        .expect("请求");
-    let status = response.status();
-    let body = String::from_utf8_lossy(&response.into_body().collect().await.unwrap().to_bytes())
+            .expect("请求");
+        let status = response.status();
+        let body = String::from_utf8_lossy(
+            &response
+                .into_body()
+                .collect()
+                .await
+                .unwrap()
+                .to_bytes()
+                .as_ref(),
+        )
         .to_string();
-    assert!(
-        recorded.calls().is_empty(),
-        "无 user_id 的请求**不得登记**（宁可归属不可判定，也不要错归属 ⇒ 误删风险）：{:?} / status={status} / body={body}",
-        recorded.calls()
-    );
-}
+        let calls = recorded.calls();
+        assert_eq!(
+            calls.len(),
+            1,
+            "[场景A] 带域的请求应当**恰好登记一次**（不多不少）：{calls:?} / status={status} / body={body}"
+        );
+        assert_eq!(
+            calls[0].0, "user-alice",
+            "[场景A] 主体必须是**令牌绑定的 user_id**（不是客户端署名键）：{calls:?}"
+        );
+        assert!(
+            !calls[0].1.trim().is_empty(),
+            "[场景A] 会话 id 不得为空：{calls:?}"
+        );
+    }
 
-#[tokio::test]
-async fn a_cross_domain_claim_is_refused_and_leaves_no_attribution() {
-    let (_guard, recorded) = RecorderGuard::install();
-    let state = harness("cross-domain").await;
-    let router = canonical_router_with_state(state);
+    // ── 场景 B：无 user_id 绑定 ⇒ **一次都不登记**（fail-closed：不误归到 default）──
+    {
+        recorded.clear();
+        let state = harness("no-user-id").await;
+        let router = canonical_router_with_state(state);
 
-    // ALICE 的令牌却自称 `user-bob` 的域 ⇒ 域门**恒定拒帧**
-    // （`domain_forbidden`「自称域与凭据域不符」）。
-    let response = router
-        .oneshot(chat_request(ALICE_TOKEN, Some("user-bob")))
-        .await
-        .expect("请求");
-    let status = response.status();
-    let body = String::from_utf8_lossy(&response.into_body().collect().await.unwrap().to_bytes())
-        .to_string();
+        let response = router
+            .oneshot(chat_request(STRANGER_TOKEN, None))
+            .await
+            .expect("请求");
+        let status = response.status();
+        let body =
+            String::from_utf8_lossy(&response.into_body().collect().await.unwrap().to_bytes())
+                .to_string();
+        assert!(
+            recorded.calls().is_empty(),
+            "[场景B] 无 user_id 的请求**不得登记**（宁可归属不可判定，也不要错归属 ⇒ 误删风险）：{:?} / status={status} / body={body}",
+            recorded.calls()
+        );
+    }
 
-    assert_eq!(
-        status,
-        axum::http::StatusCode::FORBIDDEN,
-        "自称他人域必须是 403 恒定拒帧：{body}"
-    );
-    assert!(
-        recorded.calls().is_empty(),
-        "**被拒的请求不得留下任何归属痕迹**（登记点必须留在域门之后）：{:?}",
-        recorded.calls()
-    );
-}
+    // ── 场景 C：跨域自称 ⇒ 403 恒定拒帧 ⇒ **不留任何归属痕迹** ──
+    {
+        recorded.clear();
+        let state = harness("cross-domain").await;
+        let router = canonical_router_with_state(state);
 
-#[tokio::test]
-async fn registration_is_not_lost_when_the_turn_fails() {
-    let (_guard, recorded) = RecorderGuard::install();
-    let state = harness("turn-fails").await;
-    let router = canonical_router_with_state(state);
+        // ALICE 的令牌却自称 `user-bob` 的域 ⇒ 域门**恒定拒帧**
+        // （`domain_forbidden`「自称域与凭据域不符」）。
+        let response = router
+            .oneshot(chat_request(ALICE_TOKEN, Some("user-bob")))
+            .await
+            .expect("请求");
+        let status = response.status();
+        let body =
+            String::from_utf8_lossy(&response.into_body().collect().await.unwrap().to_bytes())
+                .to_string();
 
-    // 没有可用 provider ⇒ 回合必然失败 ⇒ 但归属登记在**调 provider 之前**
-    // ⇒ ⇒ 登记**不得**随回合失败一起丢掉（否则 episode 又归不到主体）。
-    let response = router
-        .oneshot(chat_request(ALICE_TOKEN, Some("user-alice")))
-        .await
-        .expect("请求");
-    // ⚠️ **不钉状态码**：没有可用 provider ⇒ 回合必然失败（503/500 都可能）
-    // ⇒ 本用例要钉的**只有时序**：登记发生在**调 provider 之前**
-    // ⇒ ⇒ 回合怎么失败都不影响「登记已经发生」。
-    let _ = response.status();
-    assert_eq!(
-        recorded.calls().len(),
-        1,
-        "回合失败**不得**让归属登记消失：{:?}",
-        recorded.calls()
-    );
+        assert_eq!(
+            status,
+            axum::http::StatusCode::FORBIDDEN,
+            "[场景C] 自称他人域必须是 403 恒定拒帧：{body}"
+        );
+        assert!(
+            recorded.calls().is_empty(),
+            "[场景C] **被拒的请求不得留下任何归属痕迹**（登记点必须留在域门之后）：{:?}",
+            recorded.calls()
+        );
+    }
+
+    // ── 场景 D：回合失败 ⇒ 登记**不得**随回合失败一起丢（时序：登记在调 provider 之前）──
+    {
+        recorded.clear();
+        let state = harness("turn-fails").await;
+        let router = canonical_router_with_state(state);
+
+        // 没有可用 provider ⇒ 回合必然失败 ⇒ 但归属登记在**调 provider 之前**
+        // ⇒ ⇒ 登记**不得**随回合失败一起丢掉（否则 episode 又归不到主体）。
+        let response = router
+            .oneshot(chat_request(ALICE_TOKEN, Some("user-alice")))
+            .await
+            .expect("请求");
+        // ⚠️ **不钉状态码**：没有可用 provider ⇒ 回合必然失败（503/500 都可能）
+        // ⇒ 本场景要钉的**只有时序**：登记发生在**调 provider 之前**
+        // ⇒ ⇒ 回合怎么失败都不影响「登记已经发生」。
+        let _ = response.status();
+        assert_eq!(
+            recorded.calls().len(),
+            1,
+            "[场景D] 回合失败**不得**让归属登记消失：{:?}",
+            recorded.calls()
+        );
+    }
 }

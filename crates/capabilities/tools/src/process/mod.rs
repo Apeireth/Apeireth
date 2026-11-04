@@ -1200,7 +1200,7 @@ pub async fn run_native<T: Send + 'static>(
         })
         .transpose()
         .map_err(|_| NativeTaskError::Cancelled)?;
-    tokio::task::spawn_blocking(move || {
+    let run = move || {
         let _lease = lease;
         if context
             .as_ref()
@@ -1211,6 +1211,23 @@ pub async fn run_native<T: Send + 'static>(
         Ok(apeireth_plugin::tool_execution::with_native_execution(
             context, work,
         ))
-    })
-    .await?
+    };
+
+    // ⚠️ **无 tokio reactor 时同步执行**（2026-11-04 CI 实测修）。
+    //
+    // 现象：`fuzz/fuzz_targets/external.rs` 用**自写的极简 `block_on`**（无 reactor）
+    // 调 `tool.invoke(...)` ⇒ ⇒ 走到这里 ⇒ ⇒ `tokio::task::spawn_blocking` 报
+    // 「there is no reactor running, must be called from the context of a Tokio 1.x runtime」
+    // ⇒ ⇒ libFuzzer abort ⇒ **CI 的 Fuzz 门禁红**。
+    //
+    // 为什么在**产品侧**修（而不是给 fuzz crate 加 tokio 依赖）：
+    // 根因是本函数**假定**调用方一定在 tokio runtime 内 ⇒ ⇒ 任何**同步**调用方
+    // （fuzz harness / 脚本 / 同步测试）都会 panic ⇒ ⇒ 这是**真实的健壮性缺口**。
+    //
+    // 语义：无 reactor 时在**当前线程**执行（那里本来也没有 runtime 可用）；
+    // 租约与取消检查**照旧**（lease 仍在）。
+    match tokio::runtime::Handle::try_current() {
+        Ok(handle) => handle.spawn_blocking(run).await?,
+        Err(_) => run(),
+    }
 }
