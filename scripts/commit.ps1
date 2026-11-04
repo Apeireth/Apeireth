@@ -1,7 +1,7 @@
 #!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-  提交收口入口：显式 author 身份 + .githooks 检查 + staged secret/neutral 门禁。
+  提交收口入口：显式 author 身份 + .githooks 检查 + staged secret/neutral 门禁 + 架构守卫（默认 strict 拦截）。
 .DESCRIPTION
   背景（2026-10-20 效率 P0）：仓库 .githooks 存在但 core.hooksPath 未设；
   全局启用会影响同工作树的并行 AI 线（pre-commit 要求显式 GIT_AUTHOR_*）。
@@ -11,25 +11,32 @@
   流程：
   1) 校验/补齐 GIT_AUTHOR_* / GIT_COMMITTER_*（默认取 -AuthorName/-AuthorEmail 或 git config user.*）；
   2) 对 staged 改动跑 secret-scan（有脚本时）+ check-neutral-terms；
-  3) 架构守卫 arch_guard（灰度 report-only；-ArchStrict 升格拦截）；
+  3) 架构守卫 arch_guard（默认 strict：违规即阻断；-Report 显式降级为仅报告不阻断）；
   4) git -c core.hooksPath=.githooks commit（commit-msg 校验 O-6 三段 + pre-commit 校验 author/LOCKED）。
+
+  门禁等级（2026-11-04 灰度到期升格）：arch 守卫默认 strict 拦截（与 CI 两条 workflow 同级）。
+  确需降级时显式加 -Report（仅报告），并在提交正文写明降级理由与到期处置。
 
 .USAGE
   pwsh scripts/commit.ps1 -MessageFile $env:TEMP\msg.txt
   pwsh scripts/commit.ps1 -MessageFile msg.txt -AuthorName Mavis -AuthorEmail Mavis@apeireth.local
-  pwsh scripts/commit.ps1 -MessageFile msg.txt -ArchStrict      # 架构守卫违规即阻断
+  pwsh scripts/commit.ps1 -MessageFile msg.txt                   # 架构守卫默认 strict：违规即阻断
+  pwsh scripts/commit.ps1 -MessageFile msg.txt -Report            # 显式降级：架构守卫仅报告不阻断
   pwsh scripts/commit.ps1 -MessageFile msg.txt -NoVerify        # 真例外时跳过 hooks（慎用）
   pwsh scripts/commit.ps1 -DryRun -MessageFile msg.txt          # 只打印将执行的动作
 
 .NOTES
   0 装：不新增依赖；复用仓内现有门禁脚本；失败即退、不静默降级。
+  -ArchStrict 为历史兼容开关：arch 守卫自 2026-11-04 起默认 strict，该开关已无实际作用
+  （与 -Report 互斥；同时给出即报错），保留只为旧调用方不报参数错误。
 #>
 param(
     [Parameter(Mandatory = $true)][string]$MessageFile,
     [string]$AuthorName = "",
     [string]$AuthorEmail = "",
     [switch]$NoVerify,
-    [switch]$ArchStrict,
+    [switch]$ArchStrict,     # 历史兼容：arch 守卫已默认 strict，保留以免旧调用方报参数错误
+    [switch]$Report,         # 显式降级：架构守卫仅报告不阻断
     [switch]$DryRun
 )
 
@@ -38,6 +45,9 @@ $RepoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $RepoRoot
 
 if (-not (Test-Path $MessageFile)) { throw "message file not found: $MessageFile" }
+if ($ArchStrict -and $Report) {
+    throw "-ArchStrict 与 -Report 互斥：arch 守卫默认 strict，显式降级只用 -Report"
+}
 
 if (-not $AuthorName) { $AuthorName = (git config user.name) }
 if (-not $AuthorEmail) { $AuthorEmail = (git config user.email) }
@@ -62,16 +72,19 @@ if (Test-Path "scripts/check-neutral-terms.ps1") {
     if ($LASTEXITCODE -ne 0) { throw "check-neutral-terms failed" }
 }
 
-# 2.5) 架构守卫（灰度 report-only；-ArchStrict 升格拦截）
-#     口径: docs/architecture/README.md / ADR-0001；灰度至 2026-11-03 后默认 strict。
+# 2.5) 架构守卫（默认 strict 拦截；-Report 显式降级为仅报告）
+#     口径: docs/architecture/README.md / ADR-0001；灰度期已于 2026-11-04 到期升格。
 if (Test-Path "scripts/arch_guard.py") {
     Write-Host "== arch_guard ..."
-    $archMode = if ($ArchStrict) { "--strict" } else { "--report" }
+    $archMode = if ($Report) { "--report" } else { "--strict" }
     python scripts/arch_guard.py $archMode
     $archExit = $LASTEXITCODE
     if ($archExit -ne 0) {
-        if ($ArchStrict) { throw "arch_guard failed (exit=$archExit; see logs/arch-guard.log)" }
-        Write-Warning "arch_guard 报告问题（灰度期不阻断；见 logs/arch-guard.log）。可用 -ArchStrict 升格拦截。"
+        if ($Report) {
+            Write-Warning "arch_guard 报告问题（-Report 显式降级，不阻断；见 logs/arch-guard.log）。降级理由须写进提交正文。"
+        } else {
+            throw "arch_guard failed (exit=$archExit; see logs/arch-guard.log)"
+        }
     }
 }
 

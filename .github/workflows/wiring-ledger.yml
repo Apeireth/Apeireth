@@ -1,9 +1,9 @@
-name: Wiring ledger (R3c report-only)
+name: Wiring ledger (R3a/R3c blocking)
 
 # ADR-0004 R3b/R3c（实施=效率线；schema/review=架构线 2026-10-20 裁定）：
 #  - R3a env registry 覆盖检查 + wiring.yaml drift = blocking（生成物禁手改，与 docs_truth 同模式）；
 #  - R3c 交叉校验（wiring ledger 四列证据：PRODUCTION WIRED 必须有生产引用 / IMPLEMENTED 必须有 gaps 原因）
-#    = report-only，灰度至 2026-11-03；到期后删除 continue-on-error 并加 --strict，由架构线复核后转 blocking。
+#    = blocking（--crosscheck --strict）。灰度期（report-only + continue-on-error: true）已于 2026-11-04 到期结束。
 # 分工（架构线裁定 §7.4）：arch_guard 管结构/依赖/env 名；wiring ledger 管四列证据。
 
 on:
@@ -47,12 +47,11 @@ jobs:
           mkdir -p logs
           python3 scripts/wiring_report.py --verify 2>&1 | tee -a logs/wiring-ledger.log
 
-      - name: R3c cross-check (report-only until 2026-11-03)
-        continue-on-error: true
+      - name: R3c cross-check (blocking)
         run: |
           set -o pipefail
           mkdir -p logs
-          python3 scripts/wiring_report.py --crosscheck 2>&1 | tee -a logs/wiring-ledger.log
+          python3 scripts/wiring_report.py --crosscheck --strict 2>&1 | tee -a logs/wiring-ledger.log
 
       - name: Upload wiring ledger log
         if: always()
