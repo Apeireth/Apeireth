@@ -11,6 +11,25 @@
 //!   `SHADER_UNIFORM_NAMES` 为准；
 //! - 顶点数据与生产版逐值一致（全屏三角形 `[-1,-1, 3,-1, -1,3]`）。
 
+// ⭐⭐⭐ **本 crate 是 wasm 专用**（E-168）。
+//
+// ## 为什么
+//
+// 它依赖的两个模块都是 **wasm32 专属**：
+// - `apeireth_ui_dom::web`（真实 DOM 后端，`web-sys`）
+// - `apeireth_ui_app::wasm_host`（wasm 薄壳）
+//
+// ⇒ ⇒ **native 目标下这两个模块根本不参与编译**
+// ⇒ ⇒ ⇒ 若不门控，`cargo clippy`（native）会报**一堆 `unresolved import`**
+// ⇒ ⇒ ⇒ 看起来像「32 个 clippy 错误」，实际是「**这个 crate 不能编到 native**」。
+//
+// ⇒ ⇒ 这里**显式门控**：native 目标下只留一条**说人话**的说明
+// ⇒ ⇒ ⇒ 免得下一个人以为欠了一屁股 clippy 债（E-167 时确实这么误会过）。
+//
+// ✅ **验证目标只有 wasm32** ⇒ ⇒ ⇒ 门禁跑的是
+// `cargo clippy --target wasm32-unknown-unknown`（**0 错误**）。
+#![cfg(target_arch = "wasm32")]
+
 use apeireth_ui_gpu::{
     BackendPreference, BlendMode, CanvasSizeSource, Engine, EngineOptions, SceneDescriptor,
     ScenePass, ScenePipeline, SurfaceTargetInput, Topology, UniformValues, VertexFormat,
