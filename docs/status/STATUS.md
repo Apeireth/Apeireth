@@ -25,7 +25,7 @@
 | `gov.reflection_queue` | IMPLEMENTED | - | - | `357e9780` | 2026-11-20 |
 | `gov.chain_drill_ci` | IMPLEMENTED | - | - | `357e9780` | 2026-11-20 |
 | `sec.governance_chain_drill` | IMPLEMENTED | - | - | `357e9780` | 2026-11-20 |
-| `rel.release_asset_verify` | IMPLEMENTED | - | - | `357e9780` | 2026-11-20 |
+| `rel.release_asset_verify` | IMPLEMENTED | - | - | `fe4ee516` | 2026-11-20 |
 | `sec.sql_readonly_gate` | PRODUCTION WIRED | ON | - | `357e9780` | 2026-11-20 |
 | `sec.provider_proxy_ssrf` | PRODUCTION WIRED | ON | - | `357e9780` | 2026-11-20 |
 | `sec.desktop_file_roots` | PRODUCTION WIRED | ON | - | `357e9780` | 2026-11-20 |
