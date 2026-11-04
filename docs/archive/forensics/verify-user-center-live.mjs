@@ -1,4 +1,9 @@
 #!/usr/bin/env node
+// ── L5 归档（历史卷宗，只读）──────────────────────────────────────────────
+// 2026-11-04 工具链清理批：原 `docs/archive/forensics/verify-user-center-live.mjs` —— 一次性取证探针，
+// 0 调用方；迁入 `docs/archive/forensics/` 保留取证痕迹。除本横幅与脚本自述路径
+// 同步外，原件逻辑未改。
+// ─────────────────────────────────────────────────────────────────────────
 // 用户中心真机验收——对**运行中的已安装应用**（WebView2）发 CDP 指令，验证
 // 「左上角单字 → 用户头像 + 设置栏目第一页用户中心（暂只随应用存本地）」
 // 已在运行中的程序里生效。
@@ -6,7 +11,7 @@
 // 用法（先带调试端口启动应用）：
 //   $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-port=9223'
 //   Start-Process 'C:\Program Files\Apeireth Companion\companion-desktop.exe'
-//   node scripts/verify-user-center-live.mjs [--port 9223] [--out artifacts]
+//   node docs/archive/forensics/verify-user-center-live.mjs [--port 9223] [--out artifacts]
 //
 // 断言：①左上角是头像按钮（.rail-avatar） ②单字「燧」已退场 ③点击头像无条件
 //      落设置 › 用户中心 ④用户信息表单在位 ⑤昵称失焦提交真落本地 localStorage，

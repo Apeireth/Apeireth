@@ -1,4 +1,9 @@
 #!/usr/bin/env node
+// ── L5 归档（历史卷宗，只读）──────────────────────────────────────────────
+// 2026-11-04 工具链清理批：原 `docs/archive/forensics/cursor-artifact-probe.mjs` —— 一次性取证探针，
+// 0 调用方；迁入 `docs/archive/forensics/` 保留取证痕迹。除本横幅与脚本自述路径
+// 同步外，原件逻辑未改。
+// ─────────────────────────────────────────────────────────────────────────
 // 光标/插入符取证探针 v2（cursor-artifact probe）——
 // 主人反馈：origin 主题下光标在输入框上"异常白色、几乎不可见"。
 // 本探针做三件事（配合外层 pwsh 的 Win32 光标句柄/图标抓取）：
@@ -9,7 +14,7 @@
 //   3. 可选连拍截图（伪影取证）。
 //
 // 用法（应用需带 --remote-debugging-port=9223 启动）：
-//   node scripts/cursor-artifact-probe.mjs --audit-input [--theme origin] [--shot artifacts/x.png]
+//   node docs/archive/forensics/cursor-artifact-probe.mjs --audit-input [--theme origin] [--shot artifacts/x.png]
 import {writeFileSync, mkdirSync} from 'node:fs';
 import {dirname} from 'node:path';
 

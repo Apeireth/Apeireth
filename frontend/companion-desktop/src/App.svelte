@@ -2307,7 +2307,7 @@
 
   onMount(() => {
     // 全局滚轮路由（lib/wheel-scroll.ts）：死区滚轮直达滚动面板——小窗模式下
-    // 设置子导航列/聊天区留白等处滚轮失效的修复（CDP 实测见 scripts/wheel-scroll-probe.mjs）。
+    // 设置子导航列/聊天区留白等处滚轮失效的修复（CDP 实测见 docs/archive/forensics/wheel-scroll-probe.mjs）。
     const disposeWheelRouter = initWheelRouter();
     applyDocumentTheme(activeTheme);
     applyDocumentAccent(resolveAccent(config.accent));

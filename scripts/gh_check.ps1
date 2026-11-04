@@ -1,11 +1,38 @@
 #!/usr/bin/env pwsh
 # GitHub Actions runs 检查器
-# 用法: pwsh scripts/gh_check.ps1 [latest|failures|full]
+# 用法: pwsh scripts/gh_check.ps1 [latest|failures|full] [-Remote origin]
 # 需 -SkipCertificateCheck (本地证书问题)
+#
+# 仓库名**不硬编码**: 从 git remote 的 URL 推导 owner/repo（2026-11-04 批）。
+# 此前硬编码的仓库名指向的是另一个仓 ⇒ 查错仓库, 静默返回无关 run。
 
-param([string]$Mode = "latest")
+param(
+    [string]$Mode = "latest",
+    [string]$Remote = "origin"
+)
 
-$repo = "YintaTriss/apeireth-rust"
+# ---- 仓库名推导: git remote URL -> owner/repo ----
+# 兼容三种 remote 形态:
+#   git@github.com:OWNER/REPO.git
+#   https://github.com/OWNER/REPO(.git)
+#   ssh://git@github.com/OWNER/REPO(.git)
+$remoteUrl = (git remote get-url $Remote 2>$null | Select-Object -First 1)
+if (-not $remoteUrl) {
+    Write-Host "Error: 取不到 remote '$Remote' 的 URL（先 git remote add 或用 -Remote 指定）" -ForegroundColor Red
+    exit 2
+}
+$clean = $remoteUrl `
+    -replace '^git@[^:]+:', '' `
+    -replace '^ssh://(?:git@)?[^/]+/', '' `
+    -replace '^https?://[^/]+/', ''
+$clean = ($clean.TrimEnd('/')) -replace '\.git$', ''
+$repoParts = $clean -split '/'
+if ($repoParts.Count -lt 2 -or [string]::IsNullOrWhiteSpace($repoParts[-2])) {
+    Write-Host "Error: 无法从 remote URL 解析 owner/repo: $remoteUrl" -ForegroundColor Red
+    exit 2
+}
+$repo = "$($repoParts[-2])/$($repoParts[-1])"
+
 $base = "https://api.github.com/repos/$repo/actions/runs"
 
 $pages = switch ($Mode) {
@@ -28,6 +55,7 @@ for ($p = 1; $p -le $pages; $p++) {
     }
 }
 
+Write-Host "Repo: $repo  (derived from remote '$Remote')"
 Write-Host "Fetched $($allRuns.Count) runs"
 Write-Host ""
 

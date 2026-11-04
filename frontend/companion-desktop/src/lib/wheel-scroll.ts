@@ -1,6 +1,6 @@
 // 全局滚轮路由（wheel router）——"鼠标滚轮上下移动应用操作界面"的确定性保障。
 //
-// 病灶（CDP 实测复现，scripts/wheel-scroll-probe.mjs）：
+// 病灶（CDP 实测复现，docs/archive/forensics/wheel-scroll-probe.mjs）：
 //   滚轮只在命中链正好落在滚动面板上时才生效（内容列中心 ✅）；
 //   一旦光标落在"死区"——聊天区留白（#chatScroll 整链 pointer-events:none 穿透）、
 //   设置子导航列（非面板的同页旁路）、抽屉头等——滚轮事件到不了任何滚动面板，

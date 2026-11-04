@@ -207,6 +207,14 @@ crates/apeireth-integration-e2e/.*.log
 # 习惯: .r<round>-<task>-*.<ext> = sub-agent scratch, 0 必进 git (整合 #4 commit 已含 3 实际文件)
 .r[0-9][0-9][0-9]-*-*
 *.py
+# 2026-11-04 工具链清理批收窄: scripts/ 是仓内工具目录, 其下的 python 脚本默认入库.
+# 收窄理由 (实测): 全局 `*.py` 规则让**新** scripts/*.py 静默不入库, 且仓内已有 5 个
+# scripts/*.py 当初只能靠 `git add -f` 才勉强入库 (check_doc_caliber / check_no_legacy_deps /
+# guard-dataset-export / migrate_v1_to_v2_encrypted / r20-stage-6-th/dedup_licenses)
+# ⇒ 一旦重新生成/复制这些文件, 就会静默丢失. 例外仍保留: scripts/_*.py (worktree 临时工具,
+# 引用 UUID path, 跨机器不可用) —— 必须在下面的通配豁免**之后**重新声明才会生效.
+!scripts/**/*.py
+scripts/_*.py
 !scripts/guard_ml/*.py
 # DTS（文档事实体系）常驻脚本：跨批使用，必须入库（2026-10-20 第三线）
 !scripts/docs_truth.py

@@ -1,11 +1,16 @@
 #!/usr/bin/env node
+// ── L5 归档（历史卷宗，只读）──────────────────────────────────────────────
+// 2026-11-04 工具链清理批：原 `docs/archive/forensics/verify-settings-nav-live.mjs` —— 一次性取证探针，
+// 0 调用方；迁入 `docs/archive/forensics/` 保留取证痕迹。除本横幅与脚本自述路径
+// 同步外，原件逻辑未改。
+// ─────────────────────────────────────────────────────────────────────────
 // 设置页两级导航真机验收——对**运行中的已安装应用**（WebView2）发 CDP 指令，
 // 验证「大类即导航 + 描述词挪至类别分级下的页面」已在运行中的程序里生效。
 //
 // 用法（先带调试端口启动应用）：
 //   $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-port=9223'
 //   Start-Process 'C:\Program Files\Apeireth Companion\companion-desktop.exe'
-//   node scripts/verify-settings-nav-live.mjs [--port 9223] [--out artifacts]
+//   node docs/archive/forensics/verify-settings-nav-live.mjs [--port 9223] [--out artifacts]
 //
 // 断言：①侧栏只列 5 个大类 ②大类展开才见其下分区页 ③导航列无描述词
 //      ④描述词落位页面顶部（category-context）⑤换大类跟随展开

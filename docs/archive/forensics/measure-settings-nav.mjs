@@ -1,4 +1,9 @@
 #!/usr/bin/env node
+// ── L5 归档（历史卷宗，只读）──────────────────────────────────────────────
+// 2026-11-04 工具链清理批：原 `docs/archive/forensics/measure-settings-nav.mjs` —— 一次性取证探针，
+// 0 调用方；迁入 `docs/archive/forensics/` 保留取证痕迹。除本横幅与脚本自述路径
+// 同步外，原件逻辑未改。
+// ─────────────────────────────────────────────────────────────────────────
 // 设置子导航几何量测——对运行中的真实 WebView2 应用，在 980×640 最小窗视口
 // （Emulation.setDeviceMetricsOverride，同 wheel-scroll-probe 手法）量出子导航
 // 的高度预算与行高，为「多开多收」的总高度可行性给精确数字。
@@ -6,7 +11,7 @@
 // 用法（先带调试端口启动应用）：
 //   $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-port=9223'
 //   Start-Process 'C:\Program Files\Apeireth Companion\companion-desktop.exe'
-//   node scripts/measure-settings-nav.mjs [--port 9223] [--width 980] [--height 640]
+//   node docs/archive/forensics/measure-settings-nav.mjs [--port 9223] [--width 980] [--height 640]
 
 const args = process.argv.slice(2);
 function argValue(name, fallback) {

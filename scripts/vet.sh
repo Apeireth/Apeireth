@@ -32,10 +32,13 @@
 #   - 安全底线: 任一失败硬阻断 (--no-fail-on-warnings 不传), audit known
 #     项时主人需在 audit-report.json 里手动 ack, 然后再跑 (不静默放行)
 #
-# 与 scripts/audit/run-cargo-audit-deny.sh 的关系:
-#   - 老脚本 (R20 阶段 6): 只 audit + deny, 已入库, 保留不动 (向后兼容)
+# 与 R20 阶段 6 老脚本（cargo audit + deny 一键扫描, shell / pwsh 两份）的关系:
+#   - 老脚本: 只 audit + deny, 无调用方, 0 入库引用 ⇒ 2026-11-04 工具链清理批已删
+#     (原件在 git 历史里, 用 `git log --diff-filter=D -- scripts/audit/` 可查)
 #   - 本脚本 (TP20-S5): vet + audit + deny, 增量, 8 包 release 全跑
+#   - CI 侧另有 .github/workflows/cargo-audit.yml + cargo-deny.yml 各自跑单项
 #   - Makefile 的 `make audit` target 调本脚本
+#   ⇒ 老脚本的能力已由「本脚本 + CI 两份 workflow」全覆盖, 不再保留副本
 #
 # 用法:
 #   bash scripts/vet.sh                  # 三件套全跑 (release gate)

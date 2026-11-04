@@ -1,4 +1,10 @@
 #!/usr/bin/env node
+// ── L5 归档（历史卷宗，只读）──────────────────────────────────────────────
+// 2026-11-04 工具链清理批：原 `docs/archive/forensics/wheel-scroll-probe.mjs` —— 一次性取证探针，
+// 0 调用方；迁入 `docs/archive/forensics/` 保留取证痕迹（该探针是滚轮病灶的取证
+// 依据；`frontend/companion-desktop/` 三处源码 + 本仓 `scripts/avatar-perf-probe.mjs`
+// 的注释引用已同步到新路径）。除本横幅与脚本自述路径同步外，原件逻辑未改。
+// ─────────────────────────────────────────────────────────────────────────
 // CDP 滚轮探针（wheel-scroll probe）——对**真实 WebView2 应用**发真实滚轮事件，
 // 量化"鼠标滚轮 vs 右侧滚动条"的差异，作为滚动修复的复现/验收证据。
 //
@@ -9,7 +15,7 @@
 // 用法（先给应用开 CDP 端口再启动）：
 //   $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-port=9223'
 //   Start-Process 'C:\Program Files\Apeireth Companion\companion-desktop.exe'
-//   node scripts/wheel-scroll-probe.mjs [--port 9223] [--width 980] [--height 640]
+//   node docs/archive/forensics/wheel-scroll-probe.mjs [--port 9223] [--width 980] [--height 640]
 //
 // 注：Input.dispatchMouseEvent 的 wheel 走真实命中测试（与真人滚轮同语义）；
 // Emulation.setDeviceMetricsOverride 把视口钉成小窗，媒体查询随之生效。

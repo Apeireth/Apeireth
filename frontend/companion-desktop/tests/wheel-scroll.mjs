@@ -1,6 +1,6 @@
 // 全局滚轮路由纯逻辑单测（真实模块 src/lib/wheel-scroll.ts；Node 类型擦除直 import）。
 //
-// 依据 CDP 实测病灶（scripts/wheel-scroll-probe.mjs，980x640 小窗）：
+// 依据 CDP 实测病灶（docs/archive/forensics/wheel-scroll-probe.mjs，980x640 小窗）：
 //   死区（聊天留白 pe:none 穿透 / 设置子导航列旁路）里滚轮事件到不了任何滚动面板。
 // 盯死四组：
 //   ① 路由规则 R1（命中链面板=原生零干预）/ R2（后代几何面板）/ R4（唯一面板）/ none；

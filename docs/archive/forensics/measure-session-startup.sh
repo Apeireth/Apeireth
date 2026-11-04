@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# ── L5 归档（历史卷宗，只读）──────────────────────────────────────────────
+# 2026-11-04 工具链清理批：原 `docs/archive/forensics/measure-session-startup.sh` —— 一次性实测脚本，
+# 0 调用方；迁入 `docs/archive/forensics/` 保留取证痕迹。除本横幅与 repo-root
+# 推导修正（迁入后目录深度变了）外，原件逻辑未改。
 # ============================================================================
 # measure-session-startup.sh — `apeireth session` 启动到 ready 全进程实测（跨平台）
 # ----------------------------------------------------------------------------
@@ -9,7 +13,7 @@
 #       退出。含 tokio 运行时创建与进程退出（比 cold-start 基准口径宽，如实标注）。
 # 形态: 真冷（每轮全新数据目录）与热开（同数据目录重复启动）两组各 N 轮。
 # 前置: cargo build --release --locked -p apeireth-cli
-# 用法: scripts/measure-session-startup.sh [-n RUNS] [-e EXE]
+# 用法: docs/archive/forensics/measure-session-startup.sh [-n RUNS] [-e EXE]
 # 输出: 每组 min/mean/P50/max + 逐轮原始毫秒值；退出码 0 = 全部启动成功。
 # 纪律: 数字可复核（本脚本 + 日期 + 工具链，见输出抬头）。
 # ============================================================================
@@ -17,7 +21,11 @@ set -euo pipefail
 
 RUNS=12
 EXE=""
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# 迁入 docs/archive/forensics/ 后脚本深度变了 ⇒ repo-root 改用 git 顶层目录推导
+# （原为脚本所在目录的父目录，即 scripts/ 的父目录）。
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(git -C "${SCRIPT_DIR}" rev-parse --show-toplevel 2>/dev/null || true)"
+if [ -z "${REPO_ROOT}" ]; then REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"; fi
 
 while getopts "n:e:" opt; do
   case "$opt" in
@@ -50,7 +58,7 @@ BASE="$(mktemp -d "${TMPDIR:-/tmp}/apeireth-session-startup-XXXXXX")"
 cleanup() { rm -rf "$BASE"; }
 trap cleanup EXIT
 
-echo "# apeireth session 启动实测（scripts/measure-session-startup.sh）"
+echo "# apeireth session 启动实测（docs/archive/forensics/measure-session-startup.sh）"
 echo "- 时间: $(date '+%Y-%m-%d %H:%M:%S %Z') / 工具链: $(rustc --version 2>/dev/null || echo unknown) / 仓库版本: $(git -C "$REPO_ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown) / 轮数: $RUNS"
 echo "- 口径: 全进程墙钟（进程创建 → ready → 退出，含 tokio 运行时创建）"
 echo "- 平台: $(uname -sm)"

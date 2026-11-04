@@ -176,7 +176,7 @@ function killTree(child) {
   }
 }
 
-// ---------------- CDP（复用 scripts/wheel-scroll-probe.mjs 的连接形态） ----------------
+// ---------------- CDP（复用 docs/archive/forensics/wheel-scroll-probe.mjs 的连接形态） ----------------
 async function listTargets(port = CDP_PORT) {
   const res = await fetch(`http://127.0.0.1:${port}/json/list`);
   return res.json();
