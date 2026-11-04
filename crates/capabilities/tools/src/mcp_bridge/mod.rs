@@ -7,10 +7,9 @@
 //!
 //! 1. **Configuration surface** ([`config`]): `APEIRETH_MCP_SERVERS` (JSON
 //!    array) is the primary entry, the data directory's `mcp-servers.json`
-//!    (opened with the stored-document fail-closed semantics) is the
-//!    secondary one. A broken configuration refuses to open; it never
-//!    silently degrades to defaults. Startup logs are redacted: URLs may be
-//!    recorded, token/secret parameters never are.
+//!    (stored-document fail-closed semantics) is the secondary one. A broken
+//!    configuration refuses to open; it never degrades to defaults. Startup
+//!    logs are redacted: URLs may be recorded, token/secret parameters never.
 //! 2. **Connections** ([`connection`]): one connection per configured server,
 //!    with an initialize lifecycle state machine and disconnect-reconnect
 //!    that re-discovers the tool list after every reconnect.
@@ -24,12 +23,13 @@
 //!    [`ToolOutcome`](crate::exec_pipeline::ToolOutcome).
 //! 4. **Governance mapping** ([`governance`]): an external tool's permission
 //!    declaration maps to explicit [`PermissionPolicy`] grants; with no
-//!    explicit authorization the call goes to human approval, and
-//!    `APEIRETH_MCP_READONLY_PRESET=1` releases server-declared read-only
-//!    tools (still through the full pipeline).
+//!    explicit authorization the call sits at the require-approval level
+//!    (`ask` — the bridge states the verdict, it does not run the call), and
+//!    `APEIRETH_MCP_READONLY_PRESET=1` releases read-only tools (full pipeline).
 //!
-//! [`mock`] is an in-process JSON-RPC server test double (no sockets, no
-//! subprocesses) used by the end-to-end tests.
+//! [`mock`] is an in-process JSON-RPC server test double (no sockets, no subprocesses) for the e2e tests.
+//!
+//! **生产未接线**：发现 / 登记 / 授权三环零生产调用点 ⇒ 生产只构造桥与模块袋，0 个外部工具进模型工具目录。
 
 pub mod bridge;
 pub mod catalog;

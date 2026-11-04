@@ -6,7 +6,7 @@
 //! - 断点修复断言: 挂在别的槽上的开关 (记忆固化/检索深度自适应/图社区分诊/
 //!   自学习) 按**实际注册条件**取值, 上游槽缺席时自报照实 false; 外部工具桥
 //!   (mcp) 行按"桥已装配且有可用服务器"取值 —— 已启用但无服务器配置 =
-//!   无外部工具。
+//!   照实 false; **该行 = 桥 / 配置面口径, 不是外部工具面可用** (W9)。
 //!
 //! 自报读值统一经 `tool.self_status` 真调用取证 (与生产同一条投影路径)。
 
@@ -300,8 +300,10 @@ async fn community_triage_reports_false_without_the_graph_slot() {
     assert_eq!(roster_of(&modules).await["community_triage"], false);
 }
 
-/// MCP 自报语义 (如实): 桥已装配**且**有可用服务器配置才算外部工具面生效 ——
-/// 已启用但无服务器配置 = 无外部工具 (照实 false)。
+/// MCP 名册行的自报语义 (如实): 该行 = **桥 / 配置面已装配** (服务器列表已加载
+/// 且有 ≥1 enabled 条目), **不是**外部工具面可用 —— 外部工具面在生产未接线
+/// (发现 / 登记 / 授权三环零生产调用点, 见 docs/status/unwired-ledger.md W9),
+/// 故该行 true 与外部工具数零关系, 读数不可当「MCP 工具可用」。
 #[tokio::test]
 async fn mcp_row_reports_external_tools_only_when_the_bridge_serves() {
     let dir = tempfile::tempdir().expect("temp dir");
@@ -321,9 +323,17 @@ async fn mcp_row_reports_external_tools_only_when_the_bridge_serves() {
     let modules = ProductionModules::build(config, ProductionBackends::default(), clock())
         .expect("assembly builds");
     assert!(modules.mcp_bridge().is_some(), "桥必须装配");
-    assert_eq!(roster_of(&modules).await["mcp"], true);
+    // 断言: 开关开 + 有服务器配置 ⇒ 名册该行为 true。
+    // **口径注 (不是断言)**: 这个 true = 桥 / 配置面已装配, **不代表外部工具
+    // 面可用** —— 生产装配零外部工具 (发现 / 登记 / 授权三环零生产调用点), 故
+    // 该行 true 与外部工具数零关系, 读数不可当「MCP 工具可用」。
+    assert_eq!(
+        roster_of(&modules).await["mcp"],
+        true,
+        "开关开 + 有服务器配置 ⇒ 名册 mcp 行为 true (桥 / 配置面口径, 不等于外部工具面可用)"
+    );
 
-    // 开关开 + 无服务器配置: 桥照常装配 (面在), 但无外部工具 —— 照实 false。
+    // 开关开 + 无服务器配置: 桥照常装配 (面在), 但服务器面空 —— 照实 false。
     let empty = tempfile::tempdir().expect("temp dir");
     let mut config = base_config();
     config.mcp = true;
@@ -334,7 +344,7 @@ async fn mcp_row_reports_external_tools_only_when_the_bridge_serves() {
     assert_eq!(
         roster_of(&modules).await["mcp"],
         false,
-        "已启用但无服务器配置 = 无外部工具"
+        "已启用但无服务器配置 = 服务器面空 ⇒ 照实 false (桥 / 配置面口径)"
     );
 
     // 开关关: 不装配、照实 false。

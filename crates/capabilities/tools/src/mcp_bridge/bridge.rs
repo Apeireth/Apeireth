@@ -1,13 +1,13 @@
 //! The bridge: configuration in, dynamic tools out.
 //!
+//! **生产未接线**：发现 / 登记 / 授权三环零生产调用点 ⇒ `refresh()` 生产不跑，0 个外部工具进模型工具目录。
+//!
 //! One [`McpToolBridge`] owns one connection per enabled server, the dynamic
 //! tool catalog, and the shared five-stage pipeline every external call
 //! walks. [`McpToolBridge::refresh`] is the dynamic catalog entry: it runs
-//! `tools/list` on every live link (re-opening a link that dropped, which
-//! re-runs the handshake and re-discovers), reconciles the catalog, and
-//! reports exactly what must be registered and unregistered. Duplicate
-//! identities are refused at every level — a server that lists one name twice
-//! fails the refresh.
+//! `tools/list` on every live link (re-opening a dropped link, which re-runs
+//! the handshake and re-discovers), reconciles the catalog, and reports what
+//! must be registered and unregistered; duplicate identities are refused.
 
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};

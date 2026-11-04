@@ -1363,12 +1363,12 @@ impl ProductionModules {
 
         // External tool bridge (MCP): the slot is opt-in, and enabling it
         // loads the server list at assembly time (env primary, data-directory
-        // stored document secondary) with fail-closed semantics. Connections
-        // are established asynchronously after build; the module bag is the
-        // registration target for the dynamic tools discovery produces. The
-        // server list was loaded above (before the roster projection) — a
-        // server list with no enabled entry assembles an inert bridge (no
-        // external tools), and the roster reports that honestly.
+        // stored document secondary) with fail-closed semantics. Connection
+        // and discovery are NOT triggered in production: the discovery entry
+        // point `McpToolBridge::refresh()` has zero production call sites, so
+        // no external tool reaches the runtime capability table. The server
+        // list was loaded above (before the roster projection) — a list with
+        // no enabled entry assembles an inert bridge, and the roster says so.
         let mut mcp_bridge = None;
         let mut mcp_module = None;
         if let Some(server_config) = mcp_server_config {
@@ -1378,7 +1378,7 @@ impl ProductionModules {
                 RuntimeError::misconfigured(format!("mcp tool bridge refused to assemble: {error}"))
             })?;
             let module = Arc::new(McpModule::new());
-            capabilities.extend(module.capabilities());
+            capabilities.extend(module.capabilities()); // 发现之前 extend 空袋 = 恒 no-op；动态工具不入静态能力表
             mcp_bridge = Some(Arc::new(bridge));
             mcp_module = Some(module);
         }
@@ -1780,7 +1780,7 @@ impl ProductionModules {
     }
 
     /// The external tool bridge assembled for the MCP slot, when enabled.
-    /// Adapters keep this handle to run the asynchronous connect/discovery pass.
+    /// No adapter consumes this handle: connect/discovery never runs in production.
     pub fn mcp_bridge(&self) -> Option<&Arc<McpToolBridge>> {
         self.mcp_bridge.as_ref()
     }

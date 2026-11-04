@@ -70,7 +70,7 @@ claims:
 
   - id: tool.mcp_bridge
     title: "MCP 外部工具桥（catalog/连接/治理映射/配置面）"
-    level: PRODUCTION WIRED
+    level: IMPLEMENTED
     default: "OFF"
     switch_env: APEIRETH_ENABLE_MCP
     sources:
@@ -86,7 +86,7 @@ claims:
     verify_cmd: "cargo test -p apeireth-tools-canonical mcp_bridge"
     owner: tools
     next_review: "2026-11-20"
-    notes: "服务器配置 = APEIRETH_MCP_SERVERS env + mcp-servers.json（拒开）；管理 UI/健康检查面未接线。；2026-10-22 批次复核：tools-canonical mcp_bridge 15 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立"
+    notes: "四级口径：IMPLEMENTED（库级）｜PRODUCTION WIRED 不成立｜DEFAULT ENABLED 不成立（默认关，开关 `APEIRETH_ENABLE_MCP=1`）｜HARDWARE VALIDATED 不成立。；2026-11-04 实测：开 `APEIRETH_ENABLE_MCP=1` 后 0 个 MCP 工具进入模型工具目录 —— 四环全断：①发现 `crates/capabilities/tools/src/mcp_bridge/bridge.rs:175` 的 `McpToolBridge::refresh()` 生产调用点 0（仅 `crates/capabilities/tools/tests/mcp_bridge_e2e.rs`、`crates/capabilities/tools/tests/rea_bridge_probe.rs`、`crates/engine/runtime-assembly/tests/mcp_bridge_runtime_e2e.rs` 调用）；②登记 `crates/engine/runtime/src/canonical/runtime.rs:563` 的 `Runtime::register_dynamic_tool()` 生产调用点 0，且 `crates/engine/runtime-assembly/src/canonical/production.rs:1381` 的 `capabilities.extend(module.capabilities())` extend 的是空袋 ⇒ 恒 no-op；③授权 `crates/adapters/cli/src/lib.rs:1185-1373` 的生产 grant 表零条 mcp，`crates/foundation/governance/src/permission.rs:147-160` 只做精确 id 匹配 ⇒ 动态 id `tool.mcp.<server>.<tool>` 无法被静态表覆盖；桥内自建空策略（`crates/capabilities/tools/src/mcp_bridge/bridge.rs:117`）的 `Ask` 落成 `pipeline.pre_ask` permanent_error（`crates/capabilities/tools/src/exec_pipeline/mod.rs:228`/`crates/capabilities/tools/src/exec_pipeline/mod.rs:274`）⇒ 不是人批；④派发 `crates/engine/runtime/src/canonical/runtime.rs:585-596` 的 `tool_declarations()` 内无 `mcp:*`。；生产成立的部分只有：服务器列表加载（env 主入口 + 数据目录 StoredDoc 次入口 + 坏配置拒开，`crates/engine/runtime-assembly/src/canonical/production.rs:868-878`）与桥/模块袋的构造（`crates/engine/runtime-assembly/src/canonical/production.rs:1372-1384`）—— 标题里的 catalog / 连接 / 治理映射三面在生产均不成立。；读数陷阱：自述名册 `crates/engine/runtime-assembly/src/canonical/self_status_source.rs:1182` 的 `mcp` 名册行（`roster_from_config` 内） = `config.mcp` = 「服务器列表已加载且有 ≥1 enabled 条目」（`crates/engine/runtime-assembly/src/canonical/production.rs:885-887`）⇒ 与外部工具数零关系，不可读成「MCP 可用」。；服务器配置 = APEIRETH_MCP_SERVERS env + mcp-servers.json（拒开）；管理 UI/健康检查面未接线。；2026-11-04 口径归位批：level 由 PRODUCTION WIRED 降为 IMPLEMENTED —— 接线属新功能 + 治理模型变更（动态 id 与静态 grant 表形态冲突、`full` 会话预设把 RequireApproval 改写成 Allow、断线重连后能力表重登语义缺失），须 owner 单独拍板，登记见 `docs/status/unwired-ledger.md` W9"
 
   - id: tool.voice_speak
     title: "发声工具面（系统 TTS 合成即播 + 播放纪律 + 账本）"

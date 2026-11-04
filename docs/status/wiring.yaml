@@ -3,7 +3,7 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: 6d9ddd0a68fde131949d22d7e376ac3490ee3c623f99940257688fc697a19470
+claims_sha256: d5ee144d284b977489e27571096e2f34db40a52f4d5d6559f6af41f1bed0726e
 claims_total: 29
 items:
   - id: "rt.provider_router"
@@ -85,7 +85,7 @@ items:
         - "crates/capabilities/tools/src/mcp_bridge/catalog.rs"
       claims_id: "tool.mcp_bridge"
     gaps:
-      - "能力矩阵未出现开关 APEIRETH_ENABLE_MCP（待补）"
+      - "未达 PRODUCTION WIRED：四级口径：IMPLEMENTED（库级）｜PRODUCTION WIRED 不成立｜DEFAULT ENABLED 不成立（默认关，开关 `APEIRETH_ENABLE_MCP=1`）｜HARDWARE VALIDATED 不成立。；2026-11-04 实测：开 `APEIRETH_ENABLE…"
   - id: "tool.voice_speak"
     capability: "发声工具面（系统 TTS 合成即播 + 播放纪律 + 账本）"
     implemented:

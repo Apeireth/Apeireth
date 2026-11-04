@@ -385,7 +385,7 @@ impl CapabilityProvider for McpModule {
 
 /// The module bag is the registration target for the external tool bridge:
 /// discovered dynamic tools land here, and identity collisions are refused by
-/// the same reject-on-collision check the module already enforces.
+/// the same check the module enforces. 当前生产无注册者 (发现入口零调用点).
 impl apeireth_tools_canonical::mcp_bridge::McpToolRegistry for McpModule {
     fn register_tool(&self, tool: Arc<dyn ToolCapability>) -> Result<(), String> {
         McpModule::register_tool(self, tool)
