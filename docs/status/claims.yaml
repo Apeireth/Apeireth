@@ -528,7 +528,7 @@ claims:
       - crates/adapters/cli/src/care_heartbeat.rs
     tests:
       - crates/engine/runtime-assembly/tests/bio_circadian_production.rs
-    verified_at: 5c74f955e62cebcb1979fb3606e804d9fb10d73c
+    verified_at: 0d8041ee4aac88e0d2443505a83246faa60ae30d
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_circadian_production"
     owner: cli
     next_review: "2026-11-20"
@@ -630,7 +630,7 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/bio_care_wiring.rs
       - crates/engine/runtime-assembly/tests/bio_mechanisms_self_status.rs
-    verified_at: 4041ea70
+    verified_at: 0d8041ee4aac88e0d2443505a83246faa60ae30d
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_care_wiring"
     owner: organ
     next_review: "2026-11-20"
@@ -673,7 +673,7 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/bio_quorum_wiring.rs
       - crates/engine/runtime-assembly/tests/bio_quorum_immune_wiring.rs
-    verified_at: 4041ea70
+    verified_at: 0d8041ee4aac88e0d2443505a83246faa60ae30d
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_quorum_wiring"
     owner: orchestration
     next_review: "2026-11-20"

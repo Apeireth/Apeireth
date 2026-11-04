@@ -295,7 +295,7 @@ size crates/adapters/tui/src/state.rs 1585
 size crates/capabilities/tools/src/backup.rs 1236
 size crates/capabilities/tools/src/device/device_control.rs 3250
 size crates/capabilities/tools/src/device/guard_watch.rs 1341
-size crates/capabilities/tools/src/doc_ops.rs 6260
+size crates/capabilities/tools/src/doc_ops.rs 6255
 size crates/capabilities/tools/src/external.rs 2672
 size crates/capabilities/tools/src/git_write.rs 1256
 size crates/capabilities/tools/src/image_ops.rs 2233
@@ -306,7 +306,7 @@ size crates/capabilities/tools/src/recon/dotnet.rs 1233
 size crates/capabilities/tools/src/recon/yara.rs 1954
 size crates/capabilities/tools/src/recon_tool.rs 1664
 size crates/capabilities/tools/src/self_status.rs 4184
-size crates/capabilities/tools/src/sheet_ops.rs 4392
+size crates/capabilities/tools/src/sheet_ops.rs 4387
 size crates/capabilities/tools/src/shell.rs 1280
 size crates/engine/guard/src/scenario.rs 3853
 size crates/engine/guard/src/semantics.rs 1216
@@ -337,7 +337,7 @@ size crates/engine/organ/src/goal.rs 1619
 size crates/engine/organ/src/neuromodulation.rs 1608
 size crates/engine/organ/src/nociception.rs 1487
 size crates/engine/organ/src/prompt_assembly.rs 1492
-size crates/engine/organ/src/world_model.rs 1336
+size crates/engine/organ/src/world_model.rs 1332
 size crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs 1238
 size crates/engine/runtime-assembly/src/canonical/bio_tone.rs 1319
 size crates/engine/runtime-assembly/src/canonical/cognitive.rs 5139
