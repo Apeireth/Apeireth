@@ -413,12 +413,17 @@ async fn run_tamper_case(
     expected_drift: &str,
 ) {
     let tmp = tempdir().unwrap();
+    // 初始载荷只用 shell **声明 schema 内**的字段（`command` / `cwd` / `timeout_ms`，
+    // 声明面 `additionalProperties: false`）。schema 外的字段在**冻结阶段**就会被
+    // 「未知字段拒绝」挡下 ⇒ 根本走不到审批 ⇒ 测不成「批准后篡改」这一段。
+    // 篡改载荷本身仍可引入 schema 外字段（篡改发生在批准**之后**，不再经解析）。
     let call = ToolCall {
         id: "call_shell_1".into(),
         name: "shell".into(),
         arguments: serde_json::json!({
             "command": "echo shell_binding_ok",
-            "argv": ["a", "b"],
+            "cwd": tmp.path().to_string_lossy(),
+            "timeout_ms": 1000,
         }),
     };
     let provider = FakeProvider::with_first_tool_call(call);
@@ -553,21 +558,33 @@ async fn tampering_the_target_after_approval_is_refused_at_the_execution_boundar
 async fn tampering_parameters_after_approval_is_refused_at_the_execution_boundary() {
     run_tamper_case(
         |approval| {
-            approval.continuation.tool_calls[0].arguments["argv"] = serde_json::json!(["z", "b"]);
+            // 改 schema 内的一个参数值 (`cwd`): 目标 (`command`) 不变, 参数面变了。
+            approval.continuation.tool_calls[0].arguments["cwd"] =
+                serde_json::json!("/nonexistent-tampered-cwd");
         },
         "parameters",
     )
     .await;
 }
 
-/// G2.5 篡改检测·改顺序: 批准后改 argv 顺序 (值集合不变) → 摘要不符 → 拒绝即帧。
+/// G2.5 篡改检测·改另一参数: 批准后改超时值 (目标不变) → 摘要不符 → 拒绝即帧。
+///
+/// 覆盖迁移登记 (2026-11-04): 本用例原为「改 argv **顺序** (值集合不变)」，
+/// 归因面是 `argument_order`。该场景依赖 `argv` 这个**数组**字段，而 shell 的声明
+/// schema 是 `additionalProperties: false`（只认 `command` / `cwd` / `timeout_ms`），
+/// 且实现已兑现该声明（未知字段拒绝）⇒ 载荷里的 `argv` 在**冻结阶段**就被挡下，
+/// 根本走不到审批，runtime 层无法再构造「同集合改顺序」的载荷。
+/// ⇒ 本用例改为篡改另一个 schema 内参数 (`timeout_ms`)；`argument_order` 归因逻辑
+/// 本身由治理层单测覆盖：
+/// `crates/foundation/governance/src/action_binding.rs`
+/// 的 `argument_order_changes_change_the_digest_and_are_refused`。
 #[tokio::test]
-async fn reordering_arguments_after_approval_is_refused_at_the_execution_boundary() {
+async fn tampering_timeout_after_approval_is_refused_at_the_execution_boundary() {
     run_tamper_case(
         |approval| {
-            approval.continuation.tool_calls[0].arguments["argv"] = serde_json::json!(["b", "a"]);
+            approval.continuation.tool_calls[0].arguments["timeout_ms"] = serde_json::json!(999_999);
         },
-        "argument_order",
+        "parameters",
     )
     .await;
 }
