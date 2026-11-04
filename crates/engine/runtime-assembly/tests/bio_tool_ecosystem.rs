@@ -19,6 +19,7 @@ use apeireth_core::clock::VirtualClock;
 use apeireth_core::kernel::{Clock, Timestamp};
 use apeireth_plugin::ToolCapability;
 use apeireth_protocol::canonical::ToolCall;
+use apeireth_runtime_assembly::canonical::TOOL_TAXONOMY_VERSION;
 use apeireth_runtime_assembly::{
     BuildInstrumentation, CountingBuildProbe, ModuleBuildProbe, ProductionBackends,
     ProductionModules, ProductionModulesConfig,
@@ -139,7 +140,13 @@ async fn the_switch_reads_the_static_tool_ecosystem_read_only() {
     assert_eq!(row["stage"], json!("wired"), "{row}");
     assert_eq!(row["wired"], json!(true), "{row}");
     let value = &row["value"];
-    assert_eq!(value["taxonomy_version"], json!(1), "{value}");
+    // 比对**导出的版本常量**而非硬钉数字: 策展表内容变更时版本号按文件头规则 +1
+    // (硬钉会让每次表变更都必须回来改这个测试 —— 那是版本号漂移的来源)。
+    assert_eq!(
+        value["taxonomy_version"],
+        json!(TOOL_TAXONOMY_VERSION),
+        "{value}"
+    );
     assert_eq!(
         value["registered"].as_u64().expect("registered"),
         registered as u64,
