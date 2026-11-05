@@ -456,6 +456,12 @@ pub struct McpBridgeOptions {
     /// step with a server that reconnects and re-discovers a different tool
     /// list.
     ///
+    /// **The first periodic refresh runs one interval after the carrier
+    /// starts** (not immediately at t=0): the startup wiring has just
+    /// discovered the tool list, so an immediate first round would only
+    /// repeat that discovery. With the default the first round therefore
+    /// lands at t = 60 s.
+    ///
     /// **配置来源**: 本项是**程序化配置**（组合根按需构造 `McpBridgeOptions`）,
     /// **不新增 env 旋钮** —— 未在 `docs/architecture/env-registry.toml` 登记的
     /// 开关名不得进代码。若日后要开放运行时可调, 先登记 env 真源再接线。

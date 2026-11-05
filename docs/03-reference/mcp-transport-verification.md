@@ -566,7 +566,7 @@ exit=0
 
 ---
 
-## 10. 遗留与建议（**逐条标注处置状态**；① ② 已实施并实测，③ ④ ⑤ 仍开）
+## 10. 遗留与建议（**逐条标注处置状态**；① ② ⑤ 已实施并实测，③ ④ 仍开）
 
 | # | 观察 | 证据（file:line） | 性质 |
 |---|---|---|---|
@@ -574,7 +574,7 @@ exit=0
 | ② | ~~**不合法的帧被静默丢弃**~~ ⇒ **已实施（2026-11-05 补）**：帧仍被丢弃、链路**不断**（**只记不改行为**），但不再无声 ⇒ ①**机器可读**：trait 上新增带默认实现的 `McpChannel::malformed_frames() -> u64`（链接级累计丢弃数，外部实现者零破坏）；②**人可读**：限频 stderr 一行（首条 + 之后每 100 条一条，**不记帧原文** —— 坏帧可能带服务器侧内容）⇒ 防日志风暴。stdio 读帧处的**同类**静默丢弃一并覆盖。 | 落点 `crates/capabilities/tools/src/mcp_bridge/transport.rs`（trait 方法 + 限频助手 + 两处读帧分支）；用例 `crates/capabilities/tools/tests/mcp_malformed_frame_observability.rs`（2 条，含**阴性对照**） | **已销账**（可观测性）；⚠️ 遗留 ③（无 `event:` 的帧**连计数都不进**）仍开 |
 | ③ | **`event:` 字段是必需的**：裸 `data:` 行（无 `event:`）不被判为 `message` ⇒ 按「规范直觉」写的服务端会静默不响应 | `crates/foundation/plugin/src/mcp/sse.rs:28-34`；`transport.rs:366-371` | 实现边界（协议口径已在本文 §2.3 写清） |
 | ④ | **`retry:` / `id:` 帧被解析但未被使用**：连接断了不会按服务端给的 `retry` 退避重连，重连预算完全在上层 `McpServerConnection` | `crates/foundation/plugin/src/mcp/sse.rs:19`（字段存在）、`transport.rs:354-376`（读任务不读 retry）、`connection.rs:220-261`（重连在上层） | 实现边界（不影响本次结论） |
-| ⑤ | **周期刷新的第一拍是「立即」而非「一个周期后」**：`tokio::time::interval` 的首个 tick 立即完成 ⇒ 启动期接线刚做完就又跑了一轮发现（实测捕捉到第二次 `tools/list`，`id=3`）；它**与进程退出赛跑** ⇒ 短命的 CLI 进程可能跑不到第二拍。与「默认 60 000 ms 周期」的措辞有落差 | `crates/engine/runtime-assembly/src/canonical/external_tool_bridge.rs:442`（`tokio::time::interval` + `MissedTickBehavior::Delay`）、`crates/capabilities/tools/src/mcp_bridge/config.rs:49`（`DEFAULT_REFRESH_INTERVAL_MS`） | 口径落差（**只报告不实施**；是否改成「首拍延后一个周期」由主线裁决） |
+| ⑤ | ~~**周期刷新的第一拍是「立即」而非「一个周期后」**~~ ⇒ **已实施（2026-11-05 补）**：承载循环改为 `interval_at(now + interval, interval)` ⇒ **首拍 = 一个周期后**（默认 60 s ⇒ 首轮落 t=60 s）⇒ 与「每 N 毫秒刷新一次」的口径一致，且消掉「启动期接线刚做完又跑一轮发现」的重复劳动与「与进程退出赛跑」。**不改任何公开签名** ⇒ adapters 侧零改动。 | 落点 `crates/engine/runtime-assembly/src/canonical/external_tool_bridge.rs`（`interval_at`）+ `crates/capabilities/tools/src/mcp_bridge/config.rs`（`refresh_interval_ms` 的 doc）；用例 `crates/engine/runtime-assembly/tests/mcp_refresh_first_round.rs`（2 例，含**阴性对照**：临时改回 `interval(interval)` ⇒ 用例**真的 FAILED**） | **已销账**（口径落差）；⚠️ 唯一风险窗口：服务器在启动后、首个周期前变更工具列表 ⇒ 变更最多晚一个周期进能力表（≤ 60 s） |
 
 **本批 0 行 Rust 改动** —— 上述五条**只报告不实施**，是否修由主线裁决。
 

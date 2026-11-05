@@ -28,6 +28,7 @@
 //!    登记 + 桥级族放行）。
 //! 4. [`refresh_external_tools`] + [`spawn_external_tool_refresh`]: **周期刷新**
 //!    —— 发现（逐服务器隔离）→ 撤销 → 登记, 把增量同步进运行时能力表。
+//!    （**首拍在一个周期之后**, 不是立即 —— 见 [`spawn_external_tool_refresh`]。）
 //!
 //! # 周期刷新为什么必须存在
 //!
@@ -427,6 +428,12 @@ pub type ExternalToolRefreshObserver = Arc<dyn Fn(&ExternalToolRefreshOutcome) +
 /// `interval` 由调用方给出（生产面取桥的 `options().refresh_interval_ms`,
 /// `0` = 关闭周期刷新 ⇒ 不起任务）。
 ///
+/// **首拍 = 一个周期之后**（不是立即）: 启动期接线（[`wire_external_tools`]）
+/// 刚跑完一次发现, 承载任务若在 t=0 又跑一轮, 那轮发现是**重复劳动**（而且
+/// 与进程退出赛跑: 短命的 CLI 进程跑不到它, 却已经付了一次发现的钱）。
+/// 首拍延后一个周期 ⇒ 口径与「每 N 毫秒刷新一次」一致（默认 60 000 ms ⇒
+/// 第一轮在 t = 60 s）, 且启动期的接线结果原样保留到第一轮刷新。
+///
 /// # 失败语义
 ///
 /// 某服务器不可达 ⇒ 本轮不撤它的工具; 失败逐条进本轮结果 ⇒ 由观察回调记日志
@@ -439,7 +446,9 @@ pub fn spawn_external_tool_refresh(
     on_round: ExternalToolRefreshObserver,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
-        let mut ticker = tokio::time::interval(interval);
+        // 首拍延后一个周期（见上）: `interval_at` 的第一拍落在给定的起点上,
+        // 之后的每一拍间隔一个周期。
+        let mut ticker = tokio::time::interval_at(tokio::time::Instant::now() + interval, interval);
         // 错过的一拍不追补: 刷新是「跟上实况」, 不是「补齐历史」。
         ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         loop {

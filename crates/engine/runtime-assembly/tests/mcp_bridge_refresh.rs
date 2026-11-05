@@ -417,7 +417,7 @@ async fn the_periodic_carrier_runs_a_round_and_reports_it() {
         observer,
     );
 
-    // 第一轮由时间轴的立即触发驱动 ⇒ 不靠真实时间等待也能收到。
+    // 第一轮在一个周期之后触发 ⇒ 承载任务必须先 park 一次（真实时间轴，周期为毫秒级）。
     let outcome = receiver.recv().await.expect("the carrier reports a round");
     assert!(outcome.is_healthy(), "{outcome:?}");
     assert_eq!(outcome.registered, 1);
