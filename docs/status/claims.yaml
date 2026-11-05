@@ -90,7 +90,7 @@ claims:
       - crates/capabilities/tools/src/mcp_bridge/catalog.rs
       - crates/engine/runtime-assembly/tests/production_mcp_factory.rs
       - crates/engine/runtime-assembly/tests/convergence_mcp.rs
-    verified_at: e8ff0ee7a65fffe679d823d0c0786d781ca9d5d7
+    verified_at: 42d3addfa0b8ec1e3e4664c38d3f505ae79551da
     verify_cmd: "cargo test -p apeireth-tools-canonical mcp_bridge"
     owner: tools
     next_review: "2026-11-20"
@@ -289,7 +289,7 @@ claims:
       - crates/adapters/cli/src/lib.rs
     tests:
       - crates/adapters/gateway/tests/tls_serve.rs
-    verified_at: 9a5ba89cc55974472a27069d34412817d6033745
+    verified_at: 42d3addfa0b8ec1e3e4664c38d3f505ae79551da
     verify_cmd: "cargo test -p apeireth-gateway --test tls_serve"
     owner: gateway
     next_review: "2026-11-20"
@@ -825,7 +825,7 @@ claims:
       - crates/adapters/cli/tests/gateway_panels.rs
       - crates/engine/runtime-assembly/tests/production_cognitive_v1.rs
       - crates/engine/runtime-assembly/tests/profile_memory_authorization.rs
-    verified_at: e8ff0ee7a65fffe679d823d0c0786d781ca9d5d7
+    verified_at: 42d3addfa0b8ec1e3e4664c38d3f505ae79551da
     verify_cmd: "cargo test -p apeireth-runtime --test registry_runtime_v1 --locked && cargo test -p apeireth-runtime-assembly --test capability_modules_v1 --locked"
     owner: runtime
     next_review: "2026-11-28"
@@ -897,7 +897,7 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/convergence_memory.rs
       - crates/engine/runtime-assembly/tests/profile_memory_authorization.rs
-    verified_at: e8ff0ee7a65fffe679d823d0c0786d781ca9d5d7
+    verified_at: 42d3addfa0b8ec1e3e4664c38d3f505ae79551da
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test profile_memory_authorization --locked -j 2 && cargo test -p apeireth-runtime-assembly --test convergence_memory --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
@@ -923,7 +923,7 @@ claims:
       - crates/engine/runtime-assembly/tests/managed_main.rs
       - crates/engine/runtime-assembly/tests/production_cognitive_v1.rs
       - crates/engine/runtime-assembly/tests/portable_host.rs
-    verified_at: 9a5ba89cc55974472a27069d34412817d6033745
+    verified_at: 42d3addfa0b8ec1e3e4664c38d3f505ae79551da
     verify_cmd: "cargo test -p apeireth-cli --test canonical_cli_bootstrap --test care_heartbeat_host --locked -j 2 && cargo test -p apeireth-runtime-assembly --test managed_main --test production_cognitive_v1 --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
@@ -1062,7 +1062,7 @@ claims:
       - crates/capabilities/tools/src/fetch.rs
     tests:
       - crates/engine/runtime-assembly/tests/prompt_injection_turn_warning.rs
-    verified_at: 71e9a4a4ca23945eb5d13491511fe3ef3ae79f06
+    verified_at: 42d3addfa0b8ec1e3e4664c38d3f505ae79551da
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test prompt_injection_turn_warning"
     owner: runtime-assembly
     next_review: "2026-12-05"

@@ -59,6 +59,8 @@ pwsh -NoProfile -File packaging/service/apeireth-service.ps1 stop     # 优雅�
 
 1. **优雅停机**: 带服务令牌 `POST /v1/admin/shutdown` (令牌门下) → 网关收尾
    (写 `gateway.shutdown` 审计 + 观测攒批全量落盘 + 释放 PID 文件) → 退出;
+   ⚠️ **逃生阀口径下本级不可达** (无令牌 ⇒ 过门身份恒为未认证 ⇒ 角色门拒管理面)
+   ⇒ ⇒ 直接走第 2 级;
 2. 优雅停机不成就 `Stop-ScheduledTask` 停任务;
 3. 仍不退则终止网关进程树 (兜底强杀, 收尾不保证 —— 会留下"未优雅"的空窗)。
 
@@ -99,6 +101,9 @@ pwsh -NoProfile -File packaging/service/apeireth-service.ps1 uninstall
    (`APEIRETH_GATEWAY_TOKEN`) 或客户端令牌表条目 (`APEIRETH_GATEWAY_TOKENS` /
    `client-tokens.json`, name→token, 过门审计带客户端名)。令牌族两面皆空时三态门口径
    照旧 (放行 + 警告帧 + 审计) —— 但常驻暴露面请勿裸奔。
+   ⚠️ **但角色门是另一层**: **用户表存在**时, 未认证调用方的**写面**一律 403
+   (既有 fail-closed 语义: 未绑定 = 拒) ⇒ ⇒ 「令牌族皆空」只保证**令牌门**放行,
+   不保证**写面**可写;
 2. **防火墙**: 默认绑定 `127.0.0.1` (仅本机)。确需 LAN/远程访问时: 非回环绑定
    (`-Bind 0.0.0.0` 或 env `APEIRETH_LISTEN`) + 主机防火墙只放行可信网段;
    **非回环绑定强制令牌**: 令牌族两面皆空时网关拒绝启动 (fail-closed), 显式

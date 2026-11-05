@@ -6,7 +6,7 @@
     },
     "crates/adapters/gateway": {
       "files": 36,
-      "loc": 19484
+      "loc": 19514
     },
     "crates/adapters/sdk": {
       "files": 22,
@@ -86,7 +86,7 @@
     },
     "crates/engine/runtime-assembly": {
       "files": 83,
-      "loc": 44805
+      "loc": 44838
     },
     "crates/engine/storage": {
       "files": 27,
