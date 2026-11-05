@@ -485,6 +485,27 @@
       "flags": []
     },
     {
+      "id": "check-memory-reachability",
+      "path": "scripts/check_memory_reachability.py",
+      "kind": "ratchet",
+      "is_guard": true,
+      "blocking": true,
+      "invocation": [
+        "python3 scripts/check_memory_reachability.py --check"
+      ],
+      "ci_workflows": [
+        ".github/workflows/memory-reachability-ratchet.yml"
+      ],
+      "has_baseline": true,
+      "notes": "记忆 crate 能力可达率闸门 —— 把「多少能力真的接在生产链路上」变成一个数字",
+      "flags": [
+        "--check",
+        "--help",
+        "--update",
+        "-h"
+      ]
+    },
+    {
       "id": "check-mod-files",
       "path": "scripts/check_mod_files.py",
       "kind": "guard",
