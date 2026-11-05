@@ -291,7 +291,7 @@ allowed_read_locations = []         # 空 = v0.1 只按名字卡, 不按位置�
 [budgets]
 max_file_loc = 6300                 # 现状最大 src 6255 (doc_ops.rs, 2026-11-04 实测); 只减不增
 max_workspace_crates = 30           # 目标: 图像家族移出后 20; 只减不增
-max_production_edges = 118          # 上限（棘轮，只减不增；新增需 ADR）；现行实测 111（2026-11-04 复测，arch_guard edges=111）
+max_production_edges = 111          # 上限（棘轮，只减不增；新增需 ADR）；现行实测 111（2026-11-05 收紧 118 → 111：与 max_workspace_crates=30 / max_distinct_names=160 同为「上限 == 实测」口径 ⇒ ⇒ 任何新增生产边都会被拦下 ⇒ ⇒ 真要加边先问总指挥）
 
 [exceptions]
 # 例外预算 — 已裁决 (ADR-0001, owner 授权代裁 2026-10-20)
