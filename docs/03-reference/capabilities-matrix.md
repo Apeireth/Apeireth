@@ -36,7 +36,7 @@
 | 项 | 值 |
 |---|---|
 | 命令 | `cargo test --workspace --all-targets --locked --no-fail-fast` |
-| 结果 | **365 套件 / 9101 passed / 0 failed / 51 ignored**（单一真源 [test-baseline.md](test-baseline.md)） |
+| 结果 | **367 套件 / 9135 passed / 0 failed / 51 ignored**（单一真源 [test-baseline.md](test-baseline.md)） |
 | 日期 | 2026-11-05 |
 | 工具链 | rustc 1.97.1 (8bab26f4f 2026-07-14) / cargo 1.97.1 / rustup 1.29.1；MSVC 14.44.35207 + Windows SDK 10.0.26100.0 |
 
