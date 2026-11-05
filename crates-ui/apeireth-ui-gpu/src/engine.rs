@@ -1350,21 +1350,19 @@ impl Engine {
     /// 真正建管线的实现（[`Engine::create_scene_pipeline`] 与
     /// [`Engine::recreate_pipeline`] 共用）。
     fn build_pipeline(&self, scene: &SceneDescriptor) -> Result<ScenePipeline, GpuError> {
-        // ⚠ 点列表（`GL_POINTS`）**只在 WebGL（GLES）后端**可用 ⇒ ⇒ 其它后端
-        //   **在进 wgpu 之前**显式拒绝。
+        // ⭐⭐⭐⭐ **有效场景**（E-51）：本后端画不出的拓扑 ⇒ ⇒ **自动降级**成等价形态。
         //
-        // ⭐ **为什么必须提前拒绝**（实测）：wgpu 的 **WebGPU 后端**在
-        //   `create_shader_module` 里处理 `gl_PointSize` 内建时会
-        //   `unwrap_failed` ⇒ ⇒ **panic** ⇒ 在浏览器里就是**页面崩溃** ⇒ ⇒
-        //   绝不能让它走到那一步。
-        if scene.topology == Topology::PointList && !point_list_supported(self.backend) {
-            return Err(GpuError::Unsupported(format!(
-                "点列表拓扑只在本引擎的 WebGL（GLES）后端可用（当前后端：{:?}）⇒ \
-                 WebGPU 规范没有点尺寸（gl_PointSize）⇒ 请改用实例化四边形拓扑 \
-                 （Topology::InstancedQuad，后端无关）",
-                self.backend
-            )));
-        }
+        // ⚠ 点列表（`GL_POINTS`）**只在 WebGL（GLES）后端**可用（WebGPU 规范没有
+        //   点尺寸 ⇒ wgpu 的 WebGPU 后端处理 `gl_PointSize` 内建时会 **panic**
+        //   ⇒ ⇒ 在浏览器里就是**页面崩溃** ⇒ ⇒ 绝不能让它走到那一步）。
+        //
+        // ⭐ **为什么现在不是「报错」而是「降级」**（E-51 的修法）：
+        //   降级目标是**实例化四边形**（点精灵的展开形态）⇒ ⇒ 而「四边形 ≡ 点图元」
+        //   这条等价性**已被逐像素门禁证明**（差异 0）⇒ ⇒⇒ ⇒ 所以降级**不改变画面**
+        //   ⇒ ⇒⇒ ⇒ 「同一份逻辑换后端 = 换画面」这个坑**被填上了**
+        //   ⇒ ⇒⇒ ⇒ 而那条腿的「0 差异」从此**不是假绿**（引擎侧真的画了粒子）。
+        let effective_scene = effective_scene_for_backend(scene, self.backend);
+        let scene = effective_scene.as_ref();
         // ⚠ 四边形拓扑必须**有实例数据**（否则画不出任何粒子）⇒ **显式拒绝**
         //   （不静默画一张空图 ⇒ 免得「没画」被误读成「一致」）。
         if scene.topology == Topology::InstancedQuad && scene.instance_data.is_empty() {
@@ -2102,6 +2100,59 @@ fn point_list_supported(backend: wgpu::Backend) -> bool {
     matches!(backend, wgpu::Backend::Gl)
 }
 
+/// ⭐⭐⭐⭐ **有效场景**：把「本后端画不出的拓扑」**自动降级**成画得出的等价形态（E-51）。
+///
+/// ## 为什么需要（E-51）
+///
+/// WebGPU 规范**没有点尺寸**（`gl_PointSize`）⇒ ⇒ 点图元在 WebGPU 后端**不存在**
+/// ⇒ ⇒ 而 wgpu 在 WebGPU 后端处理 `gl_PointSize` 内建时会 **panic**
+/// ⇒ ⇒⇒ ⇒ 以前引擎在**进 wgpu 之前**就**显式报错** ⇒ ⇒ 「同一份 intro 逻辑换后端 = 换画面」
+/// ⇒ ⇒⇒ ⇒ 而那条腿的「0 差异」其实是**假绿**（引擎侧**根本没画**粒子）。
+///
+/// ## 降级为什么是**像素安全**的
+///
+/// ⭐ 降级目标 = [`Topology::InstancedQuad`]（点精灵的**展开**形态）
+/// ⇒ ⇒ 而「四边形展开 ≡ 硬件点图元」这条等价性**已被逐像素门禁证明**
+/// ⇒ ⇒⇒ **差异 0**（`crates-ui/evidence/p5-b/drive_intro.py --probe flat`
+/// ⇒ ⇒⇒ 三条判据全 0 差异，`check_particle_edge.py` 判据**自带反事实自检**）
+/// ⇒ ⇒⇒ ⇒ 所以「在 WebGPU 上自动走四边形」与「在 WebGL 上走点图元」**画出同一张图**
+/// ⇒ ⇒⇒ ⇒ ⇒ 降级**不会**改变画面 ⇒ ⇒⇒⇒ ⇒ 这正是 E-51 台账里写明的修法。
+///
+/// ## 数据怎么搬
+///
+/// 点图元路径：粒子属性走**顶点缓冲**（每粒子 1 个顶点，`vertex_data`）；
+/// 四边形路径：粒子属性走**实例缓冲**（每粒子 1 个实例，`instance_data`）。
+/// ⇒ ⇒ **同一个粒子、同一个 `vec4`** ⇒ ⇒ 直接搬运 ⇒ ⇒ 语义**完全一致**。
+///
+/// ⚠️ 若调用方**显式**给了 `vertex_count`（只画前 N 个粒子）⇒ ⇒ 降级时按它**截断**
+/// ⇒ ⇒ 否则会多画（实例数是按 `instance_data` 长度算的）⇒ ⇒⇒ ⇒ 那就是**画错**。
+fn effective_scene_for_backend(
+    scene: &SceneDescriptor,
+    backend: wgpu::Backend,
+) -> std::borrow::Cow<'_, SceneDescriptor> {
+    if scene.topology != Topology::PointList || point_list_supported(backend) {
+        // ⭐ 支持点图元的后端 ⇒ **原样用**（WebGL 快路径保留）。
+        return std::borrow::Cow::Borrowed(scene);
+    }
+    // ⭐ 不支持 ⇒ ⇒ 降级成实例化四边形。
+    let mut downgraded = scene.clone();
+    let per_vertex = match scene.vertex_format {
+        VertexFormat::Vec2 => 2,
+        VertexFormat::Vec4 => 4,
+    };
+    let mut instance_data = std::mem::take(&mut downgraded.vertex_data);
+    if let Some(limit) = scene.vertex_count {
+        // ⚠️ 显式顶点数 ⇒ ⇒ 只保留前 `limit` 个粒子（**别多画**）。
+        let keep = (limit as usize).saturating_mul(per_vertex);
+        instance_data.truncate(keep);
+    }
+    downgraded.instance_data = instance_data;
+    downgraded.instance_format = scene.vertex_format;
+    downgraded.vertex_count = None;
+    downgraded.topology = Topology::InstancedQuad;
+    std::borrow::Cow::Owned(downgraded)
+}
+
 /// ⭐ 四边形模板的**顶点数**（2 个三角形 = 6 个顶点）。
 pub const QUAD_TEMPLATE_VERTICES: u32 = 6;
 
@@ -2693,10 +2744,10 @@ mod tests {
     }
 
     #[test]
-    fn the_point_topology_is_only_allowed_on_the_webgl_backend() {
+    fn the_point_topology_is_downgraded_on_backends_without_point_size() {
         // ⭐⭐ **实测踩过的坑**：wgpu 的 **WebGPU 后端**处理 `gl_PointSize`
         //   内建时会 **panic**（`unwrap_failed`）⇒ 浏览器里 = **页面崩溃**
-        //   ⇒ ⇒ 引擎必须在**进 wgpu 之前**显式拒绝。
+        //   ⇒ ⇒ 引擎必须在**进 wgpu 之前**处理掉它。
         assert!(
             point_list_supported(wgpu::Backend::Gl),
             "WebGL（GLES）后端支持点尺寸 ⇒ 必须放行"
@@ -2710,9 +2761,69 @@ mod tests {
         ] {
             assert!(
                 !point_list_supported(backend),
-                "{backend:?} 没有点尺寸 ⇒ 必须拒绝（否则 wgpu 会 panic）"
+                "{backend:?} 没有点尺寸 ⇒ 必须降级（否则 wgpu 会 panic）"
             );
         }
+    }
+
+    /// ⭐⭐⭐⭐ **E-51：点图元在不支持的后端上**自动降级**成实例化四边形**。
+    ///
+    /// ## 为什么这条重要
+    ///
+    /// ⇒ ⇒ 以前：点图元在 WebGPU 上**直接报错** ⇒ ⇒ 「同一份逻辑换后端 = 换画面」
+    /// ⇒ ⇒⇒ ⇒ 而那条腿的「0 差异」是**假绿**（引擎侧**根本没画**粒子）。
+    /// ⇒ ⇒⇒⇒ 现在：**自动降级** ⇒ ⇒ 画面**不变**（四边形 ≡ 点图元，已由逐像素门禁证明）。
+    #[test]
+    fn a_point_scene_is_downgraded_to_an_instanced_quad_on_a_backend_without_point_size() {
+        let scene = SceneDescriptor::new("v", "f")
+            .with_vertex_data(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0])
+            .with_vertex_format(VertexFormat::Vec4)
+            .with_topology(Topology::PointList);
+
+        // ① WebGL（GLES）后端 ⇒ ⇒ **原样**用（快路径保留）。
+        let kept = effective_scene_for_backend(&scene, wgpu::Backend::Gl);
+        assert_eq!(kept.topology, Topology::PointList);
+        assert_eq!(kept.vertex_data.len(), 8, "WebGL 后端不该动顶点数据");
+        assert!(kept.instance_data.is_empty());
+
+        // ② WebGPU 后端 ⇒ ⇒ **降级**成实例化四边形（数据搬到实例缓冲）。
+        let downgraded = effective_scene_for_backend(&scene, wgpu::Backend::BrowserWebGpu);
+        assert_eq!(downgraded.topology, Topology::InstancedQuad);
+        assert_eq!(
+            downgraded.instance_data,
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0],
+            "粒子属性必须**原样**搬到实例缓冲"
+        );
+        assert_eq!(
+            downgraded.instance_format,
+            VertexFormat::Vec4,
+            "实例分量格式必须跟着顶点分量格式走（同一个 vec4 种子）"
+        );
+        assert!(
+            downgraded.vertex_data.is_empty(),
+            "降级后顶点缓冲是**模板**（引擎生成）⇒ 顶点数据必须让位"
+        );
+        // ⭐ 粒子数不变 ⇒ ⇒ 画的还是**同一批**粒子。
+        assert_eq!(downgraded.resolved_instance_count(), 2);
+    }
+
+    /// ⭐⭐⭐⭐ **E-51：显式顶点数在降级后必须**照旧生效**（不多画）。**
+    #[test]
+    fn an_explicit_vertex_count_survives_the_downgrade() {
+        let scene = SceneDescriptor::new("v", "f")
+            .with_vertex_data(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0])
+            .with_vertex_format(VertexFormat::Vec4)
+            .with_vertex_count(1)
+            .with_topology(Topology::PointList);
+
+        let downgraded = effective_scene_for_backend(&scene, wgpu::Backend::BrowserWebGpu);
+        assert_eq!(downgraded.topology, Topology::InstancedQuad);
+        assert_eq!(
+            downgraded.instance_data,
+            vec![1.0, 2.0, 3.0, 4.0],
+            "显式顶点数 1 ⇒ ⇒ 只搬**第一个**粒子 ⇒ ⇒ 不得多画"
+        );
+        assert_eq!(downgraded.resolved_instance_count(), 1);
     }
 
     #[test]
