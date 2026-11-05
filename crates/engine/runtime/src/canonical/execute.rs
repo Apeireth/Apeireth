@@ -1044,25 +1044,6 @@ impl Runtime {
             }),
         }
     }
-
-    /// Streaming variant of [`Runtime::execute`] for callers still on the
-    /// response-model API: forwards deltas, returns the completed response.
-    pub async fn execute_streaming(
-        &self,
-        request: TurnRequest,
-        on_delta: Arc<dyn Fn(String) + Send + Sync>,
-    ) -> RuntimeResult<TurnResponse> {
-        match self.execute_outcome_streaming(request, on_delta).await? {
-            TurnOutcome::Completed(response) => Ok(response),
-            TurnOutcome::PendingApproval(view) => Err(RuntimeError::ApprovalRequired {
-                hook: view.governance_hook,
-                reason: view.governance_reason,
-                approval: Some(view.approval_id),
-                session: Some(view.session_id),
-            }),
-        }
-    }
-
     /// Resolve a pending approval for one session.
     ///
     /// The resolver supplies only a decision and an optional human reason. It

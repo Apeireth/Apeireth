@@ -12,15 +12,6 @@ use std::sync::Arc;
 use apeireth_governance::{
     AuditSink, ChainGovernanceHook, GovernanceChain, GovernanceHook, InMemoryAuditSink,
 };
-
-/// 把治理 gate 包成 chain 单入口 hook (R8-B2 装配根切换; 内存审计默认)。
-///
-/// 返回值即 runtime 认识的 [`GovernanceHook`]; 裁决种类与 gate 直连等价,
-/// verdict 元数据按 R8-B1 适配器映射如实标 `governance_chain`。
-pub fn adapt_gate(gate: Arc<dyn GovernanceHook>) -> Arc<dyn GovernanceHook> {
-    adapt_gate_with(gate, Arc::new(InMemoryAuditSink::new()))
-}
-
 /// chain 单入口 hook + 显式审计 sink (R8-B3 注入面)。
 pub fn adapt_gate_with(
     gate: Arc<dyn GovernanceHook>,

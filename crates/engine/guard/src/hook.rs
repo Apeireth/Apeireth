@@ -532,15 +532,6 @@ impl BehaviorChainGuardHook {
         self.classifier = classifier;
         self
     }
-
-    pub fn with_safety_provider(
-        mut self,
-        provider: Arc<dyn CapabilitySafetyMetadataProvider>,
-    ) -> Self {
-        self.safety_provider = provider;
-        self
-    }
-
     pub fn last_feature_snapshot(
         &self,
         session_id: &SessionId,

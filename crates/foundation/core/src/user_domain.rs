@@ -218,19 +218,6 @@ impl UserDomain {
         domain.validate()?;
         Ok(domain)
     }
-
-    /// 补域级运行时覆盖 (性格/人设文本 + 模型, 缺省回落全局) 并校验。
-    pub fn with_runtime_overrides(
-        mut self,
-        persona_text: Option<String>,
-        model: Option<String>,
-    ) -> Result<Self, UserDomainError> {
-        self.persona_text = persona_text;
-        self.model = model;
-        self.validate()?;
-        Ok(self)
-    }
-
     /// 域文档 body 的字段校验 (显示名长度/控制字符、时间戳非负、
     /// 运行时覆盖越界即拒 —— 坏域配置拒开, 不回退默认)。
     pub fn validate(&self) -> Result<(), UserDomainError> {

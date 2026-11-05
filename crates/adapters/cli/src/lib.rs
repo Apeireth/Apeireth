@@ -3079,19 +3079,6 @@ fn build_dream_llm_thinker() -> Result<apeireth_runtime_assembly::canonical::Llm
         factory, model,
     ))
 }
-
-pub async fn dispatch_gateway_serve(port: u16) -> Result<String, String> {
-    dispatch_gateway_serve_on("127.0.0.1", port).await
-}
-
-/// Start the HTTP Gateway on an explicitly selected bind address.
-///
-/// Loopback is the safe default. Binding a non-loopback address is an
-/// intentional operator decision and is called out before the listener starts.
-pub async fn dispatch_gateway_serve_on(bind: &str, port: u16) -> Result<String, String> {
-    dispatch_gateway_serve_with(bind, port, None).await
-}
-
 /// Start the HTTP Gateway in the daemon-friendly ("resident") form
 /// (W2-①): optional single-instance PID-file claim, explicit "already
 /// running" refusals, and a graceful shutdown that finishes its audit and

@@ -29,7 +29,7 @@ claims:
     tests:
       - crates/engine/runtime/src/canonical/provider/compat_tests.rs
       - crates/engine/runtime/tests/canonical_multi_provider.rs
-    verified_at: 5c74f955e62cebcb1979fb3606e804d9fb10d73c
+    verified_at: f45f4d6fbc6bd33d7431095e8cbafe8eb1af98d7
     verify_cmd: "cargo test -p apeireth-runtime --test canonical_multi_provider"
     owner: runtime
     next_review: "2026-11-20"
@@ -45,7 +45,7 @@ claims:
       - crates/adapters/cli/src/lib.rs
     tests:
       - crates/foundation/core/src/cost_router.rs
-    verified_at: 7635b32bcc975b5e0b83c2d5b3579dc1942dbe6f
+    verified_at: f45f4d6fbc6bd33d7431095e8cbafe8eb1af98d7
     verify_cmd: "cargo test -p apeireth-core cost_router"
     owner: core
     next_review: "2026-11-20"
@@ -63,7 +63,7 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/task_board_tool.rs
       - crates/adapters/cli/tests/task_board_knob.rs
-    verified_at: 7635b32bcc975b5e0b83c2d5b3579dc1942dbe6f
+    verified_at: f45f4d6fbc6bd33d7431095e8cbafe8eb1af98d7
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test task_board_tool"
     owner: runtime-assembly
     next_review: "2026-11-20"
@@ -108,7 +108,7 @@ claims:
       - crates/adapters/cli/src/lib.rs
     tests:
       - crates/capabilities/tools/tests/voice_speak.rs
-    verified_at: 7635b32bcc975b5e0b83c2d5b3579dc1942dbe6f
+    verified_at: f45f4d6fbc6bd33d7431095e8cbafe8eb1af98d7
     verify_cmd: "cargo test -p apeireth-tools-canonical --test voice_speak"
     owner: tools
     next_review: "2026-11-20"
@@ -200,7 +200,7 @@ claims:
       - crates/capabilities/tools/src/accountability_view.rs
       - crates/foundation/governance/src/authorization.rs
       - crates/adapters/cli/src/egress_command.rs
-    verified_at: 7635b32bcc975b5e0b83c2d5b3579dc1942dbe6f
+    verified_at: f45f4d6fbc6bd33d7431095e8cbafe8eb1af98d7
     verify_cmd: "cargo test -p apeireth-runtime --lib egress && cargo test -p apeireth-runtime-assembly --lib egress_gate"
     owner: runtime
     next_review: "2026-12-01"

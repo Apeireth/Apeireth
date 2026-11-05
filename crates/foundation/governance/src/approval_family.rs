@@ -253,14 +253,6 @@ impl CommandFamily {
     pub fn from_id(id: &str) -> Option<Self> {
         Self::ALL.into_iter().find(|family| family.id() == id)
     }
-
-    /// 命令词是否判入本族（变体匹配：短形态逐字 / 前缀缩写 ≥5 字符 /
-    /// 可执行后缀剥离 / 大小写不敏感；精确命中优先于缩写命中由
-    /// [`word_families`] 统一裁决）。
-    pub fn matches_word(self, word: &str) -> bool {
-        !word_families_of_kind(word, self, MatchKind::Exact).is_empty()
-            || !word_families_of_kind(word, self, MatchKind::Abbreviation).is_empty()
-    }
 }
 
 /// 词法匹配的两种容忍度。

@@ -601,11 +601,6 @@ impl PromptInjectionHeuristic {
         signals.dedup_by(|a, b| a == b);
         signals
     }
-
-    /// Whether at least one configured prompt-injection pattern matched.
-    pub fn has_signal(text: &str) -> bool {
-        !Self::signals(text).is_empty()
-    }
 }
 
 // ---------------------------------------------------------------------------

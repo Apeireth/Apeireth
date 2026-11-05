@@ -40,11 +40,40 @@ fn scratch_dir(label: &str) -> std::path::PathBuf {
 }
 
 /// A free loopback port (bind, read, release).
-async fn free_port() -> u16 {
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let port = listener.local_addr().unwrap().port();
+
+/// ⭐ **端口分配：治「夹具的 TOCTOU」**（不是治产品）
+///
+/// **原写法（TOCTOU 竞态）**：`bind :0` ⇒ ⇒ 取端口 ⇒ ⇒ **立刻释放** ⇒ ⇒ 稍后再 bind
+/// ⇒ ⇒ **并行测试之间会抢同一个端口** ⇒ ⇒ 自己的网关 bind 失败（子进程立刻退出）
+/// ⇒ ⇒ 而 `wait_ready` 会连上**抢占者**的网关 ⇒ ⇒ **断言打在别人的服务上**
+/// ⇒ ⇒ 表现为「安全断言偶发失败（期望 403 实得 200）」⇒ ⇒ **看起来像安全回归，其实是夹具竞态**。
+///
+/// **新写法**：按 **pid 分段 + 进程内原子计数器** 取候选端口 ⇒ ⇒ **向前探测**到 bind 成功
+/// ⇒ ⇒ 同进程内**并发测试不会撞**（计数器各不相同）· 跨进程也**基本不会撞**（pid 分段不同）
+/// ⇒ ⇒ 探测本身仍是「取后释放」，但候选端口**互不重叠** ⇒ ⇒ 撞的概率 ≈ 0。
+fn next_free_port() -> u16 {
+    use std::sync::atomic::{AtomicU16, Ordering};
+    static COUNTER: AtomicU16 = AtomicU16::new(0);
+    let pid = std::process::id();
+    // 段基址：pid 分段 ⇒ ⇒ 不同进程不重叠；段内 64 个槽：进程内并发测试不重叠。
+    let base = 21_000u16 + ((pid % 400) as u16) * 64;
+    for step in 0..64u16 {
+        let candidate = base + ((COUNTER.fetch_add(1, Ordering::SeqCst) + step) % 64);
+        if let Ok(listener) = std::net::TcpListener::bind(("127.0.0.1", candidate)) {
+            let port = listener.local_addr().map(|a| a.port()).unwrap_or(candidate);
+            drop(listener);
+            return port;
+        }
+    }
+    // 段内全占 ⇒ ⇒ 回落到内核选端口（极罕见 ⇒ ⇒ 仍比原写法好）
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind fallback port");
+    let port = listener.local_addr().expect("addr").port();
     drop(listener);
     port
+}
+
+async fn free_port() -> u16 {
+    next_free_port()
 }
 
 fn slot_text(pid: u32, port: u16) -> String {
