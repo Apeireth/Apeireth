@@ -95,15 +95,23 @@ Author: deputy
 
 ### 第 3 步：**「统一契约」只做「面」，不做「块」**
 ⇒ ⇒ **四个面各一个入口**：
-| 面 | 现在的入口数（**已清点**） | 涉及模块 | 目标 |
-|---|---|---|---|
-| 写入面 | **2** | `extraction` · `memory_materializer` | **1 个** |
-| 召回面 | ⭐ **10** ⭐ | `retrieval_pipeline` · `hybrid_search` · `memory_rank` · `proactive_recall` · `query_expand` · `retrieval_tuning` · `topic_predictor` · `research_derived_memory` · `research_non_interference` · `research_roaming_memory` | **1 个** |
-| 治理面 | **5** | `memory_governance` · `forget_coordinator` · `universal_forget` · `retention` · `admission_gate` | **1 个** |
-| 注入面 | **3** | `memory_injection` · `context_compiler` · `context_window` | **1 个** |
+| 面 | 现在的**生产**入口数（**2026-11-05 18:10 复测更正**） | 说明 |
+|---|---|---|
+| 写入面 | **2** | `extraction` · `memory_materializer` |
+| 召回面 | ⭐ **1** ⭐ | **唯一**：`MemoryCoordinator::recall(&query)`（`runtime-assembly/canonical/memory_module/execution.rs:93`）⇒ ⇒ 内部走 `retrieval_pipeline`（BM25 + 向量 + 9 维加权 + 调优权重） |
+| 治理面 | **5** | `memory_governance` · `forget_coordinator` · `universal_forget` · `retention` · `admission_gate` |
+| 注入面 | **3** | `memory_injection` · `context_compiler` · `context_window` |
 
-⇒ ⇒ ⭐ **召回面 10 个入口 = 最乱的那一面** ⇒ ⇒ **「统一召回面」的收益最大**
-⇒ ⇒ （注：`research_*` 那 3 个是默认关的原型 ⇒ ⇒ 实际生产入口是 **7 个**）
+#### ⚠️ **【自我更正】我原先写的「召回面 10 个入口」是**判据错**造成的误判**
+- **原判据**：把「模块可达」当成了「入口数」（`hybrid_search`/`memory_rank`/`proactive_recall` 等**模块**可达）；
+- **实测**：能**发起一次召回**的公开入口共 12 个，但**生产真在用的只有 1 个** ⇒ ⇒
+  `retrieve` / `search` / `recall` 三个「生产调用」里，**前两个是同名不同物**
+  （`search` 命中的是 **`crates/engine/image/algo/**` 的图像算法**！`retrieve` 命中的是 README）；
+- ⇒ ⇒ **结论反转**：**融合面其实已经收敛了**（1 个生产入口）⇒ ⇒
+  **「统一召回面」不是缺口** ⇒ ⇒ ⇒ **缺的是「融合链上缺零件」**（见下）。
+
+⇒ ⇒ ⇒ ⚠️ **这已是今天第 5 次判据错误**（前 4 次：重导出 / 大小写 / `use` 后直接调用 / 同名不同物）
+⇒ ⇒ ⇒ ⇒ **规律**：**「零引用/可达率」这类判据，跨 crate 就会出现同名不同物** ⇒ ⇒ **必须逐个核对符号的宿主类型**。
 
 ⇒ ⇒ ⭐ **关键**：**统一的是「面」（对外的契约），不是「块」（内部的模块）**
 ⇒ ⇒ ⇒ 这**既**满足「一个最强引擎」的对外一致性（调用方只认 4 个面）
