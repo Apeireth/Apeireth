@@ -28,17 +28,41 @@
 //! arguments; the display carries the same call's *shape* only — the
 //! arguments' values can carry credentials, so the card shows their key
 //! names, never their values.
+//!
+//! # Content-level credential sweep on the result face
+//!
+//! Bounding the result is not the same as recognizing a credential in it: a
+//! remote server can hand back a key, a password assignment, a private key
+//! block, or a bearer token, and a length cap keeps that answer small, not
+//! harmless. So the result face **sweeps** what the server authored before it
+//! becomes the model-facing result: the placeholder family (a true value
+//! becomes an irreversible alias, registered in the ledger) followed by the
+//! existing one-way credential tripwire (a credential shape becomes a
+//! `[REDACTED_*]` label). The sweep is the repository's existing egress
+//! mechanism ([`crate::guardrail::ToolGuardrail::sweep_output_for_egress`])
+//! — it rewrites in place, it does not refuse the call and it does not
+//! truncate the answer.
+//!
+//! The sweep covers **text** surfaces: the joined result text, every text
+//! block, and a resource block's URI and body. It does **not** cover inline
+//! image data: that is a base64 payload, rewriting it would corrupt it, and
+//! the shape matchers misfire on base64.
+//!
+//! What the sweep did is observable: the rewritten markers are in the output
+//! the model reads, and a result that was swept carries an `egress_sweep`
+//! sidecar (hit counts and credential kinds) next to its content.
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use apeireth_core::kernel::CapabilityId;
-use apeireth_plugin::mcp::{content_block_to_wire, ToolCallResult};
+use apeireth_plugin::mcp::{content_block_to_wire, ContentBlock, ToolCallResult};
 use apeireth_plugin::{FrozenInvocation, ToolCapability};
 use apeireth_protocol::canonical::{NormalizedTool, ToolCall, ToolResult};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 use crate::exec_pipeline::{OutputSchema, SchemaKind};
+use crate::guardrail::{EgressSweepOutcome, EgressSweeper, LeakedCredentialKind};
 use crate::mcp::McpError;
 
 use super::catalog::McpToolEntry;
@@ -80,6 +104,34 @@ pub fn mcp_output_schema() -> OutputSchema {
         .require("content", SchemaKind::Array)
 }
 
+/// What one result-face sweep found (the observability sidecar).
+///
+/// The counts are per call and carry no true value: the placeholder family
+/// reports how many spans it aliased, the credential tripwire reports which
+/// credential shapes it tagged. A result whose sweep found nothing carries
+/// no sidecar at all — an untouched answer stays exactly the answer it was.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct McpSweepReport {
+    /// How many spans the placeholder family aliased.
+    pub redaction_hits: usize,
+    /// Which credential shapes the one-way tripwire tagged, in hit order.
+    pub tripwire_kinds: Vec<LeakedCredentialKind>,
+}
+
+impl McpSweepReport {
+    /// Whether this sweep found anything at all.
+    pub fn is_hit(&self) -> bool {
+        self.redaction_hits > 0 || !self.tripwire_kinds.is_empty()
+    }
+
+    /// Fold one sweep outcome into this report.
+    fn absorb(&mut self, outcome: &EgressSweepOutcome) {
+        self.redaction_hits += outcome.report.redaction.hits.len();
+        self.tripwire_kinds
+            .extend(outcome.report.tripwire.leaked_kinds.iter().copied());
+    }
+}
+
 /// Normalize one MCP result structure into the contract's structured value:
 /// joined text, the wire content blocks, and the server's error flag.
 ///
@@ -87,6 +139,18 @@ pub fn mcp_output_schema() -> OutputSchema {
 /// count and every block payload carry a length cap (see [`redaction`]), so
 /// one remote answer can never flood the model's context.
 pub fn normalized_mcp_value(result: &ToolCallResult) -> serde_json::Value {
+    normalized_mcp_value_with_sweep(result, None)
+}
+
+/// The normalized structured value, plus what the result-face sweep found.
+///
+/// A sweep that found nothing leaves the value exactly as
+/// [`normalized_mcp_value`] builds it — the sidecar appears only when the
+/// sweep actually rewrote something, so an untouched answer keeps its shape.
+pub fn normalized_mcp_value_with_sweep(
+    result: &ToolCallResult,
+    sweep: Option<&McpSweepReport>,
+) -> serde_json::Value {
     let text = redaction::truncate_text(&result.extract_text(), redaction::RESULT_MAX_TEXT_CHARS);
     let content: Vec<serde_json::Value> = result
         .content
@@ -94,11 +158,20 @@ pub fn normalized_mcp_value(result: &ToolCallResult) -> serde_json::Value {
         .take(redaction::RESULT_MAX_BLOCKS)
         .map(|block| content_block_to_wire(&redaction::bound_content_block(block)))
         .collect();
-    serde_json::json!({
+    let mut value = serde_json::json!({
         "text": text,
         "content": content,
         "is_error": result.is_error,
-    })
+    });
+    if let Some(report) = sweep {
+        if report.is_hit() {
+            value["egress_sweep"] = serde_json::json!({
+                "redaction_hits": report.redaction_hits,
+                "tripwire_kinds": report.tripwire_kinds,
+            });
+        }
+    }
+    value
 }
 
 /// Freeze one MCP result into a model-facing tool result.
@@ -107,6 +180,21 @@ pub fn normalized_mcp_value(result: &ToolCallResult) -> serde_json::Value {
 /// the server's own text; a success becomes the normalized structure the
 /// output contract validates. The server's text is bounded in both cases.
 pub fn tool_result_from_mcp(call_id: &str, tool_name: &str, result: ToolCallResult) -> ToolResult {
+    tool_result_from_mcp_swept(call_id, tool_name, result, None)
+}
+
+/// Freeze one MCP result into a model-facing tool result, carrying what the
+/// result-face sweep found.
+///
+/// The error face has no structured sidecar to carry the report (the error
+/// shape is fixed by the protocol), so an errored call shows the sweep only
+/// through the rewritten markers in its message.
+pub fn tool_result_from_mcp_swept(
+    call_id: &str,
+    tool_name: &str,
+    result: ToolCallResult,
+    sweep: Option<&McpSweepReport>,
+) -> ToolResult {
     let text = redaction::truncate_text(&result.extract_text(), redaction::RESULT_MAX_TEXT_CHARS);
     if result.is_error {
         let message = if text.is_empty() {
@@ -116,7 +204,52 @@ pub fn tool_result_from_mcp(call_id: &str, tool_name: &str, result: ToolCallResu
         };
         ToolResult::permanent_error(call_id, message).with_name(tool_name)
     } else {
-        ToolResult::ok(call_id, normalized_mcp_value(&result)).with_name(tool_name)
+        ToolResult::ok(call_id, normalized_mcp_value_with_sweep(&result, sweep))
+            .with_name(tool_name)
+    }
+}
+
+/// Sweep one content block: the text surfaces go through the sweep, the
+/// inline image payload does not.
+///
+/// An inline image is base64 data, not prose: rewriting it would corrupt it,
+/// and the shape matchers misfire on base64 (a payload can carry the letters
+/// of a credential prefix by accident). This is a stated boundary of the
+/// result face, not a silent omission.
+fn sweep_block(
+    sweeper: &mut EgressSweeper,
+    block: ContentBlock,
+    report: &mut McpSweepReport,
+) -> ContentBlock {
+    match block {
+        ContentBlock::Text { text, mime_type } => {
+            let outcome = sweeper.sweep(&text);
+            report.absorb(&outcome);
+            ContentBlock::Text {
+                text: outcome.text().to_string(),
+                mime_type,
+            }
+        }
+        ContentBlock::Image { data, mime_type } => ContentBlock::Image { data, mime_type },
+        ContentBlock::Resource {
+            uri,
+            text,
+            mime_type,
+        } => {
+            let outcome = sweeper.sweep(&uri);
+            report.absorb(&outcome);
+            let uri = outcome.text().to_string();
+            let text = text.map(|body| {
+                let outcome = sweeper.sweep(&body);
+                report.absorb(&outcome);
+                outcome.text().to_string()
+            });
+            ContentBlock::Resource {
+                uri,
+                text,
+                mime_type,
+            }
+        }
     }
 }
 
@@ -124,12 +257,43 @@ pub fn tool_result_from_mcp(call_id: &str, tool_name: &str, result: ToolCallResu
 pub struct McpDynamicTool {
     entry: McpToolEntry,
     connection: Arc<McpServerConnection>,
+    /// The egress sweep domain the result face is swept in.
+    ///
+    /// One instance is one redaction domain: inside it the same value always
+    /// gets the same alias, across instances it gets a different one. It is
+    /// shared behind a mutex because one tool serves concurrent calls and the
+    /// sweep needs the registry and the ledger of a single domain.
+    sweeper: Arc<Mutex<EgressSweeper>>,
 }
 
 impl McpDynamicTool {
     /// A dynamic tool for `entry`, executing through `connection`.
+    ///
+    /// The tool gets its own sweep domain, so every external tool is swept on
+    /// the result face without the caller wiring anything.
     pub fn new(entry: McpToolEntry, connection: Arc<McpServerConnection>) -> Self {
-        Self { entry, connection }
+        Self::new_with_sweeper(
+            entry,
+            connection,
+            Arc::new(Mutex::new(EgressSweeper::new())),
+        )
+    }
+
+    /// A dynamic tool whose result face is swept in a caller-held domain.
+    ///
+    /// Sharing one domain across tools of the same server keeps the alias of
+    /// one value stable across those tools (the model can correlate them);
+    /// separate domains keep the aliases unrelated.
+    pub fn new_with_sweeper(
+        entry: McpToolEntry,
+        connection: Arc<McpServerConnection>,
+        sweeper: Arc<Mutex<EgressSweeper>>,
+    ) -> Self {
+        Self {
+            entry,
+            connection,
+            sweeper,
+        }
     }
 
     /// The catalog entry backing this tool.
@@ -140,6 +304,15 @@ impl McpDynamicTool {
     /// The connection this tool executes through.
     pub fn connection(&self) -> &Arc<McpServerConnection> {
         &self.connection
+    }
+
+    /// The egress sweep domain this tool sweeps its results in.
+    ///
+    /// The domain is also the observability face of the sweep: its ledger
+    /// records every span the sweep rewrote (category and fingerprint, never
+    /// a true value).
+    pub fn sweeper(&self) -> &Arc<Mutex<EgressSweeper>> {
+        &self.sweeper
     }
 
     /// The execution inputs of one call, frozen.
@@ -177,6 +350,54 @@ impl McpDynamicTool {
         })
     }
 
+    /// Sweep one server-authored result: the text surfaces go through the
+    /// egress sweep, the inline image payload does not.
+    ///
+    /// The sweep runs **after** the answer is bounded (the same caps the
+    /// declaration face uses), so the cost of scanning stays bounded by the
+    /// answer's own limit; the normalization stage bounds the swept text
+    /// once more, because an alias is longer than the value it replaced.
+    ///
+    /// This is the right place for the sweep: the result is complete, and it
+    /// has not been handed to the caller yet.
+    fn sweep_remote_result(&self, result: &ToolCallResult) -> (ToolCallResult, McpSweepReport) {
+        let mut report = McpSweepReport::default();
+        let bounded: Vec<ContentBlock> = result
+            .content
+            .iter()
+            .take(redaction::RESULT_MAX_BLOCKS)
+            .map(|block| redaction::bound_content_block(block))
+            .collect();
+        let mut sweeper = self
+            .sweeper
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let swept: Vec<ContentBlock> = bounded
+            .into_iter()
+            .map(|block| sweep_block(&mut sweeper, block, &mut report))
+            .collect();
+        (
+            ToolCallResult {
+                content: swept,
+                is_error: result.is_error,
+            },
+            report,
+        )
+    }
+
+    /// Sweep one server-authored text (the error face).
+    ///
+    /// A server's error message is server-authored content too, and it
+    /// reaches the model context just like a result does — so it is swept the
+    /// same way.
+    fn sweep_text(&self, text: &str) -> String {
+        let mut sweeper = self
+            .sweeper
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        sweeper.sweep(text).text().to_string()
+    }
+
     /// Execute one frozen call: the frozen server, the frozen remote tool
     /// name, the frozen arguments.
     async fn execute_frozen(&self, call: &ToolCall, frozen: &McpFrozenInvocation) -> ToolResult {
@@ -186,22 +407,34 @@ impl McpDynamicTool {
             .call_tool(&frozen.remote_name, frozen.arguments.clone())
             .await
         {
-            Ok(result) => tool_result_from_mcp(&call.id, name, result),
-            Err(McpError::Transport(reason)) => ToolResult::retryable_error(
-                &call.id,
-                format!("mcp transport failure for {name}: {reason}"),
-            )
-            .with_name(name),
-            Err(McpError::JsonRpc { code, message }) => ToolResult::permanent_error(
-                &call.id,
-                format!("mcp error for {name} (code {code}): {message}"),
-            )
-            .with_name(name),
-            Err(other) => ToolResult::permanent_error(
-                &call.id,
-                format!("mcp call failed for {name}: {other}"),
-            )
-            .with_name(name),
+            Ok(result) => {
+                let (swept, report) = self.sweep_remote_result(&result);
+                tool_result_from_mcp_swept(&call.id, name, swept, Some(&report))
+            }
+            Err(McpError::Transport(reason)) => {
+                let reason = self.sweep_text(&reason);
+                ToolResult::retryable_error(
+                    &call.id,
+                    format!("mcp transport failure for {name}: {reason}"),
+                )
+                .with_name(name)
+            }
+            Err(McpError::JsonRpc { code, message }) => {
+                let message = self.sweep_text(&message);
+                ToolResult::permanent_error(
+                    &call.id,
+                    format!("mcp error for {name} (code {code}): {message}"),
+                )
+                .with_name(name)
+            }
+            Err(other) => {
+                let other = self.sweep_text(&other.to_string());
+                ToolResult::permanent_error(
+                    &call.id,
+                    format!("mcp call failed for {name}: {other}"),
+                )
+                .with_name(name)
+            }
         }
     }
 }

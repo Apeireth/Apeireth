@@ -4,8 +4,20 @@
 //! 阻断凭据外泄并防止被大模型长程记忆污染.
 //! 出境脱敏双向闸接线面 [`ToolGuardrail::sweep_output_for_egress`]: 先占位族
 //! 出境脱敏 (可还原), 再既有凭据绊线 (单向标签), 两族共存各零回归.
+//!
+//! # 接线面 (生产)
+//!
+//! [`EgressSweeper`] 把「脱敏域 (会话密钥 + 登记簿 + 账本)」与「既有凭据绊线」
+//! 绑成一个可复用的清扫器: 接线点交一段文本进来, 拿终稿文本 + 两族真账出去.
+//! 外部工具族（协议桥的远端结果面）接了这一道 —— 远端服务器回吐的内容是
+//! **不可信源**, 它的凭据形状不得裸奔进模型上下文.
+//!
+//! 一次清扫 **不新增处置语义**: 逐字走
+//! [`ToolGuardrail::sweep_output_for_egress`] —— 占位族脱敏 (真值 → 不可逆
+//! 占位, 登记入簿) + 凭据绊线 (单向标签, 永不还原). 命中既不改判也不拒执行:
+//! 文本被就地改写, 调用照常完成.
 
-use crate::redaction_bridge::{EgressRedaction, RedactionBridge};
+use crate::redaction_bridge::{EgressRedaction, LedgerEntry, RedactionBridge};
 use apeireth_governance::input_security::RedactionPlaceholder;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -452,6 +464,83 @@ impl ToolGuardrail {
             redaction,
             tripwire,
         }
+    }
+}
+
+/// 一次清扫的真账: 终稿文本 + 两族命中.
+///
+/// 终稿文本 = 占位族脱敏 + 凭据绊线单向标签 **叠加** 后的那一份
+/// （[`EgressSweepResult::tripwire`] 的 `sanitized_output`）; 占位族的中间
+/// 文本留在 `redaction.text` 里, 供对照.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EgressSweepOutcome {
+    /// 两族命中真账.
+    pub report: EgressSweepResult,
+}
+
+impl EgressSweepOutcome {
+    /// 交给下游的终稿文本（占位族 + 单向标签叠加后）.
+    pub fn text(&self) -> &str {
+        &self.report.tripwire.sanitized_output
+    }
+
+    /// 本次清扫是否有命中（占位族或凭据绊线任一命中）.
+    pub fn is_hit(&self) -> bool {
+        !self.report.redaction.hits.is_empty() || !self.report.tripwire.leaked_kinds.is_empty()
+    }
+}
+
+/// 出境清扫器: 一个脱敏域 + 既有凭据绊线的组合体.
+///
+/// 本类型 **不新增处置语义** —— 一次清扫逐字走
+/// [`ToolGuardrail::sweep_output_for_egress`]（占位族脱敏 → 凭据绊线单向
+/// 标签, 顺序固定）. 它只是把「脱敏域 (会话随机密钥 + 登记簿 + 账本)」与
+/// 「绊线」绑在一起: 接线点交一段文本进来, 拿终稿文本 + 两族真账出去,
+/// 不必各自手拼互斥量与账本入口.
+///
+/// 一个实例 = 一个脱敏域: 同域内同值恒同占位, 跨实例换别名.
+#[derive(Debug, Default)]
+pub struct EgressSweeper {
+    bridge: RedactionBridge,
+}
+
+impl EgressSweeper {
+    /// 新脱敏域 (会话随机密钥).
+    pub fn new() -> Self {
+        Self {
+            bridge: RedactionBridge::new_session(),
+        }
+    }
+
+    /// 以显式会话密钥建域（跨进程续接同一脱敏域时由调用方保管密钥）.
+    pub fn with_session_key(session_key: [u8; 32]) -> Self {
+        Self {
+            bridge: RedactionBridge::with_session_key(session_key),
+        }
+    }
+
+    /// 清扫一段文本: 占位族脱敏 → 凭据绊线（顺序固定, 不新增处置）.
+    ///
+    /// 干净文本 **逐字原样返回** —— 清扫面对「没有命中」零行为变更.
+    pub fn sweep(&mut self, raw: &str) -> EgressSweepOutcome {
+        EgressSweepOutcome {
+            report: ToolGuardrail::sweep_output_for_egress(raw, &mut self.bridge),
+        }
+    }
+
+    /// 脱敏账本条目（零真值: 只有类别 / 指纹 / 时间 / 还原与否）.
+    pub fn ledger_entries(&self) -> &[LedgerEntry] {
+        self.bridge.ledger_entries()
+    }
+
+    /// 脱敏账本 JSONL（零真值）.
+    pub fn ledger_jsonl(&self) -> String {
+        self.bridge.ledger_jsonl()
+    }
+
+    /// 登记簿里的真值数（脱敏域大小）.
+    pub fn registered_values(&self) -> usize {
+        self.bridge.registered_values()
     }
 }
 
