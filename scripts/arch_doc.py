@@ -65,12 +65,38 @@ def layer_map(contract: dict) -> dict[str, str]:
     return out
 
 
+def read_flagged_edges(contract: dict) -> list[tuple[str, str]]:
+    """读取契约登记的 flagged 边（根级与 [deps] 两处都读，按 (from, to) 去重合并）。
+
+    2026-11-05 实测修复：契约把 flagged 边登记在**根级** [[flagged_edges]]，
+    而本脚本原先读的是 [deps].flagged_edges ⇒ 恒空集 ⇒ §2 边表无 🚩 标记、
+    §3「契约登记的 flagged 边」恒渲染为「（无）」（3 条登记债务完全隐形）。
+    现两处布局都读并去重合并（与 scripts/arch_guard.py 的同名读法保持一致：
+    守卫与生成物必须看到同一份登记）。
+    """
+    buckets = (contract.get("flagged_edges") or [],
+               contract.get("deps", {}).get("flagged_edges") or [])
+    out: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for bucket in buckets:
+        for entry in bucket:
+            if not isinstance(entry, dict):
+                continue
+            src = str(entry.get("from", "")).strip()
+            dst = str(entry.get("to", "")).strip()
+            if not src or not dst or (src, dst) in seen:
+                continue
+            seen.add((src, dst))
+            out.append((src, dst))
+    return out
+
+
 def render(contract: dict, prod: dict[str, set[str]]) -> str:
     layers = layer_map(contract)
     crates = sorted(prod)
     vendored = contract.get("vendored", {}).get("image_family", [])
     allowed = contract.get("deps", {}).get("allowed_layer_edges", [])
-    flagged = {(e["from"], e["to"]) for e in contract.get("deps", {}).get("flagged_edges", [])}
+    flagged = set(read_flagged_edges(contract))
     edges = sorted((s, d) for s in prod for d in prod[s])
     lines: list[str] = [
         MARK,

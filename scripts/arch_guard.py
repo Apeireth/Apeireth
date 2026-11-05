@@ -67,6 +67,32 @@ def _norm(path: str) -> str:
 
 # ------------------------------------------------------------------- contract
 
+def read_flagged_edges(data: dict) -> list[tuple[str, str]]:
+    """读取契约登记的 flagged 边（根级与 [deps] 两处都读，按 (from, to) 去重合并）。
+
+    2026-11-05 实测修复：契约把 flagged 边登记在**根级** [[flagged_edges]]，
+    而本守卫原先读的是 [deps].flagged_edges ⇒ 恒空集 ⇒ 「flagged 边已不存在」
+    这类提示永不触发（守卫在这几条边上失效）。现两处布局都读并去重合并：
+      - 兼容两种契约布局（根级 / [deps] 子表）；
+      - 防止同一份登记写两处时被重复计数（双重登记漂移）。
+    登记项字段缺失 from/to 的按无效条目跳过（不抛异常，不静默当成一条边）。
+    """
+    buckets = (data.get("flagged_edges") or [], data.get("deps", {}).get("flagged_edges") or [])
+    out: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for bucket in buckets:
+        for entry in bucket:
+            if not isinstance(entry, dict):
+                continue
+            src = str(entry.get("from", "")).strip()
+            dst = str(entry.get("to", "")).strip()
+            if not src or not dst or (src, dst) in seen:
+                continue
+            seen.add((src, dst))
+            out.append((src, dst))
+    return out
+
+
 class Contract:
     def __init__(self, data: dict, path: Path):
         self.data = data
@@ -83,7 +109,7 @@ class Contract:
         self.exceptions_cfg = data.get("exceptions", {})
         self.concepts = data.get("concepts", [])
         self.ext_points = data.get("extension_points", {})
-        self.flagged_edges = [(e["from"], e["to"]) for e in self.deps.get("flagged_edges", [])]
+        self.flagged_edges = read_flagged_edges(data)
         self.composition_roots = data.get("composition_roots", [])
         # 双仓归属（ADR-0017）：[[workspace.repos]] 段。publish != "none" 的段 = 该仓的
         # **可发布清单**（发布可见性守卫用；见 check() 第 10 项）。

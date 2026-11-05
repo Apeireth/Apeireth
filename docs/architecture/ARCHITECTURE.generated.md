@@ -4,7 +4,7 @@
 
 > 唯一真源：`docs/architecture/contract.toml`；数据：`cargo metadata --no-deps`（生产边，kind != dev）。
 > 重新生成：`python scripts/arch_doc.py --gen`；漂移检查：`python scripts/arch_doc.py --check`（CI）。
-> 实测：workspace members = 30，生产依赖边 = 111。
+> 实测：workspace members = 31，生产依赖边 = 118。
 
 ## 1. 层 → crate
 
@@ -13,7 +13,7 @@
 | **adapters** | `apeireth-cli`, `apeireth-gateway`, `apeireth-sdk`, `apeireth-tui` |
 | **bench** | `apeireth-bench-harness` |
 | **capabilities** | `apeireth-tools-canonical` |
-| **engine** | `apeireth-guard`, `apeireth-memory`, `apeireth-organ`, `apeireth-provider`, `apeireth-runtime`, `apeireth-runtime-assembly`, `apeireth-storage` |
+| **engine** | `apeireth`, `apeireth-guard`, `apeireth-memory`, `apeireth-organ`, `apeireth-provider`, `apeireth-runtime`, `apeireth-runtime-assembly`, `apeireth-storage` |
 | **foundation** | `apeireth-core`, `apeireth-credentials`, `apeireth-governance`, `apeireth-orchestration`, `apeireth-plugin`, `apeireth-protocol` |
 | **image_family**（vendored 家族，门禁隔离见 ADR-0005 R4a） | `apeireth-image-algo`, `apeireth-image-cms`, `apeireth-image-codecs`, `apeireth-image-color`, `apeireth-image-compose`, `apeireth-image-core`, `apeireth-image-doc`, `apeireth-image-geom`, `apeireth-image-psd`, `apeireth-image-raster`, `apeireth-image-vector` |
 
@@ -21,6 +21,13 @@
 
 | from | to | 层方向 |
 |---|---|---|
+| `apeireth` | `apeireth-core` | engine → foundation ✅ |
+| `apeireth` | `apeireth-guard` | engine → engine ✅ |
+| `apeireth` | `apeireth-memory` | engine → engine ✅ |
+| `apeireth` | `apeireth-orchestration` | engine → foundation ✅ |
+| `apeireth` | `apeireth-protocol` | engine → foundation ✅ |
+| `apeireth` | `apeireth-runtime` | engine → engine ✅ |
+| `apeireth` | `apeireth-tools-canonical` | engine → capabilities ✅ |
 | `apeireth-bench-harness` | `apeireth-core` | bench → foundation ✅ |
 | `apeireth-bench-harness` | `apeireth-gateway` | bench → adapters ✅ |
 | `apeireth-bench-harness` | `apeireth-memory` | bench → engine ✅ |
@@ -54,7 +61,7 @@
 | `apeireth-gateway` | `apeireth-plugin` | adapters → foundation ✅ |
 | `apeireth-gateway` | `apeireth-protocol` | adapters → foundation ✅ |
 | `apeireth-gateway` | `apeireth-runtime` | adapters → engine ✅ |
-| `apeireth-gateway` | `apeireth-sdk` | adapters → adapters ✅ |
+| `apeireth-gateway` | `apeireth-sdk` | adapters → adapters ✅ 🚩flagged |
 | `apeireth-gateway` | `apeireth-tools-canonical` | adapters → capabilities ✅ |
 | `apeireth-governance` | `apeireth-core` | foundation → foundation ✅ |
 | `apeireth-guard` | `apeireth-core` | engine → foundation ✅ |
@@ -100,7 +107,7 @@
 | `apeireth-organ` | `apeireth-plugin` | engine → foundation ✅ |
 | `apeireth-organ` | `apeireth-protocol` | engine → foundation ✅ |
 | `apeireth-plugin` | `apeireth-core` | foundation → foundation ✅ |
-| `apeireth-plugin` | `apeireth-orchestration` | foundation → foundation ✅ |
+| `apeireth-plugin` | `apeireth-orchestration` | foundation → foundation ✅ 🚩flagged |
 | `apeireth-plugin` | `apeireth-protocol` | foundation → foundation ✅ |
 | `apeireth-protocol` | `apeireth-core` | foundation → foundation ✅ |
 | `apeireth-provider` | `apeireth-core` | engine → foundation ✅ |
@@ -127,7 +134,7 @@
 | `apeireth-sdk` | `apeireth-protocol` | adapters → foundation ✅ |
 | `apeireth-tools-canonical` | `apeireth-core` | capabilities → foundation ✅ |
 | `apeireth-tools-canonical` | `apeireth-governance` | capabilities → foundation ✅ |
-| `apeireth-tools-canonical` | `apeireth-image-core` | capabilities → image_family ✅ |
+| `apeireth-tools-canonical` | `apeireth-image-core` | capabilities → image_family ✅ 🚩flagged |
 | `apeireth-tools-canonical` | `apeireth-orchestration` | capabilities → foundation ✅ |
 | `apeireth-tools-canonical` | `apeireth-plugin` | capabilities → foundation ✅ |
 | `apeireth-tools-canonical` | `apeireth-protocol` | capabilities → foundation ✅ |
@@ -135,7 +142,9 @@
 
 ## 3. 契约登记的 flagged 边（待裁决债务，不是许可）
 
-- （无）
+- `apeireth-gateway` → `apeireth-sdk`
+- `apeireth-plugin` → `apeireth-orchestration`
+- `apeireth-tools-canonical` → `apeireth-image-core`
 
 ## 4. 装配根（登记）
 
