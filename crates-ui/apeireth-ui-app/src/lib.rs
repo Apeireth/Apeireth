@@ -21,6 +21,9 @@
 use apeireth_ui_core::Signal;
 use apeireth_ui_dom::vnode::VNode;
 
+/// ⭐⭐⭐ **视图快照**（application-layer 地基，E-178）—— 「旧回调不能覆盖新工作」。
+pub mod snapshot;
+
 /// ⭐ **wasm 薄壳**（接真实 DOM 的入口）—— **仅 wasm32 目标编译**。
 ///
 /// ⇒ native 侧**不参与编译** ⇒ ⇒ 契约层永远可 native 单测（与 core 同纪律）。
