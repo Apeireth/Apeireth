@@ -1172,7 +1172,7 @@ docs/security/process-executor-threat-model.md,L3,4,Threat Model: ProcessExecuto
 docs/status/CLOSEOUT-2026-10-20.md,L1,9,第三线收尾交接（2026-10-20）,2026-10-20,现行,5,保留,
 docs/status/CLOSEOUT-MCP-EXTERNAL-TOOLS-2026-11-05.md,L1,9,MCP 外部工具桥四环 —— 结案记录（2026-11-05）,2026-11-05,现行,6,保留,
 docs/status/README.md,L1,5,docs/status — 文档事实体系的机器真源,2026-10-20,现行,1,索引,
-docs/status/STATUS.md,L1,4,文档状态仪表盘（STATUS）,2026-10-22,现行,9,保留,
+docs/status/STATUS.md,L1,4,文档状态仪表盘（STATUS）,2026-10-22,现行,10,保留,
 docs/status/formal-coverage.md,L1,4,形式化覆盖边界登记（formal-coverage）,2026-09-25,现行,7,保留,
 docs/status/unwired-ledger.md,L1,3,未接线台账（能力齐全但没接电）,2026-11-05,现行,5,保留,
 docs/verification-ladder.md,L3,4,Apeireth Verification Ladder (L0–L5),2026-08-27,现行,0,保留,

@@ -101,7 +101,7 @@
 | **响应等待** | **无截止**。`request()` 直接 `waiter.await`，服务器收了 POST 但不回帧 ⇒ 永久阻塞 | `transport.rs:449-451` |
 | 事件流断开 | 读任务结束 ⇒ `broken = true` + `fail_all()`（唤醒所有等待者，报 `"event stream closed before the response arrived"`）；此后 `post_to_endpoint` 拒绝 ⇒ `"event stream is closed"` | `transport.rs:374-375`、`:418-420`、`:450` |
 | 重连 | **`SseChannel` 自己没有重连逻辑**。重连预算在上层 `McpServerConnection::recover()`：丢链后按退避预算重开一条**全新**通道并重跑握手 + 重发现 | `crates/capabilities/tools/src/mcp_bridge/connection.rs:220-261`（`connect` 在 `:157-194`） |
-| 工具调用截止 | 桥级 `call_timeout_ms`（默认 30 s）作用于**工具调用**流水线，不作用于握手 | `config.rs:41`、`config.rs:457-459` |
+| 工具调用截止 | 桥级 `call_timeout_ms`（默认 30 s）作为执行流水线的 around 超时，**只包住工具调用**，**不包住握手** | `config.rs:41`（默认值）、`config.rs:446`（字段）、`crates/capabilities/tools/src/mcp_bridge/bridge.rs:669`（落点） |
 
 ---
 
@@ -130,6 +130,15 @@
 ```
 
 （第二行是本机数据目录里那份治理审计账本自身校验失败 ⇒ 运行时如实降级为内存账，与本次实测无关。）
+
+**注 ①（测量口径）**：stdio 面的探针侧日志不是从 stderr 抓的 —— `StdioChannel::open` 把子进程
+stderr 接到 null（`transport.rs:175`）⇒ 本批让 stdio 探针把线缆日志写到 `$PROBE_LOG` 文件再取回（§4.1）。
+
+**注 ②（探针自身的一次缺陷，如实登记）**：sse 探针的**初版**用了一个**全局共享**的响应队列，
+没有按会话分流 ⇒ 客户端的 `initialize` 响应被投给了另一条已断开的流（探针写失败），
+真正的流**永远等不到响应** ⇒ 该次运行表现为 120 s 无输出直至被杀。
+**这是探针的缺陷，不是实现的缺陷** —— 修正探针（按 `sessionId` 分流，每条流一个队列）后
+sse 面一次跑通（§4.3）。**如实登记在此，避免后人把那次挂死误读成「实现挂死」。**
 
 ---
 
@@ -166,15 +175,29 @@ providers: provider.minimax, provider.anthropic
 [external-tools] wired: 1 registered, 0 unregistered, 1 live
 ```
 
-探针侧逐字（子进程 stdin/stdout 换行分隔 JSON-RPC）：
+探针侧逐字（子进程 stdin/stdout 换行分隔 JSON-RPC）。
+⚠️ stdio 面有一处采集口径差异：`StdioChannel::open` 把子进程的 **stderr 接到 null**
+（`transport.rs:175`）⇒ 探针的 stderr 在生产路径下**不可见**；
+因此本次让探针把线缆日志写到 `$PROBE_LOG` 文件，再逐字取回：
 
 ```
+$ PROBE_LOG=/tmp/apeireth-sse-probe/stdio_probe.log APEIRETH_ENABLE_MCP=1 \
+  APEIRETH_MCP_SERVERS='[{"name":"stdioprobe","transport":"stdio","command":"/tmp/apeireth-sse-probe/stdio_probe.py","enabled":true}]' \
+  ./target/debug/apeireth session
+...
 [probe] stdin <- {"jsonrpc":"2.0","method":"initialize","params":{"capabilities":{},"clientInfo":{"name":"apeireth-mcp-bridge","version":"2.0.0-rc.5"},"protocolVersion":"2025-03-26"},"id":1}
 [probe] stdout -> {"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-03-26","serverInfo":{"name":"stdio-probe","version":"0.1.0"},"capabilities":{"tools":{"listChanged":false}}}}
 [probe] stdin <- {"jsonrpc":"2.0","method":"notifications/initialized"}
 [probe] stdin <- {"jsonrpc":"2.0","method":"tools/list","id":2}
 [probe] stdout -> {"jsonrpc":"2.0","id":2,"result":{"tools":[{"name":"lookup-item","description":"Look one item up","inputSchema":{"type":"object","properties":{"key":{"type":"string"}},"required":["key"]},"annotations":{"readOnlyHint":true}}]}}
+[probe] stdin <- {"jsonrpc":"2.0","method":"tools/list","id":3}
 ```
+
+（末行 `tools/list` `id=3` = **周期刷新的第一拍**：`tokio::time::interval` 的首个 tick **立即完成**
+（`crates/engine/runtime-assembly/src/canonical/external_tool_bridge.rs:442`）⇒ 启动期接线之后
+马上又跑了一轮发现。这一拍**与进程退出赛跑** —— 本次 stdio 面捕捉到了（`id=3`），
+http / sse 面的那次运行没捕捉到（同一次运行里它可能在进程退出后才发出）。
+**同一命令重跑一次（耗时 0.06 s）只出现 1 次 `tools/list`** ⇒ 这是竞态，不是固定行为。）
 
 **④ 结论**：**通** —— 握手（`initialize` → `notifications/initialized`）与发现（`tools/list`）
 两段往返都在 stdio 上跑通，1 件工具进运行时能力表（`registered=1`），连接存活（`live=1`）。
@@ -281,7 +304,7 @@ providers: provider.minimax, provider.anthropic
 | ① 建连 | `GET /sse` + `Accept: text/event-stream` ⇒ 200 | 探针第 1–2 行 |
 | ② 端点宣告 | 流上 `event: endpoint` + `data: /messages?sessionId=…` ⇒ 客户端解析成绝对投递地址 | 探针第 3 行 + 随后的 POST 目标 |
 | ③ 消息投递 | `POST /messages?sessionId=…` ⇒ 202（请求体 = JSON-RPC 消息） | 探针第 4–5 行 |
-| ④ 响应匹配 | 响应回到**流上**（`event: message` + `data: <JSON-RPC 响应>`），按 `id` 配对 ⇒ `tools/list` 的工具清单被解析 | 探针第 6、9–10 行 |
+| ④ 响应匹配 | 响应回到**流上**（`event: message` + `data: <JSON-RPC 响应>`），按 `id` 配对 ⇒ `tools/list` 的工具清单被解析 | 探针第 6 行（initialize 响应）、第 9–11 行（tools/list 请求 + 响应） |
 
 落地结果与另两面**逐字相同**：`[external-tools] wired: 1 registered, 0 unregistered, 1 live`。
 
@@ -306,7 +329,7 @@ C 与 D 的分层口径：
 |---|---|---|
 | 建连 | `GET` 本身失败 | 控制组 C：`opening event stream: error sending request for url …` |
 | 端点宣告 | GET 成功但 10 s 内没等到 `event: endpoint` | 控制组 D：`event stream did not announce a message endpoint` |
-| 帧解析 | 帧收到但不是 `event: message` / JSON 不可反序列化 | **本批未触发**（探针发的帧都是合法 `event: message`；不合法的帧会被静默丢弃，见 §6 遗留 ②） |
+| 帧解析 | 帧收到但不是 `event: message` / JSON 不可反序列化 | **本批未触发**（探针发的帧都是合法 `event: message`；不合法的帧会被静默丢弃，见 §10 遗留 ②） |
 | 消息投递 | POST 非 2xx | **本批未触发**（探针回 202） |
 | 响应匹配 | 帧到了但 `id` 对不上 | **本批未触发**（`id=1` / `id=2` 都配上了） |
 
@@ -519,17 +542,24 @@ exit=0
 
 ```
 $ cargo test -p apeireth-tools-canonical --locked -j 2
-... 38 个测试二进制全部 ok
-test result: ok. 748 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
-test result: ok.   5 passed; 0 failed; ...
-test result: ok.  13 passed; 0 failed; ...
-test result: ok.  12 passed; 0 failed; ...
-test result: ok.  11 passed; 0 failed; ...
-test result: ok.   9 passed; 0 failed; ...
-test result: ok.  17 passed; 0 failed; ...
-test result: ok. 1174 passed 合计; 0 failed
+    Running unittests src/lib.rs (target/debug/deps/apeireth_tools_canonical-9f2cf32ce015a24f)
+    Running tests/apply_patch_contract_frames.rs ...
+    ... （共 38 个测试二进制：unittests + 37 个集成测试二进制）
+    Running tests/mcp_bridge_e2e.rs ...
+    Running tests/mcp_deny_guard.rs ...
+    ...
+   Doc-tests apeireth_tools_canonical
 exit=0
 ```
+
+逐套结果（每套一行 `test result: ok. N passed; 0 failed; 0 ignored; 0 measured; 0 filtered out`）：
+
+| 套件 | 结果 |
+|---|---|
+| unittests（`src/lib.rs`） | `ok. 748 passed; 0 failed` |
+| 其余 37 个集成测试二进制 | 全部 `ok. N passed; 0 failed`（含 `mcp_bridge_e2e` / `mcp_deny_guard`） |
+| doc-tests | `ok. 0 passed; 0 failed` |
+| **合计**（各套件 `ok. N passed` 求和） | **1174 passed / 0 failed** |
 
 **口径**：本批 **0 行 Rust 改动** ⇒ 该套件属「**预期不适用**」，但仍实跑并贴输出，
 作为「本批没碰生产代码」的旁证。
@@ -540,12 +570,13 @@ exit=0
 
 | # | 观察 | 证据（file:line） | 性质 |
 |---|---|---|---|
-| ① | **响应等待无截止**：`SseChannel::request` 直接 `waiter.await`，服务器收了 POST 但不回帧 ⇒ 该次请求**永久阻塞**（端点等待有 10 s 截止，响应等待没有）。握手期（`initialize`）走的是同一条路 ⇒ 一个「收请求但不回帧」的服务器能把启动期接线**挂死**（本批实测中，控制组 D 之前的一次误跑即表现为 120 s 无输出直至被杀） | `crates/capabilities/tools/src/mcp_bridge/transport.rs:449-451`（无截止）；`:394`（有截止的对照）；握手路径 `crates/capabilities/tools/src/mcp_bridge/connection.rs:339-342` | 实现边界（建议主线裁决是否给响应等待加截止） |
+| ① | **响应等待无截止**：`SseChannel::request` 直接 `waiter.await`，服务器收了 POST 但不回帧 ⇒ 该次请求**永久阻塞**（端点等待有 10 s 截止，响应等待没有）。握手期（`initialize`）走的是同一条路 ⇒ 一个「收请求但不回帧」的服务器**可能**把启动期接线挂死。**本批未用受控实验触发这一条**（本批唯一一次挂死是**探针自身的缺陷**，见 §3 注 ②，不是实现的缺陷） | `crates/capabilities/tools/src/mcp_bridge/transport.rs:449-451`（无截止）；`:394`（有截止的对照）；握手路径 `crates/capabilities/tools/src/mcp_bridge/connection.rs:339-342` | 实现边界（建议主线裁决是否给响应等待加截止） |
 | ② | **不合法的帧被静默丢弃**：`event: message` 但 `data` 不是合法 JSON-RPC 响应 ⇒ 反序列化失败即 `if let Ok(...)` 跳过，**不记日志、不计数**；流会继续跑但该次请求永远等不到响应（叠加 ① ⇒ 永久阻塞） | `crates/capabilities/tools/src/mcp_bridge/transport.rs:366-371` | 可观测性缺口（建议主线裁决是否落一条 stderr 观测） |
 | ③ | **`event:` 字段是必需的**：裸 `data:` 行（无 `event:`）不被判为 `message` ⇒ 按「规范直觉」写的服务端会静默不响应 | `crates/foundation/plugin/src/mcp/sse.rs:28-34`；`transport.rs:366-371` | 实现边界（协议口径已在本文 §2.3 写清） |
 | ④ | **`retry:` / `id:` 帧被解析但未被使用**：连接断了不会按服务端给的 `retry` 退避重连，重连预算完全在上层 `McpServerConnection` | `crates/foundation/plugin/src/mcp/sse.rs:19`（字段存在）、`transport.rs:354-376`（读任务不读 retry）、`connection.rs:220-261`（重连在上层） | 实现边界（不影响本次结论） |
+| ⑤ | **周期刷新的第一拍是「立即」而非「一个周期后」**：`tokio::time::interval` 的首个 tick 立即完成 ⇒ 启动期接线刚做完就又跑了一轮发现（实测捕捉到第二次 `tools/list`，`id=3`）；它**与进程退出赛跑** ⇒ 短命的 CLI 进程可能跑不到第二拍。与「默认 60 000 ms 周期」的措辞有落差 | `crates/engine/runtime-assembly/src/canonical/external_tool_bridge.rs:442`（`tokio::time::interval` + `MissedTickBehavior::Delay`）、`crates/capabilities/tools/src/mcp_bridge/config.rs:49`（`DEFAULT_REFRESH_INTERVAL_MS`） | 口径落差（**只报告不实施**；是否改成「首拍延后一个周期」由主线裁决） |
 
-**本批 0 行 Rust 改动** —— 上述四条**只报告不实施**，是否修由主线裁决。
+**本批 0 行 Rust 改动** —— 上述五条**只报告不实施**，是否修由主线裁决。
 
 ---
 
