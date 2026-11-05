@@ -22,8 +22,13 @@
 //!
 //! 本面是本地文件管理 (与 `onboard` 同族): 无网关审计面, 事实走 stdout/stderr
 //! 与退出码, 不伪造 `gateway.user_action` 审计行 (那是网关角色门的面)。
+//!
+//! 旗标层: 判据走 crate 级共享模块 [`crate::flags`] (白名单式扫描, 拒绝即帧) ——
+//! 本面只留自己的措辞 (英文档: 本面用法帧是英文的) 与两条自有纪律 (重复即拒 /
+//! 不收位置参数)。**动词先行**: 动词 (add / list / role / remove) 先分派, 动词
+//! 决定本命令的旗标白名单 (逐动词一个 `FlagSpec`), 动词**不是**位置参数;
+//! `--` 之后一律当位置参数。
 
-use std::collections::BTreeMap;
 use std::path::Path;
 
 use apeireth_gateway::{
@@ -31,8 +36,41 @@ use apeireth_gateway::{
 };
 use apeireth_governance::{UserCapability, UserIdentity, UserTable};
 
+use crate::flags;
+
 /// `apeireth user` 的用法行 (错误帧随行, 帮助面同源)。
 const USAGE: &str = "Usage:\n  apeireth user add --user-id ID --role owner|member|guest [--clients NAME[,NAME...]] [--domain DOMAIN] [--token TOKEN]\n  apeireth user list [--token TOKEN]\n  apeireth user role --user-id ID --role owner|member|guest [--token TOKEN]\n  apeireth user remove --user-id ID [--token TOKEN]";
+
+/// `add` 动词的旗标白名单 (五个带值旗标; 本面不收布尔旗标)。
+///
+/// 判据 (旗标形态 / 缺值 / `--` 分隔) 走 crate 级共享模块 [`crate::flags`] ——
+/// 本面只留自己的措辞与用法帧。
+const ADD_FLAGS: flags::FlagSpec = flags::FlagSpec {
+    value: &["--user-id", "--role", "--clients", "--domain", "--token"],
+    boolean: &[],
+    meta_as_positional: false,
+};
+
+/// `list` 动词的旗标白名单 (一个带值旗标)。
+const LIST_FLAGS: flags::FlagSpec = flags::FlagSpec {
+    value: &["--token"],
+    boolean: &[],
+    meta_as_positional: false,
+};
+
+/// `role` 动词的旗标白名单 (三个带值旗标)。
+const ROLE_FLAGS: flags::FlagSpec = flags::FlagSpec {
+    value: &["--user-id", "--role", "--token"],
+    boolean: &[],
+    meta_as_positional: false,
+};
+
+/// `remove` 动词的旗标白名单 (两个带值旗标)。
+const REMOVE_FLAGS: flags::FlagSpec = flags::FlagSpec {
+    value: &["--user-id", "--token"],
+    boolean: &[],
+    meta_as_positional: false,
+};
 
 /// 在默认数据目录 (`APEIRETH_DATA_DIR` / `~/.apeireth`) 执行管理命令。
 pub fn run_user_admin(args: &[String]) -> Result<String, String> {
@@ -50,24 +88,19 @@ pub fn run_user_admin_at(data_dir: &Path, args: &[String]) -> Result<String, Str
     let service = UserAdminService::new(data_dir);
     let users = service.load().map_err(|error| error.to_string())?;
     let bootstrap = users.users.is_empty();
-    let bearer = options.get("token").map(String::as_str);
+    let bearer = options.value("--token");
 
     match action.as_str() {
         "add" => {
-            let user_id = required(&options, "user-id")?;
-            let role_raw = required(&options, "role")?;
-            let clients = split_clients(options.get("clients"));
+            let user_id = required(&options, "--user-id")?;
+            let role_raw = required(&options, "--role")?;
+            let clients = split_clients(options.value("--clients"));
             if !bootstrap {
                 require_manager(&tokens, &users, bearer, &gate)?;
             }
             // 引导口径由共享服务强制: 表空时首个用户必须是 owner。
             let created = service
-                .add(
-                    user_id,
-                    role_raw,
-                    clients,
-                    options.get("domain").map(String::as_str),
-                )
+                .add(user_id, role_raw, clients, options.value("--domain"))
                 .map_err(|error| format!("refusing to add user {user_id:?}: {error}"))?;
             Ok(format!("added user {} ({})", created.user_id, created.role))
         }
@@ -96,8 +129,8 @@ pub fn run_user_admin_at(data_dir: &Path, args: &[String]) -> Result<String, Str
             Ok(lines.join("\n"))
         }
         "role" => {
-            let user_id = required(&options, "user-id")?;
-            let role_raw = required(&options, "role")?;
+            let user_id = required(&options, "--user-id")?;
+            let role_raw = required(&options, "--role")?;
             require_manager(&tokens, &users, bearer, &gate)?;
             let updated = service
                 .set_role(user_id, role_raw)
@@ -105,7 +138,7 @@ pub fn run_user_admin_at(data_dir: &Path, args: &[String]) -> Result<String, Str
             Ok(format!("user {} is now {}", updated.user_id, updated.role))
         }
         "remove" => {
-            let user_id = required(&options, "user-id")?;
+            let user_id = required(&options, "--user-id")?;
             require_manager(&tokens, &users, bearer, &gate)?;
             let removed = service
                 .remove(user_id)
@@ -152,51 +185,86 @@ fn require_manager(
     Ok(identity)
 }
 
-/// 解析 `apeireth user <action> [--flag value ...]` (逐动作白名单, 未知旗标拒)。
-fn parse_user_admin(args: &[String]) -> Result<(String, BTreeMap<String, String>), String> {
-    let Some((action, rest)) = args.split_first() else {
+/// 解析 `apeireth user <verb> [--flag value ...]` (逐动词白名单, 未知项拒)。
+///
+/// **动词先行**: 第一个 token 是动词 (add / list / role / remove), 动词决定本命令
+/// 的旗标白名单 (逐动词一个 [`flags::FlagSpec`]); 动词**不参与**旗标扫描 (不是
+/// 位置参数)。动词之后才做旗标扫描 —— 判据在 crate 级共享模块 [`crate::flags`],
+/// 本面只留自己的措辞与用法帧。
+fn parse_user_admin(args: &[String]) -> Result<(String, flags::Scan), String> {
+    let Some((verb, rest)) = args.split_first() else {
         return Err(format!("user requires a subcommand\n{USAGE}"));
     };
-    let allowed: &[&str] = match action.as_str() {
-        "add" => &["user-id", "role", "clients", "domain", "token"],
-        "list" => &["token"],
-        "role" => &["user-id", "role", "token"],
-        "remove" => &["user-id", "token"],
+    let spec: &flags::FlagSpec = match verb.as_str() {
+        "add" => &ADD_FLAGS,
+        "list" => &LIST_FLAGS,
+        "role" => &ROLE_FLAGS,
+        "remove" => &REMOVE_FLAGS,
         other => {
             return Err(format!(
                 "unknown user command: {other} (expected add, list, role, or remove)\n{USAGE}"
             ))
         }
     };
-    let mut options: BTreeMap<String, String> = BTreeMap::new();
-    let mut index = 0;
-    while index < rest.len() {
-        let flag = rest[index].as_str();
-        let Some(name) = flag.strip_prefix("--") else {
-            return Err(format!("unknown user argument: {flag}\n{USAGE}"));
-        };
-        if !allowed.contains(&name) {
-            return Err(format!("unknown user argument: {flag}\n{USAGE}"));
+    let scanned = scan_user_options(verb, spec, rest)?;
+    Ok((verb.clone(), scanned))
+}
+
+/// 旗标扫描: 白名单式扫描 —— **拒绝即帧** (判据在 crate 级共享模块 [`crate::flags`]).
+///
+/// 措辞走英文档 (本面用法帧是英文的): 未知项 (旗标与位置词类本面同称「参数」) /
+/// 缺值 一律点名 + `--` 分隔提示 + 白名单提示 + 用法帧 (跨面帧结构逐字同构)。
+///
+/// 共享层管的判据: 旗标形态 (负数是值) / 未知项分类 / **缺值** (值缺失或值本身
+/// 像旗标) / `--` 分隔。本面**自有**的两条纪律 (共享层不提供 ⇒ 面内显式判,
+/// 措辞各自可辨):
+///
+/// 1. **重复即拒** —— 同一旗标只允许给一次 (共享层 `Scan::value` 是**末位生效**
+///    ⇒ 更宽松 ⇒ 面内用 `Scan::count` 显式拒: 管理动作的参数选错 = 改错人);
+/// 2. **不收位置参数** —— 词类参数一律未知参数 (指名拒)。
+///
+/// ⚠️ 本面旧行为**无**空值判据 ⇒ 本批**不新增** (新增即收口外的收紧, 且
+/// `--clients ""` (空客户端集) 是合法取值) ⇒ 共享层比旧行为更宽松的这一处
+/// **不改**。
+fn scan_user_options(
+    verb: &str,
+    spec: &flags::FlagSpec,
+    args: &[String],
+) -> Result<flags::Scan, String> {
+    let known = spec.known();
+    let command = format!("user {verb}");
+    let scanned = flags::scan(args, spec).map_err(|error| {
+        error.frame(
+            flags::Style::En,
+            &flags::FrameContext::new(&command, flags::UnknownNoun::Argument)
+                .with_usage(USAGE)
+                .with_known(&known),
+        )
+    })?;
+    // 自有纪律 ①: 重复即拒 (不静默取末位 —— 管理动作的参数选错 = 改错人)。
+    for flag in spec.value {
+        if scanned.count(flag) > 1 {
+            return Err(format!("user {verb} {flag} was given twice\n{USAGE}"));
         }
-        let value = rest
-            .get(index + 1)
-            .ok_or_else(|| format!("user {flag} requires a value\n{USAGE}"))?;
-        if options.insert(name.to_string(), value.clone()).is_some() {
-            return Err(format!("user {flag} was given twice\n{USAGE}"));
-        }
-        index += 2;
     }
-    Ok((action.clone(), options))
+    // 自有纪律 ②: 本命令不收位置参数 (词类参数指名拒)。
+    if let Some(error) = scanned.extra_positional() {
+        return Err(error.frame(
+            flags::Style::En,
+            &flags::FrameContext::new(&command, flags::UnknownNoun::Argument).with_usage(USAGE),
+        ));
+    }
+    Ok(scanned)
 }
 
-fn required<'a>(options: &'a BTreeMap<String, String>, name: &str) -> Result<&'a str, String> {
+/// 取必填旗标的值 (缺旗标 = 用法帧)。
+fn required<'a>(options: &'a flags::Scan, name: &str) -> Result<&'a str, String> {
     options
-        .get(name)
-        .map(String::as_str)
-        .ok_or_else(|| format!("user command requires --{name}\n{USAGE}"))
+        .value(name)
+        .ok_or_else(|| format!("user command requires {name}\n{USAGE}"))
 }
 
-fn split_clients(raw: Option<&String>) -> Vec<String> {
+fn split_clients(raw: Option<&str>) -> Vec<String> {
     raw.map(|value| {
         value
             .split(',')
