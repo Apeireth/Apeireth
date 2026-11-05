@@ -101,6 +101,61 @@ impl Arbiter {
         *current == ticket.generation && ticket.channel == channel
     }
 
+    /// ⭐⭐⭐⭐ **在票据有效时才应用**（原子地「判新旧 + 应用」）。
+    ///
+    /// ## 为什么要有这个（`accept` 单独用**不够**）
+    ///
+    /// ⇒ ⇒ 「先 `accept` 再写」是**两步** ⇒ ⇒ 两步之间**状态可能变**
+    /// ⇒ ⇒⇒ 若那之间又有新工作 ⇒ ⇒⇒ 判据**已过期** ⇒ ⇒⇒ 却还是写了
+    /// ⇒ ⇒⇒ ⇒ 「判过了就写」这个模式**本身**就有竞态。
+    ///
+    /// ⇒ ⇒⇒ ⇒ 本方法把「判 + 做」收成**一次调用** ⇒ ⇒⇒ 中间**没有窗口期**。
+    ///
+    /// ## 返回
+    ///
+    /// - `Some(value)` ⇒ ⇒ **已应用**（票据有效）；
+    /// - `None` ⇒ ⇒ **已过期** ⇒ ⇒ ⇒ **没有应用**（应用函数**根本没被调用**）。
+    pub fn apply_if_current<T>(
+        &self,
+        channel: &str,
+        ticket: &Ticket,
+        apply: impl FnOnce() -> T,
+    ) -> Option<T> {
+        if self.accept(channel, ticket.clone()) {
+            Some(apply())
+        } else {
+            None
+        }
+    }
+
+    /// ⭐⭐⭐⭐ **在票据有效时才写信号**（最常见场景：异步结果**写回状态**）。
+    ///
+    /// ## ⭐⭐⭐ 为什么这一条是「根本」
+    ///
+    /// ⇒ ⇒ 异步结果最终要落到**状态**里（signal）⇒ ⇒ 若旧结果**写进去了**
+    /// ⇒ ⇒⇒ 状态**被污染** ⇒ ⇒⇒ 界面**重算**后就是旧的 ⇒ ⇒⇒
+    /// ⇒ ⇒⇒ ⇒ **「界面自己跳回去」的根源在「写回」这一层** ⇒ ⇒⇒
+    /// ⇒ ⇒⇒ ⇒ 而快照（`ui-app`）只挡「整棵树的发布」⇒ ⇒⇒ ⇒ 那是**表层**
+    /// ⇒ ⇒⇒ ⇒ ⇒ 所以这一条才是**更普适、更根本**的防线。
+    ///
+    /// ## 返回
+    ///
+    /// `true` ⇒ ⇒ **已写入**；`false` ⇒ ⇒ **已过期** ⇒ ⇒ ⇒ **信号**保持原值**。
+    pub fn guarded_set<T>(
+        &self,
+        signal: &crate::signal::Signal<T>,
+        channel: &str,
+        ticket: &Ticket,
+        value: T,
+    ) -> bool {
+        if self.accept(channel, ticket.clone()) {
+            signal.set(value);
+            true
+        } else {
+            false
+        }
+    }
+
     /// ⭐ **当前代号**（该通道）⇒ ⇒ 没有则 `None`。
     pub fn generation(&self, channel: &str) -> Option<u64> {
         self.channels.borrow().get(channel).copied()
@@ -244,6 +299,61 @@ mod tests {
         let check = move || arbiter.accept("x", moved.clone());
         assert!(check(), "⭐ 票据移进闭包后仍可用于判新旧");
         assert!(check(), "⭐ 票据可被**多次**检查（只读、不消耗）");
+    }
+
+    /// ⭐⭐⭐⭐ **过期结果写不进信号**（这才是「界面不跳回去」的**根本**）。
+    ///
+    /// ## 为什么这条比「快照」更根本
+    ///
+    /// ⇒ ⇒ 异步结果最终要落到**状态**里 ⇒ ⇒ 若旧结果**写进去了**
+    /// ⇒ ⇒⇒ 状态**被污染** ⇒ ⇒⇒ 界面重算后就是旧的
+    /// ⇒ ⇒⇒ ⇒ **根源在「写回」这一层** ⇒ ⇒⇒ ⇒ 快照只挡「整棵树的发布」（表层）。
+    #[test]
+    fn a_stale_result_cannot_write_into_the_signal() {
+        let arbiter = Arbiter::new();
+        let signal = crate::signal(String::from("初始"));
+        let stale = arbiter.begin("search");
+        // ⭐ 新工作开始 ⇒ ⇒ 旧票据过期。
+        let fresh = arbiter.begin("search");
+        // ⭐ 旧结果回来 ⇒ ⇒ **写不进**。
+        let written = arbiter.guarded_set(&signal, "search", &stale, String::from("旧"));
+        assert!(!written, "⭐ 过期结果不得写入信号");
+        assert_eq!(
+            signal.get(),
+            String::from("初始"),
+            "⭐ 信号必须保持原值（状态未被污染）"
+        );
+        // ⭐ 新结果回来 ⇒ ⇒ 写进。
+        assert!(arbiter.guarded_set(&signal, "search", &fresh, String::from("新")));
+        assert_eq!(signal.get(), String::from("新"), "⭐ 新结果必须写入");
+    }
+
+    /// ⭐⭐⭐⭐ **`apply_if_current` 在过期时**根本不调用**应用函数**。
+    ///
+    /// ⇒ ⇒ 这是「判 + 做」**没有窗口期**的关键 ⇒ ⇒
+    /// ⇒ ⇒ 若实现是「先判再调用」⇒ ⇒⇒ 中间可能又有新工作 ⇒ ⇒⇒ 竞态。
+    #[test]
+    fn apply_if_current_does_not_run_the_apply_when_stale() {
+        use std::cell::Cell;
+        let arbiter = Arbiter::new();
+        let stale = arbiter.begin("x");
+        let _fresh = arbiter.begin("x");
+        let ran = Cell::new(false);
+        let result = arbiter.apply_if_current("x", &stale, || {
+            ran.set(true);
+            42
+        });
+        assert!(result.is_none(), "⭐ 过期 ⇒ ⇒ 不返回结果");
+        assert!(!ran.get(), "⭐ 过期 ⇒ ⇒ **应用函数根本没被调用**");
+    }
+
+    /// ⭐⭐⭐⭐ **`apply_if_current` 有效时执行并返回结果**。
+    #[test]
+    fn apply_if_current_runs_the_apply_when_current() {
+        let arbiter = Arbiter::new();
+        let ticket = arbiter.begin("x");
+        let result = arbiter.apply_if_current("x", &ticket, || 42);
+        assert_eq!(result, Some(42), "⭐ 有效 ⇒ ⇒ 必须执行并返回");
     }
 
     /// ⭐⭐⭐ **来路不明的票据**被判为过期（不因为「没人发起过」而放行）。

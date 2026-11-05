@@ -60,10 +60,19 @@ impl Snapshot {
 ///   （**不**保留「旧的可能还有用」）⇒ ⇒ ⇒ 这是「只认最新」的语义；
 /// - [`Self::take_current`]：取出**仍然有效**的快照
 ///   ⇒ ⇒ ⇒ 若已过期 ⇒ ⇒ ⇒ 返回 `None`（**不渲染**）⇒ ⇒ ⇒ **不覆盖新工作**。
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct SnapshotStore {
     arbiter: Arbiter,
-    pending: std::cell::RefCell<std::collections::HashMap<String, Snapshot>>,
+    /// ⭐⭐⭐ **共享**的待渲染快照表（`Rc` ⇒ ⇒ 克隆后**看到同一份状态**）。
+    ///
+    /// ## 为什么必须是**共享**的（而不是各持一份）
+    ///
+    /// ⇒ ⇒ 宿主与屏幕**都要访问**它：宿主**取**快照去渲染、屏幕**发**快照
+    /// ⇒ ⇒⇒ 若各持一份 ⇒ ⇒⇒ 屏幕发的快照宿主**看不见** ⇒ ⇒⇒ ⇒ 机制形同虚设；
+    /// ⇒ ⇒⇒ ⇒ 而 `Arbiter` 本身**已是共享语义**（内部 `Rc<RefCell<…>>`）
+    /// ⇒ ⇒⇒ ⇒ 这里必须与它**同口径** ⇒ ⇒⇒ ⇒ 否则「代号共享、表不共享」⇒ ⇒⇒ **更糟**
+    /// ⇒ ⇒⇒ ⇒ （会看到「代号是新的、快照却是旧的」⇒ ⇒⇒ ⇒ 比不共享还难查）。
+    pending: std::rc::Rc<std::cell::RefCell<std::collections::HashMap<String, Snapshot>>>,
 }
 
 impl SnapshotStore {

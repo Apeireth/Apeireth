@@ -30,6 +30,23 @@ pub mod snapshot;
 #[cfg(target_arch = "wasm32")]
 pub mod wasm_host;
 
+/// ⭐⭐⭐⭐ **渲染计划**（E-179）：宿主每帧的**决策结果**。
+///
+/// ## 为什么是「计划」而不是「树」
+///
+/// ⇒ ⇒ 决策**不能**在持有 `HostState` 借用时去调 `screen.view()`
+/// ⇒ ⇒⇒ （重入会触发 flush ⇒ ⇒⇒ effect 里再借 `HostState` ⇒ ⇒⇒⇒ 双重借用 panic）
+/// ⇒ ⇒⇒ ⇒ 所以决策只**说明「该渲染什么」**，**不代劳**取视图。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RenderPlan {
+    /// 渲染这棵树（来自**有效快照** ⇒ ⇒ 异步结果比屏幕视图更新鲜）。
+    Snapshot(VNode),
+    /// 渲染**屏幕当前视图**（由调用方在**借用释放之后**去取）。
+    ScreenView,
+    /// ⭐ **本帧不渲染**（保留上一帧 DOM）。
+    Idle,
+}
+
 /// ⭐ **屏幕契约**：一个屏幕 = 一个身份 + 一棵由引擎渲染的视图树。
 ///
 /// ## 为什么是 trait 而不是闭包
@@ -53,6 +70,21 @@ pub trait Screen: 'static {
     /// ⚠️ **每次调用都应返回当前状态的树**（状态在信号里 ⇒ 读信号即可）
     /// ⇒ ⇒ 宿主在需要重渲染时调它 ⇒ ⇒ 树是「状态的投影」，不持有状态。
     fn view(&self) -> VNode;
+
+    /// ⭐⭐⭐ 本屏的**异步通道名**（`None` ⇒ ⇒ 本屏没有异步数据 ⇒ ⇒ 宿主不查快照）。
+    ///
+    /// ## 为什么需要它
+    ///
+    /// ⇒ ⇒ 宿主渲染前要问「这一屏有没有**待渲染的异步结果**」
+    /// ⇒ ⇒⇒ 而「有没有」是**本屏**的事 ⇒ ⇒⇒ ⇒ 不能由宿主猜。
+    ///
+    /// ## 默认
+    ///
+    /// `None` ⇒ ⇒ 绝大多数屏幕（纯本地状态）**不需要**任何改动 ✓
+    /// ⇒ ⇒⇒ ⇒ 这是一个**默认实现**的加法 ⇒ ⇒⇒ 不破坏既有实现。
+    fn channel(&self) -> Option<&str> {
+        None
+    }
 }
 
 /// ⭐ **宿主状态**：当前在哪个屏幕、要不要重渲染。
@@ -75,6 +107,14 @@ pub struct HostState {
     dirty: bool,
     /// ⭐ 已渲染次数（**批次边界**的实际渲染次数 ⇒ ⇒ 用来观测「一帧多次变更 ⇒ 渲染几次」）。
     renders: usize,
+    /// ⭐⭐⭐ **快照仓**（E-179）⇒ ⇒ 宿主与屏幕**共用**同一份。
+    ///
+    /// ## 为什么宿主要持有它
+    ///
+    /// ⇒ ⇒ 屏幕**发**快照（异步结果算好的视图）⇒ ⇒ 宿主**取**快照去渲染
+    /// ⇒ ⇒⇒ 两者必须看到**同一份**状态 ⇒ ⇒⇒ ⇒ 而 `SnapshotStore` 的克隆是**共享**的
+    /// ⇒ ⇒⇒ ⇒ 所以宿主与屏幕各持一份克隆即可 ⇒ ⇒⇒ ⇒ 不必引入 `Rc<RefCell<…>>` 的额外层。
+    snapshots: crate::snapshot::SnapshotStore,
 }
 
 impl HostState {
@@ -124,6 +164,49 @@ impl HostState {
     /// 已渲染次数。
     pub fn renders(&self) -> usize {
         self.renders
+    }
+
+    /// ⭐⭐⭐ **快照仓**（与屏幕**共享**同一份）⇒ ⇒ 屏幕用它发布、宿主用它取用。
+    pub fn snapshots(&self) -> &crate::snapshot::SnapshotStore {
+        &self.snapshots
+    }
+
+    /// ⭐⭐⭐⭐ **本帧渲染什么**（**仲裁后**的决策，E-179）。
+    ///
+    /// ## ⭐⭐⭐ 为什么返回「计划」而不是「直接给出树」
+    ///
+    /// ⇒ ⇒ 早先的实现是 `render_target(channel, || screen.view())`
+    /// ⇒ ⇒⇒ **闭包在借用未释放时被调用** ⇒ ⇒⇒ 若 `screen.view()` 触发 flush
+    /// ⇒ ⇒⇒ ⇒ flush 里的 effect 会 `host.state.borrow_mut()` ⇒ ⇒⇒⇒
+    /// ⇒ ⇒⇒⇒ **RefCell 双重借用 panic** ⇒ ⇒⇒ ⇒ wasm 里表现为「unreachable」。
+    ///
+    /// ⇒ ⇒⇒ ⇒ 所以决策**只产出计划**，**不代劳**取视图 ⇒ ⇒⇒
+    /// ⇒ ⇒⇒ ⇒ 调用方在**借用释放之后**再去取视图 ⇒ ⇒⇒ ⇒ 重入**不可能**。
+    ///
+    /// ## 口径（三条，**按顺序**）
+    ///
+    /// ① 若该通道有**有效**快照 ⇒ ⇒ [`RenderPlan::Snapshot`]（它比屏幕视图**更新鲜**）
+    ///    ⇒ ⇒ ⇒ 并**消费掉**该快照（取出即消费 ⇒ ⇒⇒ 不会渲染两次）；
+    /// ② 否则若**标脏** ⇒ ⇒ [`RenderPlan::ScreenView`]；
+    /// ③ 否则 ⇒ ⇒ [`RenderPlan::Idle`] ⇒ ⇒ **本帧不渲染**（保留上一帧 DOM）。
+    ///
+    /// ## ⚠️ 「标脏」在选了快照时**不**被消费
+    ///
+    /// ⇒ ⇒ 快照只覆盖「这个通道的那份数据」⇒ ⇒⇒ 屏幕自身的其它状态变更**仍需**渲染
+    /// ⇒ ⇒⇒ ⇒ 所以**保留**脏标记 ⇒ ⇒⇒ ⇒ 下一帧会渲染屏幕视图 ⇒ ⇒⇒ ⇒ 不丢状态。
+    pub fn render_plan(&mut self, channel: Option<&str>) -> RenderPlan {
+        // ① 有效快照优先。
+        if let Some(channel) = channel {
+            if let Some(snapshot) = self.snapshots.take_current(channel) {
+                return RenderPlan::Snapshot(snapshot.tree);
+            }
+        }
+        // ② 标脏 ⇒ ⇒ 渲染屏幕视图。
+        if self.take_dirty() {
+            return RenderPlan::ScreenView;
+        }
+        // ③ 本帧不渲染（保留上一帧 DOM）。
+        RenderPlan::Idle
     }
 
     /// 清空（屏幕被销毁时）。
@@ -210,6 +293,143 @@ mod tests {
         // 幂等：再判定时不该再渲染
         assert!(!state.take_dirty(), "渲染后不得重复渲染");
         assert_eq!(state.renders(), 1, "渲染次数不得增加");
+    }
+
+    /// ⭐ 收集树里的**全部文本**（测试用；`VNode` 没有内置的文本访问器）。
+    fn text_of(node: &VNode) -> String {
+        match node {
+            VNode::Text(text) => text.data.clone(),
+            _ => node.children().iter().map(text_of).collect(),
+        }
+    }
+
+    /// ⭐⭐⭐⭐ **宿主真的渲染「有效快照」**（真接线的证明，E-179）。
+    ///
+    /// ## 它锁住什么
+    ///
+    /// ⇒ ⇒ 前面的测试只验到「`render_target` 返回什么」
+    /// ⇒ ⇒⇒ 而这一条验的是**整条链**：屏幕**发**快照 ⇒ ⇒ 宿主**取** ⇒ ⇒ **渲染它**
+    /// ⇒ ⇒⇒ 且**过期**的那份**不得**上屏。
+    ///
+    /// ## 为什么这条重要
+    ///
+    /// ⇒ ⇒ 「有 API」≠「真在跑」⇒ ⇒⇒ 宿主若没接上去 ⇒ ⇒⇒ 机制形同虚设
+    /// ⇒ ⇒⇒ ⇒ 而这种「写了但没接线」**最难查**（代码都在、测试都过、就是不生效）。
+    #[test]
+    fn the_host_really_renders_a_valid_snapshot() {
+        use crate::snapshot::SnapshotStore;
+
+        // ① 一个「异步屏幕」：它持有**共享**的快照仓（与宿主同一份）。
+        struct AsyncScreen {
+            store: SnapshotStore,
+            view_text: String,
+        }
+        impl Screen for AsyncScreen {
+            fn id(&self) -> &str {
+                "async-screen"
+            }
+            fn as_any(&self) -> &dyn std::any::Any {
+                self
+            }
+            fn view(&self) -> VNode {
+                VNode::element("div")
+                    .child(VNode::text(self.view_text.clone()))
+                    .build()
+            }
+            fn channel(&self) -> Option<&str> {
+                Some("async")
+            }
+        }
+
+        let mut host = HostState::new();
+        // ② 屏幕与宿主**共用**同一个仓（克隆是共享的 ⇒ ⇒ 看到同一份）。
+        let screen_store = host.snapshots().clone();
+        let screen = AsyncScreen {
+            store: screen_store.clone(),
+            view_text: String::from("本地视图"),
+        };
+
+        // ③ 屏幕发了一份**有效**快照（异步结果）。
+        let ticket = screen.store.begin("async");
+        let published = screen.store.publish(
+            "async",
+            crate::snapshot::Snapshot::new(
+                VNode::element("div").child(VNode::text("异步结果")).build(),
+                ticket,
+            ),
+        );
+        assert!(published, "⭐ 有效快照必须被收下");
+
+        // ④ 宿主渲染 ⇒ ⇒ **渲染的是快照**（不是本地视图）。
+        let plan = host.render_plan(screen.channel());
+        let tree = match plan {
+            RenderPlan::Snapshot(tree) => tree,
+            other => panic!("⭐ 应当选快照，实际是 {other:?}"),
+        };
+        assert!(
+            text_of(&tree).contains("异步结果"),
+            "⭐ 宿主必须渲染**快照**（异步结果比本地视图更新鲜）"
+        );
+
+        // ⑤ 再取 ⇒ ⇒ 快照**已消费** ⇒ ⇒ 不再渲染它。
+        assert_eq!(
+            host.render_plan(screen.channel()),
+            RenderPlan::Idle,
+            "⭐ 快照取出即消费（不会渲染两次）"
+        );
+    }
+
+    /// ⭐⭐⭐⭐ **过期快照上不了屏**（真接线的证明，E-179）。
+    #[test]
+    fn a_stale_snapshot_never_reaches_the_host_render() {
+        use crate::snapshot::Snapshot;
+
+        let mut host = HostState::new();
+        let store = host.snapshots().clone();
+        // ① 旧工作 ⇒ ⇒ 旧票据。
+        let stale = store.begin("async");
+        // ② 新工作开始 ⇒ ⇒ 旧票据过期。
+        let _fresh = store.begin("async");
+        // ③ 旧结果回来 ⇒ ⇒ **发不出去**。
+        assert!(
+            !store.publish(
+                "async",
+                Snapshot::new(
+                    VNode::element("div").child(VNode::text("旧结果")).build(),
+                    stale,
+                ),
+            ),
+            "⭐ 过期快照必须被拒收"
+        );
+        // ④ 宿主渲染 ⇒ ⇒ **不渲染**它（没有快照 ⇒ ⇒ 且没标脏 ⇒ ⇒ 本帧不渲染）。
+        assert_eq!(
+            host.render_plan(Some("async")),
+            RenderPlan::Idle,
+            "⭐ 过期快照**不得**触发渲染"
+        );
+    }
+
+    /// ⭐⭐⭐ **标脏 ⇒ ⇒ 渲染屏幕视图**（无快照时的老路不变）。
+    #[test]
+    fn a_dirty_host_renders_the_screen_view() {
+        let mut host = HostState::new();
+        host.switch_to("plain");
+        assert_eq!(
+            host.render_plan(None),
+            RenderPlan::ScreenView,
+            "⭐ 标脏时必须渲染屏幕视图（老路不变）"
+        );
+    }
+
+    /// ⭐⭐⭐ **没标脏且无快照 ⇒ ⇒ 本帧不渲染**（保留上一帧 DOM）。
+    #[test]
+    fn a_clean_host_does_not_render() {
+        let mut host = HostState::new();
+        assert_eq!(
+            host.render_plan(None),
+            RenderPlan::Idle,
+            "⭐ 没标脏且无快照 ⇒ ⇒ 不渲染"
+        );
     }
 
     /// 清空 ⇒ 无当前屏幕、也不脏（屏幕被销毁后）。

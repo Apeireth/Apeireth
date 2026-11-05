@@ -156,10 +156,22 @@ pub fn rerender() -> Result<bool, JsValue> {
         let Some(host) = guard.as_mut() else {
             return Err(JsValue::from_str("宿主薄壳：还没 boot"));
         };
-        if !host.state.borrow_mut().take_dirty() {
-            return Ok(false);
-        }
-        let view = host.screen.view();
+        // ⭐⭐⭐ **渲染决策收口在 `HostState::render_plan`**（E-179）
+        //   ⇒ ⇒ 「有效快照优先、否则标脏才渲染、否则不渲染」**一处**决定
+        //   ⇒ ⇒ ⇒ 而**不是**散在 wasm 薄壳里 ⇒ ⇒⇒ 逻辑可 native 单测。
+        //
+        // ⭐⭐⭐ **为什么用「计划」而不是直接取视图**（实测教训，E-179）：
+        //   若在**持有 `host.state` 借用**时调 `screen.view()` ⇒ ⇒ 视图构建
+        //   ⇒ ⇒ 可能触发 flush ⇒ ⇒⇒ flush 里的 effect 会再借 `host.state`
+        //   ⇒ ⇒⇒ ⇒ **RefCell 双重借用 panic** ⇒ ⇒⇒ ⇒ wasm 里表现为「unreachable」。
+        //   ⇒ ⇒⇒ ⇒ 所以先取**计划**（借用在此结束）⇒ ⇒⇒ 再去取视图 ✓
+        let channel = host.screen.channel();
+        let plan = host.state.borrow_mut().render_plan(channel);
+        let view = match plan {
+            crate::RenderPlan::Snapshot(tree) => tree,
+            crate::RenderPlan::ScreenView => host.screen.view(),
+            crate::RenderPlan::Idle => return Ok(false),
+        };
         host.renderer
             .borrow_mut()
             .patch(view)
@@ -314,10 +326,22 @@ pub fn render_if_dirty() -> Result<bool, JsValue> {
         let Some(host) = guard.as_mut() else {
             return Err(JsValue::from_str("宿主薄壳：还没 boot"));
         };
-        if !host.state.borrow_mut().take_dirty() {
-            return Ok(false);
-        }
-        let view = host.screen.view();
+        // ⭐⭐⭐ **渲染决策收口在 `HostState::render_plan`**（E-179）
+        //   ⇒ ⇒ 「有效快照优先、否则标脏才渲染、否则不渲染」**一处**决定
+        //   ⇒ ⇒ ⇒ 而**不是**散在 wasm 薄壳里 ⇒ ⇒⇒ 逻辑可 native 单测。
+        //
+        // ⭐⭐⭐ **为什么用「计划」而不是直接取视图**（实测教训，E-179）：
+        //   若在**持有 `host.state` 借用**时调 `screen.view()` ⇒ ⇒ 视图构建
+        //   ⇒ ⇒ 可能触发 flush ⇒ ⇒⇒ flush 里的 effect 会再借 `host.state`
+        //   ⇒ ⇒⇒ ⇒ **RefCell 双重借用 panic** ⇒ ⇒⇒ ⇒ wasm 里表现为「unreachable」。
+        //   ⇒ ⇒⇒ ⇒ 所以先取**计划**（借用在此结束）⇒ ⇒⇒ 再去取视图 ✓
+        let channel = host.screen.channel();
+        let plan = host.state.borrow_mut().render_plan(channel);
+        let view = match plan {
+            crate::RenderPlan::Snapshot(tree) => tree,
+            crate::RenderPlan::ScreenView => host.screen.view(),
+            crate::RenderPlan::Idle => return Ok(false),
+        };
         host.renderer
             .borrow_mut()
             .patch(view)
@@ -362,8 +386,14 @@ pub fn flush() -> Result<bool, JsValue> {
         };
         let report = host.runtime.flush();
         // 批次边界：把 effect 请求的渲染**合并成一次**。
-        let rendered = if host.state.borrow_mut().take_dirty() {
-            let view = host.screen.view();
+        // ⭐ 同上 ⇒ ⇒ 决策**一处**（不三份复制）⇒ ⇒ 且**先取计划**（避免重入）。
+        let channel = host.screen.channel();
+        let plan = host.state.borrow_mut().render_plan(channel);
+        let rendered = if let Some(view) = match plan {
+            crate::RenderPlan::Snapshot(tree) => Some(tree),
+            crate::RenderPlan::ScreenView => Some(host.screen.view()),
+            crate::RenderPlan::Idle => None,
+        } {
             host.renderer
                 .borrow_mut()
                 .patch(view)

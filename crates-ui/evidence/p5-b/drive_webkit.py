@@ -109,9 +109,20 @@ def main() -> int:
     if bindgen.returncode != 0:
         print(bindgen.stderr[-2000:], file=sys.stderr)
         return fail("wasm-bindgen 失败")
+    # ⭐⭐⭐ **产物守卫**（2026-11-05 实测踩过）：wasm-bindgen **退出码 0 ≠ 产物齐全**
+    #   ⇒ ⇒⇒ 曾经因为输出被吞 ⇒ ⇒ `pkg/` 是空的 ⇒ ⇒⇒ 页面 import 失败 ⇒ ⇒⇒⇒
+    #   ⇒ ⇒⇒⇒ 探针静默不跑 ⇒ ⇒⇒⇒⇒ 报「未在时限内回传结果」⇒ ⇒⇒⇒⇒ 误判方向完全跑偏。
+    glue = wasm_pkg / "p5b_harness.js"
+    if not glue.exists():
+        return fail(f"wasm-bindgen 退出码 0 但缺产物：{glue}")
 
     # ③ 编译 Tauri 壳
     print("→ 编译 Tauri 壳（WebKitGTK）…", flush=True)
+    # ⭐⭐⭐ **强制重建**（2026-11-05 实测踩过）：Tauri 的 `frontendDist` 是
+    #   ⇒ ⇒ **构建期嵌入** ⇒ ⇒ 改了 `web/` 下的页面但没触发重建 ⇒ ⇒ 壳里跑的还是旧页面
+    #   ⇒ ⇒⇒ ⇒ 于是出现「我明明改了页面却没生效」的假象 ⇒ ⇒⇒⇒⇒ 一度误判为「修复无效」。
+    #   ⇒ ⇒⇒⇒ ⇒ 所以每次跑之前 touch 一次 build.rs ⇒ ⇒ 强制 build 脚本重跑 ⇒ ⇒ 重新嵌入。
+    (SHELL / "build.rs").touch()
     env = dict(os.environ)
     env["CARGO_TARGET_DIR"] = str(TARGET_DIR)
     shell_build = subprocess.run(
@@ -140,8 +151,10 @@ def main() -> int:
         timeout=240,
     )
     if not RESULT_FILE.exists():
-        print(run.stdout[-1500:], file=sys.stderr)
-        print(run.stderr[-1500:], file=sys.stderr)
+        print("── 宿主 stdout ──", file=sys.stderr)
+        print(run.stdout[-3000:], file=sys.stderr)
+        print("── 宿主 stderr ──", file=sys.stderr)
+        print(run.stderr[-3000:], file=sys.stderr)
         return fail("探针没产出结果文件（WebView 里可能没跑起来）")
 
     report = json.loads(RESULT_FILE.read_text(encoding="utf-8"))

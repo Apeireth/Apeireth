@@ -93,6 +93,19 @@ def main() -> int:
         )
         return 2
 
+    # ⭐⭐⭐ **缺 wasm 产物守卫**（2026-11-05 实测踩过）：
+    #   `wasm-bindgen` 的输出若被重定向吞掉（`>/dev/null 2>&1`）⇒ ⇒ `engine/pkg/` 会**是空的**
+    #   ⇒ ⇒⇒ 页面 import 失败 ⇒ ⇒⇒ 探针「没报错也没结果」⇒ ⇒⇒⇒ 极易误判成「引擎坏了」。
+    #   ⇒ ⇒⇒⇒ 所以这里**显式判存在** ⇒ ⇒⇒ 缺了就红 ⇒ ⇒⇒⇒ 不给误判留口子。
+    glue = serve_root / "engine" / "pkg" / "p5b_harness.js"
+    if not glue.exists():
+        print(
+            f"❌ 缺少 wasm glue {glue}（先跑 wasm-bindgen --target web --out-dir "
+            f"{serve_root}/engine/pkg --out-name p5b_harness <harness.wasm>）",
+            file=sys.stderr,
+        )
+        return 2
+
     httpd, port = compare.serve(serve_root)
     chrome, devtools = compare.launch_chrome()
     try:
