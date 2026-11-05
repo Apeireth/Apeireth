@@ -1,8 +1,8 @@
 //! crate 级旗标判据的**逐条机械断言**（`apeireth_cli::flags` 契约面）。
 //!
-//! 本文件守的是**共享判据本身**（不是某一面的措辞）：五处旗标扫描
-//! (`main.rs` 入口面 / `exposure.rs` / `lessons_command.rs` /
-//! `egress_command.rs` / `trait_command.rs`) 都从这里取判据，判据漂移 ⇒ 本文件红。
+//! 本文件守的是**共享判据本身**（不是某一面的措辞）：已收口的旗标扫描面
+//! (`main.rs` 入口面 / `exposure.rs` / `lessons_command.rs` / `egress_command.rs` /
+//! `trait_command.rs` / `backup.rs` / `crypto_keys.rs` / `user_admin.rs`) 都从这里取判据，判据漂移 ⇒ 本文件红。**收口面增减时同步本清单。** / `mcp_command.rs`
 //!
 //! 逐条对应共享模块声明的五条口径：
 //! 1. **旗标形态** —— 负数**不是**旗标（是值）；

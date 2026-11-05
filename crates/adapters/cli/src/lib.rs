@@ -17,7 +17,7 @@ pub mod egress_command;
 pub mod external_tools; // 外部工具（协议桥）启动期接线面.
                         // V5-b 暴露面体检 CLI 面 (只读零写; 与 `tool.exposure_audit` 同一内核两出口).
 pub mod exposure;
-pub mod flags; // crate 级旗标判据 (CLI 参数层单一真源: 五处旗标扫描共用同一判据).
+pub mod flags; // crate 级旗标判据 (CLI 参数层单一真源: 各收口面的旗标扫描共用同一判据).
 pub mod gateway_panels;
 pub mod governance_chain;
 pub mod keyring_bootstrap;

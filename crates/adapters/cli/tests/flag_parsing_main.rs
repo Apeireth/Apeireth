@@ -8,8 +8,8 @@
 //! - D6-附: 帮助文本列全顶层动词 (补齐 dream / council / subagent / nightwatch /
 //!   lessons / egress 六个子命令)。
 //!
-//! 口径真源在 `src/main.rs` 的旗标扫描注释块；解析层的逐字语义由该文件的
-//! `#[cfg(test)]` 单测守住，本文件守 CLI 可观测面 (退出码 / 错误帧 / 帮助文本)。
+//! 口径真源在 crate 级共享模块 `apeireth_cli::flags`（`src/main.rs` 只留本面措辞
+//! 档）；解析层的逐字语义由该文件的 `#[cfg(test)]` 单测守住，本文件守 CLI 可观测面 (退出码 / 错误帧 / 帮助文本)。
 
 use std::process::{Command, Output};
 

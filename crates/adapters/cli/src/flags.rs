@@ -1,8 +1,8 @@
 //! crate 级旗标判据 —— CLI 参数层单一真源。
 //!
-//! 七处旗标扫描 (`main.rs` 入口面 / `exposure.rs` / `lessons_command.rs` /
-//! `egress_command.rs` / `trait_command.rs` / `backup.rs` / `crypto_keys.rs`)
-//! 的**判据**收口到这里, 各面只留自己的措辞与用法帧。五条口径:
+//! 已收口的旗标扫描面 (`main.rs` 入口面 / `exposure.rs` / `lessons_command.rs` /
+//! `egress_command.rs` / `trait_command.rs` / `backup.rs` / `crypto_keys.rs` /
+//! `user_admin.rs` / `mcp_command.rs`) 的**判据**收口到这里, 各面只留自己的措辞与用法帧。**收口面增减时同步本清单** (清单是导航, 不是计数)。五条口径:
 //!
 //! 1. **旗标形态** —— 以 `-` 开头、长度 > 1、且**不是负数**
 //!    (`--cooldown -1` ⇒ `-1` 是**值** ⇒ 报「值不合法」, 不报「缺值」);
@@ -205,9 +205,9 @@ pub enum FlagError {
 /// 错误帧的语言档。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Style {
-    /// 中文档 (仓内多数派: lessons / egress / trait 三面)。
+    /// 中文档 (用法文本是中文的面: 仓内多数派)。
     Zh,
-    /// 英文档 (用法文本是英文的面: `main` 入口面 / `exposure` 面 / `backup` 面 / `crypto_keys` 面)。
+    /// 英文档 (用法文本是英文的面: 错误帧与同一条命令的用法帧同语言)。
     En,
 }
 
@@ -319,7 +319,7 @@ struct Wording {
     hint: fn(&str, &str) -> String,
 }
 
-/// 中文档 (仓内多数派: lessons / egress / trait 三面)。
+/// 中文档 (用法文本是中文的面用这一档)。
 const ZH: Wording = Wording {
     flag_noun: ["未知旗标", "未知参数"],
     argument_noun: "未知参数",
@@ -330,7 +330,7 @@ const ZH: Wording = Wording {
     },
 };
 
-/// 英文档 (用法文本是英文的面: `main` 入口面 / `exposure` 面)。
+/// 英文档 (用法文本是英文的面用这一档)。
 const EN: Wording = Wording {
     flag_noun: ["unknown flag", "unknown argument"],
     argument_noun: "unknown argument",
