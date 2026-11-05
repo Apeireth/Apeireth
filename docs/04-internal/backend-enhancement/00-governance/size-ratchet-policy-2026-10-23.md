@@ -66,6 +66,16 @@ crates/adapters/cli/src/lib.rs  3900  # 组装根天然聚合：新增接线点�
 - **结构性 / 方向性违规**（W10）照常按期转拦截——那些是真架构问题；
 - **尺寸类（W1）**等 3.2 的通道落地后再转拦截，否则等于要求每条线「要么别改，要么拆墙」。
 
+> **现状注记（2026-11-05）**：灰度期已于 **2026-11-04** 到期结束，`arch_guard` 已升格 **blocking**
+> （CI `arch-guard.yml` = `--strict`、CI `wiring-ledger.yml` = R3c `--crosscheck --strict`、本地 `commit.ps1`
+> = 默认 `--strict`，三者均**无** `continue-on-error`）。
+> 本提案 §3.2 的受理表 `scripts/size-justified.txt` **至今未落地**（实测：文件不存在）⇒
+> §3.4「尺寸类等 3.2 落地后再转拦截」的建议**仍未裁决**；现状是尺寸类（W1）随 blocking 一并拦截
+> （实测已有并行施工线因 `production.rs` / `self_status_source.rs` 尺寸增长被守卫判红），
+> 超出基线的增长需走 `docs/architecture/exceptions.toml` 登记（size 类 weight=1）。
+> 〔历史口径（2026-10-23）：本页成文时 `arch_guard` 仍为 report-only，故未预判转拦截后的尺寸处置〕
+> —— fast gate（`verify_changed.py`）的 arch 段按 ADR-0001 §2.3 / ADR-0011 设计**仍 report-only**，非漏改。
+
 ## 4. 不做（明确拒绝的路）
 
 - **取消棘轮**：会放出 god-file，且已有 11 个文件在 4000+ 行；

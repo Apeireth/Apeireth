@@ -26,7 +26,8 @@ git log -1 --format='%h %s'                  # 确认 HEAD 与协作日历一致
 
 | 项 | 值 |
 |---|---|
-| 规则体系 | **已生效**（ADR-0001，commit `8bfefb1b`）；灰度 report-only 至 **2026-11-03** |
+| 规则体系 | **已生效**（ADR-0001，commit `8bfefb1b`）；灰度期（report-only）已于 **2026-11-04** 到期结束 ⇒ 见下一行「门禁等级」 |
+| 门禁等级（2026-11-05 实测） | **三处 blocking**：CI `arch-guard.yml` = `arch_guard --strict`、CI `wiring-ledger.yml` = R3c `wiring_report --crosscheck --strict`，二者均**无** `continue-on-error`；本地 `commit.ps1` = **默认 `--strict` 阻断**（违规直接 `throw`；显式 `-Report` 才降级为仅告警；`-ArchStrict` 为历史兼容 no-op，与 `-Report` 同给会 `throw`）。**fast gate（`verify_changed.py`）的 arch 段仍 report-only**（仅 `--arch-strict` 升格）——ADR-0001 §2.3 / ADR-0011 的明确设计，**不是漏改**；`arch-guard.yml` 内「Baseline ratchet」步骤仍 advisory（ADR-0001 §2.2 棘轮只减不增）。`2026-11-03` 是契约 `[meta].rolling_report_only_until` 的约定到期日，实际升格发生在 2026-11-04/05（commit `f0cc1e68`） |
 | 三线协作契约 | **已生效**（commit `8e9dd3ae`） |
 | 目标架构 v1 | **Accepted**（ADR-0002，2026-10-20 owner 拍板）；Wave 2 单项 ADR：0003 R1a / 0004 R3 / 0005 R4a；Wave 3：0007 R7 / 0008 R2 均 **Accepted 且交付**；Wave 4：0009 R1b / 0010 R8 / 0011 R6 均 **Accepted（2026-10-20，owner 授权 Wave 4 按建议推进）** |
 | 架构波次 | `current_wave = 5`（Wave 4 于 2026-10-21 收口；Wave 5 = R5 取消可恢复 worker + 收口，待 owner 启动授权）；活跃例外 `expires_wave = 6` |
@@ -35,10 +36,10 @@ git log -1 --format='%h %s'                  # 确认 HEAD 与协作日历一致
 | Wave 3 已落 | **R7**：`ContextBlock` 单一化（R7-2a `0bdd9bb4` / R7-2b `a93fdbb3`）、`SessionStore` 三义→`SessionLifecycleStore`/`SessionNoteStore`（R7-3 `1cbaee95`/`3c0bcde1`）、dormant scheduler 归档（R7-4b，含 bench 同步 `2481200b`）、`PromptCacheStabilizer` 删除（R7-4a `51bb6cfa`）、Heartbeat 复核保留 active（`b36ee05e`）；**R2**：Extension ABI 家族（R2-2 `56ae816b`）、PluginManager/BehaviorRegistry 双 catalog（R2-3a/b `911e2f49`/`b5f75ba9`）、plugin 内部索引 `CapabilityIndex`（`d8aa87af`）、命名迁移 BehaviorModule/BehaviorRegistry（R2-4 `efcce6c4`） |
 | 待 owner 裁决 | **R4a-2 条件性 workspace 提取**（触发≈200k LOC，当前约 178k 行，未触发）；**R6-C/D 正式验收**（四层签核需真实人类，当前签核 0 条）；**Wave 5 启动授权**（R5） |
 | 在途违规（本波） | 无未登记在途违规；`arch_guard --report` VIOLATIONS 0 / exceptions=2（`EXC-0002` cognitive.rs 4763、`EXC-0003` tool_modules.rs 1216，weight=1、expires_wave=6，NOTE 抑制）/ STALE **0**（本批缩表 2 条） |
-| 效率线 R3a 现状 | `env-registry.toml` 155 条；R3b foundation 批验收（ADR-0004 §7.6）；R3c report-only 至 2026-11-03 后 review |
+| 效率线 R3a 现状 | `env-registry.toml` 155 条；R3b foundation 批验收（ADR-0004 §7.6）；R3c 已于 **2026-11-04** 复核升格 **blocking**（CI `--crosscheck --strict`，无 `continue-on-error`） |
 | 基线 | `scripts/arch-baseline.txt`（340 条；Wave 4 收口缩表 2 条 = `play_tools.rs` 1414→1412、`cli/lib.rs` 3879→3878；只减不增） |
 | 已登记的已知债务 | `contract.toml [flagged_edges]` 3 条；`[extension_debt]` **0**（R2 收口清零）；`[concepts].known_debt` **0 组**（R7-2.1 已合并）；CI 注释残留旧口径（`24 LOCKED` 见 cosign/dependabot/o6-anchor 等非 active guard 注释，待清）；`exceptions.toml` 活跃例外 **2** 条（EXC-0002/EXC-0003，均 size 类 weight=1、expires_wave=6，清偿任务见例外条目） |
-| 未完成项 | Wave 5+：R5 取消可恢复 worker（未开工，待 owner 启动）；R8-B2/B3（CLI 装配根切换 / 持久 `AuditSink` + IM 审计对，待安全线）；R8-D wiring 台账治理面已由效率线 E2 登记（ADR-0010 §6 已勾选；CI 演练步骤仅本地，远端未运行）；R6-C/D 正式验收（夜间 full **NOT MET**：owner 2026-10-21 裁决不推送、全本地；本地全量证据 341/8570；四层签核 0 条）；R3c 2026-11-03 后 review；R4a-2 条件性提取（owner 触发） |
+| 未完成项 | Wave 5+：R5 取消可恢复 worker（未开工，待 owner 启动）；R8-B2/B3（CLI 装配根切换 / 持久 `AuditSink` + IM 审计对，待安全线）；R8-D wiring 台账治理面已由效率线 E2 登记（ADR-0010 §6 已勾选；CI 演练步骤仅本地，远端未运行）；R6-C/D 正式验收（夜间 full **NOT MET**：owner 2026-10-21 裁决不推送、全本地；本地全量证据 341/8570；四层签核 0 条）；R4a-2 条件性提取（owner 触发） |
 
 ## 4. 每波收口 SOP（架构线主持）
 
@@ -85,16 +86,16 @@ git log -1 --format='%h %s'                  # 确认 HEAD 与协作日历一致
 | `docs/architecture/r8-b-entry-convergence-design.md` | R8-B 入口收敛设计候选（未实施）：两级治理面、三候选方案、批次与未决问题 |
 | `scripts/arch_doc.py` / `ARCHITECTURE.generated.md` | R0 架构依赖图生成物（契约+metadata，CI `--check` 防漂移） |
 | `docs/architecture/env-registry.toml` | 开关登记表（R3a，格式由架构线定、效率线播种） |
-| `.github/workflows/arch-guard.yml` | 架构守卫 CI（report-only 至 2026-11-03） |
+| `.github/workflows/arch-guard.yml` | 架构守卫 CI（**blocking**：`arch_guard --strict`，无 `continue-on-error`；灰度期已于 2026-11-04 到期结束） |
 | `.github/workflows/image-family.yml` | 图像家族独立 CI（R4a-1） |
 
 ## 8. 波次日志
 
 | 波 | 收口 | 结果 |
 |---|---|---|
-| **W1 规则落地** | 2026-10-20 | 契约/守卫/基线 356 条/ADR-0001/协作契约落地；`arch_guard --strict` 0 违规；进入灰度（report-only 至 2026-11-03） |
+| **W1 规则落地** | 2026-10-20 | 契约/守卫/基线 356 条/ADR-0001/协作契约落地；`arch_guard --strict` 0 违规；进入灰度（report-only 至 2026-11-03）〔历史口径（2026-10-20）：灰度已于 **2026-11-04** 到期结束，现行等级见 §3「门禁等级」〕 |
 | **W2 架构手术** | **2026-10-20 收口** | ADR-0002 Accepted；ADR-0003 **R1a 交付**（生物线 `151e9aea`/`77b1c1fb`：nervous_snapshot 647 行 + probes 578 行 + 测试 1,205 行，默认关；`self_status_source.rs` −173 行）；R4a-1 门禁隔离；R0 完成（依赖表生成物 + CI）；R3b 主体完成（env 登记 155 条，TODO-OWNER 0、fragments 0，验收见 ADR-0004 §7.7）；缩表 2 条、守卫 0 违规 |
-| **W3 架构手术** | **2026-10-20 收口** | R7 交付：ContextBlock 单一化（`0bdd9bb4`/`a93fdbb3`）+ SessionStore 三义收敛（`1cbaee95`/`3c0bcde1`）+ dormant scheduler 归档（`14c0e9a0`/`d5a4c537`，Heartbeat 复核保留 `b36ee05e`）+ PromptCacheStabilizer 删除（`51bb6cfa`）+ bench 同步（`2481200b`）；R2 交付：Extension ABI 家族（`56ae816b`）+ 双 catalog（`911e2f49`/`b5f75ba9`）+ plugin 内部索引更名（`d8aa87af`）+ 命名迁移（`efcce6c4`）；R4b 四岛收口（23,649 行归档 + lark 解耦）；R3b 主体完成（155 条 TODO-OWNER=0）；R3c 待 2026-11-03 后 review；缩表 3 删 1 缩、守卫 0 违规（生物线在途 1 条除外） |
+| **W3 架构手术** | **2026-10-20 收口** | R7 交付：ContextBlock 单一化（`0bdd9bb4`/`a93fdbb3`）+ SessionStore 三义收敛（`1cbaee95`/`3c0bcde1`）+ dormant scheduler 归档（`14c0e9a0`/`d5a4c537`，Heartbeat 复核保留 `b36ee05e`）+ PromptCacheStabilizer 删除（`51bb6cfa`）+ bench 同步（`2481200b`）；R2 交付：Extension ABI 家族（`56ae816b`）+ 双 catalog（`911e2f49`/`b5f75ba9`）+ plugin 内部索引更名（`d8aa87af`）+ 命名迁移（`efcce6c4`）；R4b 四岛收口（23,649 行归档 + lark 解耦）；R3b 主体完成（155 条 TODO-OWNER=0）；R3c 待 2026-11-03 后 review〔历史口径（2026-10-20）：已于 **2026-11-04** 升格 blocking〕；缩表 3 删 1 缩、守卫 0 违规（生物线在途 1 条除外） |
 | **W4 架构波** | **2026-10-21 收口** | R1b 全交付（1a/1b/2a/2b/2c/3/4a 交付、4b 收口）/ R8 A-B1-C-D 部分 / R6 A-B + C-D 载体；全量 `gate_full` **341 套件 / 8570 passed / 0 failed / 51 ignored**（26.8 min，exit 0，日志 `artifacts/wave4-close-full-2026-10-21.log`）；基线缩表 2 条；guard VIOLATIONS 0 / exceptions=2；carries 如实（R8-B2/B3、R8-D wiring、R6-C/D 签核、夜间 full 未运行、R5 未开工） |
 
 ## 9. 变更记录
@@ -123,5 +124,6 @@ git log -1 --format='%h %s'                  # 确认 HEAD 与协作日历一致
 | 2026-10-21 | **R1b-2a/2b 验收复核**（架构线）：逐项复核生物线交付 `404919f6`/`326e1542`（调质订阅）与 `a71639f9`/`0f4ef4dc`（生命周期订阅 + probe，观测面 9/14）；确认默认关零行为变化、观测面单一发布点、台账 3 条校验单测仍在；如实未做：R1b-2c 审批面 publish 未开工、`AfterTurn` 仍走钩子（归 R1b-3）、全量门禁未在复核时复跑；验收记录见 `r1b-2-handoff-2026-10-20.md` §5/§8 与 ADR-0009 §8 | 复核批 |
 | 2026-10-21 | **R1b-3 交付**（架构线，零新增信号变体）：ritual 已由 `RitualStateStore` 共享文件打通（工具写 `<care_dir>/ritual_state.json` → CLI care heartbeat 同拍读盘），只补端到端测试 `a_ritual_tool_write_is_visible_to_the_next_heartbeat_beat` + 清理陈旧注释；`sleep_pressure` / `scar_ledger_learn` / `session_event_source` 取证后如实 `NotWired` + 具体 reason；实测 runtime-assembly lib 291 passed / nervous_snapshot 13 passed / cli lib 57 passed、clippy·fmt 绿；guard VIOLATIONS 0（exceptions=2 / STALE 1 保持） | （R1b-3 交付批） |
 | 2026-10-21 | **R1b-2c 交付并复核**（生物线）：`NervousSignalKind::ApprovalSocial` 生产者+订阅者同批 additive（代码 `f2dad300` / 记录 `815d85e7`），默认关零行为变化；全量门禁随 Wave 4 收口批绿 | `f2dad300`/`815d85e7` |
-| 2026-10-21 | **Wave 4 收口**：R1b/R8/R6 交付矩阵见 §3；全量 `pwsh scripts/gate_full.ps1 -FailIfBusy` = main 264 套件 / 6263 passed + image 77 套件 / 2307 passed = **341 套件 / 8570 passed / 0 failed / 51 ignored**（HEAD `f2dad300`，26.8 min，exit 0）；基线缩表 2 条（`play_tools.rs` 1412、`cli/lib.rs` 3878）；`test-baseline.md` 现行基线刷新；`current_wave=5`；carries 如实（R8-B2/B3、R8-D wiring、R6-C/D 签核、夜间 full 未运行、R5 未开工）；R3c 2026-11-03 后 review | 收口批 commit |
+| 2026-10-21 | **Wave 4 收口**：R1b/R8/R6 交付矩阵见 §3；全量 `pwsh scripts/gate_full.ps1 -FailIfBusy` = main 264 套件 / 6263 passed + image 77 套件 / 2307 passed = **341 套件 / 8570 passed / 0 failed / 51 ignored**（HEAD `f2dad300`，26.8 min，exit 0）；基线缩表 2 条（`play_tools.rs` 1412、`cli/lib.rs` 3878）；`test-baseline.md` 现行基线刷新；`current_wave=5`；carries 如实（R8-B2/B3、R8-D wiring、R6-C/D 签核、夜间 full 未运行、R5 未开工）；R3c 2026-11-03 后 review〔历史口径（2026-10-21）：已于 **2026-11-04** 升格 blocking〕 | 收口批 commit |
 | 2026-10-21 | **效率线重启批验收**（`d2621788..3d6d3d44` 10 提交）：E1 test-baseline 维护/全量执行权接管（数字未变 341/8570/0/51）；E2 治理面 4 条 claim（claims 20→24，均 IMPLEMENTED）+ wiring 重生成；E4 `verify_ledger.py` 接入 docs-truth（负向测试留记录）；E3 夜间 CI 按 owner 裁决**不推送、全本地 → NOT MET 保留**；D29/DTS/口径修复随批；本行验收 = docs_truth / arch_doc / wiring / guard / ledger 全绿，crates 零改动（仅 nervous_snapshot 注释 +5 属生物线） |
+| 2026-11-05 | **门禁等级口径归位**：灰度期（report-only + `continue-on-error: true`）2026-11-04 到期结束 ⇒ CI `arch-guard.yml`（`arch_guard --strict`）、CI `wiring-ledger.yml`（R3c `wiring_report --crosscheck --strict`）、本地 `commit.ps1`（**默认 `--strict`** 阻断，显式 `-Report` 才降级为仅告警，`-ArchStrict` 为历史兼容 no-op）三处升格 **blocking**，均无 `continue-on-error`；fast gate（`verify_changed.py`）的 arch 段按 ADR-0001 §2.3 / ADR-0011 设计**仍 report-only**（非漏改）；`arch-guard.yml` 内「Baseline ratchet」步骤仍 advisory（ADR-0001 §2.2） | commit `f0cc1e68`（门禁升格批）+ 本批文档口径归位 |

@@ -19,7 +19,7 @@
 # - 只登记有证据的条目；未运行 = NOT RUN，未覆盖 = NOT COVERED，禁止预填。
 
 version: 1
-updated_at: "2026-10-21"
+updated_at: "2026-11-05"
 
 # 汇总（0 装口径，人工维护；脚本化后由生成器产出）
 summary:
@@ -74,7 +74,7 @@ entries:
     bounded: "->（n/a）"
     signoff: null
     verified_at: fd74a669
-    notes: "2026-10-21 实测 VIOLATIONS 0 / exceptions=2（EXC-0002/0003，守卫 NOTE 抑制）/ STALE 1（play_tools 1414，收口缩表）；灰度 report-only 至 2026-11-03。"
+    notes: "2026-10-21 实测 VIOLATIONS 0 / exceptions=2（EXC-0002/0003，守卫 NOTE 抑制）/ STALE 1（play_tools 1414，收口缩表）；〔历史口径（2026-10-21）：灰度 report-only 至 2026-11-03〕现状注记（2026-11-05）：灰度期已于 2026-11-04 到期结束，CI arch-guard（--strict）/ wiring-ledger（R3c --crosscheck --strict）与本地 commit.ps1（默认 --strict，显式 -Report 才降级）均升格 blocking 且无 continue-on-error；fast gate（verify_changed.py）的 arch 段按 ADR-0001 §2.3 / ADR-0011 设计仍 report-only，非漏改。"
 
   - id: V-scenario-002
     claim: r8.governance_chain

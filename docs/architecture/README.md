@@ -107,4 +107,15 @@ owner 特批                  ADR 记名 + 不占配额 + 仍须到期/移除计
 - 生成物漂移（`ARCHITECTURE.md` 尚未改为生成物）；
 - 测试/构建成本（门禁时长、target 体积）。
 
-**接入现状**：`verify_changed.py`（report-only 常驻）、`commit.ps1 -ArchStrict`（默认 report-only）、`.github/workflows/arch-guard.yml`（report-only）已接入；灰度至 2026-11-03 后 CI/commit 转 blocking。详见 [integration-plan.md](integration-plan.md)。
+**接入现状（2026-11-05 实测）**：灰度期（report-only + `continue-on-error: true`）已于 **2026-11-04** 到期结束（`2026-11-03` 是契约 `[meta].rolling_report_only_until` 的约定到期日），三处门禁升格 **blocking**：
+
+| 门禁 | 现行等级 | 口径 |
+|---|---|---|
+| `.github/workflows/arch-guard.yml` | **blocking** | `arch_guard --strict`；**无** `continue-on-error` |
+| `.github/workflows/wiring-ledger.yml`（R3c） | **blocking** | `wiring_report --crosscheck --strict`；**无** `continue-on-error`（`--strict` 必须与 `--crosscheck` 同用，单独给是 no-op） |
+| `scripts/commit.ps1` | **blocking**（默认） | 默认 `--strict`，违规直接 `throw`；显式 `-Report` 才降级为仅告警不阻断；`-ArchStrict` 为**历史兼容 no-op**（默认已 strict），与 `-Report` 同给会直接 `throw` |
+
+**仍为 report-only 的一层（不是漏改）**：`verify_changed.py` 的 arch 段（fast gate）**永远 report-only**，
+仅 `--arch-strict` 才升格拦截 —— 这是 ADR-0001 §2.3 / ADR-0011 的明确设计（快反馈不抢构建锁）；
+`arch-guard.yml` 内「Baseline ratchet」步骤亦为 advisory（ADR-0001 §2.2 棘轮只减不增）。
+详见 [integration-plan.md](integration-plan.md)。

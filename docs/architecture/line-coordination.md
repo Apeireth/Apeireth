@@ -33,7 +33,7 @@
 3. **staged 不跨批过夜**；长时间 staged 前先 `git restore --staged`。
 4. **同一时刻只允许一条线执行 commit**；拿不准就等一分钟重试（index 是共享单点）。
 5. 跨线同文件改动 → **hunk 级分账**（`git apply --cached` 选择性暂存），commit 正文注明"与 X 线分账"。
-6. 提交入口统一走 `commit.ps1`（secret/neutral/arch 三关；灰度期 arch report-only）。
+6. 提交入口统一走 `commit.ps1`（secret/neutral/arch 三关；**arch 关默认 strict 阻断**，显式 `-Report` 才降级为仅告警；`-ArchStrict` 为历史兼容 no-op）。
 
 ## 4. 构建与门禁纪律
 
@@ -54,7 +54,7 @@
 
 ## 6. 波次与冻结日历
 
-- **灰度期**：至 **2026-11-03**，`arch_guard` 在 fast gate/commit/CI 仅报告不阻断；之后 CI/commit 转 strict。
+- **门禁等级（2026-11-05 实测）**：灰度期（report-only + `continue-on-error: true`）已于 **2026-11-04** 到期结束 ⇒ CI `arch-guard.yml`（`--strict`）、CI `wiring-ledger.yml`（R3c `--crosscheck --strict`）与本地 `commit.ps1`（默认 `--strict`）全部 **blocking**，均无 `continue-on-error`。**fast gate（`verify_changed.py`）的 arch 段仍 report-only**（ADR-0001 §2.3 / ADR-0011 的明确设计，非漏改）。〔历史口径（2026-10-20）：原定灰度至 2026-11-03 止〕
 - **每波收口**：架构复盘（架构线主持，各线参加）→ 基线缩表 → `current_wave += 1` → 记 `wave_note`。
 - **发版冻结**：`contract [exceptions].release_freeze = true` 由 **owner / release authority 宣布**；冻结期例外预算 0，各线停止新增例外、tag 前清零。架构线**不得单方面冻结**。
 - **契约条款变更**：只在波收口做，不在他线施工中途改；紧急安全例外走 ADR + owner。

@@ -1,23 +1,43 @@
 # 架构守卫集成计划（草案）
 
-> `Status: 📝 v0.2（2026-10-20；Wave 3 收口更新）`
-> 原则：**先 report-only，后 blocking；不改现有脚本的默认行为**。本文件是接入补丁说明，不自动改任何现有文件。
+> `Status: 📝 v0.3（2026-10-20 起草；Wave 3 收口更新；2026-11-05 门禁等级口径归位）`
+> 原则：**先 report-only，后 blocking** —— 灰度期已于 **2026-11-04** 到期结束，现行等级见 §0。
+> 本文件是接入补丁说明（2026-10-20 批）+ **现行门禁等级登记**；只登记口径，不自动改任何现有文件。
+
+## 0. 现行门禁等级（2026-11-05 实测，节选自 commit `f0cc1e68` 升格批）
+
+| 门禁 | 现行等级 | 现行口径 |
+|---|---|---|
+| CI `.github/workflows/arch-guard.yml` | **blocking** | `arch_guard --strict`；**无** `continue-on-error`（步骤末尾亦无 `exit 0`，否则退出码被吞） |
+| CI `.github/workflows/wiring-ledger.yml`（R3c） | **blocking** | `wiring_report --crosscheck --strict`；**无** `continue-on-error`（⚠️ `--strict` 必须与 `--crosscheck` 同用，单独给是 no-op） |
+| 本地 `scripts/commit.ps1` | **blocking（默认）** | 默认 `--strict`，违规直接 `throw`；显式 `-Report` 才降级为仅告警不阻断；`-ArchStrict` 为**历史兼容 no-op**（默认已 strict，保留只为旧调用方不报参数错误），与 `-Report` 同给会**直接 `throw`** |
+
+**仍为 report-only 的一层（不是漏改）**：
+
+- `scripts/verify_changed.py` 的 arch 段（**fast gate**）永远 report-only，仅 `--arch-strict` 才升格拦截
+  —— ADR-0001 §2.3 / ADR-0011 的明确设计（快反馈、秒级、不动构建锁），**blocking 落在 commit 与 CI 两处**；
+- `arch-guard.yml` 内「Baseline ratchet」步骤为 advisory（ADR-0001 §2.2 棘轮只减不增，只警告不阻断）。
+
+灰度日历：`2026-11-03` 是契约 `[meta].rolling_report_only_until` 的**约定到期日**（该键即日历真源、**无脚本消费**）；
+实际升格发生在 **2026-11-04**（commit `f0cc1e68`）。
 
 ## 1. 本地接入（两处，各一行）
 
 ### 1.0 已完成（2026-10-20 契约落地批）
 
+> 本小节是 **2026-10-20 接入批的当时记录（历史口径）**；现行门禁等级见 §0。
+
 - `.gitignore` 已加 `!scripts/arch_guard.py`（跨批常驻工具入库，与 `docs_truth.py`/`verify_changed.py` 同族）；
 - 基线已生成：`scripts/arch-baseline.txt`（Wave 3 收口实测 **340 条**：env 153 / edge 111 / size 65 / ext 6 / concept 4 / devcycle 1；初版 2026-10-20 为 356 条）；
-- **三处接入已完成（灰度 report-only）**：
-  - `scripts/verify_changed.py`：新增 arch 阶段（`--arch-strict` 才拦截；默认仅报告，且对文档批也生效）；
-  - `scripts/commit.ps1`：新增 `-ArchStrict` 开关，默认 report-only + 警告；
-  - `.github/workflows/arch-guard.yml`：新增 workflow（`continue-on-error: true`，含 baseline 只减检查）；
-- 灰度截止：**2026-11-03**（契约 `[meta].rolling_report_only_until`）；之后 CI/commit 转 blocking。
+- **三处接入已完成（灰度 report-only）**〔历史口径（2026-10-20 接入批）；现行等级见 §0〕：
+  - `scripts/verify_changed.py`：新增 arch 阶段（`--arch-strict` 才拦截；默认仅报告，且对文档批也生效）——**这一层至今仍是 report-only**；
+  - `scripts/commit.ps1`：新增 `-ArchStrict` 开关，默认 report-only + 警告〔历史口径（2026-10-20）：现行**默认 `--strict` 阻断**，显式 `-Report` 才降级为仅告警，`-ArchStrict` 已是历史兼容 no-op〕；
+  - `.github/workflows/arch-guard.yml`：新增 workflow（`continue-on-error: true`，含 baseline 只减检查）〔历史口径（2026-10-20）：CI 已升格 blocking（`--strict`，无 `continue-on-error`），baseline 只减检查仍为 advisory〕；
+- 灰度截止：**2026-11-03**（契约 `[meta].rolling_report_only_until`，该键即日历真源）；之后 CI/commit 转 blocking。〔现状（2026-11-05）：灰度期已于 **2026-11-04** 到期结束，CI/commit 已转 blocking〕
 
 ### 1.1 `scripts/verify_changed.py`（fast gate）
 
-在 check 阶段之后、test 阶段之前插入一个 arch 阶段（**默认 report-only，`--strict` 可升 blocking**）：
+在 check 阶段之后、test 阶段之前插入一个 arch 阶段（**默认 report-only；`--arch-strict` 才升 blocking**）：
 
 ```python
 # 伪代码：在 run_fast_gate 的 check 之后
@@ -25,7 +45,7 @@ code = _run([sys.executable, "scripts/arch_guard.py", "--report"], log_path)
 # report-only: 不改变 fast gate 退出码；WARN 写日志
 ```
 
-口径：fast gate 只跑 `--report`（秒级，不动构建锁）；blocking 放在 CI 与 wave 收口。
+口径：fast gate 只跑 `--report`（秒级，不动构建锁）；**fast gate 永远 report-only**（ADR-0001 §2.3 / ADR-0011 的设计，非漏改）；blocking 落在 CI、本地提交入口（`commit.ps1`）与 wave 收口。
 
 ### 1.2 `scripts/commit.ps1`（提交收口）
 
@@ -36,13 +56,16 @@ $archExit = & python scripts/arch_guard.py --strict 2>&1 | Tee-Object -FilePath 
 if ($LASTEXITCODE -ne 0) { Write-Error "arch_guard 拦截：新增架构违规/例外超期（见 logs/arch-guard.log）"; exit 1 }
 ```
 
-灰度：前 2 周只 WARN（不 exit），与 DTS `docs_truth.py` 的 P0 report-only → P1 blocking 同节奏。
+现行（2026-11-05）：默认即上述 `--strict` 阻断行为；显式 `-Report` 时改跑 `--report` 且只 `Write-Warning` 不阻断；`-ArchStrict` 为历史兼容 no-op（与 `-Report` 同给直接报错）。
 
-## 2. CI 接入（已生效，灰度 report-only）
+灰度：前 2 周只 WARN（不 exit），与 DTS `docs_truth.py` 的 P0 report-only → P1 blocking 同节奏。〔历史口径（2026-10-20 起的两周）；该灰度已于 **2026-11-04** 到期结束，现行默认 strict 阻断〕
+
+## 2. CI 接入（已生效，**blocking**）
 
 正式 workflow：[`.github/workflows/arch-guard.yml`](../../.github/workflows/arch-guard.yml)（2026-10-20 生效）。
-灰度策略：`continue-on-error: true`（report-only）至 2026-11-03；到期后删掉该行并把 `--report` 改 `--strict`。
-workflow 内含 **baseline 只减检查**（PR 时对比 base 的 `scripts/arch-baseline.txt`，新增行只警告不阻断）。
+现行（2026-11-05）：跑 `arch_guard --strict`，**已无** `continue-on-error` ⇒ 违规即红（blocking）。
+灰度策略（历史口径，2026-10-20 接入批）：`continue-on-error: true`（report-only）至 2026-11-03，到期后删掉该行并把 `--report` 改 `--strict` —— **已执行（2026-11-04）**。
+workflow 内含 **baseline 只减检查**（PR 时对比 base 的 `scripts/arch-baseline.txt`，新增行只警告不阻断）——**该步骤仍为 advisory**（ADR-0001 §2.2 棘轮只减不增），与上面的 blocking 守卫步骤是**两件事**。
 
 ## 3. 波次协议
 
