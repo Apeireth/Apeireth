@@ -3,8 +3,8 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: 7f02f406dd7abed77897903e15427cffabb35574f24121e049c04bd93d000985
-claims_total: 50
+claims_sha256: 6dbd4929f7541d3bd10c3bd4b41cf384f1c617194934f45ec9f01b375917f84f
+claims_total: 51
 items:
   - id: "rt.provider_router"
     capability: "跨 provider fallback + 健康态（运行时路由）"
@@ -1281,5 +1281,24 @@ items:
       tests:
         - "crates/engine/memory/tests/golden_injection2.rs"
       claims_id: "mem.injection_contract"
+    gaps:
+      []
+  - id: "sec.output_injection_guard"
+    capability: "回合层消费工具**输出侧**的提示注入标记 ⇒ 可见告警（固定措辞，恒不阻断）"
+    implemented:
+      sources:
+        - "crates/engine/runtime-assembly/src/canonical/prompt_injection_guard.rs"
+        - "crates/engine/runtime-assembly/src/canonical/production.rs"
+        - "crates/capabilities/tools/src/fetch.rs"
+    wired:
+      production_refs:
+        - "crates/capabilities/tools/src/fetch.rs"
+        - "crates/engine/runtime-assembly/src/canonical/production.rs"
+        - "crates/engine/runtime-assembly/src/canonical/prompt_injection_guard.rs"
+    default_enabled: true
+    validated:
+      tests:
+        - "crates/engine/runtime-assembly/tests/prompt_injection_turn_warning.rs"
+      claims_id: "sec.output_injection_guard"
     gaps:
       []

@@ -55,6 +55,7 @@
 | `rt.mesh_local_worker` | IMPLEMENTED | OFF | - | `5c74f955e62c` | 2026-11-20 |
 | `mem.retrieval_ranking` | PRODUCTION WIRED | ON | - | `65fd1caedc4b` | 2026-12-04 |
 | `mem.injection_contract` | PRODUCTION WIRED | ON | - | `65fd1caedc4b` | 2026-12-04 |
+| `sec.output_injection_guard` | PRODUCTION WIRED | ON | - | `71e9a4a4ca23` | 2026-12-05 |
 
 ## 使用
 

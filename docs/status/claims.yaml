@@ -1051,3 +1051,19 @@ claims:
     owner: memory
     next_review: "2026-12-04"
     notes: "总指挥 2026-11-04 登记（记忆线收口清单 §6 报备的口径缺位）。注入侧的可核验契约 = 注入预算为**硬上限**（golden_injection2.rs 的 total_budget_is_a_hard_cap 等用例）；片段取窗口内的正文子串，不得改写。⚠️ 此前该契约在真源里无记录。"
+  - id: sec.output_injection_guard
+    title: "回合层消费工具**输出侧**的提示注入标记 ⇒ 可见告警（固定措辞，恒不阻断）"
+    level: PRODUCTION WIRED
+    default: "ON"
+    switch_env: null
+    sources:
+      - crates/engine/runtime-assembly/src/canonical/prompt_injection_guard.rs
+      - crates/engine/runtime-assembly/src/canonical/production.rs
+      - crates/capabilities/tools/src/fetch.rs
+    tests:
+      - crates/engine/runtime-assembly/tests/prompt_injection_turn_warning.rs
+    verified_at: 71e9a4a4ca23945eb5d13491511fe3ef3ae79f06
+    verify_cmd: "cargo test -p apeireth-runtime-assembly --test prompt_injection_turn_warning"
+    owner: runtime-assembly
+    next_review: "2026-12-05"
+    notes: "总指挥 2026-11-05 登记（外部审计 P0-2 的连带残留）。前批已在 fetch **产出输出处**写下 `prompt_injection` 标记（fetch.rs:54/489，用治理面**同一个**启发式 `PromptInjectionHeuristic`）⇒ 但**全仓无任何消费者** ⇒ 治理面的 `input_security.prompt_injection` 只扫**入参**（`Action::CapabilityDispatch` 的 arguments）⇒ ⇒ 「间接提示词注入」在治理管线里没有落点。本条 = 回合层在 `HookPoint::AfterToolResult`（工具结果刚进 transcript 之后、下一次 completion 组装之前）读该标记 ⇒ 通过 `ModuleOutcome::with_system_overlay` 投影进**下一次 provider 请求**（模型真的看得见）⇒ 并落 session 事件审计面；告警账（计数 + 有界记录表 256 条）经 `ProductionModules::prompt_injection_report()` 暴露。⚠️ **恒不阻断**（directive 恒 `Continue`，已单测钉住）⇒ 「命中即拒工具结果」是独立的产品决策。⚠️ 告警措辞**固定**（逐字复用 `FETCH_PROMPT_INJECTION_WARNING`）⇒ 敌意载荷无法「说服」告警本身。⚠️ 与治理面的入参扫描**互补不重叠**（入参扫「模型要调什么」，输出侧扫「远端给模型看什么」）。"

@@ -74,7 +74,7 @@ docs/02-guides/permission-surfaces.md,L3,4,权限面边界说明（三层权限�
 docs/02-guides/portable-runtime-assembly.md,L3,4,Portable Runtime Assembly,2026-10-28,现行,4,保留,
 docs/02-guides/quick-start.md,L3,4,Quick Start,,现行,10,保留,
 docs/02-guides/self-insight-channel.md,L3,4,自省通道：结构化自述与敏感面边界,2026-10-18,现行,4,保留,
-docs/02-guides/server-deployment.md,L3,4,服务器部署与运维 (常驻服务形态),,现行,7,保留,
+docs/02-guides/server-deployment.md,L3,4,服务器部署与运维 (常驻服务形态),,现行,8,保留,
 docs/02-guides/smol-vm-config.md,L3,4,smol-vm / libkrun 真接配置指南（历史设计记录）,2026-08-20,现行,3,保留,
 docs/02-guides/user-manual.md,L3,4,Apeireth 用户手册（v2 工程重构线）,2026-10-20,现行,21,保留,
 docs/02-guides/v2-frontend-quickstart.md,L3,4,"v2 Frontend Quickstart (2026-08-28, 子代理 R9 写, 主代理 Mavis 待审)",2026-08-28,现行,10,保留,
