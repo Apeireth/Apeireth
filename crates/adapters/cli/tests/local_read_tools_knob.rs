@@ -79,7 +79,7 @@ fn temp_db_path(label: &str) -> String {
         .into_owned()
 }
 
-async fn build_runtime(label: &str) -> Runtime {
+async fn build_runtime(label: &str) -> std::sync::Arc<apeireth_runtime::Runtime> {
     std::env::set_var(
         "APEIRETH_SESSION_DB",
         temp_db_path(&format!("{label}-session")),

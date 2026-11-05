@@ -2,7 +2,7 @@
 //!
 //! 接线四步（发现 → 撤销 → 登记 → 授权）的机制在
 //! `apeireth_runtime_assembly::canonical::external_tool_bridge`；本模块只做
-//! **组合根侧的两件事**：授权落点 + 失败不阻断启动。
+//! **组合根侧的三件事**：授权落点 + 失败不阻断启动 + 承载周期刷新。
 //!
 //! # 失败语义
 //!
@@ -11,11 +11,28 @@
 //!   记录**到 stderr，不静默吞掉（0 装诚实：主人要看得见「外部工具没接上」）。
 //! * **授权先于登记**：族授权 + 族逐次人批落在生产权限策略里，让派发裁决是
 //!   `RequireApproval` ⇒ 运行时挂起该次派发等人决定。
+//! * **周期刷新失败不误撤**：某服务器不可达 ⇒ 它的工具留在能力表里（不可达
+//!   不是「工具没了」的证据）；失败逐条记到 stderr（可观测）。
+//!
+//! # 周期刷新为什么必须由组合根承载
+//!
+//! 启动期接线之后，**运行时能力表**只在启动期登记过一次：连接自愈重连会把
+//! 重发现的工具列表交回**目录**，但**注册表面**只在 `refresh()` 时产出 ⇒
+//! 重连后服务器新增的工具进不了模型工具目录，删除的工具残留在能力表里。
+//! 周期刷新把这条缺口补上。
+//!
+//! 后台任务要活过组合根的栈帧 ⇒ 运行时必须 `Arc` 化 ⇒ **组合根交出
+//! `Arc<Runtime>`**（`Runtime` 是 `Send + Sync`，`Arc` 化不改变组合根的公开
+//! 面：公开面本来就交出 `Arc<Runtime>`）。
 
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use apeireth_governance::PermissionPolicy;
 use apeireth_runtime::Runtime;
+use apeireth_runtime_assembly::canonical::external_tool_bridge::{
+    spawn_external_tool_refresh, ExternalToolRefreshObserver,
+};
 use apeireth_runtime_assembly::canonical::{
     authorize_external_tool_family, wire_external_tools, McpModule,
 };
@@ -69,4 +86,59 @@ pub async fn wire_at_startup(
             eprintln!("[external-tools] discovery failed: {reason}");
         }
     }
+}
+
+/// 承载周期刷新: 后台任务周期跑一轮刷新, 把增量同步进运行时能力表。
+///
+/// # 返回
+///
+/// * `None` = 没有外部工具桥（未装配外部工具面）⇒ 无事可刷新。
+/// * `None` = 周期刷新显式关闭（桥的 `refresh_interval_ms = 0`）⇒ 不起任务。
+/// * `Some(task)` = 后台任务句柄（组合根负责 join / abort）。
+///
+/// # 失败语义
+///
+/// 某服务器不可达 ⇒ 本轮**不撤**它的工具（不可达不是「工具没了」的证据）;
+/// 失败逐条记到 stderr（可观测, 不静默）。
+///
+/// # 组合根接线点（**本批未接线**, 见交付说明）
+///
+/// 本函数需要 `Arc<Runtime>`（后台任务要活过组合根的栈帧）。组合根里
+/// `build_canonical_runtime_with_parts`（**私有** fn）当前按值返回 `Runtime`
+/// ⇒ 组合根把那一步 `Arc` 化并在**同一处**调用本函数即可。
+///
+/// **公开面的影响（如实）**: `build_canonical_runtime_from_env_with_observability`
+/// 本来就返回 `Arc<Runtime>`（不变）; 但 `CanonicalRuntimeParts` 这个**类型别名**
+/// 的第 0 元是 `Runtime` ⇒ 别名一改, `pub fn
+/// build_canonical_runtime_with_sessions_and_voice_emotion_from_env` 的第 0 元
+/// 也变成 `Arc<Runtime>`（**一处公开签名变化**）。仓内唯一调用方是 CLI 自己的
+/// `tests/care_heartbeat_host.rs`（`Arc::new(runtime)` 一行去掉即可）;
+/// gateway / sdk 复用路径**不碰**这个别名（gateway 走
+/// `build_canonical_runtime_from_env_with_observability`, sdk 是 HTTP 客户端,
+/// 不托管第二个 Runtime）⇒ 不波及那两条复用路径。
+pub fn spawn_periodic_refresh(
+    runtime: Arc<Runtime>,
+    handles: &ExternalToolHandles,
+) -> Option<tokio::task::JoinHandle<()>> {
+    let bridge = handles.bridge.as_ref()?.clone();
+    let interval_ms = bridge.options().refresh_interval_ms;
+    if interval_ms == 0 {
+        eprintln!("[external-tools] periodic refresh disabled (interval = 0)");
+        return None;
+    }
+    let observer: ExternalToolRefreshObserver = Arc::new(|outcome| {
+        if !outcome.failures.is_empty() {
+            eprintln!(
+                "[external-tools] periodic refresh degraded: {}",
+                outcome.failures.join("; ")
+            );
+        }
+    });
+    Some(spawn_external_tool_refresh(
+        runtime,
+        bridge,
+        handles.module_bag.clone(),
+        Duration::from_millis(interval_ms),
+        observer,
+    ))
 }

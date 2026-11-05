@@ -111,7 +111,7 @@ fn lock_env() -> std::sync::MutexGuard<'static, ()> {
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
-async fn build_runtime(label: &str) -> Runtime {
+async fn build_runtime(label: &str) -> std::sync::Arc<apeireth_runtime::Runtime> {
     std::env::set_var("APEIRETH_SESSION_DB", temp_path(label, "session.sqlite3"));
     std::env::set_var(
         "APEIRETH_COGNITIVE_DB",

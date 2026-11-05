@@ -81,9 +81,8 @@ pub const GUARD_ML_MODEL_ENV: &str = "APEIRETH_GUARD_ML_MODEL";
 /// 经 `attach_immune_memory` 交器官审议门 + W3.6 自述槽（同一份 `Arc`）。
 pub const ENABLE_IMMUNE_MEMORY_ENV: &str = "APEIRETH_ENABLE_IMMUNE_MEMORY";
 
-/// Legacy opt-in for the local filesystem and search tools (granted by default
-/// now); `APEIRETH_DISABLE_LOCAL_READ_TOOLS=1` is the privacy escape hatch that
-/// withholds them even though they default to on.
+/// Legacy opt-in for the local filesystem and search tools (granted by default now);
+/// `APEIRETH_DISABLE_LOCAL_READ_TOOLS=1` withholds them (privacy escape hatch).
 pub const ENABLE_LOCAL_READ_TOOLS_ENV: &str = "APEIRETH_ENABLE_LOCAL_READ_TOOLS";
 pub const DISABLE_LOCAL_READ_TOOLS_ENV: &str = "APEIRETH_DISABLE_LOCAL_READ_TOOLS";
 // 2026-09-08 用户旋钮 (per docs/01-architecture/forget-three-phase-production-spec 同批):
@@ -245,10 +244,8 @@ fn local_read_tools_enabled_from_env() -> bool {
     true
 }
 
-/// 记忆核心族默认开旋钮的统一语义 (逃生门惯例与
-/// `APEIRETH_DISABLE_LOCAL_READ_TOOLS` / `APEIRETH_DISABLE_TYPED_RECALL` 一致):
-/// `APEIRETH_DISABLE_*=1` → 关 (最高优先); `APEIRETH_ENABLE_*=0` → 关;
-/// 未设 / `=1` / 其余值 → 开。
+/// 记忆核心族默认开旋钮的统一语义 (逃生门惯例): `APEIRETH_DISABLE_*=1` → 关 (最高
+/// 优先); `APEIRETH_ENABLE_*=0` → 关; 未设 / `=1` / 其余值 → 开。
 fn core_memory_knob_enabled(enable_env: &str, disable_env: &str) -> bool {
     if std::env::var(disable_env)
         .ok()
@@ -470,9 +467,9 @@ pub fn quota_max_cost_micros_from_env() -> Option<u64> {
     )
 }
 
-/// 生效模型 id (与运行时 `with_default_model` 同一解析口径):
-/// `APEIRETH_MODEL` 显式覆盖 > minimax 族首个默认模型 (提供商面规范 id,
-/// 小写)。无模型在力回 `None` (自述模型节显式 null + 原因, 不编造)。
+/// 生效模型 id (与运行时 `with_default_model` 同一解析口径): `APEIRETH_MODEL`
+/// 显式覆盖 > minimax 族首个默认模型 (提供商面规范 id, 小写)。无模型在力回 `None`
+/// (自述模型节显式 null + 原因, 不编造)。
 pub fn active_model_id() -> Option<String> {
     if let Some(model) = std::env::var("APEIRETH_MODEL")
         .ok()
@@ -1372,7 +1369,7 @@ fn build_production_governance_parts_from_env() -> (
 
 /// Build the one canonical runtime used by CLI chat and the HTTP gateway.
 /// Provider plugins carry credentials resolution at execution time (never stored).
-pub async fn build_canonical_runtime_from_env() -> Result<Runtime, String> {
+pub async fn build_canonical_runtime_from_env() -> Result<Arc<Runtime>, String> {
     let (runtime, _, _, _, _) = build_canonical_runtime_with_sessions_from_env().await?;
     Ok(runtime)
 }
@@ -1382,7 +1379,7 @@ pub async fn build_canonical_runtime_from_env() -> Result<Runtime, String> {
 /// gateway introspection surfaces serve). 情绪源绑定位不随本口出口。
 pub async fn build_canonical_runtime_with_sessions_from_env() -> Result<
     (
-        Runtime,
+        Arc<Runtime>,
         Arc<dyn SessionStore>,
         Arc<dyn MemoryBackend>,
         Arc<std::sync::Mutex<PermissionPolicy>>,
@@ -1403,10 +1400,10 @@ pub async fn build_canonical_runtime_with_sessions_from_env() -> Result<
     Ok((runtime, session_store, memory, policy, guard_hook))
 }
 
-/// 生产网关路径的运行时组装 (R3 接线出口): 同一装配 + 情绪源/心跳源绑定位 +
-/// 成本路由器 (H-P2); 生物 probe 迟绑定槽不随本口出口。
+/// 生产网关路径的运行时组装 (R3 接线出口): 同一装配 + 情绪源/心跳源绑定位 + 成本路由器
+/// (H-P2); 生物 probe 迟绑定槽不随本口出口。
 type CanonicalRuntimeParts = (
-    Runtime,
+    Arc<Runtime>,
     Arc<dyn SessionStore>,
     Arc<dyn MemoryBackend>,
     Arc<std::sync::Mutex<PermissionPolicy>>,
@@ -1498,7 +1495,7 @@ async fn build_domain_partner_runtime(
     memory_db: PathBuf,
     voice_emotion: &VoiceEmotionSource,
     care_heartbeat: &CareHeartbeatSource,
-) -> Result<Runtime, String> {
+) -> Result<Arc<Runtime>, String> {
     let clock: Arc<dyn apeireth_core::kernel::Clock> = apeireth_core::kernel::system_clock();
     // 域伙伴运行时不注入备份导出面 (跨域打包面收口到 owner 本地操作; 名册照实报
     // `backup_export: false`), 路由器绑定位同样丢弃 (本批任务源路由只接 CLI chat
@@ -1526,7 +1523,7 @@ async fn build_canonical_runtime_with_parts(
     clock: Arc<dyn apeireth_core::kernel::Clock>,
 ) -> Result<
     (
-        Runtime,
+        Arc<Runtime>,
         Arc<std::sync::Mutex<PermissionPolicy>>,
         Arc<BehaviorChainGuardHook>,
     ),
@@ -1646,11 +1643,15 @@ async fn build_canonical_runtime_with_parts(
         builder = builder.with_default_model(model);
     }
 
-    let runtime = builder
-        .build()
-        .await
-        .map_err(|error| format!("canonical runtime bootstrap failed: {error}"))?;
+    // `Arc<Runtime>`: 组合根的后台任务要活过本函数栈帧 ⇒ 先 Arc 化.
+    let runtime = Arc::new(
+        builder
+            .build()
+            .await
+            .map_err(|error| format!("canonical runtime bootstrap failed: {error}"))?,
+    );
     external_tools::wire_at_startup(&runtime, &external_handles, &policy).await;
+    external_tools::spawn_periodic_refresh(Arc::clone(&runtime), &external_handles);
     if let Some(recorder) = guard_hook.dataset_recorder() {
         runtime.add_event_sink(Arc::new(
             apeireth_runtime_assembly::GuardDatasetObserver::new(recorder)
@@ -1704,7 +1705,6 @@ pub async fn build_canonical_runtime_from_env_with_observability() -> Result<
         bio_probe_slots,
         bio_approval,
     ) = build_canonical_runtime_assembly_from_env().await?;
-    let runtime = Arc::new(runtime);
     // W3.6: 痛觉/再生 probe 迟绑定到 runtime 自身 (Weak 无环)。
     bind_bio_pain_reader(&bio_probe_slots, &runtime);
     let governance = Arc::new(
@@ -3371,7 +3371,7 @@ pub async fn dispatch_gateway_serve_with(
         .await
         {
             Ok(partner) => {
-                domain_instances.insert(domain_id, Arc::new(partner));
+                domain_instances.insert(domain_id, partner);
             }
             Err(error) => {
                 state.observations.buffer_audit(

@@ -407,7 +407,6 @@ async fn the_self_status_care_section_reports_the_live_heartbeat_columns() {
         build_canonical_runtime_with_sessions_and_voice_emotion_from_env()
             .await
             .expect("keyless 生产装配");
-    let runtime = Arc::new(runtime);
 
     // 未起 = 两列显式 null (生产装配不冒充在跑)。
     let section = care_section_of(&runtime).await;

@@ -82,7 +82,7 @@ fn temp_path(label: &str, name: &str) -> String {
         .into_owned()
 }
 
-async fn build_runtime(label: &str) -> Runtime {
+async fn build_runtime(label: &str) -> std::sync::Arc<apeireth_runtime::Runtime> {
     std::env::set_var("APEIRETH_SESSION_DB", temp_path(label, "session.sqlite3"));
     std::env::set_var(
         "APEIRETH_COGNITIVE_DB",

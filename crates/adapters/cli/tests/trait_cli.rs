@@ -161,9 +161,10 @@ async fn trait_report_is_granted_by_default_with_zero_approval() {
     std::env::set_var("APEIRETH_SESSION_DB", dir.join("sessions.sqlite3"));
     std::env::set_var("APEIRETH_COGNITIVE_DB", dir.join("cognitive.sqlite3"));
 
-    let runtime: apeireth_runtime::Runtime = apeireth_cli::build_canonical_runtime_from_env()
-        .await
-        .expect("keyless production runtime builds without network");
+    let runtime: std::sync::Arc<apeireth_runtime::Runtime> =
+        apeireth_cli::build_canonical_runtime_from_env()
+            .await
+            .expect("keyless production runtime builds without network");
 
     let capability = CapabilityId::new("tool.trait_report").expect("capability id");
     let arguments = serde_json::json!({});

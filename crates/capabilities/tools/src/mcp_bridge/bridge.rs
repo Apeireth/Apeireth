@@ -1,7 +1,5 @@
 //! The bridge: configuration in, dynamic tools out.
 //!
-//! **生产未接线**：发现 / 登记 / 授权三环零生产调用点 ⇒ `refresh()` 生产不跑，0 个外部工具进模型工具目录。
-//!
 //! One [`McpToolBridge`] owns one connection per enabled server, the dynamic
 //! tool catalog, and the shared five-stage pipeline every external call
 //! walks. [`McpToolBridge::refresh`] is the dynamic catalog entry: it runs
@@ -14,6 +12,19 @@
 //! catalog right away — the catalog does not drift from the live server
 //! between two refreshes. The next refresh then carries the adopted tools
 //! into the report the registry is fed from.
+//!
+//! # Two refresh shapes
+//!
+//! * [`McpToolBridge::refresh`] — **fail-all**: the first unreachable server
+//!   aborts the round and the caller gets no delta at all (the startup
+//!   wiring wants that: half a delta is worse than none).
+//! * [`McpToolBridge::refresh_outcome`] — **per-server isolation**: an
+//!   unreachable server contributes no delta (its tools stay where they are
+//!   — an unreachable server is not evidence that its tools are gone), the
+//!   healthy servers' delta is still reported, and the failures are reported
+//!   next to it. The periodic refresh wants that: one dead server must not
+//!   freeze the others, and a dead server must not take the live tools out
+//!   of the registry.
 //!
 //! # Where the authorization surface lives
 //!
@@ -66,6 +77,19 @@ pub struct DiscoveryReport {
     pub removed: Vec<McpToolEntry>,
     /// The full catalog after the refresh.
     pub live: Vec<McpToolEntry>,
+}
+
+/// What one refresh round changed when the servers are refreshed one by one.
+///
+/// A round that treats every server independently must not let one
+/// unreachable server decide the fate of the others: the healthy servers'
+/// delta is real, and the failed server's tools stay where they are — an
+/// unreachable server is **not** evidence that its tools are gone.
+pub struct RefreshOutcome {
+    /// The delta of the servers that answered.
+    pub report: DiscoveryReport,
+    /// One entry per server that could not be reached.
+    pub failures: Vec<McpBridgeError>,
 }
 
 impl DiscoveryReport {
@@ -297,109 +321,185 @@ impl McpToolBridge {
 
     /// Refresh the whole dynamic catalog: (re)connect where needed, run
     /// `tools/list` everywhere, reconcile, and report the delta.
+    ///
+    /// **Fail-all**: the first server that cannot be reached aborts the whole
+    /// round — the caller gets no delta at all rather than a half-applied
+    /// one. Use [`McpToolBridge::refresh_outcome`] when the servers must be
+    /// refreshed independently.
     pub async fn refresh(&self) -> Result<DiscoveryReport, McpBridgeError> {
         let mut registered = Vec::new();
         let mut removed = Vec::new();
         let mut removed_names: BTreeSet<String> = BTreeSet::new();
         for connection in &self.connections {
-            let server = connection.server_name().to_string();
-            let discovered = match connection.discover().await {
-                Ok(tools) => tools,
-                // No live link (first connect or a dropped one): open one,
-                // which also re-discovers the tool list.
-                Err(McpError::Transport(_)) => {
-                    connection
-                        .connect()
-                        .await
-                        .map_err(|error| McpBridgeError::Connect {
-                            server: server.clone(),
-                            error,
-                        })?
-                }
-                Err(error) => {
-                    return Err(McpBridgeError::Connect {
-                        server: server.clone(),
-                        error,
-                    })
-                }
-            };
-            let mut entries = Vec::with_capacity(discovered.len());
-            for tool in &discovered {
-                entries.push(McpToolEntry::new(&server, tool)?);
-            }
-            // The directory is reconciled against this server's live list,
-            // and the wrapped-tool map is reconciled against the directory:
-            // a reconnect adopts a re-discovered list into the directory
-            // (those tools are live) without wrapping them, so the map is
-            // what the registry is handed — the reconciliation below is
-            // what carries the adopted tools into this report.
-            let (_added, gone) = self.catalog.replace_server(&server, entries.clone())?;
-            let live: BTreeMap<String, McpToolEntry> = entries
-                .into_iter()
-                .map(|entry| (entry.model_name.clone(), entry))
-                .collect();
-            let mut tools = self
-                .tools
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
-            // Tools the map still holds that the directory no longer lists:
-            // the server dropped them, or a reconnect adopted a smaller
-            // list. They leave the live set.
-            let mut stale: Vec<McpToolEntry> = tools
-                .values()
-                .filter(|handle| {
-                    handle.entry.server == server && !live.contains_key(&handle.entry.model_name)
-                })
-                .map(|handle| handle.entry.clone())
-                .collect();
-            for entry in &stale {
-                tools.remove(&entry.model_name);
-            }
-            // Tools the directory lists that the map does not hold yet (a
-            // reconnect adopted them), plus the ones whose descriptor
-            // changed: both are wrapped here.
-            for (model_name, entry) in &live {
-                let previous = tools.get(model_name).map(|handle| handle.entry.clone());
-                match previous {
-                    // Unchanged: the wrapped tool is still the right one.
-                    Some(previous) if previous == *entry => continue,
-                    // The descriptor changed: the replaced descriptor leaves
-                    // the live set — the registry must forget it before it
-                    // learns the new one (same identity, new descriptor).
-                    Some(previous) => stale.push(previous),
-                    None => {}
-                }
-                let tool = self.wrap_tool(entry.clone());
-                tools.insert(
-                    model_name.clone(),
-                    McpToolHandle {
-                        entry: entry.clone(),
-                        tool: Arc::clone(&tool),
-                    },
-                );
-                registered.push(tool);
-            }
-            drop(tools);
-            // The report carries both sides of the delta: what the registry
-            // must learn (the wrapped tools above) and what it must forget
-            // (the tools the directory dropped plus the ones the map still
-            // held).
-            for entry in gone.into_iter().chain(stale) {
-                if !removed_names.insert(entry.model_name.clone()) {
-                    continue;
-                }
-                removed.push(entry);
+            self.refresh_server(
+                connection,
+                &mut registered,
+                &mut removed,
+                &mut removed_names,
+            )
+            .await?;
+        }
+        self.authorize_discovered();
+        Ok(DiscoveryReport {
+            registered,
+            removed,
+            live: self.catalog.list(),
+        })
+    }
+
+    /// Refresh every server independently: one unreachable server does not
+    /// decide the fate of the others.
+    ///
+    /// The failed server contributes **no** delta — neither additions nor
+    /// removals: an unreachable server is not evidence that its tools are
+    /// gone (withdrawing them would be a false removal the model would pay
+    /// for). The healthy servers' delta is still reported, and the failures
+    /// are reported next to it so the caller can observe them instead of
+    /// swallowing them.
+    pub async fn refresh_outcome(&self) -> RefreshOutcome {
+        let mut registered = Vec::new();
+        let mut removed = Vec::new();
+        let mut removed_names: BTreeSet<String> = BTreeSet::new();
+        let mut failures = Vec::new();
+        for connection in &self.connections {
+            if let Err(error) = self
+                .refresh_server(
+                    connection,
+                    &mut registered,
+                    &mut removed,
+                    &mut removed_names,
+                )
+                .await
+            {
+                failures.push(error);
             }
         }
+        self.authorize_discovered();
+        RefreshOutcome {
+            report: DiscoveryReport {
+                registered,
+                removed,
+                live: self.catalog.list(),
+            },
+            failures,
+        }
+    }
 
-        // External tool permission declarations become explicit grants only
-        // where the read-only preset releases them; everything else stays
-        // outside the authorization surface until an operator authorizes it.
-        //
-        // The grant says "in the authorization surface"; the per-call
-        // approval marking says "every call still waits for a human" —
-        // external calls are approved one by one, the preset does not
-        // exempt them.
+    /// Refresh one server and fold its delta into the round being built.
+    ///
+    /// The per-server body is **atomic with respect to the shared state**:
+    /// the identity check and the directory replacement both validate
+    /// before they change anything, so a failing server leaves the
+    /// directory and the wrapped-tool map exactly as they were.
+    async fn refresh_server(
+        &self,
+        connection: &Arc<McpServerConnection>,
+        registered: &mut Vec<Arc<dyn ToolCapability>>,
+        removed: &mut Vec<McpToolEntry>,
+        removed_names: &mut BTreeSet<String>,
+    ) -> Result<(), McpBridgeError> {
+        let server = connection.server_name().to_string();
+        let discovered = match connection.discover().await {
+            Ok(tools) => tools,
+            // No live link (first connect or a dropped one): open one,
+            // which also re-discovers the tool list.
+            Err(McpError::Transport(_)) => {
+                connection
+                    .connect()
+                    .await
+                    .map_err(|error| McpBridgeError::Connect {
+                        server: server.clone(),
+                        error,
+                    })?
+            }
+            Err(error) => {
+                return Err(McpBridgeError::Connect {
+                    server: server.clone(),
+                    error,
+                })
+            }
+        };
+        let mut entries = Vec::with_capacity(discovered.len());
+        for tool in &discovered {
+            entries.push(McpToolEntry::new(&server, tool)?);
+        }
+        // The directory is reconciled against this server's live list,
+        // and the wrapped-tool map is reconciled against the directory:
+        // a reconnect adopts a re-discovered list into the directory
+        // (those tools are live) without wrapping them, so the map is
+        // what the registry is handed — the reconciliation below is
+        // what carries the adopted tools into this report.
+        let (_added, gone) = self.catalog.replace_server(&server, entries.clone())?;
+        let live: BTreeMap<String, McpToolEntry> = entries
+            .into_iter()
+            .map(|entry| (entry.model_name.clone(), entry))
+            .collect();
+        let mut tools = self
+            .tools
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        // Tools the map still holds that the directory no longer lists:
+        // the server dropped them, or a reconnect adopted a smaller
+        // list. They leave the live set.
+        let mut stale: Vec<McpToolEntry> = tools
+            .values()
+            .filter(|handle| {
+                handle.entry.server == server && !live.contains_key(&handle.entry.model_name)
+            })
+            .map(|handle| handle.entry.clone())
+            .collect();
+        for entry in &stale {
+            tools.remove(&entry.model_name);
+        }
+        // Tools the directory lists that the map does not hold yet (a
+        // reconnect adopted them), plus the ones whose descriptor
+        // changed: both are wrapped here.
+        for (model_name, entry) in &live {
+            let previous = tools.get(model_name).map(|handle| handle.entry.clone());
+            match previous {
+                // Unchanged: the wrapped tool is still the right one.
+                Some(previous) if previous == *entry => continue,
+                // The descriptor changed: the replaced descriptor leaves
+                // the live set — the registry must forget it before it
+                // learns the new one (same identity, new descriptor).
+                Some(previous) => stale.push(previous),
+                None => {}
+            }
+            let tool = self.wrap_tool(entry.clone());
+            tools.insert(
+                model_name.clone(),
+                McpToolHandle {
+                    entry: entry.clone(),
+                    tool: Arc::clone(&tool),
+                },
+            );
+            registered.push(tool);
+        }
+        drop(tools);
+        // The report carries both sides of the delta: what the registry
+        // must learn (the wrapped tools above) and what it must forget
+        // (the tools the directory dropped plus the ones the map still
+        // held).
+        for entry in gone.into_iter().chain(stale) {
+            if !removed_names.insert(entry.model_name.clone()) {
+                continue;
+            }
+            removed.push(entry);
+        }
+        Ok(())
+    }
+
+    /// Fold the discovered declarations into the bridge's permission policy.
+    ///
+    /// External tool permission declarations become explicit grants only
+    /// where the read-only preset releases them; everything else stays
+    /// outside the authorization surface until an operator authorizes it.
+    ///
+    /// The grant says "in the authorization surface"; the per-call
+    /// approval marking says "every call still waits for a human" —
+    /// external calls are approved one by one, the preset does not
+    /// exempt them.
+    fn authorize_discovered(&self) {
         if self.options.readonly_preset {
             let mut policy = self
                 .policy
@@ -422,30 +522,22 @@ impl McpToolBridge {
         // by one, allowlisted or not. An operator reading "auto_authorize"
         // must not conclude "no human will be asked" — hence the grant is
         // paired with the per-call approval marking.
-        {
-            let mut policy = self
-                .policy
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
-            for connection in &self.connections {
-                let spec = connection.spec();
-                if spec.auto_authorize_tools.is_empty() {
-                    continue;
-                }
-                McpPermissionMapping::authorize_listed_for_approval(
-                    &mut policy,
-                    &self.catalog,
-                    connection.server_name(),
-                    &spec.auto_authorize_tools,
-                );
+        let mut policy = self
+            .policy
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        for connection in &self.connections {
+            let spec = connection.spec();
+            if spec.auto_authorize_tools.is_empty() {
+                continue;
             }
+            McpPermissionMapping::authorize_listed_for_approval(
+                &mut policy,
+                &self.catalog,
+                connection.server_name(),
+                &spec.auto_authorize_tools,
+            );
         }
-
-        Ok(DiscoveryReport {
-            registered,
-            removed,
-            live: self.catalog.list(),
-        })
     }
 
     /// The currently live pipeline-wrapped tools.

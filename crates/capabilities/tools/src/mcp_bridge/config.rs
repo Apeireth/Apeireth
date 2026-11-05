@@ -40,6 +40,14 @@ pub const MCP_SERVERS_DOC_VERSION: u32 = 1;
 /// Default per-call deadline for one MCP tool call, in milliseconds.
 pub const DEFAULT_CALL_TIMEOUT_MS: u64 = 30_000;
 
+/// Default interval between two periodic catalog refreshes, in milliseconds.
+///
+/// The periodic refresh is what keeps the **runtime capability table** in step
+/// with a server that reconnects and re-discovers a different tool list: the
+/// directory side follows a reconnect right away, the registration side only
+/// follows on the next refresh.
+pub const DEFAULT_REFRESH_INTERVAL_MS: u64 = 60_000;
+
 /// How one server is reached.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -389,6 +397,18 @@ pub struct McpBridgeOptions {
     pub max_timeout_ms: u64,
     /// Disconnect/reconnect budget shared by every connection.
     pub reconnect: apeireth_plugin::mcp::ReconnectPolicy,
+    /// Interval between two periodic catalog refreshes, in milliseconds.
+    ///
+    /// `0` = the periodic refresh is **off**: the bridge then only refreshes
+    /// when a caller asks for it explicitly. The default
+    /// ([`DEFAULT_REFRESH_INTERVAL_MS`]) keeps the registration surface in
+    /// step with a server that reconnects and re-discovers a different tool
+    /// list.
+    ///
+    /// **配置来源**: 本项是**程序化配置**（组合根按需构造 `McpBridgeOptions`）,
+    /// **不新增 env 旋钮** —— 未在 `docs/architecture/env-registry.toml` 登记的
+    /// 开关名不得进代码。若日后要开放运行时可调, 先登记 env 真源再接线。
+    pub refresh_interval_ms: u64,
 }
 
 impl Default for McpBridgeOptions {
@@ -398,6 +418,7 @@ impl Default for McpBridgeOptions {
             call_timeout_ms: DEFAULT_CALL_TIMEOUT_MS,
             max_timeout_ms: DEFAULT_MAX_TIMEOUT_MS,
             reconnect: apeireth_plugin::mcp::ReconnectPolicy::default(),
+            refresh_interval_ms: DEFAULT_REFRESH_INTERVAL_MS,
         }
     }
 }
@@ -430,6 +451,16 @@ impl McpBridgeOptions {
     /// Options with an explicit reconnect budget.
     pub fn with_reconnect(mut self, reconnect: apeireth_plugin::mcp::ReconnectPolicy) -> Self {
         self.reconnect = reconnect;
+        self
+    }
+
+    /// Options with an explicit periodic refresh interval.
+    ///
+    /// `0` turns the periodic refresh off (the bridge then refreshes only when
+    /// a caller asks for it).
+    #[must_use]
+    pub fn with_refresh_interval_ms(mut self, refresh_interval_ms: u64) -> Self {
+        self.refresh_interval_ms = refresh_interval_ms;
         self
     }
 }
