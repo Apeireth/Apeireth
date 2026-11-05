@@ -305,9 +305,12 @@ def run_leg(devtools_port, base, console_log, frozen_at, out_dir, only="all", so
             cdp.evaluate(f"window.__INTRO_REDRAW__.start({json.dumps(backend)}); true")
             time.sleep(0.5)
             # ⭐ **绘制次数**快照（对称性证据）：两侧各画了多少次。
+            # ⭐⭐⭐ **引擎侧绘制计数**（E-187）：页面侧累计的 `frames_drawn`
+            #   ⇒ ⇒ 以前这里是**硬编码的 `'n/a'`**（三元两个分支一样 ⇒ ⇒ 占位不是测量）
+            #   ⇒ ⇒⇒ ⇒ 现在读**真实计数** ⇒ ⇒ 「引擎没画」能被数字直接抓到。
             counts = cdp.evaluate(
                 "JSON.stringify({production: (window.__INTRO__||{}).production_draws,"
-                " engine: (window.__INTRO_REDRAW__||{}).diag ? 'n/a' : 'n/a'})"
+                " engine: (window.__ENGINE_DRAWS__||{})[%s]})" % json.dumps(backend)
             )
             try:
                 counts = json.loads(counts)
@@ -642,6 +645,22 @@ def main():
                     )
                 production_vs_engine.append(entry)
 
+        # ── ⭐⭐⭐ **引擎侧绘制计数**（E-187）：逐腿逐后端记「引擎画了几笔」────
+        engine_drew = []
+        for key, leg in report.get("legs", {}).items():
+            for backend, segment in (leg.get("pixel_diff") or {}).items():
+                if not isinstance(segment, dict) or segment.get("skipped"):
+                    continue
+                counts = segment.get("draw_counts_at_capture") or {}
+                engine_drew.append(
+                    {
+                        "leg": key,
+                        "backend": backend,
+                        "draws": counts.get("engine"),
+                        "production_draws": counts.get("production"),
+                    }
+                )
+
         def _zero(entries, key="differing_pixels"):
             """判据的通过条件：**每一条**都必须可比较且差 0 像素。"""
             if not entries:
@@ -689,6 +708,23 @@ def main():
                     "pass"
                     if _zero(quad_vs_point) is True
                     else ("fail" if _zero(quad_vs_point) is False else "inconclusive")
+                ),
+            },
+            {
+                "id": "engine_actually_drew",
+                "description": (
+                    "引擎侧**真的画了**（`window.__ENGINE_DRAWS__[backend]` > 0）"
+                    "⇒ ⇒ 「逐像素 0 差异」的两种成因里，**排除『根本没画』**"
+                    "（⇒ ⇒ 否则那条腿是**假绿**）"
+                ),
+                "threshold": {"min_draws": 1},
+                "mandatory": True,
+                "measured": engine_drew,
+                "status": (
+                    "pass"
+                    if engine_drew
+                    and all(entry.get("draws", 0) >= 1 for entry in engine_drew)
+                    else "fail"
                 ),
             },
             {

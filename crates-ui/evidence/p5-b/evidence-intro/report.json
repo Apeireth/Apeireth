@@ -1,6 +1,6 @@
 {
   "schema": "apeireth.ui-engine.p5-b.intro-parity-report/1",
-  "generated_at": "2026-11-05T20:09:57+0800",
+  "generated_at": "2026-11-05T20:20:05+0800",
   "environment": {
     "chromium": "Chromium 154.0.8037.92 built on Debian GNU/Linux forky/sid",
     "frozen_times_seconds": [
@@ -459,7 +459,7 @@
           "channel_threshold": 2,
           "draw_counts_at_capture": {
             "production": 3,
-            "engine": "n/a"
+            "engine": 10
           }
         },
         "webgpu": {
@@ -479,7 +479,7 @@
           "channel_threshold": 2,
           "draw_counts_at_capture": {
             "production": 3,
-            "engine": "n/a"
+            "engine": 12
           }
         }
       },
@@ -506,7 +506,7 @@
       "only": "all",
       "source": "rust",
       "sprite_mode": "point",
-      "production_draws": 4,
+      "production_draws": 3,
       "rust": {
         "beats": 1,
         "drawn_passes": 0,
@@ -949,8 +949,8 @@
           "max_channel_delta": 0,
           "channel_threshold": 2,
           "draw_counts_at_capture": {
-            "production": 4,
-            "engine": "n/a"
+            "production": 3,
+            "engine": 10
           }
         },
         "webgpu": {
@@ -969,8 +969,8 @@
           "max_channel_delta": 1,
           "channel_threshold": 2,
           "draw_counts_at_capture": {
-            "production": 4,
-            "engine": "n/a"
+            "production": 3,
+            "engine": 14
           }
         }
       },
@@ -997,7 +997,7 @@
       "only": "all",
       "source": "rust",
       "sprite_mode": "quad",
-      "production_draws": 8,
+      "production_draws": 6,
       "rust": {
         "beats": 1,
         "drawn_passes": 1,
@@ -1708,8 +1708,8 @@
           "max_channel_delta": 0,
           "channel_threshold": 2,
           "draw_counts_at_capture": {
-            "production": 8,
-            "engine": "n/a"
+            "production": 6,
+            "engine": 6
           }
         },
         "webgpu": {
@@ -1728,8 +1728,8 @@
           "max_channel_delta": 0,
           "channel_threshold": 2,
           "draw_counts_at_capture": {
-            "production": 8,
-            "engine": "n/a"
+            "production": 6,
+            "engine": 9
           }
         }
       },
@@ -2468,7 +2468,7 @@
           "channel_threshold": 2,
           "draw_counts_at_capture": {
             "production": 6,
-            "engine": "n/a"
+            "engine": 11
           }
         },
         "webgpu": {
@@ -2488,7 +2488,7 @@
           "channel_threshold": 2,
           "draw_counts_at_capture": {
             "production": 6,
-            "engine": "n/a"
+            "engine": 10
           }
         }
       },
@@ -2515,10 +2515,10 @@
   "browser_console": [
     "[intro:console.log] [probe-diag] search= ?it=13.5&only=all&source=rust&sprite=quad&sync=1&probe=flat probe= flat",
     "[intro:log.error] Failed to load resource: the server responded with a status of 404 (File not found)",
-    "[intro:log.warning] [.WebGL-0x1134001b6c00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
-    "[intro:log.warning] [.WebGL-0x1134001b6c00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
-    "[intro:log.warning] [.WebGL-0x1134001b6c00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
-    "[intro:log.warning] [.WebGL-0x1134001b6c00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)",
+    "[intro:log.warning] [.WebGL-0x824001b7800]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+    "[intro:log.warning] [.WebGL-0x824001b7800]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+    "[intro:log.warning] [.WebGL-0x824001b7800]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+    "[intro:log.warning] [.WebGL-0x824001b7800]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)",
     "[intro:console.log] [probe-diag] search= ?it=13.5&only=all&source=rust&sprite=point&sync=1&probe=flat probe= flat",
     "[intro:console.log] [probe-diag] search= ?it=2.5&only=all&source=rust&sprite=quad&sync=1&probe=flat probe= flat",
     "[intro:console.log] [p5b] sprite pipeline 0 created",
@@ -2673,6 +2673,65 @@
       "status": "pass"
     },
     {
+      "id": "engine_actually_drew",
+      "description": "引擎侧**真的画了**（`window.__ENGINE_DRAWS__[backend]` > 0）⇒ ⇒ 「逐像素 0 差异」的两种成因里，**排除『根本没画』**（⇒ ⇒ 否则那条腿是**假绿**）",
+      "threshold": {
+        "min_draws": 1
+      },
+      "mandatory": true,
+      "measured": [
+        {
+          "leg": "13.5:all:quad:flat",
+          "backend": "webgl",
+          "draws": 10,
+          "production_draws": 3
+        },
+        {
+          "leg": "13.5:all:quad:flat",
+          "backend": "webgpu",
+          "draws": 12,
+          "production_draws": 3
+        },
+        {
+          "leg": "13.5:all:point:flat",
+          "backend": "webgl",
+          "draws": 10,
+          "production_draws": 3
+        },
+        {
+          "leg": "13.5:all:point:flat",
+          "backend": "webgpu",
+          "draws": 14,
+          "production_draws": 3
+        },
+        {
+          "leg": "2.5:all:quad:flat",
+          "backend": "webgl",
+          "draws": 6,
+          "production_draws": 6
+        },
+        {
+          "leg": "2.5:all:quad:flat",
+          "backend": "webgpu",
+          "draws": 9,
+          "production_draws": 6
+        },
+        {
+          "leg": "2.5:all:point:flat",
+          "backend": "webgl",
+          "draws": 11,
+          "production_draws": 6
+        },
+        {
+          "leg": "2.5:all:point:flat",
+          "backend": "webgpu",
+          "draws": 10,
+          "production_draws": 6
+        }
+      ],
+      "status": "pass"
+    },
+    {
       "id": "production_vs_engine",
       "description": "生产（原生 WebGL2 点图元）vs 引擎（同一批 uniform 取值）⇒ 逐像素差（⚠ 这一条在本批之前对 WebGPU 是**假绿**：引擎侧根本没画粒子）",
       "threshold": {
@@ -2700,7 +2759,7 @@
           "channel_threshold": 2,
           "draw_counts_at_capture": {
             "production": 3,
-            "engine": "n/a"
+            "engine": 10
           }
         },
         {
@@ -2722,7 +2781,7 @@
           "channel_threshold": 2,
           "draw_counts_at_capture": {
             "production": 3,
-            "engine": "n/a"
+            "engine": 12
           }
         },
         {
@@ -2743,8 +2802,8 @@
           "max_channel_delta": 0,
           "channel_threshold": 2,
           "draw_counts_at_capture": {
-            "production": 4,
-            "engine": "n/a"
+            "production": 3,
+            "engine": 10
           }
         },
         {
@@ -2765,8 +2824,8 @@
           "max_channel_delta": 1,
           "channel_threshold": 2,
           "draw_counts_at_capture": {
-            "production": 4,
-            "engine": "n/a"
+            "production": 3,
+            "engine": 14
           }
         },
         {
@@ -2787,8 +2846,8 @@
           "max_channel_delta": 0,
           "channel_threshold": 2,
           "draw_counts_at_capture": {
-            "production": 8,
-            "engine": "n/a"
+            "production": 6,
+            "engine": 6
           }
         },
         {
@@ -2809,8 +2868,8 @@
           "max_channel_delta": 0,
           "channel_threshold": 2,
           "draw_counts_at_capture": {
-            "production": 8,
-            "engine": "n/a"
+            "production": 6,
+            "engine": 9
           }
         },
         {
@@ -2832,7 +2891,7 @@
           "channel_threshold": 2,
           "draw_counts_at_capture": {
             "production": 6,
-            "engine": "n/a"
+            "engine": 11
           }
         },
         {
@@ -2854,7 +2913,7 @@
           "channel_threshold": 2,
           "draw_counts_at_capture": {
             "production": 6,
-            "engine": "n/a"
+            "engine": 10
           }
         }
       ],

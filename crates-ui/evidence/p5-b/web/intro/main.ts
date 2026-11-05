@@ -557,10 +557,28 @@ async function main() {
     // ⑦ ⭐ **持续重绘**（截图前必须）：浏览器的 WebGL drawing buffer 默认不保留
     //    ⇒ 合成后被清空 ⇒ 「画完就停」⇒ 之后截图**全白**（实测 99.94% 差异）。
     const redrawHandles: Record<string, number> = {};
+    // ⭐⭐⭐ **引擎侧绘制计数**（E-187）：`redraw_intro` 的返回里**本来就有**
+    //   `frames_drawn` ⇒ ⇒ 但以前被 `.catch()` **丢掉了** ⇒ ⇒
+    //   ⇒ ⇒ 「引擎到底画了几笔」**没法被数字抓到** ⇒ ⇒
+    //   ⇒ ⇒⇒ ⇒ 「逐像素 0 差异」就有两种成因：①画得一样 ②**根本没画**（假绿）。
+    //   ⇒ ⇒⇒ ⇒ 现在累计并暴露 ⇒ ⇒ ⇒ 「没画」直接变成一条**可查的红线**。
+    const engineDraws: Record<string, number> = {};
+    window.__ENGINE_DRAWS__ = engineDraws;
     const startRedraw = (backend: string) => {
       if (redrawHandles[backend] !== undefined) return;
       const tick = () => {
-        wasm.redraw_intro(backend, 1).catch(() => {});
+        wasm
+          .redraw_intro(backend, 1)
+          .then((report: unknown) => {
+            try {
+              const parsed = JSON.parse(report as string) as { frames_drawn?: number };
+              engineDraws[backend] =
+                (engineDraws[backend] ?? 0) + Number(parsed.frames_drawn ?? 0);
+            } catch (error) {
+              // 解析失败 ⇒ ⇒ 不计数（**不假装**画过）⇒ ⇒ 计数只会偏小、不会偏大。
+            }
+          })
+          .catch(() => {});
         redrawHandles[backend] = requestAnimationFrame(tick);
       };
       redrawHandles[backend] = requestAnimationFrame(tick);
@@ -588,6 +606,8 @@ declare global {
       stop: (backend: string) => void;
     };
     __P5B_WASM__: unknown;
+    // ⭐ E-187：引擎侧绘制计数（每后端一个）。
+    __ENGINE_DRAWS__: Record<string, number>;
   }
 }
 
