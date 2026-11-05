@@ -29,6 +29,9 @@ use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use tower::ServiceExt;
 
+/// env 单令牌面的令牌 (形似凭据以便泄漏显形, 非真实秘密)。
+const TOKEN: &str = "origin-token-0123456789abcdef";
+
 fn frozen_clock() -> Arc<dyn Clock> {
     Arc::new(VirtualClock::new(
         apeireth_core::kernel::Timestamp::from_epoch_millis(1_700_000_000_000)
@@ -41,7 +44,12 @@ fn frozen_clock() -> Arc<dyn Clock> {
 ///
 /// 停机端点属管理面 (`AdminControl` 档), 角色面未激活 ⇒ 管理面 fail-closed
 /// 403 ⇒ 本文件要测的是**跨源闸**, 角色门的前置条件由这里显式装上 (owner
-/// 绑定未设防口径的过门署名名 `anonymous`)。
+/// 绑定**已认证**过门的署名名 `env`)。
+///
+/// ⚠️ **为什么必须走已认证身份** (F-2 · 2026-11-05): 未设防口径下的过门身份
+/// 是 `ClientIdentity::anonymous()` (**未认证**) ⇒ 角色门**只认已认证身份**
+/// ⇒ 管理面对它一律 fail-closed ⇒ ⇒ 那样测到的 403 就分不清是**跨源闸**拒的
+/// 还是**角色门**拒的 ⇒ ⇒ 本文件的探针必须带**已认证**凭证。
 async fn router() -> axum::Router {
     let runtime = Arc::new(
         Runtime::builder()
@@ -54,17 +62,17 @@ async fn router() -> axum::Router {
             .expect("runtime"),
     );
     let mut state = build_gateway_state_with_services(runtime, GatewayServices::default());
-    state.token_gate = GatewayTokenGate::UnprotectedDefault;
+    state.token_gate = GatewayTokenGate::Enforced(TOKEN.to_string());
     state.user_access = UserAccess::from_table(owner_table());
     canonical_router_with_state(state)
 }
 
-/// 一名 owner, 绑定未设防口径的过门署名名。
+/// 一名 owner, 绑定 env 单令牌面的过门署名名。
 fn owner_table() -> UserTable {
     let users = UserTable::new(vec![UserRecord {
         user_id: "user-owner".to_string(),
         role: "owner".to_string(),
-        client_names: vec!["anonymous".to_string()],
+        client_names: vec![GatewayTokenGate::ENV_FACE_CLIENT_NAME.to_string()],
         domain: None,
     }]);
     users.validate().expect("valid user table");
@@ -75,6 +83,7 @@ fn shutdown_request(origin: Option<&str>) -> Request<Body> {
     let mut builder = Request::builder()
         .method("POST")
         .uri("/v1/admin/shutdown")
+        .header("authorization", format!("Bearer {TOKEN}"))
         .header("content-type", "application/json");
     if let Some(origin) = origin {
         builder = builder.header("origin", origin);

@@ -49,7 +49,7 @@ use super::nervous_bus::NervousBus;
 use super::nervous_switchboard::{BioSwitch, NervousSwitchboard};
 use super::organ_module::OrganModule;
 use super::preference_learning::PreferenceLearningModule;
-use super::prompt_injection_guard::{PromptInjectionGuardModule, PromptInjectionReport};
+use super::prompt_injection_guard::{self, PromptInjectionReport};
 use super::self_status_source::{
     doc_ops_status_probe, image_ops_status_probe, proposal_status_probe, roster_from_config,
     sheet_ops_status_probe, task_board_status_probe, ProductionSelfStatusSource,
@@ -669,112 +669,16 @@ pub struct ProductionModules {
     nervous_switchboard: NervousSwitchboard,
     /// 回合层提示注入告警账句柄 (fetch 开才 `Some`, 与注册的告警模块同一 `Arc`)。
     /// `None` = fetch 面没开 = 没有任何输出侧标记可读 ⇒ 零告警 (不是「读了但没命中」)。
-    prompt_injection_report: Option<Arc<PromptInjectionReport>>,
+    pub(super) prompt_injection_report: Option<Arc<PromptInjectionReport>>,
 }
 
 /// Compatibility alias for [`ProductionModules`].
 pub use ProductionModules as ProductionCognitiveModules;
 
-/// 模块族 (懒加载断言单位): 一族 = 一个开关族在 [`ProductionModules::build`] 里的构造点。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum ModuleFamily {
-    /// 文件读工具族 (`filesystem`)。
-    Filesystem,
-    /// 搜索工具族 (`search`)。
-    Search,
-    /// 仓库检视工具族 (`repo`)。
-    Repo,
-    /// 受控写文件族 (`file_write`)。
-    ApplyPatch,
-    /// 工作树改单族 (`worktree_plan`)。
-    WorktreePlan,
-    /// 工作树落盘族 (`worktree_apply`)。
-    WorktreeApply,
-    /// git 写族 (`git_write`)。
-    GitWrite,
-    /// 技能沉淀族 (`skill_distill`)。
-    SkillDistill,
-    /// 技能检索族 (`skill_search`)。
-    SkillSearch,
-    /// Dx-Check 检查族 (`education`)。
-    Education,
-    /// 受控 shell 族 (`shell`)。
-    Shell,
-    /// 受控抓取族 (`fetch`)。
-    Fetch,
-    /// 回合层提示注入告警族 (`guard.prompt_injection`): 消费 fetch **输出侧**
-    /// 写下的 `prompt_injection` 标记 ⇒ ⇒ 回合层报一条可见告警 (恒不阻断)。
-    ///
-    /// 构造条件与 [`ModuleFamily::Fetch`] 同源 (fetch 工具开着才有它的输出);
-    /// 两族一起构 = 抓取面一开, 它的输出侧标记就**一定**有人读。
-    PromptInjectionGuard,
-    /// 内容流族 (`content_feed`)。
-    ContentFeed,
-    /// 关怀规则族 (`care_schedule`)。
-    CareSchedule,
-    /// 备份导出族 (`backup`)。
-    BackupExport,
-    /// 发声族 (`voice_speak`)。
-    VoiceSpeak,
-    /// 任务簿族 (`task_board`)。
-    TaskBoard,
-    /// 性格周报族 (`trait_report`)。
-    TraitReport,
-    /// 暴露面体检族 (`exposure_audit`)。
-    ExposureAudit,
-    /// 创作工具面 W1 · 图像操作族 (`image_ops`)。
-    ImageOps,
-    /// 创作工具面 W2 · 文档操作族 (`doc_ops`)。
-    DocOps,
-    /// 创作工具面 K3 · 表格操作族 (`sheet_ops`)。
-    SheetOps,
-    /// K 轴 L1 在场感知族 (`device_sense`)。
-    DeviceSense,
-    /// K 轴 L1 天气感知族 (`weather`)。
-    Weather,
-    /// K 轴 L3/L4 受控执行族 (`device_control`)。
-    DeviceControl,
-    /// K 轴 L5 看家骨架族 (`guard_watch`)。
-    GuardWatch,
-    /// 生物机制族 W3.3 · 游戏练习场工具族 (`play_*`, 默认关): 四个工具模块各自
-    /// 一个构造点 (propose/start/finish/abort, 共享同一本内存账本);
-    /// env `APEIRETH_ENABLE_BIO_PLAY` 只认 `"1"` 且工作区根注入才构造。
-    BioPlay,
-    /// 自省通道族 (`self_status`)。
-    SelfStatus,
-    /// 安全/逆向侦察族 (`tool.recon.*`, 9 件, 默认关)。
-    Recon,
-    /// 外部适配器族 (`ext.*`, 10 件, 默认关; 子进程封装)。
-    ExternalTools,
-    /// 外部工具桥族 (`mcp`)。
-    Mcp,
-    /// 记忆协调器 (memory_recall / memory_writeback 共用)。
-    MemoryCoordinator,
-    /// 记忆召回族 (`memory_recall`)。
-    MemoryRecall,
-    /// 偏好召回族 (`preference_recall`)。
-    PreferenceRecall,
-    /// 偏好学习族 (`preference_learning`)。
-    PreferenceLearning,
-    /// 评判族 (`judge`)。
-    Judge,
-    /// 自评族 (`self_assessment`)。
-    SelfAssessment,
-    /// 议事族 (`council`)。
-    Council,
-    /// 器官网族 (`organs`)。
-    Organs,
-    /// 反思族 (`reflexion`)。
-    Reflexion,
-    /// 吸收洞察族 (`absorption_insight`)。
-    AbsorptionInsight,
-    /// 羁绊族 (`partner_bond`)。
-    PartnerBond,
-    /// 恒定人格注入族 (人格层槽)。
-    PersonaConstantInjection,
-    /// 记忆写回族 (`memory_writeback`)。
-    MemoryWriteback,
-}
+/// 模块族枚举 (`canonical::ModuleFamily`) 的兼容再导出: 族枚举本体住在装配面
+/// 这一层 (装配根 / 生物机制族装配块 / 回合层提示注入告警面三处共用) ⇒ ⇒ 旧路径
+/// `production::ModuleFamily` 保留 ⇒ ⇒ 外部调用点零改动。
+pub use super::ModuleFamily;
 
 /// 构造探针 (B-P1 懒加载断言口): 族构造点上报一次。
 ///
@@ -855,7 +759,7 @@ impl BuildInstrumentation {
         self
     }
 
-    fn constructed(&self, family: ModuleFamily) {
+    pub(super) fn constructed(&self, family: ModuleFamily) {
         if let Some(probe) = &self.probe {
             probe.constructed(family);
         }
@@ -1131,20 +1035,12 @@ impl ProductionModules {
             let provider = FetchModule::new(fetch_config);
             collect_tool_module(&mut tool_modules, &mut capabilities, &provider)?;
 
-            // 回合层提示注入告警面 (2026-11-05): fetch 的**输出侧**扫描会把
-            // `prompt_injection` 标记写进工具结果 ⇒ ⇒ 但治理面的
-            // `PromptInjectionHook` 只扫**入参** ⇒ ⇒ 此前**无人读**这个标记。
-            // ⇒ ⇒ 这里装一个只读告警模块: 在 `AfterToolResult` 读标记 ⇒ ⇒
-            // 回合层报一条**固定措辞**的可见告警 (恒不阻断, 显式化不静默)。
-            //
+            // 回合层提示注入告警面 (2026-11-05): 装在抓取面旁边 ⇒ ⇒ 抓取面一开,
+            // 它的输出侧标记就**一定**有人读 (恒不阻断, 显式化不静默)。
             // ⚠️ 构造条件 = fetch 工具开着 (fetch 关 = 根本没有这个输出面)。
-            instrument.constructed(ModuleFamily::PromptInjectionGuard);
-            prompt_injection_report = Some(Arc::new(PromptInjectionReport::new()));
-            modules.push(Arc::new(PromptInjectionGuardModule::new(Arc::clone(
-                prompt_injection_report
-                    .as_ref()
-                    .expect("report just constructed"),
-            ))) as Arc<dyn Module>);
+            // 装点、告警措辞与告警账的说明见 `prompt_injection_guard::install`。
+            prompt_injection_report =
+                Some(prompt_injection_guard::install(&mut modules, instrument));
         }
 
         // 内容流接入 (`tool.content_feed`, J1, opt-in): 订阅源管理 + 受控拉取 +
@@ -1895,16 +1791,6 @@ impl ProductionModules {
     /// 本次装配生效的开关快照 (`NervousSwitchboard::from_env` 一次解析)。
     pub fn nervous_switchboard(&self) -> &NervousSwitchboard {
         &self.nervous_switchboard
-    }
-
-    /// 回合层提示注入告警账句柄 (fetch 面开才 `Some`)。
-    ///
-    /// `None` = fetch 工具没注册 = 没有任何输出侧 `prompt_injection` 标记
-    /// ⇒ 零告警 (是「没有这个面」, 不是「有面但没命中」)。宿主读它即可知道
-    /// 本进程见过几次注入命中, 不用自己再解析 transcript。
-    #[must_use]
-    pub fn prompt_injection_report(&self) -> Option<&Arc<PromptInjectionReport>> {
-        self.prompt_injection_report.as_ref()
     }
 
     /// Wave 4 / ADR-0009 R1b-2c: 审批社交信号源句柄。

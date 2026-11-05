@@ -107,13 +107,19 @@ pwsh -NoProfile -File packaging/service/apeireth-service.ps1 uninstall
    `TlsAcceptor`; `APEIRETH_TLS_CERT` / `APEIRETH_TLS_KEY` 提供证书 ⇒ 启用;
    材料不全 ⇒ **拒绝启动**, fail-closed）,
    每客户端**权限**分级属 W3/E 轴范围, 当前版本不提供。
-   ⭐ **逃生阀下的停机口径** (2026-11-05 总指挥拍板): 逃生阀与客户端令牌表
-   **互斥** (`validate_gate_table_pair` ⇒ 配置矛盾拒开) ⇒ ⇒ 逃生阀下**唯一**
-   可绑定的过门署名名是 `anonymous` ⇒ ⇒ **要让 `/v1/admin/shutdown` 可达,
-   必须让 owner 在 `users.json` 里绑定 `anonymous`** (`client_names` 含
-   `anonymous`) ⇒ ⇒ 否则管理面 403 (fail-closed, 不静默)。
-   ⇒ ⇒ **不知道就先用 SIGTERM 停机** (CLI 的 `graceful_shutdown_signal` 已支持,
-   同走收尾账) ⇒ ⇒ **不要**为了停机而临时开令牌面。
+   ⭐ **逃生阀下的停机口径** (2026-11-05 · F-2 修复后重写): 角色门**只认已认证
+   身份** ⇒ ⇒ 未认证 / 逃生阀口径下的过门身份是 `anonymous` (**未认证**) ⇒ ⇒
+   它**不是**任何用户 ⇒ ⇒ 用户表 `client_names` 里写 `anonymous` **不会**让调用方
+   变成 owner ⇒ ⇒ **没有**「绑 `anonymous` 就能停机」这回事 ⇒ ⇒ 管理面 (含
+   `/v1/admin/shutdown`) 对未认证调用方一律 **403** (fail-closed, **不静默降级**:
+   绑定错配 / 空表 / 未认证 ⇒ 一律拒, 不猜)。
+   ⇒ ⇒ **逃生阀下要停机 ⇒ ⇒ 用 SIGTERM** (CLI 的 `graceful_shutdown_signal`
+   已支持, 同走收尾账: 收尾审计 + 观测落盘) ⇒ ⇒ **不要**为了停机而临时开
+   令牌面 ⇒ ⇒ 也**不要**把 `anonymous` 绑给 owner (绑了也不生效, 只会误导读
+   配置的人)。
+   ⇒ ⇒ **已认证路径不受影响**: env 单令牌面 (署名名 `env`) 与客户端令牌表条目
+   照旧可用 ⇒ ⇒ 管理面对**已认证**的 owner 照旧 200 (四级口径: PRODUCTION WIRED
+   —— 角色门在网关的角色门中间件里, 已接进生产路由)。
 3. **令牌轮换**: `install -RotateToken`; 轮换后重连端 (桌面/TUI) 自动取新值
    (同源读取), 常驻服务需 `stop` + `start` 让新令牌进服务 env。
 4. **令牌不外流**: 令牌只存系统凭据库与服务 env —— 不落明文文件、不进任务定义、

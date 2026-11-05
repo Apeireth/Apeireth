@@ -1154,12 +1154,12 @@ async fn require_user_capability(
         request.extensions_mut().insert(UserContext::unbound());
         return next.run(request).await;
     }
-    let client = request
-        .extensions()
-        .get::<ClientIdentity>()
-        .map(|identity| identity.client.clone())
-        .unwrap_or_else(|| ClientIdentity::UNATTRIBUTED.to_string());
-    let user = state.user_access.identity(&client, &state.client_tokens);
+    let identity = request.extensions().get::<ClientIdentity>().cloned();
+    let user = identity.as_ref().and_then(|identity| {
+        state
+            .user_access
+            .identity_for(identity, &state.client_tokens)
+    });
     let context = UserContext { user };
     if let Some(capability) = required_user_capability(request.method(), &endpoint) {
         let allowed = context.allows(capability);

@@ -343,7 +343,7 @@ size crates/engine/runtime-assembly/src/canonical/bio_tone.rs 1319
 size crates/engine/runtime-assembly/src/canonical/cognitive.rs 5201
 size crates/engine/runtime-assembly/src/canonical/orchestrator.rs 2432
 size crates/engine/runtime-assembly/src/canonical/play_tools.rs 1412
-size crates/engine/runtime-assembly/src/canonical/production.rs 1972
+size crates/engine/runtime-assembly/src/canonical/production.rs 1897
 size crates/engine/runtime-assembly/src/canonical/self_status_source.rs 2064
 size crates/engine/runtime-assembly/src/canonical/tool_modules.rs 1395
 size crates/engine/runtime/src/canonical/execute.rs 4750

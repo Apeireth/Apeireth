@@ -41,8 +41,10 @@ use apeireth_protocol::canonical::{ToolCall, ToolOutcome, ToolResult};
 use parking_lot::Mutex;
 
 use super::module::{
-    BehaviorModule, HookPoint, ModuleContext, ModuleError, ModuleManifest, ModuleOutcome,
+    BehaviorModule, HookPoint, Module, ModuleContext, ModuleError, ModuleManifest, ModuleOutcome,
 };
+use super::production::{BuildInstrumentation, ProductionModules};
+use super::ModuleFamily;
 
 /// The result field that carries the output-side prompt-injection verdict.
 ///
@@ -244,6 +246,40 @@ impl BehaviorModule for PromptInjectionGuardModule {
         // The overlay text is the fixed constant: the warning can never be
         // talked out of existence by the payload it is about.
         Ok(ModuleOutcome::continue_().with_system_overlay(warning.warning))
+    }
+}
+
+/// 回合层提示注入告警面的**装配接线** (2026-11-05): fetch 的**输出侧**扫描会把
+/// `prompt_injection` 标记写进工具结果 ⇒ ⇒ 但治理面的 `PromptInjectionHook`
+/// 只扫**入参** ⇒ ⇒ 此前**无人读**这个标记。
+/// ⇒ ⇒ 这里装一个只读告警模块: 在 `AfterToolResult` 读标记 ⇒ ⇒ 回合层报一条
+/// **固定措辞**的可见告警 (恒不阻断, 显式化不静默)。
+///
+/// ⚠️ 构造条件 = fetch 工具开着 (fetch 关 = 根本没有这个输出面 ⇒ ⇒ 零注册,
+/// 零告警)。故本函数**只由抓取面在场时**调用; 调用点留在装配根 (那里才知道
+/// fetch 工具在不在), 实现与说明留在本文件 (装配根只留一行接线)。
+///
+/// 返回交回的是**注册进去的那个模块所写的同一本账** (同一 `Arc`) ⇒ ⇒ 宿主
+/// 读到的计数与告警模块写进去的计数逐条同源。
+pub(super) fn install(
+    modules: &mut Vec<Arc<dyn Module>>,
+    instrument: &BuildInstrumentation,
+) -> Arc<PromptInjectionReport> {
+    instrument.constructed(ModuleFamily::PromptInjectionGuard);
+    let report = Arc::new(PromptInjectionReport::new());
+    modules.push(Arc::new(PromptInjectionGuardModule::new(Arc::clone(&report))) as Arc<dyn Module>);
+    report
+}
+
+impl ProductionModules {
+    /// 回合层提示注入告警账句柄 (fetch 面开才 `Some`)。
+    ///
+    /// `None` = fetch 工具没注册 = 没有任何输出侧 `prompt_injection` 标记
+    /// ⇒ 零告警 (是「没有这个面」, 不是「有面但没命中」)。宿主读它即可知道
+    /// 本进程见过几次注入命中, 不用自己再解析 transcript。
+    #[must_use]
+    pub fn prompt_injection_report(&self) -> Option<&Arc<PromptInjectionReport>> {
+        self.prompt_injection_report.as_ref()
     }
 }
 

@@ -19,6 +19,9 @@ use http_body_util::BodyExt;
 use serde_json::json;
 use tower::ServiceExt;
 
+/// env 单令牌面的令牌 (形似凭据以便泄漏显形, 非真实秘密)。
+const TOKEN: &str = "panel-token-0123456789abcdef";
+
 struct MockPanels {
     episodes: Mutex<Vec<EpisodeDto>>,
     /// id -> (protected, tombstoned, rev)
@@ -321,6 +324,7 @@ impl PanelData for MockPanels {
 fn get(uri: &str) -> Request<Body> {
     Request::builder()
         .uri(uri)
+        .header("authorization", format!("Bearer {TOKEN}"))
         .body(Body::empty())
         .expect("request")
 }
@@ -329,6 +333,7 @@ fn post(uri: &str, body: serde_json::Value) -> Request<Body> {
     Request::builder()
         .method("POST")
         .uri(uri)
+        .header("authorization", format!("Bearer {TOKEN}"))
         .header("content-type", "application/json")
         .body(Body::from(body.to_string()))
         .expect("request")
@@ -345,20 +350,25 @@ async fn body_json(response: axum::response::Response) -> serde_json::Value {
 /// 一份**带激活角色面**的装配 (P0-1 · 2026-11-04): 面板族的管理面
 /// (`/v1/panel/grants/revoke`) 要求 `AdminControl` 档, 角色面未激活 ⇒ 管理面
 /// fail-closed 403 ⇒ 本文件要钉的是**面板路由契约**, 角色门的前置条件由这里
-/// 显式装上 (owner 绑定未设防口径的过门署名名 `anonymous`)。
+/// 显式装上 (owner 绑定**已认证**过门的署名名 `env`)。
+///
+/// ⚠️ **为什么必须走已认证身份** (F-2 · 2026-11-05): 未设防口径下的过门身份
+/// 是 `ClientIdentity::anonymous()` (**未认证**) ⇒ 角色门**只认已认证身份**
+/// ⇒ 它**不是**任何用户 ⇒ 面板**写面**会被 fail-closed 拒 ⇒ ⇒ 本文件的写面
+/// 探针必须走**已认证**路径 (env 单令牌面), 否则测到的就不是「面板路由契约」。
 fn router_with_panels(runtime: Arc<Runtime>, panels: Option<Arc<dyn PanelData>>) -> axum::Router {
     let mut state = build_gateway_state(runtime, panels);
-    state.token_gate = GatewayTokenGate::UnprotectedDefault;
+    state.token_gate = GatewayTokenGate::Enforced(TOKEN.to_string());
     state.user_access = UserAccess::from_table(owner_table());
     canonical_router_with_state(state)
 }
 
-/// 一名 owner, 绑定未设防口径的过门署名名。
+/// 一名 owner, 绑定 env 单令牌面的过门署名名。
 fn owner_table() -> UserTable {
     let users = UserTable::new(vec![UserRecord {
         user_id: "user-owner".to_string(),
         role: "owner".to_string(),
-        client_names: vec!["anonymous".to_string()],
+        client_names: vec![GatewayTokenGate::ENV_FACE_CLIENT_NAME.to_string()],
         domain: None,
     }]);
     users.validate().expect("valid user table");
@@ -788,6 +798,7 @@ async fn panel_routes_degrade_to_501_without_backends() {
             Request::builder()
                 .method("POST")
                 .uri("/v1/safety/guard/evaluate")
+                .header("authorization", format!("Bearer {TOKEN}"))
                 .header("content-type", "application/json")
                 .body(Body::from(
                     json!({
@@ -849,6 +860,7 @@ async fn update_episode_route_rewrites_content_and_records_who_changed_it() {
             Request::builder()
                 .method("PUT")
                 .uri("/v1/apeireth/memory/episodes/e1/content")
+                .header("authorization", format!("Bearer {TOKEN}"))
                 .header("content-type", "application/json")
                 .body(Body::from(
                     json!({"expected_rev": 0, "content": "主人纠正：他喜欢的是古琴，不是古风"})

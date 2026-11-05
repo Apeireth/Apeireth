@@ -74,13 +74,27 @@ jobs:
         with:
           shared-key: claims-verify
 
+      # ⭐ **磁盘减负**（2026-11-05 · CI runner 曾因磁盘爆而 exit 101）：
+      # 预构建两个 workspace 会吃掉 runner 的全部空间 ⇒ ⇒ `rustls`/`reqwest` 编译期
+      # archive 写失败 ⇒ ⇒ claims-verify 假红（**不是** claim 内容问题）。
+      # ⇒ ⇒ 清 apt 缓存与 rustup 旧组件 ⇒ ⇒ 把空间还给编译。
+      - name: 腾空间（apt 缓存 + rustup 旧组件）
+        run: |
+          sudo rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*.deb || true
+          rustup self update --no-self-update 2>/dev/null || true
+          rustup component remove rustfmt clippy 2>/dev/null || true
+          df -h / | tail -1
+
       - name: 预构建测试产物（根 workspace；避免每条命令各自冷启动）
         run: cargo build --workspace --tests --locked
 
       # `src-tauri` 是**独立 [workspace]**（不能落到根 workspace）⇒ 单独预构建。
+      # ⚠️ **不用 `--all-targets`**（2026-11-05 修正）：它会额外构建 bench / example
+      # ⇒ ⇒ 而 Tauri 侧那两条 claim 的 verify_cmd 只跑 `cargo test --locked <filter>`
+      # ⇒ ⇒ ⇒ `--tests` 足够 ⇒ ⇒ **不降低任何验证** ⇒ ⇒ 只省磁盘。
       - name: 预构建 Tauri 桌面壳（独立 workspace）
         working-directory: frontend/companion-desktop/src-tauri
-        run: cargo build --workspace --all-targets --locked
+        run: cargo build --workspace --tests --locked
 
       # **H5 真值闸**：口径为 PRODUCTION WIRED / DEFAULT ENABLED / HARDWARE VALIDATED
       # 的声明**不许**靠「豁免 / 延后」成立 ⇒ 否则「已接线」只是个词。
