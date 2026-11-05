@@ -89,6 +89,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod arbitration;
 pub mod callback;
 pub mod component;
 pub mod derived;
