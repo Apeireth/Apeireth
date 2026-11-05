@@ -106,6 +106,24 @@ impl PermissionSet {
 pub struct PermissionPolicy {
     grants: PermissionSet,
     approval_capabilities: BTreeSet<String>,
+    /// Granted capability **families** (segment-boundary prefix roots).
+    ///
+    /// A family is a set of capability ids that share a root but are
+    /// discovered at runtime, so they cannot be enumerated one by one (the
+    /// external-tool bridge produces `tool.mcp.<server>.<tool>`).
+    ///
+    /// Families live in their own set instead of new [`Permission`] variants:
+    /// the enum is **not** `#[non_exhaustive]`, so a new variant would break
+    /// downstream exhaustive matches, and the variant declaration order is a
+    /// documented iteration-order contract for [`PermissionSet`].
+    #[serde(default)]
+    granted_families: BTreeSet<String>,
+    /// Capability families whose **every** member call needs a human decision.
+    ///
+    /// A family approval mark never grants anything: without a matching
+    /// grant (exact or family) the capability stays denied.
+    #[serde(default)]
+    approval_families: BTreeSet<String>,
 }
 
 impl PermissionPolicy {
@@ -139,18 +157,78 @@ impl PermissionPolicy {
         self.approval_capabilities.insert(capability.into());
     }
 
+    /// Grant a capability **family** (segment-boundary prefix).
+    ///
+    /// `family` is a family root such as `tool.mcp`; it covers every
+    /// capability id that continues the root with a **dot**
+    /// (`tool.mcp.<server>.<tool>`). The boundary is the dot:
+    ///
+    /// * `tool.mcp.demo.lookup` — covered.
+    /// * `tool.mcpsomething` — **not** covered (same text, different segment).
+    /// * `tool.mcp` — **not** covered (the bare root is not a member of
+    ///   itself; it is the family's root, not one of its members).
+    ///
+    /// A family grant is a **fallback**: an exact grant still wins, and a
+    /// capability with no grant at all stays denied — a family never widens
+    /// a [`Decision::Deny`].
+    ///
+    /// The root is stored verbatim after stripping trailing dots; an empty
+    /// root is refused (it would match nothing real, so it stays a no-op).
+    pub fn grant_family(&mut self, family: &str) {
+        if let Some(root) = normalize_family_root(family) {
+            self.granted_families.insert(root);
+        }
+    }
+
+    /// Mark a capability **family** as requiring human approval on **every**
+    /// member call.
+    ///
+    /// Same segment-boundary semantics as [`PermissionPolicy::grant_family`].
+    /// A family approval mark never grants anything: without a matching
+    /// grant (exact or family) the capability stays denied — the deny check
+    /// runs before the approval check.
+    pub fn require_approval_for_family(&mut self, family: &str) {
+        if let Some(root) = normalize_family_root(family) {
+            self.approval_families.insert(root);
+        }
+    }
+
     /// Evaluate capability dispatch for `capability`.
     ///
-    /// * Missing grant (and no `AdminOverride`) -> [`Decision::Deny`].
-    /// * Grant present but capability marked for approval -> [`Decision::RequireApproval`].
-    /// * Otherwise -> [`Decision::Allow`].
+    /// Decision order:
+    ///
+    /// 1. **Grant gate** — an exact grant, a family grant, or an
+    ///    `AdminOverride` lets the capability through; otherwise
+    ///    [`Decision::Deny`].
+    /// 2. **Exact approval mark** -> [`Decision::RequireApproval`].
+    /// 3. **Family approval mark** -> [`Decision::RequireApproval`].
+    /// 4. Otherwise -> [`Decision::Allow`].
+    ///
+    /// An exact mark always wins over a family mark (both deny the call
+    /// either way, but the exact one is evaluated first).
     pub fn decision_for_capability(&self, capability: &str) -> Decision {
         let required = Permission::ExecuteTool(capability.to_string());
-        if !self.grants.has(&required) && !self.grants.has(&Permission::AdminOverride) {
+        let exact_grant = self.grants.has(&required);
+        let family_grant = !exact_grant
+            && self
+                .granted_families
+                .iter()
+                .any(|root| capability_in_family(capability, root));
+        if !exact_grant && !family_grant && !self.grants.has(&Permission::AdminOverride) {
             return Decision::deny(format!("capability {capability} is not permitted"));
         }
 
         if self.approval_capabilities.contains(capability) {
+            return Decision::require_approval(format!(
+                "capability {capability} requires human approval"
+            ));
+        }
+
+        if self
+            .approval_families
+            .iter()
+            .any(|root| capability_in_family(capability, root))
+        {
             return Decision::require_approval(format!(
                 "capability {capability} requires human approval"
             ));
@@ -163,6 +241,33 @@ impl PermissionPolicy {
     pub fn approval_capabilities(&self) -> impl Iterator<Item = &str> {
         self.approval_capabilities.iter().map(String::as_str)
     }
+}
+
+/// Normalize a family root: trim surrounding blanks and trailing dots.
+///
+/// An empty root is refused (`None`): it would stand for "every id that
+/// starts with a dot", which is no real capability, so registering it would
+/// be a silent no-op at best and a false grant at worst.
+fn normalize_family_root(family: &str) -> Option<String> {
+    let root = family.trim().trim_end_matches('.');
+    if root.is_empty() {
+        None
+    } else {
+        Some(root.to_string())
+    }
+}
+
+/// Whether `capability` is a member of the family rooted at `root`.
+///
+/// The **segment boundary** is the dot: the id must continue the root with
+/// `.`, so `tool.mcp` covers `tool.mcp.demo.lookup` but never
+/// `tool.mcpsomething` and never the bare root itself.
+///
+/// No allocation: the prefix is stripped, not formatted.
+fn capability_in_family(capability: &str, root: &str) -> bool {
+    capability
+        .strip_prefix(root)
+        .is_some_and(|rest| rest.starts_with('.'))
 }
 
 /// Canonical governance hook wrapper for [`PermissionPolicy`].
@@ -298,6 +403,177 @@ mod tests {
             policy.decision_for_capability("tool.shell"),
             Decision::Deny { .. }
         ));
+    }
+
+    // ---------- 族授权（段边界前缀族） ----------
+
+    #[test]
+    fn family_grant_covers_members_but_neither_the_root_nor_a_textual_prefix() {
+        let mut policy = PermissionPolicy::new();
+        policy.grant_family("tool.mcp");
+
+        // 族成员命中 ⇒ Allow。
+        assert!(policy
+            .decision_for_capability("tool.mcp.demo.lookup")
+            .is_allowed());
+
+        // 族根自身（无后缀点）不命中 ⇒ Deny。
+        let root = policy.decision_for_capability("tool.mcp");
+        assert!(matches!(root, Decision::Deny { .. }), "{root:?}");
+        assert!(root.reason().unwrap().contains("is not permitted"));
+
+        // 同文本前缀不同段（无点）不命中 ⇒ Deny。
+        let prefix = policy.decision_for_capability("tool.mcpsomething");
+        assert!(matches!(prefix, Decision::Deny { .. }), "{prefix:?}");
+
+        // 别的族不命中 ⇒ Deny。
+        let other = policy.decision_for_capability("tool.foo");
+        assert!(matches!(other, Decision::Deny { .. }), "{other:?}");
+
+        // 段边界后再一段也不算命中（不是任意前缀）。
+        let deeper = policy.decision_for_capability("tool.mcp2.demo");
+        assert!(matches!(deeper, Decision::Deny { .. }), "{deeper:?}");
+    }
+
+    #[test]
+    fn family_grant_does_not_widen_capabilities_outside_the_family() {
+        let mut policy = PermissionPolicy::new();
+        policy.grant_family("tool.mcp");
+
+        for id in [
+            "tool.shell",
+            "tool.mcp2.demo",
+            "tool.mcpsomething",
+            "tool.mcp",
+        ] {
+            let decision = policy.decision_for_capability(id);
+            assert!(
+                matches!(decision, Decision::Deny { .. }),
+                "{id} must stay denied under a `tool.mcp` family grant, got {decision:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn family_approval_requires_a_human_decision_for_every_member() {
+        let mut policy = PermissionPolicy::new();
+        policy.grant_family("tool.mcp");
+        policy.require_approval_for_family("tool.mcp");
+
+        for id in [
+            "tool.mcp.demo.lookup",
+            "tool.mcp.demo.write-item",
+            "tool.mcp.x",
+        ] {
+            let decision = policy.decision_for_capability(id);
+            assert!(
+                matches!(decision, Decision::RequireApproval { .. }),
+                "{id} must require human approval under a family approval mark, got {decision:?}"
+            );
+            assert!(decision.reason().unwrap().contains("human approval"));
+        }
+    }
+
+    #[test]
+    fn family_approval_without_a_matching_grant_stays_denied() {
+        // 短路顺序：先判 grant 再判 approval —— 只有审批标记没有 grant ⇒ 仍拒。
+        let mut policy = PermissionPolicy::new();
+        policy.require_approval_for_family("tool.mcp");
+
+        let decision = policy.decision_for_capability("tool.mcp.demo.lookup");
+        assert!(matches!(decision, Decision::Deny { .. }), "{decision:?}");
+        assert!(decision.reason().unwrap().contains("is not permitted"));
+    }
+
+    #[test]
+    fn exact_grant_and_exact_approval_win_over_the_family_marks() {
+        let mut policy = PermissionPolicy::new();
+        // 精确 grant + 族 approval ⇒ 精确 grant 过闸门，族 approval 仍要求人批。
+        policy.grant(Permission::ExecuteTool("tool.mcp.demo.lookup".into()));
+        policy.require_approval_for_family("tool.mcp");
+        let exact = policy.decision_for_capability("tool.mcp.demo.lookup");
+        assert!(
+            matches!(exact, Decision::RequireApproval { .. }),
+            "{exact:?}"
+        );
+
+        // 精确 approval 与族 approval 同时命中 ⇒ 仍是人批（精确优先判定）。
+        policy.require_approval_for("tool.mcp.demo.lookup");
+        let both = policy.decision_for_capability("tool.mcp.demo.lookup");
+        assert!(matches!(both, Decision::RequireApproval { .. }), "{both:?}");
+        assert!(both.reason().unwrap().contains("human approval"));
+
+        // 精确 grant 命中 ⇒ Allow（族里没有审批标记时）。
+        let mut plain = PermissionPolicy::new();
+        plain.grant(Permission::ExecuteTool("tool.mcp.demo.lookup".into()));
+        plain.grant_family("tool.mcp");
+        assert!(plain
+            .decision_for_capability("tool.mcp.demo.lookup")
+            .is_allowed());
+    }
+
+    #[test]
+    fn admin_override_waives_the_missing_grant_but_never_the_approval_mark() {
+        let mut policy = PermissionPolicy::new();
+        policy.grant(Permission::AdminOverride);
+        // override 只豁免「无 grant 即拒」。
+        assert!(policy.decision_for_capability("tool.shell").is_allowed());
+
+        // 审批标记不被 override 豁免（既有语义）。
+        policy.require_approval_for("tool.shell");
+        assert!(matches!(
+            policy.decision_for_capability("tool.shell"),
+            Decision::RequireApproval { .. }
+        ));
+
+        // 族审批标记同样不被 override 豁免。
+        policy.require_approval_for_family("tool.mcp");
+        let family = policy.decision_for_capability("tool.mcp.demo.lookup");
+        assert!(
+            matches!(family, Decision::RequireApproval { .. }),
+            "{family:?}"
+        );
+    }
+
+    #[test]
+    fn an_empty_family_root_is_refused_instead_of_granting_a_phantom_family() {
+        let mut policy = PermissionPolicy::new();
+        policy.grant_family("");
+        policy.require_approval_for_family("");
+
+        for id in ["tool.shell", "tool.mcp.demo.lookup", ".leading-dot"] {
+            let decision = policy.decision_for_capability(id);
+            assert!(
+                matches!(decision, Decision::Deny { .. }),
+                "{id} must stay denied, got {decision:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_policy_without_families_behaves_exactly_as_before() {
+        // 零族登记 ⇒ 逐字沿用既有语义：精确 grant 放行、审批标记要人批、
+        // 其余一律拒。
+        let mut policy = PermissionPolicy::new();
+        policy.grant(Permission::ExecuteTool("tool.calculator".into()));
+        policy.grant(Permission::ExecuteTool("tool.shell".into()));
+        policy.require_approval_for("tool.shell");
+
+        assert!(policy
+            .decision_for_capability("tool.calculator")
+            .is_allowed());
+        let approved = policy.decision_for_capability("tool.shell");
+        assert!(
+            matches!(approved, Decision::RequireApproval { .. }),
+            "{approved:?}"
+        );
+        let denied = policy.decision_for_capability("tool.fetch");
+        assert!(matches!(denied, Decision::Deny { .. }), "{denied:?}");
+        assert_eq!(
+            denied.reason(),
+            Some("capability tool.fetch is not permitted"),
+            "Deny 文案不得因族机制而变"
+        );
     }
 
     fn dispatch_request<'a>(

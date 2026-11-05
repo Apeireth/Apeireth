@@ -21,6 +21,7 @@ use apeireth_core::kernel::{CapabilityId, SessionId};
 use apeireth_governance::approval_family::family_ids_for_arguments;
 use apeireth_governance::{Action, Decision, GovernanceHook, GovernanceRequest, GovernanceVerdict};
 use apeireth_runtime::canonical::{PermissionPreset, SessionStore};
+use apeireth_tools_canonical::mcp_bridge::{is_capability_in_family, MCP_FAMILY_ROOT};
 use async_trait::async_trait;
 use sha2::{Digest, Sha256};
 
@@ -35,7 +36,7 @@ use sha2::{Digest, Sha256};
 /// cover every egress, credential, and deletion exit, not just the obvious
 /// mutators:
 /// - 执行面: `tool.shell` / `tool.process` / `tool.supervisor` /
-///   `tool.std_sub_supervisor` / `tool.mcp*` (动态能力);
+///   `tool.std_sub_supervisor` / `tool.mcp.*` (动态能力, 段边界口径);
 /// - 受控写: `tool.filesystem` (workspace 边界内的读写, 仍是写) /
 ///   `tool.apply_patch` (补丁式受控写文件, 创建/修改/删除都算写) /
 ///   `tool.worktree_apply` (四拍受控工作树写, 改单落盘仍是写;
@@ -107,7 +108,10 @@ pub fn is_write_or_execute_capability(capability: &CapabilityId) -> bool {
         "fs.delete",
     ];
     let id = capability.as_str();
-    WRITE_OR_EXECUTE.contains(&id) || id.starts_with("tool.mcp")
+    // 动态外部工具族按**段边界**判定（`tool.mcp.` 前缀）：族根字面量的单一
+    // 真源在工具侧（`apeireth_tools_canonical::mcp_bridge::MCP_FAMILY_ROOT`），
+    // 段边界判定共用同一 helper —— `tool.mcpsomething` 不属于该族。
+    WRITE_OR_EXECUTE.contains(&id) || is_capability_in_family(id, MCP_FAMILY_ROOT)
 }
 
 /// 「L2 永不因预设放行」地板: 命中即该调用**不可**被预设改写放行。
@@ -116,10 +120,22 @@ pub fn is_write_or_execute_capability(capability: &CapabilityId) -> bool {
 /// `full` 预设的 RequireApproval→Allow 改写与 `standard` 的 `approval_remember`
 /// 免审记忆都不得越过它 (手机上批 push, 但每次都得人批)。L1 可逆本地写不受
 /// 地板约束 (照常走预设语义); L3/词表外本来就拒绝即帧, 无需地板。
+///
+/// 另有一条**外部工具族分支**: 动态能力族（`tool.mcp.<server>.<tool>`）的
+/// 每个成员调用都必须逐次人批, `full` 预设不得豁免它, `standard` 的
+/// `approval_remember` 免审记忆也不得豁免它。
+///
+/// ⚠️ **族分支是纯 id 判定, 不看参数**: 该分支只看能力 id 是否落在族内
+/// （段边界: `tool.mcp.` 前缀, `tool.mcpsomething` 不算), 与 git 写分级
+/// 的「id 全等 + 参数内容」口径不同 —— 外部工具一律逐次人批, 没有
+/// 「参数安全就免审」的分级。
 pub fn human_approval_floor_applies(
     capability: &CapabilityId,
     arguments: &serde_json::Value,
 ) -> bool {
+    if is_capability_in_family(capability.as_str(), MCP_FAMILY_ROOT) {
+        return true;
+    }
     capability.as_str() == apeireth_tools_canonical::GIT_WRITE_CAPABILITY_ID
         && apeireth_tools_canonical::git_write_human_approval_floor(arguments)
 }
@@ -831,6 +847,94 @@ mod tests {
         assert!(human_approval_floor_applies(&capability, &fetch));
         assert!(!human_approval_floor_applies(&capability, &commit));
         assert!(!human_approval_floor_applies(&other, &push));
+    }
+
+    /// 外部工具族地板 (纯 id 判定, 不看参数): 族内每个成员都踩地板, 族根
+    /// 自身与同前缀不同段的 id 不踩。
+    #[test]
+    fn human_approval_floor_covers_the_whole_external_tool_family() {
+        let args = serde_json::json!({});
+        for id in [
+            "tool.mcp.demo.lookup",
+            "tool.mcp.dynamic",
+            "tool.mcp.demo.write-item",
+        ] {
+            let capability = CapabilityId::new(id).unwrap();
+            assert!(
+                human_approval_floor_applies(&capability, &args),
+                "{id} must hit the human-approval floor (external tools are always per-call)"
+            );
+        }
+        // 段边界: 族根自身与同文本前缀不同段都不属于该族。
+        for id in [
+            "tool.mcp",
+            "tool.mcpsomething",
+            "tool.mcp2.demo",
+            "tool.foo",
+        ] {
+            let capability = CapabilityId::new(id).unwrap();
+            assert!(
+                !human_approval_floor_applies(&capability, &args),
+                "{id} must not hit the external-tool family floor"
+            );
+        }
+    }
+
+    /// MCP 族策略: 族 grant + 族 approval (族内每个能力都要人批)。
+    fn external_tool_family_policy() -> PermissionGovernanceHook {
+        let mut policy = PermissionPolicy::new();
+        policy.grant_family(MCP_FAMILY_ROOT);
+        policy.require_approval_for_family(MCP_FAMILY_ROOT);
+        PermissionGovernanceHook::new(policy)
+    }
+
+    /// 生效点①: `full` 预设的 RequireApproval→Allow 改写**不得**豁免 MCP 族。
+    #[tokio::test]
+    async fn full_preset_never_waives_the_external_tool_family_approval() {
+        let store: Arc<dyn SessionStore> = Arc::new(InMemorySessionStore::new());
+        let hook = PermissionPresetGovernanceHook::new(
+            Arc::new(external_tool_family_policy()),
+            store.clone(),
+        );
+        let session = SessionId::new();
+        save_session(&store, session, PermissionPreset::Full, false).await;
+
+        let capability = CapabilityId::new("tool.mcp.demo.lookup").unwrap();
+        let args = serde_json::json!({});
+        let verdict = hook
+            .evaluate_verbose(&dispatch_request(session, &capability, &args))
+            .await;
+        assert!(
+            matches!(verdict.decision, Decision::RequireApproval { .. }),
+            "full preset must not waive the external-tool family approval, got {:?}",
+            verdict.decision
+        );
+    }
+
+    /// 生效点②: `standard` + `approval_remember` 的免审记忆**不得**豁免 MCP 族。
+    #[tokio::test]
+    async fn approval_remember_never_waives_the_external_tool_family_approval() {
+        let store: Arc<dyn SessionStore> = Arc::new(InMemorySessionStore::new());
+        let hook = PermissionPresetGovernanceHook::new(
+            Arc::new(external_tool_family_policy()),
+            store.clone(),
+        );
+        let session = SessionId::new();
+        save_session(&store, session, PermissionPreset::Standard, true).await;
+
+        let capability = CapabilityId::new("tool.mcp.demo.lookup").unwrap();
+        let args = serde_json::json!({});
+        // 先走一遍真实审批流程, 把免审记忆种满。
+        approve_once(&hook, session, &capability, &args).await;
+
+        let verdict = hook
+            .evaluate_verbose(&dispatch_request(session, &capability, &args))
+            .await;
+        assert!(
+            matches!(verdict.decision, Decision::RequireApproval { .. }),
+            "approval_remember must not waive the external-tool family approval, got {:?}",
+            verdict.decision
+        );
     }
 
     /// M2 (行为面): read_only 会话下, 新纳入名单的能力必须被本 hook 显式

@@ -54,6 +54,7 @@
 
 use apeireth_plugin::ToolCapability;
 use apeireth_tools_canonical::ecosystem_health::{ToolProfile, ToolSource};
+use apeireth_tools_canonical::mcp_bridge::{is_capability_in_family, MCP_FAMILY_ROOT};
 
 /// 策展表版本：表内容（条目或词汇表）变更时 +1，冻结进自述读数。
 pub const TOOL_TAXONOMY_VERSION: u32 = 2;
@@ -77,10 +78,13 @@ pub const TAXONOMY_TAGS: &[&str] = &[
 
 /// 动态能力 id 族的**族根前缀**（成员随外部服务器发现而变，无法逐个静态登记）。
 ///
-/// 生产侧的 id 形态由 `apeireth_tools_canonical::mcp_bridge::catalog::capability_id_for`
-/// 生成（`tool.mcp.<server>.<tool>`）；完整性测试用该**生产函数**反查族根，
+/// 族根字面量的**单一真源**在工具侧
+/// （`apeireth_tools_canonical::mcp_bridge::MCP_FAMILY_ROOT`），本表只引用，
+/// 不留第二份。生产侧的 id 形态由
+/// `apeireth_tools_canonical::mcp_bridge::catalog::capability_id_for` 生成
+/// （`tool.mcp.<server>.<tool>`）；完整性测试用该**生产函数**反查族根，
 /// 防止族根字面量写漂。族根条目按**前缀**匹配动态 id（见 [`taxonomy_entry_for`]）。
-pub const DYNAMIC_FAMILY_ROOTS: &[&str] = &["tool.mcp"];
+pub const DYNAMIC_FAMILY_ROOTS: &[&str] = &[MCP_FAMILY_ROOT];
 
 /// 库级保留面（**未注册为工具**）：生产策略分类器按能力 id 形态引用，但生产
 /// 没有注册同名工具。
@@ -244,7 +248,7 @@ pub const TOOL_TAXONOMY: &[TaxonomyEntry] = &[
     },
     // 动态能力族族根：代表运行期随服务器发现而变的 `tool.mcp.<server>.<tool>`。
     TaxonomyEntry {
-        key: "tool.mcp",
+        key: MCP_FAMILY_ROOT,
         tags: &["mcp"],
         source: ToolSource::Mcp,
     },
@@ -435,16 +439,9 @@ pub fn taxonomy_entry_for(capability_id: &str) -> Option<&'static TaxonomyEntry>
         .filter_map(|root| {
             TOOL_TAXONOMY
                 .iter()
-                .find(|entry| entry.key == *root && is_family_member(capability_id, root))
+                .find(|entry| entry.key == *root && is_capability_in_family(capability_id, root))
         })
         .max_by_key(|entry| entry.key.len())
-}
-
-/// 能力 id 是否是族根 `root` 的成员（`root` + `.` + 至少一段）。
-fn is_family_member(capability_id: &str, root: &str) -> bool {
-    capability_id
-        .strip_prefix(root)
-        .is_some_and(|rest| rest.starts_with('.'))
 }
 
 /// 能力 id 的最后一段（如 `tool.play_start` → `play_start`；无点 = 原样）。
@@ -1011,7 +1008,7 @@ mod tests {
                 !curated.contains(*id)
                     && !DYNAMIC_FAMILY_ROOTS
                         .iter()
-                        .any(|root| is_family_member(id, root))
+                        .any(|root| is_capability_in_family(id, root))
             })
             .collect();
         assert!(
@@ -1031,7 +1028,7 @@ mod tests {
         assert!(
             DYNAMIC_FAMILY_ROOTS
                 .iter()
-                .any(|root| is_family_member(dynamic_id, root)),
+                .any(|root| is_capability_in_family(dynamic_id, root)),
             "生产动态能力 id {dynamic_id} 不落在任何已登记族根下: {DYNAMIC_FAMILY_ROOTS:?}"
         );
         // 族根必须自身登记在表里（否则动态能力永远无法静态覆盖）。
