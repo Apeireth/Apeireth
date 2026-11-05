@@ -62,7 +62,7 @@ note = "自研响应式 + DOM 绑定引擎（Rust → wasm32 → Tauri WebView�
 # 引擎仓 = 公开仓（crates.io 可消费）；产品仓 = 私有仓（消费引擎的已发布版本）。
 # 本段只做**归属登记**：不新增层、不新增依赖边、不新增扩展点、不改主 workspace 拓扑
 # （members / product_crates / bench_crates / version 全部不变）。
-# 主依赖图 111 条生产边 0 增 0 减；§[layers] / §[deps] / §[extension_points] 0 改动。
+# 主依赖图 118 条生产边 0 增 0 减（现行实测 118，2026-10-31 门面 crate 加入后；ADR-0019 记 111→118）；§[layers] / §[deps] / §[extension_points] 0 改动。
 # 注：主 arch_guard 只读本契约的特定键（meta/layers/deps/budgets/env/exceptions/
 # concepts/extension_points/flagged_edges/composition_roots），未知段不影响判定。
 [[workspace.repos]]
@@ -283,7 +283,7 @@ allowed_read_locations = []         # 空 = v0.1 只按名字卡, 不按位置�
 [budgets]
 max_file_loc = 6300                 # 现状最大 src ~6150 (doc_ops.rs); 只减不增
 max_workspace_crates = 31           # 目标: 图像家族移出后 20; 只减不增
-max_production_edges = 118          # 2026-10-20 实测; 只减不增 (新增需 ADR)
+max_production_edges = 118          # 2026-10-20 实测定档; 现行实测 118 (2026-10-31 门面 crate 加入后; ADR-0019 记 111→118); 只减不增 (新增需 ADR)
 
 [exceptions]
 # 例外预算 — 已裁决 (ADR-0001, owner 授权代裁 2026-10-20)

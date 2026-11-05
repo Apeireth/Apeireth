@@ -60,7 +60,7 @@
 
 ### 现状复核（2026-10-23）
 
-- **已过时（crate 规模口径）**：文中「v2 = 18 crate」「v1 = 105 crate」是 2026-10-06 口径；现值见 [AGENTS.md](../../../AGENTS.md) 与 [contract.toml](../../architecture/contract.toml)（workspace 30 members = 29 crates + bench harness；历史 31 / 20 members 口径见 AGENTS.md §3）。
+- **已过时（crate 规模口径）**：文中「v2 = 18 crate」「v1 = 105 crate」是 2026-10-06 口径；现值见 [AGENTS.md](../../../AGENTS.md) §3（单一真源）与 [contract.toml](../../architecture/contract.toml)；历史 members 口径见 AGENTS.md §3。
 - **已过时（§7.1 未接线清单）**：W2 接线工作线 2026-10-10 已全批处置完毕，原表多数项已升级；该表请按「历史口径（2026-10-06）」读。
 - **已过时（§7.2 真缺口）**：`community`、`onering`、`experiment_field`、三洋葱 L3-L5、SDK HTTP 面、真文件/网络隔离在 2026-10-10 前后陆续落地；剩余项的当前台账 = [system-gap-ledger-2026-10-18.md](../backend-enhancement/system-gap-ledger-2026-10-18.md)。
 - **已过时（§3.1 / §8.1 逐 crate 清单与 0 装清单）**：主账 🔴 清单已随接线批次大面积过期；逐 crate 清单中的模块清单（9 organ 仍锁定 9 个 ID，但引擎侧器官模块已扩到 20+ 文件）亦已漂移。
@@ -204,7 +204,7 @@
 ### 现状复核（2026-10-23）
 
 - **已过时（只读工具默认 Deny）**：`production.rs` 的默认配置现为 `filesystem: true, search: true, repo: true, shell: None, fetch: None`（`crates/engine/runtime-assembly/src/canonical/production.rs:456-460`）—— 只读工具已默认放行，shell/fetch 仍默认关（opt-in）；原文「桌面永远用不了」**已过时**。
-- **已过时（crate 数 13/16/17 并存）**：现值见 [AGENTS.md](../../../AGENTS.md) §3（30 members）与 [contract.toml](../../architecture/contract.toml)；文档侧当时的「13→17」是 2026-09-12 的中间口径。
+- **已过时（crate 数 13/16/17 并存）**：现值见 [AGENTS.md](../../../AGENTS.md) §3（单一真源）与 [contract.toml](../../architecture/contract.toml)；文档侧当时的「13→17」是 2026-09-12 的中间口径。
 - **已过时（trust tier 缺失）**：信任分级已存在（`crates/foundation/governance/src/rate_limit.rs` 的 `TrustTier` + `RateLimitGovernanceHook`，经 `governance/src/lib.rs:107` 导出）。
 - **仍成立（默认关矩阵）**：judge / council / preference_learning / organs 与 shell / fetch 默认关，是「旋钮命名即承诺」的现行口径；默认开关实况以 `canonical/production.rs` 与 [capabilities-matrix.md](../../03-reference/capabilities-matrix.md) §0.2 为准。
 - **仍成立（审批三态与 Deny 不可绕过）**：`Deny ≠ RequireApproval`、Deny 永不绕过、approval TTL 与 at-most-once 语义未见变更。
