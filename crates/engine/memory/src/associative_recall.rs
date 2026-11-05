@@ -42,6 +42,10 @@ use apeireth_plugin::memory_backend::MemoryBackend;
 /// 联想强度归一化的**共现次数上限**（超过按 100 算 ⇒ ⇒ 0..1 饱和）。
 const ASSOC_CO_OCCURRENCE_CAP: u32 = 100;
 
+/// **查表键的数量上限**（2026-11-05）：问句实词最多试这么多个键
+/// ⇒ ⇒ 避免「长问句 ⇒ 几十次查库」。
+const ASSOC_LOOKUP_KEY_LIMIT: usize = 4;
+
 /// **联想召回源**：把「**和查询实体反复共现**」的记忆作为独立通道供出来。
 ///
 /// ⚠️ 它实现的是 [`MemoryCandidateSource`]（**通道**）而不是「往候选列表里塞」
@@ -113,14 +117,41 @@ impl MemoryCandidateSource for AssociativeCandidateSource {
         if query.is_empty() || limit == 0 {
             return Ok(Vec::new());
         }
+        // ⭐ **查表键 = 问句里的「实词」**（2026-11-05 修正）
+        //
+        // **修正前**：拿**整个问句**当键去查联想网络 ⇒ ⇒ **键对不上**
+        // ⇒ ⇒ 联想边的键是**实体名**（内容里 `associate:<实体> <实体>` 标记里的那个）
+        // ⇒ ⇒ 问句 ≠ 实体名 ⇒ ⇒ ⇒ **通道几乎永不触发**（接了等于没接）。
+        //
+        // **修正后**：用**问句实词**（与写入侧 marker 里的词**同源同口径**）当键
+        // ⇒ ⇒ `query_signals::content_terms_of` ⇒ ⇒ **最长实词优先**、其余依次
+        // ⇒ ⇒ **多键查表**（上限 [`ASSOC_LOOKUP_KEY_LIMIT`]）⇒ ⇒ 命中面更全。
+        let mut lookup_keys: Vec<String> = Vec::new();
+        if let Some(subject) = crate::query_signals::subject_of_query(query) {
+            lookup_keys.push(subject);
+        }
+        for term in crate::query_signals::content_terms_of(query) {
+            if lookup_keys.len() >= ASSOC_LOOKUP_KEY_LIMIT {
+                break;
+            }
+            if !lookup_keys.iter().any(|k| k == &term) {
+                lookup_keys.push(term);
+            }
+        }
+        if lookup_keys.is_empty() {
+            return Ok(Vec::new());
+        }
         // 联想条数 ⇒ ⇒ 取候选的 2 倍（多取一些，让统一打分去挑）。
         let assoc_limit = (limit as u32).saturating_mul(2).max(4).min(32);
-        let edges = match associations.top_associations(query, assoc_limit) {
-            Ok(edges) => edges,
-            // ⚠️ 联想面**失败不许拖垮整条召回**（它是**增强**，不是**依赖**）
-            // ⇒ ⇒ 出错 ⇒ ⇒ 本通道**静默跳过** ⇒ ⇒ 其它通道照常。
-            Err(_) => return Ok(Vec::new()),
-        };
+        // ⚠️ 联想面**失败不许拖垮整条召回**（它是**增强**，不是**依赖**）
+        // ⇒ ⇒ 任一键查失败 ⇒ ⇒ 本通道**静默跳过** ⇒ ⇒ 其它通道照常。
+        let mut edges: Vec<apeireth_plugin::experience::AssociationEdge> = Vec::new();
+        for key in &lookup_keys {
+            match associations.top_associations(key, assoc_limit) {
+                Ok(found) => edges.extend(found),
+                Err(_) => continue,
+            }
+        }
 
         let mut out: Vec<MemoryCandidate> = Vec::new();
         let mut seen: Vec<String> = Vec::new();

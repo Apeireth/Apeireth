@@ -1956,9 +1956,11 @@ mod tests {
             .expect("writeback episode");
 
         let fake = Arc::new(FakeAssociations::default());
+        // ⚠️ **键 = 实体名**（不是整个问句）⇒ ⇒ 写入侧的 marker 也是实体名
+        // ⇒ ⇒ 查表键必须与写入侧**同口径**（否则通道形同虚设）。
         fake.edges.lock().expect("lock").push(AssociationEdge {
-            from_entity: QUERY.to_string(),
-            to_entity: "postgres".to_string(),
+            from_entity: "postgres".to_string(),
+            to_entity: "迁移".to_string(),
             co_occurrence_count: 25,
             last_seen_episode_id: "ep-assoc-target".to_string(),
             last_seen_at: 1_900_000_000,
