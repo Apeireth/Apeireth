@@ -885,11 +885,6 @@ impl MemoryCoordinator {
 
         // V4-c 检索维度自进化: 排序权重取**生效值** (调权落地 override; 无调权
         // 在场 = 原配置原值, 零改动回落)。
-        // ⭐ **显式 session 通道**（2026-11-05）：作用域是**线程局部**的
-        // ⇒ ⇒ 跨线程 / 跨 `await` 会失效 ⇒ ⇒ 静默回落到默认桶 ⇒ ⇒ 又变成多会话串扰
-        // ⇒ ⇒ 这里**显式**传 `query.session_id`（它就在手边）
-        // ⇒ ⇒ 线程局部作用域**保留**作兜底（其它 ambient 读取者仍要用）
-        // ⇒ ⇒ 显式**优先**（`SessionContext::Explicit` > `Ambient`）⇒ 行为逐位不变。
         let pipeline = HybridRetrievalPipeline::new_for_session(&query.session_id, self.ranking);
         let (primary_candidates, mut status) = pipeline.retrieve_with_status_for_session(
             &query.session_id,
