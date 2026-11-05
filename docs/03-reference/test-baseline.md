@@ -14,7 +14,7 @@
 | 项 | 值 |
 |---|---|
 | **命令** | `pwsh scripts/gate_full.ps1 -FailIfBusy`（R6-A 唯一全量执行器：main workspace `cargo test --workspace --all-targets --locked --no-fail-fast --exclude <图像家族 11 crate>` + 图像家族独立同命令；等价于全 workspace 口径） |
-| **结果** | **362 套件 / 9060 passed / 0 failed / 51 ignored**（2026-11-05 实测；**failed 归零** —— 2026-10-31 口径那 1 例并发敏感 flaky 已在本轮修掉，见下方「并发敏感失败口径」的 2026-11-05 更新；**ignored 51 与上轮持平**；较上一次全量（361 / 8996）净增 **+32 passed**（MCP 外部工具接线批：族授权底座 + 桥层语义归位 + 生产组合根接线 + 面板族读面 + 族根单一真源） |
+| **结果** | **365 套件 / 9101 passed / 0 failed / 51 ignored**（2026-11-05 实测；**failed 归零** —— 2026-10-31 口径那 1 例并发敏感 flaky 已在本轮修掉，见下方「并发敏感失败口径」的 2026-11-05 更新；**ignored 51 与上轮持平**；较上一次全量（361 / 8996）净增 **+32 passed**（MCP 外部工具接线批：族授权底座 + 桥层语义归位 + 生产组合根接线 + 面板族读面 + 族根单一真源） |
 | **日期** | 2026-11-05 |
 | **工具链** | rustc 1.97.1 (8bab26f4f 2026-07-14) / cargo 1.97.1 (c980f4866 2026-06-30) / rustup 1.29.1 |
 | **构建环境（Windows 实测）** | MSVC 14.44.35207（VS Build Tools 2022，C++ workload）+ Windows SDK 10.0.26100.0 |
@@ -262,7 +262,7 @@
 
 | 日期 | 结果 | 备注 |
 |---|---|---|
-| 2026-11-05 | **362 套件 / 9060 passed / 0 failed / 51 ignored** | 点对点升级批收口（§1 现行基线）：CLI 旗标判据收口 / 工具策展表口径归位 / MCP claim 降级 / 自述名册补 4 类族 / 三处灰度门禁升格 / 死脚本清理 / 出网件与外部适配器测试层补齐。**failed 由 1 → 0**（并发敏感 flaky 已修，见 §2 并发敏感失败口径的 2026-11-05 更新）。**命令**：`pwsh scripts/gate_full.ps1 -FailIfBusy`（exit 0，HEAD `d24505af`）；**工具链** rustc 1.97.1 / cargo 1.97.1；**环境 Linux x86_64**（§1 已注明与 Windows 历史口径并存） |
+| 2026-11-05 | **365 套件 / 9101 passed / 0 failed / 51 ignored** | 点对点升级批收口（§1 现行基线）：CLI 旗标判据收口 / 工具策展表口径归位 / MCP claim 降级 / 自述名册补 4 类族 / 三处灰度门禁升格 / 死脚本清理 / 出网件与外部适配器测试层补齐。**failed 由 1 → 0**（并发敏感 flaky 已修，见 §2 并发敏感失败口径的 2026-11-05 更新）。**命令**：`pwsh scripts/gate_full.ps1 -FailIfBusy`（exit 0，HEAD `d24505af`）；**工具链** rustc 1.97.1 / cargo 1.97.1；**环境 Linux x86_64**（§1 已注明与 Windows 历史口径并存） |
 | 2026-10-31 | 351 套件 / 8846 passed / 1 failed / 51 ignored | 引擎仓 / 产品仓分离批 + 门面 crate + 版本轴 rc.5（ADR-0017 / 0019 / 0020）。1 例 failed = 并发敏感 flaky（见 §3 并发敏感失败口径，pre-existing）。**命令**：`cargo test --workspace --all-targets --locked --no-fail-fast -j 2`（exit 101，失败项即上述 1 例）；**工具链** rustc 1.97.1 / cargo 1.97.1 |
 | 2026-10-21 | 341 套件 / 8570 passed / 0 failed / 51 ignored | Wave 4 收口（gate_full 实测；R4b 四岛归档后首次全量口径：main 6263 + image 2307；较 2026-10-20 的 9076 下降主要来自 R4b 归档移除的测试（SDK 607→92 等）与新增机制的净差） |
 | 2026-10-20 | 336 套件 / 9075 passed / 1 failed / 52 ignored（产品面 0 失败） | 生物机制族 W3.4 首轮全量（D27 环境敏感 1 失败；非绿跑口径；第三线权威复跑 9076 绿后移入历史） |
@@ -278,7 +278,7 @@
 | 2026-09-05 | 3120 passed / 0 failed / 13 ignored | 对账批 |
 | 2026-08-28 | 1739 passed（A 块后） | v2.0.0-rc.1 收盘期 |
 
-> 冻结口径说明：`README.md` / `README.zh-CN.md` 的徽章数字现行口径 = **9060 passed / 0 failed（2026-11-05 点对点升级批收口口径）**，与 §1 同日同口径同步；历史冻结值（8846 / 8570 / 8509 / 3695）已退役，不再适用。
+> 冻结口径说明：`README.md` / `README.zh-CN.md` 的徽章数字现行口径 = **9101 passed / 0 failed（2026-11-05 点对点升级批收口口径）**，与 §1 同日同口径同步；历史冻结值（8846 / 8570 / 8509 / 3695）已退役，不再适用。
 > 2026-10-18 README 换回退役，不再适用。数字刷新时徽章与本表 §1 同日同口径同步。
 
 ## 4. 引用方式

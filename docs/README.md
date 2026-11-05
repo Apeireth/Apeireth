@@ -19,7 +19,7 @@
 | **查某批交付了什么** | [reports](../reports/README.md)（12 册） | 不要在 `reports/` 里翻 121 篇散篇 |
 | **查我们审过什么** | [04-internal/audits/](04-internal/audits/README.md) | — |
 | **查历史考古** | [04-internal/history/](04-internal/history/) + [archive/](archive/README.md) | — |
-| **查未接线能力** | [status/unwired-ledger.md](status/unwired-ledger.md)（W1–W7） | — |
+| **查未接线能力** | [status/unwired-ledger.md](status/unwired-ledger.md)（§一 待接线 W1–W8；W9 已结案 → [结案记录](status/CLOSEOUT-MCP-EXTERNAL-TOOLS-2026-11-05.md)） | — |
 
 **全量机器可读清单**：[`INDEX.csv`](INDEX.csv)（1000+ 行，含层/题材/日期/被引用数/处置）。
 **重定向表**：[`_redirects.tsv`](_redirects.tsv)（旧路径 → 新路径）。
