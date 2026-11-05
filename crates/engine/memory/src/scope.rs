@@ -273,13 +273,6 @@ impl RecallPolicy {
         self.max_chars = max_chars.max(128);
         self
     }
-
-    #[must_use]
-    pub fn with_proactive_budget(mut self, proactive_budget: usize) -> Self {
-        self.proactive_budget = proactive_budget;
-        self
-    }
-
     #[must_use]
     pub fn with_min_score(mut self, min_score: f64) -> Self {
         self.min_score = min_score;
@@ -291,22 +284,9 @@ impl RecallPolicy {
         self.as_of_ms = Some(as_of_ms);
         self
     }
-
-    #[must_use]
-    pub fn without_as_of(mut self) -> Self {
-        self.as_of_ms = None;
-        self
-    }
-
     #[must_use]
     pub fn with_token_budget(mut self, token_budget: usize) -> Self {
         self.token_budget = token_budget.max(1);
-        self
-    }
-
-    #[must_use]
-    pub fn with_as_of(mut self, as_of_ms: Option<i64>) -> Self {
-        self.as_of_ms = as_of_ms;
         self
     }
 }

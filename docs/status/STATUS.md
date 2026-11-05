@@ -15,7 +15,7 @@
 | `sec.exposure_audit` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_EXPOSURE_AUDIT` | `5c74f955e62c` | 2026-12-01 |
 | `sec.egress_gate` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_EGRESS_GATE` | `7635b32bcc97` | 2026-12-01 |
 | `mem.lesson_object` | PRODUCTION WIRED | ON | - | `5c74f955e62c` | 2026-12-01 |
-| `gap.memory_update` | PRODUCTION WIRED | ON | - | `5c74f955e62c` | 2026-11-20 |
+| `gap.memory_update` | PRODUCTION WIRED | ON | - | `c3bc88ee47c2` | 2026-11-20 |
 | `gap.prompt_stabilizer_unwired` | NOT IMPLEMENTED | - | - | `c9251271` | 2026-11-20 |
 | `sec.linux_containment` | IMPLEMENTED | - | - | `fb4953decd20` | 2026-11-20 |
 | `sec.gateway_tls` | PRODUCTION WIRED | OFF | `APEIRETH_TLS_CERT` | `9a5ba89cc559` | 2026-11-20 |

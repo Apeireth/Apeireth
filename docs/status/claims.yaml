@@ -240,7 +240,7 @@ claims:
     tests:
       - crates/adapters/gateway/tests/panel_routes.rs
       - crates/engine/memory/tests/memory_2_tests.rs
-    verified_at: 5c74f955e62cebcb1979fb3606e804d9fb10d73c
+    verified_at: c3bc88ee47c2756bf2812b34f16ab02d770e29e2
     verify_cmd: "cargo test -p apeireth-gateway --test panel_routes update_episode"
     owner: gateway
     next_review: "2026-11-20"
