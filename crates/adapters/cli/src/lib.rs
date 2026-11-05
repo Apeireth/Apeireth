@@ -14,7 +14,8 @@ pub mod care_heartbeat;
 // B6 会话/记忆静态加密（隐患 #6）密钥面：engine `apeireth_storage::crypto` 的 CLI 出口（密钥丢失 = 显式不可恢复）。
 pub mod crypto_keys;
 pub mod egress_command;
-// V5-b 暴露面体检 CLI 面 (只读零写; 与 `tool.exposure_audit` 同一内核两出口).
+pub mod external_tools; // 外部工具（协议桥）启动期接线面.
+                        // V5-b 暴露面体检 CLI 面 (只读零写; 与 `tool.exposure_audit` 同一内核两出口).
 pub mod exposure;
 pub mod flags; // crate 级旗标判据 (CLI 参数层单一真源: 五处旗标扫描共用同一判据).
 pub mod gateway_panels;
@@ -80,11 +81,10 @@ pub const GUARD_ML_MODEL_ENV: &str = "APEIRETH_GUARD_ML_MODEL";
 /// 经 `attach_immune_memory` 交器官审议门 + W3.6 自述槽（同一份 `Arc`）。
 pub const ENABLE_IMMUNE_MEMORY_ENV: &str = "APEIRETH_ENABLE_IMMUNE_MEMORY";
 
-/// Legacy opt-in for the local filesystem and search tools. Accepted for
-/// compatibility; the tools are granted by default now.
+/// Legacy opt-in for the local filesystem and search tools (granted by default
+/// now); `APEIRETH_DISABLE_LOCAL_READ_TOOLS=1` is the privacy escape hatch that
+/// withholds them even though they default to on.
 pub const ENABLE_LOCAL_READ_TOOLS_ENV: &str = "APEIRETH_ENABLE_LOCAL_READ_TOOLS";
-/// Privacy escape hatch: when set to `1`, the local filesystem and search
-/// tools are NOT granted, even though they default to on.
 pub const DISABLE_LOCAL_READ_TOOLS_ENV: &str = "APEIRETH_DISABLE_LOCAL_READ_TOOLS";
 // 2026-09-08 用户旋钮 (per docs/01-architecture/forget-three-phase-production-spec 同批):
 // shell/fetch 注册 + 策略 grant + require_approval (每次调用仍走人工审批);
@@ -572,10 +572,8 @@ pub fn build_production_governance(enable_local_read_tools: bool) -> GovernanceP
     build_production_governance_parts(enable_local_read_tools).0
 }
 
-/// 文件写入 (`tool.apply_patch`) 的治理风险档位 (件一风险映射)。
-///
-/// 三档与设置开关一一对应; 未授权的能力永不因内容风险被抬进审批
-/// (授权仍是第一钩子)。
+/// 文件写入 (`tool.apply_patch`) 的治理风险档位 (件一风险映射)。三档与设置
+/// 开关一一对应; 未授权的能力永不因内容风险被抬进审批 (授权仍是第一钩子)。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FileWriteRiskLevel {
     /// 未开主开关: 不 grant (写入工具不在授权面)。
@@ -1595,8 +1593,8 @@ async fn build_canonical_runtime_with_parts(
     // SDK remains an HTTP client and does not host a second Runtime.
     // Builtin tools are owned by ProductionModules, not BuiltinToolsPlugin.
     builder = cognitive.register_context_projection(builder);
+    let external_handles = external_tools::take_handles(&cognitive);
     builder = cognitive.register_into(builder);
-
     let mut fallback_order: Vec<CapabilityId> = Vec::new();
 
     let minimax = MinimaxProviderPlugin::from_env()
@@ -1652,6 +1650,7 @@ async fn build_canonical_runtime_with_parts(
         .build()
         .await
         .map_err(|error| format!("canonical runtime bootstrap failed: {error}"))?;
+    external_tools::wire_at_startup(&runtime, &external_handles, &policy).await;
     if let Some(recorder) = guard_hook.dataset_recorder() {
         runtime.add_event_sink(Arc::new(
             apeireth_runtime_assembly::GuardDatasetObserver::new(recorder)

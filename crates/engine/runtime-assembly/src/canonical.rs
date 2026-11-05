@@ -86,6 +86,9 @@ pub mod dream_llm;
 /// W3 实现批: 自我改进闭环实验侧 (2026-10-10)。
 #[path = "canonical/experiment_field.rs"]
 pub mod experiment_field;
+/// 外部工具（协议桥）生产接线面: 发现 → 登记 → 授权 → 派发 (启动期)。
+#[path = "canonical/external_tool_bridge.rs"]
+pub mod external_tool_bridge;
 #[path = "canonical/guard_observer.rs"]
 pub mod guard_observer;
 #[path = "canonical/harness_patch.rs"]
@@ -202,6 +205,11 @@ pub use context_budget::{
 pub use experiment_field::{
     Experiment, ExperimentField, ExperimentStatus, FailureLearningRecord, FailureLearningSink,
     NoopVMRunner, VMRunner, Verdict, WikiFailureLearningSink,
+};
+// 外部工具（协议桥）生产接线面: 运行时登记适配器 + 族授权落点 + 启动期接线。
+pub use external_tool_bridge::{
+    authorize_external_tool_family, is_external_tool_capability, wire_external_tools,
+    ExternalToolWiring, RuntimeExternalToolRegistry, EXTERNAL_TOOL_MODULE_ID,
 };
 
 pub use nightwatch::{
