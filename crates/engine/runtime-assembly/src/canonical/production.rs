@@ -48,9 +48,10 @@ use super::nervous_bus::NervousBus;
 use super::nervous_switchboard::{BioSwitch, NervousSwitchboard};
 use super::organ_module::OrganModule;
 use super::preference_learning::PreferenceLearningModule;
+use super::self_status_roster::roster_from_config;
 use super::self_status_source::{
-    doc_ops_status_probe, image_ops_status_probe, proposal_status_probe, roster_from_config,
-    sheet_ops_status_probe, task_board_status_probe, ProductionSelfStatusSource,
+    doc_ops_status_probe, image_ops_status_probe, proposal_status_probe, sheet_ops_status_probe,
+    task_board_status_probe, ProductionSelfStatusSource,
 };
 use super::tool_modules::{
     ApplyPatchModule, BackupExportModule, CareScheduleModule, ContentFeedModule, DocOpsModule,
@@ -163,26 +164,24 @@ pub struct ProductionModulesConfig {
     /// Register the life-integration content feed (`tool.content_feed`, J1) when
     /// config is supplied.
     ///
-    /// 内容流接入: 订阅源管理 + 受控拉取 + 结构化摘要 + 入记忆流 (L2 封套
-    /// 披露, 跨源内容不直进提示词)。治理档位 (RequireApproval 级: 拉取与入库
-    /// 都经审批档, 改订阅 = 写文件走 write_intent 同族) 由治理链钩子承载。
-    /// 默认关 (opt-in)。
+    /// 内容流接入: 订阅源管理 + 受控拉取 + 结构化摘要 + 入记忆流 (L2 封套披露,
+    /// 跨源内容不直进提示词)。治理档位 (RequireApproval 级: 拉取与入库都经审批
+    /// 档, 改订阅 = 写文件走 write_intent 同族) 由治理链钩子承载。默认关 (opt-in)。
     pub content_feed: Option<apeireth_tools_canonical::ContentFeedConfig>,
     /// Register the proactive-care rule scheduling tool (`tool.care_schedule`,
     /// V3-a 双引擎主动关怀) when the care rules data directory is supplied.
     ///
     /// 关怀规则面: 增删列关怀规则 (四类触发器词表), 写文件面走 write_intent
     /// 同族 (改规则 = 写文件)。治理档位 (RequireApproval 级: 每次调用都停人工
-    /// 审批, 无自动放行档) 由治理链钩子承载。关怀发起不走本面: 发起 = 双引擎
-    /// 判定 → 标准回合 (零新消息通道)。默认关 (opt-in)。
+    /// 审批, 无自动放行档) 由治理链钩子承载。关怀发起不走本面 (双引擎判定 →
+    /// 标准回合)。默认关 (opt-in)。
     pub care_schedule: Option<PathBuf>,
     /// Register the general-voice speech tool (`tool.voice_speak`, V3-b 通用嗓闭环)
     /// when the voice configuration is supplied.
     ///
     /// 发声面: 文本 → 系统语音引擎合成即播 + 语句账本 (`spoken.jsonl`) + 安静
     /// 纪律 (勿扰窗口, 与 care_rules 同源)。治理 = 发声面档 (注册即闸
-    /// `APEIRETH_ENABLE_VOICE_SPEAK`, grant 即发声免逐次人批, 与 shell 的执行档
-    /// 分立)。默认关 (opt-in)。
+    /// `APEIRETH_ENABLE_VOICE_SPEAK`, grant 即发声免逐次人批)。默认关 (opt-in)。
     pub voice_speak: Option<apeireth_tools_canonical::VoiceSpeakConfig>,
     /// Register the backup export tool (`tool.backup_export`, G5 备份恢复) when
     /// config is supplied.
@@ -190,8 +189,7 @@ pub struct ProductionModulesConfig {
     /// 备份导出面: 全量打包记忆/账本 (七类数据面) + manifest.json 逐文件摘要
     /// (损坏可检出); **凭据不随行** (密钥/令牌面显式排除 + 测试钉死)。恢复/校验
     /// 是 CLI 面 (`apeireth backup restore|verify`, 本地操作), 不走本面。治理
-    /// 档位 (RequireApproval 级: 每次导出都停人工审批) 由授权层同源接线。
-    /// 默认关 (opt-in)。
+    /// 档位 (RequireApproval 级: 每次导出都停人工审批) 由授权层同源接线。默认关。
     pub backup: Option<apeireth_tools_canonical::backup::BackupExportConfig>,
     /// Register the durable task board (`tool.task_board`, V6-a 任务编排持久队列)
     /// when the task queue is supplied.
@@ -201,7 +199,7 @@ pub struct ProductionModulesConfig {
     /// 治理档位 (写面 = write_intent 同族: 改任务簿 = 写文件, 每次人批无自动
     /// 放行档; `task_list` 只读零审批) 由治理链
     /// ([`super::task_board_tool::TaskBoardApprovalHook`]) 唯一承载; **无
-    /// failed/retry 工具面** (failed 只能人判)。默认关 (opt-in)。
+    /// failed/retry 工具面**。默认关 (opt-in)。
     pub task_board: Option<Arc<apeireth_orchestration::task_queue::TaskQueue>>,
     /// 生物机制族 Wave 4 (SG-14): 上下文预算 (字符) 注入装配面模块;
     /// `None` = 不注入 (默认策略, 行为不变)。与 cli 组装器同一 env 真源。
@@ -220,23 +218,30 @@ pub struct ProductionModulesConfig {
     /// semantics): a defective configuration is a boot error, never a
     /// silent fallback. Off by default.
     ///
-    /// Self-report semantics (honest): the `mcp` roster row reads the
-    /// registration condition — the bridge assembled **and** at least one
-    /// enabled server entry. Enabled with no server configuration means no
-    /// external tools, and the roster says so.
+    /// Self-report semantics (honest, 2026-11-05 批): the `mcp` roster row is
+    /// the **registered tool count**口径 (see [`Self::mcp_registered_tools`]);
+    /// the "server list loaded" fact moved to the `mcp_bridge` row.
     pub mcp: bool,
     /// Data directory whose `mcp-servers.json` is the secondary config entry
     /// for the external tool bridge (see [`Self::mcp`]).
     pub mcp_data_dir: Option<PathBuf>,
+    /// 外部工具面**实际登记件数**（名册 `mcp` 行的唯一口径）: 实际登记进运行时
+    /// 能力表的外部工具件数。0 = 未接线 / 发现失败 / 无服务器 ⇒ 名册照实 false
+    /// （fail-closed）。装配期快照拿不到这个数（接线在运行时建成之后）⇒ 装配根
+    /// 在自述**调用时**现投影（纯函数 [`roster_from_config`] + 晚绑定真值）。
+    pub mcp_registered_tools: usize,
+    /// 外部工具**桥面**已装配（配置面事实: 开关开且服务器列表已加载）: 与工具
+    /// 件数**无关** —— 桥在而一件工具都没登记 ⇒ 本行 true 而 `mcp` false; 本行
+    /// 不冒充「外部工具面可用」。
+    pub mcp_bridge: bool,
     /// Register the nine native recon tools (`tool.recon.*`, 安全/逆向侦察套件).
     ///
     /// 侦察面 = 「看」不是「做」: 字符串/熵/魔数、ELF/PE/Mach-O、CLR 元数据、
     /// JS 词法、YARA 子集、pcap、TLS 握手 —— 全部只读。网络三件
     /// (`tool.recon.net` / `.web` / `.tls`) 只连 [`apeireth_tools_canonical::recon::Scope`]
-    /// 显式授权的目标; 空 scope = 全拒绝 (fail-closed)。
-    ///
-    /// 注册即闸: 开关 `APEIRETH_ENABLE_RECON=1` 才构造 (默认关), 授权面同源
-    /// (同一开关值在治理层 grant)。工作区根缺省时不注册 (文件类工具无落点)。
+    /// 显式授权的目标; 空 scope = 全拒绝 (fail-closed)。注册即闸: 开关
+    /// `APEIRETH_ENABLE_RECON=1` 才构造 (默认关), 授权面同源 (同一开关值在治理层
+    /// grant)。工作区根缺省时不注册 (文件类工具无落点)。
     pub recon: Option<apeireth_tools_canonical::ReconConfig>,
     /// Register the ten external adapters (`ext.*`: nmap / exiftool / tshark /
     /// yara / binwalk / radare2 / jadx / apktool / ghidra / openssl).
@@ -251,8 +256,7 @@ pub struct ProductionModulesConfig {
     /// Register the single organ module (post-turn organ cognition).
     ///
     /// Opt-in and off by default: the organ chain includes LLM-heavy W1/W2
-    /// side-calls, and this is the explicit rollout boundary for the first
-    /// production organ integration.
+    /// side-calls (首个生产器官接线的明确放量边界).
     pub organs: bool,
     /// Render prompt overlays in the closed-world injection format
     /// (numbered evidence + anti-hallucination rules). Off by default.
@@ -359,8 +363,7 @@ pub struct ProductionModulesConfig {
     /// 测面任何字节; 凭据值/密钥值永不出现在报告里, 只报路径词面与计数;
     /// 测不了的显式「未测」不冒充干净)。与 CLI `apeireth exposure report`
     /// 同一内核两个出口。治理 = **只读档** (注册即闸
-    /// `APEIRETH_ENABLE_EXPOSURE_AUDIT`, grant 即用零审批, 与
-    /// `tool.self_status` 同档)。默认关 (opt-in)。
+    /// `APEIRETH_ENABLE_EXPOSURE_AUDIT`, grant 即用零审批)。默认关 (opt-in)。
     pub exposure_audit: Option<apeireth_tools_canonical::ExposureAuditConfig>,
     /// Register the leftover-proposal tool (`tool.proposal_draft`, 自主度第一小步 ·
     /// 边角料提案面) when the proposal-ledger data directory is supplied.
@@ -368,10 +371,9 @@ pub struct ProductionModulesConfig {
     /// 提案面 (保守版: 它提案, 人点头): 对发现的边角料起草结构化提案 ——
     /// **提案只入提案账** (`proposals.jsonl` append-only), 不落任何真面;
     /// 人审温柔 (detail 恒含「建议你亲自确认」行 + 审批卡逐条请人过目);
-    /// 通过 = 账面标记 accepted, **提案不直接执行** (执行仍走既有工具面的
-    /// 正常审批链)。治理 = **低风险档** (读面 + append 账本, 注册即闸
+    /// 通过 = 账面标记 accepted, **提案不直接执行** (执行仍走既有工具面的正常
+    /// 审批链)。治理 = **低风险档** (读面 + append 账本, 注册即闸
     /// `APEIRETH_ENABLE_PROPOSALS`, 默认关 fail-closed, grant 即用零审批)。
-    /// 自述提案节与工具面同一本提案账。默认关 (opt-in)。
     pub proposals: Option<apeireth_tools_canonical::proposal::ProposalConfig>,
     /// Register the image-ops tool (`tool.image_ops`, 创作工具面 W1 · 图像操作).
     ///
@@ -381,8 +383,8 @@ pub struct ProductionModulesConfig {
     /// + 大小/像素上限 (防炸弹图) + 格式白名单 (png/jpeg/webp/bmp) + 读前观测门禁
     /// (未读不得覆盖写, 与读工具同一张观测表)。输出写**归档文件写入族** (读码定
     /// 归档: 治理层族词表是冻结面, 图像写 = 写文件, 不另立图像写入族)。注册条件
-    /// = 本开关 + [`Self::file_write`] (唯一写总闸) + 工作区根 + 共享读前观测门禁
-    /// (注册即闸)。默认关 (opt-in, fail-closed)。自述创作节与工具面同一计数器。
+    /// = 本开关 + [`Self::file_write`] + 工作区根 + 共享读前观测门禁 (注册即闸)。
+    /// 默认关 (opt-in, fail-closed)。
     pub image_ops: bool,
     /// Register the doc-ops tool (`tool.doc_ops`, 创作工具面 W2 · 文档操作).
     ///
@@ -391,9 +393,8 @@ pub struct ProductionModulesConfig {
     /// 工作区限域 + 敏感面拒 + 大小/页数上限 + 创建类原子写 (只创建不覆盖)。
     /// **写面双重约束**: 写动作受 [`Self::file_write`] 唯一写总闸 (组装根把同一
     /// 开关值注入 [`apeireth_tools_canonical::DocOpsConfig::with_write_gate`],
-    /// 关 = 拒写不拒读) + 审批档每次人批 (无自动放行档)。注册条件 = 本开关 +
-    /// 工作区根 (注册即闸; 读面不背写总闸, 文档读是本面的第一公民)。默认关
-    /// (opt-in, fail-closed)。自述创作节与工具面同一计数器。
+    /// 关 = 拒写不拒读) + 审批档每次人批。注册条件 = 本开关 + 工作区根 (注册即闸;
+    /// 读面不背写总闸, 文档读是本面的第一公民)。默认关 (opt-in, fail-closed)。
     pub doc_ops: Option<apeireth_tools_canonical::DocOpsConfig>,
     /// Register the sheet-ops tool (`tool.sheet_ops`, 创作工具面 K3 · 表格操作).
     ///
@@ -403,26 +404,23 @@ pub struct ProductionModulesConfig {
     /// (f64 不静默取整, NaN/inf 零产出)。**写面双重约束**: 写动作受
     /// [`Self::file_write`] 唯一写总闸 (组装根把同一开关值注入
     /// [`apeireth_tools_canonical::SheetOpsConfig::with_write_gate`], 关 = 拒写
-    /// 不拒读) + 审批档每次人批 (无自动放行档)。注册条件 = 本开关 + 工作区根
-    /// (注册即闸; 读面不背写总闸, 表格读是本面的第一公民)。默认关 (opt-in,
-    /// fail-closed)。自述创作节与工具面同一计数器。读面认 CSV + xlsx
-    /// (`.xlsx` 后缀词面判定); 写面只出 CSV (xlsx 写出后置)。
+    /// 不拒读) + 审批档每次人批。注册条件 = 本开关 + 工作区根 (读面不背写总闸,
+    /// 表格读是本面的第一公民)。默认关 (opt-in, fail-closed)。
     pub sheet_ops: Option<apeireth_tools_canonical::SheetOpsConfig>,
     /// Register the device-sense tool (`tool.device_sense`, K 轴 L1 在场感知).
     ///
     /// 在场感知面: 设备表 (`devices.json` StoredDoc 拒开, **白名单制默认零设备**)
     /// + 适配器插槽 (mock 已接固定 fixture, 真实协议族留插槽不接) + 摄像头类
     /// 敏感读面 (显式授权 + 审计账)。治理 = **只读档** (注册即闸
-    /// `APEIRETH_ENABLE_DEVICE_SENSE`, 默认关 fail-closed, grant 即用零审批)。
-    /// 自述在场节与工具面同一本设备表同一进程内感知计数。默认关 (opt-in)。
+    /// `APEIRETH_ENABLE_DEVICE_SENSE`, 默认关 fail-closed)。自述在场节与工具面
+    /// 同一本设备表同一进程内感知计数。默认关 (opt-in)。
     pub device_sense: Option<apeireth_tools_canonical::device::sense::DeviceSenseConfig>,
     /// Register the weather tool (`tool.weather`, K 轴 L1/L2 天气感知 + 提醒信号).
     ///
     /// 天气面: 公开天气读数 (mock 档 = 固定 fixture **如实标注数据源**; live 档 =
     /// 受控出口通道 / fetch 族**留插槽不接**) + 提醒信号 (只交信号: 勿扰/频率等
     /// 提醒纪律归提醒侧消费)。治理 = **只读档** (注册即闸, 与 `tool.device_sense`
-    /// 同一在场感知族开关 `APEIRETH_ENABLE_DEVICE_SENSE`, 默认关 fail-closed)。
-    /// 默认关 (opt-in)。
+    /// 同一在场感知族开关, 默认关 fail-closed)。默认关 (opt-in)。
     pub weather: Option<apeireth_tools_canonical::device::weather::WeatherConfig>,
     /// Register the device-control tool (`tool.device_control`, K 轴 L3/L4 受控执行骨架).
     ///
@@ -432,19 +430,17 @@ pub struct ProductionModulesConfig {
     /// 人批 + IM 卡) + 设备白名单 (只读消费 L1 [`Self::device_sense`] 同一本
     /// `devices.json`, 未登记/未启用拒绝即帧)。执行面 = mock 适配器 (灯/空调/
     /// 微波炉 fixture, 真实协议族后插)。治理档在治理链
-    /// (`DeviceControlApprovalHook` 唯一承载)。注册条件 = 配置注入 (注册即闸,
-    /// 双闸 `APEIRETH_ENABLE_DEVICE_SENSE` + `APEIRETH_ENABLE_DEVICE_CONTROL`,
-    /// 默认关 fail-closed)。默认关 (opt-in)。
+    /// (`DeviceControlApprovalHook` 唯一承载)。注册条件 = 配置注入 (双闸
+    /// `APEIRETH_ENABLE_DEVICE_SENSE` + `APEIRETH_ENABLE_DEVICE_CONTROL`)。
     pub device_control:
         Option<apeireth_tools_canonical::device::device_control::DeviceControlConfig>,
     /// Register the guard-watch tool (`tool.guard_watch`, K 轴 L5 看家骨架).
     ///
     /// 守护面: 守护规则 (`guard-rules.json` StoredDoc 拒开, 规则 = 设备状态阈值 /
     /// 时序条件) + 巡检判定 (白名单设备只读感知) + 告警账 (`guard-alerts.jsonl`
-    /// append-only) —— 告警 = 关怀候选高优先 (打扰纪律守护例外档: 破勿扰可配 +
-    /// 「守护告警」标注 + 频率独立上限, 提醒侧消费端同源接缝)。**只看不动**:
+    /// append-only) —— 告警 = 关怀候选高优先 (打扰纪律守护例外档)。**只看不动**:
     /// 告警不触发任何设备动作 (动手仍走 [`Self::device_control`] 三拍人批)。
-    /// 注册条件 = 配置注入 (注册即闸, 双闸 `APEIRETH_ENABLE_DEVICE_SENSE` +
+    /// 注册条件 = 配置注入 (双闸 `APEIRETH_ENABLE_DEVICE_SENSE` +
     /// `APEIRETH_ENABLE_GUARD_WATCH`, 默认关 fail-closed)。默认关 (opt-in)。
     pub guard_watch: Option<apeireth_tools_canonical::device::guard_watch::GuardWatchConfig>,
 }
@@ -474,6 +470,8 @@ impl Default for ProductionModulesConfig {
             bio_care_candidates: false,
             mcp: false,
             mcp_data_dir: None,
+            mcp_registered_tools: 0,
+            mcp_bridge: false,
             preference_learning: false,
             organs: false,
             memory_injection: false,
@@ -873,9 +871,8 @@ impl ProductionModules {
 
         // External tool bridge (MCP) server list is loaded BEFORE the roster
         // projection: the self-report must read the same facts the
-        // registration uses (已启用但无服务器配置 = 无外部工具). Fail-closed
-        // semantics unchanged: a defective configuration is a boot error,
-        // never a silent fallback.
+        // registration uses. Fail-closed semantics unchanged: a defective
+        // configuration is a boot error, never a silent fallback.
         let mcp_server_config = if config.mcp {
             Some(
                 McpServerConfig::load(config.mcp_data_dir.as_deref()).map_err(|error| {
@@ -887,18 +884,21 @@ impl ProductionModules {
         } else {
             None
         };
+        // 外部工具袋 (登记账): 早建 ⇒ 自述面可晚绑定「实际登记件数」; 生产里
+        // 启动期接线把发现的工具登记进这只袋 ⇒ 袋里件数 = 实际登记件数。
+        let mcp_tool_bag = mcp_server_config
+            .as_ref()
+            .map(|_| Arc::new(McpModule::new()));
 
         // 自省通道: 能力名册在任何字段移动之前投影 —— 名册即**实际用于装配的**
-        // config 生效值; 注入槽级的注册条件 (图谱槽 / 外部工具服务器面) 先折进
+        // config 生效值; 注入槽级的注册条件 (图谱槽 / 外部工具桥面) 先折进
         // 生效视图, 名册不复述 "配置说开"而注册没成的事实。
         let mut roster_config = config.clone();
         roster_config.community_triage = config.community_triage && backends.graph.is_some();
-        roster_config.mcp = mcp_server_config
-            .as_ref()
-            .is_some_and(|servers| servers.enabled_servers().next().is_some());
+        // 外部工具面两行口径分离: `mcp` = 实际登记件数 (启动期接线后才有数 ⇒ 现投影)。
+        roster_config.mcp_bridge = mcp_server_config.is_some();
         // 自学习 / 类型化召回 / 检索调权的生效值 = 接线事实 AND 上游槽 (自学习
-        // 信号只走记忆召回模块, 类型化召回候选只走记忆协调器, 检索调权的注入
-        // 回执面只走记忆召回模块)。
+        // 信号只走记忆召回模块, 类型化召回候选只走记忆协调器, 检索调权挂记忆召回)。
         let self_tuning_effective = backends.self_tuning.is_some() && config.memory_recall;
         let retrieval_tuning_effective =
             backends.retrieval_tuning.is_some() && config.memory_recall;
@@ -910,16 +910,6 @@ impl ProductionModules {
         // V4-b 散列增量门的生效值 = 开关 AND 散列门落库面 (面缺席 = 显式不跑)。
         roster_config.consolidation_hash_gate =
             config.consolidation_hash_gate && backends.ingest_gate.is_some();
-        let self_status_roster = config.self_status.then(|| {
-            roster_from_config(
-                &roster_config,
-                backends.workspace_root.is_some(),
-                self_tuning_effective,
-                retrieval_tuning_effective,
-                typed_recall_effective,
-                &backends.self_status_extras,
-            )
-        });
 
         let experience_count = [
             backends.wiki.is_some(),
@@ -1064,9 +1054,8 @@ impl ProductionModules {
 
         // 双引擎主动关怀 (`tool.care_schedule`, V3-a, opt-in): 关怀规则面
         // (增删列, 四类触发器词表)。治理档位在治理链 (`CareScheduleApprovalHook`):
-        // RequireApproval 级 —— 改规则 = 写文件 (write_intent 同族), 每次调用
-        // 都停人工审批。
-        // W3.6: 关怀数据目录同时作为生命周期账本持久化目录 (缺省 = 纯内存, 不建文件)。
+        // RequireApproval 级 —— 改规则 = 写文件 (write_intent 同族), 每次调用都停
+        // 人工审批。W3.6: 关怀数据目录同时作为生命周期账本持久化目录 (缺省 = 纯内存)。
         let bio_lifecycle_store_dir = config.care_schedule.clone();
         if let Some(care_dir) = config.care_schedule {
             instrument.constructed(ModuleFamily::CareSchedule);
@@ -1096,12 +1085,11 @@ impl ProductionModules {
             capabilities.extend(provider.capabilities());
         }
 
-        // 任务簿 (`tool.task_board`, V6-a 任务编排持久队列, opt-in): 增/列/
-        // 改派/完成 over 持久任务队列 (与会话账本同库的任务表; 崩溃恢复/幂等
-        // 唤醒/环路熔断/结算接账在 orchestration 队列核)。治理档位在治理链
-        // (`TaskBoardApprovalHook`): 写面 = write_intent 同族 (改任务簿 = 写
-        // 文件) 每次人批, `task_list` 只读零审批; **无 failed/retry 工具面**
-        // (failed 只能人判)。自述任务节与工具面同队同账 (task_board_status_probe)。
+        // 任务簿 (`tool.task_board`, V6-a 任务编排持久队列, opt-in): 增/列/改派/
+        // 完成 over 持久任务队列 (与会话账本同库的任务表; 崩溃恢复/幂等唤醒/环路
+        // 熔断/结算接账在 orchestration 队列核)。治理档位在治理链
+        // (`TaskBoardApprovalHook`): 写面 = write_intent 同族 (改任务簿 = 写文件)
+        // 每次人批, `task_list` 只读零审批; **无 failed/retry 工具面**。
         if let Some(queue) = config.task_board.clone() {
             instrument.constructed(ModuleFamily::TaskBoard);
             let provider = TaskBoardModule::new(queue);
@@ -1153,7 +1141,7 @@ impl ProductionModules {
         // 创作工具面 W2 · 文档操作 (`tool.doc_ops`, 默认关): 受控读写族 (PDF/DOCX 读
         // + PDF 基础写批量管道) + 工作区限域 + 敏感面拒 + 大小/页数上限 + 创建类
         // 原子写 (只创建不覆盖)。注册条件 = 开关 + 配置落位; **写面双重约束** =
-        // `file_write` 唯一写总闸 (关 = 拒写不拒读) + 审批档每次人批。
+        // `file_write` 唯一写总闸 + 审批档每次人批。
         let mut doc_ops_counters = None;
         if let Some(doc_ops_config) = &config.doc_ops {
             instrument.constructed(ModuleFamily::DocOps);
@@ -1167,7 +1155,7 @@ impl ProductionModules {
         // 筛排聚合 + 计算列 + 导出) + 工作区限域 + 敏感面拒 + 行列/字节上限 (防炸弹表)
         // + 创建类原子写 + 数值精度如实 (f64 不静默取整, NaN/inf 零产出)。注册条件
         // = 开关 + 配置落位; **写面双重约束** = `file_write` 唯一写总闸 (关 = 拒写
-        // 不拒读) + 审批档每次人批。计数器句柄留给自述创作节 (同源同账)。
+        // 不拒读) + 审批档每次人批。
         let mut sheet_ops_counters = None;
         if let Some(sheet_ops_config) = &config.sheet_ops {
             instrument.constructed(ModuleFamily::SheetOps);
@@ -1178,11 +1166,9 @@ impl ProductionModules {
         }
 
         // K 轴 L1 在场感知 (`tool.device_sense` + `tool.weather`, 默认关): 白名单制
-        // 默认零设备 (devices.json StoredDoc 拒开) + mock 适配器 (真实协议插槽留
-        // 位不接) + 摄像头类敏感读面 (显式授权 + 审计) + 天气 mock 档如实标注
-        // 数据源 + 提醒信号只交信号。注册条件 = 配置注入 (注册即闸
-        // `APEIRETH_ENABLE_DEVICE_SENSE`, 默认关 fail-closed)。感知计数器句柄留给
-        // 自述在场节 (同源同账)。
+        // 默认零设备 (devices.json StoredDoc 拒开) + mock 适配器 (真实协议插槽留位
+        // 不接) + 摄像头类敏感读面 (显式授权 + 审计) + 天气 mock 档如实标注数据源
+        // + 提醒信号只交信号。注册条件 = 配置注入 (默认关 fail-closed)。
         let mut device_sense_activity = None;
         if let Some(device_config) = &config.device_sense {
             instrument.constructed(ModuleFamily::DeviceSense);
@@ -1198,11 +1184,9 @@ impl ProductionModules {
 
         // K 轴 L3/L4 受控执行骨架 (`tool.device_control`, 默认关): 三拍执行
         // (plan/preview 零副作用 → execute 真执行 + 状态账 append-only) + 三档
-        // 分级审批 (reversible 审批档可配自动档 / irreversible 永逐次人批 /
-        // money 永逐次人批 + IM 卡) + 设备白名单 (只读消费 L1 `devices.json`
-        // 同一本设备表)。注册条件 = 配置注入 (注册即闸: 双闸
-        // `APEIRETH_ENABLE_DEVICE_SENSE` + `APEIRETH_ENABLE_DEVICE_CONTROL`,
-        // 见 `DeviceControlConfig::from_env`, 默认关 fail-closed)。
+        // 分级审批 (reversible 可配自动档 / irreversible 永逐次人批 / money 永逐次
+        // 人批 + IM 卡) + 设备白名单 (只读消费 L1 `devices.json` 同一本设备表)。
+        // 注册条件 = 配置注入 (双闸, 默认关 fail-closed)。
         let mut device_control_runner = None;
         if let Some(device_control_config) = &config.device_control {
             instrument.constructed(ModuleFamily::DeviceControl);
@@ -1213,11 +1197,10 @@ impl ProductionModules {
         }
 
         // K 轴 L5 看家骨架 (`tool.guard_watch`, 默认关): 守护规则面 (阈值/时序
-        // 条件, StoredDoc 拒开) + 巡检判定 + 告警账 (告警 = 关怀候选高优先,
-        // 提醒侧消费端同源接缝)。**只看不动**: 告警零设备动作 (动手仍走
-        // `tool.device_control` 三拍人批)。注册条件 = 配置注入 (注册即闸: 双闸
+        // 条件, StoredDoc 拒开) + 巡检判定 + 告警账。**只看不动**: 告警零设备动作
+        // (动手仍走 `tool.device_control` 三拍人批)。注册条件 = 配置注入 (双闸
         // `APEIRETH_ENABLE_DEVICE_SENSE` + `APEIRETH_ENABLE_GUARD_WATCH`,
-        // 见 `GuardWatchConfig::from_env`, 默认关 fail-closed)。
+        // 默认关 fail-closed)。
         if let Some(guard_watch_config) = &config.guard_watch {
             instrument.constructed(ModuleFamily::GuardWatch);
             let provider = super::tool_modules::GuardWatchModule::new(guard_watch_config.clone());
@@ -1225,8 +1208,8 @@ impl ProductionModules {
         }
 
         // W3.3 · 游戏练习场 (`tool.play_*`, 默认关): 装配块在 `install_bio_play`
-        // (开关值来自 config 的 `bio_play` 总闸 = 装配根一次性解析的结果, 且要求
-        // 工作区根注入), 返回共享账本句柄供自述 play probe 只读接入。
+        // (开关值 = config 的 `bio_play` 总闸, 且要求工作区根注入), 返回共享账本
+        // 句柄供自述 play probe 只读接入。
         let bio_play_state = bio_production_wiring::install_bio_play(
             &mut capabilities,
             &clock,
@@ -1237,8 +1220,7 @@ impl ProductionModules {
 
         // W3.7 · 仪式完成面 (`tool.ritual_done` / `tool.ritual_skip`, 默认关):
         // 复用族总闸 + 关怀数据目录注入; 双工具写同一本 `<care_dir>/ritual_state.json`
-        // (与 care 心跳同一目录), 补「仪式完成」显式事件源。返回的账句柄在自述槽
-        // 武装后（见下方 self_status 块之后）填入 SG-22 观测槽。
+        // (与 care 心跳同一目录)。返回的账句柄在自述槽武装后填入 SG-22 观测槽。
         let bio_ritual_store = bio_production_wiring::install_bio_ritual_tools(
             &mut capabilities,
             &clock,
@@ -1249,12 +1231,32 @@ impl ProductionModules {
         // 自省通道 (与既有 5 内置工具同列): `tool.self_status` 结构化自述面。
         // 只读档、默认可用、零审批; data 系探测口缺位时对应字段显式 null +
         // 原因, 注册与其余字段不受影响。
-        if let Some(roster) = self_status_roster {
+        if config.self_status {
+            // 名册**现投影**口: 外部工具的登记件数在启动期接线之后才有数 ⇒ 每次
+            // 自述现投影（纯函数 + 晚绑定真值; 函数零副作用）。
+            let roster_config = roster_config.clone();
+            let roster_extras = backends.self_status_extras.clone();
+            let roster_workspace_present = backends.workspace_root.is_some();
+            let roster_bag = mcp_tool_bag.clone();
             let mut source = ProductionSelfStatusSource::new(
-                roster,
+                Vec::new(),
                 self_tuning_effective,
                 backends.workspace_root.clone(),
-            );
+            )
+            .with_roster_projection(Arc::new(move || {
+                let mut effective = roster_config.clone();
+                effective.mcp_registered_tools = roster_bag
+                    .as_ref()
+                    .map_or(0, |bag| bag.capabilities().len());
+                roster_from_config(
+                    &effective,
+                    roster_workspace_present,
+                    self_tuning_effective,
+                    retrieval_tuning_effective,
+                    typed_recall_effective,
+                    &roster_extras,
+                )
+            }));
             if let Some(probe) = &backends.self_status_ledger {
                 source = source.with_ledger_probe(Arc::clone(probe));
             }
@@ -1361,23 +1363,21 @@ impl ProductionModules {
         //（开关关 / 缺目录 = `None` = 槽保持空；fill 未知武装时 no-op）。
         bio_probe_slots.fill_ritual_store(bio_ritual_store.as_ref());
 
-        // External tool bridge (MCP): the slot is opt-in, and enabling it
-        // loads the server list at assembly time (env primary, data-directory
-        // stored document secondary) with fail-closed semantics. Connection
-        // and discovery are NOT triggered in production: the discovery entry
-        // point `McpToolBridge::refresh()` has zero production call sites, so
-        // no external tool reaches the runtime capability table. The server
-        // list was loaded above (before the roster projection) — a list with
-        // no enabled entry assembles an inert bridge, and the roster says so.
+        // External tool bridge (MCP): the slot is opt-in, and enabling it loads
+        // the server list at assembly time (env primary, data-directory stored
+        // document secondary) with fail-closed semantics. Discovery runs in the
+        // composition root at startup (the bridge's `refresh()` entry point),
+        // registering the discovered tools into this bag and into the runtime
+        // capability table — the roster reads the bag ⇒ the `mcp` row reports
+        // the **registered count**, never the list.
         let mut mcp_bridge = None;
         let mut mcp_module = None;
-        if let Some(server_config) = mcp_server_config {
+        if let (Some(server_config), Some(module)) = (mcp_server_config, mcp_tool_bag.clone()) {
             instrument.constructed(ModuleFamily::Mcp);
             let options = McpBridgeOptions::from_env();
             let bridge = McpToolBridge::new(server_config, options).map_err(|error| {
                 RuntimeError::misconfigured(format!("mcp tool bridge refused to assemble: {error}"))
             })?;
-            let module = Arc::new(McpModule::new());
             capabilities.extend(module.capabilities()); // 发现之前 extend 空袋 = 恒 no-op；动态工具不入静态能力表
             mcp_bridge = Some(Arc::new(bridge));
             mcp_module = Some(module);

@@ -300,10 +300,14 @@ async fn community_triage_reports_false_without_the_graph_slot() {
     assert_eq!(roster_of(&modules).await["community_triage"], false);
 }
 
-/// MCP 名册行的自报语义 (如实): 该行 = **桥 / 配置面已装配** (服务器列表已加载
-/// 且有 ≥1 enabled 条目), **不是**外部工具面可用 —— 外部工具面在生产未接线
-/// (发现 / 登记 / 授权三环零生产调用点, 见 docs/status/unwired-ledger.md W9),
-/// 故该行 true 与外部工具数零关系, 读数不可当「MCP 工具可用」。
+/// MCP 名册行的自报语义 (如实, 2026-11-05 接线批后): `mcp` 行 = **实际登记进
+/// 运行时能力表的外部工具件数 ≥ 1**（真接线口径: 发现 → 登记 → 族授权 + 逐次
+/// 人批 → 派发）。未接线 / 发现失败 / 无服务器 ⇒ 恒 false（fail-closed: 不宣称
+/// 未证实的工具面）。**旧口径消灭**: 「服务器列表已加载」不再占用 `mcp` 行,
+/// 改由 `mcp_bridge` 行承担（桥面已装配 = 配置面事实, 与件数无关）。
+///
+/// ⚠️ 装配期快照拿不到真实件数（接线在运行时建成之后才发生）⇒ 名册在自述
+/// **调用时**现投影（`roster_projection` 口），投影内部仍是纯函数。
 #[tokio::test]
 async fn mcp_row_reports_external_tools_only_when_the_bridge_serves() {
     let dir = tempfile::tempdir().expect("temp dir");
@@ -323,14 +327,19 @@ async fn mcp_row_reports_external_tools_only_when_the_bridge_serves() {
     let modules = ProductionModules::build(config, ProductionBackends::default(), clock())
         .expect("assembly builds");
     assert!(modules.mcp_bridge().is_some(), "桥必须装配");
-    // 断言: 开关开 + 有服务器配置 ⇒ 名册该行为 true。
-    // **口径注 (不是断言)**: 这个 true = 桥 / 配置面已装配, **不代表外部工具
-    // 面可用** —— 生产装配零外部工具 (发现 / 登记 / 授权三环零生产调用点), 故
-    // 该行 true 与外部工具数零关系, 读数不可当「MCP 工具可用」。
+    // 装配期**一件外部工具都没登记** ⇒ `mcp` 行照实 false（fail-closed:
+    // 不宣称未证实的工具面）。旧口径在这里报 true（「服务器列表已加载」）⇒
+    // 主人会误以为「MCP 工具可用」—— 那正是本批要消灭的读数陷阱。
     assert_eq!(
         roster_of(&modules).await["mcp"],
+        false,
+        "一件外部工具都没登记 ⇒ 名册 mcp 行照实 false (不宣称未证实的工具面)"
+    );
+    // 桥面已装配这一**配置面事实**由 `mcp_bridge` 行承担（与件数无关）。
+    assert_eq!(
+        roster_of(&modules).await["mcp_bridge"],
         true,
-        "开关开 + 有服务器配置 ⇒ 名册 mcp 行为 true (桥 / 配置面口径, 不等于外部工具面可用)"
+        "桥面已装配 ⇒ 名册 mcp_bridge 行为 true (配置面事实, 与件数无关)"
     );
 
     // 开关开 + 无服务器配置: 桥照常装配 (面在), 但服务器面空 —— 照实 false。
@@ -344,7 +353,12 @@ async fn mcp_row_reports_external_tools_only_when_the_bridge_serves() {
     assert_eq!(
         roster_of(&modules).await["mcp"],
         false,
-        "已启用但无服务器配置 = 服务器面空 ⇒ 照实 false (桥 / 配置面口径)"
+        "已启用但无服务器配置 = 服务器面空 ⇒ 照实 false"
+    );
+    assert_eq!(
+        roster_of(&modules).await["mcp_bridge"],
+        true,
+        "桥面已装配 (配置面事实) ⇒ 名册 mcp_bridge 行为 true"
     );
 
     // 开关关: 不装配、照实 false。

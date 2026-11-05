@@ -408,6 +408,9 @@ pub use bio_mechanism_probes::{
 pub struct ProductionSelfStatusSource {
     identity: SelfStatusIdentity,
     capabilities: Vec<CapabilitySwitch>,
+    /// 名册**现投影**口: `Some` ⇒ 每次自述按该投影重算名册行（晚绑定接线事实）;
+    /// `None` ⇒ 用装配期快照行。
+    roster_projection: Option<Arc<dyn Fn() -> Vec<CapabilitySwitch> + Send + Sync>>,
     ledger: Option<StatusProbe<MemoryLedgerStats>>,
     /// 问责计数探测口（影响声明 / 后果 / 待补救）。
     pub(crate) accountability: Option<StatusProbe<apeireth_tools_canonical::AccountabilityStats>>,
@@ -456,6 +459,7 @@ impl ProductionSelfStatusSource {
         Self {
             identity: SelfStatusIdentity::default(),
             capabilities,
+            roster_projection: None,
             ledger: None,
             accountability: None,
             credentials: None,
@@ -481,6 +485,21 @@ impl ProductionSelfStatusSource {
             device_control: None,
             bio_mechanisms: None,
         }
+    }
+
+    /// 接入名册**现投影**口 (晚绑定接线事实): 每次自述按该投影重算名册行。
+    ///
+    /// 用途: 外部工具面的**实际登记件数**在**启动期接线之后**才有数（发现 →
+    /// 登记 → 族授权 + 逐次人批 → 派发）, 装配期快照拿不到 ⇒ 名册在调用时
+    /// 现投影。投影内部仍走纯函数 [`roster_from_config`]（函数本身零副作用:
+    /// 只读入参, 不读 env, 不读运行时可变状态）。
+    #[must_use]
+    pub fn with_roster_projection(
+        mut self,
+        projection: Arc<dyn Fn() -> Vec<CapabilitySwitch> + Send + Sync>,
+    ) -> Self {
+        self.roster_projection = Some(projection);
+        self
     }
 
     /// 接入记忆账本计数探测口 (会话/记忆/保护/教训计数)。
@@ -967,9 +986,15 @@ impl ProductionSelfStatusSource {
         let (accountability, accountability_reason) =
             crate::accountability_probe::probe_accountability(&self.accountability);
 
+        // 名册行: 装配期快照 or **现投影**（晚绑定接线事实, 如外部工具登记件数）。
+        let capabilities = match &self.roster_projection {
+            Some(projection) => projection(),
+            None => self.capabilities.clone(),
+        };
+
         SelfStatusSnapshot {
             identity: self.identity.clone(),
-            capabilities: self.capabilities.clone(),
+            capabilities,
             memory_ledger,
             memory_ledger_reason,
             accountability,
@@ -1042,237 +1067,9 @@ impl SelfStatusSource for ProductionSelfStatusSource {
     }
 }
 
-/// 能力名册投影: 把**实际用于装配的** [`ProductionModulesConfig`] 与注入槽
-/// 存在性投影成开关全表 (真实生效值, 非配置文本), 外加组装根补充行
-/// (例如授权层的 `local_read_tools` 旋钮)。
-/// 补行批 (2026-11-04): 4 类「装配后才存在」的族 —— 侦察 / 外部适配器 / 游戏练习场 / 仪式完成; 后两族键名带 `_registered` = **已注册 ≠ 可调用** (治理无 grant, 调用恒拒)。
-///
-/// 本地文件工具行按**实际注册条件**取值 (配置开启且工作区根已注入才算生效),
-/// 名册不复述"配置说开"而注册没成的事实。同一口径延伸到挂在别的槽上的
-/// 开关 (开关生效链审计续): 记忆固化挂在记忆写入模块、检索深度自适应与
-/// 图社区分诊挂在记忆召回模块、前瞻召回挂在记忆召回模块、记忆注入挂在
-/// 记忆协调器 —— 上游槽缺席时下游开关静默失效, 名册一律照实报 false。
-/// `self_tuning` / `typed_recall` / `retrieval_tuning` 三个注入槽参数为接线事实,
-/// 本函数再 AND 上游槽 (自学习挂记忆召回, 类型化召回挂记忆协调器, 检索调权
-/// 挂记忆召回), 与配置行同口径。
-///
-/// MCP 外部工具桥一行的自报语义 (如实): 本行 = **桥 / 配置面已装配**, **不是**
-/// 外部工具面可用 —— 外部工具面在生产未接线 (发现 / 登记 / 授权三环零生产
-/// 调用点), 故本行 true 与外部工具数零关系。服务器配置的折叠由组装根在
-/// [`super::production::ProductionModules::build`] 完成 (配置坏 = 拒开, 语义不变)。
-///
-/// **纯函数口径** (2026-11-05 批): 本函数**只读 config 与入参, 不读进程 env**
-/// (同输入必同输出)。两族生物总闸 (`bio_play` / `bio_care_candidates`) 已折进
-/// [`ProductionModulesConfig`], 由组装根从**同一张开关表**解析后回填 (env 读取
-/// 收敛到装配根单入口); 解析失败时组装根硬失败, 默认 config 两总闸皆关 ⇒ fail-closed。
-pub fn roster_from_config(
-    config: &ProductionModulesConfig,
-    workspace_root_present: bool,
-    self_tuning: bool,
-    retrieval_tuning: bool,
-    typed_recall: bool,
-    extras: &[CapabilitySwitch],
-) -> Vec<CapabilitySwitch> {
-    // 生物开关 (ADR-0009 D3 单入口): 两族总闸值取自 config (装配根回填, 本函数不读
-    // env ⇒ 纯函数); 仪式面装配条件 = 总闸开 **且** 关怀数据目录已注入。
-    let ritual_registered = config.bio_care_candidates && config.care_schedule.is_some();
-    let mut roster = vec![
-        CapabilitySwitch::new("filesystem", config.filesystem && workspace_root_present),
-        CapabilitySwitch::new("search", config.search && workspace_root_present),
-        CapabilitySwitch::new("repo", config.repo && workspace_root_present),
-        CapabilitySwitch::new("shell", config.shell.is_some()),
-        CapabilitySwitch::new("fetch", config.fetch.is_some()),
-        // 内容流接入 (`tool.content_feed`, J1): 按实际注册条件取值 (配置注入
-        // 才算生效)。治理: RequireApproval 级 (拉取与入库都经审批档)。
-        CapabilitySwitch::new("content_feed", config.content_feed.is_some()),
-        // V3-a 双引擎主动关怀的规则面 (注册条件 = 数据目录已注入, 注册即闸),
-        // 名册按实际注册条件取值。
-        CapabilitySwitch::new("care_schedule", config.care_schedule.is_some()),
-        // G5 备份导出 (`tool.backup_export`, 注册条件 = 数据源配置已注入,
-        // 注册即闸), 名册按实际注册条件取值。
-        CapabilitySwitch::new("backup_export", config.backup.is_some()),
-        // V3-b 通用嗓发声 (`tool.voice_speak`, 注册条件 = 发声配置已注入,
-        // 注册即闸), 名册按实际注册条件取值。
-        CapabilitySwitch::new("voice_speak", config.voice_speak.is_some()),
-        // R3 生产情绪源接线: 情绪→语气微调的读取面已随发声配置注入 (每次发声
-        // 现读 presence/PAD 合成器现值; 无情绪数据仍零微调)。按**实际注入事实**
-        // 取值 —— 发声配置没带读取面 = 显式未接线, 名册照实 false。
-        CapabilitySwitch::new(
-            "voice_emotion_tune",
-            config
-                .voice_speak
-                .as_ref()
-                .is_some_and(|voice| voice.emotion_reader.is_some()),
-        ),
-        // V6-a 任务簿 (`tool.task_board`, 注册条件 = 任务队列已注入, 注册即闸),
-        // 名册按实际注册条件取值 (自述任务节与工具面同队同账)。
-        CapabilitySwitch::new("task_board", config.task_board.is_some()),
-        // 性格周报 (`tool.trait_report`, 裁定 ⑤, 注册条件 = 成长账落位已注入,
-        // 注册即闸), 名册按实际注册条件取值 (自述性格节与工具面同账)。
-        CapabilitySwitch::new("trait_report", config.trait_report.is_some()),
-        // V5-b 暴露面体检 (`tool.exposure_audit`, 注册条件 = 体检配置已注入,
-        // 注册即闸), 名册按实际注册条件取值。
-        CapabilitySwitch::new("exposure_audit", config.exposure_audit.is_some()),
-        // 自主度第一小步 · 边角料提案面 (`tool.proposal_draft`, 注册条件 = 提案
-        // 账落位已注入, 注册即闸 `APEIRETH_ENABLE_PROPOSALS` 默认关 fail-closed),
-        // 名册按实际注册条件取值 (自述提案节与工具面同账)。
-        CapabilitySwitch::new("proposals", config.proposals.is_some()),
-        // 受控文件写入 (`tool.apply_patch`): 主开关按实际注册条件取值 (配置开启
-        // 且工作区根已注入才算生效); 自动放行子档依赖主开关 —— 主开关没注册成,
-        // 子档无处生效, 名册照实说 false。
-        CapabilitySwitch::new("file_write", config.file_write && workspace_root_present),
-        CapabilitySwitch::new(
-            "file_write_auto_pass",
-            config.file_write_auto_pass && config.file_write && workspace_root_present,
-        ),
-        // 创作工具面 W1 · 图像操作 (`tool.image_ops`): 输出写归档**文件写入族**
-        // (读码定归档), 按实际注册条件取值 —— 开关 + `file_write` 唯一写总闸 +
-        // 工作区根三者齐备才算生效 (子依赖写总闸, fail-closed)。自述创作节与
-        // 工具面同一计数器。
-        CapabilitySwitch::new(
-            "image_ops",
-            config.image_ops && config.file_write && workspace_root_present,
-        ),
-        // 创作工具面 W2 · 文档操作 (`tool.doc_ops`): 按实际注册条件取值 ——
-        // 开关 + 配置落位即注册 (读面不背写总闸, 文档读是第一公民); 写动作
-        // 受 `file_write` 唯一写总闸约束 (运行时拒写不拒读)。自述创作节与
-        // 工具面同一计数器。
-        CapabilitySwitch::new("doc_ops", config.doc_ops.is_some()),
-        // 创作工具面 K3 · 表格操作 (`tool.sheet_ops`): 按实际注册条件取值 ——
-        // 开关 + 配置落位即注册 (读面不背写总闸, 表格读是第一公民); 写动作
-        // 受 `file_write` 唯一写总闸约束 (运行时拒写不拒读)。自述创作节与
-        // 工具面同一计数器。
-        CapabilitySwitch::new("sheet_ops", config.sheet_ops.is_some()),
-        // K 轴 L1 在场感知 (`tool.device_sense`, 注册条件 = 感知配置已注入,
-        // 注册即闸 `APEIRETH_ENABLE_DEVICE_SENSE` 默认关 fail-closed), 名册按
-        // 实际注册条件取值 (自述在场节与工具面同表同源)。
-        CapabilitySwitch::new("device_sense", config.device_sense.is_some()),
-        // K 轴 L1 天气读面 (`tool.weather`, 注册条件 = 天气配置已注入, 与
-        // `tool.device_sense` 同族一闸), 名册按实际注册条件取值。
-        CapabilitySwitch::new("weather", config.weather.is_some()),
-        // K 轴 L3/L4 受控执行 (`tool.device_control`, 注册条件 = 执行配置已
-        // 注入, 注册即闸: 双闸 `APEIRETH_ENABLE_DEVICE_SENSE` +
-        // `APEIRETH_ENABLE_DEVICE_CONTROL` 默认关 fail-closed), 名册按实际
-        // 注册条件取值 (自述设备节与工具面同账)。
-        CapabilitySwitch::new("device_control", config.device_control.is_some()),
-        // K 轴 L5 看家骨架 (`tool.guard_watch`, 注册条件 = 守护配置已注入,
-        // 双闸 `APEIRETH_ENABLE_DEVICE_SENSE` + `APEIRETH_ENABLE_GUARD_WATCH`),
-        // 名册按实际注册条件取值。
-        CapabilitySwitch::new("guard_watch", config.guard_watch.is_some()),
-        // git 写分级 (`tool.git_write`): 主开关按实际注册条件取值 (配置开启
-        // 且工作区根已注入才算生效); 「自动放行 L1」子档依赖主开关, 且只放
-        // L1 可逆本地写 —— L2 出网永远人批不入子档。
-        CapabilitySwitch::new("git_write", config.git_write && workspace_root_present),
-        CapabilitySwitch::new(
-            "git_write_auto_pass_l1",
-            config.git_write_auto_pass_l1 && config.git_write && workspace_root_present,
-        ),
-        // 干活能力轴 P2 (worktree 计划/落盘两级): 按实际注册条件取值 —— 开关
-        // + `file_write` 唯一写总闸 + 工作区根三者齐备才算生效 (子依赖写总闸,
-        // fail-closed); 写总闸没开, 两级照实 false。
-        CapabilitySwitch::new(
-            "worktree_plan",
-            config.worktree_plan && config.file_write && workspace_root_present,
-        ),
-        CapabilitySwitch::new(
-            "worktree_apply",
-            config.worktree_apply && config.file_write && workspace_root_present,
-        ),
-        CapabilitySwitch::new("mcp", config.mcp), // 名册 mcp 行 = 桥 / 配置面，不是外部工具面
-        // 书→技能沉淀 (I1): 写面按实际注册条件取值 (开关 + `file_write` 唯一写
-        // 总闸 + 工作区根 + 技能库目录齐备才算生效, fail-closed); 只读检索按
-        // (开关 + 技能库目录) 取值, 不依赖写总闸。
-        CapabilitySwitch::new(
-            "skill_distill",
-            config.skill_distill
-                && config.file_write
-                && workspace_root_present
-                && config.skills_dir.is_some(),
-        ),
-        CapabilitySwitch::new(
-            "skill_search",
-            config.skill_search && config.skills_dir.is_some(),
-        ),
-        CapabilitySwitch::new("education", config.education),
-        CapabilitySwitch::new("memory_recall", config.memory_recall),
-        CapabilitySwitch::new("memory_writeback", config.memory_writeback),
-        CapabilitySwitch::new(
-            "memory_injection",
-            config.memory_injection && (config.memory_recall || config.memory_writeback),
-        ),
-        CapabilitySwitch::new(
-            "proactive_recall",
-            config.proactive_recall.is_some() && config.memory_recall,
-        ),
-        // 类型化召回候选只走记忆协调器 (记忆召回或记忆写入在场), 同口径。
-        CapabilitySwitch::new(
-            "typed_recall",
-            typed_recall && (config.memory_recall || config.memory_writeback),
-        ),
-        CapabilitySwitch::new("preference_recall", config.preference_recall),
-        CapabilitySwitch::new("preference_learning", config.preference_learning),
-        // 记忆固化挂在记忆写入模块 (`with_consolidation`): 写入模块缺席时
-        // 静默失效, 名册照实 false (按实际注册条件取值)。
-        CapabilitySwitch::new(
-            "consolidation",
-            config.consolidation && config.memory_writeback,
-        ),
-        // V4-a 人格提取步挂在记忆写入模块的整编触发点 (`with_persona_layer`):
-        // 人格层落库面缺席由组装根折进生效视图, 这里再 AND 上游槽 (写入模块 +
-        // 整编触发点) —— 上游槽缺席时静默失效, 名册照实 false。
-        CapabilitySwitch::new(
-            "persona_consolidation",
-            config.persona_consolidation && config.consolidation && config.memory_writeback,
-        ),
-        // V4-b 散列增量门挂在记忆写入模块的整编触发点 (`with_ingest_gate`):
-        // 散列门落库面缺席由组装根折进生效视图, 这里再 AND 上游槽 (写入模块 +
-        // 整编触发点) —— 上游槽缺席时静默失效, 名册照实 false。
-        CapabilitySwitch::new(
-            "consolidation_hash_gate",
-            config.consolidation_hash_gate && config.consolidation && config.memory_writeback,
-        ),
-        CapabilitySwitch::new("reflexion", config.reflexion),
-        CapabilitySwitch::new("self_assessment", config.self_assessment),
-        CapabilitySwitch::new("judge", config.judge.enabled),
-        CapabilitySwitch::new("council", config.council),
-        CapabilitySwitch::new("organs", config.organs),
-        CapabilitySwitch::new("partner_bond", config.partner_bond),
-        // 检索深度自适应挂在记忆召回模块 (`with_morphology_recall`), 同口径。
-        CapabilitySwitch::new(
-            "morphology_recall",
-            config.morphology_recall && config.memory_recall,
-        ),
-        // 图社区分诊挂在记忆召回模块 (`with_community_triage`), 同口径
-        // (图谱槽在否由组装根折进生效视图)。
-        CapabilitySwitch::new(
-            "community_triage",
-            config.community_triage && config.memory_recall,
-        ),
-        CapabilitySwitch::new("absorption_insight", config.absorption_insight),
-        // 自学习信号只走记忆召回模块 (`with_self_tuning`): 召回缺席时接线
-        // 无处生效, 名册照实 false (接线事实 AND 上游槽)。
-        CapabilitySwitch::new("self_tuning", self_tuning && config.memory_recall),
-        // V4-c 检索调权 (`APEIRETH_ENABLE_RETRIEVAL_TUNING`, 默认关 fail-closed)
-        // 挂记忆召回模块 (`with_retrieval_tuning`): 召回缺席时注入回执面无处
-        // 供给, 名册照实 false (接线事实 AND 上游槽)。
-        CapabilitySwitch::new("retrieval_tuning", retrieval_tuning && config.memory_recall),
-        // 补行批 (2026-11-04): 4 类「装配后才存在」的族 —— 侦察 (`tool.recon.*`,
-        // 9 件) 与外部适配器 (`tool.external.*`, 10 件) 按**实际注册条件**取值;
-        // 游戏练习场 (`tool.play_*`, 4 件) 与仪式完成 (`tool.ritual_done/skip`,
-        // 2 件) 是**已注册 ≠ 可调用** (治理面无 grant, 模型调用恒拒), 名册只报
-        // 注册事实, 不冒充可调 (键名带 `_registered` 后缀即此义)。
-        CapabilitySwitch::new("recon", config.recon.is_some() && workspace_root_present),
-        CapabilitySwitch::new("external", config.external.is_some()),
-        CapabilitySwitch::new("play_registered", config.bio_play && workspace_root_present),
-        CapabilitySwitch::new("ritual_registered", ritual_registered),
-    ];
-    roster.extend(extras.iter().cloned());
-    roster.sort_by(|a, b| a.name.cmp(&b.name));
-    roster
-}
-
 #[cfg(test)]
 mod tests {
+    use super::super::self_status_roster::roster_from_config;
     use super::*;
 
     #[test]

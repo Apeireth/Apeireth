@@ -142,6 +142,8 @@ pub mod retrieval_tuning_wire;
 #[path = "canonical/ritual_tools.rs"]
 pub mod ritual_tools;
 /// 「性格养成」第一铲: 自校准接线层 (引擎落地 + tuning-log.jsonl 落盘)。
+#[path = "canonical/self_status_roster.rs"]
+pub mod self_status_roster;
 #[path = "canonical/self_status_source.rs"]
 pub mod self_status_source;
 #[path = "canonical/self_tuning_wire.rs"]
@@ -280,13 +282,14 @@ pub use ritual_tools::{
     RitualSkipTool, RITUAL_CAPABILITY_IDS, RITUAL_DONE_CAPABILITY_ID, RITUAL_DONE_TOOL_NAME,
     RITUAL_SKIP_CAPABILITY_ID, RITUAL_SKIP_TOOL_NAME,
 };
+pub use self_status_roster::roster_from_config;
 pub use self_status_source::{
     budget_status_from_configured, budget_status_from_constants, care_status_probe,
     cost_routing_probe, device_control_status_probe, doc_ops_status_probe, domain_status_probe,
     image_ops_status_probe, max_rounds_per_turn_constant, max_tool_calls_per_round_constant,
-    persona_status_probe, roster_from_config, session_quota_probe, sheet_ops_status_probe,
-    task_board_status_probe, ProductionSelfStatusSource, BUDGET_SOURCE_CONFIGURED,
-    BUDGET_SOURCE_CONFIGURED_NOTE, BUDGET_SOURCE_CONSTANT,
+    persona_status_probe, session_quota_probe, sheet_ops_status_probe, task_board_status_probe,
+    ProductionSelfStatusSource, BUDGET_SOURCE_CONFIGURED, BUDGET_SOURCE_CONFIGURED_NOTE,
+    BUDGET_SOURCE_CONSTANT,
 };
 pub use self_tuning_wire::{
     consolidation_cadence_turns, migrate_legacy_tuning_log_file, tuning_log_path,

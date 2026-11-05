@@ -25,12 +25,16 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use apeireth_core::clock::VirtualClock;
-use apeireth_core::kernel::{Clock, Timestamp};
+use apeireth_core::kernel::{CapabilityId, Clock, Timestamp};
+use apeireth_core::stored_doc;
 use apeireth_governance::{Decision, PermissionPolicy};
 use apeireth_plugin::ToolCapability;
-use apeireth_protocol::canonical::ToolCall;
+use apeireth_protocol::canonical::{NormalizedTool, ToolCall, ToolParameters, ToolResult};
 use apeireth_runtime_assembly::{
     roster_from_config, ProductionBackends, ProductionModules, ProductionModulesConfig,
+};
+use apeireth_tools_canonical::mcp_bridge::{
+    doc_compat, server_list_path, McpServerConfig, McpServerSpec,
 };
 use apeireth_tools_canonical::recon::Scope;
 use apeireth_tools_canonical::{ExternalToolsConfig, ReconConfig, SELF_STATUS_SECTIONS};
@@ -430,4 +434,164 @@ async fn an_invalid_switchboard_parameter_refuses_the_assembly() {
         error.to_string().contains("nervous switchboard"),
         "拒绝原因必须指向开关表解析, got: {error}"
     );
+}
+
+// ---- 外部工具面 (协议桥) 口径批 (2026-11-05): 「外部工具面实际可用」 ----
+//
+// 名册两行, 口径**分离** (读数陷阱消灭):
+// - `mcp` = **外部工具面实际可用** = 实际登记进运行时能力表的外部工具件数 ≥ 1
+//   (真接线口径: 发现 → 登记 → 族授权 + 逐次人批 → 派发); 未接线 / 发现失败 /
+//   无服务器 ⇒ 恒 false (fail-closed: 不宣称未证实的工具面)。
+// - `mcp_bridge` = **桥面已装配** (配置面事实: 开关开且服务器列表已加载) —— 与
+//   工具件数无关, 不冒充「外部工具面可用」。
+//
+// 场景构造: 开关开 + 服务器列表已加载 (1 个 enabled 条目) 但**未接线** ⇒ 一件
+// 外部工具都没登记 ⇒ `mcp` 照实 false (旧口径在这里会报 true ⇒ 骗人); 再往
+// 模块袋登记一件 ⇒ `mcp` 照实 true。
+
+/// 一件最小的外部工具 (只用于「登记件数」断言, 不真调外部服务器)。
+struct ProbeExternalTool {
+    id: CapabilityId,
+    name: String,
+}
+
+#[async_trait::async_trait]
+impl ToolCapability for ProbeExternalTool {
+    fn id(&self) -> &CapabilityId {
+        &self.id
+    }
+
+    fn declaration(&self) -> NormalizedTool {
+        NormalizedTool {
+            name: self.name.clone(),
+            description: Some("probe".to_string()),
+            parameters: ToolParameters::new(),
+            strict: false,
+        }
+    }
+
+    async fn invoke(&self, _call: &ToolCall) -> ToolResult {
+        ToolResult::ok("call_probe", serde_json::json!({}))
+    }
+}
+
+/// 外部工具面装配: 开关开 + 服务器列表已加载 (1 个 enabled 条目), 未接线。
+async fn external_tool_face(tag: &str) -> ProductionModules {
+    let dir = workspace(tag);
+    let body = McpServerConfig::new(vec![McpServerSpec::stdio("demo", "demo-server")]);
+    stored_doc::save_single(
+        &server_list_path(&dir),
+        &doc_compat(),
+        body,
+        stored_doc::DEFAULT_DOC_MODE,
+    )
+    .expect("保存服务器列表");
+    let mut config = base_config();
+    config.mcp = true;
+    config.mcp_data_dir = Some(dir);
+    ProductionModules::build(config, ProductionBackends::default(), clock()).expect("装配必须成功")
+}
+
+/// 外部工具面 ①: 两行**恒在场**; 开关关 ⇒ 照实 false (不宣称未证实的工具面)。
+#[tokio::test]
+async fn the_external_tool_rows_always_exist_and_are_false_when_the_switch_is_off() {
+    let _guard = env_lock();
+    let modules = ProductionModules::build(base_config(), ProductionBackends::default(), clock())
+        .expect("装配必须成功");
+    let frame = self_status_frame(&modules).await;
+    let capabilities = frame["capabilities"]
+        .as_object()
+        .expect("capabilities 是对象");
+    assert!(capabilities.contains_key("mcp"), "名册必须有 mcp 行");
+    assert!(
+        capabilities.contains_key("mcp_bridge"),
+        "名册必须有 mcp_bridge 行"
+    );
+    assert_eq!(
+        frame["capabilities"]["mcp"], false,
+        "开关关 ⇒ 外部工具面照实 false"
+    );
+    assert_eq!(
+        frame["capabilities"]["mcp_bridge"], false,
+        "开关关 ⇒ 桥面未装配"
+    );
+}
+
+/// 外部工具面 ② (**本批核心**): 开关开 + 服务器列表已加载, 但**一件工具都没
+/// 登记** (未接线 / 发现失败) ⇒ `mcp` 行照实 **false** —— 旧口径 (服务器列表已
+/// 加载) 在这里会报 true ⇒ 骗人; `mcp_bridge` 行照实 true (桥面已装配, 与件数
+/// 无关, 不冒充「外部工具面可用」)。
+#[tokio::test]
+async fn the_mcp_row_is_false_when_no_external_tool_is_registered() {
+    let _guard = env_lock();
+    let modules = external_tool_face("mcp-unwired").await;
+    assert!(modules.mcp_bridge().is_some(), "桥必须装配");
+    let frame = self_status_frame(&modules).await;
+    assert_eq!(
+        frame["capabilities"]["mcp"], false,
+        "一件外部工具都没登记 ⇒ 外部工具面照实 false (旧口径会报 true ⇒ 骗人)"
+    );
+    assert_eq!(
+        frame["capabilities"]["mcp_bridge"], true,
+        "桥面已装配 (配置面事实) 与工具件数无关"
+    );
+}
+
+/// 外部工具面 ③: 真的登记了一件外部工具 ⇒ `mcp` 行照实 true (工具面实际可用)。
+#[tokio::test]
+async fn the_mcp_row_is_true_once_an_external_tool_is_registered() {
+    let _guard = env_lock();
+    let modules = external_tool_face("mcp-registered").await;
+    let bag = modules.mcp_module().expect("模块袋在位").clone();
+    bag.register_tool(Arc::new(ProbeExternalTool {
+        id: CapabilityId::new("tool.mcp.demo.probe").expect("合法能力 id"),
+        name: "mcp:demo:probe".to_string(),
+    }))
+    .expect("外部工具登记进模块袋");
+
+    let frame = self_status_frame(&modules).await;
+    assert_eq!(
+        frame["capabilities"]["mcp"], true,
+        "登记了一件外部工具 ⇒ 外部工具面照实 true"
+    );
+    assert_eq!(
+        frame["capabilities"]["mcp_bridge"], true,
+        "桥面已装配 (配置面事实) 与工具件数无关"
+    );
+}
+
+/// 外部工具面 ④ (纯函数口径, 2026-11-05): 名册投影**只读 config** —— 件数由
+/// config 的 `mcp_registered_tools` 承载 (装配根回填口径): 开关开且件数 ≥ 1 ⇒
+/// `mcp` true; 件数 0 ⇒ false; 开关关 ⇒ false (即便件数非 0); `mcp_bridge` 行
+/// 只读**桥面事实** (与件数无关)。
+#[test]
+fn the_roster_projection_reads_the_registered_count_from_the_config() {
+    let mut config = base_config();
+    let mut roster = roster_map(&config, true);
+    assert_eq!(roster["mcp"], false, "默认: 未接线 ⇒ 照实 false");
+    assert_eq!(roster["mcp_bridge"], false, "默认: 桥面未装配 ⇒ false");
+
+    // 开关开 + 确实登记了工具 ⇒ true。
+    config.mcp = true;
+    config.mcp_registered_tools = 3;
+    roster = roster_map(&config, true);
+    assert_eq!(roster["mcp"], true, "开关开 + 登记 3 件 ⇒ 外部工具面 true");
+    assert_eq!(
+        roster["mcp_bridge"], false,
+        "桥面行只读桥面事实 (与件数无关)"
+    );
+
+    // 开关开但一件都没登记 ⇒ false (旧口径在这里会报 true ⇒ 骗人)。
+    config.mcp_registered_tools = 0;
+    roster = roster_map(&config, true);
+    assert_eq!(
+        roster["mcp"], false,
+        "开关开 + 一件没登记 ⇒ 照实 false (旧口径会报 true ⇒ 骗人)"
+    );
+
+    // 开关关 ⇒ false (件数非零也不宣称)。
+    config.mcp = false;
+    config.mcp_registered_tools = 3;
+    roster = roster_map(&config, true);
+    assert_eq!(roster["mcp"], false, "开关关 ⇒ 照实 false");
 }
