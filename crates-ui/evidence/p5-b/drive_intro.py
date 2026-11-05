@@ -621,9 +621,26 @@ def main():
         production_vs_engine = []
         for key, leg in report.get("legs", {}).items():
             for backend, segment in (leg.get("pixel_diff") or {}).items():
-                production_vs_engine.append(
-                    {"leg": key, "backend": backend, **(segment if isinstance(segment, dict) else {})}
-                )
+                entry = {
+                    "leg": key,
+                    "backend": backend,
+                    **(segment if isinstance(segment, dict) else {}),
+                }
+                # ⚠️⚠️ **「不适用」必须显式标记**（2026-11-05 实测踩过）：
+                #   某后端**结构性不支持**这条腿（如点图元在 WebGPU 上**没有点尺寸**
+                #   ⇒ ⇒ `Topology::PointList` 在 WebGPU 后端根本不可用）
+                #   ⇒ ⇒ 该对照对这条腿**不适用** ⇒ ⇒ **不是「失败」**。
+                #   ⇒ ⇒⇒ 但本条判据以前**没标** ⇒ ⇒ `_zero` 撞上 `skipped`
+                #   ⇒ ⇒⇒ ⇒ 报成 `status: fail` ⇒ ⇒⇒ 而**所有实测行都是 0 差异**
+                #   ⇒ ⇒⇒ ⇒ ⇒ 读报告的人会以为「引擎坏了」⇒ ⇒⇒ ⇒ 那是**误判**。
+                #   ⇒ ⇒⇒ ⇒ 现在：标 `not_applicable`（**不隐藏**，照样留在 measured 里）。
+                if not leg.get("valid", True):
+                    entry["not_applicable"] = True
+                    entry["not_applicable_reason"] = (
+                        "该腿有后端不可用（见 report.legs_invalid / invalid_backends）"
+                        "⇒ 「生产 vs 引擎」对本腿不适用"
+                    )
+                production_vs_engine.append(entry)
 
         def _zero(entries, key="differing_pixels"):
             """判据的通过条件：**每一条**都必须可比较且差 0 像素。"""
@@ -683,10 +700,22 @@ def main():
                 "threshold": {"differing_pixels": 0, "channel_threshold": CHANNEL_THRESHOLD},
                 "mandatory": False,
                 "measured": production_vs_engine,
+                # ⚠️ 与 `engine_dual_backend_parity` **同一口径**：先剔掉「不适用」的腿
+                #   ⇒ ⇒ 否则合法的 N/A 会被判成 fail（2026-11-05 实测踩过）。
                 "status": (
                     "pass"
-                    if _zero(production_vs_engine) is True
-                    else ("fail" if _zero(production_vs_engine) is False else "inconclusive")
+                    if _zero(
+                        [e for e in production_vs_engine if not e.get("not_applicable")]
+                    )
+                    is True
+                    else (
+                        "fail"
+                        if _zero(
+                            [e for e in production_vs_engine if not e.get("not_applicable")]
+                        )
+                        is False
+                        else "inconclusive"
+                    )
                 ),
             },
         ]
