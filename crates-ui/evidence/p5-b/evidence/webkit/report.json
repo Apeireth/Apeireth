@@ -29,7 +29,7 @@
     "failures": [],
     "payload": "value=Some(\"a\");pos=None;checked=Some(false)",
     "g8_error_boundary_ok": true,
-    "g8_captured_error": "Unsupported: create_element() 失败：JsValue(InvalidCharacterError: The string contains invalid characters.\ncreateElement@[native code]\n@tauri://localhost/engine/pkg/p5b_harness.js:1250:43\nhandleError@tauri://localhost/engine/pkg/p5b_harness.js:3616:23\n<web_sys[87fce178bfa1bdc9]::features::gen_Document::Document>::create_element::__wbg_createElement_74049073a11f9c31 externref shim@p5b_harness.wasm:wasm-function[7442]\n<web_sys[87fce178bfa1bdc9]::features::gen_Document::Document>::create_element@p5b_harness.wasm:wasm-function[6240]\n<apeireth_ui_dom[cb50d36515770dc0]::web::WebDom as apeireth_ui_dom[cb50d36515770dc0]::dom::Dom>::create_element@p5b_harness.wasm:wasm-function[3840]\n<apeireth_ui_dom[cb50d36515770dc0]::renderer::Renderer<apeireth_ui_dom[cb50d36515770dc0]::web::WebDom>>::mount_node@p5b_harness.wasm:wasm-function[821]\n2096@wasm-function[2096]\n1587@wasm-function[1587]\n696@wasm-function[696]\n5686@wasm-function[5686]\n6902@wasm-function[6902]\nl1_probe@tauri://localhost/engine/pkg/p5b_harness.js:502:30\nmain@tauri://localhost:124:37)",
+    "g8_captured_error": "Unsupported: create_element() 失败：JsValue(InvalidCharacterError: The string contains invalid characters.\ncreateElement@[native code]\n@tauri://localhost/engine/pkg/p5b_harness.js:1250:43\nhandleError@tauri://localhost/engine/pkg/p5b_harness.js:3616:23\n<web_sys[87fce178bfa1bdc9]::features::gen_Document::Document>::create_element::__wbg_createElement_74049073a11f9c31 externref shim@p5b_harness.wasm:wasm-function[7447]\n<web_sys[87fce178bfa1bdc9]::features::gen_Document::Document>::create_element@p5b_harness.wasm:wasm-function[6244]\n<apeireth_ui_dom[cb50d36515770dc0]::web::WebDom as apeireth_ui_dom[cb50d36515770dc0]::dom::Dom>::create_element@p5b_harness.wasm:wasm-function[3842]\n<apeireth_ui_dom[cb50d36515770dc0]::renderer::Renderer<apeireth_ui_dom[cb50d36515770dc0]::web::WebDom>>::mount_node@p5b_harness.wasm:wasm-function[821]\n2100@wasm-function[2100]\n1589@wasm-function[1589]\n696@wasm-function[696]\n5691@wasm-function[5691]\n6907@wasm-function[6907]\nl1_probe@tauri://localhost/engine/pkg/p5b_harness.js:502:30\nmain@tauri://localhost:124:37)",
     "g8_panic_hook": "installed",
     "engine_form": {
       "x": 16,
@@ -53,7 +53,7 @@
   "asyncLineArm": {
     "armed": true
   },
-  "asyncTick": 1,
+  "asyncTick": 2,
   "ok": false,
   "failures": [
     "不是 WebKitGTK（UA=''）⇒ ⇒ 这次**不算** WebKitGTK 证据"
