@@ -706,6 +706,19 @@ fn active_session_key() -> Option<String> {
     ACTIVE_SESSION_KEYS.with(|keys| keys.borrow().last().cloned())
 }
 
+/// 当前**生效值桶**的键（**分桶的唯一口径**）。
+///
+/// ⇒ 与 [`install_effective`] / [`effective_ranking_or`] / [`entry_salience`] /
+/// [`effective_installed`] 的落桶**完全同一个键**：有会话作用域 ⇒ 作用域的键;
+/// 没有 ⇒ 进程级默认桶键。
+///
+/// ⚠️ **只读查询面**（**不引入第二套分桶语义**）⇒ ⇒ 接线层可以按**同一个键**
+/// 给「调权**学习**状态」分桶 ⇒ ⇒ 学习与生效值落地**同一会话口径**
+/// ⇒ ⇒ 多会话不串扰（否则 A 学出来的权重会被 B 的引擎继承）。
+pub fn effective_bucket_key() -> String {
+    active_session_key().unwrap_or_else(|| DEFAULT_SESSION_KEY.to_string())
+}
+
 /// 生效检索排序状态: 层权重 + 条目显著性表。
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct EffectiveRanking {
@@ -720,8 +733,7 @@ pub struct EffectiveRanking {
 /// ⚠️ **会话维度**：有会话作用域 ⇒ 装进**该会话的桶**；没有 ⇒ 装进进程级
 /// 默认桶（旧口径不变 ⇒ 既有调用点照旧可用）。
 pub fn install_effective(value: EffectiveRanking) {
-    let key = active_session_key().unwrap_or_else(|| DEFAULT_SESSION_KEY.to_string());
-    install_effective_for_session(&key, value);
+    install_effective_for_session(&effective_bucket_key(), value);
 }
 
 /// 按**会话**安装生效检索排序（显式会话维度 ⇒ 不依赖作用域）。
@@ -754,8 +766,7 @@ pub fn clear_effective_for_session(session_key: &str) {
 ///
 /// ⚠️ **会话维度**：有会话作用域 ⇒ 读**该会话的桶**（没有则回落进程级默认桶）。
 pub fn effective_ranking_or(fallback: MemoryRankingConfig) -> MemoryRankingConfig {
-    let key = active_session_key().unwrap_or_else(|| DEFAULT_SESSION_KEY.to_string());
-    effective_ranking_or_for_session(&key, fallback)
+    effective_ranking_or_for_session(&effective_bucket_key(), fallback)
 }
 
 /// 按**会话**读生效层权重：**会话桶 → 进程级默认桶 → 调用方传入值**。
@@ -777,8 +788,7 @@ pub fn effective_ranking_or_for_session(
 
 /// 读条目显著性 (无 override / 未调条目 = 0)。
 pub fn entry_salience(memory_id: &str) -> f64 {
-    let key = active_session_key().unwrap_or_else(|| DEFAULT_SESSION_KEY.to_string());
-    entry_salience_for_session(&key, memory_id)
+    entry_salience_for_session(&effective_bucket_key(), memory_id)
 }
 
 /// 按**会话**读条目显著性（会话桶 → 进程级默认桶 → 0）。
@@ -795,8 +805,7 @@ pub fn entry_salience_for_session(session_key: &str, memory_id: &str) -> f64 {
 
 /// 生效 override 是否在场 (诊断/自述用)。
 pub fn effective_installed() -> bool {
-    let key = active_session_key().unwrap_or_else(|| DEFAULT_SESSION_KEY.to_string());
-    effective_installed_for_session(&key)
+    effective_installed_for_session(&effective_bucket_key())
 }
 
 /// 按**会话**看生效 override 是否在场（含进程级默认桶的回落）。

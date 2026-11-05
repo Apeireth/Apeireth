@@ -55,6 +55,23 @@ pub trait CredentialWriter: Send + Sync {
         self.write(name, value)?;
         Err("该凭据写入端不支持端点绑定声明（凭据已写入，但绑定未登记）".to_string())
     }
+
+    /// 该凭据**已声明**的端点（`None` = **未声明** ⇒ 不参与绑定闸；空 `Some` = 声明了但为空）。
+    ///
+    /// # 为什么需要它（2026-11-04 · 端点绑定闸的连带残留）
+    /// 绑定闸（`apeireth_provider::endpoint_binding`）在凭据**未声明绑定**时
+    /// **不拦**（2026-11-01 P1 的有意权衡：否则正常的自建端点会被全部打死）。
+    /// ⇒ ⇒ 于是「**只改端点、不带凭据**」时，若这把凭据**从未声明绑定**，
+    /// 它会**静默跟随**到新端点 ⇒ ⇒ 真实 API key 可能被发往非预期主机。
+    ///
+    /// ⇒ ⇒ 本方法让网关能**读出**绑定状态 ⇒ ⇒ 在热更响应里**如实告警**
+    /// （「失败显式化 ⇒ 没有静默降级」）⇒ ⇒ 而不是假装没有这回事。
+    ///
+    /// ⚠️ 默认实现返回 `None`（「该写入端不可知」）⇒ ⇒ 与同 trait 既有
+    /// 「默认实现 = 如实报失败」风格一致 ⇒ ⇒ **不假装**绑定存在。
+    fn bound_endpoints(&self, _name: &str) -> Option<Vec<String>> {
+        None
+    }
 }
 
 /// Capability flags carried by the hot config.
@@ -255,6 +272,46 @@ pub async fn admin_config_update(
             "capabilities 仅存 gateway 热配置状态并在 GET 回显; 无法对运行中的 provider 图热生效"
                 .to_string(),
         );
+    }
+
+    // ⚠️ **只改端点、不带凭据** ⇒ ⇒ 这把凭据将**跟随**到新端点
+    // ⇒ ⇒ 若它**从未声明绑定** ⇒ ⇒ 绑定闸不拦 ⇒ ⇒ 真实 key 可能被发往非预期主机
+    // ⇒ ⇒ 这里**如实告警**（2026-11-04）：失败显式化 ⇒ 没有静默降级。
+    // ⇒ ⇒ 顺带把「显式绑定」的做法告诉操作者（同笔提交 api_key）。
+    if patch.base_url.is_some() && patch.api_key.is_none() {
+        let name = credential_name(&provider);
+        let declared = state
+            .services
+            .credentials
+            .as_ref()
+            .and_then(|writer| writer.bound_endpoints(&name));
+        match declared {
+            None => warnings.push(format!(
+                "凭据 {name} **未声明端点绑定** ⇒ 本次只改端点 ⇒ 该凭据将被发往 {}                  （要显式绑定：请与 base_url **同笔**提交 api_key）",
+                patch.base_url.as_deref().unwrap_or_default()
+            )),
+            Some(list) if list.is_empty() => warnings.push(format!(
+                "凭据 {name} 的端点绑定**为空** ⇒ 本次只改端点 ⇒ 该凭据将被发往 {}                  （要显式绑定：请与 base_url **同笔**提交 api_key）",
+                patch.base_url.as_deref().unwrap_or_default()
+            )),
+            Some(list) => {
+                let target = patch.base_url.as_deref().unwrap_or_default();
+                let matches = list.iter().any(|raw| {
+                    raw.trim_start_matches("https://")
+                        .trim_start_matches("http://")
+                        .trim_end_matches('/')
+                        == target
+                            .trim_start_matches("https://")
+                            .trim_start_matches("http://")
+                            .trim_end_matches('/')
+                });
+                if !matches {
+                    warnings.push(format!(
+                        "凭据 {name} 当前绑定在 {list:?}，与新端点 {target} **不一致**                          ⇒ 绑定闸会在下一次请求时**拒发**该凭据                          （要让它跟随新端点：请与 base_url **同笔**提交 api_key 重新声明绑定）"
+                    ));
+                }
+            }
+        }
     }
 
     if let Some(api_key) = patch.api_key.as_deref() {

@@ -14,6 +14,13 @@
 //! ([`RetrievalTuningWire::from_env`]); 默认关 fail-closed。关 = 无回执、
 //! 无证据、无调权、无账。
 //!
+//! **会话维度** (多会话串扰修复, 2026-11-04): 调权**学习**按**会话隔离** ⇒ ⇒
+//! 每个会话一套「引擎 + 待决注入集」⇒ ⇒ A 会话调权学到的权重**不会**进 B
+//! 会话的引擎 ⇒ ⇒ B 的检索不会吃到 A 学出来的权重。
+//! ⇒ ⇒ 桶键口径 = 生效值落地的口径 (同一套键, 见
+//! [`apeireth_memory::retrieval_tuning::effective_bucket_key`]) ⇒ ⇒ 不新造
+//! 第二套分桶语义。
+//!
 //! **0 装诚实**:
 //! - 持久化失败 fail-open (调整仍生效) 但计入 [`RetrievalTuningWire::log_failures`],
 //!   不静默吞掉"账丢了";
@@ -22,6 +29,7 @@
 //! - 空召回轮不是机会轮 (检索什么都没命中 = 对已注入条目无证据), 证据保持
 //!   待决, 绝不拿"没有回执"当负信号。
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -81,16 +89,69 @@ struct PendingRound {
     receipts: Vec<SelectedAttribution>,
 }
 
+/// **一个会话的调权学习状态** (按会话隔离 ⇒ 互不串扰)。
+#[derive(Debug)]
+struct SessionTuningState {
+    /// 该会话的调权引擎 (层权重 + 条目显著性 + 证据账 + 漂移监控)。
+    engine: RetrievalTuningEngine,
+    /// 该会话的待决注入集 (上个有选中回执的注入集; **不跨会话** ⇒ ⇒
+    /// A 会话的注入集不会被 B 会话的回执裁决)。
+    pending: Option<PendingRound>,
+    /// 最近更新序号 (诊断面: 谁的待决集是最近的)。
+    updated: u64,
+}
+
+impl SessionTuningState {
+    fn new() -> Self {
+        Self {
+            engine: new_tuning_engine(),
+            pending: None,
+            updated: 0,
+        }
+    }
+}
+
+/// 构造**会话级**调权引擎 (基线默认权重 + 检索质量漂移监控)。
+///
+/// ⚠️ 参数口径: EMA α=0.05 (基线稳、迟钝) · |z|≥2.0 算偏离 · **连续 3 批**
+/// 才告警 ⇒ ⇒ 单批波动**不告警** (防假告警)。
+fn new_tuning_engine() -> RetrievalTuningEngine {
+    // 记忆线 (2026-11-03): 给自进化引擎挂上**检索质量漂移监控**
+    // ⇒ ⇒ 每批证据的命中率进监控器 ⇒ ⇒ 连续多批偏离才告警
+    // ⇒ ⇒ **这就是 `QualityDriftMonitor` 的生产消费点** (此前全仓零消费者)。
+    RetrievalTuningEngine::new().with_quality_drift(QualityDriftMonitor::new(
+        &[apeireth_memory::retrieval_tuning::RETRIEVAL_HIT_RATE_METRIC],
+        0.05,
+        2.0,
+        3,
+    ))
+}
+
 /// 检索维度自进化接线层: 回执 → 证据 → 引擎调权 → 账落盘 + 生效值落地。
+///
+/// ⚠️ **会话维度** (多会话串扰修复, 2026-11-04): 调权**学习**按**会话隔离**
+/// ⇒ ⇒ 每个会话一套「引擎 + 待决注入集」⇒ ⇒ A 会话调权学到的权重**不会**
+/// 进 B 会话的引擎 ⇒ ⇒ B 的检索不会吃到 A 学出来的权重。
 #[derive(Debug)]
 pub struct RetrievalTuningWire {
-    engine: Mutex<RetrievalTuningEngine>,
+    /// **按会话分桶**的调权学习状态 (引擎 + 待决注入集)。
+    ///
+    /// ⚠️ **桶键口径 = 生效值落地的口径** (同一套键 ⇒ 不新造第二套分桶语义):
+    /// [`apeireth_memory::retrieval_tuning::effective_bucket_key`] ⇒ ⇒ 读侧
+    /// (`effective_ranking_or_for_session`) 与写侧**同一个桶**。
+    sessions: Mutex<BTreeMap<String, SessionTuningState>>,
+    /// 进程级「最近一次调权真值」 (诊断面; **学习**本身按会话隔离)。
+    last_move: Mutex<Option<RetrievalTuningRecord>>,
+    /// 进程级「最近一批漂移告警明细」 (诊断面)。
+    last_alarms: Mutex<Vec<apeireth_memory::DriftAlarm>>,
+    /// 自进化账的**进程级**序号 (账是进程级单文件 ⇒ 序号进程级单调)。
+    ledger_seq: AtomicU64,
+    /// 待决注入集的「最近更新」序号 (诊断面: 谁的待决集是最近的)。
+    update_seq: AtomicU64,
     /// 自进化账 (`retrieval_tuning.jsonl`, append-only)。
     log_path: PathBuf,
     /// 账追加失败计数 (0 装诚实: 持久化失败不静默)。
     log_failures: AtomicU64,
-    /// 待决注入集 (上个有选中回执的检索轮)。
-    pending: Mutex<Option<PendingRound>>,
     /// 检索轮计数 (全部轮)。
     rounds: AtomicU64,
     /// 机会轮计数 (有选中回执的检索轮; > 0 = 信号面在场)。
@@ -106,22 +167,13 @@ impl RetrievalTuningWire {
     /// 构造接线层 (引擎以默认评分权重为基线; 生效值在首次调权时落地)。
     pub fn new(log_path: PathBuf) -> Self {
         Self {
-            // 记忆线（2026-11-03）：给自进化引擎挂上**检索质量漂移监控**
-            // ⇒ ⇒ 每批证据的命中率进监控器 ⇒ ⇒ 连续多批偏离才告警
-            // ⇒ ⇒ **这就是 `QualityDriftMonitor` 的生产消费点**（此前全仓零消费者）。
-            // ⚠️ 参数口径：EMA α=0.05（基线稳、迟钝）· |z|≥2.0 算偏离 · **连续 3 批**才告警
-            // ⇒ ⇒ 单批波动**不告警**（防假告警）。
-            engine: Mutex::new(RetrievalTuningEngine::new().with_quality_drift(
-                QualityDriftMonitor::new(
-                    &[apeireth_memory::retrieval_tuning::RETRIEVAL_HIT_RATE_METRIC],
-                    0.05,
-                    2.0,
-                    3,
-                ),
-            )),
+            sessions: Mutex::new(BTreeMap::new()),
+            last_move: Mutex::new(None),
+            last_alarms: Mutex::new(Vec::new()),
+            ledger_seq: AtomicU64::new(0),
+            update_seq: AtomicU64::new(0),
             log_path,
             log_failures: AtomicU64::new(0),
-            pending: Mutex::new(None),
             rounds: AtomicU64::new(0),
             selective_rounds: AtomicU64::new(0),
             quality_alarms: AtomicU64::new(0),
@@ -147,6 +199,12 @@ impl RetrievalTuningWire {
     ///
     /// 调用即裁决上个机会轮的注入集: 再次被命中 = 正信号, 机会在场而未再
     /// 命中 = 负信号 (注入后命中回执的最简可用口径); 本集转为待决。
+    ///
+    /// ⚠️ **会话维度** (多会话串扰修复, 2026-11-04): 学习状态按**会话分桶**
+    /// ⇒ ⇒ ① **引擎**取当前会话的桶 (不共用一个进程级引擎 ⇒ ⇒ A 学出来的
+    /// 权重不会进 B 的引擎); ② **待决注入集**也取当前会话的桶 (A 的注入集
+    /// 不会被 B 的回执裁决); ③ 生效值装进**同一个键**的生效值桶
+    /// (显式键 ⇒ 不依赖作用域还在不在)。
     pub fn record_injection_round(&self, receipts: &[SelectedAttribution], at_epoch_ms: i64) {
         if receipts.is_empty() {
             self.record_empty_round(at_epoch_ms);
@@ -154,34 +212,62 @@ impl RetrievalTuningWire {
         }
         self.rounds.fetch_add(1, Ordering::Relaxed);
         self.selective_rounds.fetch_add(1, Ordering::Relaxed);
-        let previous = self
-            .pending
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .replace(PendingRound {
+        // ⚠️ **会话键口径 = 生效值落地的口径** (同一套键 ⇒ 不新造第二套语义):
+        // 有会话作用域 ⇒ 作用域的键; 没有 ⇒ 进程级默认桶键。
+        let session_key = apeireth_memory::retrieval_tuning::effective_bucket_key();
+        let updated = self.update_seq.fetch_add(1, Ordering::Relaxed);
+
+        let (records, effective, batch_alarms) = {
+            let mut sessions = self
+                .sessions
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let state = sessions
+                .entry(session_key.clone())
+                .or_insert_with(SessionTuningState::new);
+            state.updated = updated;
+            let previous = state.pending.replace(PendingRound {
                 receipts: receipts.to_vec(),
             });
-        let Some(previous) = previous else {
-            return;
+            let Some(previous) = previous else {
+                // 首轮 (本会话还没有待决集) ⇒ 无证据可裁决 ⇒ 不调权。
+                return;
+            };
+            let evidence = resolve_evidence(&previous.receipts, receipts, at_epoch_ms);
+            let records = state.engine.observe_batch(&evidence);
+            // 记忆线（2026-11-03）：取本批的漂移告警（有 ⇒ 计数涨 ⇒ 面板/运维可读）。
+            let batch_alarms = state
+                .engine
+                .quality_drift()
+                .map(|monitor| monitor.alarms().to_vec())
+                .unwrap_or_default();
+            let effective = state.engine.effective();
+            (records, effective, batch_alarms)
         };
-        let evidence = resolve_evidence(&previous.receipts, receipts, at_epoch_ms);
-        let mut engine = self
-            .engine
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let records = engine.observe_batch(&evidence);
         if !records.is_empty() {
-            apeireth_memory::retrieval_tuning::install_effective(engine.effective());
+            // 装进**当前会话的桶** (显式键 ⇒ 与读侧同一个桶 ⇒ 调权真生效)。
+            apeireth_memory::retrieval_tuning::install_effective_for_session(
+                &session_key,
+                effective,
+            );
         }
-        // 记忆线（2026-11-03）：取本批的漂移告警（有 ⇒ 计数涨 ⇒ 面板/运维可读）。
-        let batch_alarms = engine
-            .quality_drift()
-            .map(|monitor| monitor.alarms().len())
-            .unwrap_or(0);
-        drop(engine);
-        if batch_alarms > 0 {
+        if !batch_alarms.is_empty() {
             self.quality_alarms
-                .fetch_add(batch_alarms as u64, Ordering::Relaxed);
+                .fetch_add(batch_alarms.len() as u64, Ordering::Relaxed);
+        }
+        {
+            let mut last_alarms = self
+                .last_alarms
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            *last_alarms = batch_alarms;
+        }
+        if let Some(last) = records.last() {
+            let mut last_move = self
+                .last_move
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            *last_move = Some(last.clone());
         }
         for record in &records {
             self.persist(record);
@@ -205,28 +291,40 @@ impl RetrievalTuningWire {
     }
 
     /// 进化次数 (真实调权移动数)。
+    ///
+    /// ⚠️ **进程级口径** (诊断面): 学习按会话隔离, 但**账**是进程级单文件
+    /// ⇒ ⇒ 这里给**各会话移动数之和** (= 账面行数)。
     pub fn evolution_count(&self) -> u64 {
-        self.engine
+        self.sessions
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .evolution_count()
+            .values()
+            .map(|state| state.engine.evolution_count())
+            .sum()
     }
 
     /// 最近一次调权真值 (何时/因何证据/何维度/前后权重)。
+    ///
+    /// ⚠️ **进程级口径** (诊断面): 跨会话的「最近一次」。
     pub fn last_move(&self) -> Option<RetrievalTuningRecord> {
-        self.engine
+        self.last_move
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .last_move()
-            .cloned()
+            .clone()
     }
 
     /// 当前生效层权重 (调权后真值)。
+    ///
+    /// ⚠️ **会话维度**: 取**当前会话桶**里那个引擎的权重 (与生效值落地
+    /// 同一个键 ⇒ 口径一致); 当前会话还没调过 ⇒ 回落基线默认值。
     pub fn effective_ranking(&self) -> apeireth_memory::MemoryRankingConfig {
-        self.engine
+        let session_key = apeireth_memory::retrieval_tuning::effective_bucket_key();
+        self.sessions
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .ranking()
+            .get(&session_key)
+            .map(|state| state.engine.ranking())
+            .unwrap_or_default()
     }
 
     /// 账追加失败计数 (0 装诚实: 持久化失败不静默)。
@@ -250,27 +348,45 @@ impl RetrievalTuningWire {
     pub fn quality_drift_alarms(&self) -> (u64, Vec<apeireth_memory::DriftAlarm>) {
         let count = self.quality_alarms.load(Ordering::Relaxed);
         let alarms = self
-            .engine
+            .last_alarms
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .quality_drift()
-            .map(|monitor| monitor.alarms().to_vec())
-            .unwrap_or_default();
+            .clone();
         (count, alarms)
     }
 
     /// 待决注入集 (诊断/测试用)。
+    ///
+    /// ⚠️ **会话维度**: 学习按会话隔离 ⇒ ⇒ 待决集也按会话分桶 ⇒ 这里给
+    /// **当前会话桶**的待决集; 当前会话没有待决集时 ⇒ 给**最近更新**的那一个
+    /// (跨会话诊断视图; 学习裁决本身永远只看本会话的桶)。
     pub fn pending_receipts(&self) -> Vec<SelectedAttribution> {
-        self.pending
+        let session_key = apeireth_memory::retrieval_tuning::effective_bucket_key();
+        let sessions = self
+            .sessions
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .as_ref()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if let Some(state) = sessions.get(&session_key) {
+            if let Some(pending) = state.pending.as_ref() {
+                return pending.receipts.clone();
+            }
+        }
+        sessions
+            .values()
+            .max_by_key(|state| state.updated)
+            .and_then(|state| state.pending.as_ref())
             .map(|pending| pending.receipts.clone())
             .unwrap_or_default()
     }
 
     /// 账追加 (JSONL 追加, 每行一个逐记录信封; append-only)。
+    ///
+    /// ⚠️ **序号取进程级**: 学习按会话隔离 ⇒ ⇒ 各会话引擎的 `seq` 是**会话内**
+    /// 序号; 但**账是进程级单文件** ⇒ ⇒ 落账时按追加顺序重编进程级序号
+    /// ⇒ ⇒ 账面 `seq` 仍单调递增 (跨会话不重复)。
     fn persist(&self, record: &RetrievalTuningRecord) {
+        let mut record = record.clone();
+        record.seq = self.ledger_seq.fetch_add(1, Ordering::Relaxed) + 1;
         let doc = stored_doc::StoredDoc::new(
             RETRIEVAL_TUNING_DOC_NAME,
             RETRIEVAL_TUNING_DOC_VERSION,
@@ -533,6 +649,104 @@ mod tests {
             "本机会轮注入集转待决"
         );
         assert_eq!(wire.log_failures(), 0);
+        let _ = std::fs::remove_dir_all(log.parent().unwrap());
+    }
+
+    /// **两个会话的调权学习互不影响** (多会话串扰回归)。
+    ///
+    /// 旧实现: 接线层持有**单个进程级引擎** ⇒ ⇒ A 会话调权学到的权重会被
+    /// B 会话的引擎**继承** ⇒ ⇒ B 的检索吃到 A 学出来的权重 (串扰); 待决
+    /// 注入集也是进程级单槽 ⇒ ⇒ A 的注入集会被 B 的回执裁决 (证据跨会话)。
+    /// ⇒ ⇒ 现在: **引擎 + 待决注入集**都按**会话分桶** (与生效值落地同一套键)。
+    #[test]
+    fn two_sessions_do_not_share_their_tuning_learning() {
+        let _guard = lock_wire();
+        apeireth_memory::retrieval_tuning::clear_effective();
+        let log = temp_log("session-isolation");
+        let wire = RetrievalTuningWire::new(log.clone());
+
+        // A 会话: 注入 mem-a (semantic) ⇒ 下一轮**不再命中** ⇒ 负证据 ⇒ 层权重下调一步。
+        {
+            let _scope = apeireth_memory::retrieval_tuning::enter_session_scope("session-a");
+            wire.record_injection_round(
+                &[receipt("mem-a", Some(RetrievalDimension::Semantic))],
+                1_000,
+            );
+            wire.record_injection_round(&[receipt("mem-other", None)], 2_000);
+        }
+        // B 会话: 注入 mem-b (semantic) ⇒ 下一轮**再命中** ⇒ 正证据 ⇒ 层权重上调一步。
+        {
+            let _scope = apeireth_memory::retrieval_tuning::enter_session_scope("session-b");
+            wire.record_injection_round(
+                &[receipt("mem-b", Some(RetrievalDimension::Semantic))],
+                1_000,
+            );
+            wire.record_injection_round(
+                &[receipt("mem-b", Some(RetrievalDimension::Semantic))],
+                2_000,
+            );
+        }
+
+        let fallback = apeireth_memory::MemoryRankingConfig::default();
+        let ranking_a = apeireth_memory::retrieval_tuning::effective_ranking_or_for_session(
+            "session-a",
+            fallback,
+        );
+        let ranking_b = apeireth_memory::retrieval_tuning::effective_ranking_or_for_session(
+            "session-b",
+            fallback,
+        );
+        let baseline = fallback.semantic_weight;
+        let step = apeireth_memory::retrieval_tuning::DIMENSION_STEP;
+        assert!(
+            (ranking_a.semantic_weight - (baseline - step)).abs() < 1e-9,
+            "A: 负证据 ⇒ 层权重下调一步: {:?}",
+            ranking_a.semantic_weight
+        );
+        assert!(
+            (ranking_b.semantic_weight - (baseline + step)).abs() < 1e-9,
+            "B: 正证据 ⇒ 层权重上调一步 (不许继承 A 的下调): {:?}",
+            ranking_b.semantic_weight
+        );
+        assert_ne!(
+            ranking_a, ranking_b,
+            "两个会话的检索权重必须互不影响 (不许串扰)"
+        );
+
+        // 条目显著性同样按会话隔离。
+        let entry_step = apeireth_memory::retrieval_tuning::ENTRY_STEP;
+        assert!(
+            (apeireth_memory::retrieval_tuning::entry_salience_for_session("session-a", "mem-a")
+                + entry_step)
+                .abs()
+                < 1e-12,
+            "A: mem-a 负证据 ⇒ 显著性下调一步"
+        );
+        assert!(
+            (apeireth_memory::retrieval_tuning::entry_salience_for_session("session-b", "mem-b")
+                - entry_step)
+                .abs()
+                < 1e-12,
+            "B: mem-b 正证据 ⇒ 显著性上调一步"
+        );
+        assert_eq!(
+            apeireth_memory::retrieval_tuning::entry_salience_for_session("session-b", "mem-a"),
+            0.0,
+            "B 不得吃到 A 的条目显著性"
+        );
+
+        // 账是**进程级单文件** ⇒ 两会话的记录都在账里; 序号进程级单调 (跨会话不重复)。
+        assert_eq!(wire.evolution_count(), 4, "两会话各 2 条移动 (条目 + 维度)");
+        let summary = read_retrieval_tuning_log(&log).expect("读回");
+        assert_eq!(summary.evolution_count(), 4);
+        assert_eq!(summary.skipped, 0);
+        for (index, record) in summary.records.iter().enumerate() {
+            assert_eq!(
+                record.seq,
+                index as u64 + 1,
+                "seq 进程级单调 (跨会话不重复)"
+            );
+        }
         let _ = std::fs::remove_dir_all(log.parent().unwrap());
     }
 

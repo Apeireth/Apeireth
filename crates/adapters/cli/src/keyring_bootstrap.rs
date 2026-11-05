@@ -171,6 +171,14 @@ impl CredentialWriter for HotCredentialWriter {
         Ok(())
     }
 
+    /// 该凭据**已声明**的端点（`None` = 未声明 ⇒ 不参与绑定闸）。
+    ///
+    /// ⚠️ 这是**只读查询**，不接触密文 ⇒ ⇒ 网关据此在热更响应里
+    /// **如实告警**「只改端点 ⇒ 未绑定凭据会跟随到新主机」（2026-11-04）。
+    fn bound_endpoints(&self, name: &str) -> Option<Vec<String>> {
+        self.store.declared_endpoints(name)
+    }
+
     /// 写入凭据**并**登记它的端点绑定（安全审计 P1 的「凭据库维度」）。
     ///
     /// 绑定与凭据**存在同一个 store** ⇒ 换端点配置**改不到**这份绑定
@@ -220,6 +228,51 @@ mod tests {
             .expect("hot override visible on the next resolve");
         assert_eq!(got.expose(), "sk-decoy-seam");
         // 清理共享 store, 不污染同进程其它测试。
+        hot_credential_store().remove(name);
+    }
+
+    /// `bound_endpoints` 是网关**如实告警**的数据来源（2026-11-04）。
+    ///
+    /// ⭐ 必须钉住三件事：
+    /// ① 写了带绑定的凭据 ⇒ 查询**得到**绑定（否则网关会误报「未声明绑定」⇒ 告警成噪音）；
+    /// ② 只写值（无绑定）⇒ 查询为 `None`（未声明 ⇒ 不参与绑定闸）；
+    /// ③ 查询**不接触密文**（只读绑定表 ⇒ 绝不返回任何 key）。
+    #[test]
+    fn bound_endpoints_reports_the_declared_binding_without_touching_the_secret() {
+        let writer = HotCredentialWriter {
+            store: hot_credential_store(),
+            durable: None,
+        };
+        let name = "provider.bound-lookup.api_key";
+
+        // ② 未写 ⇒ 未声明 ⇒ None。
+        assert_eq!(
+            writer.bound_endpoints(name),
+            None,
+            "没写过 ⇒ 没声明绑定 ⇒ 必须 None（否则网关会误报「未声明绑定」）"
+        );
+
+        // ① 写了带绑定的 ⇒ 查得到。
+        writer
+            .write_with_endpoints(
+                name,
+                "sk-lookup-test",
+                &["https://a.example/v1".to_string()],
+            )
+            .expect("write with endpoints");
+        assert_eq!(
+            writer.bound_endpoints(name),
+            Some(vec!["https://a.example/v1".to_string()]),
+            "同笔登记的绑定必须查得到"
+        );
+
+        // ③ 查询结果里**不含任何密文**。
+        let listed = format!("{:?}", writer.bound_endpoints(name));
+        assert!(
+            !listed.contains("sk-lookup-test"),
+            "绑定查询**不得**返回或泄漏密文：{listed}"
+        );
+
         hot_credential_store().remove(name);
     }
 
