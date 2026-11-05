@@ -15,10 +15,14 @@ use apeireth_governance::PermissionPolicy;
 use apeireth_plugin::ToolCapability;
 use apeireth_protocol::canonical::ToolCall;
 use apeireth_tools_canonical::exec_pipeline::{ExecutionStage, ToolOutcome};
+use apeireth_tools_canonical::mcp_bridge::tool::redaction::{
+    DECLARATION_MAX_DESCRIPTION_CHARS, DECLARATION_MAX_SCHEMA_DEPTH,
+    DECLARATION_MAX_SCHEMA_PROPERTIES, RESULT_MAX_BLOCKS, RESULT_MAX_TEXT_CHARS, TRUNCATION_MARKER,
+};
 use apeireth_tools_canonical::mcp_bridge::{
-    mcp_output_schema, InProcessMcpServer, McpBridgeError, McpBridgeOptions, McpConfigError,
-    McpDynamicTool, McpPermissionMapping, McpServerConfig, McpServerConnection, McpServerSpec,
-    McpToolBridge, McpToolRegistry, McpTransportKind, MockToolSpec,
+    mcp_output_schema, DiscoveredTool, InProcessMcpServer, McpBridgeError, McpBridgeOptions,
+    McpConfigError, McpDynamicTool, McpPermissionMapping, McpServerConfig, McpServerConnection,
+    McpServerSpec, McpToolBridge, McpToolEntry, McpToolRegistry, McpTransportKind, MockToolSpec,
 };
 
 const SERVER: &str = "demo";
@@ -57,6 +61,32 @@ fn call(name: &str, arguments: serde_json::Value) -> ToolCall {
         id: "call_1".into(),
         name: name.into(),
         arguments,
+    }
+}
+
+/// A dynamic tool over one hand-built server descriptor.
+///
+/// The server side stays the in-process double — the connection is the same
+/// one the bridge opens — but the descriptor is built here so a server may
+/// declare a shape the ordinary tool list never carries.
+fn dynamic_over(discovered: DiscoveredTool) -> McpDynamicTool {
+    let server = InProcessMcpServer::new(SERVER);
+    let options = test_options();
+    let connection = Arc::new(McpServerConnection::new(
+        demo_spec(),
+        server.factory(),
+        &options,
+    ));
+    let entry = McpToolEntry::new(SERVER, &discovered).unwrap();
+    McpDynamicTool::new(entry, connection)
+}
+
+/// The nesting depth of a converged schema (the top object counts as 1).
+fn object_depth(value: &serde_json::Value) -> usize {
+    match value {
+        serde_json::Value::Object(map) => 1 + map.values().map(object_depth).max().unwrap_or(0),
+        serde_json::Value::Array(items) => items.iter().map(object_depth).max().unwrap_or(0),
+        _ => 0,
     }
 }
 
@@ -687,4 +717,381 @@ async fn a_failed_reconnect_leaves_the_catalog_intact() {
         "a failed reconnect must not empty the catalog"
     );
     assert_eq!(bridge.catalog().len(), 1);
+}
+
+// ---------------------------------------------------------------------------
+// Bounded convergence: what a server authored must stay bounded, converged,
+// and clean before it reaches the model (declaration face + result face).
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn a_long_server_description_is_bounded_and_marked() {
+    let server = InProcessMcpServer::new(SERVER);
+    let long = "d".repeat(4_000);
+    server.set_tools(vec![
+        MockToolSpec::new("lookup-item", "found").with_description(long.clone())
+    ]);
+    let bridge = bridge_over(&server, test_options());
+    let report = bridge.refresh().await.unwrap();
+    let dynamic = McpDynamicTool::new(
+        bridge.catalog().get("mcp:demo:lookup-item").unwrap(),
+        Arc::clone(&bridge.connections()[0]),
+    );
+
+    let declaration = dynamic.declaration();
+    let description = declaration
+        .description
+        .expect("the server declared a description");
+    assert!(
+        description.chars().count() <= DECLARATION_MAX_DESCRIPTION_CHARS,
+        "the description must stay inside its cap: {}",
+        description.chars().count()
+    );
+    assert!(
+        description.ends_with(TRUNCATION_MARKER),
+        "a cut description must say so: {description}"
+    );
+    assert!(
+        description.starts_with(&"d".repeat(100)),
+        "the kept head must stay the server's own text"
+    );
+    assert_eq!(report.registered.len(), 1);
+}
+
+#[tokio::test]
+async fn a_non_object_schema_degrades_to_the_empty_object_schema() {
+    // A schema that is not an object schema does not describe named
+    // arguments: the tool stays callable, with the empty object schema.
+    for schema in [
+        serde_json::json!({ "type": "string" }),
+        serde_json::json!({ "type": "array" }),
+        serde_json::json!([{ "type": "string" }]),
+        serde_json::json!("just a string"),
+    ] {
+        let tool = dynamic_over(DiscoveredTool {
+            name: "odd-tool".into(),
+            description: None,
+            input_schema: Some(schema),
+            declared_read_only: false,
+        });
+        let declaration = tool.declaration();
+        assert_eq!(
+            declaration.parameters.get("type"),
+            Some(&serde_json::json!("object")),
+            "a non-object schema must degrade to an object schema"
+        );
+        assert_eq!(
+            declaration.parameters.get("properties"),
+            Some(&serde_json::json!({})),
+            "the degraded schema must carry no property"
+        );
+    }
+}
+
+#[tokio::test]
+async fn a_deep_schema_converges_within_its_depth_bound() {
+    let mut schema =
+        serde_json::json!({ "type": "object", "properties": { "leaf": { "type": "string" } } });
+    for _ in 0..64 {
+        schema = serde_json::json!({ "type": "object", "properties": { "next": schema } });
+    }
+    let tool = dynamic_over(DiscoveredTool {
+        name: "deep-tool".into(),
+        description: None,
+        input_schema: Some(schema),
+        declared_read_only: false,
+    });
+
+    // The walk terminates and stays inside the depth bound: no panic, no
+    // unbounded recursion.
+    let declaration = tool.declaration();
+    assert_eq!(
+        declaration.parameters.get("type"),
+        Some(&serde_json::json!("object"))
+    );
+    let depth = object_depth(&serde_json::Value::Object(declaration.parameters.clone()));
+    assert!(
+        depth <= DECLARATION_MAX_SCHEMA_DEPTH + 3,
+        "the converged schema must stay inside its depth bound: {depth}"
+    );
+}
+
+#[tokio::test]
+async fn a_wide_schema_converges_within_its_property_bound() {
+    let mut properties = serde_json::Map::new();
+    for index in 0..500 {
+        properties.insert(
+            format!("field-{index}"),
+            serde_json::json!({ "type": "string", "description": "a field" }),
+        );
+    }
+    let tool = dynamic_over(DiscoveredTool {
+        name: "wide-tool".into(),
+        description: None,
+        input_schema: Some(serde_json::json!({ "type": "object", "properties": properties })),
+        declared_read_only: false,
+    });
+
+    let declaration = tool.declaration();
+    let kept = declaration.parameters["properties"]
+        .as_object()
+        .expect("the property map survives");
+    assert!(
+        kept.len() <= DECLARATION_MAX_SCHEMA_PROPERTIES,
+        "the property map must stay inside its cap: {}",
+        kept.len()
+    );
+    assert!(!kept.is_empty(), "the convergence must not empty the map");
+}
+
+#[tokio::test]
+async fn invisible_characters_are_cleaned_from_the_declaration() {
+    let tool = dynamic_over(DiscoveredTool {
+        name: "sneaky-tool".into(),
+        description: Some("look\u{200B} here\u{202E} now".into()),
+        input_schema: Some(serde_json::json!({
+            "type": "object",
+            "properties": {
+                "path": { "type": "string", "description": "the\u{200B}path" }
+            }
+        })),
+        declared_read_only: false,
+    });
+
+    let declaration = tool.declaration();
+    let description = declaration.description.expect("a description");
+    assert!(!description.contains('\u{200B}'), "{description}");
+    assert!(!description.contains('\u{202E}'), "{description}");
+    assert_eq!(description, "look here now");
+    let property = declaration.parameters["properties"]["path"]["description"]
+        .as_str()
+        .expect("the property description survives");
+    assert!(!property.contains('\u{200B}'), "{property}");
+    assert_eq!(property, "thepath");
+}
+
+#[tokio::test]
+async fn a_long_remote_result_is_bounded() {
+    let server = InProcessMcpServer::new(SERVER);
+    server.set_tools(vec![MockToolSpec::new("chatty-tool", "z".repeat(200_000))]);
+    let bridge = bridge_over(&server, test_options());
+    let report = bridge.refresh().await.unwrap();
+    let dynamic = McpDynamicTool::new(
+        bridge.catalog().get("mcp:demo:chatty-tool").unwrap(),
+        Arc::clone(&bridge.connections()[0]),
+    );
+    McpPermissionMapping::authorize(
+        &mut bridge.policy().lock().unwrap(),
+        &bridge.catalog().get("mcp:demo:chatty-tool").unwrap(),
+    );
+
+    let tool_call = call("mcp:demo:chatty-tool", serde_json::json!({}));
+    let executed = bridge.pipeline().run(&dynamic, &tool_call).await;
+    assert!(executed.outcome.ok, "{}", executed.outcome.output_text);
+
+    let structured = executed.outcome.structured().expect("structured sidecar");
+    let text = structured["text"].as_str().expect("the joined text");
+    assert!(
+        text.chars().count() <= RESULT_MAX_TEXT_CHARS,
+        "the remote text must stay inside its cap: {}",
+        text.chars().count()
+    );
+    assert!(text.ends_with(TRUNCATION_MARKER), "a cut text must say so");
+    assert_eq!(report.registered.len(), 1);
+}
+
+#[tokio::test]
+async fn a_normal_schema_keeps_its_properties() {
+    let tool = dynamic_over(DiscoveredTool {
+        name: "lookup-item".into(),
+        description: Some("Look one item up".into()),
+        input_schema: Some(serde_json::json!({
+            "type": "object",
+            "properties": {
+                "query": { "type": "string", "description": "what to look for" },
+                "limit": { "type": "integer", "description": "how many" }
+            },
+            "required": ["query"]
+        })),
+        declared_read_only: false,
+    });
+
+    let declaration = tool.declaration();
+    assert_eq!(declaration.description.as_deref(), Some("Look one item up"));
+    assert_eq!(declaration.parameters["type"], serde_json::json!("object"));
+    let properties = declaration.parameters["properties"]
+        .as_object()
+        .expect("the property map survives");
+    assert_eq!(properties.len(), 2, "a normal schema keeps every property");
+    assert_eq!(properties["query"]["type"], serde_json::json!("string"));
+    assert_eq!(
+        properties["query"]["description"],
+        serde_json::json!("what to look for")
+    );
+    assert_eq!(properties["limit"]["type"], serde_json::json!("integer"));
+    assert_eq!(
+        properties["limit"]["description"],
+        serde_json::json!("how many")
+    );
+    assert_eq!(
+        declaration.parameters["required"],
+        serde_json::json!(["query"])
+    );
+}
+
+// ---------------------------------------------------------------------------
+// The bounds that are not about the declaration face: the result face's
+// block count, the error path, and the fixed point of the convergence.
+// ---------------------------------------------------------------------------
+
+/// The prefix the result renderer puts in front of an error message.
+const ERROR_PREFIX: &str = "error: ";
+
+#[tokio::test]
+async fn the_result_face_bounds_the_block_count() {
+    let server = InProcessMcpServer::new(SERVER);
+    // Twenty text blocks: more than one result may carry.
+    let blocks: Vec<serde_json::Value> = (0..20)
+        .map(|index| serde_json::json!({ "type": "text", "text": format!("block {index}") }))
+        .collect();
+    server.set_tools(vec![MockToolSpec::new("many-blocks", "ignored")
+        .with_raw_result(
+            serde_json::json!({ "content": blocks, "is_error": false }),
+        )]);
+    let bridge = bridge_over(&server, test_options());
+    let report = bridge.refresh().await.unwrap();
+    let dynamic = McpDynamicTool::new(
+        bridge.catalog().get("mcp:demo:many-blocks").unwrap(),
+        Arc::clone(&bridge.connections()[0]),
+    );
+    McpPermissionMapping::authorize(
+        &mut bridge.policy().lock().unwrap(),
+        &bridge.catalog().get("mcp:demo:many-blocks").unwrap(),
+    );
+
+    let executed = bridge
+        .pipeline()
+        .run(
+            &dynamic,
+            &call("mcp:demo:many-blocks", serde_json::json!({})),
+        )
+        .await;
+    assert!(executed.outcome.ok, "{}", executed.outcome.output_text);
+    let structured = executed.outcome.structured().expect("structured sidecar");
+    let content = structured["content"].as_array().expect("content blocks");
+    assert!(!content.is_empty(), "the result keeps its blocks");
+    assert!(
+        content.len() <= RESULT_MAX_BLOCKS,
+        "the block count must stay inside its cap: {}",
+        content.len()
+    );
+    assert_eq!(structured["is_error"], serde_json::json!(false));
+    assert_eq!(report.registered.len(), 1);
+}
+
+#[tokio::test]
+async fn a_server_error_reply_is_bounded_too() {
+    let server = InProcessMcpServer::new(SERVER);
+    server.set_tools(vec![
+        MockToolSpec::new("boom", "ignored").error_reply("e".repeat(200_000))
+    ]);
+    let bridge = bridge_over(&server, test_options());
+    let report = bridge.refresh().await.unwrap();
+    let dynamic = McpDynamicTool::new(
+        bridge.catalog().get("mcp:demo:boom").unwrap(),
+        Arc::clone(&bridge.connections()[0]),
+    );
+    McpPermissionMapping::authorize(
+        &mut bridge.policy().lock().unwrap(),
+        &bridge.catalog().get("mcp:demo:boom").unwrap(),
+    );
+
+    let executed = bridge
+        .pipeline()
+        .run(&dynamic, &call("mcp:demo:boom", serde_json::json!({})))
+        .await;
+    assert!(!executed.outcome.ok, "the server's error stays an error");
+    assert!(
+        executed.outcome.output_text.chars().count()
+            <= RESULT_MAX_TEXT_CHARS + ERROR_PREFIX.chars().count(),
+        "the error text must stay inside its cap: {}",
+        executed.outcome.output_text.chars().count()
+    );
+    assert!(
+        executed.outcome.output_text.contains(TRUNCATION_MARKER),
+        "a cut error must say so"
+    );
+    assert_eq!(report.registered.len(), 1);
+}
+
+#[tokio::test]
+async fn the_convergence_is_a_fixed_point() {
+    let schema = serde_json::json!({
+        "type": "object",
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+            "query": { "type": "string", "description": "what to look for" },
+            "nested": { "type": "object", "properties": { "deep": { "type": "integer" } } }
+        },
+        "required": ["query"],
+        "additionalProperties": false
+    });
+    let first = dynamic_over(DiscoveredTool {
+        name: "twice-tool".into(),
+        description: Some("Look one item up".into()),
+        input_schema: Some(schema.clone()),
+        declared_read_only: false,
+    })
+    .declaration();
+
+    // The same declaration, asked for twice, is the same declaration.
+    let again = dynamic_over(DiscoveredTool {
+        name: "twice-tool".into(),
+        description: Some("Look one item up".into()),
+        input_schema: Some(schema.clone()),
+        declared_read_only: false,
+    })
+    .declaration();
+    assert_eq!(first, again, "the declaration must be deterministic");
+
+    // And the converged shape, fed back in, converges onto itself: the
+    // convergence is a fixed point, not a one-way ratchet.
+    let round_trip = dynamic_over(DiscoveredTool {
+        name: "twice-tool".into(),
+        description: first.description.clone(),
+        input_schema: Some(serde_json::Value::Object(first.parameters.clone())),
+        declared_read_only: false,
+    })
+    .declaration();
+    assert_eq!(first.description, round_trip.description);
+    assert_eq!(first.parameters, round_trip.parameters);
+}
+
+#[tokio::test]
+async fn the_parameter_closure_stays_visible_to_the_model() {
+    // `additionalProperties` says whether the parameter set is closed; the
+    // model reads it to decide what it may pass, so it survives the
+    // convergence.
+    let tool = dynamic_over(DiscoveredTool {
+        name: "closed-tool".into(),
+        description: Some("Look one item up".into()),
+        input_schema: Some(serde_json::json!({
+            "type": "object",
+            "properties": { "query": { "type": "string" } },
+            "required": ["query"],
+            "additionalProperties": false
+        })),
+        declared_read_only: false,
+    });
+
+    let declaration = tool.declaration();
+    assert_eq!(
+        declaration.parameters["additionalProperties"],
+        serde_json::json!(false),
+        "the closure of the parameter set must stay visible"
+    );
+    assert_eq!(
+        declaration.parameters["required"],
+        serde_json::json!(["query"])
+    );
 }

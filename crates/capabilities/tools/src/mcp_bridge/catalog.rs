@@ -16,6 +16,14 @@ use super::connection::DiscoveredTool;
 use super::family::MCP_FAMILY_ROOT;
 
 /// One external tool as it is exposed to the model.
+///
+/// The entry keeps the server's **raw** declaration: the description and the
+/// input schema are stored as the server sent them, and nothing here
+/// bounds or rewrites them. The bounded, converged view the model sees is
+/// built at the model-facing boundary
+/// ([`crate::mcp_bridge::tool::McpDynamicTool::declaration`]), so the
+/// directory stays a faithful record of what the server offers while the
+/// model's copy stays bounded.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct McpToolEntry {
     /// Configured server name that provides the tool.
@@ -36,6 +44,10 @@ pub struct McpToolEntry {
 
 impl McpToolEntry {
     /// Build the entry for one discovered tool of one server.
+    ///
+    /// No length or shape limit is applied here: the entry is the faithful
+    /// record of what the server declared. The limits live at the
+    /// model-facing boundary, where the declaration is converged.
     pub fn new(server: &str, tool: &DiscoveredTool) -> Result<Self, McpCatalogError> {
         let model_name = model_name(server, &tool.name);
         let capability_id = capability_id_for(server, &tool.name)?;

@@ -8,6 +8,16 @@
 //! the bridge wraps it in `PipelinedCapability`, so risk mapping, guards, the
 //! deadline, and the correction channel all wrap this call.
 //!
+//! # Bounded convergence at this boundary
+//!
+//! Everything the server authored reaches the model through this module: the
+//! declaration (description + input schema) and the result (text + content
+//! blocks). Both are bounded and converged by [`redaction`] before they
+//! leave: a length cap on every string, a bounded shape for the declared
+//! schema, and a clean of the invisible characters that carry injections.
+//! The convergence is *bounded*, never total — a normal schema keeps its
+//! properties, and a normal description is kept verbatim.
+//!
 //! # Frozen invocations (the approval card's payload)
 //!
 //! The tool freezes its execution inputs ([`McpDynamicTool::freeze_invocation`])
@@ -24,7 +34,7 @@ use std::sync::Arc;
 use apeireth_core::kernel::CapabilityId;
 use apeireth_plugin::mcp::{content_block_to_wire, ToolCallResult};
 use apeireth_plugin::{FrozenInvocation, ToolCapability};
-use apeireth_protocol::canonical::{NormalizedTool, ToolCall, ToolParameters, ToolResult};
+use apeireth_protocol::canonical::{NormalizedTool, ToolCall, ToolResult};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
@@ -33,6 +43,12 @@ use crate::mcp::McpError;
 
 use super::catalog::McpToolEntry;
 use super::connection::McpServerConnection;
+
+// The bounded-convergence helpers live in their own file. The bridge's
+// module root is frozen for this batch, so the file is wired in here — the
+// model-facing boundary that uses it.
+#[path = "redaction.rs"]
+pub mod redaction;
 
 /// The frozen payload version of the external-tool invocation.
 ///
@@ -66,11 +82,20 @@ pub fn mcp_output_schema() -> OutputSchema {
 
 /// Normalize one MCP result structure into the contract's structured value:
 /// joined text, the wire content blocks, and the server's error flag.
+///
+/// The server's answer is bounded on the way in: the joined text, the block
+/// count and every block payload carry a length cap (see [`redaction`]), so
+/// one remote answer can never flood the model's context.
 pub fn normalized_mcp_value(result: &ToolCallResult) -> serde_json::Value {
-    let content: Vec<serde_json::Value> =
-        result.content.iter().map(content_block_to_wire).collect();
+    let text = redaction::truncate_text(&result.extract_text(), redaction::RESULT_MAX_TEXT_CHARS);
+    let content: Vec<serde_json::Value> = result
+        .content
+        .iter()
+        .take(redaction::RESULT_MAX_BLOCKS)
+        .map(|block| content_block_to_wire(&redaction::bound_content_block(block)))
+        .collect();
     serde_json::json!({
-        "text": result.extract_text(),
+        "text": text,
         "content": content,
         "is_error": result.is_error,
     })
@@ -80,9 +105,9 @@ pub fn normalized_mcp_value(result: &ToolCallResult) -> serde_json::Value {
 ///
 /// A server-side error (`isError`) becomes a permanent tool error carrying
 /// the server's own text; a success becomes the normalized structure the
-/// output contract validates.
+/// output contract validates. The server's text is bounded in both cases.
 pub fn tool_result_from_mcp(call_id: &str, tool_name: &str, result: ToolCallResult) -> ToolResult {
-    let text = result.extract_text();
+    let text = redaction::truncate_text(&result.extract_text(), redaction::RESULT_MAX_TEXT_CHARS);
     if result.is_error {
         let message = if text.is_empty() {
             "external tool reported an error without detail".to_string()
@@ -187,17 +212,18 @@ impl ToolCapability for McpDynamicTool {
         &self.entry.capability_id
     }
 
+    /// The model-facing declaration of one external tool.
+    ///
+    /// The server's description and input schema are converged before they
+    /// reach the model (see [`redaction`]): the description is cleaned and
+    /// bounded, the schema keeps its properties but loses its unbounded
+    /// shape, and a schema that is not an object schema degrades to the
+    /// empty object schema.
     fn declaration(&self) -> NormalizedTool {
-        let mut parameters = ToolParameters::new();
-        if let Some(schema) = &self.entry.input_schema {
-            if let Some(object) = schema.as_object() {
-                parameters = object.clone();
-            }
-        }
         NormalizedTool {
             name: self.entry.model_name.clone(),
-            description: self.entry.description.clone(),
-            parameters,
+            description: redaction::converge_description(self.entry.description.as_deref()),
+            parameters: redaction::converge_input_schema(self.entry.input_schema.as_ref()),
             strict: false,
         }
     }
