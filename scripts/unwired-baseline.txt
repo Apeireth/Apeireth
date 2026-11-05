@@ -119,9 +119,8 @@ orphan doc_ops_capability_shared  # G5  ⚠️ 2026-11-04 级联：删 `doc_ops_
 orphan sheet_ops_capability_shared  # G5  ⚠️ 2026-11-04 级联：删 `sheet_ops_capability`（零调用点）后失去唯一调用者 ⇒ ⇒ 待判：**「不带 live 策略槽」这个装配变体还要不要**（生产用 `_shared_with_slot`）
 orphan retrieve_with_reranker_for_session  # G5  **显式会话**的重排入口（`SessionContext::Explicit`）⇒ ⇒ 与 ambient 版**共用**内部实现 `retrieve_with_reranker_in` ⇒ ⇒ **刻意成对**（显式会话 vs 会话作用域兜底）⇒ ⇒ 零引用是「显式会话那条路还没被调用」的结果，**不是没实现**
 
-# --- G6（47 条）：**冗余 API 表面 / 宿主入口**：同一能力有**主路径在用**，这些是并行入口或便利包装；或设计上是给宿主/外部调用的公开 API。已逐条核查（见 `unwired-debt-taxonomy-2026-10-24.md` 与 `unwired-debt-audit-2026-10-24.md`）。
+# --- G6（46 条）：**冗余 API 表面 / 宿主入口**：同一能力有**主路径在用**，这些是并行入口或便利包装；或设计上是给宿主/外部调用的公开 API。已逐条核查（见 `unwired-debt-taxonomy-2026-10-24.md` 与 `unwired-debt-audit-2026-10-24.md`）。
 
-orphan with_used  # G6
 orphan constrain_to_trusted  # G6
 orphan decompose_default  # G6  校准族**未接生产**（`decompose_default` 无生产消费者）⇒ ⇒ 零引用是族级结果；校准分解默认值（配 `calibration_gap`）
 orphan extract_experience_from_episode  # G6

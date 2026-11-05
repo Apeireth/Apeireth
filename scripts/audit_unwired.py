@@ -144,6 +144,8 @@ def main() -> int:
     # 1) 建索引：符号 → 在 code / test 里的引用次数
     code_text = defaultdict(str)
     test_text = defaultdict(str)
+    # crate 私有（`pub(crate)` / `pub(super)` / `pub(in …)`）声明数 ⇒ ⇒ **不计入公开 API 孤儿**，但计数可审计
+    crate_private_decls = 0
     declarations: list[tuple[str, str, Path]] = []  # (kind, name, file)
 
     for path in source_files():
@@ -159,7 +161,21 @@ def main() -> int:
             code, tests = split_code_test(text)
             code_text[str(rel)] = code
             test_text[str(rel)] = tests
+            # ⚠️ 2026-11-05（deputy）：**`pub(crate)` 不是公开 API** ⇒ ⇒ 不该进「公开 API 孤儿」基线。
+            #   实测：`ModuleTurnState::with_used`（`engine/runtime/src/canonical/module.rs`）
+            #   是 `pub(crate) fn` + `#[allow(dead_code)]` ⇒ ⇒ **crate 内刻意保留的构造器**
+            #   ⇒ ⇒ 它被误收成「孤儿」（owner 裁定「先定位再说」⇒ 定位后确认：**误收**）。
+            #   ⇒ ⇒ 这里**跳过 crate 私有声明**，但**计数上报**（不静默丢弃 ⇒ ⇒ 可审计）。
             for line in code.splitlines():
+                # ⚠️ 2026-11-05（deputy）：**受限可见性（`pub(crate)` / `pub(super)` / `pub(in …)`）
+                #   不是公开 API** ⇒ ⇒ 不该进「公开 API 孤儿」基线。
+                #   实测：`ModuleTurnState::with_used`（`engine/runtime/src/canonical/module.rs`）
+                #   是 `pub(crate) fn` + `#[allow(dead_code)]` ⇒ ⇒ **crate 内刻意保留的构造器**
+                #   ⇒ ⇒ 它被误收成「孤儿」（owner 裁定「先定位再说」⇒ 定位后确认：**误收**）。
+                #   ⇒ ⇒ 这里**跳过受限可见性声明**，但**计数上报**（不静默丢弃 ⇒ ⇒ 可审计）。
+                if line.lstrip().startswith("pub("):
+                    crate_private_decls += 1
+                    continue
                 match = DECL.match(line)
                 if match and match.group(1) == "fn":
                     declarations.append((match.group(1), match.group(2), rel))
@@ -291,6 +307,7 @@ def main() -> int:
         f"孤儿 API 报告：orphan（真零引用）{len(orphans)} 条；"
         f"test-only（被集成测试覆盖，正常）{len(test_only)} 条"
     )
+    print(f"    crate 私有声明（不计入孤儿）：{crate_private_decls} 个 ⇒ ⇒ 只减不增")
     for kind, name, rel, _, _ in orphans:
         print(f"  [{kind:9}] {name:44} {rel}")
     return 0
