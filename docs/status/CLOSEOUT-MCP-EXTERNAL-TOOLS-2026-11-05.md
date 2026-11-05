@@ -34,7 +34,7 @@
 | ② `full` 预设把 RequireApproval 改写成 Allow | **MCP 族审批地板** `human_approval_floor_applies`（`crates/engine/runtime-assembly/src/canonical/permission_preset.rs:132`）：族内能力**一律逐次人批**，`full` 预设**不豁免**、`standard` 的免审记忆**也不豁免**（owner 已拍板） | `5ead6ac1` |
 | ③ 重连后能力表重登语义缺失 | **周期刷新 + 重连后能力表重登**：`spawn_external_tool_refresh`（`crates/engine/runtime-assembly/src/canonical/external_tool_bridge.rs:434`）+ `apply_external_tool_report`（先撤后登，`:307`）+ 重连回流目录 | `34735d62` |
 | 前置项「桥内 `Ask` ≠ 运行时挂起审批」 | 桥内闸改 **deny-only 透传**（拒绝即拒；放行或「要人批」一律透传给运行时治理链，桥内不重复要批）⇒ 人批只发生在运行时 | `a3de1dc9` |
-| 前置项「deny 闸无注入口」 | **仍在途**（见 §6 遗留 ③）⇒ 本条未销账 | 在途 |
+| 前置项「deny 闸无注入口」 | **配置面已销账**（同日 `6f1a543a`：每服务器 `deny_tools` ⇒ 被封工具不入目录、不入登记面；deny 压过只读预设 / allowlist / 族授权）⇒ 本条**部分销账** | 已销账（配置面）；主人面运行时封禁操作仍另批 |
 
 **owner 拍板项（2026-11-05 接线批）**：MCP 族**一律逐次人批**，`full` 预设**不豁免**。
 接线批据此把族审批地板做进预设层，并用测试钉死「预设不得越过地板」这一条。
@@ -87,7 +87,7 @@
 |---|---|---|---|
 | ① | **结果面不做内容级凭据识别** —— 远端回吐的凭据**仍会进模型上下文**；现有防线是「有界 + 收敛 + 逐次人批」，不是识别 | `crates/capabilities/tools/src/mcp_bridge/redaction.rs` 的 `clean_text`（`:137`）只清控制字符 / 隐形字符，无凭据内容识别；结果面只做长度收敛（`:95`） | 设计边界（安全线知悉） |
 | ② | **`sweep_output_for_egress` 仍未接线到工具输出面** ⇒ **不能**声称「MCP 结果已脱敏」 | 全仓唯一调用点是其自身单测 `crates/capabilities/tools/src/redaction_bridge.rs:971`（位于 `#[cfg(test)]` 模块，模块起点 `:654`）；生产侧零调用点 | 未接线（出境线，非 MCP 域） |
-| ③ | **deny 闸的操作面注入口仍缺** ⇒ 主人暂无「事后拉黑单个外部工具」的手段 | `McpToolDenyGuard::deny_capability()` 的生产调用点为 0（仅 `crates/capabilities/tools/tests/mcp_bridge_e2e.rs:212` 与自身单测 `crates/capabilities/tools/src/mcp_bridge/governance.rs:655`） | **在途**：另一条并行施工线正在补（工作树未提交 —— 每服务器 `deny_tools` 配置面 → 装配期 `seed_deny_list` 播种；**未进 HEAD，本记录按在途登记，不计入销账**（四级口径：**PRODUCTION WIRED** 的四环证据不含此面）。owner：安全线 + 并行线 |
+| ③ | **deny 闸的配置面封禁已落地**（同日 `6f1a543a` 进 HEAD）—— 被封工具**不入目录、不入登记面**，deny 压过只读预设 / allowlist / 族授权；**但主人可见的「当场拉黑」面仍不存在**（改配置文件 + **重启**生效；库 API `bridge.deny_guard().deny_capability(...)` 有，主人面无） | 配置面字段 `McpServerSpec::deny_tools`（`crates/capabilities/tools/src/mcp_bridge/config.rs`，`#[serde(default)]` ⇒ 老配置零改动兼容）；装配期播种 `seed_deny_list`（`bridge.rs`）+ 目录边界过滤（`bridge.rs`）⇒ 被封工具**从不被登记**；既有对账逻辑天然报 `removed` ⇒ 已注册的随之注销，**无需特例** | **已销账（配置面这一层）**：提交 `6f1a543a`（生产代码净 +186 行 + 14 条用例 `crates/capabilities/tools/tests/mcp_deny_guard.rs`）。**未销账（主人面这一层）**：运行时封禁操作面需另派批（须先解持久化与双写者并发） |
 | ④ | **名册不独立复核「族授权 + 逐次人批已就位」** —— 那层在组合根的策略里，名册够不着 ⇒ 名册只报可观测代理「已登记 ≥1」 | `crates/engine/runtime-assembly/src/canonical/self_status_roster.rs:121`；策略落点在 `crates/adapters/cli/src/external_tools.rs:74` | 读数边界（运行时线） |
 | ⑤ | **工具数 N 本身不在名册**（`CapabilitySwitch` 只有布尔）⇒ 计数面在接线日志（stderr） | `crates/engine/runtime-assembly/src/canonical/self_status_roster.rs:121`；计数日志 `crates/adapters/cli/src/external_tools.rs:79`（`[external-tools] wired: …`） | 读数边界（运行时线） |
 | ⑥ | **真服务器端到端未实测** ⇒ HARDWARE VALIDATED 不成立 | §4 探针性质说明（仓内自建最小 stdio 探针 ≠ 真实第三方 MCP 服务器） | 实测缺口（安全线） |

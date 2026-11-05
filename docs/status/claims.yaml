@@ -98,7 +98,7 @@ claims:
       **声明面/结果面已做有界收敛**（`crates/capabilities/tools/src/mcp_bridge/redaction.rs`：描述 ≤500 字符、schema 深度 ≤8 / 属性 ≤64、结果正文 ≤64 KiB、控制字符清洗复用治理既有字符类）—— 第三方原文不再裸奔进模型。
       **周期刷新 + 重连后能力表重登已落地**（`external_tool_bridge.rs` 的 `refresh_outcome` 逐服务器隔离 / `apply_external_tool_report` 先撤后登 / `spawn_external_tool_refresh`，默认 60s、程序化配置无 env 旋钮）—— 不可达服务器不产出增量（不误撤），同 id 同模型面名重复登记幂等。
       **名册口径已归位**：`mcp` 行 = 实际登记进运行时能力表的外部工具件数 ≥ 1（`crates/engine/runtime-assembly/src/canonical/self_status_roster.rs`）⇒ 旧口径「服务器列表已加载」不再冒充「MCP 工具可用」；新增 `mcp_bridge` 行 = 桥面已装配（配置面事实，与件数无关）。
-      **遗留（如实）**：① 结果面不做内容级凭据识别 —— 远端回吐凭据仍会进模型上下文（防线是有界 + 收敛 + 逐次人批）；② `sweep_output_for_egress` 仍未接线到工具输出面 ⇒ 不能声称「MCP 结果已脱敏」；③ deny 闸生产注入口在途（另一条并行线施工中）⇒ 主人暂无「事后拉黑单个外部工具」的手段；④ 名册不独立复核「族授权 + 逐次人批已就位」（那层在组合根的策略里，名册够不着）⇒ 只报可观测代理「已登记 ≥1」；⑤ 工具数 N 本身不在名册（`CapabilitySwitch` 只有布尔）⇒ 计数面在接线日志（stderr）；⑥ 真服务器端到端未实测 ⇒ HARDWARE VALIDATED 不成立。
+      **遗留（如实）**：① 结果面不做内容级凭据识别 —— 远端回吐凭据仍会进模型上下文（防线是有界 + 收敛 + 逐次人批）；② `sweep_output_for_egress` 仍未接线到工具输出面 ⇒ 不能声称「MCP 结果已脱敏」；③ deny 闸的**配置面封禁**已于同日落地（`McpServerSpec::deny_tools`，提交 `6f1a543a`）⇒ 被封工具不入目录、不入登记面，deny 压过只读预设 / allowlist / 族授权；但**主人可见的「当场拉黑」面仍不存在**（改配置文件 + 重启生效，库 API 有、主人面无）；④ 名册不独立复核「族授权 + 逐次人批已就位」（那层在组合根的策略里，名册够不着）⇒ 只报可观测代理「已登记 ≥1」；⑤ 工具数 N 本身不在名册（`CapabilitySwitch` 只有布尔）⇒ 计数面在接线日志（stderr）；⑥ 真服务器端到端未实测 ⇒ HARDWARE VALIDATED 不成立。
 
   - id: tool.voice_speak
     title: "发声工具面（系统 TTS 合成即播 + 播放纪律 + 账本）"
