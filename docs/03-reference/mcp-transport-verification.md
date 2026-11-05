@@ -566,12 +566,12 @@ exit=0
 
 ---
 
-## 10. 遗留与建议（**只报告不实施**）
+## 10. 遗留与建议（**逐条标注处置状态**；① ② 已实施并实测，③ ④ ⑤ 仍开）
 
 | # | 观察 | 证据（file:line） | 性质 |
 |---|---|---|---|
-| ① | **响应等待无截止**：`SseChannel::request` 直接 `waiter.await`，服务器收了 POST 但不回帧 ⇒ 该次请求**永久阻塞**（端点等待有 10 s 截止，响应等待没有）。握手期（`initialize`）走的是同一条路 ⇒ 一个「收请求但不回帧」的服务器**可能**把启动期接线挂死。**本批未用受控实验触发这一条**（本批唯一一次挂死是**探针自身的缺陷**，见 §3 注 ②，不是实现的缺陷） | `crates/capabilities/tools/src/mcp_bridge/transport.rs:449-451`（无截止）；`:394`（有截止的对照）；握手路径 `crates/capabilities/tools/src/mcp_bridge/connection.rs:339-342` | 实现边界（建议主线裁决是否给响应等待加截止） |
-| ② | **不合法的帧被静默丢弃**：`event: message` 但 `data` 不是合法 JSON-RPC 响应 ⇒ 反序列化失败即 `if let Ok(...)` 跳过，**不记日志、不计数**；流会继续跑但该次请求永远等不到响应（叠加 ① ⇒ 永久阻塞） | `crates/capabilities/tools/src/mcp_bridge/transport.rs:366-371` | 可观测性缺口（建议主线裁决是否落一条 stderr 观测） |
+| ① | ~~**响应等待无截止**~~ ⇒ **已实施（2026-11-05 补）**：复核发现**三个传输面都无截止**（不只 sse；`reqwest::Client::new()` 默认 `timeout: None`），统一给 **30 s 硬截止**（对齐生产实际在用的桥级调用档位 `call_timeout_ms` = 30 s），超时**如实报**「`… did not deliver the response within 30s`」并**清掉挂起等待者**（含「请求没发出去」那条改前就在泄漏的路径）⇒ 改前「收 POST 不回帧」会让启动期接线**永久挂死**（实测 91 s 被杀、exit=124、连 `[external-tools]` 都没打出来），改后 **30 s 有界返回**、错误可辨、**启动不阻断**（exit=0）。 | 落点 `crates/capabilities/tools/src/mcp_bridge/transport.rs`（`RESPONSE_TIMEOUT` + 三面 `request` 的等待包装 + `PendingRouter::{forget, wait_for}`）；用例 `crates/capabilities/tools/tests/mcp_transport_response_deadline.rs`（8 条） | **已销账**（传输面响应相位）；⚠️ **请求相位**三处（sse/http 的 POST、stdio 的写）**仍无截止**，另批 |
+| ② | ~~**不合法的帧被静默丢弃**~~ ⇒ **已实施（2026-11-05 补）**：帧仍被丢弃、链路**不断**（**只记不改行为**），但不再无声 ⇒ ①**机器可读**：trait 上新增带默认实现的 `McpChannel::malformed_frames() -> u64`（链接级累计丢弃数，外部实现者零破坏）；②**人可读**：限频 stderr 一行（首条 + 之后每 100 条一条，**不记帧原文** —— 坏帧可能带服务器侧内容）⇒ 防日志风暴。stdio 读帧处的**同类**静默丢弃一并覆盖。 | 落点 `crates/capabilities/tools/src/mcp_bridge/transport.rs`（trait 方法 + 限频助手 + 两处读帧分支）；用例 `crates/capabilities/tools/tests/mcp_malformed_frame_observability.rs`（2 条，含**阴性对照**） | **已销账**（可观测性）；⚠️ 遗留 ③（无 `event:` 的帧**连计数都不进**）仍开 |
 | ③ | **`event:` 字段是必需的**：裸 `data:` 行（无 `event:`）不被判为 `message` ⇒ 按「规范直觉」写的服务端会静默不响应 | `crates/foundation/plugin/src/mcp/sse.rs:28-34`；`transport.rs:366-371` | 实现边界（协议口径已在本文 §2.3 写清） |
 | ④ | **`retry:` / `id:` 帧被解析但未被使用**：连接断了不会按服务端给的 `retry` 退避重连，重连预算完全在上层 `McpServerConnection` | `crates/foundation/plugin/src/mcp/sse.rs:19`（字段存在）、`transport.rs:354-376`（读任务不读 retry）、`connection.rs:220-261`（重连在上层） | 实现边界（不影响本次结论） |
 | ⑤ | **周期刷新的第一拍是「立即」而非「一个周期后」**：`tokio::time::interval` 的首个 tick 立即完成 ⇒ 启动期接线刚做完就又跑了一轮发现（实测捕捉到第二次 `tools/list`，`id=3`）；它**与进程退出赛跑** ⇒ 短命的 CLI 进程可能跑不到第二拍。与「默认 60 000 ms 周期」的措辞有落差 | `crates/engine/runtime-assembly/src/canonical/external_tool_bridge.rs:442`（`tokio::time::interval` + `MissedTickBehavior::Delay`）、`crates/capabilities/tools/src/mcp_bridge/config.rs:49`（`DEFAULT_REFRESH_INTERVAL_MS`） | 口径落差（**只报告不实施**；是否改成「首拍延后一个周期」由主线裁决） |
