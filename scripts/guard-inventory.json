@@ -381,6 +381,27 @@
       "flags": []
     },
     {
+      "id": "check-fusion-channels",
+      "path": "scripts/check_fusion_channels.py",
+      "kind": "ratchet",
+      "is_guard": true,
+      "blocking": true,
+      "invocation": [
+        "python3 scripts/check_fusion_channels.py"
+      ],
+      "ci_workflows": [
+        ".github/workflows/fusion-channel-ratchet.yml"
+      ],
+      "has_baseline": true,
+      "notes": "融合通道闸门 —— 「不许不涨」的尺子（B）",
+      "flags": [
+        "--help",
+        "--report",
+        "--update",
+        "-h"
+      ]
+    },
+    {
       "id": "check-fuzz-bins",
       "path": "scripts/check_fuzz_bins.py",
       "kind": "guard",

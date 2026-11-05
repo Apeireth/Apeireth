@@ -1,0 +1,33 @@
+{
+  "corpora": [
+    {
+      "baseline": {
+        "cases": 476,
+        "ndcg_at_k": 0.16146706276775386,
+        "recall_at_k": 0.29831932773109243
+      },
+      "delta": 0.0,
+      "name": "redchamber",
+      "with_channel": {
+        "cases": 476,
+        "ndcg_at_k": 0.16146706276775386,
+        "recall_at_k": 0.29831932773109243
+      }
+    },
+    {
+      "baseline": {
+        "cases": 248,
+        "ndcg_at_k": 0.4817377629786214,
+        "recall_at_k": 0.6875
+      },
+      "delta": 0.0,
+      "name": "watershed",
+      "with_channel": {
+        "cases": 248,
+        "ndcg_at_k": 0.4817377629786214,
+        "recall_at_k": 0.6875
+      }
+    }
+  ],
+  "k": 10
+}
