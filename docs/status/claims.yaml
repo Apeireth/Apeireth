@@ -44,7 +44,7 @@ claims:
       - crates/adapters/cli/src/lib.rs
     tests:
       - crates/foundation/core/src/cost_router.rs
-    verified_at: d24505af
+    verified_at: 6f1a543a
     verify_cmd: "cargo test -p apeireth-core cost_router"
     owner: core
     next_review: "2026-11-20"
@@ -62,7 +62,7 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/task_board_tool.rs
       - crates/adapters/cli/tests/task_board_knob.rs
-    verified_at: d24505af
+    verified_at: 6f1a543a
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test task_board_tool"
     owner: runtime-assembly
     next_review: "2026-11-20"
@@ -70,7 +70,7 @@ claims:
 
   - id: tool.mcp_bridge
     title: "MCP 外部工具桥（catalog/连接/治理映射/配置面）"
-    level: IMPLEMENTED
+    level: PRODUCTION WIRED
     default: "OFF"
     switch_env: APEIRETH_ENABLE_MCP
     sources:
@@ -79,14 +79,26 @@ claims:
       - crates/capabilities/tools/src/mcp_bridge/config.rs
       - crates/capabilities/tools/src/mcp_bridge/governance.rs
       - crates/engine/runtime-assembly/src/canonical/production.rs
+      - crates/capabilities/tools/src/mcp_bridge/redaction.rs
+      - crates/engine/runtime-assembly/src/canonical/external_tool_bridge.rs
+      - crates/engine/runtime-assembly/src/canonical/self_status_roster.rs
+      - crates/foundation/governance/src/permission.rs
+      - crates/adapters/cli/src/external_tools.rs
     tests:
       - crates/capabilities/tools/src/mcp_bridge/config.rs
       - crates/capabilities/tools/src/mcp_bridge/catalog.rs
-    verified_at: d24505af
+    verified_at: 6f1a543a
     verify_cmd: "cargo test -p apeireth-tools-canonical mcp_bridge"
     owner: tools
     next_review: "2026-11-20"
-    notes: "四级口径：IMPLEMENTED（库级）｜PRODUCTION WIRED 不成立｜DEFAULT ENABLED 不成立（默认关，开关 `APEIRETH_ENABLE_MCP=1`）｜HARDWARE VALIDATED 不成立。；2026-11-04 实测：开 `APEIRETH_ENABLE_MCP=1` 后 0 个 MCP 工具进入模型工具目录 —— 四环全断：①发现 `crates/capabilities/tools/src/mcp_bridge/bridge.rs:175` 的 `McpToolBridge::refresh()` 生产调用点 0（仅 `crates/capabilities/tools/tests/mcp_bridge_e2e.rs`、`crates/capabilities/tools/tests/rea_bridge_probe.rs`、`crates/engine/runtime-assembly/tests/mcp_bridge_runtime_e2e.rs` 调用）；②登记 `crates/engine/runtime/src/canonical/runtime.rs:563` 的 `Runtime::register_dynamic_tool()` 生产调用点 0，且 `crates/engine/runtime-assembly/src/canonical/production.rs:1381` 的 `capabilities.extend(module.capabilities())` extend 的是空袋 ⇒ 恒 no-op；③授权 `crates/adapters/cli/src/lib.rs:1185-1373` 的生产 grant 表零条 mcp，`crates/foundation/governance/src/permission.rs:147-160` 只做精确 id 匹配 ⇒ 动态 id `tool.mcp.<server>.<tool>` 无法被静态表覆盖；桥内自建空策略（`crates/capabilities/tools/src/mcp_bridge/bridge.rs:117`）的 `Ask` 落成 `pipeline.pre_ask` permanent_error（`crates/capabilities/tools/src/exec_pipeline/mod.rs:228`/`crates/capabilities/tools/src/exec_pipeline/mod.rs:274`）⇒ 不是人批；④派发 `crates/engine/runtime/src/canonical/runtime.rs:585-596` 的 `tool_declarations()` 内无 `mcp:*`。；生产成立的部分只有：服务器列表加载（env 主入口 + 数据目录 StoredDoc 次入口 + 坏配置拒开，`crates/engine/runtime-assembly/src/canonical/production.rs:868-878`）与桥/模块袋的构造（`crates/engine/runtime-assembly/src/canonical/production.rs:1372-1384`）—— 标题里的 catalog / 连接 / 治理映射三面在生产均不成立。；读数陷阱：自述名册 `crates/engine/runtime-assembly/src/canonical/self_status_source.rs:1182` 的 `mcp` 名册行（`roster_from_config` 内） = `config.mcp` = 「服务器列表已加载且有 ≥1 enabled 条目」（`crates/engine/runtime-assembly/src/canonical/production.rs:885-887`）⇒ 与外部工具数零关系，不可读成「MCP 可用」。；服务器配置 = APEIRETH_MCP_SERVERS env + mcp-servers.json（拒开）；管理 UI/健康检查面未接线。；2026-11-04 口径归位批：level 由 PRODUCTION WIRED 降为 IMPLEMENTED —— 接线属新功能 + 治理模型变更（动态 id 与静态 grant 表形态冲突、`full` 会话预设把 RequireApproval 改写成 Allow、断线重连后能力表重登语义缺失），须 owner 单独拍板，登记见 `docs/status/unwired-ledger.md` W9"
+    notes: |
+      四级口径：**PRODUCTION WIRED**（接入 canonical 运行时主路径）｜DEFAULT ENABLED 不成立（默认关，开关 `APEIRETH_ENABLE_MCP=1`）｜**HARDWARE VALIDATED 不成立**（2026-11-05 live 探针用的是仓内自建的最小 stdio 探针，不是真实第三方 MCP 服务器）。
+      2026-11-05 接线批（owner 拍板「MCP 族一律逐次人批、`full` 预设不豁免」）：四环接通 —— ①发现 `crates/capabilities/tools/src/mcp_bridge/bridge.rs` 的 `McpToolBridge::refresh()` 有生产调用点（组合根 `crates/adapters/cli/src/external_tools.rs`）；②登记 `crates/engine/runtime/src/canonical/runtime.rs` 的 `Runtime::register_dynamic_tool()` 有生产调用点（`crates/engine/runtime-assembly/src/canonical/external_tool_bridge.rs` 的 `RuntimeExternalToolRegistry::register`）⇒ 进运行时能力表，`tool_declarations()` 自动带上 `mcp:<server>:<tool>`；③授权 —— 新增族授权底座（`crates/foundation/governance/src/permission.rs` 的 `grant_family` / `require_approval_for_family` / `decision_for_capability` 族兜底）+ MCP 族审批地板（`crates/engine/runtime-assembly/src/canonical/permission_preset.rs` 的 `human_approval_floor_applies`）⇒ MCP 族一律逐次人批、`full` 预设不豁免（族根 `tool.mcp`，段边界判定，`tool.mcpsomething` 不命中）；④派发 —— `find_by_name` 按 `declaration().name` 命中动态工具。
+      **live 实测（2026-11-05 实跑）**：`APEIRETH_ENABLE_MCP=1` + 可达 stdio 服务器 ⇒ stderr `[external-tools] wired: 1 registered, 0 unregistered, 1 live`；开关关 ⇒ 不装配；开关开 + 服务器不可达 ⇒ stderr `[external-tools] discovery failed: …` 且启动不中断。
+      **声明面/结果面已做有界收敛**（`crates/capabilities/tools/src/mcp_bridge/redaction.rs`：描述 ≤500 字符、schema 深度 ≤8 / 属性 ≤64、结果正文 ≤64 KiB、控制字符清洗复用治理既有字符类）—— 第三方原文不再裸奔进模型。
+      **周期刷新 + 重连后能力表重登已落地**（`external_tool_bridge.rs` 的 `refresh_outcome` 逐服务器隔离 / `apply_external_tool_report` 先撤后登 / `spawn_external_tool_refresh`，默认 60s、程序化配置无 env 旋钮）—— 不可达服务器不产出增量（不误撤），同 id 同模型面名重复登记幂等。
+      **名册口径已归位**：`mcp` 行 = 实际登记进运行时能力表的外部工具件数 ≥ 1（`crates/engine/runtime-assembly/src/canonical/self_status_roster.rs`）⇒ 旧口径「服务器列表已加载」不再冒充「MCP 工具可用」；新增 `mcp_bridge` 行 = 桥面已装配（配置面事实，与件数无关）。
+      **遗留（如实）**：① 结果面不做内容级凭据识别 —— 远端回吐凭据仍会进模型上下文（防线是有界 + 收敛 + 逐次人批）；② `sweep_output_for_egress` 仍未接线到工具输出面 ⇒ 不能声称「MCP 结果已脱敏」；③ deny 闸生产注入口在途（另一条并行线施工中）⇒ 主人暂无「事后拉黑单个外部工具」的手段；④ 名册不独立复核「族授权 + 逐次人批已就位」（那层在组合根的策略里，名册够不着）⇒ 只报可观测代理「已登记 ≥1」；⑤ 工具数 N 本身不在名册（`CapabilitySwitch` 只有布尔）⇒ 计数面在接线日志（stderr）；⑥ 真服务器端到端未实测 ⇒ HARDWARE VALIDATED 不成立。
 
   - id: tool.voice_speak
     title: "发声工具面（系统 TTS 合成即播 + 播放纪律 + 账本）"
@@ -100,7 +112,7 @@ claims:
       - crates/adapters/cli/src/lib.rs
     tests:
       - crates/capabilities/tools/tests/voice_speak.rs
-    verified_at: d24505af
+    verified_at: 6f1a543a
     verify_cmd: "cargo test -p apeireth-tools-canonical --test voice_speak"
     owner: tools
     next_review: "2026-11-20"
@@ -150,9 +162,10 @@ claims:
       - crates/capabilities/tools/src/exposure_audit/report.rs
       - crates/adapters/cli/src/exposure.rs
       - crates/engine/runtime-assembly/src/canonical/self_status_source.rs
+      - crates/engine/runtime-assembly/src/canonical/self_status_roster.rs
     tests:
       - crates/capabilities/tools/src/exposure_audit/mod.rs
-    verified_at: d24505af
+    verified_at: 6f1a543a
     verify_cmd: "cargo test -p apeireth-tools-canonical --lib exposure_audit"
     owner: capabilities
     next_review: "2026-12-01"
@@ -187,7 +200,7 @@ claims:
       - crates/capabilities/tools/src/accountability_view.rs
       - crates/foundation/governance/src/authorization.rs
       - crates/adapters/cli/src/egress_command.rs
-    verified_at: d24505af
+    verified_at: 6f1a543a
     verify_cmd: "cargo test -p apeireth-runtime --lib egress && cargo test -p apeireth-runtime-assembly --lib egress_gate"
     owner: runtime
     next_review: "2026-12-01"
@@ -228,7 +241,7 @@ claims:
     tests:
       - crates/adapters/gateway/tests/panel_routes.rs
       - crates/engine/memory/tests/memory_2_tests.rs
-    verified_at: 357e9780
+    verified_at: 6f1a543a
     verify_cmd: "cargo test -p apeireth-gateway --test panel_routes memory_update"
     owner: gateway
     next_review: "2026-11-20"
@@ -277,7 +290,7 @@ claims:
       - crates/adapters/cli/src/lib.rs
     tests:
       - crates/adapters/gateway/tests/tls_serve.rs
-    verified_at: d24505af
+    verified_at: 6f1a543a
     verify_cmd: "cargo test -p apeireth-gateway --test tls_serve"
     owner: gateway
     next_review: "2026-11-20"
@@ -334,7 +347,7 @@ claims:
     tests:
       - crates/foundation/governance/src/chain.rs
       - crates/adapters/cli/tests/governance_chain_equivalence.rs
-    verified_at: d24505af
+    verified_at: 6f1a543a
     verify_cmd: "cargo test -p apeireth-governance --lib"
     owner: governance
     next_review: "2026-11-20"
@@ -511,7 +524,7 @@ claims:
       - crates/adapters/cli/src/lib.rs
     tests:
       - crates/engine/runtime/tests/bio_pain_wiring.rs
-    verified_at: d24505af
+    verified_at: 6f1a543a
     verify_cmd: "cargo test -p apeireth-runtime --test bio_pain_wiring"
     owner: runtime
     next_review: "2026-11-20"

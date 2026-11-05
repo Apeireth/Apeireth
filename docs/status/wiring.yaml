@@ -3,7 +3,7 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: 8d7861b2dafcd2a791393485115fed86a990e06504fd3672d6c5b0862d8b0145
+claims_sha256: b8738f136eb5952e716786c8e7abd77e0014be916375f080d932fbce2ad1d221
 claims_total: 29
 items:
   - id: "rt.provider_router"
@@ -70,14 +70,24 @@ items:
         - "crates/capabilities/tools/src/mcp_bridge/config.rs"
         - "crates/capabilities/tools/src/mcp_bridge/governance.rs"
         - "crates/engine/runtime-assembly/src/canonical/production.rs"
+        - "crates/capabilities/tools/src/mcp_bridge/redaction.rs"
+        - "crates/engine/runtime-assembly/src/canonical/external_tool_bridge.rs"
+        - "crates/engine/runtime-assembly/src/canonical/self_status_roster.rs"
+        - "crates/foundation/governance/src/permission.rs"
+        - "crates/adapters/cli/src/external_tools.rs"
     wired:
       production_refs:
+        - "crates/adapters/cli/src/external_tools.rs"
         - "crates/adapters/cli/src/lib.rs"
         - "crates/capabilities/tools/src/mcp_bridge/bridge.rs"
         - "crates/capabilities/tools/src/mcp_bridge/catalog.rs"
         - "crates/capabilities/tools/src/mcp_bridge/config.rs"
         - "crates/capabilities/tools/src/mcp_bridge/governance.rs"
+        - "crates/capabilities/tools/src/mcp_bridge/redaction.rs"
+        - "crates/engine/runtime-assembly/src/canonical/external_tool_bridge.rs"
         - "crates/engine/runtime-assembly/src/canonical/production.rs"
+        - "crates/engine/runtime-assembly/src/canonical/self_status_roster.rs"
+        - "crates/foundation/governance/src/permission.rs"
     default_enabled: false
     validated:
       tests:
@@ -85,7 +95,7 @@ items:
         - "crates/capabilities/tools/src/mcp_bridge/catalog.rs"
       claims_id: "tool.mcp_bridge"
     gaps:
-      - "未达 PRODUCTION WIRED：四级口径：IMPLEMENTED（库级）｜PRODUCTION WIRED 不成立｜DEFAULT ENABLED 不成立（默认关，开关 `APEIRETH_ENABLE_MCP=1`）｜HARDWARE VALIDATED 不成立。；2026-11-04 实测：开 `APEIRETH_ENABLE…"
+      []
   - id: "tool.voice_speak"
     capability: "发声工具面（系统 TTS 合成即播 + 播放纪律 + 账本）"
     implemented:
@@ -152,12 +162,14 @@ items:
         - "crates/capabilities/tools/src/exposure_audit/report.rs"
         - "crates/adapters/cli/src/exposure.rs"
         - "crates/engine/runtime-assembly/src/canonical/self_status_source.rs"
+        - "crates/engine/runtime-assembly/src/canonical/self_status_roster.rs"
     wired:
       production_refs:
         - "crates/adapters/cli/src/exposure.rs"
         - "crates/adapters/cli/src/lib.rs"
         - "crates/capabilities/tools/src/exposure_audit/mod.rs"
         - "crates/capabilities/tools/src/exposure_audit/report.rs"
+        - "crates/engine/runtime-assembly/src/canonical/self_status_roster.rs"
         - "crates/engine/runtime-assembly/src/canonical/self_status_source.rs"
     default_enabled: false
     validated:
