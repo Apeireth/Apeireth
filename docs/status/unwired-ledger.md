@@ -88,6 +88,37 @@
 - `crates/engine/organ/src/motivation.rs`
 - `crates/foundation/orchestration/src/research_vault_ftrl.rs`
 
+### 5.2p **有意不接**：`first user must be owner` 的**引导口径不进 HTTP 面**（2026-11-05 总指挥拍板）
+
+**现象**：`crates/adapters/gateway/src/user_admin.rs:229` 的「首个用户必须是 owner」
+⇒ ⇒ **只在 CLI 引导口可观测**；HTTP 面**观测不到**（除「装载期快照 + 名册事后重置」这条缝）。
+
+**为什么这是**有意不接**（不是缺陷）**：
+* 引导口径触发的前提 = **用户表为空**；
+* ⇒ ⇒ 而 HTTP 面的角色门要求 `AdminControl` ⇒ ⇒ **角色面必须已激活**
+  ⇒ ⇒ **角色面激活需要 `users.json` 存在** ⇒ ⇒ **表非空** ⇒ ⇒ 引导口径**不触发**；
+* ⇒ ⇒ 要让 HTTP 面能建「首个 owner」⇒ ⇒ 就得**允许无认证写用户表**
+  ⇒ ⇒ **那正是 P0-1（管理面 fail-closed）刚堵掉的口子** ⇒ ⇒ **绝不能开**。
+
+⇒ ⇒ **裁决**：引导口径 = **CLI 引导口专属规则**（HTTP 面的正确顺序 = 先用 CLI 建好 owner，
+再走 HTTP 管人）⇒ ⇒ **不补 HTTP 口径**。
+⇒ ⇒ ⚠️ **若将来产品确实要「HTTP 自助引导」** ⇒ ⇒ 那是一条**独立的、可审计的**产品决策
+⇒ ⇒ 需要：单独的引导端点 + 一次性引导票据 + 审计留痕 ⇒ ⇒ **不是本条**。
+
+### 5.2q **需知悉的装配要求**（不是缺陷，但**必须写清**）：逃生阀下 `/v1/admin/shutdown` 的可达性
+
+**现象**：逃生阀（`APEIRETH_GATEWAY_TOKEN=none`）与客户端令牌表**互斥**
+（`client_tokens.rs:356` `validate_gate_table_pair` ⇒ 配置矛盾拒开）
+⇒ ⇒ 逃生阀下**唯一**可绑定的过门署名名是 `anonymous`
+⇒ ⇒ **要让管理面可达，owner 必须绑定 `anonymous`**（`users.json` 的 `client_names`）
+⇒ ⇒ 否则管理面 403（fail-closed，**不静默**）。
+
+⇒ ⇒ **裁决**：**不改代码**（`resolve_user_identity` 的第二步回落
+`users.identity_for_client(client)` **已经支持**这个绑定 ⇒ ⇒ 能力**已具备**）
+⇒ ⇒ ⇒ 但**必须显式化** ⇒ ⇒ 已写进 `docs/02-guides/server-deployment.md` §6 第 2 条
+⇒ ⇒ ⇒ **不知道就用 SIGTERM 停机**（CLI `graceful_shutdown_signal` 已支持，同走收尾账）
+⇒ ⇒ ⇒ **不要**为了停机而临时开令牌面。
+
 ### 5.3 整族未接线：`layered_memo`（6 个模块同因）
 
 整个 `layered_memo` 在生产代码零消费（外部仅 `dream_consolidation.rs` 的 doc 链接），

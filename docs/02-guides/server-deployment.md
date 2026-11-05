@@ -103,8 +103,17 @@ pwsh -NoProfile -File packaging/service/apeireth-service.ps1 uninstall
    (`-Bind 0.0.0.0` 或 env `APEIRETH_LISTEN`) + 主机防火墙只放行可信网段;
    **非回环绑定强制令牌**: 令牌族两面皆空时网关拒绝启动 (fail-closed), 显式
    `APEIRETH_GATEWAY_TOKEN=none` 为逃生阀 (明示不设防, 留审计)。
-   TLS 尚未接线 (`APEIRETH_TLS_CERT`/`APEIRETH_TLS_KEY` 为接口桩, 流量明文),
+   TLS **已接线**（**四级口径：PRODUCTION WIRED** —— 真 rustls `ServerConfig` +
+   `TlsAcceptor`; `APEIRETH_TLS_CERT` / `APEIRETH_TLS_KEY` 提供证书 ⇒ 启用;
+   材料不全 ⇒ **拒绝启动**, fail-closed）,
    每客户端**权限**分级属 W3/E 轴范围, 当前版本不提供。
+   ⭐ **逃生阀下的停机口径** (2026-11-05 总指挥拍板): 逃生阀与客户端令牌表
+   **互斥** (`validate_gate_table_pair` ⇒ 配置矛盾拒开) ⇒ ⇒ 逃生阀下**唯一**
+   可绑定的过门署名名是 `anonymous` ⇒ ⇒ **要让 `/v1/admin/shutdown` 可达,
+   必须让 owner 在 `users.json` 里绑定 `anonymous`** (`client_names` 含
+   `anonymous`) ⇒ ⇒ 否则管理面 403 (fail-closed, 不静默)。
+   ⇒ ⇒ **不知道就先用 SIGTERM 停机** (CLI 的 `graceful_shutdown_signal` 已支持,
+   同走收尾账) ⇒ ⇒ **不要**为了停机而临时开令牌面。
 3. **令牌轮换**: `install -RotateToken`; 轮换后重连端 (桌面/TUI) 自动取新值
    (同源读取), 常驻服务需 `stop` + `start` 让新令牌进服务 env。
 4. **令牌不外流**: 令牌只存系统凭据库与服务 env —— 不落明文文件、不进任务定义、
