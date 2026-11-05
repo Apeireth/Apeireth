@@ -390,11 +390,20 @@ fuzz_target!(|data: &[u8]| {
         !findings.is_empty(),
         "contains_pii 必须与 findings 同口径"
     );
-    assert_eq!(
-        PromptInjectionHeuristic::has_signal(text),
-        !signals.is_empty(),
-        "has_signal 必须与 signals 同口径"
-    );
+      // ⚠️ 2026-11-05：`has_signal` 已删（它是 `signals(text).is_empty()` 的**一行包装**，
+      // 零调用 ⇒ ⇒ 属「重复对外壳」⇒ ⇒ 11-05 按孤儿处置删除）。
+      // ⇒ ⇒ 本断言改为**校验本体的真实性质**：**同口径 + 幂等**（同一输入两次调用结果一致）
+      // ⇒ ⇒ ⚠️ **不写同义反复**（`x.is_empty() || !x.is_empty()` 恒真 ⇒ ⇒ 等于没断言）。
+      assert_eq!(
+          PromptInjectionHeuristic::signals(text).is_empty(),
+          signals.is_empty(),
+          "signals 必须与自身重算同口径（确定性）"
+      );
+      assert_eq!(
+          PromptInjectionHeuristic::signals(text).len(),
+          signals.len(),
+          "signals 必须确定（重复调用结果一致）"
+      );
     assert_eq!(
         FeelingHintHeuristic::has_hint(text),
         !hints.is_empty(),
