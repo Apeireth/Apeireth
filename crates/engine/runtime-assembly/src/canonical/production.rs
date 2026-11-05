@@ -206,6 +206,12 @@ pub struct ProductionModulesConfig {
     /// 生物机制族 Wave 4 (SG-14): 上下文预算 (字符) 注入装配面模块;
     /// `None` = 不注入 (默认策略, 行为不变)。与 cli 组装器同一 env 真源。
     pub context_budget_chars: Option<usize>,
+    /// 生物机制族 W3.3 · 游戏练习场族总闸 (env `APEIRETH_ENABLE_BIO_PLAY`, 只认 `"1"`)。
+    /// 装配根解析后回填 (env 读取收敛到装配根单入口); 注册条件 = 本总闸 AND 工作区根已注入。
+    pub bio_play: bool,
+    /// 生物机制族 W3.7 · 生物候选总闸 (env `APEIRETH_ENABLE_BIO_CARE_CANDIDATES`, 只认 `"1"`), 仪式完成面复用。
+    /// 装配根解析后回填; 注册条件 = 本总闸 AND 关怀数据目录已注入 (`care_schedule`)。
+    pub bio_care_candidates: bool,
     /// Register the external tool bridge (MCP) module.
     ///
     /// When enabled, the server list is loaded at assembly time from
@@ -464,6 +470,8 @@ impl Default for ProductionModulesConfig {
             backup: None,
             task_board: None,
             context_budget_chars: None,
+            bio_play: false,
+            bio_care_candidates: false,
             mcp: false,
             mcp_data_dir: None,
             preference_learning: false,
@@ -834,19 +842,22 @@ impl ProductionModules {
     }
 
     fn build_inner(
-        config: ProductionModulesConfig,
+        mut config: ProductionModulesConfig,
         backends: ProductionBackends,
         clock: Arc<dyn Clock>,
         instrument: &BuildInstrumentation,
     ) -> RuntimeResult<Self> {
         let mut modules: Vec<Arc<dyn Module>> = Vec::new();
-        // Wave 4 / ADR-0009 R1b-1a: 神经信号总线 + 开关表一次解析 (9 开关 + 1
-        // 参数, fail-closed)。全关 = 不注册桥 = 零行为变化; 任一开关开 = 桥在
-        // 模块表首位注册, 这是唯一的 HookPoint→信号映射点。
+        // Wave 4 / ADR-0009 R1b-1a: 神经信号总线 + 开关表一次解析 (9 开关 + 1 参数,
+        // fail-closed)。全关 = 不注册桥 = 零行为变化; 任一开关开 = 桥在模块表首位注册。
         let nervous_bus = Arc::new(NervousBus::new());
         let nervous_switchboard = NervousSwitchboard::from_env().map_err(|error| {
             RuntimeError::misconfigured(format!("nervous switchboard refused to load: {error}"))
         })?;
+        // 两族生物总闸折进 config (env 读取收敛到装配根单入口): 值取自同一张
+        // `NervousSwitchboard` —— 装配面与自述名册同源, 名册不再读 env (纯函数)。
+        config.bio_play = nervous_switchboard.switch_enabled(BioSwitch::Play);
+        config.bio_care_candidates = nervous_switchboard.switch_enabled(BioSwitch::CareCandidates);
         if nervous_switchboard.any_enabled() {
             modules.push(
                 Arc::new(NervousBridgeModule::new(nervous_bus.as_ref().clone())) as Arc<dyn Module>,
@@ -966,12 +977,10 @@ impl ProductionModules {
             }
         }
 
-        // 干活能力轴 P2 (「计划→改→验证→落」四拍受控工作树写, opt-in): 两级
-        // 工具面注册条件 = 开关 + `file_write` 唯一写总闸 + 工作区根 (注册即闸,
-        // 与 `tool.apply_patch` 同受一闸)。`worktree_plan` 是只读改单面 (零落盘,
-        // 其产物是 apply 的输入合同); `worktree_apply` 走**共享**读前观测门禁
-        // (与读工具同一张观测表, 未读不得覆盖/删除)。审批级: apply 每次落盘
-        // 都人批 (无自动放行档, 审批卡载荷 = 改单摘要), plan 只读零审批。
+        // 干活能力轴 P2 (「计划→改→验证→落」四拍受控工作树写, opt-in): 注册条件 =
+        // 开关 + `file_write` 唯一写总闸 + 工作区根 (注册即闸)。plan 只读改单面
+        // (零落盘, 产物是 apply 的输入合同); apply 走**共享**读前观测门禁 (未读
+        // 不得覆盖/删除), 每次落盘人批 (无自动放行档), plan 只读零审批。
         if config.worktree_plan && config.file_write {
             if let Some(root) = &backends.workspace_root {
                 instrument.constructed(ModuleFamily::WorktreePlan);
@@ -1001,10 +1010,8 @@ impl ProductionModules {
 
         // 书→技能沉淀 (P 轴吸收自动化 P1, 默认关): 两级工具面。`tool.skill_distill`
         // 是写文件面 —— 注册条件 = 开关 + `file_write` 唯一写总闸 + 工作区根 +
-        // 技能库目录 (注册即闸, 与 `tool.apply_patch` 同受一闸), 审批档 = 每次
-        // 沉淀都人批 (无自动放行档, 审批卡载荷 = 技能卡摘要); `tool.skill_search`
-        // 是只读档 (零审批), 只要技能库目录。技能库 = 数据目录 `skills/`,
-        // 每卡一 StoredDoc (拒开语义)。
+        // 技能库目录 (注册即闸), 每次沉淀人批; `tool.skill_search` 是只读档
+        // (零审批), 只要技能库目录 (`skills/` 数据目录, 每卡一 StoredDoc 拒开)。
         if config.skill_distill && config.file_write {
             if let (Some(root), Some(skills_dir)) = (&backends.workspace_root, &config.skills_dir) {
                 instrument.constructed(ModuleFamily::SkillDistill);
@@ -1032,10 +1039,8 @@ impl ProductionModules {
         }
 
         // 文件写入总闸 (宪法级, 内测整改): `file_write` 是**唯一写总闸** ——
-        // 组装根把同一开关值注入 shell 配置, shell 写命令 (重定向/删除类/写
-        // 命令面) 与 apply_patch 同受此闸, 开关名与权力相符。关 = 写意图拒绝
-        // 即帧 (`pipeline.pre_deny`); 开 = shell 行为不变 (审批链照旧走既有
-        // 风险映射)。
+        // 组装根把同一开关值注入 shell 配置, shell 写命令与 apply_patch 同受此闸。
+        // 关 = 写意图拒绝即帧 (`pipeline.pre_deny`); 开 = shell 行为不变。
         if let Some(shell_config) = config.shell {
             instrument.constructed(ModuleFamily::Shell);
             let provider = ShellModule::new(shell_config.with_file_write(config.file_write));
@@ -1050,8 +1055,7 @@ impl ProductionModules {
 
         // 内容流接入 (`tool.content_feed`, J1, opt-in): 订阅源管理 + 受控拉取 +
         // 结构化摘要 + 入记忆流 (L2 封套披露)。治理档位在治理链
-        // (`ContentFeedApprovalHook`): RequireApproval 级 —— 拉取与入库都经
-        // 审批档, 改订阅走 write_intent 同族 (改订阅 = 写文件)。
+        // (`ContentFeedApprovalHook`): RequireApproval 级 (拉取与入库都经审批档)。
         if let Some(feed_config) = config.content_feed {
             instrument.constructed(ModuleFamily::ContentFeed);
             let provider = ContentFeedModule::new(feed_config);
@@ -1062,8 +1066,7 @@ impl ProductionModules {
         // (增删列, 四类触发器词表)。治理档位在治理链 (`CareScheduleApprovalHook`):
         // RequireApproval 级 —— 改规则 = 写文件 (write_intent 同族), 每次调用
         // 都停人工审批。
-        // W3.6: 关怀数据目录同时作为生命周期账本持久化目录（开关关 = 纯内存，
-        // 不建文件；目录缺省 = 不持久化），故先克隆再按需搬迁。
+        // W3.6: 关怀数据目录同时作为生命周期账本持久化目录 (缺省 = 纯内存, 不建文件)。
         let bio_lifecycle_store_dir = config.care_schedule.clone();
         if let Some(care_dir) = config.care_schedule {
             instrument.constructed(ModuleFamily::CareSchedule);
@@ -1135,9 +1138,8 @@ impl ProductionModules {
 
         // 创作工具面 W1 · 图像操作 (`tool.image_ops`, 默认关): 闭合操作词表管道 +
         // 工作区限域读写 + 敏感面拒 + 炸弹图上限 + 格式白名单 + 原子写。注册条件 =
-        // 开关 + `file_write` 唯一写总闸 + 工作区根 + 共享读前观测门禁 (注册即闸,
-        // 与 `tool.apply_patch` 同受一闸一观测表); 输出写归档文件写入族。
-        // 计数器句柄留给自述创作节 (同源同账)。
+        // 开关 + `file_write` 唯一写总闸 + 工作区根 + 共享读前观测门禁; 输出写
+        // 归档文件写入族。计数器句柄留给自述创作节 (同源同账)。
         let mut image_ops_activity = None;
         if config.image_ops && config.file_write {
             if let Some(root) = &backends.workspace_root {
@@ -1148,11 +1150,10 @@ impl ProductionModules {
             }
         }
 
-        // 创作工具面 W2 · 文档操作 (`tool.doc_ops`, 默认关): 受控读写族 (PDF 读 +
-        // DOCX 读 + PDF 基础写批量管道) + 工作区限域 + 敏感面拒 + 大小/页数上限 +
-        // 创建类原子写 (只创建不覆盖)。注册条件 = 开关 + 配置落位 (注册即闸);
-        // **写面双重约束** = `file_write` 唯一写总闸 (组装根注入同一开关值,
-        // 关 = 拒写不拒读) + 审批档每次人批。计数器句柄留给自述创作节 (同源同账)。
+        // 创作工具面 W2 · 文档操作 (`tool.doc_ops`, 默认关): 受控读写族 (PDF/DOCX 读
+        // + PDF 基础写批量管道) + 工作区限域 + 敏感面拒 + 大小/页数上限 + 创建类
+        // 原子写 (只创建不覆盖)。注册条件 = 开关 + 配置落位; **写面双重约束** =
+        // `file_write` 唯一写总闸 (关 = 拒写不拒读) + 审批档每次人批。
         let mut doc_ops_counters = None;
         if let Some(doc_ops_config) = &config.doc_ops {
             instrument.constructed(ModuleFamily::DocOps);
@@ -1163,11 +1164,10 @@ impl ProductionModules {
         }
 
         // 创作工具面 K3 · 表格操作 (`tool.sheet_ops`, 默认关): 受控读写族 (CSV 读 +
-        // 筛排聚合 + 计算列 + 导出) + 工作区限域 + 敏感面拒 + 行列/字节上限
-        // (防炸弹表) + 创建类原子写 (只创建不覆盖) + 数值精度如实 (f64 不静默
-        // 取整, NaN/inf 零产出)。注册条件 = 开关 + 配置落位 (注册即闸);
-        // **写面双重约束** = `file_write` 唯一写总闸 (组装根注入同一开关值,
-        // 关 = 拒写不拒读) + 审批档每次人批。计数器句柄留给自述创作节 (同源同账)。
+        // 筛排聚合 + 计算列 + 导出) + 工作区限域 + 敏感面拒 + 行列/字节上限 (防炸弹表)
+        // + 创建类原子写 + 数值精度如实 (f64 不静默取整, NaN/inf 零产出)。注册条件
+        // = 开关 + 配置落位; **写面双重约束** = `file_write` 唯一写总闸 (关 = 拒写
+        // 不拒读) + 审批档每次人批。计数器句柄留给自述创作节 (同源同账)。
         let mut sheet_ops_counters = None;
         if let Some(sheet_ops_config) = &config.sheet_ops {
             instrument.constructed(ModuleFamily::SheetOps);
@@ -1225,14 +1225,14 @@ impl ProductionModules {
         }
 
         // W3.3 · 游戏练习场 (`tool.play_*`, 默认关): 装配块在 `install_bio_play`
-        // (开关值来自装配根一次性解析的 `NervousSwitchboard`, 且要求工作区根注入),
-        // 返回共享账本句柄供自述 play probe 只读接入。
+        // (开关值来自 config 的 `bio_play` 总闸 = 装配根一次性解析的结果, 且要求
+        // 工作区根注入), 返回共享账本句柄供自述 play probe 只读接入。
         let bio_play_state = bio_production_wiring::install_bio_play(
             &mut capabilities,
             &clock,
             backends.workspace_root.as_deref(),
             instrument,
-            nervous_switchboard.switch_enabled(BioSwitch::Play),
+            config.bio_play,
         );
 
         // W3.7 · 仪式完成面 (`tool.ritual_done` / `tool.ritual_skip`, 默认关):
@@ -1243,7 +1243,7 @@ impl ProductionModules {
             &mut capabilities,
             &clock,
             bio_lifecycle_store_dir.as_deref(),
-            nervous_switchboard.switch_enabled(BioSwitch::CareCandidates),
+            config.bio_care_candidates,
         );
 
         // 自省通道 (与既有 5 内置工具同列): `tool.self_status` 结构化自述面。

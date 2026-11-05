@@ -1,4 +1,5 @@
-//! 自述名册补行批 (2026-11-04): 4 类「装配后才存在」的族在能力名册里的行。
+//! 自述名册补行批 (2026-11-04) + 纯函数化批 (2026-11-05): 4 类「装配后才存在」
+//! 的族在能力名册里的行。
 //!
 //! 覆盖点 (0 装诚实, 行值 = **实际装配事实**, 不是「能力是否存在」):
 //! - 4 类新行**恒在场** (键存在), 开关关时一律 false —— 名册不缺行 = 可自察;
@@ -9,6 +10,13 @@
 //! - **已注册 ≠ 可调用**: 两族治理面无 grant ⇒ 默认策略恒拒 (行名如实区分);
 //! - 补行**不破坏** 21 节自述冻结合同 (节位/节数不变, 新行只在 `capabilities` 节内);
 //! - 开关全关时装配面零变化 (四族一件工具都不注册)。
+//!
+//! 纯函数化批 (2026-11-05): play / ritual 两族生物总闸已折进
+//! `ProductionModulesConfig`, 名册 `roster_from_config` **只读 config, 不读进程
+//! env** ⇒ 恢复纯函数 (同输入同输出)。故:
+//! - 名册级用例**一律构造 config**, 不再靠改 env 造场景;
+//! - 装配级用例 (真调 `ProductionModules::build`) 仍走 env —— env 是**装配根**
+//!   的开关来源 (装配根把解析结果回填进 config), 那一层本就该读 env; 名册层不该读。
 //!
 //! 纪律: 本文件是**新建**测试文件, 不改任何既有测试文件。
 
@@ -34,11 +42,14 @@ const NOW_MS: i64 = 1_700_000_000_123;
 const PLAY_ENV: &str = "APEIRETH_ENABLE_BIO_PLAY";
 /// 生物候选总闸 env 名 (仪式完成面复用族总闸)。
 const CARE_ENV: &str = "APEIRETH_ENABLE_BIO_CARE_CANDIDATES";
+/// 节律时区偏移 env 名 (装配根唯一的「参数」; 非法值 = 装配硬失败)。
+const TZ_OFFSET_ENV: &str = "APEIRETH_BIO_CIRCADIAN_TZ_OFFSET_MIN";
 
 /// 四类补行族的键名 (断言用同一份字面量, 免得改键时漏改测试)。
 const ROSTER_KEYS: [&str; 4] = ["recon", "external", "play_registered", "ritual_registered"];
 
-/// 进程 env 只在本文件的装配测试里改; 全文件共用一把锁 (并行下仍确定)。
+/// 进程 env 只在本文件的**装配级**用例与纯函数判据里改; 全文件共用一把锁
+/// (并行下仍确定)。
 static ENV_LOCK: Mutex<()> = Mutex::new(());
 
 fn env_lock() -> MutexGuard<'static, ()> {
@@ -144,7 +155,6 @@ fn capability_ids(modules: &ProductionModules) -> Vec<String> {
 /// 名册补行 ①: 4 类新行**恒在场**, 开关关时一律 false (名册不缺行 = 可自察)。
 #[test]
 fn the_four_late_assembled_families_always_have_a_roster_row() {
-    let _guard = env_lock();
     let roster = roster_map(&base_config(), true);
     for key in ROSTER_KEYS {
         assert!(roster.contains_key(key), "名册必须有 {key} 行");
@@ -155,7 +165,6 @@ fn the_four_late_assembled_families_always_have_a_roster_row() {
 /// 名册补行 ②: 侦察 / 外部适配器两行按**实际注册条件**取值。
 #[test]
 fn recon_and_external_rows_follow_their_registration_conditions() {
-    let _guard = env_lock();
     let mut config = base_config();
     config.recon = Some(ReconConfig { scope: scope() });
     config.external = Some(ExternalToolsConfig {
@@ -176,14 +185,16 @@ fn recon_and_external_rows_follow_their_registration_conditions() {
 }
 
 /// 名册补行 ③: 游戏练习场 / 仪式完成两行报**注册事实** (键名带 `_registered`)。
+///
+/// 纯函数化批: 两族总闸改由 config 承载 (**不读 env**), 且「总闸开但注入缺」
+/// 仍照实 false —— 总闸是必要条件, 不是注册事实本身。
 #[test]
 fn play_and_ritual_rows_report_registration_not_callability() {
-    let _guard = env_lock();
-    let _play = EnvSwitch::set(PLAY_ENV, "1");
-    let _care = EnvSwitch::set(CARE_ENV, "1");
-
     let mut config = base_config();
+    config.bio_play = true;
+    config.bio_care_candidates = true;
     config.care_schedule = Some(workspace("care"));
+
     let roster = roster_map(&config, true);
     assert_eq!(roster["play_registered"], true);
     assert_eq!(roster["ritual_registered"], true);
@@ -199,6 +210,26 @@ fn play_and_ritual_rows_report_registration_not_callability() {
         roster["ritual_registered"], false,
         "缺关怀数据目录 = 仪式完成面注册不成"
     );
+}
+
+/// 名册补行 ③bis: **总闸开但注入缺** ⇒ 行仍 false (总闸 ≠ 注册事实)。
+#[test]
+fn an_enabled_switch_without_its_injection_slot_still_reports_false() {
+    let mut config = base_config();
+    config.bio_play = true;
+    config.bio_care_candidates = true;
+
+    // 练习场: 总闸开, 工作区根缺席 = 注册不成。
+    let roster = roster_map(&config, false);
+    assert_eq!(roster["play_registered"], false);
+    // 仪式: 总闸开, 关怀数据目录缺席 = 无处落盘 = 注册不成。
+    assert_eq!(roster["ritual_registered"], false);
+
+    // 两族注入齐备 ⇒ 照实 true (总闸 + 注入 = 注册事实)。
+    config.care_schedule = Some(workspace("care-both"));
+    let roster = roster_map(&config, true);
+    assert_eq!(roster["play_registered"], true);
+    assert_eq!(roster["ritual_registered"], true);
 }
 
 /// 名册补行 ④: **已注册 ≠ 可调用** —— 两族治理面无 grant ⇒ 默认策略恒拒。
@@ -295,6 +326,10 @@ async fn with_the_switches_off_the_four_families_register_nothing() {
 }
 
 /// 名册补行 ⑦: 开关开且**真装配**时, 两行照实 true (装配级, 经真调用取证)。
+///
+/// 纯函数化批: env 是**装配根**的开关来源 —— 装配根把解析结果回填进 config,
+/// 名册再只读 config。故本用例仍设 env (装配根那一层本就该读 env), 且顺带钉住
+/// 「装配根回填 ⇒ 名册照实 true」这条新链路 (传入的 config 两总闸为默认值 = 关)。
 #[tokio::test]
 async fn the_rows_turn_true_only_when_the_families_are_really_assembled() {
     let _guard = env_lock();
@@ -303,6 +338,9 @@ async fn the_rows_turn_true_only_when_the_families_are_really_assembled() {
 
     let mut config = base_config();
     config.care_schedule = Some(workspace("on-care"));
+    // 传入 config 的两总闸是默认值 (关) —— 真值只能来自装配根回填。
+    assert_eq!(config.bio_play, false);
+    assert_eq!(config.bio_care_candidates, false);
     let modules = ProductionModules::build(
         config,
         ProductionBackends {
@@ -331,4 +369,65 @@ async fn the_rows_turn_true_only_when_the_families_are_really_assembled() {
     let frame = self_status_frame(&modules).await;
     assert_eq!(frame["capabilities"]["play_registered"], true);
     assert_eq!(frame["capabilities"]["ritual_registered"], true);
+}
+
+/// 纯函数判据 (2026-11-05): `roster_from_config` **不读进程 env** —— 同进程内
+/// 改 env 后再调它, 输出**逐行不变** (同输入同输出)。
+#[test]
+fn the_roster_is_a_pure_function_and_ignores_process_env() {
+    let _guard = env_lock();
+
+    // 样本一: 两总闸皆开 + 注入齐备。
+    let mut on = base_config();
+    on.bio_play = true;
+    on.bio_care_candidates = true;
+    on.care_schedule = Some(workspace("pure-on"));
+    let on_before = roster_map(&on, true);
+
+    // 样本二: 两总闸皆关 (默认 fail-closed)。
+    let off = base_config();
+    let off_before = roster_map(&off, true);
+
+    // 同进程内把两族 env 开关打开 —— 名册输出必须**一字不变**。
+    let _play = EnvSwitch::set(PLAY_ENV, "1");
+    let _care = EnvSwitch::set(CARE_ENV, "1");
+    assert_eq!(
+        on_before,
+        roster_map(&on, true),
+        "改 env 后名册输出必须不变 (名册不读 env ⇒ 纯函数)"
+    );
+    assert_eq!(
+        off_before,
+        roster_map(&off, true),
+        "env 打开也不许把默认关闭的两族翻成 true (名册只认 config)"
+    );
+
+    // 复核: 两样本的值本身仍符合「总闸 + 注入」口径 (断言未被上面的等价性稀释)。
+    assert_eq!(on_before["play_registered"], true);
+    assert_eq!(on_before["ritual_registered"], true);
+    assert_eq!(off_before["play_registered"], false);
+    assert_eq!(off_before["ritual_registered"], false);
+}
+
+/// fail-closed 判据 (2026-11-05): 开关表解析失败 (节律时区参数非法) 时,
+/// **装配根硬失败** (拒开 = 不产生任何名册), 而不是「静默全关后照常开跑」。
+#[tokio::test]
+async fn an_invalid_switchboard_parameter_refuses_the_assembly() {
+    let _guard = env_lock();
+    let _tz = EnvSwitch::set(TZ_OFFSET_ENV, "not-a-number");
+
+    let Err(error) = ProductionModules::build(
+        base_config(),
+        ProductionBackends {
+            workspace_root: Some(workspace("bad-tz")),
+            ..ProductionBackends::default()
+        },
+        clock(),
+    ) else {
+        panic!("非法节律时区参数必须拒开 (fail-closed, 不静默回退)");
+    };
+    assert!(
+        error.to_string().contains("nervous switchboard"),
+        "拒绝原因必须指向开关表解析, got: {error}"
+    );
 }

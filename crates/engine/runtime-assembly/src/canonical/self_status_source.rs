@@ -45,7 +45,6 @@ use apeireth_tools_canonical::{
 };
 
 use super::care_heartbeat::CareHeartbeatStatus;
-use super::nervous_switchboard::{BioSwitch, NervousSwitchboard};
 use super::production::ProductionModulesConfig;
 use super::session::Session;
 use super::{execute::MAX_TOOL_CALLS_PER_ROUND, runtime::DEFAULT_MAX_ROUNDS};
@@ -1061,6 +1060,11 @@ impl SelfStatusSource for ProductionSelfStatusSource {
 /// 外部工具面可用 —— 外部工具面在生产未接线 (发现 / 登记 / 授权三环零生产
 /// 调用点), 故本行 true 与外部工具数零关系。服务器配置的折叠由组装根在
 /// [`super::production::ProductionModules::build`] 完成 (配置坏 = 拒开, 语义不变)。
+///
+/// **纯函数口径** (2026-11-05 批): 本函数**只读 config 与入参, 不读进程 env**
+/// (同输入必同输出)。两族生物总闸 (`bio_play` / `bio_care_candidates`) 已折进
+/// [`ProductionModulesConfig`], 由组装根从**同一张开关表**解析后回填 (env 读取
+/// 收敛到装配根单入口); 解析失败时组装根硬失败, 默认 config 两总闸皆关 ⇒ fail-closed。
 pub fn roster_from_config(
     config: &ProductionModulesConfig,
     workspace_root_present: bool,
@@ -1069,13 +1073,9 @@ pub fn roster_from_config(
     typed_recall: bool,
     extras: &[CapabilitySwitch],
 ) -> Vec<CapabilitySwitch> {
-    // 生物开关 (ADR-0009 D3 单入口): `ProductionModulesConfig` 无生物开关字段,
-    // 名册读装配根**同一张开关表** (与装配逐项一致); 解析失败 = 全关 (fail-closed)。
-    let bio_board = NervousSwitchboard::from_env().ok();
-    let bio_on = |switch: BioSwitch| bio_board.as_ref().is_some_and(|b| b.switch_enabled(switch));
-    let (bio_play, bio_care) = (bio_on(BioSwitch::Play), bio_on(BioSwitch::CareCandidates));
-    // 仪式完成面的装配条件 = 族总闸开 **且** 关怀数据目录已注入 (无处落盘 = 不注册)。
-    let ritual_registered = bio_care && config.care_schedule.is_some();
+    // 生物开关 (ADR-0009 D3 单入口): 两族总闸值取自 config (装配根回填, 本函数不读
+    // env ⇒ 纯函数); 仪式面装配条件 = 总闸开 **且** 关怀数据目录已注入。
+    let ritual_registered = config.bio_care_candidates && config.care_schedule.is_some();
     let mut roster = vec![
         CapabilitySwitch::new("filesystem", config.filesystem && workspace_root_present),
         CapabilitySwitch::new("search", config.search && workspace_root_present),
@@ -1263,7 +1263,7 @@ pub fn roster_from_config(
         // 注册事实, 不冒充可调 (键名带 `_registered` 后缀即此义)。
         CapabilitySwitch::new("recon", config.recon.is_some() && workspace_root_present),
         CapabilitySwitch::new("external", config.external.is_some()),
-        CapabilitySwitch::new("play_registered", bio_play && workspace_root_present),
+        CapabilitySwitch::new("play_registered", config.bio_play && workspace_root_present),
         CapabilitySwitch::new("ritual_registered", ritual_registered),
     ];
     roster.extend(extras.iter().cloned());
