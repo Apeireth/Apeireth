@@ -12,9 +12,9 @@ Historical design proposals and archived implementations live under `docs/archiv
 
 ```text
 apeireth/
-> Workspace taxonomy: **workspace = 30 members（29 product crates + 1 bench-only harness）**
-> (foundation 6 / engine 7 + image family 11 / capabilities 1 / adapters 4 = 29 + `benches` harness)。
-> crate 口径统一见本文件下表与 [INSTALL.md](INSTALL.md)（2026-10-20 R4b 归档 `apeireth-perception` 后更新；历史口径 31 members 见 [AGENTS.md](AGENTS.md) §3 与 CHANGELOG）。
+> Workspace taxonomy: **workspace = 31 members（30 product crates + 1 bench-only harness）**
+> (foundation 6 / engine 8 + image family 11 / capabilities 1 / adapters 4 = 30 + `benches` harness)。
+> crate 口径统一见本文件下表与 [INSTALL.md](INSTALL.md)（2026-10-31 ADR-0019 新增门面 crate `apeireth` 后更新，计入 engine 层；历史口径 30 members（2026-10-20 至 2026-10-31）见 [AGENTS.md](AGENTS.md) §3 与 CHANGELOG）。
 
 ├── crates/
 │   ├── foundation/       # stable domain types, protocol, plugins, policy, credentials
@@ -53,7 +53,7 @@ pre-freeze cleanup.
 Dependencies flow inward toward stable contracts and downward through the runtime layers.
 The **authoritative** production edge list and layer-direction verdict are generated in
 [`ARCHITECTURE.generated.md`](docs/architecture/ARCHITECTURE.generated.md)
-(2026-10-22 实测：30 members / 111 production edges)。手改该生成物或在此手写第二份依赖表
+(2026-10-22 实测：30 members / 111 production edges)〔历史口径（2026-10-22）：当日实测值即 30 / 111；现行 = **31 members / 118 production edges**（2026-10-31 ADR-0019 新增门面 crate `apeireth` 后）〕。手改该生成物或在此手写第二份依赖表
 均视为契约违规：增删依赖边的唯一方式是改代码 + `Cargo.toml`，然后由 `arch_guard` 与
 `arch_doc --gen` 反映。
 

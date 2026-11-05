@@ -12,7 +12,7 @@
 
 1. **这是什么**：一个用 Rust 写的**个人工具型助手底座**——开源免费、双协议（Apache-2.0 OR MIT）、主战场是个人用户的工具型助手（[ADR-0013](../adr/0013-open-source-personal-utility-assistant.md)，owner 2026-10-23 拍板）。它不是现成应用：模型是租户，底座不绑定任何一家模型，换模型不重做底座。
 2. **这不是什么**：不是「已经都接好」的系统。当前大量能力是**库级实现但生产未接线**（唯一清单见[未接线台账](../status/unwired-ledger.md)）；**默认关**的能力不是系统现状（见[能力矩阵 §0.2](capabilities-matrix.md)）；带 `#[ignore]` 的 live E2E 是**未实测**，不是「通过了」。
-3. **现在真实状态**：workspace = **30 members（29 crates + bench harness）**（[contract.toml](../architecture/contract.toml) `[workspace]`）；能力声明逐条落在 [claims.yaml](../status/claims.yaml)；批次债在 [00-backlog.md](../04-internal/backend-enhancement/00-backlog.md)，系统级缺口在 [SG 台账](../04-internal/backend-enhancement/system-gap-ledger-2026-10-18.md)，真机实测记录在 [live-verification-ledger.md](../04-internal/live-verification-ledger.md)。**测试数字只认 [test-baseline.md](test-baseline.md) 一处**，其余文档只引用不抄写。
+3. **现在真实状态**：workspace = **31 members（30 crates + bench harness）**（[contract.toml](../architecture/contract.toml) `[workspace]`）；能力声明逐条落在 [claims.yaml](../status/claims.yaml)；批次债在 [00-backlog.md](../04-internal/backend-enhancement/00-backlog.md)，系统级缺口在 [SG 台账](../04-internal/backend-enhancement/system-gap-ledger-2026-10-18.md)，真机实测记录在 [live-verification-ledger.md](../04-internal/live-verification-ledger.md)。**测试数字只认 [test-baseline.md](test-baseline.md) 一处**，其余文档只引用不抄写。
 
 ---
 
@@ -65,12 +65,12 @@ pwsh scripts/commit.ps1 -MessageFile <msg.txt>
 
 ---
 
-## 2. 项目全貌：四层单向依赖 + 30 members
+## 2. 项目全貌：四层单向依赖 + 31 members
 
 ### 2.1 组成
 
-- **30 members = 29 crates + bench harness**。
-- 其中 **18 个产品 crate**：foundation 6 / engine 7 / capabilities 1 / adapters 4（分层明细以 [contract.toml](../architecture/contract.toml) `[layers]` 为准）。
+- **31 members = 30 crates + bench harness**。
+- 其中 **19 个产品 crate**：foundation 6 / engine 8 / capabilities 1 / adapters 4（门面 crate `apeireth` 于 2026-10-31 加入、计入 engine 层；分层明细以 [contract.toml](../architecture/contract.toml) `[layers]` 为准）。
 - **11 个图像家族 crate**（`crates/engine/image/*`：许可搬运线第一批 vendored 创作内核 + 我们自己的接口层，溯源与质检见 [license-port](../04-internal/license-port/README.md)）。
 - **1 个 bench harness**（基准复现包，不计入产品 crate）。
 - 逐包职责另见 [crates.md](crates.md)——该索引尚未列图像家族与终端驾驶舱，**成员数以 contract.toml 与根 `Cargo.toml` 为准**。
@@ -96,6 +96,7 @@ graph TD
         PRV[apeireth-provider: 多 provider 路由]
         STO[apeireth-storage: 持久化与迁移]
         ORG[apeireth-organ: 认知器官]
+        FAC[apeireth: 门面（只 re-export，ADR-0019）]
     end
     subgraph L1 [Layer 1 基石与治理层 foundation]
         CORE[apeireth-core: 9 哲学锚 / 键集 / 不可变脊柱]
@@ -120,7 +121,7 @@ graph TD
 ### 2.3 已归档（不要去找）
 
 - 多模态感知 crate 与 SDK 四孤岛已归档至 `legacy/archived/`（2026-10-20，[ADR-0005](../adr/0005-r4-crate-topology-surgery.md) R4b）。当前 active workspace **不存在**这两个 crate，原文档里提到它们的段落一律按已归档处理。
-- 历史口径（2026-10-18）：31 members（30 crates + bench harness）；历史口径（2026-10-18 之前）：20 members（19 crates + bench harness）。这两条只作追溯，**不得当现值引用**。
+- 历史口径（2026-10-18）：31 members（30 crates + bench harness）；历史口径（2026-10-20 至 2026-10-31）：30 members（29 crates + bench harness）；历史口径（2026-10-18 之前）：20 members（19 crates + bench harness）。这几条只作追溯，**不得当现值引用**。
 
 ---
 

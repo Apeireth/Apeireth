@@ -78,8 +78,8 @@ workflow 内含 **baseline 只减检查**（PR 时对比 base 的 `scripts/arch-
 
 | 指标 | 采集 | 当前值（Wave 4 收口，2026-10-21 实测） | 方向 |
 |---|---|---|---|
-| workspace members | `cargo metadata` | **30**（图像家族仍在主仓；目标 20） | 图像家族出主仓后降至 20 |
-| 生产依赖边 | arch_guard | **111** | 只减不增（新增需 ADR） |
+| workspace members | `cargo metadata` | **30**〔历史口径（2026-10-21 Wave 4 收口实测）：现行 **31** —— 2026-10-31 ADR-0019 新增门面 crate `apeireth` 后〕（图像家族仍在主仓；目标 20） | 图像家族出主仓后降至 20 |
+| 生产依赖边 | arch_guard | **111**〔历史口径（2026-10-21 Wave 4 收口实测）：现行 **118** —— 门面 crate +7 条生产边〕 | 只减不增（新增需 ADR） |
 | 裸 env 名 / 出现次数 / 文件 | arch_guard + `wiring_report --stats` | guard src 口径 **154**；registry entries **154** | 只减 |
 | env 登记 `TODO-OWNER` / `UNCLASSIFIED` | `wiring_report.py --stats`（效率线） | entries **154**；TODO-OWNER **0**；UNCLASSIFIED **146**；kind: product 133 / test_only 11 / derived 10 | 每波只减 |
 | 最大 src 文件行数 | arch_guard | **6,150**（doc_ops.rs） | 只减 |
@@ -90,9 +90,12 @@ workflow 内含 **baseline 只减检查**（PR 时对比 base 的 `scripts/arch-
 | 生物机制观测格 | self_status_source 台账 | 14 条机制中 **9/14** 观测格注册（R1b-2b 迟绑定 5 + W3.7 生态 1 + 承载力 + 练习等；R1b-2c 未新增观测格） | 只增 |
 | 全量门禁耗时 | 日志 | **26.8 分钟**（2026-10-21 `gate_full`，main 264 + image 77 套件；R6-A 唯执行器/锁/失败分类生效；日志 `artifacts/wave4-close-full-2026-10-21.log`） | 只减 |
 
+> **记分牌口径说明**：上表是 **Wave 4 收口（2026-10-21 实测）** 快照，属带日期的历史记录，**不追溯改写**（members / 生产依赖边两行已就地加〔历史口径（2026-10-21）〕注记）。
+> 现行值（2026-11-05 实测）：**workspace members = 31 / 生产依赖边 = 118** —— 门面 crate `apeireth` 于 2026-10-31 加入（[ADR-0019](../adr/0019-apeireth-facade-crate.md)，members 30→31、生产边 111→118）；真源 = [contract.toml](contract.toml) `[workspace]` / `[budgets]` 与 [ARCHITECTURE.generated.md](ARCHITECTURE.generated.md)。
+
 ## 5. 后续（v0.2 路线）
 
-1. `ARCHITECTURE.md` 改为 `contract.toml` 生成物 + `--check` 漂移检测——**R0 已完成（2026-10-20）**：`scripts/arch_doc.py` → [ARCHITECTURE.generated.md](ARCHITECTURE.generated.md)（Wave 3 收口后 30 members / 111 边，CI `--check`）；根 `ARCHITECTURE.md` 的手写依赖表已退役，改为指针 + 人工边界规则；
+1. `ARCHITECTURE.md` 改为 `contract.toml` 生成物 + `--check` 漂移检测——**R0 已完成（2026-10-20）**：`scripts/arch_doc.py` → [ARCHITECTURE.generated.md](ARCHITECTURE.generated.md)（Wave 3 收口后 30 members / 111 边〔历史口径（Wave 3 收口）：现行 31 members / 118 边〕，CI `--check`）；根 `ARCHITECTURE.md` 的手写依赖表已退役，改为指针 + 人工边界规则；
 2. `claims.yaml` 与能力矩阵逐行映射（接线账）；
 3. env 读取位置收敛到 config 模块后，按文件卡（`allowed_read_locations`）；
 4. 依赖边的"代码级使用"核验（可选：`cargo udeps` 或自研 grep）；
