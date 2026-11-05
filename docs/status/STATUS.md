@@ -19,7 +19,7 @@
 | `gap.prompt_stabilizer_unwired` | NOT IMPLEMENTED | - | - | `357e9780` | 2026-11-20 |
 | `sec.linux_containment` | IMPLEMENTED | - | - | `357e9780` | 2026-11-20 |
 | `sec.gateway_tls` | PRODUCTION WIRED | OFF | `APEIRETH_TLS_CERT` | `6f1a543a` | 2026-11-20 |
-| `sec.storage_envelope_crypto` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_SESSION_SEAL` | `357e9780` | 2026-11-20 |
+| `sec.storage_envelope_crypto` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_SESSION_SEAL` | `c13b7e17` | 2026-11-20 |
 | `gov.chain_skeleton` | PRODUCTION WIRED | ON | - | `357e9780` | 2026-11-20 |
 | `gov.chain_hook_adapter` | PRODUCTION WIRED | ON | - | `6f1a543a` | 2026-11-20 |
 | `gov.reflection_queue` | IMPLEMENTED | - | - | `357e9780` | 2026-11-20 |
