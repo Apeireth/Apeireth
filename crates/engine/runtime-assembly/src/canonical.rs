@@ -139,6 +139,12 @@ pub mod play_tools;
 pub mod preference_learning;
 #[path = "canonical/production.rs"]
 pub mod production;
+/// 回合层提示注入告警面 (2026-11-05): 消费 fetch 工具**输出侧**写下的
+/// `prompt_injection` 标记 ⇒ ⇒ 在回合层如实报一条**可见**告警 (固定措辞,
+/// 恒不阻断)。标记的写出面在 `apeireth_tools_canonical::fetch`; 治理面的
+/// `PromptInjectionHook` 只扫**入参**, 此前无人读这个输出侧标记。
+#[path = "canonical/prompt_injection_guard.rs"]
+pub mod prompt_injection_guard;
 #[path = "canonical/repetition_advisory.rs"]
 pub mod repetition_advisory;
 /// V4-c 检索维度自进化接线层 (证据账 + `retrieval_tuning.jsonl` 落盘 + 调权落地)。

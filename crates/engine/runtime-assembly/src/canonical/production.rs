@@ -49,6 +49,7 @@ use super::nervous_bus::NervousBus;
 use super::nervous_switchboard::{BioSwitch, NervousSwitchboard};
 use super::organ_module::OrganModule;
 use super::preference_learning::PreferenceLearningModule;
+use super::prompt_injection_guard::{PromptInjectionGuardModule, PromptInjectionReport};
 use super::self_status_source::{
     doc_ops_status_probe, image_ops_status_probe, proposal_status_probe, roster_from_config,
     sheet_ops_status_probe, task_board_status_probe, ProductionSelfStatusSource,
@@ -666,6 +667,9 @@ pub struct ProductionModules {
     nervous_bus: Arc<NervousBus>,
     /// Wave 4 / ADR-0009 R1b-1a: 本次装配生效的开关快照 (一次解析, 诊断读).
     nervous_switchboard: NervousSwitchboard,
+    /// 回合层提示注入告警账句柄 (fetch 开才 `Some`, 与注册的告警模块同一 `Arc`)。
+    /// `None` = fetch 面没开 = 没有任何输出侧标记可读 ⇒ 零告警 (不是「读了但没命中」)。
+    prompt_injection_report: Option<Arc<PromptInjectionReport>>,
 }
 
 /// Compatibility alias for [`ProductionModules`].
@@ -698,6 +702,12 @@ pub enum ModuleFamily {
     Shell,
     /// 受控抓取族 (`fetch`)。
     Fetch,
+    /// 回合层提示注入告警族 (`guard.prompt_injection`): 消费 fetch **输出侧**
+    /// 写下的 `prompt_injection` 标记 ⇒ ⇒ 回合层报一条可见告警 (恒不阻断)。
+    ///
+    /// 构造条件与 [`ModuleFamily::Fetch`] 同源 (fetch 工具开着才有它的输出);
+    /// 两族一起构 = 抓取面一开, 它的输出侧标记就**一定**有人读。
+    PromptInjectionGuard,
     /// 内容流族 (`content_feed`)。
     ContentFeed,
     /// 关怀规则族 (`care_schedule`)。
@@ -912,6 +922,9 @@ impl ProductionModules {
         }
         let mut capabilities: Vec<Arc<dyn ToolCapability>> = Vec::new();
         let mut tool_modules: Vec<Arc<dyn Plugin>> = Vec::new();
+        // 回合层提示注入告警账 (fetch 开时才构造 = 才有输出侧标记可读);
+        // 组合根取回同一句柄, 让宿主能读「本进程见过几次注入命中」。
+        let mut prompt_injection_report: Option<Arc<PromptInjectionReport>> = None;
         // W3.3: 器官模块句柄留给组合根迟绑定 guard 免疫记忆 (默认 None = 未注册).
         let mut organ_module: Option<Arc<OrganModule>> = None;
         // W3.6: 自述 probe 迟绑定槽 (安装点按开关武装; cli/组合根后续填句柄).
@@ -1117,6 +1130,21 @@ impl ProductionModules {
             instrument.constructed(ModuleFamily::Fetch);
             let provider = FetchModule::new(fetch_config);
             collect_tool_module(&mut tool_modules, &mut capabilities, &provider)?;
+
+            // 回合层提示注入告警面 (2026-11-05): fetch 的**输出侧**扫描会把
+            // `prompt_injection` 标记写进工具结果 ⇒ ⇒ 但治理面的
+            // `PromptInjectionHook` 只扫**入参** ⇒ ⇒ 此前**无人读**这个标记。
+            // ⇒ ⇒ 这里装一个只读告警模块: 在 `AfterToolResult` 读标记 ⇒ ⇒
+            // 回合层报一条**固定措辞**的可见告警 (恒不阻断, 显式化不静默)。
+            //
+            // ⚠️ 构造条件 = fetch 工具开着 (fetch 关 = 根本没有这个输出面)。
+            instrument.constructed(ModuleFamily::PromptInjectionGuard);
+            prompt_injection_report = Some(Arc::new(PromptInjectionReport::new()));
+            modules.push(Arc::new(PromptInjectionGuardModule::new(Arc::clone(
+                prompt_injection_report
+                    .as_ref()
+                    .expect("report just constructed"),
+            ))) as Arc<dyn Module>);
         }
 
         // 内容流接入 (`tool.content_feed`, J1, opt-in): 订阅源管理 + 受控拉取 +
@@ -1854,6 +1882,7 @@ impl ProductionModules {
             bio_probe_slots,
             nervous_bus,
             nervous_switchboard,
+            prompt_injection_report,
         })
     }
 
@@ -1866,6 +1895,16 @@ impl ProductionModules {
     /// 本次装配生效的开关快照 (`NervousSwitchboard::from_env` 一次解析)。
     pub fn nervous_switchboard(&self) -> &NervousSwitchboard {
         &self.nervous_switchboard
+    }
+
+    /// 回合层提示注入告警账句柄 (fetch 面开才 `Some`)。
+    ///
+    /// `None` = fetch 工具没注册 = 没有任何输出侧 `prompt_injection` 标记
+    /// ⇒ 零告警 (是「没有这个面」, 不是「有面但没命中」)。宿主读它即可知道
+    /// 本进程见过几次注入命中, 不用自己再解析 transcript。
+    #[must_use]
+    pub fn prompt_injection_report(&self) -> Option<&Arc<PromptInjectionReport>> {
+        self.prompt_injection_report.as_ref()
     }
 
     /// Wave 4 / ADR-0009 R1b-2c: 审批社交信号源句柄。
