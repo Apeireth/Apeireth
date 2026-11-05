@@ -58,6 +58,20 @@ def fail(message: str) -> int:
     return 1
 
 
+def loadavg_hint() -> str:
+    """机器负载（1/5/15 分钟 load average）—— 用来判断「是不是机器被压住了」。
+
+    ⭐ 为什么要有它：2026-11-05 实测踩过 —— 别的线在并行编译（load average 528）
+    ⇒ ⇒ WebKit 的 wasm JIT 编不完 ⇒ ⇒ 页面停在「loading-wasm」⇒ ⇒⇒ 看着像
+    「引擎坏了」⇒ ⇒⇒ 实则是**时间预算不够** ⇒ ⇒⇒ 失败时**先把负载摆出来**，
+    免得下一个人又去怀疑代码。
+    """
+    try:
+        return pathlib.Path("/proc/loadavg").read_text(encoding="utf-8").strip()
+    except OSError:
+        return "（读不到 /proc/loadavg）"
+
+
 def main() -> int:
     if shutil.which("xvfb-run") is None:
         return fail("缺 xvfb-run（无头环境下起真实窗口需要它）")
@@ -148,13 +162,19 @@ def main() -> int:
         ],
         capture_output=True,
         text=True,
-        timeout=240,
+        # ⭐⭐⭐ **超时与壳的轮询预算对齐**（2026-11-05 实测踩过）：机器上**同时有别的
+        #   ⇒ ⇒ 线在并行编译**时（实测 `load average` 到 **528**）⇒ ⇒ WebKit 的 wasm
+        #   ⇒ ⇒ JIT 编 5.9 MB 模块**编不完 180 秒** ⇒ ⇒ 页面停在「loading-wasm」
+        #   ⇒ ⇒⇒ 看着像「引擎坏了」⇒ ⇒⇒ 实则是**时间预算不够**（老规矩：先怀疑自己的测量）
+        #   ⇒ ⇒⇒⇒ 故壳内预算 900 秒、这里 1200 秒。
+        timeout=1200,
     )
     if not RESULT_FILE.exists():
         print("── 宿主 stdout ──", file=sys.stderr)
         print(run.stdout[-3000:], file=sys.stderr)
         print("── 宿主 stderr ──", file=sys.stderr)
         print(run.stderr[-3000:], file=sys.stderr)
+        print(f"── 机器负载 ──\n{loadavg_hint()}", file=sys.stderr)
         return fail("探针没产出结果文件（WebView 里可能没跑起来）")
 
     report = json.loads(RESULT_FILE.read_text(encoding="utf-8"))
@@ -183,6 +203,16 @@ def main() -> int:
     if failures:
         for item in failures:
             print(f"❌ {item}", file=sys.stderr)
+        # ⭐⭐ 把**机器负载**摆出来（先怀疑自己的测量 ⇒ ⇒ 别急着怀疑代码）。
+        print(f"── 机器负载 ──\n{loadavg_hint()}", file=sys.stderr)
+        print(f"── 页面阶段 ──\n{report.get('stage')!r}", file=sys.stderr)
+        # ⭐⭐⭐ **宿主 stdout/stderr 总是打印**（不只在「结果文件缺失」时）：
+        #   壳每 400ms 打一行 `[probe] url=…` ⇒ ⇒ 那就是**页面 hash 的时间线**
+        #   ⇒ ⇒⇒ 失败时它是**唯一**能区分「页面没跑」与「页面卡在哪一步」的轨迹。
+        print("── 宿主 stdout ──", file=sys.stderr)
+        print(run.stdout[-4000:], file=sys.stderr)
+        print("── 宿主 stderr（末段） ──", file=sys.stderr)
+        print("\n".join(run.stderr.splitlines()[-40:]), file=sys.stderr)
         return 1
     print("✅ WebKitGTK 侧引擎取证全过（键盘语义 / 焦点与模态 / DOM 基础）")
     return 0

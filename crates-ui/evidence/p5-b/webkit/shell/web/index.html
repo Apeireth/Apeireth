@@ -87,8 +87,18 @@ async function main() {
   report();                                   // ① 先报「页面活了」
   results.stage = 'loading-wasm';
   report();
+  // ⭐⭐⭐ **看门狗**（2026-11-05 实测踩过）：若 `import()` **一直不落地**，
+  //   ⇒ ⇒ 页面**其实还活着**（JS 循环在跑）⇒ ⇒ 只是 wasm 没加载完 ⇒ ⇒⇒
+  //   ⇒ ⇒ 那就**显式写进结果** ⇒ ⇒⇒ 免得下一个人只看到「loading-wasm」而瞎猜
+  //   ⇒ ⇒⇒ （2026-11-05 实测：机器 `load average` 500+ 时，WebKit 的 wasm
+  //   ⇒ ⇒⇒ 编译 5.9 MB 模块**编不完预算**⇒ ⇒⇒ 看着像「引擎坏了」）。
+  var watchdog = setTimeout(function () {
+    results.watchdog = 'import-pending-30s';
+    report();
+  }, 30000);
   try {
     var mod = await import('./engine/pkg/p5b_harness.js');
+    clearTimeout(watchdog);
     await mod.default();
     var p5b = mod;
     results.stage = 'wasm-ready';

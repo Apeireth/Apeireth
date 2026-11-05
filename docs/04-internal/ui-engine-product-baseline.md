@@ -126,6 +126,10 @@ impl Screen for SettingsScreen {
   **一次变更只触发一次重渲染**（帧边界收口 ⇒ 5 次标脏 ⇒ 1 次重渲染，native 测试钉住）；
 - `wire_signal_to_host(runtime, host, source)`：把「状态信号 ⇒ 标脏 ⇒ 重渲染」接上
   （core 的 effect 是**依赖追踪式**的 ⇒ 闭包里读哪个 signal 就订阅哪个）。
+  **E-180 起**：`source` 是**泛型**（`Signal<T>`，任何状态类型都能接），
+  且函数返回 `Result<EffectHandle, ReactiveError>` —— **信号必须与 `runtime`
+  同属一张图**，错位时**当场**报 `ForeignSignal`（否则依赖边建不起来 ⇒
+  「状态变了界面不动」且无任何报错）。
 
 ---
 

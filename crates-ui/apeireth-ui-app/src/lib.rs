@@ -225,22 +225,51 @@ impl HostState {
 ///
 /// ⚠️ 返回的 `EffectHandle` **必须被保留**（或显式 drop）⇒ ⇒ 否则效果会被立刻撤销
 /// （见 `apeireth_ui_core::effect`）。
-pub fn wire_signal_to_host(
+///
+/// ## ⭐⭐ 为什么 `source` 是**泛型**（E-180）
+///
+/// 早先这个签名写死 `&Signal<String>` ⇒ ⇒ 而真实的屏幕状态**什么类型都有**
+/// （`bool` / `Vec<String>` / 自定义结构）⇒ ⇒⇒ 那些屏幕**接不上**
+/// ⇒ ⇒⇒ 只能自己在宿主里**抄一遍**这段逻辑 ⇒ ⇒⇒ ⇒ 抄一份就多一处「忘了接」的坑。
+/// ⇒ ⇒ ⇒ 泛型化后**一处**逻辑覆盖**所有**信号类型 ⇒ ⇒⇒ 宿主不必再抄。
+///
+/// ## ⭐⭐⭐ 为什么**返回 `Result`**（E-180：把静默失效变成显式报错）
+///
+/// 「信号属于哪个运行时」决定依赖边**能不能**建立。跨运行时的信号写它
+/// **不会**触发任何重渲染，现象是「状态变了界面不动」，且**全程无任何报错** ——
+/// 这正是本 crate 文档里记过的「**幽灵输入**」。
+///
+/// 类型层（`ReactiveScope`）已经挡住「状态持有者自建运行时」那条路，但
+/// `Runtime::new` 仍是 `pub`（native 测试与独立运行时的需要），所以接线处
+/// 必须**当场复核归属**：复核不过就返回
+/// [`apeireth_ui_core::ReactiveError::ForeignSignal`]，而不是「接上了、
+/// 其实什么都不会发生」。
+///
+/// 判据：`runtime.owns(host)` 且 `runtime.owns(source)`（**指针身份**）。
+pub fn wire_signal_to_host<T: Clone + 'static>(
     runtime: &apeireth_ui_core::Runtime,
     host: &Signal<HostState>,
-    source: &Signal<String>,
-) -> apeireth_ui_core::EffectHandle {
+    source: &Signal<T>,
+) -> Result<apeireth_ui_core::EffectHandle, apeireth_ui_core::ReactiveError> {
+    // ⭐ 守卫：宿主状态与被接的信号必须**同属这一个运行时**。
+    // 错位时**当场**报错，而不是「接上了、其实什么都不会发生」。
+    if !runtime.owns(host) {
+        return Err(apeireth_ui_core::ReactiveError::ForeignSignal { node: host.id() });
+    }
+    if !runtime.owns(source) {
+        return Err(apeireth_ui_core::ReactiveError::ForeignSignal { node: source.id() });
+    }
     // ⭐ core 的 effect 是**依赖追踪式**的：闭包里**读了哪个 signal** ⇒ 就订阅哪个
     // ⇒ ⇒ 这里读 `source` ⇒ 订阅它 ⇒ 它变了 ⇒ 本 effect 重跑 ⇒ 宿主标脏。
     let source = source.clone();
     let host = host.clone();
-    runtime.effect(move || {
+    Ok(runtime.effect(move || {
         let _ = source.get(); // ← 这一行**就是**订阅（依赖收集点）
         host.update(|mut state| {
             state.mark_dirty();
             state
         });
-    })
+    }))
 }
 
 #[cfg(test)]
@@ -441,5 +470,95 @@ mod tests {
         state.clear();
         assert!(state.current().is_none());
         assert!(!state.is_dirty());
+    }
+
+    /// ⭐⭐⭐ **信号变了 ⇒ ⇒ 宿主标脏**（E-180：这条链此前**零测试**）。
+    ///
+    /// ## 为什么这条必须钉住
+    ///
+    /// 「状态变了界面不动」是**最难查**的一类 bug ⇒ ⇒ 而它的成败**全在这根线上**
+    /// ⇒ ⇒ 若哪天这根线断了 ⇒ ⇒⇒ 现象是「界面静默不动」⇒ ⇒⇒ 没有任何报错。
+    ///
+    /// ## ⭐ 为什么用 `Signal<bool>`（而不是 `String`）
+    ///
+    /// 早先签名写死 `Signal<String>` ⇒ ⇒ 真实屏幕的状态**什么类型都有**
+    /// ⇒ ⇒⇒ E-180 把它**泛型化** ⇒ ⇒⇒ 这条测试**顺带**证明泛型那一路也通。
+    ///
+    /// ## ⭐ 为什么每步都要 `flush()`
+    ///
+    /// core 的 effect 是**延迟执行**的（「渲染后执行」）⇒ ⇒ ⇒ 它**不**在
+    /// `set` 的那一刻跑 ⇒ ⇒⇒ 而是在宿主调度器驱动的那次 `flush` 里跑
+    /// ⇒ ⇒⇒ 所以「信号变了 ⇒ ⇒ 宿主标脏」这条链**跨一次 flush**才成立
+    /// ⇒ ⇒⇒ ⇒ 不 flush 就断言 ⇒ ⇒⇒ 会得到「没标脏」的**假阴性**。
+    #[test]
+    fn a_signal_change_marks_the_host_dirty() {
+        let runtime = apeireth_ui_core::Runtime::new();
+        // ⭐⭐ 信号必须**建在同一个 runtime 上**（`runtime.signal`）⇒ ⇒ 自由函数
+        // `apeireth_ui_core::signal(...)` 落的是**线程局部默认运行时** ⇒ ⇒⇒ 那是
+        // **另一张图** ⇒ ⇒⇒ 依赖边根本不会建立 ⇒ ⇒⇒ 「信号变了宿主不脏」会**假红**。
+        let host = runtime.signal(HostState::new());
+        let flag = runtime.signal(false);
+        // ⭐ 保留 handle ⇒ ⇒ 否则效果会被立刻撤销（见 `core::effect` 的约定）。
+        let _handle =
+            wire_signal_to_host(&runtime, &host, &flag).expect("同属一个运行时的接线不得失败");
+        // ⭐ effect 的**首次**执行发生在 flush ⇒ ⇒ flush 后宿主才脏（首帧要渲染）
+        runtime.flush();
+        assert!(
+            host.get().is_dirty(),
+            "⭐ 接线并 flush 后必须先脏一次（首帧要渲染）"
+        );
+        // 清脏 ⇒ ⇒ 只看「**变化之后**」的效果
+        host.update(|mut state| {
+            state.take_dirty();
+            state
+        });
+        assert!(!host.get().is_dirty());
+        // ⭐⭐ 改信号 ⇒ ⇒ flush ⇒ ⇒ 宿主必须**再次**标脏
+        flag.set(true);
+        runtime.flush();
+        assert!(
+            host.get().is_dirty(),
+            "⭐ 信号变了 ⇒ ⇒ 宿主必须标脏 ⇒ ⇒ 否则界面静默不动"
+        );
+    }
+
+    /// ⭐⭐⭐ **错位接线必须当场报错**（E-180：把「幽灵输入」从静默变成显式）。
+    ///
+    /// ## 为什么这条必须钉住
+    ///
+    /// 上一条测试写出来时**当场踩中**了这个坑：信号用**自由函数**
+    /// `apeireth_ui_core::signal(...)` 建（落线程局部**默认运行时**），
+    /// effect 却挂在另一个 `Runtime::new()` 上 ⇒ ⇒⇒ 那是**两张图**
+    /// ⇒ ⇒⇒ 依赖边根本不会建立 ⇒ ⇒⇒ 「信号变了宿主不脏」**没有任何报错**。
+    ///
+    /// ⇒ ⇒ 所以本条锁住：**错位必须显式报错**，不许「接上了、其实什么都不会发生」。
+    #[test]
+    fn a_signal_from_another_runtime_is_rejected() {
+        let runtime = apeireth_ui_core::Runtime::new();
+        let other = apeireth_ui_core::Runtime::new();
+        let host = runtime.signal(HostState::new());
+        // 这个信号属于**另一个**运行时 ⇒ ⇒ 依赖边永远建不起来。
+        let alien = other.signal(false);
+        let err = match wire_signal_to_host(&runtime, &host, &alien) {
+            Ok(_) => panic!("跨运行时的信号不得被接上"),
+            Err(err) => err,
+        };
+        assert_eq!(
+            err,
+            apeireth_ui_core::ReactiveError::ForeignSignal { node: alien.id() },
+            "⭐ 必须报「信号不属于该运行时」⇒ ⇒ 且点名是**哪一个**节点"
+        );
+        // 宿主状态本身来自别的运行时 ⇒ ⇒ 同样当场报错。
+        let alien_host = other.signal(HostState::new());
+        let err = match wire_signal_to_host(&runtime, &alien_host, &host) {
+            Ok(_) => panic!("跨运行时的宿主状态不得被接上"),
+            Err(err) => err,
+        };
+        assert_eq!(
+            err,
+            apeireth_ui_core::ReactiveError::ForeignSignal {
+                node: alien_host.id()
+            }
+        );
     }
 }

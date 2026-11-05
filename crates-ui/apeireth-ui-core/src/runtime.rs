@@ -629,6 +629,27 @@ impl Runtime {
         Derived::new(self.inner.clone(), compute)
     }
 
+    /// 这个运行时是否**拥有**某个信号（**指针身份**判定）。
+    ///
+    /// ## 为什么需要（不是「防御性编程」，是本 crate 记录过的真实缺陷）
+    ///
+    /// 「信号属于哪个运行时」决定依赖边**能不能**建立 ⇒ ⇒ 跨运行时的信号
+    /// 写它**不会**触发任何重渲染 ⇒ ⇒ 表现为「**状态变了界面不动**」且
+    /// **无任何报错** ⇒ ⇒ 这正是本 crate 文档里记的「**幽灵输入**」
+    /// （见 crate 文档「架构不变量」一节）。
+    ///
+    /// ⇒ ⇒ 类型层（[`ReactiveScope`]）已经挡住「状态持有者自建运行时」那条路
+    /// ⇒ ⇒ 但 [`Runtime::new`] 仍是 `pub`（native 测试 / 独立运行时的需要）
+    /// ⇒ ⇒ ⇒ 接线处必须能在**运行期**复核归属 ⇒ ⇒ 这就是本方法。
+    ///
+    /// ## 复核方式
+    ///
+    /// 与 [`ReactiveScope::same_runtime`] 同一判据（**指针身份**）⇒ ⇒
+    /// 「同一张图」= 「同一个内部状态」。
+    pub fn owns<T>(&self, signal: &Signal<T>) -> bool {
+        signal.same_runtime(&self.inner)
+    }
+
     /// 交出一个**使用者形态**的作用域（**给状态持有者**）。
     ///
     /// # 为什么宿主要把运行时「降级」交给状态持有者
@@ -1170,6 +1191,29 @@ mod tests {
         fn schedule_flush(&self, flush: Box<dyn FnOnce()>) {
             self.queue.borrow_mut().push(flush);
         }
+    }
+
+    /// ⭐⭐⭐ **运行时归属判据**（E-180：「幽灵输入」的**运行期复核**）。
+    ///
+    /// ## 为什么钉这条
+    ///
+    /// 「信号属于哪个运行时」决定依赖边**能不能**建立。跨运行时的信号写它
+    /// **不会**触发任何重渲染 ⇒ ⇒ 现象是「状态变了界面不动」且**无任何报错**
+    /// ⇒ ⇒ 所以接线处必须能在**运行期**问出「这个信号是不是我的」。
+    #[test]
+    fn a_runtime_owns_only_the_signals_it_created() {
+        let runtime = Runtime::new();
+        let other = Runtime::new();
+        let mine = runtime.signal(1u32);
+        let theirs = other.signal(1u32);
+        assert!(runtime.owns(&mine), "自己建的信号当然归自己");
+        assert!(!runtime.owns(&theirs), "别人的信号不得被认领");
+        // 克隆共享**同一张图** ⇒ ⇒ 归属不变。
+        let cloned = mine.clone();
+        assert!(runtime.owns(&cloned));
+        // 反向也要成立（不能「谁问都算拥有」）。
+        assert!(!other.owns(&mine));
+        assert!(other.owns(&theirs));
     }
 
     #[test]

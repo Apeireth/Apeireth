@@ -40,7 +40,12 @@ fn main() {
             let sink = sink_for_command.clone();
             std::thread::spawn(move || {
                 let started = Instant::now();
-                let limit = Duration::from_secs(180);
+                // ⭐⭐⭐ **预算按「机器负载」放宽**（2026-11-05 实测踩过）：
+                // 机器上**同时有别的线在并行编译**时（实测 `load average` 到 **528**），
+                // WebKit 的 wasm JIT 编 5.9 MB 模块**编不完 180 秒** ⇒ ⇒ 页面停在
+                // 「loading-wasm」⇒ ⇒⇒ 看着像「引擎坏了」⇒ ⇒⇒ 实则是**时间预算不够**
+                // ⇒ ⇒⇒⇒ ⇒ 所以预算放宽到 900 秒 ⇒ ⇒⇒⇒ 并在驱动侧同步放宽超时。
+                let limit = Duration::from_secs(900);
                 loop {
                     std::thread::sleep(Duration::from_millis(400));
                     // ⭐⭐ 诊断：**通过 eval 反查页面状态**（`window.title()` 是**窗口**标题，
