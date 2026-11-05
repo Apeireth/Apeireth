@@ -1,0 +1,64 @@
+{
+  "stage": "done",
+  "keyboardSemantics": {
+    "plain_key": "Enter",
+    "plain_shift": false,
+    "plain_ctrl": false,
+    "plain_composing": false,
+    "shifted_key": "Enter",
+    "shifted_shift": true,
+    "shifted_ctrl": false,
+    "shifted_composing": false,
+    "composing_key": "Enter",
+    "composing_flag": true,
+    "ok": true
+  },
+  "focusModal": {
+    "installed": true,
+    "focus_after_first": "fm-b1",
+    "focus_after_tab": "fm-b2",
+    "focus_after_shift_tab": "fm-b1",
+    "focus_in_modal": "fm-inside",
+    "focus_after_close": "fm-b1",
+    "modal_restored": true,
+    "empty_window_ok": true,
+    "ok": true
+  },
+  "dom": {
+    "ok": true,
+    "failures": [],
+    "payload": "value=Some(\"a\");pos=None;checked=Some(false)",
+    "g8_error_boundary_ok": true,
+    "g8_captured_error": "Unsupported: create_element() 失败：JsValue(InvalidCharacterError: The string contains invalid characters.\ncreateElement@[native code]\n@tauri://localhost/engine/pkg/p5b_harness.js:1135:43\nhandleError@tauri://localhost/engine/pkg/p5b_harness.js:3485:23\n<web_sys[87fce178bfa1bdc9]::features::gen_Document::Document>::create_element::__wbg_createElement_74049073a11f9c31 externref shim@p5b_harness.wasm:wasm-function[7407]\n<web_sys[87fce178bfa1bdc9]::features::gen_Document::Document>::create_element@p5b_harness.wasm:wasm-function[6211]\n<apeireth_ui_dom[cb50d36515770dc0]::web::WebDom as apeireth_ui_dom[cb50d36515770dc0]::dom::Dom>::create_element@p5b_harness.wasm:wasm-function[3821]\n<apeireth_ui_dom[cb50d36515770dc0]::renderer::Renderer<apeireth_ui_dom[cb50d36515770dc0]::web::WebDom>>::mount_node@p5b_harness.wasm:wasm-function[818]\n2086@wasm-function[2086]\n1579@wasm-function[1579]\n694@wasm-function[694]\n5658@wasm-function[5658]\n6869@wasm-function[6869]\nl1_probe@tauri://localhost/engine/pkg/p5b_harness.js:418:30\nmain@tauri://localhost:124:37)",
+    "g8_panic_hook": "installed",
+    "engine_form": {
+      "x": 16,
+      "y": 179,
+      "w": 1248,
+      "h": 25
+    },
+    "js_form": {
+      "x": 16,
+      "y": 179,
+      "w": 1248,
+      "h": 25
+    },
+    "device_input": {
+      "x": 40,
+      "y": 447.5,
+      "w": 387.5,
+      "h": 62.5
+    }
+  },
+  "errors_from_dom": [],
+  "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/60.5 Safari/605.1.15",
+  "errors": [],
+  "consoleErrors": [],
+  "ok": true,
+  "summary": {
+    "keyboardSemantics": true,
+    "focusModal": true,
+    "dom": true
+  },
+  "failures": []
+}

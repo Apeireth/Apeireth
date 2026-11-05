@@ -266,6 +266,45 @@ impl Dom for WebDom {
         self.composing.get()
     }
 
+    /// ⭐⭐⭐ **可见性**（E-181）：读**计算样式**（不是行内样式 ⇒ ⇒ class 驱动的隐藏也算）。
+    ///
+    /// ## 判据
+    ///
+    /// - `display:none` ⇒ ⇒ **不可见**（连带**整棵子树**都不可见）；
+    /// - `visibility:hidden|collapse` ⇒ ⇒ **不可见**；
+    /// - `opacity:0` ⇒ ⇒ **仍算可见**（浏览器仍可聚焦它 ⇒ ⇒ 引擎要**与浏览器一致**）。
+    ///
+    /// ## 为什么读**计算样式**而不是行内样式
+    ///
+    /// ⇒ ⇒ 真实界面的隐藏**几乎都来自 class**（如 r10 的 `ai-collapsed`）
+    /// ⇒ ⇒ 只读行内样式 ⇒ ⇒⇒ 那种隐藏**查不出来** ⇒ ⇒⇒⇒ 焦点还是会停在看不见的地方。
+    ///
+    /// ## 查不到时怎么办
+    ///
+    /// ⇒ ⇒ **当可见**（保守）⇒ ⇒ 宁可多一个焦点目标，也不要焦点**丢��**。
+    fn is_visible(&self, node: &Self::Node) -> bool {
+        let Ok(element) = self.as_element(node) else {
+            return true;
+        };
+        // ⚠️ web-sys 0.3.106 的 `get_computed_style` 挂在 **Window** 上（不是 Element）
+        //   ⇒ ⇒ 拿不到窗口 ⇒ ⇒ **当可见**（保守）。
+        let Some(window) = web_sys::window() else {
+            return true;
+        };
+        // ⚠️ web-sys 0.3.106 的 `Window::get_computed_style` 返回 **`Result<Option<…>>`**
+        let Ok(Some(style)) = window.get_computed_style(element) else {
+            return true;
+        };
+        // ⚠️ web-sys 0.3.106 的 `get_property_value` 返回 **`Result<String, JsValue>`**
+        //   ⇒ ⇒ 读不到就**当没有这条声明**（⇒ 不判隐藏 ⇒ 保守）。
+        let display = style.get_property_value("display").unwrap_or_default();
+        if display.trim() == "none" {
+            return false;
+        }
+        let visibility = style.get_property_value("visibility").unwrap_or_default();
+        !matches!(visibility.trim(), "hidden" | "collapse")
+    }
+
     fn bounding_box(&self, node: &Self::Node) -> Result<ElementBox, DomError> {
         let element = self.as_element(node)?;
         let rect = element.get_bounding_client_rect();

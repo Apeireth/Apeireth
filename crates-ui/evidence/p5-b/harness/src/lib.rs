@@ -1906,6 +1906,19 @@ pub fn l1_focus_modal_probe() -> Result<JsValue, JsValue> {
                         .child(VNode::text("不可聚焦"))
                         .build(),
                 )
+                // ⭐⭐⭐ **E-181 可见性**：`class="fm-hidden"` ⇒ ⇒ 页面里用
+                //   **真实 class 规则** `.fm-hidden { display: none; }` 把它藏起来
+                //   ⇒ ⇒ 隐藏**只能**由浏览器的**计算样式**判出来（引擎自己
+                //   不知道 class 规则）⇒ ⇒ ⇒ 这条路**只有浏览器能验**。
+                //   ⇒ ⇒ 它在 Tab 序列里必须**被跳过**（⇒ ⇒ Tab 从 fm-b1 直接
+                //   落到 fm-b2）⇒ ⇒ 「可见性判据坏掉」⇒ ⇒ 下面那条断言立刻红。
+                .child(
+                    VNode::element("button")
+                        .attr("id", "fm-hidden")
+                        .attr("class", "fm-hidden")
+                        .child(VNode::text("隐藏按钮"))
+                        .build(),
+                )
                 .child(
                     VNode::element("input")
                         .attr("id", "fm-b2")
@@ -1960,7 +1973,8 @@ pub fn l1_focus_modal_probe() -> Result<JsValue, JsValue> {
         .map_err(|error| JsValue::from_str(&format!("聚焦失败：{error}")))?;
     let focus_after_first = active_id();
 
-    // ② 派发 Tab ⇒ ⇒ 引擎应把焦点移到下一个可聚焦元素（跳过 span ⇒ ⇒ 落到 input）
+    // ② 派发 Tab ⇒ ⇒ 引擎应把焦点移到下一个**可见**的可聚焦元素
+    //    （跳过 span ⇒ **跳过 class 驱动的隐藏按钮** ⇒ ⇒ 落到 input）
     let tab_event = make_key("Tab", false)?;
     let first_button = document
         .query_selector("#focus-modal-root #fm-b1")
@@ -1976,9 +1990,11 @@ pub fn l1_focus_modal_probe() -> Result<JsValue, JsValue> {
     let focus_after_shift_tab = active_id();
 
     // ④⭐ 开模态（只允许弹层里的按钮）⇒ ⇒ Tab ⇒ ⇒ 焦点**不得**跳出弹层
+    //
+    // ⚠ 弹层在**子节点下标 4**（E-181 插入了隐藏按钮 ⇒ ⇒ 后面全部后移一位）。
     renderer_cell
         .borrow_mut()
-        .open_modal(&[&[3, 0]], &[3], Some(&[3, 0]))
+        .open_modal(&[&[4, 0]], &[4], Some(&[4, 0]))
         .map_err(|error| JsValue::from_str(&format!("开模态失败：{error}")))?;
     let modal_tab_event = make_key("Tab", false)?;
     let inside = document
@@ -1997,7 +2013,7 @@ pub fn l1_focus_modal_probe() -> Result<JsValue, JsValue> {
     let empty_window_ok = {
         let mut guard = renderer_cell.borrow_mut();
         guard
-            .patch_windowed_at_path(&[3], &[], 0, |_| VNode::element("div").build())
+            .patch_windowed_at_path(&[4], &[], 0, |_| VNode::element("div").build())
             .is_ok()
     };
 
@@ -2021,7 +2037,7 @@ pub fn l1_focus_modal_probe() -> Result<JsValue, JsValue> {
     // ⭐ 判据
     let ok = installed
         && focus_after_first == "fm-b1"      // ① 初始焦点在第一个按钮
-        && focus_after_tab == "fm-b2"       // ② Tab ⇒ ⇒ 跳到 input（跳过 span）
+        && focus_after_tab == "fm-b2"       // ② Tab ⇒ ⇒ 跳到 input（跳过 span **与隐藏按钮**）
         && focus_after_shift_tab == "fm-b1" // ③ Shift+Tab ⇒ ⇒ 回到第一个
         && focus_in_modal == "fm-inside"    // ④ 模态内 Tab ⇒ ⇒ 焦点**留在**弹层里
         && focus_after_close == "fm-b1"     // ⑤ 关模态 ⇒ ⇒ 焦点归还

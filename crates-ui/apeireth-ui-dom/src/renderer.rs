@@ -825,15 +825,18 @@ impl<D: Dom> Renderer<D> {
     /// ⇒ ⇒ ⇒ 陷阱在浏览器里**其实并不成立**（用户按 Tab 会跳出弹层）
     /// ⇒ ⇒ ⇒ 引擎必须自己算一份「可 Tab 序列」。
     ///
-    /// ⚠️ **已知简化**：**不读**计算样式 ⇒ ⇒ `display:none` 的元素**仍会被列入**
-    /// ⇒ ⇒ ⇒ 真实场景需要宿主提供「是否可见」查询（**未做**）。
+    /// ⭐⭐⭐ **可见性**（E-181）：不可见（`display:none` / `visibility:hidden`）
+    /// ⇒ ⇒ **不进**序列 ⇒ ⇒⇒ 且**整棵子树**都不进。
+    ///
+    /// 判据两路：①**引擎自判**（`hidden` 属性 / 行内 `display:none`）
+    /// ⇒ ⇒ ②**宿主查询**（[`crate::dom::Dom::is_visible`] ⇒ ⇒ 真实浏览器读**计算样式**）。
     pub fn focus_order(&self) -> crate::keyboard::FocusOrder {
         let mut order = crate::keyboard::FocusOrder::default();
         let Some(root) = self.tree.as_ref() else {
             return order;
         };
         let mut path: Vec<usize> = Vec::new();
-        collect_focusable(root, &mut path, &mut order);
+        collect_focusable(&self.dom, root, &mut path, &mut order);
         order
     }
 
@@ -2779,6 +2782,7 @@ fn path_id(path: &[usize]) -> FocusId {
 /// 从**挂载树根**起算 ⇒ ⇒ 与 [`Renderer::focus_at_path`] **同一口径** ✓
 /// ⇒ ⇒ ⇒ 收集到的路径可以直接拿去聚焦。
 fn collect_focusable<D: Dom>(
+    dom: &D,
     node: &MountedNode<D>,
     path: &mut Vec<usize>,
     order: &mut crate::keyboard::FocusOrder,
@@ -2789,6 +2793,15 @@ fn collect_focusable<D: Dom>(
         MountedNode::Text(_) => return,
     };
     if let MountedNode::Element(element) = node {
+        // ⭐⭐⭐⭐ **可见性**（E-181）：不可见 ⇒ ⇒ **整棵子树都不可见**
+        //   ⇒ ⇒ ⇒ 直接**不再往下走**（否则隐藏子树里的控件仍会被 Tab 到）。
+        //
+        //   判据两路：①**引擎自己就知道**的（`hidden` 属性 / 行内 `display:none`）
+        //   ⇒ ⇒ 后端没布局时也正确 ⇒ ⇒⇒ 可 native 单测；
+        //   ②**宿主查询**的（class 驱动的隐藏 ⇒ ⇒ 读**计算样式**）。
+        if hidden_by_vnode(&element.vnode) || !dom.is_visible(&element.dom) {
+            return;
+        }
         // ⭐ 读标签与相关属性（**只读**，不分配字符串副本以外的东西）。
         let tag = element.vnode.tag.as_str();
         let tabindex = element
@@ -2819,9 +2832,42 @@ fn collect_focusable<D: Dom>(
     }
     for (index, child) in children.iter().enumerate() {
         path.push(index);
-        collect_focusable(child, path, order);
+        collect_focusable(dom, child, path, order);
         path.pop();
     }
+}
+
+/// ⭐⭐⭐ **引擎自己就知道的隐藏**（E-181）：`hidden` 属性 / 行内 `display:none`。
+///
+/// ## 为什么引擎要自己判一遍
+///
+/// ⇒ ⇒ 这两种隐藏**写在虚拟树上** ⇒ ⇒ 引擎**自己知道** ⇒ ⇒⇒ 就不该依赖宿主
+/// ⇒ ⇒⇒⇒ ⇒ 后端**没有布局**时（native 内存后端）也能给出正确答案 ⇒ ⇒⇒⇒ 可 native 单测。
+///
+/// ## `hidden` 属性的口径
+///
+/// ⇒ ⇒ HTML 的 `hidden` 是**布尔属性** ⇒ ⇒ **只要写了就算隐藏**（`hidden="false"` 也隐藏）
+/// ⇒ ⇒⇒ 唯独 `AttrValue::Bool(false)`（引擎显式表达「不隐藏」）⇒ ⇒⇒ 算可见。
+fn hidden_by_vnode(vnode: &ElementVNode) -> bool {
+    vnode
+        .attrs
+        .iter()
+        .any(|(name, value)| match (name.as_str(), value) {
+            ("hidden", AttrValue::Bool(flag)) => *flag,
+            ("hidden", AttrValue::Text(_)) => true,
+            ("style", AttrValue::Text(text)) => style_declares_display_none(text),
+            _ => false,
+        })
+}
+
+/// ⭐ 行内样式里有没有 `display:none`（容忍空白 / 大小写 / 末尾分号）。
+fn style_declares_display_none(text: &str) -> bool {
+    text.split(';').any(|declaration| {
+        let Some((property, value)) = declaration.split_once(':') else {
+            return false;
+        };
+        property.trim().eq_ignore_ascii_case("display") && value.trim().eq_ignore_ascii_case("none")
+    })
 }
 
 /// 身份段 ⇒ `FocusId`（FNV-1a）。
@@ -3699,6 +3745,173 @@ mod tests {
         assert_eq!(
             renderer.focus_tracker().current(),
             Some(renderer.identity_id(&[0]))
+        );
+    }
+
+    /// ⭐⭐⭐⭐ **`hidden` 属性**的元素**不进**可 Tab 序列（E-181）。
+    ///
+    /// ## 为什么这条是缺陷本体
+    ///
+    /// 「结构上可聚焦」≠「用户能 Tab 到」⇒ ⇒ `hidden` 的按钮在浏览器里**Tab 不到**
+    /// ⇒ ⇒⇒ 引擎若还把它列进序列 ⇒ ⇒⇒ 焦点会**停在看不见的地方**
+    /// ⇒ ⇒⇒⇒ 用户表现为「Tab 好像丢了一次」⇒ ⇒⇒⇒ 极难自查。
+    #[test]
+    fn a_hidden_attribute_leaves_the_tab_order() {
+        let (mut renderer, _root) = renderer_with_dom();
+        renderer
+            .mount(
+                VNode::element("div")
+                    .child(
+                        VNode::element("button")
+                            .attr("id", "b1")
+                            .child(VNode::text("1"))
+                            .build(),
+                    )
+                    .child(
+                        VNode::element("button")
+                            .attr("id", "hidden-one")
+                            .attr("hidden", true)
+                            .child(VNode::text("2"))
+                            .build(),
+                    )
+                    .child(VNode::element("input").attr("id", "b3").build())
+                    .build(),
+            )
+            .expect("挂载必须成功");
+        let paths: Vec<Vec<usize>> = renderer
+            .focus_order()
+            .tabbable
+            .iter()
+            .map(|item| item.path.clone())
+            .collect();
+        assert_eq!(
+            paths,
+            vec![vec![0usize], vec![2usize]],
+            "⭐ hidden 的按钮必须被跳过（浏览器 Tab 不到它）"
+        );
+    }
+
+    /// ⭐⭐⭐⭐ **行内 `display:none`** 的元素**不进**可 Tab 序列（E-181）。
+    #[test]
+    fn an_inline_display_none_leaves_the_tab_order() {
+        let (mut renderer, _root) = renderer_with_dom();
+        renderer
+            .mount(
+                VNode::element("div")
+                    .child(
+                        VNode::element("button")
+                            .attr("id", "b1")
+                            .child(VNode::text("1"))
+                            .build(),
+                    )
+                    .child(
+                        VNode::element("button")
+                            .attr("id", "styled-away")
+                            .attr("style", "display: none;")
+                            .child(VNode::text("2"))
+                            .build(),
+                    )
+                    .build(),
+            )
+            .expect("挂载必须成功");
+        let paths: Vec<Vec<usize>> = renderer
+            .focus_order()
+            .tabbable
+            .iter()
+            .map(|item| item.path.clone())
+            .collect();
+        assert_eq!(
+            paths,
+            vec![vec![0usize]],
+            "⭐ 行内 display:none 的按钮必须被跳过"
+        );
+    }
+
+    /// ⭐⭐⭐⭐ **隐藏的子树**整体不进序列（E-181）。
+    ///
+    /// ⇒ ⇒ 父级不可见 ⇒ ⇒ 里面的控件**也不可见** ⇒ ⇒ ⇒ 都不能 Tab 到。
+    #[test]
+    fn a_hidden_subtree_leaves_the_tab_order_entirely() {
+        let (mut renderer, _root) = renderer_with_dom();
+        renderer
+            .mount(
+                VNode::element("div")
+                    .child(
+                        VNode::element("button")
+                            .attr("id", "visible")
+                            .child(VNode::text("1"))
+                            .build(),
+                    )
+                    .child(
+                        VNode::element("section")
+                            .attr("id", "hidden-panel")
+                            .attr("hidden", true)
+                            .child(
+                                VNode::element("button")
+                                    .attr("id", "inside-hidden")
+                                    .child(VNode::text("2"))
+                                    .build(),
+                            )
+                            .build(),
+                    )
+                    .build(),
+            )
+            .expect("挂载必须成功");
+        let paths: Vec<Vec<usize>> = renderer
+            .focus_order()
+            .tabbable
+            .iter()
+            .map(|item| item.path.clone())
+            .collect();
+        assert_eq!(
+            paths,
+            vec![vec![0usize]],
+            "⭐ 隐藏子树里的按钮必须一起被跳过"
+        );
+    }
+
+    /// ⭐⭐ **可见元素不被误杀**（E-181 的回归防线）。
+    ///
+    /// ⇒ ⇒ 可见性判据**只**排除真隐藏 ⇒ ⇒⇒ 普通按钮**必须**留在序列里
+    /// ⇒ ⇒⇒ 否则修一个 bug 会造出另一个（焦点**够不着**比焦点**多一个**更糟）。
+    #[test]
+    fn visible_elements_stay_in_the_tab_order() {
+        let (mut renderer, _root) = renderer_with_dom();
+        renderer
+            .mount(
+                VNode::element("div")
+                    .child(
+                        VNode::element("button")
+                            .attr("id", "b1")
+                            .child(VNode::text("1"))
+                            .build(),
+                    )
+                    .child(
+                        VNode::element("button")
+                            .attr("id", "b2")
+                            .attr("style", "color: red;")
+                            .child(VNode::text("2"))
+                            .build(),
+                    )
+                    .child(
+                        VNode::element("input")
+                            .attr("id", "b3")
+                            .attr("hidden", false)
+                            .build(),
+                    )
+                    .build(),
+            )
+            .expect("挂载必须成功");
+        let paths: Vec<Vec<usize>> = renderer
+            .focus_order()
+            .tabbable
+            .iter()
+            .map(|item| item.path.clone())
+            .collect();
+        assert_eq!(
+            paths,
+            vec![vec![0usize], vec![1usize], vec![2usize]],
+            "⭐ 可见元素必须全部留在序列里"
         );
     }
 

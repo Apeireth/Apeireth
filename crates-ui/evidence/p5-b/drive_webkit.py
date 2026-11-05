@@ -38,6 +38,7 @@ python3 drive_webkit.py
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import pathlib
@@ -73,6 +74,16 @@ def loadavg_hint() -> str:
 
 
 def main() -> int:
+    # ⭐ 证据落盘目录（E-181）：与 L1 / W0 驱动**同构** ⇒ ⇒ 三份 report.json
+    #   都在 `evidence/<name>/report.json` ⇒ ⇒ 主线一处收齐 ⇒ ⇒ 不用再去
+    #   `/tmp` 里翻。
+    parser = argparse.ArgumentParser(description="WebKitGTK 侧引擎取证探针")
+    parser.add_argument(
+        "--out",
+        default=str(pathlib.Path(__file__).resolve().parent / "evidence" / "webkit"),
+    )
+    args = parser.parse_args()
+
     if shutil.which("xvfb-run") is None:
         return fail("缺 xvfb-run（无头环境下起真实窗口需要它）")
     if shutil.which("pkg-config") is None:
@@ -200,6 +211,20 @@ def main() -> int:
         #   ⇒ ⇒ ⇒ 曾经「不判红」是因为当时**未归因** ⇒ ⇒⇒ 归因后（E-176 修完）
         #   ⇒ ⇒ ⇒ ⇒ 改判红 ⇒ ⇒ ⇒ 这样本驱动就是这条缺陷的**回归门**。
         failures.append(f"页面报了 {len(report['errors'])} 个 error：{report['errors'][:3]}")
+    # ⭐ 证据落盘（E-181）：与 L1 / W0 驱动**同构** ⇒ ⇒ 三份 report.json
+    #   都在 `evidence/<name>/report.json` ⇒ ⇒ 主线一处收齐 ⇒ ⇒ 不用再去
+    #   `/tmp` 里翻 ⇒ ⇒ 而且**失败也落盘**（失败证据同样要留）。
+    out_dir = pathlib.Path(args.out)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "report.json").write_text(
+        json.dumps(
+            {**report, "ok": not failures, "failures": failures},
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
     if failures:
         for item in failures:
             print(f"❌ {item}", file=sys.stderr)

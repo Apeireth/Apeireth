@@ -7,6 +7,13 @@
   body { font: 14px/1.6 system-ui, sans-serif; margin: 16px; background: #101418; color: #dfe6ee; }
   #app-root { padding: 8px; border: 1px solid #2b3440; border-radius: 6px; }
   pre { background: #0b0e12; padding: 10px; border-radius: 6px; overflow: auto; max-height: 60vh; }
+  /* ⭐⭐⭐ E-181 可见性证据：**class 驱动**的隐藏 ⇒ ⇒ 引擎自己不知道这条规则
+     ⇒ ⇒ 只能由浏览器的**计算样式**判出来 ⇒ ⇒ ⇒ 这条路只有浏览器能验。
+     ⇒ ⇒ 探针树里的 `button#fm-hidden`（class="fm-hidden"）必须被 Tab **跳过**
+     ⇒ ⇒ 判据：Tab 之后焦点落在 `fm-b2`（不是 `fm-hidden`）。
+     ⇒ ⇒ ⚠ WebKit 侧**必须**也有这条规则 ⇒ ⇒ 否则那个按钮**不会**被隐藏
+     ⇒ ⇒ ⇒ 断言会红。 */
+  .fm-hidden { display: none; }
 </style>
 </head>
 <body>

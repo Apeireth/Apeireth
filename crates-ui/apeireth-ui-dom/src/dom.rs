@@ -452,6 +452,28 @@ pub trait Dom: 'static {
         false
     }
 
+    /// ⭐⭐⭐ **这个节点是否可见**（E-181：可聚焦序列的可见性）。
+    ///
+    /// ## 为什么需要它
+    ///
+    /// 「结构上可聚焦」≠「用户能 Tab 到」⇒ ⇒ `display:none` / `visibility:hidden`
+    /// ⇒ ⇒ 的元素**不能**进可 Tab 序列（浏览器自己也不会聚焦它们）
+    /// ⇒ ⇒⇒ ⇒ 若不查可见性 ⇒ ⇒⇒ 引擎会把焦点**停在看不见的地方**（用户表现为「Tab 好像丢了一次」）。
+    ///
+    /// ## 默认实现
+    ///
+    /// `true`（**一律可见**）⇒ ⇒ 后端**没有布局信息**时（native 内存后端）用它
+    /// ⇒ ⇒ **保守取向**：宁可多一个焦点目标，也不要让焦点**丢��**
+    /// ⇒ ⇒⇒ （真实浏览器后端 [`crate::web::WebDom`] **实现了**它 ⇒ ⇒⇒ 读计算样式。）
+    ///
+    /// ## ⚠️ 判据口径
+    ///
+    /// 「不可见」= 计算样式里 `display:none` 或 `visibility:hidden|collapse`
+    /// ⇒ ⇒（`opacity:0` **不算**不可见 —— 浏览器仍可聚焦它）
+    fn is_visible(&self, _node: &Self::Node) -> bool {
+        true
+    }
+
     /// ⭐ **设置滚动位置**（CSS 像素）⇒ 实现应把值**夹到** `[0, max_scroll_top]`。
     fn set_scroll_top(&self, node: &Self::Node, top: f64) -> Result<(), DomError> {
         let _ = (node, top);
