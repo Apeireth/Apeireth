@@ -77,7 +77,7 @@
     },
     {
       "module": "hallways",
-      "loc": 740,
+      "loc": 734,
       "layer": "D4",
       "kind": "association",
       "consumes": "TextAndRanking",
@@ -231,7 +231,7 @@
     },
     {
       "module": "online_calibration",
-      "loc": 521,
+      "loc": 511,
       "layer": "D5",
       "kind": "calibration",
       "consumes": "FullPipeline",
