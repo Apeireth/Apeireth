@@ -656,9 +656,18 @@ impl MemoryCoordinator {
             && !query.query_text.trim().is_empty()
         {
             if let Some(graph_store) = &self.graph {
-                if let Ok(facts) =
-                    graph_store.facts_from(&query.query_text, (query.limit * 2).max(10) as u32)
-                {
+                // ⭐ **按 as-of 时间取事实**（2026-11-05）：让**时间锚点**对图事实也生效。
+                //
+                // 接线前：`facts_from` 的语义是「**现在**有效的事实」（store 内部硬编码 now）
+                // ⇒ ⇒ 召回带 `as_of_ms`（例:「3年前」）时 ⇒ ⇒ **问过去、答现在**
+                // ⇒ ⇒ ⇒ **答非所问**。
+                // ⇒ ⇒ 这里改用 `facts_from_as_of` ⇒ ⇒ 拿到「**当时知道什么**」。
+                let graph_as_of_ms = query.as_of_ms.unwrap_or(now_ms);
+                if let Ok(facts) = graph_store.facts_from_as_of(
+                    &query.query_text,
+                    (query.limit * 2).max(10) as u32,
+                    graph_as_of_ms,
+                ) {
                     for fact in facts {
                         let id = format!(
                             "fact:{}:{}:{}",
@@ -1767,6 +1776,162 @@ mod tests {
         fn forget_subject(&self, _subject_id: &str) -> apeireth_plugin::CapabilityResult<()> {
             Ok(())
         }
+    }
+
+    /// ⭐ **带时间的图**（2026-11-05 A2 夹具）：两条事实，**有效期不同**
+    /// ⇒ ⇒ 一条「一直有效」· 一条「只在过去有效」⇒ ⇒ 用来验证 **as-of 锚点**。
+    struct TimedGraph {
+        facts: Vec<apeireth_plugin::experience::GraphFact>,
+    }
+
+    impl apeireth_plugin::experience::KnowledgeGraphStore for TimedGraph {
+        fn put_fact(
+            &self,
+            _fact: &apeireth_plugin::experience::GraphFact,
+        ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+            Ok(())
+        }
+
+        fn put_link(
+            &self,
+            _link: &apeireth_plugin::experience::GraphLink,
+        ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+            Ok(())
+        }
+
+        fn facts_from(
+            &self,
+            _subject_id: &str,
+            _limit: u32,
+        ) -> apeireth_plugin::CapabilityResult<Vec<apeireth_plugin::experience::GraphFact>>
+        {
+            // 模拟**旧语义**：「现在有效」⇒ ⇒ **忽略时间锚点**。
+            let now = chrono::Utc::now().timestamp_millis();
+            Ok(self
+                .facts
+                .iter()
+                .filter(|f| f.valid_until.is_none_or(|u| u > now))
+                .cloned()
+                .collect())
+        }
+
+        fn facts_from_as_of(
+            &self,
+            _subject_id: &str,
+            _limit: u32,
+            as_of_ms: i64,
+        ) -> apeireth_plugin::CapabilityResult<Vec<apeireth_plugin::experience::GraphFact>>
+        {
+            Ok(self
+                .facts
+                .iter()
+                .filter(|f| apeireth_plugin::experience::fact_valid_at(f, as_of_ms))
+                .cloned()
+                .collect())
+        }
+
+        fn links_from(
+            &self,
+            _from_id: &str,
+            _limit: u32,
+        ) -> apeireth_plugin::CapabilityResult<Vec<apeireth_plugin::experience::GraphLink>>
+        {
+            Ok(Vec::new())
+        }
+
+        fn forget_subject(&self, _subject_id: &str) -> apeireth_plugin::CapabilityResult<()> {
+            Ok(())
+        }
+    }
+
+    /// ⭐ **时间锚点对图事实生效**（2026-11-05 A2）
+    ///
+    /// 接线前：`facts_from` 的语义 = 「**现在**有效」（store 内部硬编码 now）
+    /// ⇒ ⇒ 带 `as_of_ms` 的查询 ⇒ ⇒ **问过去、答现在** ⇒ ⇒ **答非所问**。
+    /// ⇒ ⇒ 本测试证明：**带 as-of 的查询只拿到「当时有效」的事实**。
+    #[test]
+    fn graph_facts_respect_the_as_of_anchor() {
+        use apeireth_plugin::experience::GraphFact;
+
+        const T_PAST: i64 = 1_700_000_000_000; // 2023-11
+        const T_LATER: i64 = 1_800_000_000_000; // 2027-01
+        let coordinator = coordinator();
+        let graph = TimedGraph {
+            facts: vec![
+                GraphFact {
+                    id: "fact-always".into(),
+                    subject_id: "rust".into(),
+                    subject_kind: "language".into(),
+                    predicate: "is".into(),
+                    object_id: "fast".into(),
+                    object_kind: "property".into(),
+                    valid_from: T_PAST,
+                    valid_until: None,
+                    source_episode_id: "ep-1".into(),
+                    confidence: 0.9,
+                },
+                GraphFact {
+                    id: "fact-only-in-past".into(),
+                    subject_id: "rust".into(),
+                    subject_kind: "language".into(),
+                    predicate: "had".into(),
+                    object_id: "borrow-checker".into(),
+                    object_kind: "property".into(),
+                    valid_from: T_PAST,
+                    // ⚠️ **必须早于「现在」** ⇒ ⇒ 否则它**现在也有效**
+                    // ⇒ ⇒ 两条路径（`facts_from` = now 语义 vs `facts_from_as_of`）
+                    // ⇒ ⇒ 结果一样 ⇒ ⇒ **测不出区别**（测试没牙）。
+                    valid_until: Some(T_PAST + 3_600_000),
+                    source_episode_id: "ep-2".into(),
+                    confidence: 0.8,
+                },
+            ],
+        };
+        let coordinator =
+            coordinator.with_experience(Arc::new(graph), Arc::new(FakeAssociations::default()));
+
+        let base = crate::MemoryRecallQuery {
+            session_id: SESSION.to_string(),
+            query_text: "rust".to_string(),
+            layers: vec![MemoryLayerKind::Relational],
+            limit: 8,
+            max_chars: 4_000,
+            recency_decay_lambda: 0.0,
+            min_score: 0.0,
+            as_of_ms: None,
+            visible_scopes: vec![crate::scope::MemoryScope::Session {
+                session_id: SESSION.to_string(),
+            }],
+            exact_scope_authorization: false,
+        };
+
+        // ① **带 as-of（过去）** ⇒ ⇒ 只该看到「当时有效」的那条。
+        let past = crate::MemoryRecallQuery {
+            as_of_ms: Some(T_PAST),
+            ..base.clone()
+        };
+        let past_result = coordinator.recall(&past).expect("recall as-of past");
+        let past_ids: Vec<&str> = past_result.items.iter().map(|i| i.id.as_str()).collect();
+        assert!(
+            past_ids.contains(&"fact:rust:is:fast"),
+            "当时有效的事实必须出现（**当时知道什么**）⇒ ⇒ 实际: {past_ids:?}"
+        );
+        assert!(
+            past_ids.contains(&"fact:rust:had:borrow-checker"),
+            "当时仍有效的事实必须出现 ⇒ ⇒ 实际: {past_ids:?}"
+        );
+
+        // ② **as-of 在那条事实作废之后** ⇒ ⇒ 它不该出现。
+        let after = crate::MemoryRecallQuery {
+            as_of_ms: Some(T_LATER + 1),
+            ..base
+        };
+        let after_result = coordinator.recall(&after).expect("recall as-of later");
+        let after_ids: Vec<&str> = after_result.items.iter().map(|i| i.id.as_str()).collect();
+        assert!(
+            !after_ids.contains(&"fact:rust:had:borrow-checker"),
+            "**作废之后**的事实不该被召回 ⇒ ⇒ 实际: {after_ids:?}"
+        );
     }
 
     /// ⭐ **联想召回接通**（2026-11-05）
