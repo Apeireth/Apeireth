@@ -30,12 +30,17 @@ use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 
-use apeireth_ui_core::Runtime;
+use apeireth_ui_core::{Runtime, Signal};
 use apeireth_ui_dom::dom::Dom;
+use apeireth_ui_dom::vnode::VNode;
 use apeireth_ui_dom::web::WebDom;
 use apeireth_ui_dom::Renderer;
 
+use crate::async_line::AsyncLine;
 use crate::{HostState, Screen};
+
+/// ⭐ E-182：演示屏的**异步数据线通道名**（按通道隔离 ⇒ ⇒ 不与别的数据线互相干扰）。
+const DEMO_ASYNC_CHANNEL: &str = "demo-async";
 
 /// 宿主实例（wasm 单线程 ⇒ `thread_local`）。
 struct Host {
@@ -58,6 +63,40 @@ struct Host {
     /// ⚠️ core 的 effect 语义：「创建时不执行、依赖标脏后重跑、重跑前清空旧依赖」。
     #[allow(dead_code)]
     auto_render: apeireth_ui_core::EffectHandle,
+    /// ⭐⭐⭐ **E-182：异步数据线的定时器闭包**（**必须保活**）。
+    ///
+    /// ⇒ ⇒ `Closure` 一旦被 drop ⇒ ⇒ JS 侧回调**立刻失效** ⇒ ⇒ 定时器**永远不会到点**
+    /// ⇒ ⇒⇒ 所以必须**由宿主持有**到它触发为止。
+    ///
+    /// ⚠️ 为什么不「发出新查询就丢掉旧的」：那等于**取消**上一个请求
+    /// ⇒ ⇒⇒ 而「乱序返回」恰恰要求**旧请求仍在飞**（已发出、不可撤回）
+    /// ⇒ ⇒⇒ ⇒ 丢掉闭包 = 悄悄取消 ⇒ ⇒ **仲裁就永远不会被触发** ⇒ ⇒ 证据就没了。
+    /// ⇒ ⇒⇒ ⇒ 故：**攒着**，`dispose_screen` 时统一清空（drop ⇒ 回调失效 ⇒ 零残留）。
+    timers: TimerSlot,
+    /// ⭐ E-182：异步数据线的计数（**证据用**：解决几个 / 被接受几个 / 被驳回几个）。
+    line_stats: Rc<LineStats>,
+}
+
+/// ⭐ E-182：**定时器闭包槽**（`Rc<RefCell<Vec<…>>>` 太长 ⇒ ⇒ 起名，避免 clippy 报「类型过于复杂」）。
+type TimerSlot = Rc<RefCell<Vec<Closure<dyn FnMut()>>>>;
+
+/// ⭐ E-182：异步数据线的计数（宿主侧的「账」⇒ ⇒ 证据读它）。
+///
+/// ## 为什么需要计数（而不是只看 DOM）
+///
+/// 「DOM 显示 beta」**不能**说明 alpha 被驳回了 —— 也可能是 alpha **根本没回来**。
+/// ⇒ ⇒ 三个数一起看才成立：`resolved == 2`（两条都回来了）+ `rejected == 1`
+/// （有一条被挡下）+ `accepted == 1`（只有一条上屏）。
+#[derive(Debug, Default)]
+struct LineStats {
+    /// 已解决（回调已到）的请求数。
+    resolved: Cell<u32>,
+    /// 被接受（成功发布）的快照数。
+    accepted: Cell<u32>,
+    /// 被驳回（过期 ⇒ 不许覆盖新工作）的快照数。
+    rejected: Cell<u32>,
+    /// 还剩几次「慢查询」（模拟**冷缓存**：第一个请求慢 ⇒ ⇒ 后发的请求**先**回来）。
+    slow_left: Cell<u32>,
 }
 
 thread_local! {
@@ -89,7 +128,11 @@ pub fn boot(container_selector: &str) -> Result<(), JsValue> {
 
     let runtime = Runtime::new();
     let state = Rc::new(RefCell::new(HostState::new()));
-    let screen: Rc<dyn Screen> = Rc::new(DemoScreen::new(&runtime));
+    // ⭐⭐⭐ **E-182：屏幕与宿主必须共用同一份快照仓**
+    //   ⇒ ⇒ 用 `snapshots().clone()` 拿（**共享**，不是各持一份）
+    //   ⇒ ⇒⇒ 否则屏幕发的快照宿主**看不见** ⇒ ⇒ 机制形同虚设。
+    let store = state.borrow().snapshots().clone();
+    let screen: Rc<dyn Screen> = Rc::new(DemoScreen::new(&runtime, store));
     state.borrow_mut().switch_to(screen.id());
 
     let mut renderer = Renderer::new(dom, root);
@@ -125,6 +168,12 @@ pub fn boot(container_selector: &str) -> Result<(), JsValue> {
     let frame_slot = Rc::new(FrameSlot {
         closure: RefCell::new(None),
     });
+    // ⭐ E-182：异步数据线的接线（定时器槽 + 计数；**慢查询只剩 1 次** ⇒ 模拟冷缓存）。
+    let timers = Rc::new(RefCell::new(Vec::new()));
+    let line_stats = Rc::new(LineStats {
+        slow_left: Cell::new(1),
+        ..LineStats::default()
+    });
     HOST.with(|slot| {
         *slot.borrow_mut() = Some(Host {
             renderer,
@@ -135,6 +184,8 @@ pub fn boot(container_selector: &str) -> Result<(), JsValue> {
             frame_id: frame_id.clone(),
             frame_slot: frame_slot.clone(),
             auto_render,
+            timers,
+            line_stats,
         });
     });
 
@@ -201,6 +252,9 @@ pub fn dispose_screen() -> Result<(), JsValue> {
         }
         // ⭐ 释放帧闭包（槽被释放 ⇒ ⇒ 闭包被 drop ⇒ ⇒ JS 侧回调失效 ⇒ ⇒ **零残留**）。
         host.frame_slot.closure.borrow_mut().take();
+        // ⭐ E-182：清空在飞的定时器（drop ⇒ ⇒ 回调失效 ⇒ ⇒ 不会再算完去发快照）
+        //   ⇒ ⇒ 否则销毁后的异步结果会往一个**已销毁**的宿主里发快照（脏写）。
+        host.timers.borrow_mut().clear();
         host.auto_render.dispose();
         host.renderer
             .borrow_mut()
@@ -408,22 +462,75 @@ pub fn flush() -> Result<bool, JsValue> {
     })
 }
 
-/// ⭐ **演示屏幕**：一个受控输入框（信号 ⇄ DOM 双向绑定）。
+/// ⭐⭐⭐ **演示屏的树**（**唯一**的构建处 ⇒ ⇒ 屏幕路径与快照路径**必定一致**）。
+///
+/// ## 为什么抽成一个函数（E-182）
+///
+/// 异步数据线要发的是**整棵树**（快照**替换**整棵树，不是补丁）
+/// ⇒ ⇒ 若屏幕自己建一棵、异步回调另建一棵 ⇒ ⇒ **两棵树会漂移**
+/// （输入框的绑定、id、class 早晚对不上）⇒ ⇒ ⇒ 那些差异只会以「诡异的 DOM 行为」暴露。
+/// ⇒ ⇒⇒ 故：**一处构建**、两条路径共用。
+///
+/// ⚠️ `text` / `query` 传的是**信号**（不是值）：输入框要**双向绑定**
+/// ⇒ ⇒ 绑定必须拿到信号本身；`results` 传值（异步结果是一次性文本）。
+fn demo_view(text: &Signal<String>, query: &Signal<String>, results: &str) -> VNode {
+    use apeireth_ui_dom::binding::Binding;
+
+    VNode::element("section")
+        .attr("class", "app-screen")
+        .child(
+            VNode::element("input")
+                .attr("id", "app-demo-input")
+                .bind(Binding::text(text.clone()))
+                .build(),
+        )
+        .child(
+            VNode::element("input")
+                .attr("id", "app-demo-query")
+                .attr("placeholder", "异步查询")
+                .bind(Binding::text(query.clone()))
+                .build(),
+        )
+        .child(
+            VNode::element("p")
+                .attr("id", "app-demo-results")
+                .child(VNode::text(results))
+                .build(),
+        )
+        .build()
+}
+
+/// ⭐⭐ **演示屏幕**：受控输入框（信号 ⇄ DOM 双向绑定）+ **异步数据线**（E-182）。
 ///
 /// ## 为什么内置演示屏
 ///
 /// 它是**最小可运行**的宿主证据：信号变 ⇒ DOM 更新；用户输入 ⇒ 信号更新
 /// ⇒ ⇒ 一眼就能看出「契约 → 引擎 → 真实 DOM」这条链通不通。
+///
+/// ## E-182：为什么要它带一条**异步数据线**
+///
+/// ⇒ ⇒ 宿主运行时里「旧回调不能覆盖新工作」这条**只有接了真异步才可能被观测**
+/// ⇒ ⇒⇒ 而**参考宿主**是最合适的第一个消费者：它是**生产路径**（不是测试夹具）
+/// ⇒ ⇒⇒⇒ 于是「快照仲裁」从「引擎有这能力」变成「**产品宿主在用它**」。
 pub struct DemoScreen {
     /// 输入框的值（信号）。
-    text: apeireth_ui_core::Signal<String>,
+    text: Signal<String>,
+    /// ⭐ E-182：异步查询词（受控 ⇒ ⇒ 与输入框双向绑定）。
+    query: Signal<String>,
+    /// ⭐ E-182：**已公布（上屏）**的异步结果 ⇒ ⇒ 只有**过仲裁**的结果才写到这里。
+    results: Signal<String>,
+    /// ⭐ E-182：异步数据线（**与宿主共享**同一个快照仓）。
+    line: AsyncLine,
 }
 
 impl DemoScreen {
-    /// 建演示屏（`runtime` 提供信号与运行时）。
-    pub fn new(runtime: &Runtime) -> Self {
+    /// 建演示屏（`runtime` 提供信号与运行时；`store` 必须与宿主**共享**）。
+    pub fn new(runtime: &Runtime, store: crate::snapshot::SnapshotStore) -> Self {
         Self {
             text: runtime.signal(String::from("宿主已就绪")),
+            query: runtime.signal(String::new()),
+            results: runtime.signal(String::from("（还没有异步结果）")),
+            line: AsyncLine::new(store, DEMO_ASYNC_CHANNEL),
         }
     }
 }
@@ -437,18 +544,146 @@ impl Screen for DemoScreen {
         self
     }
 
-    fn view(&self) -> apeireth_ui_dom::vnode::VNode {
-        use apeireth_ui_dom::binding::Binding;
-        use apeireth_ui_dom::vnode::VNode;
-
-        VNode::element("section")
-            .attr("class", "app-screen")
-            .child(
-                VNode::element("input")
-                    .attr("id", "app-demo-input")
-                    .bind(Binding::text(self.text.clone()))
-                    .build(),
-            )
-            .build()
+    /// ⭐ E-182：**声明通道** ⇒ ⇒ 宿主才会去取这条数据线的快照（否则永远走屏幕视图）。
+    fn channel(&self) -> Option<&str> {
+        Some(DEMO_ASYNC_CHANNEL)
     }
+
+    fn view(&self) -> VNode {
+        demo_view(&self.text, &self.query, &self.results.get())
+    }
+}
+
+/// ⭐⭐⭐ **发起一次异步查询**（演示屏专用：真实定时器 + 真实仲裁）。
+///
+/// ## 它做什么
+///
+/// ① **领票**（`line.begin()`）⇒ ⇒ 拿到「本次查询」的代号；
+/// ② **记下查询词**（受控输入 ⇒ ⇒ 屏幕显示它）；
+/// ③ 排一个**真定时器**（`set_timeout` ⇒ ⇒ 真异步，不是同步假装）；
+/// ④ 到点时算结果 ⇒ ⇒ **过仲裁**（`line.publish`）⇒ ⇒ **过期的一律丢掉**。
+///
+/// ## 为什么第一个请求慢（600ms）、之后快（150ms）
+///
+/// 为了**必然**造出**乱序**：先发「alpha」（慢）再发「beta」（快）
+/// ⇒ ⇒ beta **先**回来 ⇒ ⇒ alpha **后**回来
+/// ⇒ ⇒⇒ ⇒ 若没有仲裁 ⇒ alpha **会盖掉** beta（屏幕上出现过期结果）
+/// ⇒ ⇒⇒ ⇒ **这就是要验的那件事**。
+///
+/// ## Errors
+///
+/// 未 boot / 当前屏幕不是演示屏 ⇒ 返回 JS 错误。
+#[wasm_bindgen]
+pub fn set_demo_query(query: &str) -> Result<(), JsValue> {
+    HOST.with(|slot| {
+        let guard = slot.borrow();
+        let Some(host) = guard.as_ref() else {
+            return Err(JsValue::from_str("宿主薄壳：还没 boot"));
+        };
+        let Some(demo) = host.screen.as_any().downcast_ref::<DemoScreen>() else {
+            return Err(JsValue::from_str("宿主薄壳：当前屏幕不是演示屏"));
+        };
+        let Some(window) = web_sys::window() else {
+            return Err(JsValue::from_str("宿主薄壳：没有 window"));
+        };
+
+        // ① 领票（**在请求发出之前**领）② 记下查询词③ 标记脏（输入框要显示新词）
+        let ticket = demo.line.begin();
+        demo.query.set(query.to_owned());
+        host.state.borrow_mut().mark_dirty();
+
+        // ④ 真定时器：第一个请求慢（冷缓存）⇒ ⇒ 后发先至
+        let delay = if host.line_stats.slow_left.get() > 0 {
+            host.line_stats
+                .slow_left
+                .set(host.line_stats.slow_left.get() - 1);
+            600
+        } else {
+            150
+        };
+
+        // ⑤ 到点：算结果 ⇒ ⇒ **过仲裁** ⇒ ⇒ 过期的一律丢掉（不覆盖新工作）
+        let text = demo.text.clone();
+        let query_signal = demo.query.clone();
+        let results = demo.results.clone();
+        let line = demo.line.clone();
+        let state = host.state.clone();
+        let stats = host.line_stats.clone();
+        let query_owned = query.to_owned();
+        let closure = Closure::<dyn FnMut()>::new(move || {
+            // ⭐ 诊断：回调入口打标记（若在下面某步冻住 ⇒ ⇒ 报告里能看到「卡在哪个回调」）
+            let stage_key = JsValue::from_str("__P5B_ASYNC_STAGE__");
+            if let Some(window) = web_sys::window() {
+                let _ = js_sys::Reflect::set(
+                    &window,
+                    &stage_key,
+                    &JsValue::from_str(&format!("cb-enter:{query_owned}")),
+                );
+            }
+            let fetched = format!("{query_owned} 的结果");
+            stats.resolved.set(stats.resolved.get() + 1);
+            let tree = demo_view(&text, &query_signal, &fetched);
+            // ⚠️ 票据 `clone()`：闭包要能**被重复调用**（`FnMut`）
+            //   ⇒ ⇒ 把捕获的票**移出**会让闭包退化成 `FnOnce` ⇒ ⇒ 编译直接红。
+            //   ⇒ ⇒ 票据是**值语义凭证**（`Clone`）⇒ ⇒ 克隆一份传进去，语义不变。
+            if line.publish(tree, ticket.clone()) {
+                // ⭐ 被接受：只有**最新**的那条能走到这里
+                stats.accepted.set(stats.accepted.get() + 1);
+                results.set(fetched);
+                state.borrow_mut().mark_dirty();
+            } else {
+                // ⭐⭐ 被驳回：**过期结果** ⇒ ⇒ 不许覆盖新工作（这就是仲裁的意义）
+                stats.rejected.set(stats.rejected.get() + 1);
+            }
+            if let Some(window) = web_sys::window() {
+                let _ = js_sys::Reflect::set(
+                    &window,
+                    &stage_key,
+                    &JsValue::from_str(&format!("cb-done:{query_owned}")),
+                );
+            }
+        });
+        let _ = window.set_timeout_with_callback_and_timeout_and_arguments_0(
+            closure.as_ref().unchecked_ref(),
+            delay,
+        );
+        // 必须保活到触发（drop ⇒ ⇒ 回调立刻失效 ⇒ ⇒ 定时器永不到点）。
+        host.timers.borrow_mut().push(closure);
+        Ok(())
+    })
+}
+
+/// ⭐⭐ **异步数据线的计数**（证据读它 ⇒ ⇒ 光看 DOM 不够）。
+///
+/// ## 为什么需要它
+///
+/// 「DOM 显示 beta」**不能**证明 alpha 被驳回了 —— 也可能 alpha **根本没回来**。
+/// ⇒ ⇒ 三个数一起看才成立：`resolved == 2`（两条都回来了）
+/// + `accepted == 1`（只上屏一条）+ `rejected == 1`（有一条被挡下）。
+///
+/// # Errors
+///
+/// 未 boot ⇒ 返回 JS 错误。
+#[wasm_bindgen]
+pub fn async_line_stats() -> Result<JsValue, JsValue> {
+    HOST.with(|slot| {
+        let guard = slot.borrow();
+        let Some(host) = guard.as_ref() else {
+            return Err(JsValue::from_str("宿主薄壳：还没 boot"));
+        };
+        let object = js_sys::Object::new();
+        let stats = &host.line_stats;
+        for (key, value) in [
+            ("resolved", stats.resolved.get()),
+            ("accepted", stats.accepted.get()),
+            ("rejected", stats.rejected.get()),
+        ] {
+            js_sys::Reflect::set(
+                &object,
+                &JsValue::from_str(key),
+                &JsValue::from_f64(f64::from(value)),
+            )?;
+        }
+        Ok(object.into())
+    })
 }

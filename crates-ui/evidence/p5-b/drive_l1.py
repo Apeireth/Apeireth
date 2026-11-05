@@ -146,6 +146,9 @@ def main() -> int:
     keyboard = report.get("keyboardSemantics") or {}
     # ⭐⭐⭐ 焦点与模态（E-174）：Tab 走引擎？焦点陷阱在真实浏览器里成立？
     focus_modal = report.get("focusModal") or {}
+    # ⭐⭐⭐ 异步数据线（E-182）：真定时器造乱序 ⇒ ⇒ 过期结果**必须被驳回**
+    #   ⇒ ⇒ 判据三条一起看：DOM 只显示**新**结果 + 两条都回来 + 有一条被驳
+    async_line = report.get("asyncLine") or {}
     dom_ok = bool(dom.get("ok"))
     upload_ok = bool(upload.get("ok"))
     # ⭐ 宿主段有三个子判定：主段 + **帧后**（rAF 帧驱动）+ **销毁**（DOM 卸载）
@@ -168,6 +171,7 @@ def main() -> int:
     integration_ok = bool(integration.get("ok"))
     keyboard_ok = bool(keyboard.get("ok"))
     focus_modal_ok = bool(focus_modal.get("ok"))
+    async_line_ok = bool(async_line.get("ok"))
     if not dom_ok:
         print(f"❌ DOM 探针失败项：{dom.get('failures')}", file=sys.stderr)
     if not upload_ok:
@@ -203,6 +207,17 @@ def main() -> int:
             f"close={focus_modal.get('focus_after_close')}）",
             file=sys.stderr,
         )
+    if not async_line_ok:
+        print(
+            f"❌ 异步数据线探针失败项：{async_line.get('failures')} "
+            f"（DOM={async_line.get('resultsText')!r} "
+            f"resolved={async_line.get('resolved')} "
+            f"accepted={async_line.get('accepted')} "
+            f"rejected={async_line.get('rejected')} "
+            f"arrivalOrder={async_line.get('arrivalOrder')} "
+            f"naiveLastWins={async_line.get('naiveLastWins')!r}）",
+            file=sys.stderr,
+        )
     if not perf_ok:
         print(f"❌ 规模基线探针失败项：{perf.get('failures')}", file=sys.stderr)
     if not real_load_ok:
@@ -217,13 +232,15 @@ def main() -> int:
         and integration_ok
         and keyboard_ok
         and focus_modal_ok
+        and async_line_ok
     ):
         return 1
     print(
         "✅ L1 浏览器探针全过（G1 测量 / G2 载荷 / G3 焦点与 IME / G6 缩放 / "
         "G8 错误边界与 panic hook / G7 纹理上传端到端 / 双向绑定 / 组合集成 / "
         "键盘语义（Enter vs Shift+Enter + IME 组合期）/ "
-        "焦点与模态（Tab 走引擎 + 焦点陷阱）/ 产品宿主）"
+        "焦点与模态（Tab 走引擎 + 焦点陷阱）/ "
+        "异步数据线（乱序返回 + 仲裁驳回过期结果）/ 产品宿主）"
     )
     return 0
 

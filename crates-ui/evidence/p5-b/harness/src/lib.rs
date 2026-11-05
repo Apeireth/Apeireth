@@ -3422,6 +3422,277 @@ pub fn l1_app_probe() -> Result<JsValue, JsValue> {
     Ok(result.into())
 }
 
+/// ⭐ **探针阶段标记**（诊断用）：把当前阶段写进 `window.__P5B_ASYNC_STAGE__`。
+///
+/// ## 为什么要它（2026-11-05 实测踩过）
+///
+/// ⇒ ⇒ 探针若在 wasm 里**挂住**（没有抛错、也没有返回）⇒ ⇒ JS 侧只看到
+/// 「await 永远不落地」⇒ ⇒⇒ **什么都看不出来** ⇒ ⇒⇒⇒ 只能瞎猜。
+/// ⇒ ⇒⇒ 阶段标记让「挂在哪一步」变成**可观测**的。
+fn mark_async_stage(stage: &str) {
+    if let Some(window) = web_sys::window() {
+        let _ = js_sys::Reflect::set(
+            &window,
+            &JsValue::from_str("__P5B_ASYNC_STAGE__"),
+            &JsValue::from_str(stage),
+        );
+    }
+}
+
+/// ⭐ E-182：异步数据线探针的**跨调用状态**（arm → collect 两段之间）。
+struct AsyncProbeState {
+    /// 宿主容器（collect 时移除）。
+    container: web_sys::Element,
+    /// 对照组：真实到达顺序（arm 时排的定时器往里写）。
+    arrivals: std::rc::Rc<std::cell::RefCell<Vec<String>>>,
+    /// 对照组定时器闭包（**必须保活**到 collect）。
+    #[allow(dead_code)]
+    control_timers: Vec<Closure<dyn FnMut()>>,
+}
+
+thread_local! {
+    /// 当前正在跑的异步探针状态（`None` = 没 arm 过）。
+    static ASYNC_PROBE: std::cell::RefCell<Option<AsyncProbeState>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// ⭐⭐⭐ **异步数据线探针（第一段：armed）**（E-182）。
+///
+/// ## 为什么拆成两段（**不是**为了好看）
+///
+/// 2026-11-05 实测：**异步 wasm 导出**（`async fn` 导出 ⇒ JS 侧拿到 Promise）
+/// 在 **WebKitGTK** 里**永远不落地** ⇒ ⇒ 页面 `await` 挂住
+/// ⇒ ⇒⇒ 而且**事件循环也被冻住**（超时定时器都不跑）⇒ ⇒ 页面停在上一份报告
+/// ⇒ ⇒⇒⇒ 于是「探针挂了」和「探针没跑」**无法区分**。
+/// ⇒ ⇒⇒ ⇒ 改成**两段同步导出**：① arm（同步回来）② 页面自己等 900ms ③ collect（同步回来）
+/// ⇒ ⇒⇒⇒ 任何一段挂住 ⇒ ⇒ **页面侧一眼看出是哪一段**。
+///
+/// ## 它做什么
+///
+/// ① 建容器 + `boot` 参考宿主（宿主内部接了一条**异步数据线**）；
+/// ② 先发「alpha」（**慢**：600ms，模拟冷缓存）、紧接着发「beta」（**快**：150ms）
+/// ③ 并用**同样的延时**排一组对照定时器 ⇒ ⇒ 记录**真实到达顺序**。
+///
+/// # Errors
+///
+/// 建容器 / boot / 发查询失败 ⇒ 返回 JS 错误。
+#[wasm_bindgen]
+pub fn l1_async_line_arm() -> Result<JsValue, JsValue> {
+    use apeireth_ui_app::wasm_host;
+
+    mark_async_stage("arm:start");
+    let document = web_sys::window()
+        .and_then(|window| window.document())
+        .ok_or_else(|| JsValue::from_str("没有 document"))?;
+    let body = document
+        .body()
+        .ok_or_else(|| JsValue::from_str("没有 body"))?;
+
+    // ① 宿主容器（真实 DOM）
+    let container = document
+        .create_element("div")
+        .map_err(|error| JsValue::from_str(&format!("建容器失败：{error:?}")))?;
+    container
+        .set_attribute("id", "l1-async-root")
+        .map_err(|error| JsValue::from_str(&format!("设容器 id 失败：{error:?}")))?;
+    body.append_child(&container)
+        .map_err(|error| JsValue::from_str(&format!("挂容器失败：{error:?}")))?;
+
+    // ② boot 参考宿主（它内部接了一条**异步数据线**）
+    mark_async_stage("arm:boot");
+    wasm_host::boot("#l1-async-root")
+        .map_err(|error| JsValue::from_str(&format!("boot 失败：{error:?}")))?;
+    mark_async_stage("arm:booted");
+
+    // ③ 造乱序：先发**慢**的 alpha，再发**快**的 beta ⇒ ⇒ beta **先**回来
+    mark_async_stage("arm:query-alpha");
+    wasm_host::set_demo_query("alpha")
+        .map_err(|error| JsValue::from_str(&format!("set_demo_query(alpha) 失败：{error:?}")))?;
+    mark_async_stage("arm:query-beta");
+    wasm_host::set_demo_query("beta")
+        .map_err(|error| JsValue::from_str(&format!("set_demo_query(beta) 失败：{error:?}")))?;
+
+    // ④ 对照组：**同样的延时**再排两条定时器 ⇒ ⇒ 记录**真实到达顺序**
+    //   ⇒ ⇒ 若顺序是 [beta, alpha] ⇒ ⇒ 「后发先至」成立
+    //   ⇒ ⇒⇒ 若顺序是 [alpha, beta] ⇒ ⇒ 乱序这个前提不成立 ⇒ ⇒ 正跑段什么也证明不了。
+    let arrivals: std::rc::Rc<std::cell::RefCell<Vec<String>>> =
+        std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+    let mut control_timers: Vec<Closure<dyn FnMut()>> = Vec::new();
+    for (label, delay) in [("alpha", 600i32), ("beta", 150i32)] {
+        let arrivals_for_timer = arrivals.clone();
+        let closure = Closure::<dyn FnMut()>::new(move || {
+            arrivals_for_timer.borrow_mut().push(label.to_owned());
+        });
+        if let Some(window) = web_sys::window() {
+            let _ = window.set_timeout_with_callback_and_timeout_and_arguments_0(
+                closure.as_ref().unchecked_ref(),
+                delay,
+            );
+        }
+        control_timers.push(closure);
+    }
+
+    ASYNC_PROBE.with(|slot| {
+        *slot.borrow_mut() = Some(AsyncProbeState {
+            container,
+            arrivals,
+            control_timers,
+        });
+    });
+    mark_async_stage("arm:done");
+
+    let result = js_sys::Object::new();
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("armed"),
+        &JsValue::from_bool(true),
+    );
+    Ok(result.into())
+}
+
+/// ⭐⭐⭐ **异步数据线探针（第二段：collect）**（E-182）—— 「旧回调不能覆盖新工作」的证据。
+///
+/// ## 它断言什么
+///
+/// 真定时器造出**乱序**（alpha 慢、beta 快 ⇒ ⇒ beta 先回来、alpha 后回来）后：
+/// ① **DOM 必须显示 beta**（后到的 alpha **不许**覆盖它）；
+/// ② `resolved == 2`（两条**都**回来了）+ `accepted == 1`（只上屏一条）
+/// + `rejected == 1`（有一条**被驳回**）⇒ ⇒ 三个数一起才排除「alpha 根本没回来」；
+/// ③ 对照组：真实到达顺序必须是 `[beta, alpha]`（**后发先至**）
+/// ⇒ ⇒⇒ 否则「乱序」这个前提不成立 ⇒ ⇒ ①②**什么也证明不了** ⇒ ⇒ **必须报红**。
+///
+/// ## ⚠️ 为什么还要 `naiveLastWins`
+///
+/// 把「对照组实测的到达顺序」直接套到「谁最后到谁上屏」这条**朴素策略**上
+/// ⇒ ⇒ 得到**没有仲裁时**屏幕上会是什么（实测是 **alpha**）
+/// ⇒ ⇒⇒ 这就把「仲裁是唯一让它不发生的机制」写成了**可复核的数字**，而不是一句断言。
+///
+/// # Errors
+///
+/// 没有 arm 过 / 读 DOM / 计数失败 ⇒ 返回 JS 错误。
+#[wasm_bindgen]
+pub fn l1_async_line_collect() -> Result<JsValue, JsValue> {
+    use apeireth_ui_app::wasm_host;
+
+    mark_async_stage("collect:start");
+    let mut failures: Vec<String> = Vec::new();
+    let document = web_sys::window()
+        .and_then(|window| window.document())
+        .ok_or_else(|| JsValue::from_str("没有 document"))?;
+
+    // ① 正跑段判据：DOM 上的结果文本 + 三个计数
+    let results_text = document
+        .query_selector("#app-demo-results")
+        .ok()
+        .flatten()
+        .and_then(|element| element.text_content())
+        .unwrap_or_default();
+    let stats = wasm_host::async_line_stats()
+        .map_err(|error| JsValue::from_str(&format!("async_line_stats 失败：{error:?}")))?;
+    let stat = |key: &str| -> f64 {
+        js_sys::Reflect::get(&stats, &JsValue::from_str(key))
+            .ok()
+            .and_then(|value| value.as_f64())
+            .unwrap_or(-1.0)
+    };
+    let resolved = stat("resolved");
+    let accepted = stat("accepted");
+    let rejected = stat("rejected");
+    mark_async_stage("collect:read");
+
+    if !results_text.starts_with("beta") {
+        failures.push(format!(
+            "① 过期结果覆盖了新结果：DOM 显示 {results_text:?}（必须是 beta 的结果 \
+             ⇒ ⇒ 说明仲裁没挡住后到的 alpha）"
+        ));
+    }
+    if resolved != 2.0 {
+        failures.push(format!(
+            "② 两条请求**都**应当回来：resolved={resolved}（必须是 2 \
+             ⇒ ⇒ 否则「显示 beta」可能只是 alpha 没回来 ⇒ ⇒ 判据不成立）"
+        ));
+    }
+    if accepted != 1.0 {
+        failures.push(format!("② 只应上屏一条：accepted={accepted}（必须是 1）"));
+    }
+    if rejected != 1.0 {
+        failures.push(format!(
+            "② 后到的过期结果**必须被驳回**：rejected={rejected}（必须是 1）"
+        ));
+    }
+
+    // ② 对照组判据：真实到达顺序必须是「后发先至」
+    let state = ASYNC_PROBE.with(|slot| slot.borrow_mut().take());
+    let Some(state) = state else {
+        return Err(JsValue::from_str(
+            "异步数据线探针：没有先 arm 就 collect（顺序错了）",
+        ));
+    };
+    let order = state.arrivals.borrow().clone();
+    let order_ok =
+        order == vec![String::from("beta"), String::from("alpha")];
+    if !order_ok {
+        failures.push(format!(
+            "③ 对照组：到达顺序应为 [beta, alpha]（后发先至），实测 {order:?} \
+             ⇒ ⇒ 乱序这个前提不成立 ⇒ 正跑段的「显示 beta」不能证明仲裁生效"
+        ));
+    }
+    // 「没有仲裁」时会显示什么：**按到达顺序覆盖** ⇒ ⇒ 最后到的是谁，屏幕上就是谁
+    let naive_last = order.last().cloned().unwrap_or_default();
+
+    // ③ 收尾：销毁宿主 + 移除容器（不污染后续探针）
+    mark_async_stage("collect:dispose");
+    let _ = wasm_host::dispose_screen();
+    if let Some(body) = document.body() {
+        let _ = body.remove_child(&state.container);
+    }
+    drop(state);
+    mark_async_stage("collect:done");
+
+    let result = js_sys::Object::new();
+    let failures_array = js_sys::Array::new();
+    for item in &failures {
+        failures_array.push(&JsValue::from_str(item));
+    }
+    let order_array = js_sys::Array::new();
+    for label in &order {
+        order_array.push(&JsValue::from_str(label));
+    }
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("ok"),
+        &JsValue::from_bool(failures.is_empty()),
+    );
+    let _ = js_sys::Reflect::set(&result, &JsValue::from_str("failures"), &failures_array);
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("resultsText"),
+        &JsValue::from_str(&results_text),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("resolved"),
+        &JsValue::from_f64(resolved),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("accepted"),
+        &JsValue::from_f64(accepted),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("rejected"),
+        &JsValue::from_f64(rejected),
+    );
+    let _ = js_sys::Reflect::set(&result, &JsValue::from_str("arrivalOrder"), &order_array);
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("naiveLastWins"),
+        &JsValue::from_str(&naive_last),
+    );
+    Ok(result.into())
+}
+
 /// ⭐⭐⭐⭐ **宿主「帧后」探针**（在浏览器的一帧之后调用）。
 ///
 /// ## 它验证什么

@@ -21,6 +21,13 @@
 use apeireth_ui_core::Signal;
 use apeireth_ui_dom::vnode::VNode;
 
+/// ⭐⭐⭐ **异步数据线**（E-182）—— 「领票 / 发布 / 作废」的**参考接线**。
+///
+/// ⇒ ⇒ 宿主只管**算树**，**不碰票据** ⇒ ⇒⇒ 漏接的可能最小 ⇒ ⇒⇒⇒
+/// ⇒ ⇒ 它与 [`HostState`] **共享**同一份 [`snapshot::SnapshotStore`] ⇒ ⇒⇒
+/// ⇒ ⇒⇒ 屏幕**发**快照、宿主**取**快照 ⇒ ⇒⇒ ⇒ 机制才成立。
+pub mod async_line;
+
 /// ⭐⭐⭐ **视图快照**（application-layer 地基，E-178）—— 「旧回调不能覆盖新工作」。
 pub mod snapshot;
 

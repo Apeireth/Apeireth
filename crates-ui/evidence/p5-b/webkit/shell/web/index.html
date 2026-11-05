@@ -123,6 +123,34 @@ async function main() {
     var errBefore = window.__WEBKIT_PROBE_ERRORS__.length;
     try { results.dom = p5b.l1_probe(); }
     catch (error) { results.dom = { ok: false, failures: ['DOM 探针抛错：' + String(error)] }; }
+    report();   // ⭐ 诊断：确认 `l1_probe()` **真的返回了**（否则下一份报告就是上一段的）
+    // ⭐⭐⭐ E-182：异步数据线（真定时器 + 乱序 + 仲裁 + 内置对照组）
+    // ⚠️ **两段同步导出**：WebKitGTK 里 `async fn` 导出实测**永远不落地**
+    //   ⇒ ⇒ 而且事件循环被冻住（超时定时器都不跑）⇒ ⇒ 页面停在上一份报告
+    //   ⇒ ⇒⇒ 两段式：arm 同步回来 ⇒ 页面自己等 900ms ⇒ collect 同步回来
+    //   ⇒ ⇒⇒⇒ 哪一段挂住，报告里的 `stage` 一眼看出。
+    try {
+      window.__P5B_ASYNC_STAGE__ = 'js:arm';
+      results.asyncLineArm = p5b.l1_async_line_arm();
+      report();
+      // ⭐ 诊断：把 900ms **切成 9 段**、每段 report 一次
+      //   ⇒ ⇒ 若事件循环被冻住 ⇒ ⇒ 报告会**停在**最后一个跑到的 tick
+      //   ⇒ ⇒⇒ 于是「冻结发生在哪个时刻」变成可观测（本次实测就靠它定位）。
+      for (var tick = 1; tick <= 9; tick += 1) {
+        window.__P5B_ASYNC_STAGE__ = 'js:sleep-tick-' + tick;
+        await new Promise(function (resolve) { setTimeout(resolve, 100); });
+        results.asyncTick = tick;
+        report();
+      }
+      window.__P5B_ASYNC_STAGE__ = 'js:collect';
+      results.asyncLine = p5b.l1_async_line_collect();
+    } catch (error) {
+      results.asyncLine = {
+        ok: false,
+        failures: ['异步数据线探针抛错：' + String(error) + '（阶段=' + (window.__P5B_ASYNC_STAGE__ || '未知') + '）'],
+      };
+    }
+    report();
     results.errors_from_dom = window.__WEBKIT_PROBE_ERRORS__.slice(errBefore);
 
 
@@ -132,11 +160,13 @@ async function main() {
     results.consoleErrors = consoleErrors;
     results.ok = !!(results.keyboardSemantics && results.keyboardSemantics.ok)
       && !!(results.focusModal && results.focusModal.ok)
-      && !!(results.dom && results.dom.ok);
+      && !!(results.dom && results.dom.ok)
+      && !!(results.asyncLine && results.asyncLine.ok);
     results.summary = {
       keyboardSemantics: !!(results.keyboardSemantics && results.keyboardSemantics.ok),
       focusModal: !!(results.focusModal && results.focusModal.ok),
       dom: !!(results.dom && results.dom.ok),
+      asyncLine: !!(results.asyncLine && results.asyncLine.ok),
     };
     results.stage = 'done';
   } catch (error) {

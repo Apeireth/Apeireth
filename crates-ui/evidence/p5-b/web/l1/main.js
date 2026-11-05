@@ -21,6 +21,21 @@ try {
   results.upload = { ok: false, failures: [`上传探针抛错：${String(error)}`] };
 }
 try {
+  // ⭐⭐⭐ E-182：异步数据线（真定时器 + 乱序 + 仲裁）⇒ ⇒ 自己 boot / 自己 dispose
+  //   ⇒ ⇒ **必须排在 `l1_app_probe` 之前**：它会 boot 一个新宿主并在结束时销毁
+  //   ⇒ ⇒⇒ 若放在后面会把 app 探针的宿主顶掉 ⇒ ⇒ 后续 after_frame 探针全红。
+  // ⚠️ **两段同步导出**（不是 async 导出）：WebKitGTK 里 async 导出实测会挂住
+  //   （2026-11-05）⇒ ⇒ 两段式让「挂在哪一段」可观测。
+  p5b.l1_async_line_arm();
+  await new Promise((resolve) => setTimeout(resolve, 900));
+  results.asyncLine = p5b.l1_async_line_collect();
+} catch (error) {
+  results.asyncLine = {
+    ok: false,
+    failures: [`异步数据线探针抛错：${String(error)}（阶段=${window.__P5B_ASYNC_STAGE__ || '未知'}）`],
+  };
+}
+try {
   results.app = p5b.l1_app_probe();
 } catch (error) {
   results.app = { ok: false, failures: [`宿主探针抛错：${String(error)}`] };
