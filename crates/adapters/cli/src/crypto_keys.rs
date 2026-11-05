@@ -17,6 +17,10 @@
 //! 平台凭据库/桌面侧车 keychain 锚定实现未接线 (engine 只有 `KekAnchor` trait);
 //! 模型面工具 (`tool.*`) 未注册 (归口装配面治理接线); 本动词不写审计行
 //! (审计归口治理面); live E2E 未实测。
+//!
+//! 旗标层: 判据走 crate 级共享模块 [`crate::flags`] (白名单式扫描, 拒绝即帧) ——
+//! 本面只留自己的措辞 (英文档: 本面用法帧是英文的) 与三条自有纪律 (重复即拒 /
+//! 非空值 / 不收位置参数); `--` 之后一律当位置参数。
 
 use std::io::Write as _;
 use std::path::PathBuf;
@@ -25,8 +29,34 @@ use apeireth_storage::crypto::{
     KdfParams, KeyWrapFile, PartitionId, PartitionKey, RecoveryKey, UnlockKey, KEY_LOSS_BOUNDARY,
 };
 
+use crate::flags;
+
 /// `apeireth crypto` 用法帧。
 pub const USAGE: &str = "apeireth crypto\n\nUsage:\n  apeireth crypto wrap --partition <ID> --keys <FILE> --recovery-out <FILE>\n  apeireth crypto recovery-export --keys <FILE> --out <FILE>\n  apeireth crypto unlock --keys <FILE> [--recovery <FILE>] [--out <KEYFILE>]\n\n  wrap / recovery-export 从 stdin 读一行口令 (终端回显);\n  unlock 缺省读口令, --recovery <FILE> 改用恢复件 (hex);\n  --out <KEYFILE> 导出解锁后的分区密钥材料 (0600), 供 B6-2a 会话封缄 daemon 读取\n  (配 APEIRETH_ENABLE_SESSION_SEAL=1 + APEIRETH_SESSION_SEAL_KEY_FILE)。\n  密钥丢失 = 不可恢复 (无后门): 恢复件导出后请离线保管。";
+
+/// `wrap` 的旗标白名单 (三个带值旗标; 本面不收布尔旗标)。
+///
+/// 判据 (旗标形态 / 缺值 / `--` 分隔) 走 crate 级共享模块 [`crate::flags`] ——
+/// 本面只留自己的措辞与用法帧。
+const WRAP_FLAGS: flags::FlagSpec = flags::FlagSpec {
+    value: &["--partition", "--keys", "--recovery-out"],
+    boolean: &[],
+    meta_as_positional: false,
+};
+
+/// `recovery-export` 的旗标白名单 (两个带值旗标)。
+const RECOVERY_EXPORT_FLAGS: flags::FlagSpec = flags::FlagSpec {
+    value: &["--keys", "--out"],
+    boolean: &[],
+    meta_as_positional: false,
+};
+
+/// `unlock` 的旗标白名单 (三个带值旗标; `--out` 是 opt-in 导出第二动作)。
+const UNLOCK_FLAGS: flags::FlagSpec = flags::FlagSpec {
+    value: &["--keys", "--recovery", "--out"],
+    boolean: &[],
+    meta_as_positional: false,
+};
 
 /// `apeireth crypto` 入口。
 pub fn run_crypto(args: &[String]) -> Result<String, String> {
@@ -44,10 +74,10 @@ pub fn run_crypto(args: &[String]) -> Result<String, String> {
 
 /// 生成分区 DEK + 双槽包裹 (口令 + 恢复件) + 恢复件导出。
 fn run_wrap(args: &[String]) -> Result<String, String> {
-    let options = parse_options(args, &["--partition", "--keys", "--recovery-out"])?;
-    let partition_text = require_value(&options, "--partition")?;
-    let keys_path = PathBuf::from(require_value(&options, "--keys")?);
-    let recovery_path = PathBuf::from(require_value(&options, "--recovery-out")?);
+    let scanned = scan_options("wrap", &WRAP_FLAGS, args)?;
+    let partition_text = require_value(&scanned, "wrap", "--partition")?;
+    let keys_path = PathBuf::from(require_value(&scanned, "wrap", "--keys")?);
+    let recovery_path = PathBuf::from(require_value(&scanned, "wrap", "--recovery-out")?);
 
     if keys_path.exists() {
         return Err(format!(
@@ -99,9 +129,9 @@ fn run_wrap(args: &[String]) -> Result<String, String> {
 
 /// 用口令解包后换新恢复件 (丢失恢复件时的补出出口)。
 fn run_recovery_export(args: &[String]) -> Result<String, String> {
-    let options = parse_options(args, &["--keys", "--out"])?;
-    let keys_path = PathBuf::from(require_value(&options, "--keys")?);
-    let out_path = PathBuf::from(require_value(&options, "--out")?);
+    let scanned = scan_options("recovery-export", &RECOVERY_EXPORT_FLAGS, args)?;
+    let keys_path = PathBuf::from(require_value(&scanned, "recovery-export", "--keys")?);
+    let out_path = PathBuf::from(require_value(&scanned, "recovery-export", "--out")?);
     if out_path.exists() {
         return Err(format!(
             "crypto recovery-export refused: 恢复件文件已存在, 不覆盖: {}",
@@ -138,11 +168,11 @@ fn run_recovery_export(args: &[String]) -> Result<String, String> {
 
 /// 解锁自检 (口令或恢复件可解包; 不落任何数据)。
 fn run_unlock(args: &[String]) -> Result<String, String> {
-    let options = parse_options(args, &["--keys", "--recovery", "--out"])?;
-    let keys_path = PathBuf::from(require_value(&options, "--keys")?);
+    let scanned = scan_options("unlock", &UNLOCK_FLAGS, args)?;
+    let keys_path = PathBuf::from(require_value(&scanned, "unlock", "--keys")?);
     let key_wrap = read_key_wrap(&keys_path)?;
 
-    let unlock = match options.get("--recovery") {
+    let unlock = match scanned.value("--recovery") {
         Some(recovery_path) => {
             let text = std::fs::read_to_string(recovery_path).map_err(|error| error.to_string())?;
             let recovery = RecoveryKey::from_hex(&text).map_err(|error| error.to_string())?;
@@ -162,7 +192,7 @@ fn run_unlock(args: &[String]) -> Result<String, String> {
         dek.partition(),
         KEY_LOSS_BOUNDARY
     );
-    if let Some(out_path) = options.get("--out") {
+    if let Some(out_path) = scanned.value("--out") {
         let out_path = PathBuf::from(out_path);
         if out_path.exists() {
             return Err(format!(
@@ -203,40 +233,66 @@ fn now_millis() -> i64 {
         .unwrap_or(0)
 }
 
-/// 旗标解析: 只认白名单旗标 + 每旗标恰一值 (未知/重复/悬空 = 用法帧)。
-fn parse_options(
+/// 旗标解析: 白名单式扫描 —— **拒绝即帧** (判据在 crate 级共享模块 [`crate::flags`]).
+///
+/// 措辞走英文档 (本面用法帧是英文的): 未知项 (旗标与位置词类本面同称「参数」) /
+/// 缺值 一律点名 + `--` 分隔提示 + 白名单提示 + 用法帧 (跨面帧结构逐字同构)。
+///
+/// 共享层管的判据: 旗标形态 (负数是值) / 未知项分类 / **缺值** (值缺失或值本身
+/// 像旗标) / `--` 分隔。本面**自有**的三条纪律 (共享层不提供 ⇒ 面内显式判,
+/// 措辞各自可辨):
+///
+/// 1. **非空值** —— 值不得是空串/纯空白 (空路径 = 落到当前目录);
+/// 2. **重复即拒** —— 同一旗标只允许给一次 (不静默取末位: 密钥落点选错 =
+///    密钥写错文件);
+/// 3. **不收位置参数** —— 词类参数一律未知参数 (指名拒)。
+///
+/// ⚠️ 本面是**密钥材料面**: 共享层比本面旧行为**更宽松**的两处 (允许空值 /
+/// 允许重复) 一律由上面两条自有纪律补回 ⇒ 收口不放宽任何一条拒绝路径。
+fn scan_options(
+    verb: &str,
+    spec: &flags::FlagSpec,
     args: &[String],
-    allowed: &[&str],
-) -> Result<std::collections::BTreeMap<String, String>, String> {
-    let mut options = std::collections::BTreeMap::new();
-    let mut index = 0;
-    while index < args.len() {
-        let flag = args[index].as_str();
-        if !allowed.contains(&flag) {
-            return Err(format!("unknown crypto argument: {flag}\n{USAGE}"));
-        }
-        index += 1;
-        let Some(value) = args.get(index) else {
-            return Err(format!("crypto {flag} requires a value\n{USAGE}"));
-        };
+) -> Result<flags::Scan, String> {
+    let known = spec.known();
+    let command = format!("crypto {verb}");
+    let scanned = flags::scan(args, spec).map_err(|error| {
+        error.frame(
+            flags::Style::En,
+            &flags::FrameContext::new(&command, flags::UnknownNoun::Argument)
+                .with_usage(USAGE)
+                .with_known(&known),
+        )
+    })?;
+    // 自有纪律 ①: 非空值 (逐个取值判 —— 空路径 = 落到当前目录)。
+    for (flag, value) in &scanned.values {
         if value.trim().is_empty() {
-            return Err(format!("crypto {flag} requires a non-empty value\n{USAGE}"));
+            return Err(format!(
+                "crypto {verb} {flag} requires a non-empty value\n{USAGE}"
+            ));
         }
-        if options.insert(flag.to_string(), value.clone()).is_some() {
-            return Err(format!("crypto {flag} given twice\n{USAGE}"));
-        }
-        index += 1;
     }
-    Ok(options)
+    // 自有纪律 ②: 重复即拒 (不静默取末位 —— 密钥落点选错 = 密钥写错文件)。
+    for flag in spec.value {
+        if scanned.count(flag) > 1 {
+            return Err(format!("crypto {verb} {flag} given twice\n{USAGE}"));
+        }
+    }
+    // 自有纪律 ③: 本命令不收位置参数 (词类参数指名拒)。
+    if let Some(error) = scanned.extra_positional() {
+        return Err(error.frame(
+            flags::Style::En,
+            &flags::FrameContext::new(&command, flags::UnknownNoun::Argument).with_usage(USAGE),
+        ));
+    }
+    Ok(scanned)
 }
 
-fn require_value<'a>(
-    options: &'a std::collections::BTreeMap<String, String>,
-    flag: &str,
-) -> Result<&'a String, String> {
-    options
-        .get(flag)
-        .ok_or_else(|| format!("crypto 缺旗标 {flag}\n{USAGE}"))
+/// 取必填旗标的值 (缺旗标 = 用法帧)。
+fn require_value<'a>(scanned: &'a flags::Scan, verb: &str, flag: &str) -> Result<&'a str, String> {
+    scanned
+        .value(flag)
+        .ok_or_else(|| format!("crypto {verb} missing flag: {flag}\n{USAGE}"))
 }
 
 #[cfg(test)]

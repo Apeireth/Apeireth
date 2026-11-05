@@ -1,8 +1,8 @@
 //! crate 级旗标判据 —— CLI 参数层单一真源。
 //!
-//! 六处旗标扫描 (`main.rs` 入口面 / `exposure.rs` / `lessons_command.rs` /
-//! `egress_command.rs` / `trait_command.rs` / `backup.rs`) 的**判据**收口到
-//! 这里, 各面只留自己的措辞与用法帧。五条口径:
+//! 七处旗标扫描 (`main.rs` 入口面 / `exposure.rs` / `lessons_command.rs` /
+//! `egress_command.rs` / `trait_command.rs` / `backup.rs` / `crypto_keys.rs`)
+//! 的**判据**收口到这里, 各面只留自己的措辞与用法帧。五条口径:
 //!
 //! 1. **旗标形态** —— 以 `-` 开头、长度 > 1、且**不是负数**
 //!    (`--cooldown -1` ⇒ `-1` 是**值** ⇒ 报「值不合法」, 不报「缺值」);
@@ -207,7 +207,7 @@ pub enum FlagError {
 pub enum Style {
     /// 中文档 (仓内多数派: lessons / egress / trait 三面)。
     Zh,
-    /// 英文档 (用法文本是英文的面: `main` 入口面 / `exposure` 面 / `backup` 面)。
+    /// 英文档 (用法文本是英文的面: `main` 入口面 / `exposure` 面 / `backup` 面 / `crypto_keys` 面)。
     En,
 }
 
