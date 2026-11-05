@@ -9,7 +9,12 @@
 //!   **passed through** to the runtime governance chain, which is the only
 //!   place a human approval is obtained;
 //! * [`McpToolDenyGuard`] (monotonic guard stage): a deny-only blocklist, so
-//!   an operator can hard-refuse specific external capabilities;
+//!   an operator can hard-refuse specific external capabilities. The
+//!   operator's surface is the per-server `deny_tools` list of the
+//!   configuration ([`super::config::McpServerSpec`]): the bridge seeds the
+//!   gate from that list when it is assembled, so the blocklist has a
+//!   **production injection point** and a denied tool is refused **before it
+//!   executes** — no matter what else authorizes it;
 //! * [`McpPermissionMapping`]: the seeding helpers that turn external tool
 //!   permission declarations into [`PermissionPolicy`] grants.
 //!
@@ -40,7 +45,7 @@ use apeireth_governance::{Decision, Permission, PermissionPolicy, ToolGuard, Too
 
 use crate::exec_pipeline::{PreExecuteHook, PreExecuteRequest, PreVerdict};
 
-use super::catalog::{McpToolCatalog, McpToolEntry};
+use super::catalog::{capability_id_for, McpCatalogError, McpToolCatalog, McpToolEntry};
 use super::family::{is_capability_in_family, MCP_FAMILY_ROOT};
 
 /// Family-scoped authorization the bridge holds locally.
@@ -233,6 +238,13 @@ impl PreExecuteHook for McpRiskMappingHook {
 }
 
 /// A monotonic, deny-only blocklist for external capabilities.
+///
+/// The gate may only **tighten**: a blocked capability stays blocked, and
+/// nothing that runs after it (the read-only preset, the operator allowlist,
+/// a family grant) can turn the refusal back into a pass. It answers one
+/// question — *is this capability blocked?* — and it answers it at the
+/// **guard stage of the tool pipeline**, which runs **before** the tool
+/// executes.
 pub struct McpToolDenyGuard {
     blocked: Mutex<BTreeSet<String>>,
 }
@@ -251,6 +263,36 @@ impl McpToolDenyGuard {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .insert(capability.into())
+    }
+
+    /// Block every listed remote tool of one server.
+    ///
+    /// The capability id is composed exactly the way the dynamic directory
+    /// composes it (`tool.mcp.<server>.<tool>`, see
+    /// [`capability_id_for`]), so the blocklist and the directory can never
+    /// disagree about which identity a tool carries.
+    ///
+    /// This is the bridge's **production injection point** for the deny
+    /// surface: the operator's `deny_tools` list is folded into the gate
+    /// when the bridge is assembled, so the gate is armed before the first
+    /// discovery runs.
+    ///
+    /// Returns how many identities were newly blocked. A name that cannot
+    /// compose into a stable id is refused (fail-closed) rather than
+    /// silently skipped.
+    pub fn deny_server_tools(
+        &self,
+        server: &str,
+        tool_names: &[String],
+    ) -> Result<usize, McpCatalogError> {
+        let mut blocked = 0;
+        for name in tool_names {
+            let capability = capability_id_for(server, name)?;
+            if self.deny_capability(capability.as_str()) {
+                blocked += 1;
+            }
+        }
+        Ok(blocked)
     }
 
     /// Unblock one capability.
@@ -281,6 +323,13 @@ impl ToolGuard for McpToolDenyGuard {
         "mcp_tool_deny"
     }
 
+    /// The one question this stage asks: is the capability blocked?
+    ///
+    /// A refusal here is **final for the call**: the pipeline closes it as
+    /// `pipeline.guard_deny` and the tool never runs. Nothing that ran
+    /// earlier — the read-only preset release, the operator allowlist, a
+    /// family grant — can prevent the refusal, and nothing that runs later
+    /// can overturn it (the guard vocabulary has no allow verdict).
     fn deny(&self, request: &ToolGuardRequest<'_>) -> Option<String> {
         let capability = request.capability.as_str();
         if self.is_blocked(capability) {

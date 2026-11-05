@@ -109,6 +109,29 @@ pub struct McpServerSpec {
     /// conclude "no human will be asked".
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub auto_authorize_tools: Vec<String>,
+    /// Remote tool names the operator pulls out of the external surface.
+    ///
+    /// This is the operator-authored **deny list**, and it is the production
+    /// injection point of the bridge's monotonic deny gate: the list is
+    /// seeded into the gate when the bridge is assembled, so a denied tool
+    /// is refused **before it executes** — even when it is declared
+    /// read-only, even when the allowlist above names it, and even when a
+    /// family grant covers it.
+    ///
+    /// **Deny beats every release.** The read-only preset, the allowlist and
+    /// the family grant all answer *"is this capability inside the
+    /// authorization surface?"*; the deny list answers *"is this tool
+    /// exposed at all?"*. A denied tool never enters the dynamic directory,
+    /// never reaches the model tool catalog, and — should a handle to it
+    /// exist anyway — the deny gate refuses its call. The deny side is
+    /// monotonic: nothing later overturns it.
+    ///
+    /// The names are matched against the **server-side tool name** (the same
+    /// surface `auto_authorize_tools` uses), not against the model-facing
+    /// name. A malformed name refuses the whole configuration to open
+    /// (fail-closed, same grade as a malformed allowlist entry).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub deny_tools: Vec<String>,
 }
 
 impl McpServerSpec {
@@ -122,6 +145,7 @@ impl McpServerSpec {
             url: None,
             enabled: true,
             auto_authorize_tools: Vec::new(),
+            deny_tools: Vec::new(),
         }
     }
 
@@ -139,6 +163,7 @@ impl McpServerSpec {
             url: Some(url.into()),
             enabled: true,
             auto_authorize_tools: Vec::new(),
+            deny_tools: Vec::new(),
         }
     }
 
@@ -157,6 +182,24 @@ impl McpServerSpec {
     pub fn with_auto_authorize(mut self, tool: impl Into<String>) -> Self {
         self.auto_authorize_tools.push(tool.into());
         self
+    }
+
+    /// Pull one remote tool out of the exposed surface (builder style).
+    ///
+    /// The deny list wins over the read-only preset, over the allowlist and
+    /// over a family grant: a denied tool is never exposed and never runs.
+    #[must_use]
+    pub fn with_deny_tool(mut self, tool: impl Into<String>) -> Self {
+        self.deny_tools.push(tool.into());
+        self
+    }
+
+    /// Whether the operator's deny list pulls `remote_name` out.
+    ///
+    /// The name is the **server-side** tool name — the same surface the
+    /// allowlist uses.
+    pub fn denies(&self, remote_name: &str) -> bool {
+        self.deny_tools.iter().any(|name| name == remote_name)
     }
 
     /// Disable this server (builder style).
@@ -186,6 +229,14 @@ impl McpServerSpec {
                     reason: format!(
                         "auto_authorize_tools entry {tool:?} violates the MCP name grammar"
                     ),
+                });
+            }
+        }
+        for tool in &self.deny_tools {
+            if !is_valid_mcp_name(tool) {
+                return Err(McpConfigError::InvalidSpec {
+                    name,
+                    reason: format!("deny_tools entry {tool:?} violates the MCP name grammar"),
                 });
             }
         }

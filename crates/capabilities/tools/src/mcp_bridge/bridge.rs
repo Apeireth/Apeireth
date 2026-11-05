@@ -40,6 +40,28 @@
 //! use. Until the wiring batch hands the bridge the production policy, the
 //! bridge's policy is **not** the production policy — a library-level gate,
 //! not a production one.
+//!
+//! # Where the deny surface lives
+//!
+//! The **deny** side is not part of the authorization surface: it is the
+//! operator's blocklist, and it lives in the configuration — one
+//! `deny_tools` list per server ([`super::config::McpServerSpec`]). The
+//! bridge seeds the monotonic deny gate from that list when it is assembled,
+//! so the gate is armed **before the first discovery**.
+//!
+//! The gate is the **one true source of "what is denied"**, and the bridge
+//! consults it in two places:
+//!
+//! * **the directory**: a denied tool never enters the dynamic directory —
+//!   it is not wrapped, not registered, and the model never sees it in the
+//!   tool catalog;
+//! * **the pipeline**: the gate refuses the call at the guard stage, which
+//!   runs **before the tool executes**, so a handle obtained out of band
+//!   still cannot run a denied tool.
+//!
+//! The deny side therefore beats every release: the read-only preset, the
+//! operator allowlist (`auto_authorize_tools`) and a family grant all
+//! decide *authorization*, and none of them can bring a denied tool back.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
@@ -146,8 +168,13 @@ struct McpToolHandle {
 /// validate-then-mutate discipline as a refresh: one unbuildable identity
 /// aborts the whole adoption, and a refused list leaves the directory
 /// untouched.
+///
+/// The deny gate is consulted here too: a denied tool does not enter the
+/// directory even when the server re-advertises it after a reconnect — the
+/// gate owns the deny set, not the discovery path.
 struct CatalogRediscoverySink {
     catalog: Arc<McpToolCatalog>,
+    deny_guard: Arc<McpToolDenyGuard>,
 }
 
 impl McpRediscoverySink for CatalogRediscoverySink {
@@ -155,6 +182,9 @@ impl McpRediscoverySink for CatalogRediscoverySink {
         let mut entries = Vec::with_capacity(tools.len());
         for tool in &tools {
             let entry = McpToolEntry::new(server, tool).map_err(|error| error.to_string())?;
+            if self.deny_guard.is_blocked(entry.capability_id.as_str()) {
+                continue;
+            }
             entries.push(entry);
         }
         self.catalog
@@ -244,12 +274,17 @@ impl McpToolBridge {
         let catalog = Arc::new(McpToolCatalog::new());
         let family_grants = Arc::new(McpFamilyGrants::new());
         let deny_guard = Arc::new(McpToolDenyGuard::new());
+        // The operator's deny list is armed here — before the first
+        // discovery — so a denied tool is never discovered into the surface
+        // and never reaches the pipeline.
+        seed_deny_list(&config, &connections, &deny_guard)?;
         let pipeline = build_pipeline(&options, &catalog, &policy, &family_grants, &deny_guard);
         // Every connection gets the directory side of the reconnect
         // hand-over: a re-discovered tool list reaches the directory
         // without waiting for the next explicit refresh.
         let sink = Arc::new(CatalogRediscoverySink {
             catalog: Arc::clone(&catalog),
+            deny_guard: Arc::clone(&deny_guard),
         });
         for connection in &connections {
             connection.set_rediscovery_sink(Arc::clone(&sink) as Arc<dyn McpRediscoverySink>);
@@ -421,7 +456,14 @@ impl McpToolBridge {
         };
         let mut entries = Vec::with_capacity(discovered.len());
         for tool in &discovered {
-            entries.push(McpToolEntry::new(&server, tool)?);
+            let entry = McpToolEntry::new(&server, tool)?;
+            // A denied tool never enters the directory: it is not wrapped,
+            // not registered, and the model never sees it. The guard stage
+            // refuses it anyway, so both halves of the deny surface agree.
+            if self.is_denied(&entry.capability_id) {
+                continue;
+            }
+            entries.push(entry);
         }
         // The directory is reconciled against this server's live list,
         // and the wrapped-tool map is reconciled against the directory:
@@ -550,6 +592,18 @@ impl McpToolBridge {
             .collect()
     }
 
+    /// Whether the deny gate blocks this capability.
+    ///
+    /// The gate is the one true source of the deny set: the configuration
+    /// seeds it, and the directory filter and the pipeline guard both read
+    /// it. A caller may also block a capability at runtime
+    /// ([`McpToolDenyGuard::deny_capability`]) — the next refresh then takes
+    /// the tool out of the directory and reports it as removed, so the
+    /// registry forgets it and the model stops seeing it.
+    fn is_denied(&self, capability_id: &CapabilityId) -> bool {
+        self.deny_guard.is_blocked(capability_id.as_str())
+    }
+
     fn wrap_tool(&self, entry: McpToolEntry) -> Arc<dyn ToolCapability> {
         let connection = self
             .connections
@@ -563,6 +617,38 @@ impl McpToolBridge {
             Arc::clone(&self.pipeline),
         ))
     }
+}
+
+/// Fold the operator's deny lists into the monotonic deny gate.
+///
+/// Two sources, one gate:
+///
+/// * the **configured** servers — the operator surface (the `deny_tools`
+///   list of each server spec);
+/// * the **live** connections — the runtime authority (a caller may hand the
+///   bridge connections built from a spec of its own, and that spec's deny
+///   list must hold too).
+///
+/// The gate owns the deny set, so both sources are folded into it before the
+/// first discovery runs: a denied tool is never discovered into the surface
+/// and never reaches the pipeline.
+///
+/// A name that cannot compose into a stable capability id refuses the
+/// assembly (fail-closed) instead of being silently skipped.
+fn seed_deny_list(
+    config: &McpServerConfig,
+    connections: &[Arc<McpServerConnection>],
+    deny_guard: &McpToolDenyGuard,
+) -> Result<usize, McpBridgeError> {
+    let mut blocked = 0;
+    for spec in config.enabled_servers() {
+        blocked += deny_guard.deny_server_tools(&spec.name, &spec.deny_tools)?;
+    }
+    for connection in connections {
+        blocked += deny_guard
+            .deny_server_tools(connection.server_name(), &connection.spec().deny_tools)?;
+    }
+    Ok(blocked)
 }
 
 fn build_pipeline(
