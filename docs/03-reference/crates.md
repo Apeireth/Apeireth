@@ -1,6 +1,6 @@
 # Apeireth Crate Index
 
-This index lists the current root Cargo workspace (30 members = 29 product crates + 1 bench harness; historical 18/20 members). `apeireth-perception` and the SDK four-island modules are archived under `legacy/archived/` (2026-10-20, ADR-0005 R4b). The independent
+This index lists the current root Cargo workspace (31 members = 30 product crates + 1 bench harness; historical 18/20/30 members). The facade crate `apeireth` was added on 2026-10-31 (ADR-0019, counted in the engine layer): it only re-exports and adds no new capability. `apeireth-perception` and the SDK four-island modules are archived under `legacy/archived/` (2026-10-20, ADR-0005 R4b). The independent
 Tauri shell is documented with the frontend, and `legacy/` is excluded from
 the product workspace.
 
@@ -27,6 +27,7 @@ the product workspace.
 | `apeireth-memory` | `crates/engine/memory` | 五维时空记忆与 Browser 导出 (`five_dimensional`)、双时态事实图谱与残差特异性检索 (`bitemporal_graph`)、SHA-256 唯一事实链与 Merkle 仲裁 (`arbitration`)、6 阶段昼夜做梦引擎 (`dreaming`)、元思维递进思考链 (`meta_thinking`)、活维基知识编译与反熵 Lint (`wiki_fs`) |
 | ~~`apeireth-perception`~~ **已归档（2026-10-20）** | `legacy/archived/perception`（原 `crates/engine/perception`） | 原多模态感知体系 MiniMax LIVE 高保真 TTS 适配器与 3D PAD 情感语气调制 (`minimax_tts`)、Whisper 语音识别与 Xcap 屏幕捕获 |
 | `apeireth-organ` | `crates/engine/organ` | 9 cognitive organs (W1..W3 world models, E4 curiosity, F1 emotion, F4 hypothesis, F6 values, E7 emergence, memory merger, persona tone synthesizer) |
+| `apeireth` | `crates/apeireth` | 门面 crate（ADR-0019，2026-10-31 加入，计入 engine 层）：只做 re-export，无新能力；出边落在 foundation / engine / capabilities 允许表内 |
 
 ## Capabilities
 
@@ -41,6 +42,31 @@ the product workspace.
 | `apeireth-gateway` | `crates/adapters/gateway` | 8 帧全双工 WebSocket 协议、SentenceDivider 标点流式分句器 (TTFAB < 300ms) 与毫秒级 Barge-in 语音插话打断控制器 (`duplex_gateway`, `barge_in`) |
 | `apeireth-cli` | `crates/adapters/cli` | 统一开发者命令行与会话执行入口 |
 | `apeireth-sdk` | `crates/adapters/sdk` | 跨平台安全客户端与 SDK 接口定义 |
+| `apeireth-tui` | `crates/adapters/tui` | 全屏终端驾驶舱客户端（重度用户操控台），连既有 gateway 后端 |
+
+## Image family (vendored)
+
+Vendored image-core family (11 crates: 1 interface layer + 10 vendored engines), added by the license-port line on 2026-10-18; main gate isolation per ADR-0005 R4a. Layer bookkeeping per `docs/architecture/contract.toml` `[layers] image_family`.
+
+| Package | Path | Responsibility |
+| --- | --- | --- |
+| `apeireth-image-core` | `crates/engine/image/core` | 图像核心门面：对 vendored 图像引擎家族的中立稳定接口 |
+| `apeireth-image-algo` | `crates/engine/image/algo` | 深度无关、tile-aware 的 CPU 图像滤镜（模糊 / 锐化 / 噪声 / 扭曲 / 风格化） |
+| `apeireth-image-cms` | `crates/engine/image/cms` | 纯 Rust 色彩配置文件管理（v2 / v4 配置文件格式）：解析与写入、色彩变换、渲染意图、黑点补偿 |
+| `apeireth-image-codecs` | `crates/engine/image/codecs` | 对称、保留深度与元数据的平面光栅格式编解码 |
+| `apeireth-image-color` | `crates/engine/image/color` | 像素格式、色彩模型、采样类型与混合模式数学 |
+| `apeireth-image-compose` | `crates/engine/image/compose` | CPU 参考合成器：把文档图层树压平为直通 alpha 的 RGBA |
+| `apeireth-image-doc` | `crates/engine/image/doc` | 图像核心文档模型：图层、调整、填充、蒙版与合成组（纯数据） |
+| `apeireth-image-geom` | `crates/engine/image/geom` | 图像核心家族共用几何基元：尺寸、矩形、仿射、tile 与 warp |
+| `apeireth-image-psd` | `crates/engine/image/psd` | PSD（v1）/ PSB（v2）分层图像格式的无损读写 |
+| `apeireth-image-raster` | `crates/engine/image/raster` | 任意像素格式的稀疏、写时复制 tiled 像素面 |
+| `apeireth-image-vector` | `crates/engine/image/vector` | 矢量路径、形状图层、描边与矢量蒙版 → 抗锯齿覆盖率与像素面 |
+
+## Bench harness
+
+| Package | Path | Responsibility |
+| --- | --- | --- |
+| `apeireth-bench-harness` | `benches` | 工作区性能目标的可复现 benchmark 宿主（bench-only 包，不入产品依赖图） |
 
 ## Independent frontend workspace
 

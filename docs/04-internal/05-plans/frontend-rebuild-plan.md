@@ -64,7 +64,7 @@ Author:          总工程师（lead）· 前端视觉总攻线
 | 旧设计对照证据 | 已完成面：工具卡面批一/批二、状态条面、治理卷宗面、设置页 M0–M3；**30 对证据 PNG 逐像素 0 差异**（主代理 2026-10-28 用 PIL 独立重算，非转述） | `crates-ui/apeireth-ui-demo/harness/**/evidence/` |
 | 在途未提交 | **80,609 行**（文本类文件计行；PNG 证据未计） | `git status --porcelain` + 逐文件 `wc -l`（2026-10-28） |
 
-**主仓清白**（本线开工前基线）：`git diff --name-only -- frontend/` = **0**；LOCKED 5 项 **0 触碰**；主 `Cargo.lock` **0 行 diff**；主 workspace **30 members** 不变（引擎在独立 workspace，不进主依赖图）。
+**主仓清白**（本线开工前基线）：`git diff --name-only -- frontend/` = **0**；LOCKED 5 项 **0 触碰**；主 `Cargo.lock` **0 行 diff**；主 workspace **30 members** 不变（引擎在独立 workspace，不进主依赖图）。〔历史口径（2026-10-28 本线开工前基线）：当日实测值即 30 members；现行 = **31 members**，2026-10-31 ADR-0019 新增门面 crate `apeireth` 后——本线不依赖该数字，只声明「引擎在独立 workspace、不进主依赖图」这一条边界〕
 
 > 口径注：上表 645 是 `crates-ui` **独立 workspace** 的实测，不入主仓 `test-baseline.md` 口径；主仓测试数字以该真源为准，本文不抄写。
 

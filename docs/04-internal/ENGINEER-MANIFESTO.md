@@ -52,8 +52,8 @@ Author:          主代理 Mavis
 
 | 维度 | 真账 |
 |---|---|
-| **Workspace** | **30 members（29 crates + bench harness）**（foundation 6 / engine 7 / capabilities 1 / adapters 4 = 18 + 图像核心家族 11（image-core 接口层 + 10 vendored）= 29 crates；2026-10-20 R4b 归档 perception 后 31→30 members / 30→29 crates，见 ADR-0005；2026-10-18 许可搬运线 +11，见 [license-port/](license-port/)）, 单向依赖, 0 循环（2026-09-05 实测 + 2026-10-06 对账新增 `crates/engine/guard`；历史口径：2026-10-18 前 20 members / 此前 18 crates） |
-| **架构收敛** | v1 86-crate → v2 **29 crate = 66.3% 收敛**（2026-10-20 R4b 后口径；2026-10-18 口径为 30 crate / 65.1%；79.1% 为 18-crate 历史口径——图像家族是 vendored 内核，不与 v1 业务 crate 同轴比较） |
+| **Workspace** | **31 members（30 crates + bench harness）**（foundation 6 / engine 8 / capabilities 1 / adapters 4 = 19 + 图像核心家族 11（image-core 接口层 + 10 vendored）= 30 crates；2026-10-31 ADR-0019 新增门面 crate `apeireth`（只做 re-export，无新能力，计入 engine 层）后 30→31 members / 29→30 crates；2026-10-20 R4b 归档 perception 后 31→30 members / 30→29 crates，见 ADR-0005；2026-10-18 许可搬运线 +11，见 [license-port/](license-port/)）, 单向依赖, 0 循环（2026-09-05 实测 + 2026-10-06 对账新增 `crates/engine/guard`；历史口径：2026-10-20 至 2026-10-31 30 members / 2026-10-18 前 20 members / 此前 18 crates） |
+| **架构收敛** | v1 86-crate → v2 **30 crate = 65.1% 收敛**（现行口径，2026-10-31 ADR-0019 新增门面 crate `apeireth` 后；数值与 2026-10-18 许可搬运线后口径同为 30 crate / 65.1%；〔历史口径（2026-10-20 至 2026-10-31）：29 crate / 66.3%〕；79.1% 为 18-crate 历史口径——图像家族是 vendored 内核，不与 v1 业务 crate 同轴比较） |
 | **哲学锚** | **9 项 LOCKED** (S-1/S-2/S-3 + O-1..O-6, O-6 永远追求最优 2026-08-27 主人授权加) |
 | **测试** | **单一真源 [test-baseline.md](../03-reference/test-baseline.md)**（2026-10-18 全量 `-j 2` 口径，本文不抄写数字）；历史：2026-10-13 实测 5360 passed / 0 failed / 22 ignored（190 suites）、2026-09-05 3120/13、2026-08-28 A 块后 1739 |
 | **clippy** | **0 警告** (`--workspace --all-targets --locked -- -D warnings`) |

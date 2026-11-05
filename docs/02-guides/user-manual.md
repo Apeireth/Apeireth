@@ -1,6 +1,6 @@
 # Apeireth 用户手册（v2 工程重构线）
 
-> 给运行 Apeireth 的人：它在做什么、我怎么控制它。机制描述以真实代码为准（写作时点 v2.0.0-alpha.1 / 13-crate；当前 **workspace 30 members（29 crates + bench harness）/ v2.0.0-rc.5**（2026-10-20 R4b 归档 perception 后更新；2026-10-18 审计批口径为 31 members），能力性判断以下方 2026-10-06 对账注与台账为准）。
+> 给运行 Apeireth 的人：它在做什么、我怎么控制它。机制描述以真实代码为准（写作时点 v2.0.0-alpha.1 / 13-crate；当前 **workspace 31 members（30 crates + bench harness）/ v2.0.0-rc.5**（2026-10-31 ADR-0019 新增门面 crate `apeireth` 后更新；历史口径 30 members（2026-10-20 至 2026-10-31）/ 2026-10-18 审计批口径 31 members 见 [AGENTS.md](../../AGENTS.md) §3），能力性判断以下方 2026-10-06 对账注与台账为准）。
 > 快速跑起来见 [quick-start.md](quick-start.md)；部署见 [deployment.md](deployment.md)；架构总览见根 [ARCHITECTURE.md](../../ARCHITECTURE.md)。
 
 ```

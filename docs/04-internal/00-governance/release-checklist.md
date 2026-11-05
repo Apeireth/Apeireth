@@ -34,7 +34,7 @@
 > 远程 CI 首跑仍未验证（无 tag 推送权限动作）。见 §5 R-1（已收敛）。
 
 > **发布就绪状态（2026-10-22 收口）**：仓库侧发布门禁已全绿——R-1（版本门禁）exit 0、
-> R-2（发布说明模板口径+未签名声明）、R-3（`SHA256SUMS` 命名）、R-4（30 members / 111 edges）、
+> R-2（发布说明模板口径+未签名声明）、R-3（`SHA256SUMS` 命名）、R-4（30 members / 111 edges〔历史口径（2026-10-22 收口实测）：当日实测值即 30 / 111；现行 = **31 members / 118 production edges**，2026-10-31 ADR-0019 新增门面 crate `apeireth` 后〕）、
 > R-5（测试数字二源指针）、R-6（`cargo run -- --version`）全部收敛或模板侧收敛；
 > `docs_truth.py --verify --check` / `arch_guard.py --strict` / `arch_doc.py --check` 均绿。
 > **剩余只等三件 owner/发布线动作（仓库侧无待办）**：① `push`（本地跨线提交未推；推后远程 CI
@@ -93,14 +93,18 @@
     现行行与 2026-10-20 旧行（336 套件 / 9075 passed / 1 failed）；`logs/gate-full.log` 尾部
     `GATE FULL PASSED (2026-10-21 15:52:59)`，`artifacts/wave4-close-full-2026-10-21.log`
     尾部 `GATE FULL PASSED`。全量执行权 2026-10-21 起在效率线；本轮未重跑（见 §3.1）。
-- [x] crate 口径核对：`workspace = 30 members（29 crates + bench harness）`（2026-10-20 R4b 归档
-      `apeireth-perception` 后；历史 31 members）；成员有变时先改 ARCHITECTURE.md / INSTALL.md /
+- [x] crate 口径核对：`workspace = 31 members（30 crates + bench harness）`（2026-10-31 ADR-0019 新增门面
+      crate `apeireth` 后；历史 30 members / 31 members 口径链见 [AGENTS.md](../../../AGENTS.md) §3）；
+      成员有变时先改 ARCHITECTURE.md / INSTALL.md /
       README 本体，再全仓 grep 旧口径
-  - 真源实证（2026-10-21）：`python -c "import tomllib; ..."` → **30 members**；版本 → `2.0.0-rc.5`。
+  - 真源实证（2026-10-21）：`python -c "import tomllib; ..."` → **30 members**〔历史口径（2026-10-21 实测）：
+    当日实测值即 30 members；现行 = **31 members**，2026-10-31 ADR-0019 新增门面 crate `apeireth` 后〕；版本 → `2.0.0-rc.5`。
     **2026-10-22 旧口径清零（现值文档）**：`README.md:13` Workspace 徽章 31 → **30 members**；
     `README.zh-CN.md:13` 徽章同步、正文「31 成员工作区」→ **30 成员工作区**；
     `ARCHITECTURE.md:56`「2026-10-20：31 members / 118 production edges」→ **「2026-10-22：30 members /
     111 production edges」**（生成物 `ARCHITECTURE.generated.md:7` 同值）；全仓 grep 现值文档零命中。
+    〔历史口径（2026-10-22 清零批）：当日清零目标即 30 members / 111 production edges；该口径已于
+    2026-10-31 ADR-0019 新增门面 crate `apeireth` 后再归位到 **31 members / 118 production edges**〕
     带日期历史标注的命中（`SECURITY.md` 2026-10-18 行、user-manual 注记、team-handover 2026-10-18 口径、
     CHANGELOG 历史）按「历史不追改」保留（见 §5 R-4，已收敛）。
 - [x] 徽章数字与链接目标对齐（Tests 徽章 → capabilities-matrix §0.1 有据）
@@ -114,6 +118,8 @@
     **2026-10-22 已闭环**：① README 注记日期改为 2026-10-21，matrix §0.1 行加现行指针
     （「历史口径；现行 §1 = 341/8570/0/51（2026-10-21）」）；② Workspace 徽章已改 30
     ⇒ 两项闭环，`docs_truth --verify --check` 仍 exit 0（R-5 已收敛）。
+    〔该「现行」指针已于 2026-11-05 随测试基线刷新失效（matrix §0.1 已随真源同步）；现行值只见
+    [test-baseline.md](../../03-reference/test-baseline.md) §1〕
 - [x] 未接线能力的标注仍在（WebSocket 服务端 / DSL 洋葱 / SDK STUB_MODE 等，见
       [capabilities-matrix.md](../../03-reference/capabilities-matrix.md) §0.2）
   - 实证（2026-10-21）：capabilities-matrix §0.2「未接线（不是默认开关问题）」行（L76）列
@@ -172,7 +178,7 @@ _本清单由「落差清账·文本可信度批」创建（2026-10-16）。_
 | E-7 | 资产校验反路 | 同上，对篡改末字节的 exe 副本 | `FAIL`，exit 1（fail-closed） |
 | E-8 | 版本一致性门禁脚本 | `pwsh -NoProfile -File scripts/check-release-version.ps1`；`-Json`；`-ExpectedVersion 9.9.9` | **2026-10-22 修复后 exit 0**：PASS 33 行 + `[SKIP]` 2 行（fuzz 子工程），JSON passed=true；反证 9.9.9 → exit 1（见 R-1 已收敛） |
 | E-9 | 文档真源门禁 | `python scripts/docs_truth.py --verify --check` | `OK: STATUS.md matches claims.yaml; README badges match baseline`，exit 0 |
-| E-10 | crate 口径 | `python -c "import tomllib; ... print(len(d['workspace']['members']))"` | `30`（版本 `2.0.0-rc.5`） |
+| E-10 | crate 口径 | `python -c "import tomllib; ... print(len(d['workspace']['members']))"` | `30`（版本 `2.0.0-rc.5`）〔历史口径（2026-10-21 实测）：当日实测值即 30 members；现行 = **31 members**，2026-10-31 ADR-0019 新增门面 crate `apeireth` 后〕 |
 | E-11 | tag ↔ 版本 | `git tag --list`；`git show v2.0.0-rc.5:Cargo.toml` | tag `v2.0.0-rc.5` 存在（→ commit `2a8b46fe`），version = `2.0.0-rc.5` |
 | E-12 | 全量门禁记录（只复核） | `logs/gate-full.log`；`artifacts/wave4-close-full-2026-10-21.log` 尾部 | `GATE FULL PASSED (2026-10-21 15:52:59)`；`GATE FULL PASSED` |
 
@@ -196,6 +202,9 @@ L57 tag ↔ Release 页互相指向（只有 tag 侧，E-11）。
   正文曾写「18-Crate Kernel + Assembly, 3600+ Verified Tests」（旧口径）——**已改**为
   「30-Member Workspace (29 crates + 1 bench harness), 8570+ Verified Tests (2026-10-21)」；
   下载段**新增 Unsigned build notice**（NotSigned + 先核对 SHA-256/从源码构建提示）。
+  〔历史口径（2026-10-22）：当日发布正文模板即上述 30-Member / 2026-10-21 测试基线文案；
+  该模板已于 2026-11-05 再归位到 **31-Member Workspace（30 crates + 1 bench harness）** +
+  2026-11-05 测试基线（数字见 [test-baseline.md](../../03-reference/test-baseline.md) §1）〕
   残留：已发布的 `v2.0.0-rc.5` Release 页正文仍是旧文案（本机无 gh/Release 面通道）⇒ 待发布线编辑/重发。
 - **R-3（已收敛，2026-10-22）** 资产名漂移：指南 `docs/beta/rc2-beta-guide.md:8` 引
   `SHA256SUMS.txt` —— **已统一**为 `SHA256SUMS`（= 流水线产物名）；仓库侧零漂移。
@@ -204,9 +213,13 @@ L57 tag ↔ Release 页互相指向（只有 tag 侧，E-11）。
   徽章与正文、`ARCHITECTURE.md:56`（31 members / 118 edges）**已全部清零**为
   **30 members / 111 production edges**（与 `ARCHITECTURE.generated.md:7` 一致）；历史带日期标注按
   「历史不追改」保留。
+  〔历史口径（2026-10-22）：当日清零目标即 30 members / 111 production edges；该口径已于
+  2026-10-31 ADR-0019 新增门面 crate `apeireth` 后再归位到 **31 members / 118 production edges**〕
 - **R-5（已收敛，2026-10-22）** 测试数字二源漂移：`capabilities-matrix.md` §0.1 保留 336/9075/52
   的历史实测行（带日期），**已加现行指针**「现行 §1 = 341 套件 / 8570 passed / 0 failed / 51 ignored
   （2026-10-21）」；README 注记日期改为 2026-10-21。真源（test-baseline §1）未动，`docs_truth` exit 0。
+  〔该「现行」指针已于 2026-11-05 随测试基线刷新失效；现行值只见
+  [test-baseline.md](../../03-reference/test-baseline.md) §1（其余文档只引用不抄写）〕
 - **R-6（已收敛，2026-10-22）** L29 的 `cargo run` 直跑路径曾被他线在途编译红阻断（E0308，
   `GovernanceChain::new` 期望 `Arc<GovernanceChain>`）；安全线 R8-B2/B3 收口（`4e380a69`/`e812fda9`）
   后 **已复跑**：`cargo run -p apeireth-cli --bin apeireth --locked -j 2 -- --version` →

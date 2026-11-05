@@ -268,7 +268,7 @@ Rust 源码  ──►  wasm32-unknown-unknown  ──►  Tauri WebView（现�
   5. 契约登记：`docs/architecture/contract.toml` §[workspace] / §[vendored] / §[extension_points]；**例外登记：不适用**（破「0 引新外部 dep」纪律**非架构契约违规**，理由见 §7.2 与 ADR-0015 §6.2）。
 - **验收门**：
   - 本计划书落地 + 内部链接可解析（`docs/adr/0015-pure-rust-ui-engine.md` §4 指向本文 §3）；
-  - `python scripts/arch_guard.py --strict` 通过且**基线净额 ≤ 0**（主 workspace 30 members / 111 边 0 改动）— **本批未实测**（本批 0 生产改动，命令留 P0 施工批跑）；
+  - `python scripts/arch_guard.py --strict` 通过且**基线净额 ≤ 0**（主 workspace 31 members / 118 边 0 改动）— **本批未实测**（本批 0 生产改动，命令留 P0 施工批跑）。〔历史口径（2026-10-24 计划立项时）：立项当时基线为 30 members / 111 边；现行基线 = **31 members / 118 边**（2026-10-31 ADR-0019 新增门面 crate `apeireth` 后）——本门禁只看「净额 0」，两处数字均以 `contract.toml` 为准〕
   - LOCKED 5 项 0 触碰；
   - 0 触碰 `frontend/companion-desktop/`。
 - **估时**：3–5 人日（含骨架与 CI 落地）。
@@ -370,7 +370,7 @@ Rust 源码  ──►  wasm32-unknown-unknown  ──►  Tauri WebView（现�
 | **G8** | 0 触碰 LOCKED | ✅ 绿 | `git status` 对 `crates/foundation/core/src/{eight_anchors,philosophy,onion}.rs` / 主 `Cargo.toml` / `legacy/` **0 条**；根 `Cargo.toml` 0 行 diff（`workspace.package.version` 未动） |
 | **G9** | 0 触碰生产前端 | ✅ 绿 | `git diff origin/main -- frontend/` = **0 行**（本分支从未有提交碰过 `frontend/**`）；`pnpm check` ⇒ svelte-check **0 errors 0 warnings**；`pnpm test` ⇒ **82 / 82 套件全绿**。⚠️ **环境注记**：前端测试需 **Node ≥ 22**（`tests/run-all.mjs` 直跑 `.mjs` 引 `.ts`，要 `--experimental-strip-types`；该 flag 语义在 v24 变了 ⇒ 本机 Node v24 下会**假失败 66/82**）。仓内 CI 已钉 `node-version: 22` 并写明此坑（`.github/workflows/companion-desktop-ci.yml`）。主代理用 **Node v22.23.1** 复跑 ⇒ 82/82 全绿 ⇒ **该失败是环境版本差，与本项目无关**（`git diff origin/main -- frontend/` = 0 行即证） |
 | **G10** | fmt 0 diff | ✅ 绿 | `cargo fmt --all -- --check` ⇒ EXIT 0，**0 diff** |
-| **G11** | 依赖边净额 0（主 workspace） | ✅ 绿 | `arch_guard --strict` ⇒ **VIOLATIONS: 0**；主图 `crates=30 / edges=111 / env=160` 与 P0 基线**逐项相等** |
+| **G11** | 依赖边净额 0（主 workspace） | ✅ 绿 | `arch_guard --strict` ⇒ **VIOLATIONS: 0**；主图 `crates=30 / edges=111 / env=160` 与 P0 基线**逐项相等**〔历史口径（2026-10-24 P0 收口实测）：当日主图即 30 crates / 111 边；现行主图 = **31 crates / 118 边**（2026-10-31 ADR-0019 新增门面 crate `apeireth` 后）——本门禁的「净额 0」结论不受影响〕 |
 | **G12** | 0 引新外部 dep（主 workspace） | ✅ 绿 | 根 `Cargo.lock` **0 行 diff**（`git diff --numstat Cargo.lock` = 0）；主 lock 里 `apeireth-ui` **0 处**；`crates-ui` 的 19 个外部依赖**许可逐个审过并登记在册**（清单见 §4 末「G12 外部依赖逐个登记」），全部落在 `deny.toml` 的 `licenses.allow` 内，`cargo deny check licenses` ⇒ ok |
 
 **12 条门：11 条绿（G1–G2 / G4–G12），G3 待 owner 亲审。**
@@ -677,7 +677,7 @@ R4 预警「审批卡这种输入输出明确的组件通过了，但 62 个组�
 | 逐帧对照的帧序列采集与比对方法 | **未实测**（方法待 P2/P3 立项时定） |
 | 现有 38 条源码镜像测试的**逐条覆盖关系**（哪条对应哪个组件） | **未实测**（本批只测了总数与分类，未逐条建映射） |
 | 破 0-dep 纪律的**例外登记状态** | ✅ **已定案：不登记 `exceptions.toml`**。实测 `scripts/arch_guard.py` 违规类别全集为 `direction/structural/size/caliber/duplicate/edge/env/exception`，**不含外部依赖类别** ⇒ 该纪律是 commit 正文诚实声明而非架构契约约束，登记不存在的架构违规是伪造账。落点改为 ADR-0015 §6.2 如实登记 + 本文 R5 专项 + 每批 commit 正文声明例外明细 |
-| 主仓 `arch_guard --strict` 现行基线（30 crates / 111 边） | ✅ **已实测**（P0 收口时亲跑，`crates-ui/` 不进主图 ⇒ 基线 0 变化）：30 crates / 111 边 / 160 env / VIOLATIONS 0 |
+| 主仓 `arch_guard --strict` 现行基线（31 crates / 118 边） | ✅ **已实测**（P0 收口时亲跑，`crates-ui/` 不进主图 ⇒ 基线 0 变化）：30 crates / 111 边 / 160 env / VIOLATIONS 0〔历史口径（2026-10-24 P0 收口实测）：当日主图即 30 crates / 111 边〕；现行复跑（2026-11-05，`python scripts/arch_guard.py --report`，Linux x86_64 / rustc 1.97.1）：**31 crates / 118 边 / 160 env / VIOLATIONS 0**（2026-10-31 ADR-0019 新增门面 crate `apeireth` 后） |
 | naga 能否覆盖本仓 2 条 GLSL 程序 | ✅ **已实测**（P0 探测子线）：**能，着色器本体不用重写**；需**机械变换**（删 `#version 300 es` 行 + **合并成一个 std140 uniform 块 + 补 padding** —— ⚠️ 2026-10-24 P5 实测修订，原记的「逐个注入 `layout(binding=N)`」在 WebGL2 后端必然超限）。⇒ **R1 概率由「中」下调为「低」**（详见 ADR-0015 §2.6 与 §8.2） |
 | 全仓测试 / clippy 数字 | **不在本文范围**——以 [docs/03-reference/test-baseline.md](../../../docs/03-reference/test-baseline.md) 为准，本文不抄写 |
 
