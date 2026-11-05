@@ -23,6 +23,32 @@
 //! ([`McpChannel::malformed_frames`]) and write the first drop — plus every
 //! hundredth one after it — to stderr. Dropping stays a drop: a bad frame
 //! never closes the link.
+//!
+//! # Observability: a frame that names no event type
+//!
+//! The protocol library decides what a frame means: a frame is a message
+//! only when it names the `message` event type
+//! (`apeireth_plugin::mcp::sse::SseFrame::is_message`). A frame that carries
+//! a payload but **no** event type therefore reaches neither branch of the
+//! read loop: it is dropped **silently** — no count, no log — and the request
+//! that waited for it never gets an answer.
+//!
+//! The event stream therefore **counts** those frames
+//! ([`McpChannel::unrouted_frames`]) and writes the first one — plus every
+//! hundredth one after it — to stderr. The count is separate from
+//! [`McpChannel::malformed_frames`] on purpose: a frame without an event type
+//! is not known to be malformed (its payload may be a perfectly valid
+//! response), it is a frame the client could not **route**. Dropping stays a
+//! drop: such a frame never closes the link, and it is still not a message.
+//!
+//! # Consumption: the stream-level fields (`id:` / `retry:`)
+//!
+//! Two SSE fields carry state that no response path consumes: `id:` (the
+//! Last-Event-ID a resumed stream continues from) and `retry:` (the server's
+//! reconnection hint). A channel that reads them but nobody consumes leaves
+//! them dead on the wire. The channel therefore hands every frame it reads
+//! to the observer its owner installed ([`McpFrameObserver`]), and the owner
+//! decides what the stream-level state means.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -35,7 +61,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, Command};
 use tokio::sync::{oneshot, watch};
 
-use apeireth_plugin::mcp::sse::{absolutize_endpoint, SseBuffer};
+use apeireth_plugin::mcp::sse::{absolutize_endpoint, SseBuffer, SseFrame};
 use apeireth_plugin::mcp::{Id, JsonRpcRequest, JsonRpcResponse};
 
 use crate::mcp::McpError;
@@ -72,6 +98,30 @@ fn response_timeout(source: &str, deadline: Duration) -> McpError {
     ))
 }
 
+/// A sink for the frames a channel reads.
+///
+/// The channel owns the bytes; the owner of a link owns the meaning. Two
+/// event-stream fields carry state that **no response path consumes** —
+/// `id:` (the Last-Event-ID a resumed stream continues from) and `retry:`
+/// (the server's reconnection hint) — so a channel hands every frame it
+/// reads to the observer its owner installed.
+///
+/// **Observation only**: an observer never changes what the channel does with
+/// a frame. The routing decision stays in the channel.
+pub trait McpFrameObserver: Send + Sync {
+    /// Observe one frame read from the stream.
+    fn observe_frame(&self, frame: &SseFrame);
+}
+
+/// An observer that ignores every frame.
+///
+/// The default for a link whose owner has no stream-level state to track.
+struct IgnoredFrames;
+
+impl McpFrameObserver for IgnoredFrames {
+    fn observe_frame(&self, _frame: &SseFrame) {}
+}
+
 /// One JSON-RPC link to one external server.
 #[async_trait]
 pub trait McpChannel: Send + Sync {
@@ -95,6 +145,29 @@ pub trait McpChannel: Send + Sync {
     fn malformed_frames(&self) -> u64 {
         0
     }
+
+    /// How many frames carried a payload but named **no** event type.
+    ///
+    /// **Observability, not behaviour**: such a frame is dropped exactly as
+    /// before and the link stays open. What changes is that the drop is
+    /// *counted* — without it the frame leaves no trace at all: the client
+    /// cannot tell whether the payload was a JSON-RPC response, so the
+    /// request that waited for it simply never gets an answer.
+    ///
+    /// The count is deliberately **separate** from
+    /// [`McpChannel::malformed_frames`]: a frame without an event type is
+    /// not known to be malformed (its payload may be a perfectly valid
+    /// response) — it is a frame the client could not **route**.
+    ///
+    /// Two frame kinds are deliberately **not** counted here:
+    ///
+    /// * a frame that names an event type — an explicitly typed frame that
+    ///   is not `message` is ignored **by design** (event-type dispatch);
+    /// * a frame that carries no payload at all — that is a control frame
+    ///   (`id:` / `retry:`), not a lost message.
+    fn unrouted_frames(&self) -> u64 {
+        0
+    }
 }
 
 /// How many dropped malformed frames pass between two stderr lines.
@@ -103,6 +176,12 @@ pub trait McpChannel: Send + Sync {
 /// frame would bury the rest of the run. **Every drop is still counted**; only
 /// the log is throttled (the first drop, then every [`MALFORMED_FRAME_LOG_EVERY`]-th).
 const MALFORMED_FRAME_LOG_EVERY: u64 = 100;
+
+/// How many unroutable frames pass between two stderr lines.
+///
+/// Same reasoning as [`MALFORMED_FRAME_LOG_EVERY`]: the log is throttled, the
+/// count is not.
+const UNROUTED_FRAME_LOG_EVERY: u64 = 100;
 
 /// Record one frame that could not be read as a JSON-RPC response.
 ///
@@ -122,11 +201,46 @@ fn note_malformed_frame(counter: &AtomicU64, source: &str, error: &serde_json::E
     }
 }
 
+/// Record one frame that carried a payload but named no event type.
+///
+/// **Only observation**: the frame is dropped exactly as before (it is not a
+/// message, so it is not routed) and the link stays open. What changes is
+/// that the drop is *counted* (per link, queryable through
+/// [`McpChannel::unrouted_frames`]) and *logged* (throttled: the first drop
+/// plus every [`UNROUTED_FRAME_LOG_EVERY`]-th one).
+///
+/// The line carries the running count only, **not the frame payload**: the
+/// payload may still carry server-side content.
+fn note_unrouted_frame(counter: &AtomicU64, source: &str) {
+    let count = counter.fetch_add(1, Ordering::SeqCst) + 1;
+    if count == 1 || count % UNROUTED_FRAME_LOG_EVERY == 0 {
+        eprintln!(
+            "[mcp] {source}: frame carries a payload but no event type (dropped, {count} so far)"
+        );
+    }
+}
+
 /// Reopens channels for one server: every (re)connect gets a fresh link.
 #[async_trait]
 pub trait McpChannelFactory: Send + Sync {
     /// Open one fresh channel.
     async fn open(&self) -> Result<Arc<dyn McpChannel>, McpError>;
+
+    /// Open one fresh channel that reports the frames it reads to `observer`
+    /// and asks the server to resume from `last_event_id`.
+    ///
+    /// The default opens a plain channel: a transport that carries no frames
+    /// (stdio / http) has nothing to report and nothing to resume from, so
+    /// an owner that does not care about the stream-level fields keeps the
+    /// zero-cost path.
+    async fn open_with_observer(
+        &self,
+        observer: Arc<dyn McpFrameObserver>,
+        last_event_id: Option<&str>,
+    ) -> Result<Arc<dyn McpChannel>, McpError> {
+        let _ = (observer, last_event_id);
+        self.open().await
+    }
 }
 
 /// A factory that replays one pre-built channel (in-process links, tests).
@@ -170,10 +284,33 @@ impl McpChannelFactory for SpecChannelFactory {
     async fn open(&self) -> Result<Arc<dyn McpChannel>, McpError> {
         open_channel(&self.spec).await
     }
+
+    async fn open_with_observer(
+        &self,
+        observer: Arc<dyn McpFrameObserver>,
+        last_event_id: Option<&str>,
+    ) -> Result<Arc<dyn McpChannel>, McpError> {
+        open_channel_with_observer(&self.spec, observer, last_event_id).await
+    }
 }
 
 /// Open one channel matching `spec`'s transport kind.
 pub async fn open_channel(spec: &McpServerSpec) -> Result<Arc<dyn McpChannel>, McpError> {
+    open_channel_with_observer(spec, Arc::new(IgnoredFrames), None).await
+}
+
+/// Open one channel matching `spec`'s transport kind, reporting every frame
+/// the link reads to `observer` and asking the server to resume from
+/// `last_event_id`.
+///
+/// `last_event_id` is the `id:` the server handed out on the previous link:
+/// a resumed event stream continues from it. `None` = a fresh stream (the
+/// first link of a server has nothing to resume from).
+pub async fn open_channel_with_observer(
+    spec: &McpServerSpec,
+    observer: Arc<dyn McpFrameObserver>,
+    last_event_id: Option<&str>,
+) -> Result<Arc<dyn McpChannel>, McpError> {
     match spec.transport {
         McpTransportKind::Stdio => {
             let command = spec.command.as_deref().unwrap_or("");
@@ -185,7 +322,7 @@ pub async fn open_channel(spec: &McpServerSpec) -> Result<Arc<dyn McpChannel>, M
         }
         McpTransportKind::Sse => {
             let url = spec.url.as_deref().unwrap_or("");
-            SseChannel::open(url).await
+            SseChannel::open_with_observer(url, RESPONSE_TIMEOUT, observer, last_event_id).await
         }
     }
 }
@@ -514,6 +651,7 @@ pub struct SseChannel {
     router: Arc<PendingRouter>,
     broken: Arc<AtomicBool>,
     malformed: Arc<AtomicU64>,
+    unrouted: Arc<AtomicU64>,
     response_deadline: Duration,
 }
 
@@ -534,10 +672,31 @@ impl SseChannel {
         url: &str,
         response_deadline: Duration,
     ) -> Result<Arc<dyn McpChannel>, McpError> {
+        Self::open_with_observer(url, response_deadline, Arc::new(IgnoredFrames), None).await
+    }
+
+    /// Open the event stream at `url`, bounding every response wait on this
+    /// link by `response_deadline`, reporting every frame the link reads to
+    /// `observer`, and asking the server to resume from `last_event_id`.
+    ///
+    /// `last_event_id` is the `id:` the server handed out on the previous
+    /// link: it travels as the `Last-Event-ID` request header, so a resumed
+    /// stream continues where the dead one stopped. `None` = a fresh stream.
+    ///
+    /// The observer is **observation only**: it never changes what the link
+    /// does with a frame.
+    pub async fn open_with_observer(
+        url: &str,
+        response_deadline: Duration,
+        observer: Arc<dyn McpFrameObserver>,
+        last_event_id: Option<&str>,
+    ) -> Result<Arc<dyn McpChannel>, McpError> {
         let client = reqwest::Client::new();
-        let response = client
-            .get(url)
-            .header("Accept", "text/event-stream")
+        let mut request = client.get(url).header("Accept", "text/event-stream");
+        if let Some(id) = last_event_id {
+            request = request.header("Last-Event-ID", id);
+        }
+        let response = request
             .send()
             .await
             .map_err(|e| transport_error("opening event stream", e))?;
@@ -552,9 +711,11 @@ impl SseChannel {
         let router = Arc::new(PendingRouter::default());
         let broken = Arc::new(AtomicBool::new(false));
         let malformed = Arc::new(AtomicU64::new(0));
+        let unrouted = Arc::new(AtomicU64::new(0));
         let reader_router = Arc::clone(&router);
         let reader_broken = Arc::clone(&broken);
         let reader_malformed = Arc::clone(&malformed);
+        let reader_unrouted = Arc::clone(&unrouted);
         let base_url = url.to_string();
         tokio::spawn(async move {
             let mut stream = response.bytes_stream();
@@ -565,6 +726,9 @@ impl SseChannel {
                 };
                 buffer.push_bytes(&bytes);
                 for frame in buffer.drain_frames() {
+                    // 流级提示（`id:` / `retry:`）不经过响应路径 ⇒ 交给观察者,
+                    // 由链路的拥有者决定这些字段意味着什么。
+                    observer.observe_frame(&frame);
                     if frame.is_endpoint() {
                         let endpoint = absolutize_endpoint(&base_url, &frame.data());
                         let _ = endpoint_tx.send(Some(endpoint));
@@ -580,6 +744,12 @@ impl SseChannel {
                                 note_malformed_frame(&reader_malformed, "event stream", &error);
                             }
                         }
+                    } else if frame.event.is_none() && !frame.data_lines.is_empty() {
+                        // 裸 `data:` 帧（**无** `event:`）: 协议库不把它当 message
+                        // ⇒ 两个分支都不进 ⇒ 改前**连计数都不进**（完全无声）。
+                        // 现在**记一笔**（可观测, 不改行为: 帧仍被丢弃, 链路不断,
+                        // 该次请求照旧等不到响应 —— 行为变更另批, 本处不碰）。
+                        note_unrouted_frame(&reader_unrouted, "event stream");
                     }
                 }
             }
@@ -594,6 +764,7 @@ impl SseChannel {
             router,
             broken,
             malformed,
+            unrouted,
             response_deadline,
         };
         channel.wait_for_endpoint().await?;
@@ -675,6 +846,10 @@ impl McpChannel for SseChannel {
 
     fn malformed_frames(&self) -> u64 {
         self.malformed.load(Ordering::SeqCst)
+    }
+
+    fn unrouted_frames(&self) -> u64 {
+        self.unrouted.load(Ordering::SeqCst)
     }
 }
 

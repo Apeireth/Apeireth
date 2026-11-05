@@ -10,19 +10,38 @@
 //! down and rebuilds it, then re-discovers the tool list and hands that list
 //! to the owner through [`McpRediscoverySink`] — a dropped list would leave
 //! the dynamic tool catalog stale after a reconnect.
+//!
+//! # The stream-level fields (`id:` / `retry:`)
+//!
+//! Two event-stream fields carry state that no response path consumes: `id:`
+//! (the Last-Event-ID a resumed stream continues from) and `retry:` (the
+//! server's reconnection hint). The connection installs an observer on every
+//! link it opens, so those fields are **observed** while the stream runs —
+//! not after the link is already gone — and a disconnect hands them to the
+//! protocol library's [`ReconnectState`] through its `observe_frame` entry
+//! point. Without that hand-over the server's `retry:` was parsed and then
+//! dropped on the floor: the reconnect always used the locally computed
+//! backoff.
+//!
+//! The server's hint **replaces** the computed wait, so it is bounded by
+//! [`bounded_server_retry`]: a server that asked for an hour would
+//! otherwise pin the client for an hour. The number of attempts stays
+//! bounded by the policy either way.
 
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use apeireth_plugin::mcp::{
     is_valid_mcp_name, negotiate_protocol_version, normalize_mcp_result, ClientCapabilities,
-    ClientInfo, ClientSession, Id, JsonRpcRequest, McpTool, ReconnectState, ServerInfo,
-    SessionState, ToolCallResult, MCP_PROTOCOL_VERSION, SUPPORTED_PROTOCOL_VERSIONS,
+    ClientInfo, ClientSession, Id, JsonRpcRequest, McpTool, ReconnectPolicy, ReconnectState,
+    ServerInfo, SessionState, SseFrame, ToolCallResult, MCP_PROTOCOL_VERSION,
+    SUPPORTED_PROTOCOL_VERSIONS,
 };
 
 use crate::mcp::McpError;
 
 use super::config::{McpBridgeOptions, McpServerSpec};
-use super::transport::{McpChannel, McpChannelFactory, SpecChannelFactory};
+use super::transport::{McpChannel, McpChannelFactory, McpFrameObserver, SpecChannelFactory};
 
 /// One tool a server exposes through `tools/list`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -56,13 +75,73 @@ pub trait McpRediscoverySink: Send + Sync {
     fn on_rediscovery(&self, server: &str, tools: Vec<DiscoveredTool>) -> Result<(), String>;
 }
 
+/// The stream-level state a server hands out through `id:` / `retry:`.
+///
+/// Both fields are **observed** while the stream runs (they arrive on frames
+/// no response path looks at) and are consumed when the link drops: the
+/// `id:` resumes the next link from the same place, the `retry:` becomes the
+/// reconnect wait.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct StreamHints {
+    /// The last `id:` the server sent — the Last-Event-ID.
+    pub last_event_id: Option<String>,
+    /// The last `retry:` the server sent, **already bounded** by the policy
+    /// ceiling (see [`bounded_server_retry`]).
+    pub server_retry: Option<Duration>,
+}
+
+/// The reconnection wait a server's `retry:` hint may cause.
+///
+/// The hint **replaces** the locally computed backoff (that is what the
+/// server asks for: "wait this long before you come back"), so it must stay
+/// inside the policy's own envelope. The envelope is
+/// [`ReconnectPolicy::max_backoff`] — the very ceiling the computed backoff
+/// is already capped to — so a hint can shorten the wait but never push the
+/// client outside the window the policy allows. Without the bound a server
+/// could pin the client for an arbitrary time (`retry: 3600000` = one hour).
+///
+/// The **number** of attempts is bounded separately: the policy's
+/// `max_attempts` is checked before the wait is handed out, so a hint can
+/// never extend the reconnect budget.
+pub fn bounded_server_retry(hint: Duration, max_backoff: Duration) -> Duration {
+    hint.min(max_backoff)
+}
+
+/// The observer a connection installs on every link it opens.
+///
+/// It records the two stream-level fields and nothing else: **observation
+/// only** — the link's routing decisions stay in the transport.
+struct HintObserver {
+    hints: Arc<Mutex<StreamHints>>,
+    max_backoff: Duration,
+}
+
+impl McpFrameObserver for HintObserver {
+    fn observe_frame(&self, frame: &SseFrame) {
+        let mut hints = self
+            .hints
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if let Some(id) = &frame.id {
+            if !id.is_empty() {
+                hints.last_event_id = Some(id.clone());
+            }
+        }
+        if let Some(retry) = frame.retry {
+            hints.server_retry = Some(bounded_server_retry(retry, self.max_backoff));
+        }
+    }
+}
+
 /// One live connection to one external server.
 pub struct McpServerConnection {
     spec: McpServerSpec,
     factory: Arc<dyn McpChannelFactory>,
     channel: Mutex<Option<Arc<dyn McpChannel>>>,
     session: Mutex<ClientSession>,
-    reconnect: Mutex<ReconnectState>,
+    reconnect: Arc<Mutex<ReconnectState>>,
+    policy: ReconnectPolicy,
+    hints: Arc<Mutex<StreamHints>>,
     reconnects: std::sync::atomic::AtomicUsize,
     sink: Mutex<Option<Arc<dyn McpRediscoverySink>>>,
     rediscovery_error: Mutex<Option<String>>,
@@ -83,7 +162,9 @@ impl McpServerConnection {
                 "apeireth-mcp-bridge",
                 env!("CARGO_PKG_VERSION"),
             ))),
-            reconnect: Mutex::new(ReconnectState::new(options.reconnect.clone())),
+            reconnect: Arc::new(Mutex::new(ReconnectState::new(options.reconnect.clone()))),
+            policy: options.reconnect.clone(),
+            hints: Arc::new(Mutex::new(StreamHints::default())),
             reconnects: std::sync::atomic::AtomicUsize::new(0),
             sink: Mutex::new(None),
             rediscovery_error: Mutex::new(None),
@@ -127,6 +208,30 @@ impl McpServerConnection {
         self.reconnects.load(std::sync::atomic::Ordering::SeqCst)
     }
 
+    /// The last event id the server handed out on this link's stream.
+    ///
+    /// `None` = the server never sent an `id:` field (the first link of a
+    /// server, or a server that does not resume streams).
+    pub fn last_event_id(&self) -> Option<String> {
+        self.hints
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .last_event_id
+            .clone()
+    }
+
+    /// The reconnection wait the server asked for on its last `retry:` frame.
+    ///
+    /// `None` = the server never sent a `retry:` field ⇒ the reconnect uses
+    /// the locally computed backoff. The value is **already bounded** by the
+    /// policy ceiling (see [`bounded_server_retry`]).
+    pub fn server_retry(&self) -> Option<Duration> {
+        self.hints
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .server_retry
+    }
+
     /// Install the owner side of the reconnect hand-over.
     ///
     /// The bridge installs one sink per connection: it is the only way a
@@ -155,7 +260,23 @@ impl McpServerConnection {
     /// Open a fresh link, run the initialize handshake, and discover the
     /// tool list. Used for the first connect and for every reconnect.
     pub async fn connect(&self) -> Result<Vec<DiscoveredTool>, McpError> {
-        let channel = self.factory.open().await?;
+        // The link observes the stream-level fields (`id:` / `retry:`) as it
+        // reads them, and resumes from the last event id the dead link
+        // handed out.
+        let observer = Arc::new(HintObserver {
+            hints: Arc::clone(&self.hints),
+            max_backoff: self.policy.max_backoff,
+        });
+        let last_event_id = self
+            .hints
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .last_event_id
+            .clone();
+        let channel = self
+            .factory
+            .open_with_observer(observer, last_event_id.as_deref())
+            .await?;
         // Fresh link, fresh handshake: close whatever state the previous
         // link left behind before the lifecycle machine starts again.
         {
@@ -220,6 +341,11 @@ impl McpServerConnection {
     async fn recover(&self, reason: &str) -> Result<(), McpError> {
         self.reconnects
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        // Hand the stream-level state the dead link observed to the protocol
+        // library's reconnect state: the `id:` resumes the next link, the
+        // `retry:` becomes the wait below. **Before** the wait is handed out
+        // — afterwards it is too late for this disconnect.
+        self.observe_stream_hints();
         {
             let mut channel = self
                 .channel
@@ -258,6 +384,36 @@ impl McpServerConnection {
         let tools = self.connect().await?;
         self.publish_rediscovery(tools);
         Ok(())
+    }
+
+    /// Hand the observed stream-level state to the reconnect state.
+    ///
+    /// The protocol library keeps the Last-Event-ID and the server's
+    /// reconnection hint in [`ReconnectState`] — this is the entry point
+    /// that fills them (`observe_frame`). The hint is already bounded (see
+    /// [`bounded_server_retry`]); the event id is the server's own value.
+    ///
+    /// Doing this here — **before** `on_disconnect()` hands out the wait —
+    /// is what makes the server's `retry:` reach the reconnect: without it
+    /// the wait was always the locally computed backoff.
+    fn observe_stream_hints(&self) {
+        let hints = self
+            .hints
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone();
+        if hints.last_event_id.is_none() && hints.server_retry.is_none() {
+            return;
+        }
+        let mut reconnect = self
+            .reconnect
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        reconnect.observe_frame(&SseFrame {
+            id: hints.last_event_id,
+            retry: hints.server_retry,
+            ..SseFrame::default()
+        });
     }
 
     /// Hand a re-discovered tool list to the owner.
