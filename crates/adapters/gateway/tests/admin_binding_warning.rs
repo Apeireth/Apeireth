@@ -57,10 +57,6 @@ impl StubCredentials {
             written: Arc::new(Mutex::new(Vec::new())),
         }
     }
-
-    fn writes(&self) -> Vec<(String, String)> {
-        self.written.lock().unwrap().clone()
-    }
 }
 
 impl CredentialWriter for StubCredentials {
