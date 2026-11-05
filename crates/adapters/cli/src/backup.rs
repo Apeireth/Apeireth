@@ -11,6 +11,10 @@
 //!   `--to <ROOT>` = 搬家恢复 (逐件按 relpath 重组到新根), 缺省 = 同机原位;
 //! - `verify <BUNDLE>`: 只验不恢复 (独立校验, 不触碰数据面)。
 //!
+//! 旗标层: 判据走 crate 级共享模块 [`crate::flags`] (白名单式扫描, 拒绝即帧) ——
+//! 本面只留自己的措辞 (英文档: 本面用法帧是英文的) 与用法帧; `--` 之后一律当
+//! 位置参数 (想传以 `-` 开头的路径就放在 `--` 之后)。
+//!
 //! 治理面: CLI 面是本地操作; `backup.export` / `backup.restore` 记审计行
 //! (时间 + 清单件数, 落 `daemon-audit.jsonl` 与面板审计同一账本);
 //! `verify` 是只读校验, 零审计行 (如实注)。self_status 备份节读
@@ -27,8 +31,30 @@ use apeireth_tools_canonical::backup::{
 };
 use apeireth_tools_canonical::skill::SKILLS_SUBDIR;
 
+use crate::flags;
+
 /// 本面的用法帧 (错误即帧: 参数错 = 带用法的正式通道)。
 pub const USAGE: &str = "Usage:\n  apeireth backup export <DIR>\n  apeireth backup restore <BUNDLE> [--to <ROOT>]\n  apeireth backup verify <BUNDLE>";
+
+/// `restore` 的旗标白名单 (`--to` 是带值旗标: 吃下一个词, 缺值/值像旗标即拒)。
+///
+/// 判据 (旗标形态 / 缺值 / `--` 分隔) 走 crate 级共享模块 [`crate::flags`] ——
+/// 本面只留自己的措辞与用法帧。
+const RESTORE_FLAGS: flags::FlagSpec = flags::FlagSpec {
+    value: &["--to"],
+    boolean: &[],
+    meta_as_positional: false,
+};
+
+/// 不收旗标的动词 (`export` / `verify`) 的白名单。
+///
+/// 空白名单 = 本动词的每个 `-` 开头词都是**未知旗标** (指名拒): 拼错的旗标
+/// 不静默变成路径 (`backup export --help` 不该落一个名为 `--help` 的目录)。
+const NO_FLAGS: flags::FlagSpec = flags::FlagSpec {
+    value: &[],
+    boolean: &[],
+    meta_as_positional: false,
+};
 
 /// 审计行的服务词面 (面板审计同账本, 服务字段分域)。
 const AUDIT_SERVICE: &str = "backup";
@@ -252,6 +278,26 @@ fn now_millis() -> i64 {
         .unwrap_or(0)
 }
 
+/// 白名单式旗标扫描 —— **拒绝即帧** (判据在 crate 级共享模块 [`crate::flags`])。
+///
+/// 措辞走英文档 (本面用法帧是英文的): 未知旗标 / 缺值 一律点名 + `--` 分隔提示
+/// + 用法帧; `--` 之后一律当位置参数。
+fn scan_flags(
+    command: &str,
+    spec: &flags::FlagSpec,
+    args: &[String],
+) -> Result<flags::Scan, String> {
+    let known = spec.known();
+    flags::scan(args, spec).map_err(|error| {
+        error.frame(
+            flags::Style::En,
+            &flags::FrameContext::new(command, flags::UnknownNoun::Flag)
+                .with_usage(USAGE)
+                .with_known(&known),
+        )
+    })
+}
+
 /// `apeireth backup` 入口 (env 解析数据面路径)。
 pub fn run_backup(args: &[String]) -> Result<String, String> {
     run_backup_at(&BackupCliPaths::from_env(), args)
@@ -265,7 +311,9 @@ pub fn run_backup_at(paths: &BackupCliPaths, args: &[String]) -> Result<String, 
     };
     match verb {
         "export" => {
-            let target = match rest {
+            // 旗标层: 判据走共享模块 (本动词不收旗标 ⇒ `-` 开头的词一律未知旗标)。
+            let scanned = scan_flags("backup export", &NO_FLAGS, rest)?;
+            let target = match scanned.positionals.as_slice() {
                 [target] if !target.trim().is_empty() => PathBuf::from(target),
                 _ => return Err(format!("backup export requires exactly one <DIR>\n{USAGE}")),
             };
@@ -288,7 +336,9 @@ pub fn run_backup_at(paths: &BackupCliPaths, args: &[String]) -> Result<String, 
             ))
         }
         "verify" => {
-            let bundle = match rest {
+            // 旗标层: 判据走共享模块 (本动词不收旗标 ⇒ `-` 开头的词一律未知旗标)。
+            let scanned = scan_flags("backup verify", &NO_FLAGS, rest)?;
+            let bundle = match scanned.positionals.as_slice() {
                 [bundle] if !bundle.trim().is_empty() => PathBuf::from(bundle),
                 _ => {
                     return Err(format!(
@@ -309,42 +359,36 @@ pub fn run_backup_at(paths: &BackupCliPaths, args: &[String]) -> Result<String, 
 }
 
 /// 解析 restore 参数 (`<BUNDLE> [--to <ROOT>]`; 未知/悬空旗标 = 用法帧)。
+///
+/// 判据 (旗标形态 / 缺值 / `--` 分隔 / 重复) 走 crate 级共享模块
+/// [`crate::flags`]; 本面只留自己的措辞与用法帧。
 fn parse_restore_args(args: &[String]) -> Result<(PathBuf, RestoreOptions), String> {
-    let mut bundle: Option<PathBuf> = None;
-    let mut to_root: Option<PathBuf> = None;
-    let mut index = 0;
-    while index < args.len() {
-        match args[index].as_str() {
-            "--to" => {
-                index += 1;
-                let Some(value) = args.get(index) else {
-                    return Err(format!("backup restore --to requires a value\n{USAGE}"));
-                };
-                if value.trim().is_empty() {
-                    return Err(format!(
-                        "backup restore --to requires a non-empty root\n{USAGE}"
-                    ));
-                }
-                to_root = Some(PathBuf::from(value));
-            }
-            flag if flag.starts_with("--") => {
-                return Err(format!("unknown backup restore argument: {flag}\n{USAGE}"));
-            }
-            value => {
-                if bundle.is_some() {
-                    return Err(format!(
-                        "backup restore takes exactly one <BUNDLE>\n{USAGE}"
-                    ));
-                }
-                bundle = Some(PathBuf::from(value));
-            }
-        }
-        index += 1;
+    let scanned = scan_flags("backup restore", &RESTORE_FLAGS, args)?;
+    // 同一旗标只允许给一次 (重复即拒, 不静默取末位: 搬家恢复落点选错 = 恢复落错根)。
+    if scanned.count("--to") > 1 {
+        return Err(format!("backup restore --to given twice\n{USAGE}"));
     }
-    let bundle = bundle.ok_or_else(|| format!("backup restore requires a <BUNDLE>\n{USAGE}"))?;
-    let options = match to_root {
-        Some(root) => RestoreOptions::to_root(root),
+    // 值层 (面自己的纪律): 落点根不得为空串/纯空白 (空串落位 = 落进当前目录)。
+    let options = match scanned.value("--to") {
+        Some(root) => {
+            if root.trim().is_empty() {
+                return Err(format!(
+                    "backup restore --to requires a non-empty root\n{USAGE}"
+                ));
+            }
+            RestoreOptions::to_root(PathBuf::from(root))
+        }
         None => RestoreOptions::in_place(),
+    };
+    // 本动词只收一个 <BUNDLE>; 空串按缺 (与 export/verify 同口径)。
+    let bundle = match scanned.positionals.as_slice() {
+        [bundle] if !bundle.trim().is_empty() => PathBuf::from(bundle),
+        [_, _, ..] => {
+            return Err(format!(
+                "backup restore takes exactly one <BUNDLE>\n{USAGE}"
+            ))
+        }
+        _ => return Err(format!("backup restore requires a <BUNDLE>\n{USAGE}")),
     };
     Ok((bundle, options))
 }
