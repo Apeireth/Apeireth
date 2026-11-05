@@ -738,7 +738,10 @@ impl MemoryCoordinator {
             let (candidates, candidate_meta, governance_filtered) =
                 self.collect_candidates(query, now_ms);
             let total_candidates = candidates.len();
-            if total_candidates == 0 {
+            // ⭐ **联想通道**（第三条）：提前算 ⇒ ⇒ 「有没有候选」**跨通道**判断。
+            // ⚠️ 联想通道**没有候选** ⇒ ⇒ 提前返回的**形状与条件一字不改**（零回归）。
+            let associative_candidates = self.collect_associative_candidates(query);
+            if total_candidates == 0 && associative_candidates.is_empty() {
                 return Ok(MemoryRecallResult {
                     items: Vec::new(),
                     total_candidates: 0,
@@ -758,9 +761,10 @@ impl MemoryCoordinator {
                 candidates,
                 candidate_meta,
                 governance_filtered,
-                total_candidates,
+                total_candidates + associative_candidates.len(),
                 None,
                 now_ms,
+                associative_candidates,
             )
         } else {
             block_on_future(self.recall_async(query))
@@ -779,7 +783,9 @@ impl MemoryCoordinator {
             self.collect_candidates(query, now_ms);
 
         let total_candidates = candidates.len();
-        if total_candidates == 0 {
+        // ⭐ **联想通道**（第三条）：与同步路径**同口径**（见 `collect_associative_candidates`）。
+        let associative_candidates = self.collect_associative_candidates(query);
+        if total_candidates == 0 && associative_candidates.is_empty() {
             return Ok(MemoryRecallResult {
                 items: Vec::new(),
                 total_candidates: 0,
@@ -848,10 +854,41 @@ impl MemoryCoordinator {
             candidates,
             candidate_meta,
             governance_filtered,
-            total_candidates,
+            total_candidates + associative_candidates.len(),
             vector_source,
             now_ms,
+            associative_candidates,
         )
+    }
+
+    /// ⭐ **联想候选**（2026-11-05）：第三条召回通道的候选。
+    ///
+    /// ⚠️ **为什么提前算**（不是塞进 `collect_candidates`）：
+    /// 召回入口有个**提前返回**（`total_candidates == 0` ⇒ ⇒ 直接返回空结果）⇒ ⇒
+    /// 若联想候选等到管线里才算 ⇒ ⇒ **提前返回会先把它挡在门外** ⇒ ⇒ 通道形同虚设。
+    /// ⇒ ⇒ 所以在**提前返回之前**就算一次（跨通道判断「到底有没有候选」）。
+    ///
+    /// ⚠️ **提前返回的形状一字不改**：联想通道**没有候选**时 ⇒ ⇒ 走的还是老路
+    /// ⇒ ⇒ 结果逐字节不变（**零回归**）。
+    fn collect_associative_candidates(&self, query: &MemoryRecallQuery) -> Vec<MemoryCandidate> {
+        let Some(associations) = &self.associations else {
+            return Vec::new();
+        };
+        if query.exact_scope_authorization
+            || !query.layers.contains(&MemoryLayerKind::Relational)
+            || query.query_text.trim().is_empty()
+        {
+            return Vec::new();
+        }
+        let source = crate::associative_recall::AssociativeCandidateSource::new(
+            Arc::clone(associations),
+            Arc::clone(&self.backend),
+            Arc::clone(&self.governance),
+        );
+        match source.candidates(&query.query_text, query.limit) {
+            Ok(candidates) => candidates,
+            Err(_) => Vec::new(),
+        }
     }
 
     fn execute_hybrid_retrieval(
@@ -863,6 +900,7 @@ impl MemoryCoordinator {
         total_candidates: usize,
         vector_source: Option<StaticVectorCandidateSource>,
         now_ms: i64,
+        associative_candidates: Vec<MemoryCandidate>,
     ) -> Result<MemoryRecallResult, MemoryError> {
         // ⚠️ **会话维度**（多会话串扰修复）：生效检索权重按**会话**分桶 ⇒ ⇒
         // 本次召回必须在自己的会话作用域里读生效值（否则会读到别的会话的
@@ -878,9 +916,34 @@ impl MemoryCoordinator {
             }
         }
         let lexical_source = Bm25LexicalCandidateSource::new(candidates);
+        // ⚠️ **声明顺序有讲究**：`sources` 持有各通道的**引用** ⇒ ⇒ 通道源必须
+        // **活得更久** ⇒ ⇒ 所以联想源先声明、再建 `sources`（否则借用不过生命周期检查）。
+        let associative_source = if !associative_candidates.is_empty() {
+            Some(
+                crate::associative_recall::AssociativeCandidateSource::from_candidates(
+                    associative_candidates,
+                ),
+            )
+        } else {
+            None
+        };
         let mut sources: Vec<&dyn MemoryCandidateSource> = vec![&lexical_source];
         if let Some(ref vs) = vector_source {
             sources.push(vs);
+        }
+        // ⭐ **联想召回通道**（2026-11-05 接线）：第三条通道 ⇒ ⇒ **与词法/向量正交**。
+        //
+        // 接线前：`self.associations` 字段在、`with_experience` 会装上
+        // ⇒ ⇒ **但全 crate 零调用 `top_associations`** ⇒ ⇒ **已接线未通电**。
+        //
+        // 为什么必须是**独立通道**而不是「往候选列表里塞」：
+        // 召回链的**唯一入口就是 `sources`** ⇒ ⇒ 混进 `candidates` 只会变成
+        // **BM25 的输入**（被词面相似度重新排一遍）⇒ ⇒ ⇒ 联想的信号会被抹掉。
+        //
+        // ⚠️ **零回归**：联想通道**没有候选**时 ⇒ ⇒ 它不进 `sources`
+        // ⇒ ⇒ 管线行为与接线前**逐字节**一致。
+        if let Some(ref source) = associative_source {
+            sources.push(source);
         }
 
         // V4-c 检索维度自进化: 排序权重取**生效值** (调权落地 override; 无调权
@@ -1629,6 +1692,178 @@ mod tests {
                 session_id: SESSION.to_string(),
             })
             .expect("writeback episode");
+    }
+
+    /// ⭐ **联想召回的夹具**（2026-11-05）：一个**只认固定联想**的 `AssociationStore`
+    /// ⇒ ⇒ 用来证明「联想候选真的进了候选集」，而不是「代码写了但没生效」。
+    #[derive(Default)]
+    struct FakeAssociations {
+        edges: std::sync::Mutex<Vec<apeireth_plugin::experience::AssociationEdge>>,
+    }
+
+    impl apeireth_plugin::experience::AssociationStore for FakeAssociations {
+        fn record_cooccurrence(
+            &self,
+            _from: &str,
+            _to: &str,
+            _episode_id: &str,
+        ) -> apeireth_plugin::CapabilityResult<()> {
+            Ok(())
+        }
+
+        fn top_associations(
+            &self,
+            entity: &str,
+            limit: u32,
+        ) -> apeireth_plugin::CapabilityResult<Vec<apeireth_plugin::experience::AssociationEdge>>
+        {
+            let edges = self.edges.lock().expect("fake associations mutex");
+            Ok(edges
+                .iter()
+                .filter(|e| e.from_entity == entity || e.to_entity == entity)
+                .take(limit as usize)
+                .cloned()
+                .collect())
+        }
+    }
+
+    /// **空图**（测试夹具）：联想召回只需要 `AssociationStore`
+    /// ⇒ ⇒ 图那一侧给一个**什么都不返回**的实现（证明「联想」与「图」是两条独立的面）。
+    struct EmptyKnowledgeGraph;
+
+    impl apeireth_plugin::experience::KnowledgeGraphStore for EmptyKnowledgeGraph {
+        fn put_fact(
+            &self,
+            _fact: &apeireth_plugin::experience::GraphFact,
+        ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+            Ok(())
+        }
+
+        fn put_link(
+            &self,
+            _link: &apeireth_plugin::experience::GraphLink,
+        ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+            Ok(())
+        }
+
+        fn facts_from(
+            &self,
+            _subject_id: &str,
+            _limit: u32,
+        ) -> apeireth_plugin::CapabilityResult<Vec<apeireth_plugin::experience::GraphFact>>
+        {
+            Ok(Vec::new())
+        }
+
+        fn links_from(
+            &self,
+            _from_id: &str,
+            _limit: u32,
+        ) -> apeireth_plugin::CapabilityResult<Vec<apeireth_plugin::experience::GraphLink>>
+        {
+            Ok(Vec::new())
+        }
+
+        fn forget_subject(&self, _subject_id: &str) -> apeireth_plugin::CapabilityResult<()> {
+            Ok(())
+        }
+    }
+
+    /// ⭐ **联想召回接通**（2026-11-05）
+    ///
+    /// 接线前：`self.associations` 被装上，但**全 crate 零调用** `top_associations`
+    /// ⇒ ⇒ 联想能力「算得出来但从不上场」。
+    /// ⇒ ⇒ 本测试证明：**装了联想 store ⇒ 联想候选真的进了召回候选集**。
+    #[test]
+    fn associative_recall_surfaces_associated_episodes() {
+        use apeireth_plugin::experience::AssociationEdge;
+
+        const QUERY: &str = "数据库迁移";
+        let coordinator = coordinator();
+        coordinator
+            .writeback_episode(&Episode {
+                id: "ep-assoc-target".to_string(),
+                timestamp: 1_900_000_000,
+                role: "user".to_string(),
+                content: "把 Postgres 迁到 SQLite 的那次改动".to_string(),
+                session_id: SESSION.to_string(),
+            })
+            .expect("writeback episode");
+
+        let fake = Arc::new(FakeAssociations::default());
+        fake.edges.lock().expect("lock").push(AssociationEdge {
+            from_entity: QUERY.to_string(),
+            to_entity: "postgres".to_string(),
+            co_occurrence_count: 25,
+            last_seen_episode_id: "ep-assoc-target".to_string(),
+            last_seen_at: 1_900_000_000,
+        });
+        let coordinator = coordinator.with_experience(Arc::new(EmptyKnowledgeGraph), fake);
+
+        let query = crate::MemoryRecallQuery {
+            session_id: SESSION.to_string(),
+            query_text: QUERY.to_string(),
+            layers: vec![MemoryLayerKind::Relational],
+            limit: 8,
+            max_chars: 4_000,
+            recency_decay_lambda: 0.0,
+            min_score: 0.0,
+            as_of_ms: None,
+            // ⚠️ **可见域不能空**：`is_visible_in(&[])` = `any` over 空 = **false**
+            // ⇒ ⇒ 空可见域 ⇒ ⇒ **所有**候选（含词法通道）全被筛掉。
+            visible_scopes: vec![crate::scope::MemoryScope::Session {
+                session_id: SESSION.to_string(),
+            }],
+            exact_scope_authorization: false,
+        };
+        let result = coordinator.recall(&query).expect("recall");
+        assert!(
+            result
+                .items
+                .iter()
+                .any(|item| item.id == "assoc:ep-assoc-target"),
+            "联想候选必须上场（**接线前它从不上场**）⇒ ⇒ 实际拿到: {:?}",
+            result.items.iter().map(|i| &i.id).collect::<Vec<_>>()
+        );
+    }
+
+    /// ⭐ **没装联想 ⇒ ⇒ 行为逐字节不变**（零回归守）
+    #[test]
+    fn associative_recall_is_absent_without_store() {
+        let coordinator = coordinator();
+        coordinator
+            .writeback_episode(&Episode {
+                id: "ep-assoc-absent".to_string(),
+                timestamp: 1_900_000_000,
+                role: "user".to_string(),
+                content: "数据库迁移的内容".to_string(),
+                session_id: SESSION.to_string(),
+            })
+            .expect("writeback episode");
+        let query = crate::MemoryRecallQuery {
+            session_id: SESSION.to_string(),
+            query_text: "数据库迁移".to_string(),
+            layers: vec![MemoryLayerKind::Relational],
+            limit: 8,
+            max_chars: 4_000,
+            recency_decay_lambda: 0.0,
+            min_score: 0.0,
+            as_of_ms: None,
+            // ⚠️ **可见域不能空**：`is_visible_in(&[])` = `any` over 空 = **false**
+            // ⇒ ⇒ 空可见域 ⇒ ⇒ **所有**候选（含词法通道）全被筛掉。
+            visible_scopes: vec![crate::scope::MemoryScope::Session {
+                session_id: SESSION.to_string(),
+            }],
+            exact_scope_authorization: false,
+        };
+        let result = coordinator.recall(&query).expect("recall");
+        assert!(
+            !result
+                .items
+                .iter()
+                .any(|item| item.id.starts_with("assoc:")),
+            "没装联想 store ⇒ ⇒ 不该有任何联想候选"
+        );
     }
 
     /// 已写好记忆的检索器.

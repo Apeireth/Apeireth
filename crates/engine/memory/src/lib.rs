@@ -315,6 +315,7 @@ pub use session_lifecycle::{
     SessionState,
 };
 // Core Capability Expansion Phase 3: 记忆治理 (forget/protect/update, 不破坏 append-only episodes).
+pub mod associative_recall;
 pub mod memory_governance;
 pub use memory_governance::{
     GovernedEpisode, MemoryGovernanceError, MemoryGovernanceStatus, MemoryGovernanceStore,
