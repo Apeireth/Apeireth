@@ -459,12 +459,6 @@ impl Runtime {
     pub(crate) fn emit_event(&self, event: RuntimeEvent) {
         read_lock_or_recover(&self.event_sink).emit(event);
     }
-
-    /// The repeated-identical-call advisory policy in force.
-    pub fn repetition_policy(&self) -> &RepetitionPolicy {
-        &self.config.repetition_advisory
-    }
-
     /// A user message entered this session: any repetition streak is cleared.
     pub(crate) fn note_user_message(&self, session: SessionId) {
         let mut map = self.lock_repetition_detectors();
@@ -979,18 +973,6 @@ impl RuntimeBuilder {
         self.config.cost_rates = Some(rates);
         self
     }
-
-    /// Set the metrics rolling window (G-P1, 拍/层).
-    ///
-    /// Each layer (per session + global) keeps the last N turn-closure beats in
-    /// process memory. The value is clamped to `1..=`[`super::metrics::MAX_METRICS_WINDOW_TURNS`],
-    /// so the effective window always equals `config.metrics_window_turns`.
-    #[must_use]
-    pub fn with_metrics_window(mut self, turns: usize) -> Self {
-        self.config.metrics_window_turns = turns.clamp(1, super::metrics::MAX_METRICS_WINDOW_TURNS);
-        self
-    }
-
     /// Install the runtime-invariant consumption point.
     ///
     /// Without it, no invariant checking happens at the dispatch boundary.

@@ -369,17 +369,6 @@ impl BehaviorChain {
             _ => None,
         })
     }
-
-    /// Retrieve the most recent N actions.
-    pub fn recent_actions(&self, n: usize) -> Vec<&ActionNode> {
-        let all = self.actions();
-        if all.len() <= n {
-            all
-        } else {
-            all[all.len() - n..].to_vec()
-        }
-    }
-
     /// Check whether a sensitive source was read prior to an external sink write.
     ///
     /// ⚠️ **用 sink 全集判定**（旧实现只看 `sink_classes.first()` ⇒ ⇒ 多 sink

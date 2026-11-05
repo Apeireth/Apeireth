@@ -447,11 +447,6 @@ impl ChainApprovalAudit {
             committed: Arc::new(Mutex::new(committed)),
         })
     }
-
-    /// 系统时钟口径 (生产)。
-    pub fn with_system_clock(sink: Arc<FileChainAuditSink>) -> Result<Self, String> {
-        Self::open(sink, Arc::new(SystemChainClock))
-    }
 }
 
 impl ApprovalAuditSink for ChainApprovalAudit {

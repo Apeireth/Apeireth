@@ -836,12 +836,6 @@ impl GatewayTokenGate {
             Self::UnprotectedDefault | Self::UnprotectedDeclared => None,
         }
     }
-
-    /// 令牌族是否在场 (env 单令牌或令牌表任一非空) —— 在场即强制校验。
-    pub fn family_enforced(&self, clients: &crate::client_tokens::ClientTokenTable) -> bool {
-        matches!(self, Self::Enforced(_)) || !clients.is_empty()
-    }
-
     /// 过门裁决 (纯函数): `bearer` 是 `Authorization: Bearer ` 后面的裸令牌。
     ///
     /// 口径 (令牌族合并后):
@@ -1394,50 +1388,6 @@ pub fn canonical_router_with_state(state: GatewayState) -> Router {
         )
         .with_state(state)
 }
-
-/// Serve the canonical gateway until the listener closes.
-pub async fn serve_canonical(
-    listener: tokio::net::TcpListener,
-    runtime: Arc<Runtime>,
-    panels: Option<Arc<dyn PanelData>>,
-) -> std::io::Result<()> {
-    serve_canonical_with_services(listener, runtime, GatewayServices::from_panel(panels)).await
-}
-
-/// Serve the canonical gateway over explicit bounded-context gateway ports.
-pub async fn serve_canonical_with_services(
-    listener: tokio::net::TcpListener,
-    runtime: Arc<Runtime>,
-    services: GatewayServices,
-) -> std::io::Result<()> {
-    serve_with_shutdown(listener, runtime, services, std::future::pending::<()>()).await
-}
-
-/// Serve the canonical gateway until the listener closes **or** a shutdown is
-/// requested (W2-① 常驻形态的优雅停机面).
-///
-/// Shutdown sources funnel into one policy:
-///
-/// - `external_shutdown` — the composition root's process-signal face
-///   (`SIGTERM` / console control events);
-/// - [`crate::shutdown::ShutdownTrigger`] — fired by the token-gated
-///   `POST /v1/admin/shutdown` endpoint (the service scripts' stop path).
-///
-/// When either fires, the server stops accepting new work, waits for in-flight
-/// requests to finish, then performs the closing bookkeeping (收尾): one final
-/// `gateway.shutdown` audit fact and a full flush of the observation archive to
-/// its port (the `daemon-audit.jsonl` archive in the production assembly), so
-/// the last facts of the process are on disk before it exits (落盘).
-pub async fn serve_with_shutdown(
-    listener: tokio::net::TcpListener,
-    runtime: Arc<Runtime>,
-    services: GatewayServices,
-    external_shutdown: impl std::future::Future<Output = ()> + Send + 'static,
-) -> std::io::Result<()> {
-    let state = build_gateway_state_with_services(runtime, services);
-    serve_state_with_shutdown(listener, state, external_shutdown).await
-}
-
 /// Serve over an explicit [`GatewayState`] until the listener closes or a
 /// shutdown fires (see [`serve_with_shutdown`] for the shutdown contract).
 ///

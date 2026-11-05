@@ -85,7 +85,7 @@ orphan with_quorum_gate_probe  # G3  生物族默认关 ⇒ 零引用是设计�
 orphan with_system_markers  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线
 orphan with_task_type  # G3  认知编排面默认关 ⇒ 零引用是设计如此
 
-# --- G4（28 条）：**注入点 / 探测口**（`with_*`）。生产装配走 `install_*`。
+# --- G4（23 条）：**注入点 / 探测口**（`with_*`）。生产装配走 `install_*`。
 
 orphan with_age  # G4
 orphan with_backend  # G4
@@ -99,20 +99,15 @@ orphan with_envelope_budget  # G4
 orphan with_foreign_keys  # G4
 orphan with_importance_weight  # G4  ⭐ **会被调优引擎覆盖**：调优层已按维度设 `importance_weight`（`retrieval_tuning.rs:527`）⇒ ⇒ 本旋钮只在「调优尚无该维度权重」时生效（兜底路径）⇒ ⇒ 零引用是**覆盖关系**的结果，不是没实现
 orphan with_journal_mode  # G4
-orphan with_metrics_window  # G4
 orphan with_min_candidate_score  # G4  主动召回族已接生产；这条是**候选分数门槛**旋钮 ⇒ ⇒ 生产用 `ProactiveRecallPolicy` 的默认门槛 ⇒ ⇒ 零引用是「默认策略未显式调它」的结果（旋钮存在但未拧）
 orphan with_port  # G4
 orphan with_preview_chars  # G4
 orphan with_ranking_config  # G4  ⭐ **实测修正**：不是「该接线未接」⇒ ⇒ 它设的 `self.ranking` 会被 `effective_ranking_or(self.ranking, …)`（`coordinator.rs:889`）**盖掉** ⇒ ⇒ 只在「调优引擎尚无会话桶」时生效（兜底路径）⇒ ⇒ 零引用是**覆盖关系**的结果，**不是没实现**
 orphan with_rate_limiting  # G4
 orphan with_reader  # G4  元思考族（`MetaThinking`）**未接生产**（生产侧引用 0）⇒ ⇒ 零引用是族级结果；读面注入（与 `save_to_cluster` 配对）
-orphan with_runtime_overrides  # G4
-orphan with_safety_provider  # G4
 orphan with_session_label  # G4
 orphan with_shell_executable  # G4
 orphan with_synchronous  # G4
-orphan with_system_clock  # G4
-orphan with_task_scope  # G4
 orphan with_user_agent  # G4
 orphan with_voices_error  # G4
 
@@ -124,32 +119,24 @@ orphan doc_ops_capability_shared  # G5  ⚠️ 2026-11-04 级联：删 `doc_ops_
 orphan sheet_ops_capability_shared  # G5  ⚠️ 2026-11-04 级联：删 `sheet_ops_capability`（零调用点）后失去唯一调用者 ⇒ ⇒ 待判：**「不带 live 策略槽」这个装配变体还要不要**（生产用 `_shared_with_slot`）
 orphan retrieve_with_reranker_for_session  # G5  **显式会话**的重排入口（`SessionContext::Explicit`）⇒ ⇒ 与 ambient 版**共用**内部实现 `retrieve_with_reranker_in` ⇒ ⇒ **刻意成对**（显式会话 vs 会话作用域兜底）⇒ ⇒ 零引用是「显式会话那条路还没被调用」的结果，**不是没实现**
 
-# --- G6（58 条）：**冗余 API 表面 / 宿主入口**：同一能力有**主路径在用**，这些是并行入口或便利包装；或设计上是给宿主/外部调用的公开 API。已逐条核查（见 `unwired-debt-taxonomy-2026-10-24.md` 与 `unwired-debt-audit-2026-10-24.md`）。
+# --- G6（47 条）：**冗余 API 表面 / 宿主入口**：同一能力有**主路径在用**，这些是并行入口或便利包装；或设计上是给宿主/外部调用的公开 API。已逐条核查（见 `unwired-debt-taxonomy-2026-10-24.md` 与 `unwired-debt-audit-2026-10-24.md`）。
 
 orphan with_used  # G6
 orphan constrain_to_trusted  # G6
 orphan decompose_default  # G6  校准族**未接生产**（`decompose_default` 无生产消费者）⇒ ⇒ 零引用是族级结果；校准分解默认值（配 `calibration_gap`）
 orphan extract_experience_from_episode  # G6
 orphan save_to_cluster  # G6  元思考族（`MetaThinking`）**未接生产**（生产侧引用 0）⇒ ⇒ 零引用是族级结果 ⇒ ⇒ `ClusterStore` 在生产是**间接消费链**（经 `meta_thinking`），但 `meta_thinking` 本身未接 ⇒ ⇒ 这条是其写面
-orphan serve_canonical  # G6
 orphan trait_locks_path  # G6
 orphan validate_schedule  # G6
 orphan recall_with_policy  # G6  主动召回族**已接生产**，但生产用**保留型** `ProactiveRecallService`（`cognitive.rs:1357`）⇒ ⇒ 这条是「一次性便利入口」⇒ ⇒ 零引用是**两种调用形态并存**的结果，不是没实现
-orphan active_profile  # G6
-orphan adapt_gate  # G6
 orphan allow_capability  # G6
 orphan apeireth_sdk_py  # G6
 orphan beside_feeds  # G6
 orphan bio_care_config_from_env  # G6
-orphan claim_count  # G6
-orphan dispatch_gateway_serve  # G6
-orphan execute_streaming  # G6
 orphan explicit_allow_list  # G6
-orphan family_enforced  # G6
 orphan get_for_subject  # G6  承诺族已接生产；生产读单条走 `store.get(&id)`（`memory_typed_sink.rs:135`）⇒ ⇒ 这条是**带主体校验**的读面 ⇒ ⇒ 零引用是「生产选了无主体版」的结果 ⇒ ⇒ ⚠️ 与上一条同属「主体隔离一致性」待查项
 orphan get_page  # G6  wiki 知识库族（`WikiFs`）**未接生产**（生产侧引用 0）⇒ ⇒ 零引用是族级结果；与已接的 `compile_page` 配对（分页读面）
 orphan get_persona  # G6  人格族（`FiveDimensional`）**未接生产**（生产侧引用 0）⇒ ⇒ 零引用是族级结果（人格库未接）
-orphan has_signal  # G6
 orphan held_for  # G6
 orphan is_compatible  # G6
 orphan is_episode_forgotten  # G6  遗忘治理族（`UniversalForgetFacade`）**未接生产**（实测生产侧引用 0）⇒ ⇒ 零引用是**族级**结果，不是「没实现」；该面是治理只读查询（配 `forget_episode`）
@@ -158,7 +145,6 @@ orphan last_watch  # G6
 orphan library_root  # G6
 orphan links_for_diary  # G6  跨日记族（`CrossDiary`）**未接生产**（生产侧引用 0）⇒ ⇒ 零引用是族级结果；与 `links_for_fact` 同族
 orphan list_active  # G6  承诺族**已接生产**，但生产**只用** `list_active_for_subject`（`memory_typed_sink.rs:145` / `typed_recall.rs:110`）⇒ ⇒ 这条是**无主体版**（`subject_id=None` ⇒ 跨主体读面）⇒ ⇒ **刻意不接**（主体隔离面）⇒ ⇒ ⚠️ 见看板「主体隔离一致性」一条
-orphan matches_word  # G6
 orphan materialize_to_sink  # G6  物化器族**已接生产**，但生产走的是**逐条** `materialize_episode`（`cognitive.rs`）⇒ ⇒ 这条是「批量 + 投递」的**另一条路** ⇒ ⇒ 零引用是「两条路并存」的结果；能力是活的（`MemoryMaterializationSink` 有生产实现）
 orphan minimax_default  # G6
 orphan nervous_system_from_frame  # G6
@@ -168,10 +154,8 @@ orphan put_default  # G6
 orphan query_as_of  # G6  宿主 `TemporalGraphStore` **已接生产**（`adapters/cli/src/lib.rs:2003`）⇒ ⇒ 本条是 `query(&TemporalGraphQuery::new(as_of_ms))` 的**一行便利包装** ⇒ ⇒ **正名已在 `query`** ⇒ ⇒ 零引用是「有正名、包装未用」的结果
 orphan query_with_time_range  # G6  溯源族已接生产；本条是**溯源时间区间**查询（与「事实 as-of」是**两套时间轴**：区间 vs 时点）⇒ ⇒ 零引用是「另一条时间轴的读面」的结果；与 `query_as_of` **不构成同义**
 orphan rebind  # G6
-orphan recent_actions  # G6
 orphan reconnect_attempts  # G6
 orphan remove_job  # G6
-orphan repetition_policy  # G6
 orphan retrieve_with_reranker  # G6  **ambient 会话**的重排入口 ⇒ ⇒ 与 `_for_session` 版**共用** `retrieve_with_reranker_in` ⇒ ⇒ 成对设计（同上）⇒ ⇒ 零引用是「重排默认不启用（保序即默认）」的结果 ⇒ ⇒ 留着 = 将来可挂模型重排**而不改检索主干**
 orphan sdk_method_names  # G6
 orphan set_quiet_threshold  # G6  睡眠周期族（`SleepCycle`）**未接生产**（唯一提及在 `foundation/core/src/clock.rs` 的**注释**里）⇒ ⇒ 零引用是族级结果
