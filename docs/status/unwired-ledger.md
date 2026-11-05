@@ -114,28 +114,19 @@
 ⇒ ⇒ ⚠️ **若将来产品确实要「HTTP 自助引导」** ⇒ ⇒ 那是一条**独立的、可审计的**产品决策
 ⇒ ⇒ 需要：单独的引导端点 + 一次性引导票据 + 审计留痕 ⇒ ⇒ **不是本条**。
 
-### 5.2q **需知悉的装配要求**（不是缺陷，但**必须写清**）：逃生阀下 `/v1/admin/shutdown` 的**不可达**
+### 5.2q **需知悉的装配要求**（不是缺陷，但**必须写清**）：逃生阀下 `/v1/admin/shutdown` 的可达性
 
-**现象**：角色门**只认已认证身份**（2026-11-05 · F-2 真实进程验证后的修复）：
-未认证 / 逃生阀口径下过门的身份是 `ClientIdentity::anonymous()`（**未认证**）
-⇒ ⇒ 用户表 `client_names` 里写 `anonymous` **不会**让它变成任何用户
-⇒ ⇒ 逃生阀下**没有**「绑 `anonymous` 就能停机」这回事
-⇒ ⇒ 管理面（含 `/v1/admin/shutdown`）对调用方一律 **403**
-（fail-closed，**不静默**降级：绑定错配 / 空表 / 未认证 ⇒ 一律拒，不猜）。
+**现象**：逃生阀（`APEIRETH_GATEWAY_TOKEN=none`）与客户端令牌表**互斥**
+（`client_tokens.rs:356` `validate_gate_table_pair` ⇒ 配置矛盾拒开）
+⇒ ⇒ 逃生阀下**唯一**可绑定的过门署名名是 `anonymous`
+⇒ ⇒ **要让管理面可达，owner 必须绑定 `anonymous`**（`users.json` 的 `client_names`）
+⇒ ⇒ 否则管理面 403（fail-closed，**不静默**）。
 
-⇒ ⇒ **裁决**（2026-11-05 · **改口径**）：**「绑 `anonymous` 就能停机」这条配方作废**
-—— 角色门只认**已认证**身份 ⇒ ⇒ 逃生阀下要停机 ⇒ ⇒ **用 SIGTERM**
-（CLI `graceful_shutdown_signal` 已支持，同走收尾账）
-⇒ ⇒ ⇒ **不要**为了停机而临时开令牌面 ⇒ ⇒ ⇒ 也**不要**把 `anonymous` 绑给 owner
-（绑了也不生效，只会误导读配置的人）。
-
-⇒ ⇒ ⇒ **已认证路径不受影响**：env 单令牌面（署名名 `env`）与客户端令牌表条目
-照旧可用 ⇒ ⇒ 管理面对**已认证**的 owner 照旧 200
-（四级口径：PRODUCTION WIRED —— 角色门已接进网关生产路由）。
-
-⇒ ⇒ ⇒ 已同步进 `docs/02-guides/server-deployment.md` §6 第 2 条
-⇒ ⇒ ⇒ 回归钉在 `apeireth-gateway` 的 `admin_plane_unauthenticated_binding` 测试面
-（真实 HTTP 级：零凭据打管理面 ⇒ 403；已认证 owner ⇒ 照旧 200）。
+⇒ ⇒ **裁决**：**不改代码**（`resolve_user_identity` 的第二步回落
+`users.identity_for_client(client)` **已经支持**这个绑定 ⇒ ⇒ 能力**已具备**）
+⇒ ⇒ ⇒ 但**必须显式化** ⇒ ⇒ 已写进 `docs/02-guides/server-deployment.md` §6 第 2 条
+⇒ ⇒ ⇒ **不知道就用 SIGTERM 停机**（CLI `graceful_shutdown_signal` 已支持，同走收尾账）
+⇒ ⇒ ⇒ **不要**为了停机而临时开令牌面。
 
 ### 5.3 整族未接线：`layered_memo`（6 个模块同因）
 
