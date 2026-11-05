@@ -90,4 +90,25 @@
   R1b-1a/1b/3/4a），自本页生效起回归各线，不再扩大架构线施工面。
 - R6-C/D 的**四层签核只能 owner 本人签**（`verification-ledger.yaml` signoff），任何线不得代签。
 
+## 10. 跨分支合线待决登记（2026-11-05）
+
+⚠️ **本页只登记「合线时会打架」的事实与待决点**；**不预判合线顺序**（那是 owner 决策）。
+
+### 10.1 生产依赖边上限：两条分支的实测不同源
+
+| 分支 | `max_production_edges` | 该值的实测来源 | `git branch --contains` |
+|---|---|---|---|
+| `ui-engine-p0-2026-10-24`（本树） | **118** | 门面 crate `apeireth` 于 2026-10-31（ADR-0019）加入后实测：31 members / **118** 生产边（`cargo metadata --no-deps` = 31；`arch_guard.py --strict` = `crates=31 edges=118`） | 本树 |
+| `debt-round8` / `integration/consolidate-2026-10-31` | **111**（commit `79531b4c`「生产依赖边棘轮收紧 118 → 111（上限 == 实测）」） | **那条分支自己的树**：30 members、**无**门面 crate ⇒ 111 边 | **不含**本树 |
+
+⇒ **两条分支的 118 与 111 各自都是自己树上的真实测**（不是谁抄错）⇒ **合线时必有一处要改**。
+⇒ **待决点**：哪条分支先进主线。**若 `debt-round8` 先合**，本树
+`docs/architecture/contract.toml` 的 `[budgets].max_production_edges` **值**与**注释**都需重新对齐
+（值 118 → 111，注释里的「现行实测 118（2026-10-31 门面 crate 加入后）」也要改成 111 的出处）⇒
+否则会出现「值 = 111、注释写 118」的新矛盾。**本树已把该处注释归位到 118**（结构化字段 0 改动，
+见该文件的 commit）。
+⚠️ 该字段属**结构化字段**（棘轮上限）⇒ **改动须 ADR**（`docs/architecture/contract.toml` 的
+注释头第 ③ 条：允许集合只减不增，新增依赖边/开关/结构必须 ADR + 本文件变更）。
+⇒ **本页不代改该值**，也不代提 ADR —— 等 owner 定合线顺序。
+
 - **2026-10-21 效率线重启批完成（架构线验收）**：`d2621788..3d6d3d44` 共 10 提交——E1 test-baseline 维护/全量执行权接管、E2 治理面登记（claims 20→24 均 IMPLEMENTED）、E4 台账校验接入 docs-truth；E3 夜间 CI 按 owner 裁决「不推送、全本地」收口为 NOT MET（未冒称夜间 CI）；门禁全绿，crates 零改动。安全线自 `d2621788` 起 0 提交，S1/S2 待启动；R6-C/D 正式验收仍需 owner 签核。
