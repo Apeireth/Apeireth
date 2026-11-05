@@ -11,7 +11,7 @@ use apeireth_runtime::ApprovalDecision;
 
 fn print_help() {
     println!(
-        "apeireth\n\nUsage:\n  apeireth session\n  apeireth chat <PROMPT> [--model MODEL] [--session SESSION]\n  apeireth onboard [--tier casual|pro] [--show | --reset]\n  apeireth approve --session SESSION --approval APPROVAL\n  apeireth reject --session SESSION --approval APPROVAL [--reason REASON]\n  apeireth cancel --session SESSION --approval APPROVAL [--reason REASON]\n  apeireth dream [--session SESSION] [--limit N] [--date YYYY-MM-DD]\n  apeireth council <TOPIC>\n  apeireth subagent <TITLE> [--payload JSON]\n  apeireth nightwatch [--session SESSION] [--limit N] [--watch] [--idle SECS] [--cooldown SECS] [--interval SECS]\n  apeireth lessons [--db PATH] [--scope SCOPE] [--status STATUS]\n  apeireth egress ledger|impact|outcome [--path PATH] [--limit N] [--json]\n  apeireth gateway serve [--bind ADDR] [--port PORT] [--pid-file PATH]\n  apeireth user add --user-id ID --role owner|member|guest [--clients NAME[,NAME...]] [--domain DOMAIN] [--token TOKEN]\n  apeireth user list [--token TOKEN]\n  apeireth user role --user-id ID --role owner|member|guest [--token TOKEN]\n  apeireth user remove --user-id ID [--token TOKEN]\n  apeireth backup export <DIR>\n  apeireth backup restore <BUNDLE> [--to <ROOT>]\n  apeireth backup verify <BUNDLE>\n  apeireth crypto wrap --partition <ID> --keys <FILE> --recovery-out <FILE>\n  apeireth crypto recovery-export --keys <FILE> --out <FILE>\n  apeireth crypto unlock --keys <FILE> [--recovery <FILE>]\n  apeireth exposure report [--json] [--out <PATH>] [--bundle <BUNDLE>]\n  apeireth trait report [--json]\n  apeireth trait lock <SLIDER>\n  apeireth trait unlock <SLIDER>\n\nOptions:\n  -h, --help       Show this help (leading position only: apeireth --help / apeireth chat --help)\n  -V, --version    Show the version (leading position only: apeireth --version)\n  --               End flag parsing: every following word is a positional argument\n\nNotes:\n  Unknown flags are refused (never silently treated as text); to pass a word that\n  starts with '-', put it after `--` (e.g. apeireth chat -- --modle gpt-4 hello).\n\nEnvironment:\n  APEIRETH_LISTEN  gateway serve 绑定地址 (缺省 127.0.0.1; --bind 显式旗标优先)\n  APEIRETH_GATEWAY_TOKEN  全 API 面令牌门 (缺省回环; 非回环绑定必须设令牌)"
+        "apeireth\n\nUsage:\n  apeireth session\n  apeireth chat <PROMPT> [--model MODEL] [--session SESSION]\n  apeireth onboard [--tier casual|pro] [--show | --reset]\n  apeireth approve --session SESSION --approval APPROVAL\n  apeireth reject --session SESSION --approval APPROVAL [--reason REASON]\n  apeireth cancel --session SESSION --approval APPROVAL [--reason REASON]\n  apeireth dream [--session SESSION] [--limit N] [--date YYYY-MM-DD]\n  apeireth council <TOPIC>\n  apeireth subagent <TITLE> [--payload JSON]\n  apeireth nightwatch [--session SESSION] [--limit N] [--watch] [--idle SECS] [--cooldown SECS] [--interval SECS]\n  apeireth lessons [--db PATH] [--scope SCOPE] [--status STATUS]\n  apeireth egress ledger|impact|outcome [--path PATH] [--limit N] [--json]\n  apeireth gateway serve [--bind ADDR] [--port PORT] [--pid-file PATH]\n  apeireth user add --user-id ID --role owner|member|guest [--clients NAME[,NAME...]] [--domain DOMAIN] [--token TOKEN]\n  apeireth user list [--token TOKEN]\n  apeireth user role --user-id ID --role owner|member|guest [--token TOKEN]\n  apeireth user remove --user-id ID [--token TOKEN]\n  apeireth backup export <DIR>\n  apeireth backup restore <BUNDLE> [--to <ROOT>]\n  apeireth backup verify <BUNDLE>\n  apeireth crypto wrap --partition <ID> --keys <FILE> --recovery-out <FILE>\n  apeireth crypto recovery-export --keys <FILE> --out <FILE>\n  apeireth crypto unlock --keys <FILE> [--recovery <FILE>]\n  apeireth exposure report [--json] [--out <PATH>] [--bundle <BUNDLE>]\n  apeireth trait report [--json]\n  apeireth trait lock <SLIDER>\n  apeireth trait unlock <SLIDER>\n  apeireth mcp list [--live]\n  apeireth mcp deny <server>.<tool>\n  apeireth mcp undeny <server>.<tool>\n\nOptions:\n  -h, --help       Show this help (leading position only: apeireth --help / apeireth chat --help)\n  -V, --version    Show the version (leading position only: apeireth --version)\n  --               End flag parsing: every following word is a positional argument\n\nNotes:\n  Unknown flags are refused (never silently treated as text); to pass a word that\n  starts with '-', put it after `--` (e.g. apeireth chat -- --modle gpt-4 hello).\n\nEnvironment:\n  APEIRETH_LISTEN  gateway serve 绑定地址 (缺省 127.0.0.1; --bind 显式旗标优先)\n  APEIRETH_GATEWAY_TOKEN  全 API 面令牌门 (缺省回环; 非回环绑定必须设令牌)"
     );
 }
 
@@ -953,6 +953,18 @@ fn main() -> ExitCode {
             }
             Err(error) => {
                 eprintln!("trait operation refused: {error}");
+                ExitCode::FAILURE
+            }
+        },
+        // 外部工具（协议桥）主人管理面: list 只读列配置面 / deny·undeny 改
+        // 配置面 (改的是文件 ⇒ 需重启生效, 输出逐字写明, 不声称当场生效)。
+        "mcp" => match apeireth_cli::mcp_command::run_mcp(&args[1..]) {
+            Ok(report) => {
+                println!("{report}");
+                ExitCode::SUCCESS
+            }
+            Err(error) => {
+                eprintln!("mcp operation refused: {error}");
                 ExitCode::FAILURE
             }
         },

@@ -22,6 +22,7 @@ pub mod gateway_panels;
 pub mod governance_chain;
 pub mod keyring_bootstrap;
 pub mod lessons_command;
+pub mod mcp_command; // 外部工具（协议桥）主人管理面: list / deny / undeny.
 mod self_status_probe;
 
 use self_status_probe::self_status_ledger_probe;
@@ -37,8 +38,7 @@ pub use canonical_approval::dispatch_canonical_approval;
 pub use care_heartbeat::CareHeartbeatSource;
 pub use portable_bundle::{PortableBundleManifest, PortableBundleSynthesizer};
 
-use std::path::PathBuf;
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use apeireth_core::kernel::{ApprovalId, CapabilityId, SessionId};
 use apeireth_governance::TurnSecurityContext;
