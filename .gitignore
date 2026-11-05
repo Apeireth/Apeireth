@@ -236,6 +236,11 @@ crates/apeireth-integration-e2e/.*.log
 # 写了、台账（E-60）也引用了，但**一直在忽略名单里** ⇒ ⇒ 仓库里根本没有这个文件
 # ⇒ ⇒ 「判据存在」只是本地幻觉。静默忽略比报错更危险 ⇒ ⇒ 这里补放行。
 !crates-ui/evidence/p5-b/check_particle_edge.py
+# ⭐ 2026-11-05：跨壳对照驱动（台账 E-183/E-184）——
+#   「**非 Tauri** 的 WebKitGTK 最小壳」（PyGObject + WebKit2 4.1）⇒ ⇒
+#   用来分清「回调重入在 WebKitGTK 内核里好不好」与「Tauri 壳堵不堵」
+#   ⇒ ⇒ 判据脚本**必须进仓**，否则「只在本机跑过」= 无证据。
+!crates-ui/evidence/p5-b/drive_webkit_plain.py
 !scripts/guard_ml/*.py
 # DTS（文档事实体系）常驻脚本：跨批使用，必须入库（2026-10-20 第三线）
 !scripts/docs_truth.py
