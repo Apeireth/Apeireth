@@ -22,7 +22,7 @@ pub mod gateway_panels;
 pub mod governance_chain;
 pub mod keyring_bootstrap;
 pub mod lessons_command;
-pub mod mcp_command; // 外部工具（协议桥）主人管理面: list / deny / undeny.
+pub mod mcp_command; // 外部工具（协议桥）主人管理面: list / deny / undeny / authorize / unauthorize.
 mod self_status_probe;
 
 use self_status_probe::self_status_ledger_probe;
