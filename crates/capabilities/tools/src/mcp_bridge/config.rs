@@ -83,14 +83,22 @@ pub struct McpServerSpec {
     pub url: Option<String>,
     /// Whether this server is wired at all. Explicit, never defaulted.
     pub enabled: bool,
-    /// Remote tool names the operator explicitly authorizes without human
-    /// approval.
+    /// Remote tool names the operator puts into the authorization surface.
     ///
     /// This is an operator-authored allowlist for tools whose read-only
     /// semantics are known, but whose server declaration is conservative
     /// (for example REA declares almost none of its inspection tools as
     /// read-only). Names are matched against the server-side tool name and
     /// are converted to explicit `PermissionPolicy` grants after discovery.
+    ///
+    /// **Degraded semantics (0 装诚实)**: the list decides *whether the
+    /// capability is granted* — whether it is inside the authorization
+    /// surface at all. It does **not** mean "exempt from the per-call human
+    /// approval": external tool calls are approved one by one, allowlisted
+    /// or not, and the `full` session preset does not exempt them either.
+    /// A listed tool is therefore granted **and** marked to require
+    /// approval. An operator reading the name "auto_authorize" must not
+    /// conclude "no human will be asked".
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub auto_authorize_tools: Vec<String>,
 }
@@ -133,7 +141,10 @@ impl McpServerSpec {
         self
     }
 
-    /// Authorize one remote tool without human approval (builder style).
+    /// Put one remote tool into the authorization surface (builder style).
+    ///
+    /// The list decides *whether the capability is granted*, never whether a
+    /// human is asked: external calls are approved one by one, listed or not.
     #[must_use]
     pub fn with_auto_authorize(mut self, tool: impl Into<String>) -> Self {
         self.auto_authorize_tools.push(tool.into());

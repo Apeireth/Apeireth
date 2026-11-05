@@ -7,8 +7,9 @@
 //! / [`normalize_mcp_result`] normalize the wire shapes, and
 //! [`is_valid_mcp_name`] polices tool names. The channel underneath is
 //! whatever [`McpChannelFactory`] opens; a transport failure tears the link
-//! down and rebuilds it, then re-discovers the tool list so the dynamic tool
-//! catalog is never stale after a reconnect.
+//! down and rebuilds it, then re-discovers the tool list and hands that list
+//! to the owner through [`McpRediscoverySink`] — a dropped list would leave
+//! the dynamic tool catalog stale after a reconnect.
 
 use std::sync::{Arc, Mutex};
 
@@ -38,6 +39,23 @@ pub struct DiscoveredTool {
     pub declared_read_only: bool,
 }
 
+/// The owner side of the reconnect hand-over.
+///
+/// The connection owns the wire, the owner owns the directory of live tools.
+/// A reconnect re-runs `tools/list`, and that list is the only fresh
+/// knowledge about the server's tool set — so the connection hands it over
+/// instead of dropping it. A dropped list is a stale directory: the model
+/// keeps seeing a tool the server has dropped, and never sees the one it
+/// has added.
+pub trait McpRediscoverySink: Send + Sync {
+    /// Adopt the tool list a reconnect re-discovered for `server`.
+    ///
+    /// A refused adoption leaves the owner's directory as it is — never
+    /// half-applied, never cleared. The refusal is reported back so it can
+    /// be observed instead of swallowed.
+    fn on_rediscovery(&self, server: &str, tools: Vec<DiscoveredTool>) -> Result<(), String>;
+}
+
 /// One live connection to one external server.
 pub struct McpServerConnection {
     spec: McpServerSpec,
@@ -46,6 +64,8 @@ pub struct McpServerConnection {
     session: Mutex<ClientSession>,
     reconnect: Mutex<ReconnectState>,
     reconnects: std::sync::atomic::AtomicUsize,
+    sink: Mutex<Option<Arc<dyn McpRediscoverySink>>>,
+    rediscovery_error: Mutex<Option<String>>,
 }
 
 impl McpServerConnection {
@@ -65,6 +85,8 @@ impl McpServerConnection {
             ))),
             reconnect: Mutex::new(ReconnectState::new(options.reconnect.clone())),
             reconnects: std::sync::atomic::AtomicUsize::new(0),
+            sink: Mutex::new(None),
+            rediscovery_error: Mutex::new(None),
         }
     }
 
@@ -103,6 +125,31 @@ impl McpServerConnection {
     /// How many disconnect recoveries this connection has run in total.
     pub fn reconnect_count(&self) -> usize {
         self.reconnects.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Install the owner side of the reconnect hand-over.
+    ///
+    /// The bridge installs one sink per connection: it is the only way a
+    /// re-discovered tool list reaches the dynamic directory. Without a sink
+    /// the connection keeps its own list to itself (a standalone connection
+    /// has no directory to update).
+    pub fn set_rediscovery_sink(&self, sink: Arc<dyn McpRediscoverySink>) {
+        *self
+            .sink
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(sink);
+    }
+
+    /// The last refusal of the owner side of a reconnect hand-over.
+    ///
+    /// `None` means every re-discovered list was adopted (or that no sink is
+    /// installed). A refusal leaves the directory untouched; it is reported
+    /// here rather than swallowed.
+    pub fn last_rediscovery_error(&self) -> Option<String> {
+        self.rediscovery_error
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone()
     }
 
     /// Open a fresh link, run the initialize handshake, and discover the
@@ -203,7 +250,36 @@ impl McpServerConnection {
         if !wait.is_zero() {
             tokio::time::sleep(wait).await;
         }
-        self.connect().await.map(|_| ())
+        // The reconnect re-ran `tools/list`: that list is the only fresh
+        // knowledge about the server's tool set, so it flows back to the
+        // owner (the dynamic directory) instead of being dropped here. A
+        // dropped list is a stale directory — the model would keep seeing a
+        // tool the server dropped, and miss the one it added.
+        let tools = self.connect().await?;
+        self.publish_rediscovery(tools);
+        Ok(())
+    }
+
+    /// Hand a re-discovered tool list to the owner.
+    ///
+    /// The sink is taken out of its slot before it is called, so the owner
+    /// never runs while the connection's slot is locked. A refusal is kept
+    /// as the connection's last rediscovery error; it never fails the call
+    /// that triggered the reconnect.
+    fn publish_rediscovery(&self, tools: Vec<DiscoveredTool>) {
+        let sink = self
+            .sink
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone();
+        let Some(sink) = sink else {
+            return;
+        };
+        let outcome = sink.on_rediscovery(self.spec.name.as_str(), tools);
+        *self
+            .rediscovery_error
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = outcome.err();
     }
 
     async fn call_once(

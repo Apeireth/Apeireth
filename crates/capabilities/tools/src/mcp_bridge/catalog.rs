@@ -13,6 +13,7 @@ use apeireth_core::kernel::CapabilityId;
 use thiserror::Error;
 
 use super::connection::DiscoveredTool;
+use super::family::MCP_FAMILY_ROOT;
 
 /// One external tool as it is exposed to the model.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -56,8 +57,12 @@ pub fn model_name(server: &str, tool: &str) -> String {
 }
 
 /// Stable capability identity for one external tool.
+///
+/// The id is composed from the family root ([`MCP_FAMILY_ROOT`]) so the
+/// dynamic family cannot drift between the id shape and the family
+/// definition.
 pub fn capability_id_for(server: &str, tool: &str) -> Result<CapabilityId, McpCatalogError> {
-    let raw = format!("tool.mcp.{server}.{tool}");
+    let raw = format!("{MCP_FAMILY_ROOT}.{server}.{tool}");
     CapabilityId::new(raw.clone()).map_err(|e| McpCatalogError::InvalidIdentity {
         model_name: model_name(server, tool),
         reason: e.to_string(),

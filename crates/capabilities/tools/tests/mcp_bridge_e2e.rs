@@ -142,7 +142,7 @@ async fn call_travels_the_full_chain_into_the_server_and_back() {
 }
 
 #[tokio::test]
-async fn unauthorized_external_tool_goes_to_approval_and_never_runs() {
+async fn unauthorized_external_tool_is_refused_and_never_runs() {
     let server = InProcessMcpServer::new(SERVER);
     server.set_tools(vec![MockToolSpec::new("send-item", "sent")]);
     let bridge = bridge_over(&server, test_options());
@@ -153,9 +153,12 @@ async fn unauthorized_external_tool_goes_to_approval_and_never_runs() {
         .invoke(&call("mcp:demo:send-item", serde_json::json!({})))
         .await;
     assert!(!result.is_ok());
+    // 未授权 ⇒ **拒绝即帧** (`pipeline.pre_deny`)。旧口径是 `pipeline.pre_ask`
+    // —— 那是把「拒绝」说成「要人批」: `Ask` 落成 permanent_error, 不是运行时
+    // 挂起审批。人批权归运行时治理链 (决策面); 桥内这一层是 deny-only 闸。
     assert!(
-        result.render().contains("pipeline.pre_ask"),
-        "unauthorized calls must ask for approval: {}",
+        result.render().contains("pipeline.pre_deny"),
+        "unauthorized calls must be refused: {}",
         result.render()
     );
     assert!(
@@ -207,13 +210,18 @@ async fn explicit_permission_grant_authorizes_the_call() {
     assert!(result.is_ok(), "{}", result.render());
     assert_eq!(server.call_log().len(), 1);
 
-    // An approval marking on top of the grant keeps the call pending.
+    // An approval marking on top of the grant does not block the call here:
+    // the human decision belongs to the **runtime governance chain** (the
+    // decision face), which suspends the dispatch and resumes it after the
+    // decision. The bridge's own pipeline is a deny-only gate — it must not
+    // ask a second time, or the resume path would turn an approved call into
+    // a hard failure (`pipeline.pre_ask`) and break the approval loop.
     McpPermissionMapping::require_approval(&mut bridge.policy().lock().unwrap(), &entry);
     let asked = tool
         .invoke(&call("mcp:demo:lookup-item", serde_json::json!({})))
         .await;
-    assert!(!asked.is_ok(), "an approval marking keeps the call pending");
-    assert_eq!(server.call_log().len(), 1, "the pending call never ran");
+    assert!(asked.is_ok(), "{}", asked.render());
+    assert_eq!(server.call_log().len(), 2);
 }
 
 #[tokio::test]
@@ -247,8 +255,10 @@ async fn readonly_preset_releases_declared_read_only_tools_only() {
         .invoke(&call("mcp:demo:send-item", serde_json::json!({})))
         .await;
     assert!(!pending.is_ok());
+    // 未在只读声明内的工具 ⇒ **拒绝即帧** (`pipeline.pre_deny`)。旧口径是
+    // `pipeline.pre_ask` —— 那是把「拒绝」说成「要人批」。
     assert!(
-        pending.render().contains("pipeline.pre_ask"),
+        pending.render().contains("pipeline.pre_deny"),
         "{}",
         pending.render()
     );
@@ -530,4 +540,151 @@ async fn dynamic_tool_declaration_carries_the_server_schema() {
         Some(&serde_json::json!("object"))
     );
     assert_eq!(report.registered.len(), 1);
+}
+
+#[tokio::test]
+async fn reconnect_adopts_a_server_side_tool_addition_into_the_catalog() {
+    let server = InProcessMcpServer::new(SERVER);
+    server.set_tools(vec![MockToolSpec::new("echo", "v1")]);
+    let bridge = bridge_over(&server, test_options());
+    let report = bridge.refresh().await.unwrap();
+    assert_eq!(report.registered_names(), ["mcp:demo:echo"]);
+    let tool = report.registered[0].clone();
+
+    McpPermissionMapping::authorize(
+        &mut bridge.policy().lock().unwrap(),
+        &bridge.catalog().get("mcp:demo:echo").unwrap(),
+    );
+
+    // The link drops mid-run and the server gains a tool while we are away.
+    server.drop_next_requests(1);
+    server.set_tools(vec![
+        MockToolSpec::new("echo", "v2"),
+        MockToolSpec::new("extra-tool", "new"),
+    ]);
+
+    let result = tool
+        .invoke(&call("mcp:demo:echo", serde_json::json!({})))
+        .await;
+    assert!(result.is_ok(), "{}", result.render());
+    assert!(
+        bridge.connections()[0].reconnect_count() >= 1,
+        "the disconnect recovery must have run"
+    );
+    assert!(
+        bridge.connections()[0].last_rediscovery_error().is_none(),
+        "the re-discovered list must be adopted, not refused"
+    );
+
+    // The directory knows the added tool right after the reconnect: the
+    // re-discovered list is not dropped on the way out of the connection,
+    // so the catalog does not drift from the live server.
+    let added = bridge
+        .catalog()
+        .get("mcp:demo:extra-tool")
+        .expect("the tool the server added must be in the catalog");
+    assert_eq!(added.remote_name, "extra-tool");
+    assert_eq!(added.capability_id.as_str(), "tool.mcp.demo.extra-tool");
+
+    // The next refresh hands the adopted tool to the registry.
+    let report = bridge.refresh().await.unwrap();
+    assert_eq!(report.registered_names(), ["mcp:demo:extra-tool"]);
+    assert_eq!(report.removed.len(), 0);
+}
+
+#[tokio::test]
+async fn reconnect_adopts_a_server_side_tool_removal_into_the_catalog() {
+    let server = InProcessMcpServer::new(SERVER);
+    server.set_tools(vec![
+        MockToolSpec::new("echo", "v1"),
+        MockToolSpec::new("extra-tool", "new"),
+    ]);
+    let bridge = bridge_over(&server, test_options());
+    let report = bridge.refresh().await.unwrap();
+    assert_eq!(
+        report.registered_names(),
+        ["mcp:demo:echo", "mcp:demo:extra-tool"]
+    );
+    let tool = report
+        .registered
+        .iter()
+        .find(|tool| tool.declaration().name == "mcp:demo:echo")
+        .expect("the echo tool is registered")
+        .clone();
+
+    McpPermissionMapping::authorize(
+        &mut bridge.policy().lock().unwrap(),
+        &bridge.catalog().get("mcp:demo:echo").unwrap(),
+    );
+
+    // The link drops mid-run and the server drops a tool while we are away.
+    server.drop_next_requests(1);
+    server.set_tools(vec![MockToolSpec::new("echo", "v2")]);
+
+    let result = tool
+        .invoke(&call("mcp:demo:echo", serde_json::json!({})))
+        .await;
+    assert!(result.is_ok(), "{}", result.render());
+    assert!(
+        bridge.connections()[0].reconnect_count() >= 1,
+        "the disconnect recovery must have run"
+    );
+
+    // The tool the server dropped is no longer exposed: it left the
+    // directory together with the re-discovered list.
+    assert!(
+        bridge.catalog().get("mcp:demo:extra-tool").is_none(),
+        "a tool the server dropped must leave the catalog"
+    );
+
+    // The next refresh reports it as removed, so the registry unregisters it.
+    let report = bridge.refresh().await.unwrap();
+    assert_eq!(report.removed.len(), 1);
+    assert_eq!(report.removed[0].model_name, "mcp:demo:extra-tool");
+    assert!(
+        !bridge
+            .tools()
+            .iter()
+            .any(|tool| tool.declaration().name == "mcp:demo:extra-tool"),
+        "the dropped tool must leave the live tool set"
+    );
+}
+
+#[tokio::test]
+async fn a_failed_reconnect_leaves_the_catalog_intact() {
+    let server = InProcessMcpServer::new(SERVER);
+    server.set_tools(vec![MockToolSpec::new("echo", "v1")]);
+    let bridge = bridge_over(&server, test_options());
+    let report = bridge.refresh().await.unwrap();
+    assert_eq!(report.registered_names(), ["mcp:demo:echo"]);
+    let tool = report.registered[0].clone();
+
+    McpPermissionMapping::authorize(
+        &mut bridge.policy().lock().unwrap(),
+        &bridge.catalog().get("mcp:demo:echo").unwrap(),
+    );
+
+    // The call drops, and the reconnect that follows drops as well: the
+    // handshake never completes, so there is no fresh list to adopt.
+    server.drop_next_requests(2);
+
+    let result = tool
+        .invoke(&call("mcp:demo:echo", serde_json::json!({})))
+        .await;
+    assert!(
+        !result.is_ok(),
+        "the call must fail when the reconnect fails"
+    );
+    assert!(
+        bridge.connections()[0].reconnect_count() >= 1,
+        "the disconnect recovery must have run"
+    );
+
+    // The directory is untouched: the tool is still listed and the call
+    // fails. Fail-closed means "refuse to run", not "empty the directory".
+    assert!(
+        bridge.catalog().get("mcp:demo:echo").is_some(),
+        "a failed reconnect must not empty the catalog"
+    );
+    assert_eq!(bridge.catalog().len(), 1);
 }
