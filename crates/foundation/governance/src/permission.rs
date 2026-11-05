@@ -241,6 +241,21 @@ impl PermissionPolicy {
     pub fn approval_capabilities(&self) -> impl Iterator<Item = &str> {
         self.approval_capabilities.iter().map(String::as_str)
     }
+
+    /// The capability **families** that are granted.
+    ///
+    /// A family root covers every capability under it on a segment boundary
+    /// (see [`PermissionPolicy::grant_family`]). Read-only introspection:
+    /// surfaces that show what the owner authorized (grants listing, panel
+    /// readout) read it here instead of keeping a second source of truth.
+    pub fn granted_families(&self) -> impl Iterator<Item = &str> {
+        self.granted_families.iter().map(String::as_str)
+    }
+
+    /// The capability **families** whose members each need a human decision.
+    pub fn approval_families(&self) -> impl Iterator<Item = &str> {
+        self.approval_families.iter().map(String::as_str)
+    }
 }
 
 /// Normalize a family root: trim surrounding blanks and trailing dots.

@@ -45,6 +45,8 @@ use apeireth_runtime_assembly::{CareHeartbeatStatus, TraitGrowthFacts, TraitGrow
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
+mod grant_readout;
+
 const MAX_TRACES: usize = 500;
 const MAX_AUDIT: usize = 1_000;
 const TITLE_CHARS: usize = 40;
@@ -355,10 +357,8 @@ fn project_live_tool_catalog(
         .map(|(owner, capability)| {
             let declaration = capability.declaration();
             let capability_id = capability.id().to_string();
-            let granted = policy.as_ref().is_some_and(|policy| {
-                policy.iter().any(|permission| {
-                    matches!(permission, Permission::ExecuteTool(name) if name == &capability_id || name == &declaration.name)
-                })
+            let permission = policy.as_ref().map_or("none", |policy| {
+                grant_readout::permission_state(policy, &capability_id, &declaration.name)
             });
             ToolDto {
                 name: declaration.name,
@@ -366,7 +366,7 @@ fn project_live_tool_catalog(
                 args_schema: (!declaration.parameters.is_empty())
                     .then(|| serde_json::Value::Object(declaration.parameters)),
                 source: owner,
-                permission: if granted { "granted" } else { "none" }.to_string(),
+                permission: permission.to_string(),
                 available: true,
             }
         })
@@ -412,14 +412,12 @@ fn grant_capability(permission: &Permission) -> String {
 }
 
 fn session_title(session: &Session) -> Option<String> {
-    session
+    let user = session
         .messages
         .iter()
-        .find(|m| m.role == MessageRole::User)
-        .map(|m| ContentPart::join_text(&m.content))
-        .map(|text| text.trim().to_string())
-        .filter(|text| !text.is_empty())
-        .map(|text| snippet(&text, TITLE_CHARS))
+        .find(|m| m.role == MessageRole::User)?;
+    let text = ContentPart::join_text(&user.content).trim().to_string();
+    (!text.is_empty()).then(|| snippet(&text, TITLE_CHARS))
 }
 
 fn snippet(text: &str, max_chars: usize) -> String {
@@ -475,10 +473,8 @@ fn append_jsonl<T: serde::Serialize>(path: &PathBuf, value: &T) {
 }
 
 fn now_millis() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0)
+    let elapsed = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH);
+    elapsed.map(|d| d.as_millis() as i64).unwrap_or(0)
 }
 
 #[async_trait]
@@ -845,6 +841,10 @@ impl PanelData for CliPanelData {
                 capability: grant_capability(permission),
                 granted_at: None,
             })
+            // 族授权在授权面**可见**: 族是独立集合 (不塞进 `Permission` 枚举 ——
+            // 枚举非 `#[non_exhaustive]`, 加变体会破下游穷尽匹配), 主人看不见自己
+            // 授过 MCP 族 ⇒ 面板读数与执法面不一致。
+            .chain(grant_readout::family_grants(&policy))
             .collect())
     }
 
