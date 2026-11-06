@@ -116,7 +116,7 @@ claims:
       - crates/engine/runtime-assembly/tests/production_mcp_factory.rs
       - crates/engine/runtime-assembly/tests/convergence_mcp.rs
       - crates/adapters/cli/tests/mcp_cli.rs
-    verified_at: e9136c06
+    verified_at: 80190015
     verify_cmd: "cargo test -p apeireth-tools-canonical mcp_bridge"
     owner: tools
     next_review: "2026-11-20"
@@ -823,7 +823,7 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/bio_tool_ecosystem.rs
       - crates/engine/runtime-assembly/src/canonical/tool_taxonomy.rs
-    verified_at: 58b42e55
+    verified_at: 80190015
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_tool_ecosystem"
     owner: tools
     next_review: "2026-11-20"
@@ -882,6 +882,7 @@ claims:
       - crates/engine/runtime-assembly/src/canonical/cognitive_registry.rs
       - crates/engine/runtime/src/canonical/principal_authority.rs
       - crates/engine/runtime/src/canonical/session.rs
+      - crates/engine/runtime-assembly/src/canonical/production_config.rs
     tests:
       - crates/engine/runtime/tests/legacy_tool_adapter_contract.rs
       - crates/engine/runtime/tests/cognitive_module_abi.rs
@@ -893,7 +894,7 @@ claims:
       - crates/adapters/cli/tests/gateway_panels.rs
       - crates/engine/runtime-assembly/tests/production_cognitive_v1.rs
       - crates/engine/runtime-assembly/tests/profile_memory_authorization.rs
-    verified_at: 9db4418d5bba94b432555732a7434f638929a636
+    verified_at: 80190015
     verify_cmd: "cargo test -p apeireth-runtime --test registry_runtime_v1 --locked && cargo test -p apeireth-runtime-assembly --test capability_modules_v1 --locked"
     owner: runtime
     next_review: "2026-11-28"
@@ -962,10 +963,11 @@ claims:
       - crates/engine/runtime/src/canonical/principal_authority.rs
       - crates/engine/memory/src/coordinator.rs
       - crates/engine/memory/src/layers.rs
+      - crates/engine/runtime-assembly/src/canonical/production_config.rs
     tests:
       - crates/engine/runtime-assembly/tests/convergence_memory.rs
       - crates/engine/runtime-assembly/tests/profile_memory_authorization.rs
-    verified_at: 58b42e55
+    verified_at: 80190015
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test profile_memory_authorization --locked -j 2 && cargo test -p apeireth-runtime-assembly --test convergence_memory --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
@@ -1128,9 +1130,10 @@ claims:
       - crates/engine/runtime-assembly/src/canonical/prompt_injection_guard.rs
       - crates/engine/runtime-assembly/src/canonical/production.rs
       - crates/capabilities/tools/src/fetch.rs
+      - crates/engine/runtime-assembly/src/canonical/production_config.rs
     tests:
       - crates/engine/runtime-assembly/tests/prompt_injection_turn_warning.rs
-    verified_at: 58b42e55
+    verified_at: 80190015
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test prompt_injection_turn_warning"
     owner: runtime-assembly
     next_review: "2026-12-05"
