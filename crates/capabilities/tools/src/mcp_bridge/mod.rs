@@ -41,12 +41,32 @@
 //! Layering: runtime governance chain first, tool pipeline second.
 //!
 //! The bridge's policy is meant to be the **shared production policy** (see
-//! `McpToolBridge::new_with_policy`); until the wiring batch hands it over,
-//! the bridge's policy is a library-level gate, not a production one.
+//! `McpToolBridge::new_with_policy`); the production assembly still builds the
+//! bridge with `McpToolBridge::new`, so the bridge's policy is a library-level
+//! gate, not a production one.
 //!
 //! [`mock`] is an in-process JSON-RPC server test double (no sockets, no subprocesses) for the e2e tests.
 //!
-//! **生产未接线**：发现 / 登记 / 授权三环零生产调用点 ⇒ 生产只构造桥与模块袋，0 个外部工具进模型工具目录。
+//! **生产已接线**（`PRODUCTION WIRED`，默认关：`APEIRETH_ENABLE_MCP=1`）：
+//! **发现 / 登记 / 授权 / 派发四环都有生产调用点** —— ① **发现**
+//! `McpToolBridge::refresh()` ← 组合根 `crates/adapters/cli/src/external_tools.rs`
+//! 的 `wire_at_startup` → 装配面的 `wire_external_tools`；
+//! ② **登记** `Runtime::register_dynamic_tool()` ⇒ 外部工具进**运行时能力表**
+//! ⇒ **真的进 `tool_declarations()`**（模型面工具名 `mcp:<server>:<tool>`）；
+//! ③ **授权** = 生产权限策略的**族授权 + 族逐次人批**
+//! （`authorize_external_tool_family`）⇒ 族内能力一律逐次人批；
+//! ④ **派发** = 能力表按模型面名命中（`find_by_name`）。
+//!
+//! **装配面只注册两份东西**：**资源工厂形态**（`McpDefinition` —— 运行时初始化时
+//! 交出活桥）与**登记账袋**（`McpModule` —— 自述面晚绑定「实际登记件数」）
+//! ⇒ **不重复连进程、不重复构造桥对象**（活桥只有一只）。
+//!
+//! **仍属实的遗留**：桥内闸用的仍是**桥内自建策略**（生产装配走
+//! `McpToolBridge::new`，**不是**共享生产策略 `new_with_policy`）⇒ 运行时裁决
+//! 与桥内闸不是同一份策略（族级放行补齐等效效果，但两者不是同一把锁）。
+//!
+//! **仍未实测**：真第三方 MCP 服务器端到端未跑过 ⇒ `HARDWARE VALIDATED` 不成立
+//! （`DEFAULT ENABLED` 也不成立：默认关）。
 
 pub mod bridge;
 pub mod catalog;

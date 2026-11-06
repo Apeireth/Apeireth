@@ -254,6 +254,22 @@ fn denied_handle(bridge: &McpToolBridge, tool: &str, read_only: bool) -> McpDyna
     McpDynamicTool::new(entry, Arc::clone(&bridge.connections()[0]))
 }
 
+/// Build the dynamic tool of a **live** capability out of the directory.
+///
+/// The handle production hands out comes from the directory, so its
+/// descriptor is the one the server actually advertised (input schema and
+/// read-only declaration included). A hand-built entry carries a descriptor
+/// the connection never discovered, and the checked call path refuses such
+/// a descriptor **before** the call reaches the server — so a test that
+/// wants the call to really happen has to take the entry from the catalog.
+fn live_handle(bridge: &McpToolBridge, tool: &str) -> McpDynamicTool {
+    let entry = bridge
+        .catalog()
+        .get(&format!("mcp:{SERVER}:{tool}"))
+        .unwrap_or_else(|| panic!("the discovered tool {tool:?} is in the catalog"));
+    McpDynamicTool::new(entry, Arc::clone(&bridge.connections()[0]))
+}
+
 #[tokio::test]
 async fn a_denied_tool_is_refused_by_the_guard_even_when_it_is_authorized() {
     let server = InProcessMcpServer::new(SERVER);
@@ -485,7 +501,10 @@ async fn a_denied_tool_stays_denied_after_a_reconnect() {
         MockToolSpec::new("echo", "v2"),
         MockToolSpec::new("send-item", "sent"),
     ]);
-    let handle = denied_handle(&bridge, "echo", false);
+    // The handle comes from the directory: its descriptor is the one the
+    // server advertised, so the descriptor check passes and the call really
+    // reaches the server — and really hits the dropped link.
+    let handle = live_handle(&bridge, "echo");
     let _ = handle.invoke(&call("mcp:demo:echo")).await;
 
     // The reconnect really ran, and the re-discovered list was adopted (the

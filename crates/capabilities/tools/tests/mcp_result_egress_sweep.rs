@@ -27,8 +27,8 @@ use apeireth_protocol::canonical::{ToolCall, ToolOutcome, ToolResult};
 use apeireth_tools_canonical::exec_pipeline::ToolExecutionPipeline;
 use apeireth_tools_canonical::guardrail::EgressSweeper;
 use apeireth_tools_canonical::mcp_bridge::{
-    DiscoveredTool, InProcessMcpServer, McpBridgeOptions, McpDynamicTool, McpPermissionMapping,
-    McpServerConfig, McpServerConnection, McpServerSpec, McpToolBridge, McpToolEntry, MockToolSpec,
+    InProcessMcpServer, McpBridgeOptions, McpDynamicTool, McpPermissionMapping, McpServerConfig,
+    McpServerConnection, McpServerSpec, McpToolBridge, MockToolSpec,
 };
 
 const SERVER: &str = "demo";
@@ -344,23 +344,20 @@ async fn the_sweep_ledger_records_the_hit_without_the_true_value() {
         "leak",
         format!("password = {PASSWORD_VALUE}"),
     )]);
-    let options = test_options();
-    let connection = Arc::new(McpServerConnection::new(
-        demo_spec(),
-        server.factory(),
-        &options,
-    ));
-    let entry = McpToolEntry::new(
-        SERVER,
-        &DiscoveredTool {
-            name: "leak".into(),
-            description: None,
-            input_schema: None,
-            declared_read_only: false,
-        },
-    )
-    .expect("the descriptor is a valid catalog entry");
-    let tool = McpDynamicTool::new(entry, connection);
+    let bridge = bridge_over(&server, test_options());
+    bridge.refresh().await.expect("discovery succeeds");
+
+    // The handle is built over the **discovered** entry: the descriptor the
+    // server advertised is the descriptor the checked call path compares
+    // against, so a hand-built entry would be refused before the call ever
+    // reached the server.
+    let tool = McpDynamicTool::new(
+        bridge
+            .catalog()
+            .get("mcp:demo:leak")
+            .expect("the discovered tool is in the catalog"),
+        Arc::clone(&bridge.connections()[0]),
+    );
 
     let result = tool.invoke(&call("mcp:demo:leak")).await;
     assert!(result.is_ok(), "{}", result.render());

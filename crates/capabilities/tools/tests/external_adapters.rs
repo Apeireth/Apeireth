@@ -511,9 +511,18 @@ async fn shell_metacharacters_in_a_path_reach_the_child_as_one_literal_argument(
     }
 }
 
+/// A host that carries shell metacharacters is refused **before** any child
+/// runs: the scope only authorizes bare domains, so a name that merely *looks*
+/// like an authorized domain never reaches the process boundary.
+///
+/// The scope hardening is the point (a name that only ends with an authorized
+/// domain is not that domain): the refusal happens here, upstream of the
+/// process boundary, so the metacharacters never get the chance to be
+/// interpreted. The **path** face keeps the argv-integrity case
+/// (`shell_metacharacters_in_a_path_reach_the_child_as_one_literal_argument`).
 #[cfg(unix)]
 #[tokio::test]
-async fn shell_metacharacters_in_a_network_host_reach_the_child_verbatim() {
+async fn a_shell_metacharacter_host_is_refused_by_the_scope_before_any_child_runs() {
     let scratch = scratch_dir("argv-host");
     let record_dir = scratch.path().join("argv");
     let binary = argv_recorder(scratch.path(), "record-argv", &record_dir);
@@ -529,31 +538,35 @@ async fn shell_metacharacters_in_a_network_host_reach_the_child_verbatim() {
     let host = "$(echo apeireth-host-canary).example";
     let tool = OpenSslTool::new(scope).with_binary(&binary);
 
-    // The stub answers with an empty transcript, so the adapter's own report
-    // is empty; what matters here is what the child received.
-    let _ = tool
+    // The name is not a bare domain, so the scope refuses it.
+    let result = tool
         .invoke(&call("ext.openssl", json!({"host": host, "port": 443})))
         .await;
 
+    assert!(!result.is_ok(), "the host must be refused: {result:?}");
+    assert!(
+        !result.outcome.is_retryable(),
+        "the refusal must be permanent"
+    );
+    let message = error_message(&result);
+    assert!(
+        message.contains("scope refused"),
+        "the refusal must name the scope: {message}"
+    );
+    assert!(
+        message.contains("outside the authorized scope"),
+        "the refusal must say the target is out of scope: {message}"
+    );
+    assert!(
+        message.contains(host),
+        "the refusal must name the refused host: {message}"
+    );
+
+    // No child ran: the argv recorder never received anything.
     let argv = recorded_argv(&record_dir);
-    assert_eq!(
-        argv.len(),
-        6,
-        "the child must receive the fixed argv: {argv:?}"
-    );
     assert!(
-        argv[2].contains("$(echo apeireth-host-canary).example:443"),
-        "the connect target must stay literal: {argv:?}"
-    );
-    assert!(
-        argv[5].contains("$(echo apeireth-host-canary).example"),
-        "the server name must stay literal: {argv:?}"
-    );
-    assert!(
-        !argv
-            .iter()
-            .any(|argument| argument.contains("apeireth-host-canary\n")),
-        "no expansion may have happened: {argv:?}"
+        argv.is_empty(),
+        "no child may run for a refused host: {argv:?}"
     );
 }
 

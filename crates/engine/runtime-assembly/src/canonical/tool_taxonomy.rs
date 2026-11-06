@@ -57,7 +57,7 @@ use apeireth_tools_canonical::ecosystem_health::{ToolProfile, ToolSource};
 use apeireth_tools_canonical::mcp_bridge::{is_capability_in_family, MCP_FAMILY_ROOT};
 
 /// 策展表版本：表内容（条目或词汇表）变更时 +1，冻结进自述读数。
-pub const TOOL_TAXONOMY_VERSION: u32 = 2;
+pub const TOOL_TAXONOMY_VERSION: u32 = 3;
 
 /// 封闭标签词汇表（顺序即展示顺序；表条目只能引用此处出现的标签）。
 pub const TAXONOMY_TAGS: &[&str] = &[
@@ -334,6 +334,15 @@ pub const TOOL_TAXONOMY: &[TaxonomyEntry] = &[
         tags: &["filesystem", "search"],
         source: ToolSource::Builtin,
     },
+    // 代码地图 (`tool.repo_map`)：工作区限域**只读**，扫源文件抽符号签名 → 建跨文件
+    // 依赖图 → Personalized PageRank 排序 ⇒ 能力域 = **读本地文件**（filesystem）
+    // + **进程内静态分析计算**（compute），与静态侦察族 `tool.recon.*` 同域
+    // （纯查询无检索面 ⇒ 不挂 `search` 标签）。
+    TaxonomyEntry {
+        key: "tool.repo_map",
+        tags: &["filesystem", "compute"],
+        source: ToolSource::Builtin,
+    },
     TaxonomyEntry {
         key: "tool.ritual_done",
         tags: &["companion"],
@@ -587,7 +596,7 @@ mod tests {
         let mut unique = keys.clone();
         unique.dedup();
         assert_eq!(unique.len(), keys.len(), "策展表 key 不得重复");
-        assert_eq!(TOOL_TAXONOMY_VERSION, 2, "表内容变更时必须同步 +版本号");
+        assert_eq!(TOOL_TAXONOMY_VERSION, 3, "表内容变更时必须同步 +版本号");
     }
 
     // ---------- 生产注册面扫描（完整性闸门的真源） ----------
