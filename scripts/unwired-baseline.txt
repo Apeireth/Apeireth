@@ -111,8 +111,9 @@ orphan with_synchronous  # G4
 orphan with_user_agent  # G4
 orphan with_voices_error  # G4
 
-# --- G5（6 条）：**待判**：其余。逐条要人回答「真没人调，还是判据看不见」。**还债从这里开始。**
+# --- G5（7 条）：**待判**：其余。逐条要人回答「真没人调，还是判据看不见」。**还债从这里开始。**
 
+orphan record_quality_metrics  # G5  待接线：docs/status/unwired-ledger.md §一 W13（引擎外部指标注入口 · deputy 2026-11-06 引入 · 已实现但零调用）
 orphan observe_failures  # G5  已被 `observe_failures_since` 取代（零调用）⇒ ⇒ 待接线：docs/status/unwired-ledger.md §一 W12（reflexion_tuning 整模块待接线）
 orphan forget_principal_with_permit  # G5  「被遗忘权」的**类型级防绕过面**（permit 由调用方自带 ⇒ 外部无法伪造）⇒ ⇒ **即使零调用也必须留着**；能力已由主入口 `forget_principal` 覆盖（permit 缺省时内核自解析访问史）⇒ ⇒ 零引用 = 「备用的严格输入路径」，不是「没实现」
 orphan research_coordinated_forget_with_permit  # G5  「被遗忘权」的**类型级防绕过面**（permit 由调用方自带）⇒ ⇒ **即使零调用也必须留着**；能力已由主入口 `research_coordinated_forget` 覆盖（共用 `coordinated_forget_core`，permit 缺省时内核自解析）⇒ ⇒ 零引用 = 「备用的严格输入路径」，不是「没实现」
