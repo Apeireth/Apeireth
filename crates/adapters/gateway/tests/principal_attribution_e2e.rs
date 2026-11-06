@@ -18,10 +18,18 @@
 //! 3. **登记不因 chat 失败而丢失**：归属登记发生在**调 provider 之前**
 //!    ⇒ 请求后续失败**不影响**归属已登记（否则 episode 又归不到主体）。
 //!
-//! # 隔离纪律
+//! # 隔离纪律（2026-11-05 改：**作用域内槽**）
 //!
-//! 写面是**进程级**槽 ⇒ 本文件用 RAII 守卫（装入 ⇒ 测 ⇒ **Drop 时卸下**）
-//! ⇒ 否则同进程内其它用例会继承这个假写面（顺序敏感的偶发红）。
+//! 写面是**进程级默认槽** ⇒ 本文件用 RAII 守卫**进作用域**（作用域内槽 ⇒
+//! **线程局部**）⇒ 测 ⇒ **Drop 时弹自己那一层**
+//! ⇒ ⇒ 并行用例各推各的层 ⇒ **互不顶替**；守卫 Drop **只弹自己那层**
+//! ⇒ ⇒ **不会误杀**别的用例（乃至生产装配）的写面。
+//!
+//! ⚠️ 作用域内槽是**线程局部** ⇒ 读侧必须与推入**同线程**
+//! ⇒ ⇒ 本文件的请求走 `tower::ServiceExt::oneshot`（同线程驱动 handler）⇒ 成立。
+//!
+//! ⭐ **另有一条**用例钉「**装入在启动线程、读在 HTTP handler 线程**」的
+//! **真跨线程**场景（生产同构）⇒ ⇒ 见文件末尾。
 
 use std::sync::{Arc, Mutex};
 
@@ -73,27 +81,26 @@ impl PrincipalSessionRecorder for Recorded {
     }
 }
 
-/// RAII 守卫：装入假写面 ⇒ 退出时**卸下**（防跨用例污染）。
+/// RAII 守卫：**进作用域**（作用域内槽）⇒ 退出时**弹自己那一层**（防跨用例污染）。
+///
+/// ⚠️ 2026-11-05：作用域内槽是**线程局部** ⇒ 并行用例各推各的层 ⇒ **互不顶替**；
+/// 守卫 Drop **只弹自己那层** ⇒ ⇒ **不会误杀**其它用例（乃至生产装配）的写面。
 struct RecorderGuard {
+    _scope: principal_sessions::ScopeGuard,
     _recorded: Arc<Recorded>,
 }
 
 impl RecorderGuard {
     fn install() -> (Self, Arc<Recorded>) {
         let recorded = Arc::new(Recorded::default());
-        principal_sessions::install_principal_session_recorder(recorded.clone());
+        let scope = principal_sessions::enter_scope(recorded.clone());
         (
             Self {
+                _scope: scope,
                 _recorded: recorded.clone(),
             },
             recorded,
         )
-    }
-}
-
-impl Drop for RecorderGuard {
-    fn drop(&mut self) {
-        principal_sessions::clear_principal_session_recorder();
     }
 }
 
