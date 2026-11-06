@@ -135,12 +135,6 @@ impl CircadianGateState {
         proactive_gate(self.inputs.phase, self.inputs.window, self.inputs.urgency)
     }
 
-    /// 当前是否应抑制主动接触: `Some(gate)` = 拦下, `None` = 放行。
-    #[must_use]
-    pub fn should_suppress(&self) -> Option<ProactiveGate> {
-        should_suppress_proactive(self)
-    }
-
     /// 当前睡眠压力 (拷贝)。
     #[must_use]
     pub fn pressure(&self) -> SleepPressure {
@@ -227,16 +221,6 @@ pub fn bio_circadian_wiring_from_env_value(
     session_start_ms: i64,
 ) -> Option<BioCircadianGate> {
     BioCircadianGate::from_env_value(raw, clock, config, session_start_ms)
-}
-
-/// 从 env 现值装配节律门 (同 [`bio_circadian_wiring_from_env_value`] 的 fail-closed 口径)。
-#[must_use]
-pub fn bio_circadian_wiring_from_env(
-    clock: CircadianGateClock,
-    config: CircadianConfig,
-    session_start_ms: i64,
-) -> Option<BioCircadianGate> {
-    BioCircadianGate::from_env(clock, config, session_start_ms)
 }
 
 /// 一次心跳节律门决策 (观测字段; 区分「未到点」与「被门拦下」)。

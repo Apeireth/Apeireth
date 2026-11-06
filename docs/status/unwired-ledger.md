@@ -1599,6 +1599,271 @@ grep -rn "\.facts_as_of(" crates/ --include=*.rs
   启发式预警打开后 1200+ 条命中，几乎全是 trait 实现方法与测试 helper，**噪声大于信号**）。
 ⇒ 保留判据，把**已知盲区**记在此条，并按上面的复现办法**人工**扫一轮。
 
+### 5.6 孤儿三分类批次计划（2026-11-06）
+
+> **本节性质**：**只分诊 + 出计划**。本轮**未删任何一行生产代码**（删除由主代理按批次执行）
+> ⇒ ⇒ 本节只往台账**新增**，**不改删**任何既有行。
+>
+> **清单口径**：`scripts/unwired-baseline.txt` 现有 **103 条** `orphan` 行。
+> ⚠️ 任务书写的「102 条」是 **2026-11-06 早先**（提交 `ae4bbc11`）的基线数；
+> 后续提交 `8db3b9a0`（登记 W13 `record_quality_metrics`）把基线推到 **103 条**
+> ⇒ ⇒ 本节按 **103** 条做**全量**分诊（不抽样）。
+> 复核命令：`python3 scripts/audit_unwired.py --check`
+> ⇒ 期望输出「孤儿 API 基线一致（103 条，无新增、无过期）」。
+
+#### 5.6.0 本轮用到的判据（**先说清楚「零调用」到底怎么判的**）
+
+| # | 判据 | 口径 |
+|---|---|---|
+| **J1** | **全消费者面** | 判「零调用」必须扫完 **10 个面**：`crates/*/*/src` + `crates/*/*/tests` + `crates/*/*/examples`（审计原生口径）+ **`fuzz/`**（独立 cargo workspace，CI `.github/workflows/fuzz.yml` 真跑）+ **顶层 `benches/`** + **顶层 `examples/`** + **`crates-ui/`** + **`legacy/`** + **`scripts/`** + **`research/`** ⇒ 共扫 **3362** 个 `.rs` 文件。⚠️ 审计工具的 `SCAN_ROOTS` **只含前三个面** ⇒ ⇒ 后面 7 个面**必须手工补扫**，否则「零调用」是假结论 |
+| **J2** | **实现核对，不是名字像** | 每条都读了**定义处的 doc 注释 + 签名 + 函数体**（含宿主 `impl` 类型），并核对**主路径是否真的在生产被调用** ⇒ ⇒ 不用「名字像」替代「实现核对」 |
+| **J3** | **自闭环要排除** | 判「主路径在生产在用」时，必须**排除掉落在孤儿自身定义体内部的调用点** ⇒ 否则 `A` 调 `B`、而 `B` 唯一的生产调用点就是 `A` ⇒ ⇒ 会**误判「B 在生产在用」**。⚠️ 本轮实测踩到 3 例（`recall_by_mood`→`recall_by_mood_at` / `put_default`→`Cache::put` / `snapshot_from_env`→`snapshot_from_values`）⇒ ⇒ **这 3 例的处置被本判据从「删」翻成「保留」** |
+| **J4** | **`pub use` 重导出要查** | 跨 crate 的 `pub use` 会让调用点「看起来不像引用」⇒ ⇒ 凡被 `pub use` 重导出的 ⇒ ⇒ **不能删**（删了破坏对外 API 面）⇒ 本轮命中 **10 条** |
+| **J5** | **在途保护（最近 3 天）** | `git log -1 --format=%cd -- <file>` 落在最近 3 天 ⇒ 不建议删。⚠️ 本轮**用了更严的二次判据**：`git log -S "fn <sym>(" -- <file>` 取**符号真正被引入**的那次提交 ⇒ 命中 **3 条** ⇒ ⇒ 这 3 条一律**不删** |
+| **J6** | **字段可见性 ⇒ 注入点** | `with_*` setter 逐条核了它写的字段是 `pub` 还是私有、私有字段**是不是唯一注入点** ⇒ 落在 §5.5q 既定先例上：「公开字段上的语法糖」/「私有字段的唯一注入点」⇒ **保留**（删了旋钮不可设 = 能力缺失） |
+| **J7** | **已发布 crate 的外部影响** | 本仓 **19 个产品 crate 全部 `publish = true`**（无一个 `publish = false`）⇒ ⇒ 删任何 `pub fn` 都是**对外 API 变更（semver 面）**⇒ ⇒ 删除批次只收「能力被活路径完整覆盖 + 未被 `pub use` 重导出」的那几条 |
+
+**本轮复核推翻的 4 条既有判断**（都是**判据假阳性**，不是代码有问题）：
+> ⚠️ 「原判断」列指的是**按分组/按名字看会得出的那个结论**（G6 = 冗余表面 ⇒ 看着像可删的便利包装；
+> G3 = 观测面 ⇒ 看着像 `_at` 版的重复），**不是说仓库里有人写过「可删」** ⇒ ⇒ 下面 4 条都是**本轮新推翻的**。
+
+| 符号 | 按分组/按名字会得出的结论 | 实测 | 本轮结论 |
+|---|---|---|---|
+| `allow_capability` | 零调用外壳（G6「宿主入口」） | ⭐ **`fuzz/fuzz_targets/mcp_governance.rs:531/558/562` 真调用它**（`fuzz/` 是独立 cargo workspace，CI `.github/workflows/fuzz.yml` 真跑）⇒ ⇒ **审计的 `SCAN_ROOTS` 漏了 `fuzz/`** | ⭐ **不是零调用** ⇒ **保留** |
+| `recall_by_mood` | 看着像 `_at` 版的冗余包装（可删） | `recall_by_mood_at` 的**唯一**生产调用点就是 `recall_by_mood` 自己（`crates/engine/organ/src/emotion_memory.rs:268`）⇒ ⇒ **自闭环** ⇒ 情绪召回族**整族未接线** | ⇒ **保留**（族级未接线），**不删** |
+| `put_default` | 看着像 `put` 的冗余包装（可删） | `Cache::put` 的生产引用**只有** `put_default` 自己（`crates/engine/storage/src/cache/mod.rs:238`）⇒ ⇒ **自闭环** ⇒ 缓存写面整族未接线 | ⇒ **保留**（族级未接线），**不删** |
+| `observe_failures` | 待接线（W12） | 源码**自带** `#[deprecated(note = "改用 observe_failures_since（带游标：幂等）；本函数不幂等")]`（`crates/engine/memory/src/reflexion_tuning.rs:318`）+「**新代码请用 `observe_failures_since`**」 | ⇒ **保留**（显式向后兼容面），**不是**该接线的活能力 |
+
+#### 5.6.1 三分类汇总
+
+| 分类 | 条数 | 占比 | 处置要点 |
+|---|---|---|---|
+| **① 接线** | **5** | 4.9% | 真能力该用起来。其中 2 条是 owner 已裁定「**保留且必须接线**」（W10/W11）；1 条是跨线在途（W13，接线由引入者做）；1 条是 JobBoard 整族生产无入口（真能力缺口）；1 条是主体隔离一致性缺口（⚠️ 行为变更，接线前需 owner 拍板语义） |
+| **② 保留**（附理由） | **88** | 85.4% | 公开 API 面 / 向后兼容 / 类型级防绕过面 / 族级未接线资产 / owner 裁定不接 / 3 天内跨线在途 |
+| **③ 删除** | **10** | 9.7% | 薄包装：能力被**生产在用的主路径完整覆盖**，且**未被 `pub use` 重导出**，且**不是 3 天内引入** |
+| **合计** | **103** | 100% | 与基线条数一致（`audit_unwired.py --check` 复核通过） |
+
+> ⚠️ **删除占比只有 9.7% 是意料之中的**：基线里 **95% 的条目是「已发布 crate 的公开 API 面」**
+> ⇒ ⇒ 按本仓 §5.5q 既定先例（「签名不同的便利包装」/「私有字段的唯一注入点」/「公开字段上的语法糖」⇒ 保留），
+> **绝大多数「零调用」是「公开 API 面没人用」，不是「没人实现的死代码」**。
+> ⇒ ⇒ 硬删它们 = **对外 semver 破坏**，收益只有几十行 ⇒ ⇒ **不划算**。
+
+#### 5.6.2 逐条三分类（103 条全量 · 不抽样）
+
+> **读法**：「分类」列 = 本轮裁定；「证据与处置要点」列 = 该条**为什么**是这个分类
+> ⇒ ⇒ **删除**的条目都写了「主路径在哪个 file:line 生产在用」⇒ ⇒ 删了能力不丢。
+
+**G3（25 条）· 生物 / 认知 / 编排的观测与查询面**
+
+| # | 符号 | 分类 | 定义位置 | 证据与处置要点 |
+|---|---|---|---|---|
+| 1 | `bio_care_assembly_from_env` | **删除** | `crates/engine/runtime-assembly/src/canonical/care_heartbeat.rs:241` | 一行包装：转调 `bio_care_assembly_from_env_value`；主路径在 `crates/adapters/cli/src/care_heartbeat.rs:270` + `crates/engine/runtime-assembly/src/canonical/care_heartbeat.rs:236` **生产在用** ⇒ 删了能力不丢 |
+| 2 | `bio_circadian_wiring_from_env` | **删除** | `crates/engine/runtime-assembly/src/canonical/bio_circadian.rs:234` | 一行包装：转调 `BioCircadianGate::from_env`；主路径 `bio_circadian_wiring_from_env_value` 在 `crates/adapters/cli/src/care_heartbeat.rs:423` **生产在用** ⇒ 删了能力不丢 |
+| 3 | `bio_lifecycle_module_from_env_value` | 保留 | `crates/engine/runtime-assembly/src/canonical/bio_lifecycle.rs:841` | 生物生命周期整块未接线（同族无任何生产在用主路径）⇒ 零引用是**族级**结果 ⇒ 待接线资产，删了就是删能力 |
+| 4 | `deviation` | 保留 | `crates/engine/organ/src/homeostasis.rs:232` | 稳态面观测读口；同族无生产在用主路径 ⇒ 族级未接线 |
+| 5 | `disarm` | 保留 | `crates/engine/organ/src/goal.rs:821` | 目标自停用面（治理语义，与 W3/SelfDisableAudit 同族）；同族无生产在用主路径 ⇒ 保留 |
+| 6 | `graph_snapshot` | 保留 | `crates/engine/organ/src/causal_world_model_edges.rs:505` | 因果世界模型图快照面；同族 `load_graph`/`mine_and_load` 亦零 ⇒ 族级未接线 |
+| 7 | `load_graph` | 保留 | `crates/engine/organ/src/causal_world_model.rs:1085` | 因果世界模型载入面；同族零引用 ⇒ 族级未接线 |
+| 8 | `mcts_search` | 保留 | `crates/engine/organ/src/causal_world_model.rs:1204` | MCTS 搜索面（`pub async fn`）；同族零引用 ⇒ 族级未接线 |
+| 9 | `mine_and_load` | 保留 | `crates/engine/organ/src/causal_world_model.rs:1112` | 因果世界模型挖掘+载入面；同族零引用 ⇒ 族级未接线 |
+| 10 | `mood_trend` | **删除** | `crates/engine/organ/src/emotion_memory.rs:234` | 一行包装：转调 `mood_trend_at`；主路径在 `crates/engine/organ/src/emotion_memory.rs:457` **生产在用**（`EmotionOrgan::new()` 生产构造于 `crates/engine/runtime-assembly/src/canonical/organ_module.rs:130`）⇒ 删了能力不丢 |
+| 11 | `no_bio_care_inputs` | 保留 | `crates/engine/runtime-assembly/src/canonical/care_heartbeat.rs:256` | 关怀输入空供给档（缺省诚实默认）；生产走 `bio_care_config_from_env_value` 路径 ⇒ 保留 |
+| 12 | `recall_by_mood` | 保留 | `crates/engine/organ/src/emotion_memory.rs:262` | ⚠️ **自闭环**：`recall_by_mood_at` 的**唯一**生产调用点就是 `recall_by_mood` 自己（`emotion_memory.rs:268`）⇒ 情绪召回族**整族未接线** ⇒ 保留（不是冗余包装） |
+| 13 | `record_tool_result` | 保留 | `crates/engine/runtime-assembly/src/canonical/bio_lifecycle.rs:714` | 生物生命周期工具结果记录面；族级未接线 |
+| 14 | `set_last_hold` | 保留 | `crates/engine/organ/src/emergence.rs:710` | 涌现面 `last_hold` 写入点；同族零引用 ⇒ 族级未接线 |
+| 15 | `should_suppress` | **删除** | `crates/engine/runtime-assembly/src/canonical/bio_circadian.rs:140` | 一行包装：转调 `should_suppress_proactive`；主路径在 `crates/engine/runtime-assembly/src/canonical/bio_circadian.rs:367` **生产在用** ⇒ 删了能力不丢 |
+| 16 | `stop_all` | 保留 | `crates/engine/runtime-assembly/src/canonical/orchestrator.rs:852` | 编排停止面（生产各自走分域 stop_*）⇒ 公开编排面，保留 |
+| 17 | `to_prompt` | 保留 | `crates/engine/organ/src/care/engine.rs:214` | 关怀候选→prompt 渲染（**独有语义**，非包装）；生产走同族 `to_turn_input`（`crates/engine/runtime-assembly/src/canonical/care_heartbeat.rs:388/402/415`）⇒ 两种形态刻意并存 |
+| 18 | `with_attrs` | 保留 | `crates/engine/organ/src/causal_world_model.rs:84` | 因果世界模型构造注入点；同族 `with_window`/`with_min_evidence`/`with_miner`/`with_llm_proposer` 全零 ⇒ 族级未接线 |
+| 19 | `with_deadline` | 保留 | `crates/engine/organ/src/world_model.rs:436` | 私有字段 `deadline_ms` 的**唯一注入点**（`crates/engine/organ/src/world_model.rs:436`）⇒ 删了旋钮不可设 = 能力缺失（§5.5q 先例） |
+| 20 | `with_llm_proposer` | 保留 | `crates/engine/organ/src/causal_world_model.rs:1446` | LLM 提议者注入点；族级未接线（同族 `with_miner` 亦零） |
+| 21 | `with_material_source` | 保留 | `crates/engine/organ/src/care/engine.rs:540` | 公开字段 `material` 上的**语法糖**（§5.5q 先例）⇒ 保留 |
+| 22 | `with_miner` | 保留 | `crates/engine/organ/src/causal_world_model.rs:1438` | 挖掘器注入点；族级未接线 |
+| 23 | `with_quorum_gate_probe` | 保留 | `crates/engine/runtime-assembly/src/canonical/bio_mechanism_probes.rs:528` | 法定数门**探测口**（注入点语义）⇒ 保留 |
+| 24 | `with_system_markers` | 保留 | `crates/engine/organ/src/prompt_assembly.rs:400` | 私有字段 `system_markers` 的**唯一注入点** ⇒ 删了旋钮不可设 = 能力缺失（§5.5q 先例） |
+| 25 | `with_task_type` | 保留 | `crates/engine/runtime-assembly/src/canonical/cognitive.rs:2384` | 私有字段 `task_type` 的**唯一注入点** ⇒ 删了旋钮不可设 = 能力缺失（§5.5q 先例） |
+
+**G4（23 条）· 注入点 / 探测口（`with_*`）**
+
+| # | 符号 | 分类 | 定义位置 | 证据与处置要点 |
+|---|---|---|---|---|
+| 1 | `with_age` | 保留 | `crates/foundation/orchestration/src/research_context_policy.rs:102` | 研究上下文策略构造器；同族 `with_core` 亦零 ⇒ 族级未接线 |
+| 2 | `with_backend` | 保留 | `crates/foundation/plugin/src/perception.rs:311` | 感知后端注入点（`Arc<dyn>` 依赖注入 ⇒ 接入面）⇒ 保留 |
+| 3 | `with_bio_self_status_from_env` | 保留 | `crates/engine/runtime-assembly/src/canonical/self_status_source.rs:679` | 私有字段 `bio_mechanisms` 注入（另有 2 处注入点）⇒ 非唯一，但删除收益 < 10 行且动的是已发布 crate 的装配面 ⇒ 保留 |
+| 4 | `with_busy_timeout` | 保留 | `crates/engine/storage/src/pool.rs:138` | **公开字段** `busy_timeout` 上的语法糖（§5.5q 先例）⇒ 保留 |
+| 5 | `with_clear_env` | 保留 | `crates/capabilities/tools/src/process/mod.rs:517` | 私有字段 `environment` 注入（另有 2 处注入点）⇒ 收益极小 ⇒ 保留 |
+| 6 | `with_data` | 保留 | `crates/foundation/plugin/src/mcp/jsonrpc.rs:124` | **公开字段** `data` 上的语法糖（§5.5q 先例）⇒ 保留 |
+| 7 | `with_date` | 保留 | `crates/engine/memory/src/dailynote/note.rs:52` | **公开字段** `date` 上的语法糖（§5.5q 先例）⇒ 保留 |
+| 8 | `with_deep_risk_floor` | 保留 | `crates/capabilities/tools/src/exposure_audit/funnel/mod.rs:179` | **公开字段** `deep_risk_floor` 上的语法糖（§5.5q 先例）⇒ 保留 |
+| 9 | `with_envelope_budget` | 保留 | `crates/capabilities/tools/src/content_feed/tool.rs:195` | **公开字段** `envelope_budget_chars` 上的语法糖（§5.5q 先例）⇒ 保留 |
+| 10 | `with_foreign_keys` | 保留 | `crates/engine/storage/src/pool.rs:132` | **公开字段** `foreign_keys` 上的语法糖（§5.5q 先例）⇒ 保留 |
+| 11 | `with_importance_weight` | 保留 | `crates/engine/memory/src/canonical/retrieval.rs:147` | **公开字段** `importance_weight` 上的语法糖（§5.5q 先例）⇒ 保留 |
+| 12 | `with_journal_mode` | 保留 | `crates/engine/storage/src/pool.rs:120` | **公开字段** `journal_mode` 上的语法糖（§5.5q 先例）⇒ 保留 |
+| 13 | `with_min_candidate_score` | 保留 | `crates/engine/memory/src/proactive_recall.rs:63` | **公开字段** `min_candidate_score` 上的语法糖（§5.5q 先例）⇒ 保留 |
+| 14 | `with_port` | 保留 | `crates/capabilities/tools/src/device/weather.rs:241` | 天气设备端口注入点；族级未接线 |
+| 15 | `with_preview_chars` | 保留 | `crates/foundation/orchestration/src/repetition_advisory.rs:184` | **公开字段** `preview_chars` 上的语法糖（§5.5q 先例）⇒ 保留 |
+| 16 | `with_ranking_config` | 保留 | `crates/engine/memory/src/coordinator.rs:377` | 私有字段 `ranking` 的**唯一注入点** ⇒ 删了旋钮不可设 = 能力缺失（§5.5q 先例） |
+| 17 | `with_rate_limiting` | 保留 | `crates/capabilities/tools/src/fetch.rs:134` | 私有字段 `rate_limiter` 注入（同族 `with_rate_limiting_config` 覆盖同一能力）⇒ 非唯一，但删除收益 < 5 行且动的是已发布 crate 的 builder 面 ⇒ 保留 |
+| 18 | `with_reader` | 保留 | `crates/engine/memory/src/meta_thinking.rs:185` | 私有字段 `reader` 的**唯一注入点** ⇒ 删了旋钮不可设 = 能力缺失（§5.5q 先例） |
+| 19 | `with_session_label` | 保留 | `crates/capabilities/tools/src/content_feed/tool.rs:202` | **公开字段** `session_label` 上的语法糖（§5.5q 先例）⇒ 保留 |
+| 20 | `with_shell_executable` | 保留 | `crates/capabilities/tools/src/shell.rs:98` | **公开字段** `shell_executable` 上的语法糖（§5.5q 先例）⇒ 保留 |
+| 21 | `with_synchronous` | 保留 | `crates/engine/storage/src/pool.rs:126` | **公开字段** `synchronous` 上的语法糖（§5.5q 先例）⇒ 保留 |
+| 22 | `with_user_agent` | 保留 | `crates/capabilities/tools/src/fetch.rs:125` | 私有字段 `user_agent` 的**唯一注入点** ⇒ 删了 UA 旋钮不可设 = 能力缺失（§5.5q 先例） |
+| 23 | `with_voices_error` | 保留 | `crates/capabilities/tools/src/voice/mock.rs:145` | 私有字段 `voices` 注入（另有 1 处注入点）⇒ 非唯一，但删除收益极小 ⇒ 保留 |
+
+**G5（7 条）· 待判（G5）**
+
+| # | 符号 | 分类 | 定义位置 | 证据与处置要点 |
+|---|---|---|---|---|
+| 1 | `record_quality_metrics` | **接线** | `crates/engine/memory/src/retrieval_tuning.rs:405` | ⚠️ **3 天内引入**（`eff3d0af` 2026-11-06）⇒ 跨线在途，**不删**；owner 已登记为 §一 W13（外部指标注入口 → 漂移监控面） |
+| 2 | `observe_failures` | 保留 | `crates/engine/memory/src/reflexion_tuning.rs:319` | ⚠️ **3 天内引入**（`f3914677` 2026-11-06）⇒ 跨线在途，**不删**；且源码自述 `#[deprecated]`（`crates/engine/memory/src/reflexion_tuning.rs:318`，「新代码请用 `observe_failures_since`」）⇒ 显式向后兼容面 |
+| 3 | `forget_principal_with_permit` | 保留 | `crates/engine/memory/src/universal_forget.rs:404` | 「被遗忘权」的**类型级防绕过面**（permit 由调用方自带 ⇒ 外部无法伪造）⇒ 即使零调用也必须留着；能力已由主入口 `forget_principal` 覆盖 ⇒ 零引用 = 备用严格输入路径 |
+| 4 | `research_coordinated_forget_with_permit` | 保留 | `crates/engine/memory/src/forget_coordinator.rs:134` | 同上：类型级防绕过面（permit 缺省时内核自解析访问史）⇒ 保留 |
+| 5 | `doc_ops_capability_shared` | 保留 | `crates/capabilities/tools/src/doc_ops.rs:4578` | ⚠️ **`pub use` 重导出**于 `crates/capabilities/tools/src/lib.rs:185` ⇒ 删了破坏对外 API 面；生产走 `doc_ops_capability_shared_with_slot`（`crates/engine/runtime-assembly/src/canonical/tool_modules.rs:955` 区间）⇒ 保留 |
+| 6 | `sheet_ops_capability_shared` | 保留 | `crates/capabilities/tools/src/sheet_ops.rs:3399` | ⚠️ **`pub use` 重导出**于 `crates/capabilities/tools/src/lib.rs:303` ⇒ 删了破坏对外 API 面；生产走 `sheet_ops_capability_shared_with_slot` ⇒ 保留 |
+| 7 | `retrieve_with_reranker_for_session` | 保留 | `crates/engine/memory/src/retrieval_pipeline.rs:529` | ⚠️ **3 天内引入**（`0d34b1d8` 2026-11-05，session-isolation 批）⇒ 跨线在途，**不删**；与 ambient 版 `retrieve_with_reranker` **刻意成对**（共用 `retrieve_with_reranker_in`）⇒ 两半都保留 |
+
+**G6（45 条）· 冗余 API 表面 / 宿主入口**
+
+| # | 符号 | 分类 | 定义位置 | 证据与处置要点 |
+|---|---|---|---|---|
+| 1 | `constrain_to_trusted` | **接线** | `crates/engine/guard/src/intent.rs:569` | owner 2026-11-05 裁定（W10）「**保留，且必须接线**」——「意图是否要约束到可信源」是**安全语义**，不是冗余 API；`pub use` 于 `crates/engine/guard/src/lib.rs:52` ⇒ 接线，不得删 |
+| 2 | `extract_experience_from_episode` | 保留 | `crates/foundation/plugin/src/experience.rs:563` | 源码**自述向后兼容包装**（`crates/foundation/plugin/src/experience.rs:562`「Compatibility wrapper … New code should use `extract_experience` so associations are not lost」）；且 `pub use` 于 `crates/engine/memory/src/experience.rs:16` ⇒ 保留 |
+| 3 | `save_to_cluster` | 保留 | `crates/engine/memory/src/meta_thinking.rs:305` | 一行落盘包装（`manager.create_file(cluster, &result.to_markdown())`）；但 **`pub use` 于 `crates/engine/memory/src/lib.rs:217`** ⇒ 删了破坏对外 API 面 ⇒ 保留 |
+| 4 | `trait_locks_path` | 保留 | `crates/engine/runtime-assembly/src/canonical/trait_growth.rs:63` | 零参便利包装（主路径 `trait_locks_path_for` 在 `crates/engine/runtime-assembly/src/canonical/self_tuning_wire.rs:78` 生产在用）；但 **`pub use` 于 `crates/engine/runtime-assembly/src/canonical.rs:323` + `desktop.rs:122`** ⇒ 保留 |
+| 5 | `validate_schedule` | **接线** | `crates/foundation/orchestration/src/cron.rs:380` | owner 2026-11-05 裁定（W11）「**保留，且必须接线**」——「调度要不要校验」是**正确性语义**；`pub use` 于 `crates/foundation/orchestration/src/lib.rs:165` ⇒ 接线，不得删 |
+| 6 | `recall_with_policy` | 保留 | `crates/engine/memory/src/proactive_recall.rs:140` | 一次性便利入口（生产用保留型 `ProactiveRecallService::recall`，`crates/engine/memory/src/coordinator.rs:1224`）⇒ 零引用是**两种调用形态并存**的结果，不是没实现 ⇒ 保留 |
+| 7 | `allow_capability` | 保留 | `crates/capabilities/tools/src/mcp_bridge/governance.rs:111` | ⚠️ **审计没扫的面有真消费者**：`fuzz/fuzz_targets/mcp_governance.rs:531/558/562` 调用它（`fuzz/` 是独立 cargo workspace，CI `.github/workflows/fuzz.yml` 真跑）⇒ **不是零调用外壳**；且与 `deny_capability`（生产在用）对称 ⇒ 保留 |
+| 8 | `apeireth_sdk_py` | 保留 | `crates/adapters/sdk/src/python.rs:92` | PyO3 `#[pymodule]` 入口 ⇒ 由 **Python import 机制**调用，Rust 侧零引用是正常态（判据看不见）⇒ 保留 |
+| 9 | `beside_feeds` | **删除** | `crates/capabilities/tools/src/content_feed/lifecycle.rs:259` | 一行路径派生包装：转调 `FeedLifecycleStore::for_data_dir`；主路径在 `crates/capabilities/tools/src/content_feed/store.rs:274` **生产在用** ⇒ 删了能力不丢 |
+| 10 | `bio_care_config_from_env` | **删除** | `crates/engine/runtime-assembly/src/canonical/care_reminder.rs:273` | 一行包装：转调 `bio_care_config_from_env_value`；主路径在 `crates/engine/runtime-assembly/src/canonical/care_heartbeat.rs:226` + `care_reminder.rs:202` **生产在用** ⇒ 删了能力不丢 |
+| 11 | `explicit_allow_list` | 保留 | `crates/capabilities/tools/src/fetch.rs:111` | `EgressPolicy::ExplicitAllowList` 档位的**构造器**（只收紧不放宽 ⇒ 零生产消费不是「死代码」而是「没人用这一档」）⇒ 安全策略面，保留 |
+| 12 | `get_for_subject` | **接线** | `crates/engine/memory/src/commitments.rs:507` | **带主体校验**的承诺读面（生产读单条走 `store.get(&id)`，`crates/engine/runtime-assembly/src/canonical/memory_typed_sink.rs:135`）⇒ 零引用是「生产选了无主体版」的结果；同族主体版 `list_active_for_subject` 已在生产（`memory_typed_sink.rs:145` / `typed_recall.rs:110`）⇒ 接线以闭合「主体隔离一致性」缺口（⚠️ 行为变更，接线前需 owner 拍板语义） |
+| 13 | `get_page` | 保留 | `crates/engine/memory/src/wiki_fs.rs:117` | wiki 知识库族**整族未接线**（同族主路径 `compile_page` 生产零引用）⇒ 零引用是族级结果 ⇒ 保留（分页读面资产） |
+| 14 | `get_persona` | 保留 | `crates/engine/memory/src/five_dimensional.rs:209` | 人格族**整族未接线**（同族 `get_working`/`get_recent`/`get_entity_facts`/`get_reflections` 全零）⇒ 保留 |
+| 15 | `held_for` | 保留 | `crates/engine/storage/src/rate_limit/mod.rs:307` | `AcquiredPermit` 的持有时长读口（限流器 permit 族在生产在用）⇒ 公开库原语面，保留 |
+| 16 | `is_compatible` | 保留 | `crates/adapters/sdk/src/version.rs:50` | 对外**版本兼容性谓词**（SDK 公开契约面）⇒ 保留 |
+| 17 | `is_episode_forgotten` | 保留 | `crates/engine/memory/src/universal_forget.rs:222` | 遗忘治理只读查询面（2026-10-24 审计已核实：遗忘**会**过滤 —— `crates/engine/memory/src/coordinator.rs:319` 等 13 处走 `get_governed` 查 status）⇒ 保留 |
+| 18 | `is_satisfied_by` | **删除** | `crates/capabilities/tools/src/process/mod.rs:258` | 一行包装：转调 `missing_requirements(capabilities).is_empty()`；主路径在 `crates/capabilities/tools/src/process/mod.rs:732` **生产在用** ⇒ 删了能力不丢 |
+| 19 | `last_watch` | 保留 | `crates/capabilities/tools/src/device/guard_watch.rs:704` | 默认关守护族的**诊断读口**（`GuardWatch` 族默认关）⇒ 保留 |
+| 20 | `library_root` | 保留 | `crates/capabilities/tools/src/skill/search.rs:115` | 装配检查用访问器（源码自述「测试/装配检查用」）⇒ 保留 |
+| 21 | `links_for_diary` | 保留 | `crates/engine/memory/src/cross_diary.rs:134` | 跨日记**反向**读面（日记→事实）；同族正向 `links_for_fact` 在生产在用（`crates/engine/memory/src/cross_diary_wiring.rs:128`）⇒ 反向面刻意并存 ⇒ 保留 |
+| 22 | `list_active` | 保留 | `crates/engine/memory/src/commitments.rs:528` | **跨主体**读面（`subject_id=None`）；生产刻意只走主体版 `list_active_for_subject` ⇒ 「**刻意不接**（主体隔离面）」⇒ 保留 |
+| 23 | `materialize_to_sink` | 保留 | `crates/engine/memory/src/memory_materializer.rs:317` | 投递 **core episode** 的另一条路（同族 `materialize_to_typed_sink` 投递 typed projection，trait 不同 ⇒ 语义不同）；生产在用的是后者（`crates/engine/memory/src/coordinator.rs` 区间）⇒ 保留 |
+| 24 | `minimax_default` | 保留 | `crates/foundation/plugin/src/perception_backend.rs:276` | 默认关协议库面（perception backend 的默认档）⇒ 保留 |
+| 25 | `nervous_system_from_frame` | **删除** | `crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs:269` | 一行包装：转调 `nervous_system_from_frame_with`；主路径在 `crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs:344` **生产在用** ⇒ 删了能力不丢 |
+| 26 | `not_wired_reason` | **删除** | `crates/capabilities/tools/src/accountability_view.rs:72` | 一行常量读取包装：转调 `DATA_PROBE_NOT_WIRED`；该常量在 `crates/capabilities/tools/src/self_status.rs:1036` 定义 + 40+ 处在用 ⇒ 删了能力不丢 |
+| 27 | `outbound_budget` | 保留 | `crates/adapters/sdk/src/im/transport.rs:195` | IM 出站预算读口（主路径 `ImChannelKind::max_text_bytes` 在 `crates/adapters/sdk/src/im/segment.rs:41` 在用）；但 **`pub use` 于 `crates/adapters/sdk/src/im/mod.rs:58`** ⇒ 保留 |
+| 28 | `put_default` | 保留 | `crates/engine/storage/src/cache/mod.rs:237` | ⚠️ **自闭环**：`Cache::put` 的生产引用只有 `put_default` 自己（`crates/engine/storage/src/cache/mod.rs:238`）⇒ 缓存写面**整族未接线** ⇒ 保留（不是冗余包装） |
+| 29 | `query_as_of` | **删除** | `crates/engine/memory/src/temporal_graph_store.rs:501` | 一行便利包装：转调 `self.query(&TemporalGraphQuery::new(as_of_ms))`；主路径 `TemporalGraphStore::query` 在 `crates/engine/runtime-assembly/src/canonical/typed_recall.rs:168` **生产在用** ⇒ 删了能力不丢 |
+| 30 | `query_with_time_range` | 保留 | `crates/engine/memory/src/provenance.rs:209` | 溯源**时间区间**查询（与「事实 as-of」是**两套时间轴**：区间 vs 时点）⇒ 与 `query_as_of` **不构成同义** ⇒ 保留 |
+| 31 | `rebind` | 保留 | `crates/foundation/plugin/src/alias.rs:82` | 默认关协议库面（alias 重新绑定）⇒ 保留 |
+| 32 | `reconnect_attempts` | 保留 | `crates/capabilities/tools/src/mcp_bridge/connection.rs:106` | MCP 连接重连退避读面（默认关宿主面）⇒ 保留 |
+| 33 | `remove_job` | **接线** | `crates/foundation/orchestration/src/job_board.rs:499` | **任务板整族生产无入口**（2026-10-24 审计：JobBoard 全模块仅 `crates/foundation/orchestration/tests/job_output_ring.rs` 构造 ⇒ 并行工具派发 + 长任务过程输出留存无入口）⇒ 真能力缺口 ⇒ 接线 |
+| 34 | `retrieve_with_reranker` | 保留 | `crates/engine/memory/src/retrieval_pipeline.rs:507` | ambient 会话的重排入口（与 `_for_session` **刻意成对**，共用 `retrieve_with_reranker_in`）；⚠️ 配对项 `_for_session` 是 3 天内引入 ⇒ **成对保留**；「重排默认不启用（保序即默认）」⇒ 保留 |
+| 35 | `sdk_method_names` | 保留 | `crates/adapters/sdk/src/client.rs:1025` | SDK 公开常量读面（主路径 `SDK_TOOL_WHITELIST` 在 `crates/adapters/sdk/src/client.rs:997` 在用）⇒ 保留 |
+| 36 | `set_quiet_threshold` | 保留 | `crates/engine/memory/src/layered_memo/sleep_cycle.rs:68` | 睡眠周期族**整族未接线**（唯一提及在注释里）⇒ 保留 |
+| 37 | `shard_count` | 保留 | `crates/engine/storage/src/cache/shard.rs:98` | 分片缓存的分片数读口（`ShardCache` 在生产在用）⇒ 公开库原语面，保留 |
+| 38 | `snapshot_from_env` | 保留 | `crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs:182` | 进程 env 读取便利面（主路径 `snapshot_from_values_with_bus` 在 `crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs:303` 在用）⇒ 签名不同的便利包装（§5.5q 先例）⇒ 保留 |
+| 39 | `strategy_kind` | 保留 | `crates/engine/storage/src/rate_limit/mod.rs:355` | 限流策略读口（`RateLimiter` 在生产在用）⇒ 公开库原语面，保留 |
+| 40 | `stream_len` | 保留 | `crates/foundation/orchestration/src/runtime_invariants.rs:450` | 流长度读口（主路径 `observe`/`recorded` 已覆盖）⇒ 公开库原语面，保留 |
+| 41 | `tool_paths` | 保留 | `crates/adapters/sdk/src/client.rs:1030` | SDK 公开常量读面（主路径 `TOOL_PATHS` 在 `crates/adapters/sdk/src/client.rs:879` 在用）⇒ 保留 |
+| 42 | `total_subscriptions` | 保留 | `crates/foundation/plugin/src/mcp/subscribe.rs:398` | MCP 订阅计数读口（订阅面在生产在用）⇒ 公开库原语面，保留 |
+| 43 | `upsert_hallway` | 保留 | `crates/engine/memory/src/hallways.rs:325` | 走廊族**整族未接线**（同族 `upsert_hallway_raw` 的生产引用只在 `hallways.rs` 内部 ⇒ 外部零消费）⇒ 零引用是族级结果 ⇒ 保留 |
+| 44 | `device_control_capability` | 保留 | `crates/capabilities/tools/src/device/device_control.rs:2347` | 「**不带 live 策略槽**」的装配变体（生产用 `_with_slot`，`crates/engine/runtime-assembly/src/canonical/tool_modules.rs:1225`）⇒ 既有 public API，仓内无调用点 ⇒ 删了破坏外部调用者向后兼容 ⇒ 保留 |
+| 45 | `skill_distill_capability` | 保留 | `crates/capabilities/tools/src/skill/distill.rs:721` | 同上；且 **`pub use` 于 `crates/capabilities/tools/src/lib.rs:316` + `skill/mod.rs:35`** ⇒ 保留 |
+
+**G7（3 条）· owner 裁定不接**
+
+| # | 符号 | 分类 | 定义位置 | 证据与处置要点 |
+|---|---|---|---|---|
+| 1 | `im_router` | 保留 | `crates/adapters/gateway/src/im_bridge.rs:1077` | owner 2026-10-23 裁定暂缓（W1 IM 通道）⇒ **有意保留**，不是遗漏；且 **`pub use` 于 `crates/adapters/gateway/src/lib.rs:191`** |
+| 2 | `closure_of` | 保留 | `crates/adapters/gateway/src/im_approval.rs:402` | owner 裁定不接（W5 哲学向）⇒ **有意保留** |
+| 3 | `verdict_keys_for_principle` | 保留 | `crates/foundation/core/src/onion.rs:326` | owner 裁定不接（W5 哲学向）⇒ **有意保留** |
+
+#### 5.6.3 分批执行计划
+
+> **排序原则**：**先删零调用外壳**（最安全、收益最大）⇒ ⇒ 再处理「保留」（补理由，零删除）⇒ ⇒ 最后「接线」（要改行为，要 owner 拍板）。
+> **每批 ≤ 20 条**；**同批条目互不依赖**（按 crate 切分 ⇒ ⇒ 不同批次之间无耦合 ⇒ ⇒ 可并行执行）。
+> ⚠️ **磁盘 85%**（`/` 889G 已用 710G）⇒ ⇒ **跑测前先清 `target/`**，每批只跑**受影响的 crate**，不要上全量 `cargo test --workspace`。
+
+**A 批 · 删除（10 条 · 合计预计删 65 行）**
+
+| 批次 | 范围（crate） | 条目（定义位置） | 预计删行 | 风险评估 |
+|---|---|---|---|---|
+| **A1** | `apeireth-runtime-assembly` | `bio_care_assembly_from_env`<br>`crates/engine/runtime-assembly/src/canonical/care_heartbeat.rs:241`<br>`bio_circadian_wiring_from_env`<br>`crates/engine/runtime-assembly/src/canonical/bio_circadian.rs:234`<br>`bio_care_config_from_env`<br>`crates/engine/runtime-assembly/src/canonical/care_reminder.rs:273`<br>`should_suppress`<br>`crates/engine/runtime-assembly/src/canonical/bio_circadian.rs:140`<br>`nervous_system_from_frame`<br>`crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs:269` | **37 行** | **低**。5 条全是**一行转调**；主路径 `bio_care_assembly_from_env_value`（`crates/adapters/cli/src/care_heartbeat.rs:270`）、`bio_circadian_wiring_from_env_value`（`crates/adapters/cli/src/care_heartbeat.rs:423`）、`bio_care_config_from_env_value`（`crates/engine/runtime-assembly/src/canonical/care_heartbeat.rs:226`）、`should_suppress_proactive`（`crates/engine/runtime-assembly/src/canonical/bio_circadian.rs:367`）、`nervous_system_from_frame_with`（`crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs:344`）**全部在生产被调用**；5 条**均未被 `pub use` 重导出**；均**非 3 天内引入**（最晚 `2026-11-04`，但引入提交在 `2026-10-18`～`2026-10-22`）。⚠️ **唯一残留**：删 `bio_circadian_wiring_from_env` 后，`crates/engine/runtime-assembly/src/canonical/bio_circadian.rs:220` 的 doc 注释「等价于 [`BioCircadianGate::from_env_value`]」会指向一个不同名 ⇒ 同步改 doc |
+| **A2** | `apeireth-tools-canonical` | `is_satisfied_by`<br>`crates/capabilities/tools/src/process/mod.rs:258`<br>`beside_feeds`<br>`crates/capabilities/tools/src/content_feed/lifecycle.rs:259`<br>`not_wired_reason`<br>`crates/capabilities/tools/src/accountability_view.rs:72` | **19 行** | **低-中**。主路径 `missing_requirements`（`crates/capabilities/tools/src/process/mod.rs:732`）、`FeedLifecycleStore::for_data_dir`（`crates/capabilities/tools/src/content_feed/store.rs:274`）**生产在用**；`not_wired_reason` 的返回值就是常量 `DATA_PROBE_NOT_WIRED`（`crates/capabilities/tools/src/self_status.rs:1036`，40+ 处在用）⇒ 能力不丢。⚠️ 这 3 条在**已发布** crate `apeireth-tools-canonical` ⇒ 删 `pub fn` 是对外 API 变更 ⇒ **发版前记 CHANGELOG**；`accountability_view` 是 `pub mod` ⇒ 外部可直接调 `not_wired_reason()` |
+| **A3** | `apeireth-organ` + `apeireth-memory`（**两 crate 互不依赖 ⇒ 可并行**） | `mood_trend`<br>`crates/engine/organ/src/emotion_memory.rs:234`<br>`query_as_of`<br>`crates/engine/memory/src/temporal_graph_store.rs:501` | **9 行** | **低**。`mood_trend` 转调 `mood_trend_at`，后者在 `crates/engine/organ/src/emotion_memory.rs:457` **生产在用**（`EmotionOrgan::new()` 生产构造于 `crates/engine/runtime-assembly/src/canonical/organ_module.rs:130` ⇒ 族在生产）；`query_as_of` 转调 `self.query(&TemporalGraphQuery::new(as_of_ms))`，主路径 `TemporalGraphStore::query` 在 `crates/engine/runtime-assembly/src/canonical/typed_recall.rs:168` **生产在用**。⚠️ `query_as_of` 是**宿主面**（时态图查询）⇒ 外部可能有调用者 ⇒ 记 CHANGELOG |
+
+**B 批 · 保留（88 条 · 预计删 0 行 · 只补理由）**
+
+| 批次 | 桶 | 条数 | 条目 | 理由（桶级） | 风险 |
+|---|---|---|---|---|---|
+| **B1** | owner 裁定 / 安全与治理语义 | 6 | `forget_principal_with_permit`、`research_coordinated_forget_with_permit`、`is_episode_forgotten`、`im_router`、`closure_of`、`verdict_keys_for_principle` | 「被遗忘权」的**类型级防绕过面**（permit 由调用方自带 ⇒ 外部无法伪造）· 遗忘过滤已由 `get_governed` 覆盖 · owner 2026-10-23 裁定暂缓（W1 IM 通道）/ 2026-10-24 裁定不接（W5 哲学层） | **零**（不动代码） |
+| **B2** | 公开 API 面 / 向后兼容 | 10 | `doc_ops_capability_shared`、`sheet_ops_capability_shared`、`extract_experience_from_episode`、`save_to_cluster`、`trait_locks_path`、`outbound_budget`、`skill_distill_capability`、`device_control_capability`、`allow_capability`、`apeireth_sdk_py` | 8 条被 **`pub use` 重导出**（删了破坏对外 API 面）· `device_control_capability` 是「不带 live 策略槽」的既有装配变体（生产用 `_with_slot`）· `allow_capability` **在 `fuzz/` 有真消费者**（`fuzz/fuzz_targets/mcp_governance.rs:531/558/562`）· `apeireth_sdk_py` 是 PyO3 `#[pymodule]`（由 Python import 机制调用） | **零**（不动代码） |
+| **B3** | 族级未接线资产 / 注入点 / 公开字段语法糖 | 44 | G3 族级未接线 11 条 + G4 注入点 23 条 + 其余 10 条 | 零引用是**族级**结果（同族主路径生产零引用）· 私有字段的**唯一注入点**（删了旋钮不可设 = 能力缺失）· **公开字段上的语法糖**（§5.5q 既定先例） | **零**（不动代码） |
+| **B4** | SDK · 宿主 · 默认关协议库面 | 28 | `is_compatible`、`sdk_method_names`、`tool_paths`、`outbound_budget` 族、`held_for`、`shard_count`、`strategy_kind`、`total_subscriptions`、`rebind`、`minimax_default`、`stream_len`、`last_watch`、`library_root`、`explicit_allow_list`、`set_quiet_threshold`、`get_page`、`get_persona`、`upsert_hallway`、`retrieve_with_reranker`、`recall_with_policy`、`materialize_to_sink`、`links_for_diary`、`list_active`、`query_with_time_range`、`put_default`、`snapshot_from_env`、`no_bio_care_inputs`、`to_prompt`、`observe_failures` | 公开库原语面 / 对外 SDK 契约面 / 默认关协议库面 / 刻意并存的第二条路（跨主体读面、成对重排入口、两条投递路） | **零**（不动代码） |
+
+**C 批 · 接线（5 条 · 预计删 0 行 · 改行为）**
+
+| 批次 | 符号 | 谁该用 | 最小改法（文件:行号） | 前置条件 | 风险 |
+|---|---|---|---|---|---|
+| **C1** | `constrain_to_trusted`<br>`crates/engine/guard/src/intent.rs:569` | `engine/guard` 的**意图解释面** | 意图判定入口接「是否只信可信源」⇒ ⇒ 在 `IntentInterpreter` 的实现处消费该策略原语 | ⚠️ **owner 2026-11-05 已裁定（W10）「保留，且必须接线」** ——「意图是否要约束到可信源」是**安全语义**，不是冗余 API ⇒ ⇒ **不删、必须接** | **中**：改的是**安全语义** ⇒ 行为会变 ⇒ 需 owner 定「哪些源算可信」 |
+| **C2** | `validate_schedule`<br>`crates/foundation/orchestration/src/cron.rs:380` | `foundation/orchestration` 的**调度面** | 调度入口接校验 ⇒ ⇒ 调度真正落地前调用 `Schedule::validate`（`crates/foundation/orchestration/src/cron.rs:87`） | ⚠️ **owner 2026-11-05 已裁定（W11）「保留，且必须接线」** ——「调度要不要校验」是**正确性语义**（未校验的调度会跑错） | **中**：未校验的调度会跑错 ⇒ 接上是**修 bug**，但会暴露既有的坏调度 ⇒ 需先看存量调度 |
+| **C3** | `record_quality_metrics`<br>`crates/engine/memory/src/retrieval_tuning.rs:405` | **漂移监控面**（外部校准指标注入口） | 把「外部指标」接到漂移监控面 ⇒ ⇒ 注入点要在**漂移监控装配处**，且 ⚠️ **必须核对注入点边界**（无界 ⇒ 指标洪泛） | ⚠️ **跨线在途**（引入提交 `eff3d0af`，2026-11-06，deputy）⇒ ⇒ **本线不抢接线、不删**；走「登记 + 给理由」 | **中**：指标洪泛 ⇒ 需有界注入点 |
+| **C4** | `remove_job`<br>`crates/foundation/orchestration/src/job_board.rs:499` | **任务板 / 长任务过程输出**（并行工具派发） | `JobBoard` 整族接入生产 ⇒ ⇒ 装配根构造 `JobBoard` + 长任务提交时 `record_progress` + 取消时 `remove_job` | 2026-10-24 审计已定性：「`JobBoard` 全模块仅 `crates/foundation/orchestration/tests/job_output_ring.rs` 构造 ⇒ **并行工具派发 + 长任务过程输出留存 ⇒ 生产无入口**」⇒ ⇒ 真能力缺口 | **中-高**：并行工具派发是**行为变更**（长任务输出留存策略）⇒ 需产品定「保留多久/怎么清理」 |
+| **C5** | `get_for_subject`<br>`crates/engine/memory/src/commitments.rs:507` | **承诺读面**（主体隔离） | 生产读单条改走主体校验版 ⇒ ⇒ 改 `crates/engine/runtime-assembly/src/canonical/memory_typed_sink.rs:135` 的 `store.get(&id)` ⇒ `store.get_for_subject(subject, &id)` | 同族主体版 `list_active_for_subject` **已在生产**（`memory_typed_sink.rs:145` / `typed_recall.rs:110`）⇒ ⇒ 主体版读面是**已确立的口径** | ⚠️ **高**：改的是**读路径的可见性**（无主体版会跨主体返回）⇒ ⇒ **行为变更** ⇒ **接线前需 owner 拍板语义** |
+
+**D 批 · 跨线在途保护（3 条 · 不删、不接线 · 等引入者）**
+
+| 符号 | 引入提交 | 保护理由 |
+|---|---|---|
+| `record_quality_metrics` | `eff3d0af`（2026-11-06） | deputy 在途的新 API ⇒ ⇒ **不删**（接线见 C3，由引入者做） |
+| `observe_failures` | `f3914677`（2026-11-06） | deputy 在途 ⇒ ⇒ **不删**；且源码自带 `#[deprecated]` ⇒ ⇒ 是**显式向后兼容面** ⇒ ⇒ 保留（等兼容窗口结束再议） |
+| `retrieve_with_reranker_for_session` | `0d34b1d8`（2026-11-05） | session-isolation 批在途 ⇒ ⇒ **不删**；且与 `retrieve_with_reranker` **刻意成对**（共用 `retrieve_with_reranker_in`）⇒ ⇒ **两半都保留**（删一半 = 破坏成对设计） |
+
+#### 5.6.4 每批的判据说明（**批次不是随手切的，是按判据切的**）
+
+| 批次 | 切批判据 | 执行前必须过的检查 | 执行后必须过的检查 |
+|---|---|---|---|
+| **A1 / A2 / A3** | **同 crate 一批** ⇒ ⇒ 批次之间零耦合（可并行）⇒ ⇒ 符合「可独立删除、互不依赖」 | ① 该条在 `scripts/unwired-baseline.txt` 里**仍存在**（防止并行线已处理过）；② 该条**未被 `pub use` 重导出**；③ 该条**不在** D 批 3 条在途清单里；④ 主路径的**生产引用点仍在**（§5.6.0 J3：排除自闭环后仍有命中） | ① `python3 scripts/audit_unwired.py --update` 后该条**从基线消失**（棘轮缩表）；② 受影响 crate 的 `cargo test --all-targets -j 2` 全绿；③ `cargo clippy --all-targets -- -D warnings` 0 警告；④ `cargo fmt --check` 0 diff；⑤ 文档口径同步（`not_wired_reason` 等被外部 doc 引用处） |
+| **B1 / B2 / B3 / B4** | **按「保留理由的类型」分桶** ⇒ ⇒ 每桶一个**可复述的理由模板** ⇒ ⇒ 将来新增条目能直接对号入座 | ① 每条在本节表格里**有证据行**（file:line 级别）；② 「保留」理由**不是**「暂时没人用」这种循环理由 | ① 基线**条数不变**（保留 ⇒ 不缩表）；② 每条在 `scripts/unwired-baseline.txt` 的行内理由**已写清**（或在本节有对应行）⇒ ⇒ 避免下一任代理重新分诊一遍 |
+| **C1 / C2 / C3 / C4 / C5** | **按「谁该用」分批** ⇒ ⇒ 每批一个**明确的消费方** ⇒ ⇒ 接线责任清晰 | ① ⚠️ **C1 / C2 已有 owner 裁定**（2026-11-05）⇒ ⇒ 接线方向不再讨论；② ⚠️ **C3 是跨线在途** ⇒ ⇒ 本线不抢；③ ⚠️ **C4 / C5 是行为变更** ⇒ ⇒ **需 owner 拍板**才能开工 | ① 四级口径升到 **PRODUCTION WIRED**（有生产装配调用点 **且** 实测跑过）；② 台账 §一 的 W 行改「已接线 + 提交号」并**保留原行**；③ `scripts/unwired-baseline.txt` 对应行**从基线删除**（还了债就要缩表） |
+| **D 批** | **3 天内引入** ⇒ ⇒ 保护 | ① 引入提交确实在最近 3 天内（`git log -S "fn <sym>(" -- <file>` 实测）；② 该条**不是**本线自己刚清理过的旧 API | 不动代码 ⇒ ⇒ 只在台账登记（已在本节登记） |
+
+> ⚠️ **批次顺序的硬约束**：**A 批必须先于 C 批**完成
+> ⇒ ⇒ 理由：C1/C2/C3 的接线点会**碰到 A 批删过的文件**（如 `crates/engine/runtime-assembly/src/canonical/bio_circadian.rs` 同时含 A1 的 `bio_circadian_wiring_from_env` 与 `should_suppress`）
+> ⇒ ⇒ 先删再接 ⇒ ⇒ 避免「同一个文件里一边删一边改」造成 diff 冲突与并行线撞车。
+
+#### 5.6.5 本轮纪律确认（**逐条自查**）
+
+| # | 纪律 | 确认结果 |
+|---|---|---|
+| 1 | **不许删任何生产代码** | ✅ **本轮零删除**：只往 `docs/status/unwired-ledger.md` **新增** §5.6 一节，既有行**一行未改未删**（校验见 §5.6.6） |
+| 2 | **只允许改 `docs/status/unwired-ledger.md`** | ✅ 分析脚本全部放在 `/tmp/orphan-triage/`（**仓外**），仓内**未新增任何文件**；`git status` 里除本台账外只有**并行线自己**的改动（`docs/status/claims.yaml` / `docs/status/workline-registry.md`） |
+| 3 | **不许 commit / push / stash / checkout** | ✅ 本轮**未执行**任何 git 写操作 |
+| 4 | **不许碰 `/home/bai/Projects/Apeireth-rust`** | ✅ 未访问该路径 |
+| 5 | **「零调用」结论都扫了全消费者面** | ✅ 扫了 **10 个面**（`crates/*/*/{src,tests,examples}` + `fuzz/` + 顶层 `benches/` + 顶层 `examples/` + `crates-ui/` + `legacy/` + `scripts/` + `research/`）= **3362** 个 `.rs` 文件；⚠️ 审计工具原生只扫前三个面 ⇒ ⇒ **103 条里 102 条的「全消费者面零引用」结论经补扫确认**，**唯一例外是 `allow_capability`**（`fuzz/` 有真消费者 ⇒ 已在 §5.6.0 单列并改判「保留」）⇒ ⇒ **没有任何一条是「只扫 `crates/` 就下的零调用结论」** |
+| 6 | **没有建议删 deputy 最近 3 天引入的 API** | ✅ D 批 3 条在途保护（`record_quality_metrics` / `observe_failures` / `retrieve_with_reranker_for_session`）**全部保留**；A 批 10 条删除项的引入提交**最晚是 2026-10-22**，无一在 3 天窗口内（用 `git log -S` 逐条实测，不是只看文件日期） |
+| 7 | **没有用「名字像」代替「实现核对」** | ✅ 每条都读了**定义处的 doc 注释 + 签名 + 函数体 + 宿主 `impl` 类型**；主路径「在生产在用」的结论逐条给出了 **file:line**；⚠️ 并且**主动推翻**了 3 条「看起来是冗余包装」的判断（`recall_by_mood` / `put_default` / `snapshot_from_values` 的**自闭环**）⇒ ⇒ 这正说明核对的是实现而非名字 |
+| 8 | **没有改动任何生产代码** | ✅ 同第 1 条 |
+
+#### 5.6.6 本节改动自校验
+
+```bash
+# ① 本节只「新增」⇒ 既有行数不变
+git diff --numstat docs/status/unwired-ledger.md
+#    ⇒ numstat 只有一处「N 行新增 / 0 行删除」
+
+# ② 既有标题一个没少、顺序没变
+grep -n "^#\{1,4\} " docs/status/unwired-ledger.md | head -60
+
+# ③ 基线未被本轮改动（棘轮只减不增 ⇒ 本轮**没还债**⇒ 基线应仍是 103）
+python3 scripts/audit_unwired.py --check
+#    ⇒ 期望「孤儿 API 基线一致（103 条，无新增、无过期）」
+```
+
+
 ## 六、L3 骨架声明（7 条）的接线缺口（2026-11-06 声明审计）
 
 > **口径（四级）**：`NOT IMPLEMENTED < IMPLEMENTED < PRODUCTION WIRED < HARDWARE VALIDATED`

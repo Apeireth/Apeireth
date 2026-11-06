@@ -57,10 +57,8 @@
 # --- G1（0 条）：集成测试辅助 API。保留合理，但**不应增长**。
 
 
-# --- G3（25 条）：生物 / 认知 / 编排的**观测与查询 API**。生物族默认关 ⇒ 打开前不会走到。
+# --- G3（21 条）：生物 / 认知 / 编排的**观测与查询 API**。生物族默认关 ⇒ 打开前不会走到。
 
-orphan bio_care_assembly_from_env  # G3  生物族默认关（`APEIRETH_ENABLE_BIO_CARE_CANDIDATES=1` 才开 ⇒ fail-closed）⇒ 关着走不到 ⇒ 零引用是设计如此
-orphan bio_circadian_wiring_from_env  # G3  生物族默认关（`APEIRETH_ENABLE_BIO_CIRCADIAN` 才开）⇒ 零引用是设计如此
 orphan bio_lifecycle_module_from_env_value  # G3  生物族默认关（`APEIRETH_ENABLE_BIO_LIFECYCLE=1` 才开 ⇒ fail-closed）⇒ 零引用是设计如此
 orphan deviation  # G3  organ 族未接生产（实测 `apeireth_organ::` 仅现于 tests/）⇒ 零引用是「族未接线」的结果，不是「没实现」
 orphan disarm  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线
@@ -68,12 +66,10 @@ orphan graph_snapshot  # G3  organ 族未接生产（同上）⇒ 零引用源�
 orphan load_graph  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线
 orphan mcts_search  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线
 orphan mine_and_load  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线
-orphan mood_trend  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线
 orphan no_bio_care_inputs  # G3  生物族默认关 ⇒ 零引用是设计如此
 orphan recall_by_mood  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线
 orphan record_tool_result  # G3  生物族默认关 ⇒ 零引用是设计如此
 orphan set_last_hold  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线
-orphan should_suppress  # G3  生物族默认关 ⇒ 零引用是设计如此
 orphan stop_all  # G3  生物/器官编排面默认关 ⇒ 零引用是设计如此
 orphan to_prompt  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线
 orphan with_attrs  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线
@@ -121,7 +117,7 @@ orphan doc_ops_capability_shared  # G5  ⚠️ 2026-11-04 级联：删 `doc_ops_
 orphan sheet_ops_capability_shared  # G5  ⚠️ 2026-11-04 级联：删 `sheet_ops_capability`（零调用点）后失去唯一调用者 ⇒ ⇒ 待判：**「不带 live 策略槽」这个装配变体还要不要**（生产用 `_shared_with_slot`）
 orphan retrieve_with_reranker_for_session  # G5  **显式会话**的重排入口（`SessionContext::Explicit`）⇒ ⇒ 与 ambient 版**共用**内部实现 `retrieve_with_reranker_in` ⇒ ⇒ **刻意成对**（显式会话 vs 会话作用域兜底）⇒ ⇒ 零引用是「显式会话那条路还没被调用」的结果，**不是没实现**
 
-# --- G6（45 条）：**冗余 API 表面 / 宿主入口**：同一能力有**主路径在用**，这些是并行入口或便利包装；或设计上是给宿主/外部调用的公开 API。已逐条核查（见 `unwired-debt-taxonomy-2026-10-24.md` 与 `unwired-debt-audit-2026-10-24.md`）。
+# --- G6（38 条）：**冗余 API 表面 / 宿主入口**：同一能力有**主路径在用**，这些是并行入口或便利包装；或设计上是给宿主/外部调用的公开 API。已逐条核查（见 `unwired-debt-taxonomy-2026-10-24.md` 与 `unwired-debt-audit-2026-10-24.md`）。
 
 orphan constrain_to_trusted  # G6
 orphan extract_experience_from_episode  # G6
@@ -129,10 +125,7 @@ orphan save_to_cluster  # G6  元思考族（`MetaThinking`）**未接生产**�
 orphan trait_locks_path  # G6
 orphan validate_schedule  # G6
 orphan recall_with_policy  # G6  主动召回族**已接生产**，但生产用**保留型** `ProactiveRecallService`（`cognitive.rs:1357`）⇒ ⇒ 这条是「一次性便利入口」⇒ ⇒ 零引用是**两种调用形态并存**的结果，不是没实现
-orphan allow_capability  # G6
 orphan apeireth_sdk_py  # G6
-orphan beside_feeds  # G6
-orphan bio_care_config_from_env  # G6
 orphan explicit_allow_list  # G6
 orphan get_for_subject  # G6  承诺族已接生产；生产读单条走 `store.get(&id)`（`memory_typed_sink.rs:135`）⇒ ⇒ 这条是**带主体校验**的读面 ⇒ ⇒ 零引用是「生产选了无主体版」的结果 ⇒ ⇒ ⚠️ 与上一条同属「主体隔离一致性」待查项
 orphan get_page  # G6  wiki 知识库族（`WikiFs`）**未接生产**（生产侧引用 0）⇒ ⇒ 零引用是族级结果；与已接的 `compile_page` 配对（分页读面）
@@ -140,18 +133,14 @@ orphan get_persona  # G6  人格族（`FiveDimensional`）**未接生产**（生
 orphan held_for  # G6
 orphan is_compatible  # G6
 orphan is_episode_forgotten  # G6  遗忘治理族（`UniversalForgetFacade`）**未接生产**（实测生产侧引用 0）⇒ ⇒ 零引用是**族级**结果，不是「没实现」；该面是治理只读查询（配 `forget_episode`）
-orphan is_satisfied_by  # G6
 orphan last_watch  # G6
 orphan library_root  # G6
 orphan links_for_diary  # G6  跨日记族（`CrossDiary`）**未接生产**（生产侧引用 0）⇒ ⇒ 零引用是族级结果；与 `links_for_fact` 同族
 orphan list_active  # G6  承诺族**已接生产**，但生产**只用** `list_active_for_subject`（`memory_typed_sink.rs:145` / `typed_recall.rs:110`）⇒ ⇒ 这条是**无主体版**（`subject_id=None` ⇒ 跨主体读面）⇒ ⇒ **刻意不接**（主体隔离面）⇒ ⇒ ⚠️ 见看板「主体隔离一致性」一条
 orphan materialize_to_sink  # G6  物化器族**已接生产**，但生产走的是**逐条** `materialize_episode`（`cognitive.rs`）⇒ ⇒ 这条是「批量 + 投递」的**另一条路** ⇒ ⇒ 零引用是「两条路并存」的结果；能力是活的（`MemoryMaterializationSink` 有生产实现）
 orphan minimax_default  # G6
-orphan nervous_system_from_frame  # G6
-orphan not_wired_reason  # G6
 orphan outbound_budget  # G6
 orphan put_default  # G6
-orphan query_as_of  # G6  宿主 `TemporalGraphStore` **已接生产**（`adapters/cli/src/lib.rs:2003`）⇒ ⇒ 本条是 `query(&TemporalGraphQuery::new(as_of_ms))` 的**一行便利包装** ⇒ ⇒ **正名已在 `query`** ⇒ ⇒ 零引用是「有正名、包装未用」的结果
 orphan query_with_time_range  # G6  溯源族已接生产；本条是**溯源时间区间**查询（与「事实 as-of」是**两套时间轴**：区间 vs 时点）⇒ ⇒ 零引用是「另一条时间轴的读面」的结果；与 `query_as_of` **不构成同义**
 orphan rebind  # G6
 orphan reconnect_attempts  # G6

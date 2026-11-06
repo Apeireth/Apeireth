@@ -41,9 +41,25 @@ BASELINE = ROOT / "scripts" / "unwired-baseline.txt"
 # `cargo run --example` 拉起（如 `scripts/guard_ml/train_shadow.py` 跑
 # `stamp_guard_artifact`）。不扫的话，这些「被 example 调用的公开 API」
 # 会被误报成孤儿 —— 2026-10-24 实测：`stamp_artifact_file` 因此假阳性。
+# ⭐ **消费者面必须扫全**（2026-11-06 修判据的洞）
+# 此前只扫 `crates/*/*/{src,tests,examples}` ⇒ ⇒ **漏了 `fuzz/`**
+# ⇒ ⇒ ⇒ 实测：`allow_capability` 被 `fuzz/fuzz_targets/mcp_governance.rs:531/558/562`
+#          **真调用** ⇒ ⇒ 但审计报它「零调用」⇒ ⇒ ⇒ **假阳性**
+# ⇒ ⇒ ⇒ `fuzz/` 是**独立 cargo workspace**、CI `.github/workflows/fuzz.yml` **真跑**
+# ⇒ ⇒ ⇒ ⇒ 它是**真消费者面**，不是「历史文档」
+# ⇒ ⇒ ⇒ 同族还漏了：顶层 `benches/` · 顶层 `examples/`
+# ⇒ ⇒ ⇒ ⚠️ **不扫** `legacy/`（归档捐赠代码 ⇒ ⇒ 不是本仓活跃面 ⇒ ⇒ 扫它会淹出上千条历史符号）
+# ⇒ ⇒ ⇒ ⚠️ 方向纪律：多扫面 ⇒ ⇒ 只可能**多报**（更保守）⇒ ⇒ 不会漏报 ⇒ ⇒ 方向安全。
 SCAN_ROOTS = sorted(
     str(path.relative_to(ROOT))
-    for pattern in ("crates/*/*/src", "crates/*/*/tests", "crates/*/*/examples")
+    for pattern in (
+        "crates/*/*/src",
+        "crates/*/*/tests",
+        "crates/*/*/examples",
+        "fuzz/fuzz_targets",
+        "benches",
+        "examples",
+    )
     for path in ROOT.glob(pattern)
     if path.is_dir()
 )

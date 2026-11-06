@@ -254,11 +254,6 @@ impl IsolationRequirement {
             .map(|(_, level)| *level)
     }
 
-    /// True when every requirement is met by `capabilities`.
-    pub fn is_satisfied_by(&self, capabilities: &IsolationCapabilities) -> bool {
-        self.missing_requirements(capabilities).is_empty()
-    }
-
     /// The subset of requirements that `capabilities` does not meet.
     ///
     /// Each entry is `(capability, required_level)`.

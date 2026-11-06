@@ -68,11 +68,6 @@ pub fn snapshot_accountability(
     Some((stats, snapshot.accountability_reason.clone()))
 }
 
-/// 未挂载时的原因文案（供调用方复用）。
-pub fn not_wired_reason() -> String {
-    DATA_PROBE_NOT_WIRED.to_string()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

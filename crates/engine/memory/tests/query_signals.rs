@@ -460,8 +460,11 @@ fn report_contains_the_two_caveats() {
         distinctiveness: 0.2,
     }];
     let report = render_signal_report(&outcomes, 0.1);
+    // ⚠️ **2026-11-06 对齐**：deputy 的 `ae2f0686`「去掉箭头符号」把报告文案里的
+    // `⇒` 换成了 `：`（**只换分隔符，语义一字未变**）
+    // ⇒ ⇒ ⇒ 断言随之对齐 ⇒ ⇒ **断言强度不变**（仍要求那两句口径提醒**逐字出现**）。
     assert!(
-        report.contains("题面被改写 ⇒ 分数不可与基线直接比"),
+        report.contains("题面被改写：分数不可与基线直接比"),
         "报告必须含口径提醒①：\n{report}"
     );
     assert!(
