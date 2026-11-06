@@ -61,44 +61,44 @@ pub struct FailureRecord {
     ///
     /// **为什么必须有它**：失败轨迹要喂**权重自演化**
     /// （[`crate::retrieval_tuning::RetrievalTuningEngine::observe_batch`]）
-    /// ⇒ ⇒ 那条 API 要的是 **`memory_id`** ⇒ ⇒ ⇒ **没有归因 ⇒ ⇒ 失败归不到任何记忆**
-    /// ⇒ ⇒ ⇒ ⇒ **失败学不到任何东西** ⇒ ⇒ ⇒ **反思闭环缺最后一环**。
+    /// 那条 API 要的是 **`memory_id`**，**没有归因，失败归不到任何记忆**
+    /// **失败学不到任何东西**，**反思闭环缺最后一环**。
     ///
-    /// ⚠️ **向后兼容**：老数据没有这个字段 ⇒ ⇒ `serde(default)` ⇒ ⇒ 读旧文件不炸
-    /// ⇒ ⇒ ⇒ 且**老记录的归因是空** ⇒ ⇒ ⇒ **不编造归因**（该空就空）。
+    /// ⚠️ **向后兼容**：老数据没有这个字段，`serde(default)`，读旧文件不炸
+    /// 且**老记录的归因是空**，**不编造归因**（该空就空）。
     #[serde(default)]
     pub attributions: Vec<FailureAttribution>,
     /// ⭐ **会话键**（2026-11-06）：这条失败属于**哪个会话**。
     ///
     /// **为什么要它**：生产调权引擎是**按会话分桶**的
     /// （`retrieval_tuning_wire` 明写「A 会话的注入集不会被 B 会话的回执裁决」）
-    /// ⇒ ⇒ ⇒ **失败也必须按会话隔离** ⇒ ⇒ ⇒ 否则 **A 会话的失败会去调 B 会话的权重**
-    /// ⇒ ⇒ ⇒ ⇒ **跨会话串扰**。
+    /// **失败也必须按会话隔离**，否则 **A 会话的失败会去调 B 会话的权重**
+    /// **跨会话串扰**。
     ///
-    /// ⚠️ **可选**：`None` = **不知道属于哪个会话** ⇒ ⇒ ⇒ 桥**不许**把它算进任何会话
-    /// ⇒ ⇒ ⇒ （只喂「不带会话过滤」的全局结算时才会用到）。
+    /// ⚠️ **可选**：`None` = **不知道属于哪个会话**，桥**不许**把它算进任何会话
+    /// （只喂「不带会话过滤」的全局结算时才会用到）。
     #[serde(default)]
     pub session_key: Option<String>,
 }
 
 /// ⭐ **失败归因**（2026-11-05）：失败时**在场的记忆** + 它当时的**显著维度**。
 ///
-/// ⭐ **转换**（2026-11-06）：`SelectedAttribution` ⇒ ⇒ `FailureAttribution`
-/// ⇒ ⇒ ⇒ 接线方**不用手写映射**（字段名不同：`id`/`dominant_dimension`
-/// ⇒ ⇒ ⇒ vs `memory_id`/`dimension`）。
+/// ⭐ **转换**（2026-11-06）：`SelectedAttribution`，`FailureAttribution`
+/// 接线方**不用手写映射**（字段名不同：`id`/`dominant_dimension`
+/// vs `memory_id`/`dimension`）。
 ///
 /// 形状与 [`crate::retrieval_tuning::SelectedAttribution`] **同语义**
-/// ⇒ ⇒ ⇒ **可直接喂** `observe_batch`（不用转译）。
+/// **可直接喂** `observe_batch`（不用转译）。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FailureAttribution {
     /// 被注入的记忆 id。
     pub memory_id: String,
-    /// 该记忆当时的**显著维度**（归因）; `None` = 无评分分量数据 ⇒ ⇒ **不编造归因**。
+    /// 该记忆当时的**显著维度**（归因）; `None` = 无评分分量数据，**不编造归因**。
     pub dimension: Option<crate::retrieval_tuning::RetrievalDimension>,
 }
 
 impl From<crate::retrieval_tuning::SelectedAttribution> for FailureAttribution {
-    /// ⭐ **接线方的省事入口**（2026-11-06）：注入回执 ⇒ ⇒ 失败归因。
+    /// ⭐ **接线方的省事入口**（2026-11-06）：注入回执，失败归因。
     fn from(attribution: crate::retrieval_tuning::SelectedAttribution) -> Self {
         Self {
             memory_id: attribution.id,
@@ -274,16 +274,16 @@ pub trait ReflexionStore: Send + Sync {
     /// ⭐ **登记一条失败轨迹，**带归因**（2026-11-05）。
     ///
     /// # 为什么单独一个入口（而不是改 [`Self::record_failure`] 的签名）
-    /// 改签名会**打断所有既有实现与调用方** ⇒ ⇒ ⇒ 所以这里**加一个带默认实现的新方法**：
-    /// 默认实现 = 调 [`Self::record_failure`] ⇒ ⇒ **归因不落盘**
-    /// ⇒ ⇒ ⇒ **返回值也必须是不带归因的那份**（⚠️ **不许撒谎**：
-    /// 2026-11-06 实测修正 —— 旧写法只改**返回值副本** ⇒ ⇒ 调用方以为落盘了
-    /// ⇒ ⇒ ⇒ 而 store 里是空的 ⇒ ⇒ ⇒ **桥对未覆写的实现静默失效**）。
-    /// ⇒ ⇒ 需要**真的落盘归因**的实现**覆写本方法**（内存版 / 文件版已覆写）。
-    /// ⇒ ⇒ ⇒ 覆写与否，**返回值与 store 永远一致**。
+    /// 改签名会**打断所有既有实现与调用方**，所以这里**加一个带默认实现的新方法**：
+    /// 默认实现 = 调 [`Self::record_failure`]，**归因不落盘**
+    /// **返回值也必须是不带归因的那份**（⚠️ **不许撒谎**：
+    /// 2026-11-06 实测修正 —— 旧写法只改**返回值副本**，调用方以为落盘了
+    /// 而 store 里是空的，**桥对未覆写的实现静默失效**）。
+    /// 需要**真的落盘归因**的实现**覆写本方法**（内存版 / 文件版已覆写）。
+    /// 覆写与否，**返回值与 store 永远一致**。
     ///
     /// # 为什么要归因
-    /// 失败要喂**权重自演化**（`observe_batch` 要 `memory_id`）⇒ ⇒ ⇒ **没有归因 = 学不到**。
+    /// 失败要喂**权重自演化**（`observe_batch` 要 `memory_id`），**没有归因 = 学不到**。
     fn record_failure_with_attribution(
         &self,
         kind: FailureKind,
@@ -292,15 +292,15 @@ pub trait ReflexionStore: Send + Sync {
         timestamp_epoch_ms: i64,
         attributions: Vec<FailureAttribution>,
     ) -> Result<FailureRecord, ReflexionError> {
-        // ⚠️ **归因不落盘 ⇒ ⇒ 返回值也不带归因**（不许撒谎，2026-11-06 实测修正）。
-        // ⇒ ⇒ 想要归因**真的落盘** ⇒ ⇒ 必须**覆写本方法**（内存版 / 文件版已覆写）。
+        // ⚠️ **归因不落盘，返回值也不带归因**（不许撒谎，2026-11-06 实测修正）。
+        //，想要归因**真的落盘**，必须**覆写本方法**（内存版 / 文件版已覆写）。
         //
-        // ⚠️ 这里是**显式丢弃**（不是「忘了用」）⇒ ⇒ 归因在默认实现下**必然不落盘**。
+        // ⚠️ 这里是**显式丢弃**（不是「忘了用」），归因在默认实现下**必然不落盘**。
         let _ = attributions;
         let record = self.record_failure(kind, task_type, summary, timestamp_epoch_ms)?;
         debug_assert!(
             record.attributions.is_empty(),
-            "默认实现不落归因 ⇒ ⇒ 返回值也不该带归因"
+            "默认实现不落归因，返回值也不该带归因"
         );
         Ok(record)
     }
@@ -679,7 +679,7 @@ impl ReflexionStore for FileReflexionStore {
         })
     }
 
-    /// ⭐ **带归因**（2026-11-05 覆写）：归因**真的落盘**（JSON 文件 ⇒ 向后兼容）。
+    /// ⭐ **带归因**（2026-11-05 覆写）：归因**真的落盘**（JSON 文件：向后兼容）。
     fn record_failure_with_attribution(
         &self,
         kind: FailureKind,
