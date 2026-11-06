@@ -271,6 +271,12 @@ pub struct CorpusAssociativeSource {
 }
 
 impl MemoryCandidateSource for CorpusAssociativeSource {
+    /// ⭐ **本路权重**（2026-11-06）：与生产联想通道**同口径**
+    /// ⇒ 替身量到的东西必须与生产一致 ⇒ 否则数字不能信。
+    fn fusion_weight(&self) -> f64 {
+        crate::associative_recall::ASSOC_FUSION_WEIGHT
+    }
+
     fn candidates(
         &self,
         query: &str,
@@ -332,6 +338,21 @@ impl MemoryCandidateSource for CorpusAssociativeSource {
                     source_request: None,
                 },
             });
+        }
+        // ⭐ **按路归一化**（2026-11-06 实测修正）：**本路顶分 = 1.0**
+        //
+        // **为什么**：BM25 路把分数按**自己的 max** 归一化（**顶分恒为 1.0**），
+        // 而联想路的原始强度只有 0.37~0.51 ⇒ ⇒ **两路量纲不对等**
+        // ⇒ ⇒ ⇒ 不归一化 ⇒ ⇒ 联想候选**结构性沉底** ⇒ ⇒ ⇒ **通道贡献恒为 0**
+        // ⇒ ⇒ ⇒ 实测：公平卷上通道收益 **delta = 0.0000**（**白接**）。
+        //
+        // ⚠️ **与生产通道同口径**：生产的联想通道也必须按自己的 max 归一化
+        // ⇒ ⇒ 否则**替身量的是假东西** ⇒ ⇒ ⇒ 数字不能信。
+        let max_score = out.iter().map(|c| c.score).fold(0.0_f64, f64::max);
+        if max_score > 0.0 {
+            for candidate in &mut out {
+                candidate.score /= max_score;
+            }
         }
         // ⚠️ **确定性**：按 (分数降序, id 升序) ⇒ 与生产的「按 id 并集 + 统一打分」可比。
         out.sort_by(|left, right| {
