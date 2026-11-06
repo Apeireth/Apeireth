@@ -11,8 +11,11 @@
 //! * **missing binary** — a missing third-party binary is a *permanent* error:
 //!   never a degraded success, never a retryable one, never a silent fallback to
 //!   the default binary;
-//! * **argv integrity** — shell metacharacters in user-controlled values reach
-//!   the child as literal argv elements and are never interpreted by a shell;
+//! * **argv integrity** — shell metacharacters in user-controlled values that
+//!   reach a child (the **path** face) arrive as literal argv elements and are
+//!   never interpreted by a shell; on the **network host** face the target is
+//!   refused earlier still, by scope confinement (below), so no metacharacter
+//!   ever gets the chance to be interpreted;
 //! * **bounded output** — an over-long child output yields a bounded response,
 //!   never an unbounded blob;
 //! * **scope confinement** — a network target outside the authorized scope, or a

@@ -580,10 +580,7 @@ impl McpToolBridge {
                     .policy
                     .lock()
                     .unwrap_or_else(|poisoned| poisoned.into_inner());
-                let previous = self
-                    .preset_grants
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner());
+                let previous = self.preset_grants.lock().unwrap_or_else(|e| e.into_inner());
                 for id in previous
                     .iter()
                     .filter(|id| !self.catalog.is_declared_read_only(id))
@@ -601,10 +598,7 @@ impl McpToolBridge {
                 &mut policy,
                 &self.catalog,
             );
-            *self
-                .preset_grants
-                .lock()
-                .unwrap_or_else(|e| e.into_inner()) = self
+            *self.preset_grants.lock().unwrap_or_else(|e| e.into_inner()) = self
                 .catalog
                 .list()
                 .into_iter()
