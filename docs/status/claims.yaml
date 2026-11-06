@@ -1066,7 +1066,7 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/failure_learning_bridge.rs
       - crates/engine/memory/tests/reflexion_session_persistence.rs
-    verified_at: PENDING_MERGE_COMMIT
+    verified_at: 9e5797530163236465316b67aac3b697bef68c5b
     verify_cmd: "cargo nextest run -p apeireth-runtime-assembly --test failure_learning_bridge --offline && cargo nextest run -p apeireth-memory --test reflexion_session_persistence --offline"
     owner: memory
     next_review: "2026-12-04"

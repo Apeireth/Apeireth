@@ -50,10 +50,11 @@
 | `mem.registered_namespace` | IMPLEMENTED | - | - | `e1127c32d57b` | 2026-11-20 |
 | `rt.desktop_managed_main` | PRODUCTION WIRED | ON | - | `9db4418d5bba` | 2026-11-20 |
 | `rt.module_execution_contract` | IMPLEMENTED | OFF | - | `5c74f955e62c` | 2026-11-20 |
-| `rt.system_one_internal` | PRODUCTION WIRED | OFF | APEIRETH_ENABLE_SYSTEM_ONE | `9db4418d5bba` | 2026-11-20 |
+| `rt.system_one_internal` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_SYSTEM_ONE` | `9db4418d5bba` | 2026-11-20 |
 | `rt.module_messages` | IMPLEMENTED | OFF | - | `5392e56c3218` | 2026-11-20 |
 | `rt.mesh_local_worker` | IMPLEMENTED | OFF | - | `5c74f955e62c` | 2026-11-20 |
 | `mem.retrieval_ranking` | PRODUCTION WIRED | ON | - | `e1127c32d57b` | 2026-12-04 |
+| `mem.failure_learning_bridge` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_RETRIEVAL_TUNING` | `9e5797530163` | 2026-12-04 |
 | `mem.injection_contract` | PRODUCTION WIRED | ON | - | `e1127c32d57b` | 2026-12-04 |
 | `sec.output_injection_guard` | PRODUCTION WIRED | ON | - | `42d3addfa0b8` | 2026-12-05 |
 
