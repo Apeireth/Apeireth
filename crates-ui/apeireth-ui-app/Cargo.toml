@@ -30,6 +30,39 @@ description = "Apeireth UI 引擎产品工程：宿主运行时契约 + wasm 入
 name = "apeireth_ui_app"
 path = "src/lib.rs"
 
+[features]
+# ⭐⭐⭐⭐⭐ **`wasm-host`：引擎自带的 wasm 薄壳**（`src/wasm_host.rs`）。
+#
+# ## 为什么需要这个门（2026-11-06 实测撞到）
+#
+# ⇒ ⇒ 引擎的 `wasm_host` **无条件编译** ⇒ ⇒ 它导出 `boot` / `rerender` /
+# ⇒ ⇒ `render_if_dirty` / `render_count` / `async_line_stats` ……
+# ⇒ ⇒⇒ 而**私有产品仓自带自己的宿主薄壳** ⇒ ⇒⇒ 若它也导出同名函数
+# ⇒ ⇒⇒⇒ ⇒ wasm-bindgen **直接报错**：
+# ⇒ ⇒⇒⇒ ⇒ `the name async_line_stats is exported by multiple crates in this build`
+# ⇒ ⇒⇒⇒ ⇒ ⇒ 产品侧只能**改名规避**（`render_workspace_if_dirty` / `workspace_async_stats` …）
+# ⇒ ⇒⇒⇒ ⇒ ⇒ 那是**绕过**，不是**根治**。
+#
+# ## 这个门怎么用
+#
+# ⇒ ⇒ **产品自带宿主** ⇒ ⇒ **关掉**引擎的薄壳：
+# ```toml
+# apeireth-ui-app = { …, default-features = false, features = ["contract-only"] }
+# ```
+# ⇒ ⇒ ⇒ 引擎的 `wasm_host` **不参与编译** ⇒ ⇒ ⇒ 导出名**不可能**再撞
+# ⇒ ⇒⇒ ⇒ ⇒ 产品**可以**用自己的名字 ⇒ ⇒⇒ ⇒ 不用再被逼着改名。
+#
+# ## 为什么默认**仍然开着**
+#
+# ⇒ ⇒ 引擎自己的证据装置与 demo **依赖**它 ⇒ ⇒⇒ ⇒ 默认关掉会**打断现有证据链**
+# ⇒ ⇒⇒ ⇒ 所以默认开 ⇒ ⇒⇒ ⇒ **要产品自己带宿主时**再显式关。
+default = ["wasm-host"]
+#: ⭐ 引擎自带的 wasm 薄壳（`src/wasm_host.rs`）—— **默认开**（引擎自己的证据装置依赖它）。
+wasm-host = []
+#: 只要**契约**（`Screen` / `HostState` / `RenderPlan` / `async_line` / `snapshot`）
+#: ⇒ ⇒ **不要**引擎自带的 wasm 薄壳（产品自带宿主时用这个）。
+contract-only = []
+
 [dependencies]
 #: 引擎门面（响应式核心 / DOM / GPU / 组件库的具名导出）。
 apeireth-ui = { path = "../apeireth-ui" }

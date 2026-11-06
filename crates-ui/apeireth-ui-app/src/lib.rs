@@ -28,13 +28,45 @@ use apeireth_ui_dom::vnode::VNode;
 /// ⇒ ⇒⇒ 屏幕**发**快照、宿主**取**快照 ⇒ ⇒⇒ ⇒ 机制才成立。
 pub mod async_line;
 
+/// ⭐⭐⭐⭐⭐ **feature 门的自证**（2026-11-06）。
+///
+/// ## 这条测什么
+///
+/// ⇒ ⇒ `wasm_host` 这个模块**能不能被关掉** ⇒ ⇒⇒⇒ 关掉后产品的 wasm 导出名
+/// ⇒ ⇒⇒⇒ ⇒ **不可能**再与引擎的撞车 ⇒ ⇒⇒⇒ ⇒ 那才是**根治**（而不是产品侧改名规避）。
+///
+/// ## 为什么用「编译期条件」而不是运行时断言
+///
+/// ⇒ ⇒ 模块在**关掉**时**根本不存在** ⇒ ⇒⇒ ⇒ 运行时断言它「不存在」是废话
+/// ⇒ ⇒⇒ ⇒ ⇒ 真正要证的是「**能**关」⇒ ⇒⇒ ⇒ 所以反过来：**开着**时断言它在、
+/// ⇒ ⇒⇒ ⇒ **关着**时（`contract-only`）整个 crate 仍能编译（由 CI 的
+/// ⇒ ⇒⇒ ⇒ `cargo check --no-default-features --features contract-only` 覆盖）。
+#[cfg(all(test, feature = "wasm-host", target_arch = "wasm32"))]
+mod wasm_host_feature_gate_tests {
+    #[test]
+    fn the_engine_wasm_host_is_present_when_the_feature_is_on() {
+        // ⇒ ⇒ 模块**在**（feature 开着）⇒ ⇒⇒ ⇒ 编译期就证明了「关得掉」
+        // ⇒ ⇒⇒ ⇒ （关掉的那一侧由 CI 的 `--no-default-features` 编译覆盖）。
+        let _ = super::wasm_host::render_count;
+    }
+}
+
 /// ⭐⭐⭐ **视图快照**（application-layer 地基，E-178）—— 「旧回调不能覆盖新工作」。
 pub mod snapshot;
 
 /// ⭐ **wasm 薄壳**（接真实 DOM 的入口）—— **仅 wasm32 目标编译**。
 ///
 /// ⇒ native 侧**不参与编译** ⇒ ⇒ 契约层永远可 native 单测（与 core 同纪律）。
-#[cfg(target_arch = "wasm32")]
+///
+/// ⭐⭐⭐⭐⭐ **feature 门**（2026-11-06 补）：产品**自带宿主**时应当**关掉**它
+/// ⇒ ⇒ ⇒ 原因：它导出 `boot` / `render_if_dirty` / `render_count` / `async_line_stats` ……
+/// ⇒ ⇒⇒ 而产品若也导出同名 ⇒ ⇒⇒⇒ wasm-bindgen **直接报错**
+/// ⇒ ⇒⇒⇒ ⇒（实测：`the name async_line_stats is exported by multiple crates in this build`）
+/// ⇒ ⇒⇒⇒ ⇒ ⇒ 产品侧此前只能**改名规避**⇒ ⇒⇒⇒ ⇒ 那是**绕过**，不是**根治**。
+///
+/// ⇒ ⇒⇒ **怎么关**：`default-features = false, features = ["contract-only"]`
+/// ⇒ ⇒⇒ ⇒ （见 `Cargo.toml` 的 `[features]` 段）。
+#[cfg(all(target_arch = "wasm32", feature = "wasm-host"))]
 pub mod wasm_host;
 
 /// ⭐⭐⭐⭐ **渲染计划**（E-179）：宿主每帧的**决策结果**。

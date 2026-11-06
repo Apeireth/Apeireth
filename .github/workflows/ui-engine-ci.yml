@@ -86,6 +86,19 @@ jobs:
       - name: cargo check (crates-ui)
         run: cargo check --workspace --all-targets --locked
 
+      - name: ⭐⭐⭐⭐ **feature 门：产品自带宿主时能关掉引擎的 wasm 薄壳**
+        run: |
+          # ⚠️ 为什么要这条（2026-11-06 实测撞到）：
+          #   引擎的 `ui-app::wasm_host` **无条件编译** ⇒ ⇒ 它导出 `boot` /
+          #   `render_if_dirty` / `render_count` / `async_line_stats` ……
+          #   ⇒ ⇒⇒ 而**私有产品仓自带宿主** ⇒ ⇒⇒ 若同名 ⇒ ⇒⇒⇒ wasm-bindgen **直接报错**
+          #   ⇒ ⇒⇒⇒ ⇒（实测：`the name async_line_stats is exported by multiple crates`）
+          #   ⇒ ⇒⇒⇒ ⇒ 产品侧此前只能**改名规避**⇒ ⇒⇒⇒ ⇒ 那是**绕过**，不是**根治**。
+          #   ⇒ ⇒⇒ ⇒ 所以：`wasm-host` 这个 feature **必须真的能关掉** ⇒ ⇒⇒ ⇒ 否则它形同虚设。
+          cargo check -p apeireth-ui-app --target wasm32-unknown-unknown --locked \
+            --no-default-features --features contract-only
+          echo "✅ 关掉引擎 wasm 薄壳后仍能编译（导出名冲突的根治措施有效）"
+
   # =========================================================================
   # 2. Clippy 门禁 — 零警告（-D warnings）
   # =========================================================================
