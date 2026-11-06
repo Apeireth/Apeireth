@@ -378,7 +378,7 @@ claims:
     tests:
       - crates/foundation/governance/tests/governance_chain_drill.rs
 
-    verified_at: 4eb9539f3fa9a4e00a1999ca2c3cb8a15e5776e4
+    verified_at: ff52545ce8ac3f5b245d49642623704572c1f03e
 
     verify_cmd: "cargo test -p apeireth-governance --test governance_chain_drill --locked"
     owner: governance
