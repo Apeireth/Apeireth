@@ -1125,6 +1125,252 @@ pub fn l1_probe() -> Result<JsValue, JsValue> {
     Ok(result.into())
 }
 
+/// ⭐⭐⭐⭐ **CLS（布局位移）观测探针** —— L1-G7 的**最后一段浏览器证据**。
+///
+/// ## 它证明什么
+///
+/// 引擎的 `LayoutShiftTracker` **吃的是真实 DOM 几何**（`WebDom::bounding_box`
+/// ⇒ `getBoundingClientRect`），不是脚本化的假测量
+/// ⇒ ⇒ 所以「用户真的看得见的跳动」能被引擎算出来，
+/// 而「亚像素噪声」与「视口外的移动」**不会被记成缺陷**。
+///
+/// ## 三条对照（缺一不可）
+///
+/// | 场景 | 期望 | 为什么要这条 |
+/// |---|---|---|
+/// | **真实位移**（插入 100px 高的占位 ⇒ 被追踪元素下移 100px）| 得分 **> 0** | 证明**能测出来** |
+/// | **亚像素位移**（下移 0.5px，低于 1px 阈值）| 得分 **= 0** | 证明**不把渲染噪声当缺陷**（E-54 那类 1 LSB 差异） |
+/// | **视口外的元素**（放到 y=100000）| 得分 **= 0** | 证明**只计用户看得见的位移** |
+///
+/// ⚠️ 前两条是「阳性 / 阴性」成对；第三条防「把不可见区域也算进去」。
+/// ⇒ ⇒ 只有三条**同时成立**，CLS 观测才算真的可用（否则就是**一个永远返回 0 的摆设**）。
+#[wasm_bindgen]
+pub fn l1_layout_shift_probe(container_id: &str) -> Result<JsValue, JsValue> {
+    use apeireth_ui_dom::dom::Dom as _;
+    use apeireth_ui_dom::layout_shift::LayoutShiftTracker;
+    use apeireth_ui_dom::renderer::Renderer;
+    use apeireth_ui_dom::vnode::VNode;
+
+    let mut failures: Vec<String> = Vec::new();
+
+    let dom = apeireth_ui_dom::web::WebDom::new()
+        .map_err(|error| JsValue::from_str(&format!("WebDom::new: {error}")))?;
+    let root = dom
+        .create_element("div")
+        .map_err(|error| JsValue::from_str(&format!("建根失败：{error}")))?;
+    let root_id = format!("{container_id}-cls-root");
+    dom.set_attribute(&root, "id", &root_id)
+        .map_err(|error| JsValue::from_str(&format!("设 id 失败：{error}")))?;
+    // ⚠️⚠️ **必须钉在视口内**（2026-11-06 实测踩过）：探针页 body 上方已有大量内容
+    //   ⇒ 直接 appendChild 会让被测元素落在 y≈1250
+    //   ⇒ 而 CLS 得分算「并集 ∩ **视口**」⇒ 元素在视口外 ⇒ 影响占比恒 0
+    //   ⇒ **得分恒 0**（看着像「观测坏了」，实则元素根本不在视口里）。
+    dom.set_attribute(
+        &root,
+        "style",
+        "position: fixed; top: 0; left: 0; z-index: -1;",
+    )
+    .map_err(|error| JsValue::from_str(&format!("设 style 失败：{error}")))?;
+    let document = web_sys::window()
+        .and_then(|window| window.document())
+        .ok_or_else(|| JsValue::from_str("无 document"))?;
+    if let Some(body) = document.body() {
+        let _ = body.append_child(&root);
+    }
+
+    let mut renderer = apeireth_ui_dom::renderer::Renderer::new(dom, root);
+
+    // ⭐⭐ 视口必须用**真实窗口尺寸**：得分 = 并集∩视口/视口面积 × 位移/长边
+    //   ⇒ 视口填错 ⇒ 要么把可见位移算成 0（视口比实际小），要么被稀释到看不出。
+    let window = web_sys::window().ok_or_else(|| JsValue::from_str("无 window"))?;
+    let vw = window
+        .inner_width()
+        .ok()
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.0);
+    let vh = window
+        .inner_height()
+        .ok()
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.0);
+    let (vw, vh) = if vw.is_finite() && vw > 0.0 && vh.is_finite() && vh > 0.0 {
+        (vw, vh)
+    } else {
+        (800.0, 600.0)
+    };
+    let mut tracker = LayoutShiftTracker::new(vw, vh);
+
+    // 树：div(列) -> [占位 div, 被追踪 span]
+    let build = |spacer_height: &str, tracked_style: &str| {
+        let spacer_style = format!("height: {spacer_height};");
+        VNode::element("div")
+            .child(
+                VNode::element("div")
+                    .attr("style", spacer_style.as_str())
+                    .build(),
+            )
+            .child(
+                VNode::element("span")
+                    .attr("style", tracked_style)
+                    .child(VNode::text("tracked"))
+                    .build(),
+            )
+            .build()
+    };
+
+    // ① 挂载：占位 0px ⇒ 被追踪 span 在顶部
+    renderer
+        .mount(build("0px", "display:block; height:50px; width:100px;"))
+        .map_err(|error| JsValue::from_str(&format!("mount: {error:?}")))?;
+    let box_before = renderer
+        .bounding_box_at_path(&[1])
+        .map_err(|error| JsValue::from_str(&format!("bbox(baseline): {error:?}")))?;
+    let baseline = renderer
+        .observe_layout_shift_at_path(&mut tracker, 1, &[1])
+        .map_err(|error| JsValue::from_str(&format!("observe(baseline): {error:?}")))?;
+    // ② 占位变 100px ⇒ span **真的**下移 100px
+    renderer
+        .patch(build("100px", "display:block; height:50px; width:100px;"))
+        .map_err(|error| JsValue::from_str(&format!("patch(shift): {error:?}")))?;
+    let box_after = renderer
+        .bounding_box_at_path(&[1])
+        .map_err(|error| JsValue::from_str(&format!("bbox(shift): {error:?}")))?;
+    let shifted = renderer
+        .observe_layout_shift_at_path(&mut tracker, 1, &[1])
+        .map_err(|error| JsValue::from_str(&format!("observe(shift): {error:?}")))?;
+
+    if baseline != 0.0 {
+        failures.push(format!("首次观测只应建基线，实际 {baseline}"));
+    }
+    if !(shifted > 0.0) {
+        failures.push(format!(
+            "真实下移 100px 却测得 {shifted} ⇒ ⇒ **CLS 观测没有吃真实几何**"
+        ));
+    }
+
+    // ③ 反向对照 A：**亚像素**位移（0.5px < 1px 阈值）⇒ ⇒ 必须 0
+    let before_subpixel = tracker.total();
+    renderer
+        .patch(build("100.5px", "display:block; height:50px; width:100px;"))
+        .map_err(|error| JsValue::from_str(&format!("patch(subpixel): {error:?}")))?;
+    let subpixel = renderer
+        .observe_layout_shift_at_path(&mut tracker, 1, &[1])
+        .map_err(|error| JsValue::from_str(&format!("observe(subpixel): {error:?}")))?;
+    if subpixel != 0.0 {
+        failures.push(format!(
+            "亚像素位移不得计分（阈值 1px），实际 {subpixel}"
+        ));
+    }
+    let subpixel_did_not_accumulate = (tracker.total() - before_subpixel).abs() < 1e-12;
+    if !subpixel_did_not_accumulate {
+        failures.push(String::from("亚像素位移被累加进了总分"));
+    }
+
+    // ④ 反向对照 B：**前后都在视口外** => => 必须 0
+    //
+    // ⚠️ 口径（写错会得到一个「永远通过」的假判据）：得分用
+    //   **before ∪ after ∩ 视口** => => 从「可见位置」移到视口外时，**并集**仍含
+    //   可见的那部分 => => 那是**正确计分**（用户确实看见它不见了）
+    //   => => 所以负对照必须让**两次观测都在视口外**，才真正验证「视口外不计分」。
+    let mut offscreen_tracker = LayoutShiftTracker::new(vw, vh);
+    // 先把元素挪到很远（**新** tracker ⇒ 首观测只建基线、不计分）
+    renderer
+        .patch(build("100000px", "display:block; height:50px; width:100px;"))
+        .map_err(|error| JsValue::from_str(&format!("patch(offscreen-base): {error:?}")))?;
+    let offscreen_baseline = renderer
+        .observe_layout_shift_at_path(&mut offscreen_tracker, 2, &[1])
+        .map_err(|error| JsValue::from_str(&format!("observe(offscreen-base): {error:?}")))?;
+    // 再挪 500px（仍在视口外）
+    renderer
+        .patch(build("100500px", "display:block; height:50px; width:100px;"))
+        .map_err(|error| JsValue::from_str(&format!("patch(offscreen-move): {error:?}")))?;
+    let offscreen = renderer
+        .observe_layout_shift_at_path(&mut offscreen_tracker, 2, &[1])
+        .map_err(|error| JsValue::from_str(&format!("observe(offscreen-move): {error:?}")))?;
+    if offscreen_baseline != 0.0 {
+        failures.push(format!("视口外基线应为 0，实际 {offscreen_baseline}"));
+    }
+    if offscreen != 0.0 {
+        failures.push(format!("**两次都在视口外**的位移不得计分，实际 {offscreen}"));
+    }
+    if offscreen_tracker.total().abs() > 1e-12 {
+        failures.push(String::from("视口外位移被累加进了总分"));
+    }
+
+    // ⑤ 观测次数必须真的增加（防「一次都没观测却报 0 = 看着正常」）
+    let samples_ok = tracker.samples() >= 3 && offscreen_tracker.samples() >= 2;
+    if !samples_ok {
+        failures.push(format!(
+            "观测次数不足（主 {} < 3 或 视口外 {} < 2）⇒ ⇒ 结论不可用",
+            tracker.samples(),
+            offscreen_tracker.samples()
+        ));
+    }
+
+    let result = js_sys::Object::new();
+    let _ = js_sys::Reflect::set(&result, &JsValue::from_str("vw"), &JsValue::from_f64(vw));
+    let _ = js_sys::Reflect::set(&result, &JsValue::from_str("vh"), &JsValue::from_f64(vh));
+    let failures_array = js_sys::Array::new();
+    for item in &failures {
+        failures_array.push(&JsValue::from_str(item));
+    }
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("ok"),
+        &JsValue::from_bool(failures.is_empty()),
+    );
+    let _ = js_sys::Reflect::set(&result, &JsValue::from_str("failures"), &failures_array);
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("baseline_score"),
+        &JsValue::from_f64(baseline),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("shift_score"),
+        &JsValue::from_f64(shifted),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("subpixel_score"),
+        &JsValue::from_f64(subpixel),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("offscreen_score"),
+        &JsValue::from_f64(offscreen),
+    );
+    let box_to_json = |b: apeireth_ui_dom::dom::ElementBox| {
+        let o = js_sys::Object::new();
+        let _ = js_sys::Reflect::set(&o, &JsValue::from_str("x"), &JsValue::from_f64(b.x));
+        let _ = js_sys::Reflect::set(&o, &JsValue::from_str("y"), &JsValue::from_f64(b.y));
+        let _ = js_sys::Reflect::set(&o, &JsValue::from_str("w"), &JsValue::from_f64(b.width));
+        let _ = js_sys::Reflect::set(&o, &JsValue::from_str("h"), &JsValue::from_f64(b.height));
+        o
+    };
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("box_before"),
+        &box_to_json(box_before),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("box_after"),
+        &box_to_json(box_after),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("total"),
+        &JsValue::from_f64(tracker.total()),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("samples"),
+        &JsValue::from_f64(tracker.samples() as f64),
+    );
+    Ok(result.into())
+}
+
 /// ⭐⭐⭐ **纹理上传端到端探针**（L1-G7 浏览器证据）。
 ///
 /// 链路：真实引擎（`Engine::create`）→ `GpuTextureUploader`（**引擎内**实现，无需适配器）

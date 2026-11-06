@@ -138,6 +138,12 @@ try {
   results.binding = { ok: false, failures: [`绑定探针抛错：${String(error)}`] };
 }
 try {
+  // ⭐⭐⭐⭐ CLS（布局位移）观测：真位移 > 0 / 亚像素 = 0 / 视口外 = 0（L1-G7 最后一段）
+  results.layoutShift = p5b.l1_layout_shift_probe('l1-root-host');
+} catch (error) {
+  results.layoutShift = { ok: false, failures: [`CLS 探针抛错：${String(error)}`] };
+}
+try {
   // ⭐⭐⭐ 键盘语义探针：Enter 与 Shift+Enter 可区分？IME 组合期可识别？（E-169）
   results.keyboardSemantics = p5b.l1_keyboard_semantics_probe();
 } catch (error) {

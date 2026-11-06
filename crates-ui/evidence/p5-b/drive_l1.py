@@ -146,6 +146,10 @@ def main() -> int:
     keyboard = report.get("keyboardSemantics") or {}
     # ⭐⭐⭐ 焦点与模态（E-174）：Tab 走引擎？焦点陷阱在真实浏览器里成立？
     focus_modal = report.get("focusModal") or {}
+    # ⭐⭐⭐⭐ CLS（布局位移）观测：L1-G7 的**最后一段浏览器证据**。
+    #   ⇒ ⇒ 三条对照必须同时成立：真位移 > 0 / 亚像素 = 0 / 视口外 = 0
+    #   ⇒ ⇒ 否则「CLS 观测」就是一个**永远返回 0 的摆设**。
+    layout_shift = report.get("layoutShift") or {}
     # ⭐⭐⭐ 异步数据线（E-182）：真定时器造乱序 ⇒ ⇒ 过期结果**必须被驳回**
     #   ⇒ ⇒ 判据三条一起看：DOM 只显示**新**结果 + 两条都回来 + 有一条被驳
     async_line = report.get("asyncLine") or {}
@@ -172,6 +176,7 @@ def main() -> int:
     keyboard_ok = bool(keyboard.get("ok"))
     focus_modal_ok = bool(focus_modal.get("ok"))
     async_line_ok = bool(async_line.get("ok"))
+    layout_shift_ok = bool(layout_shift.get("ok"))
     if not dom_ok:
         print(f"❌ DOM 探针失败项：{dom.get('failures')}", file=sys.stderr)
     if not upload_ok:
@@ -233,11 +238,12 @@ def main() -> int:
         and keyboard_ok
         and focus_modal_ok
         and async_line_ok
+        and layout_shift_ok
     ):
         return 1
     print(
         "✅ L1 浏览器探针全过（G1 测量 / G2 载荷 / G3 焦点与 IME / G6 缩放 / "
-        "G8 错误边界与 panic hook / G7 纹理上传端到端 / 双向绑定 / 组合集成 / "
+        "G8 错误边界与 panic hook / G7 纹理上传端到端 / G7 布局位移观测" "（真位移>0 · 亚像素=0 · 视口外=0）/ 双向绑定 / 组合集成 / "
         "键盘语义（Enter vs Shift+Enter + IME 组合期）/ "
         "焦点与模态（Tab 走引擎 + 焦点陷阱）/ "
         "异步数据线（乱序返回 + 仲裁驳回过期结果）/ 产品宿主）"

@@ -4,7 +4,7 @@
     "failures": [],
     "payload": "value=Some(\"a\");pos=None;checked=Some(false)",
     "g8_error_boundary_ok": true,
-    "g8_captured_error": "Unsupported: create_element() 失败：JsValue(InvalidCharacterError: Failed to execute 'createElement' on 'Document': The tag name provided ('') is not a valid name.\nInvalidCharacterError: Failed to execute 'createElement' on 'Document': The tag name provided ('') is not a valid name.\n    at http://127.0.0.1:42587/engine/pkg/p5b_harness.js:1248:30\n    at handleError (http://127.0.0.1:42587/engine/pkg/p5b_harness.js:3614:18)\n    at __wbg_createElement_74049073a11f9c31 (http://127.0.0.1:42587/engine/pkg/p5b_harness.js:1247:67)\n    at p5b_harness.wasm.<web_sys[87fce178bfa1bdc9]::features::gen_Document::Document>::create_element::__wbg_createElement_74049073a11f9c31 externref shim (http://127.0.0.1:42587/engine/pkg/p5b_harness_bg.wasm:wasm-function[7447]:0x3c0fe2)\n    at p5b_harness.wasm.<web_sys[87fce178bfa1bdc9]::features::gen_Document::Document>::create_element (http://127.0.0.1:42587/engine/pkg/p5b_harness_bg.wasm:wasm-function[6244]:0x3b3a8a)\n    at p5b_harness.wasm.<apeireth_ui_dom[cb50d36515770dc0]::web::WebDom as apeireth_ui_dom[cb50d36515770dc0]::dom::Dom>::create_element (http://127.0.0.1:42587/engine/pkg/p5b_harness_bg.wasm:wasm-function[3842]:0x36b883)\n    at p5b_harness.wasm.<apeireth_ui_dom[cb50d36515770dc0]::renderer::Renderer<apeireth_ui_dom[cb50d36515770dc0]::web::WebDom>>::mount_node (http://127.0.0.1:42587/engine/pkg/p5b_harness_bg.wasm:wasm-function[821]:0x13c0e6)\n    at p5b_harness.wasm.<apeireth_ui_dom[cb50d36515770dc0]::renderer::Renderer<apeireth_ui_dom[cb50d36515770dc0]::web::WebDom>>::mount (http://127.0.0.1:42587/engine/pkg/p5b_harness_bg.wasm:wasm-function[2100]:0x2cbf44)\n    at p5b_harness.wasm.<apeireth_ui_dom[cb50d36515770dc0]::renderer::Renderer<apeireth_ui_dom[cb50d36515770dc0]::web::WebDom>>::render_guarded (http://127.0.0.1:42587/engine/pkg/p5b_harness_bg.wasm:wasm-function[1589]:0x26e56d)\n    at p5b_harness.wasm.p5b_harness[e536333e2a4a43e4]::l1_probe (http://127.0.0.1:42587/engine/pkg/p5b_harness_bg.wasm:wasm-function[696]:0xa6cb8))",
+    "g8_captured_error": "Unsupported: create_element() 失败：JsValue(InvalidCharacterError: Failed to execute 'createElement' on 'Document': The tag name provided ('') is not a valid name.\nInvalidCharacterError: Failed to execute 'createElement' on 'Document': The tag name provided ('') is not a valid name.\n    at http://127.0.0.1:40625/engine/pkg/p5b_harness.js:1281:30\n    at handleError (http://127.0.0.1:40625/engine/pkg/p5b_harness.js:3655:18)\n    at __wbg_createElement_74049073a11f9c31 (http://127.0.0.1:40625/engine/pkg/p5b_harness.js:1280:67)\n    at p5b_harness.wasm.<web_sys[87fce178bfa1bdc9]::features::gen_Document::Document>::create_element::__wbg_createElement_74049073a11f9c31 externref shim (http://127.0.0.1:40625/engine/pkg/p5b_harness_bg.wasm:wasm-function[7474]:0x3c4f33)\n    at p5b_harness.wasm.<web_sys[87fce178bfa1bdc9]::features::gen_Document::Document>::create_element (http://127.0.0.1:40625/engine/pkg/p5b_harness_bg.wasm:wasm-function[6268]:0x3b792a)\n    at p5b_harness.wasm.<apeireth_ui_dom[cb50d36515770dc0]::web::WebDom as apeireth_ui_dom[cb50d36515770dc0]::dom::Dom>::create_element (http://127.0.0.1:40625/engine/pkg/p5b_harness_bg.wasm:wasm-function[3854]:0x36f102)\n    at p5b_harness.wasm.<apeireth_ui_dom[cb50d36515770dc0]::renderer::Renderer<apeireth_ui_dom[cb50d36515770dc0]::web::WebDom>>::mount_node (http://127.0.0.1:40625/engine/pkg/p5b_harness_bg.wasm:wasm-function[824]:0x13dfae)\n    at p5b_harness.wasm.<apeireth_ui_dom[cb50d36515770dc0]::renderer::Renderer<apeireth_ui_dom[cb50d36515770dc0]::web::WebDom>>::mount (http://127.0.0.1:40625/engine/pkg/p5b_harness_bg.wasm:wasm-function[2106]:0x2cef0e)\n    at p5b_harness.wasm.<apeireth_ui_dom[cb50d36515770dc0]::renderer::Renderer<apeireth_ui_dom[cb50d36515770dc0]::web::WebDom>>::render_guarded (http://127.0.0.1:40625/engine/pkg/p5b_harness_bg.wasm:wasm-function[1593]:0x270f4e)\n    at p5b_harness.wasm.p5b_harness[bc2a7310c63287a5]::l1_probe (http://127.0.0.1:40625/engine/pkg/p5b_harness_bg.wasm:wasm-function[698]:0xa6d6f))",
     "g8_panic_hook": "installed",
     "engine_form": {
       "x": 8,
@@ -68,14 +68,14 @@
   },
   "deferredWindow": {
     "step1": {
-      "mount_millis": 1
+      "mount_millis": 0
     },
     "step2": {
       "ok": true,
       "failures": [],
       "deferred_millis": 1,
-      "plan_millis": 0,
-      "write_millis": 1
+      "plan_millis": 1,
+      "write_millis": 0
     }
   },
   "perf": {
@@ -83,32 +83,32 @@
     "failures": [],
     "width": 8,
     "depth": 4,
-    "elements": 37483,
+    "elements": 37484,
     "row_elements": 4681,
-    "mount_millis": 133,
-    "update_millis": 91,
+    "mount_millis": 396,
+    "update_millis": 259,
     "screen_rows": 22,
     "screen_nodes": 46,
-    "screen_update_millis": 0.03,
-    "screen_update_micros": 30,
-    "screen_clock_probe": 1793873839617,
-    "screen_min_sample": 0.025,
-    "build_millis": 3,
+    "screen_update_millis": 0.07,
+    "screen_update_micros": 70,
+    "screen_clock_probe": 1793973980610,
+    "screen_min_sample": 0.065,
+    "build_millis": 5,
     "compared_nodes": 42138,
     "written_nodes": 8
   },
   "realLoad": {
     "ok": true,
     "failures": [],
-    "mount_millis": 76,
-    "input_redraw_millis": 0.06,
-    "scroll_redraw_millis": 0.02,
+    "mount_millis": 169,
+    "input_redraw_millis": 0.19,
+    "scroll_redraw_millis": 0.05,
     "mounted_rows": 7,
     "rows_millis": 0,
     "guarded_millis": 0,
-    "window_millis": 76,
-    "window_plan_millis": 76,
-    "window_write_millis": 0,
+    "window_millis": 169,
+    "window_plan_millis": 165,
+    "window_write_millis": 4,
     "window_plan2_millis": 0,
     "rounds": 400
   },
@@ -150,6 +150,30 @@
     "ok": true,
     "failures": [],
     "signal_value": "uplink"
+  },
+  "layoutShift": {
+    "vw": 1440,
+    "vh": 900,
+    "ok": true,
+    "failures": [],
+    "baseline_score": 0,
+    "shift_score": 0.0008037551440329218,
+    "subpixel_score": 0,
+    "offscreen_score": 0,
+    "box_before": {
+      "x": 0,
+      "y": 0,
+      "w": 100,
+      "h": 50
+    },
+    "box_after": {
+      "x": 0,
+      "y": 100,
+      "w": 100,
+      "h": 50
+    },
+    "total": 0.0008037551440329218,
+    "samples": 3
   },
   "keyboardSemantics": {
     "plain_key": "Enter",
