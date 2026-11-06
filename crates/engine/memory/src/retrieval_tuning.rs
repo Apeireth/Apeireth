@@ -193,7 +193,7 @@ pub enum EvidenceOrigin {
     /// 注入后的命中回执（**既有证据面**：正 = 又命中，负 = 在场却没再命中）。
     #[default]
     InjectionReceipt,
-    /// **任务失败**：召回给了这些记忆 ⇒ ⇒ 结果仍失败 ⇒ ⇒ 该记忆「**被选中却没用上**」。
+    /// **任务失败**：召回给了这些记忆，结果仍失败，该记忆「**被选中却没用上**」。
     TaskFailure,
 }
 
@@ -204,12 +204,12 @@ pub struct TuningEvidence {
     pub signal: EvidenceSignal,
     /// ⭐ **证据来源**（2026-11-06）：这条证据**从哪来**。
     ///
-    /// **为什么需要**：账本摘要原本硬编码「注入后命中回执」⇒ ⇒
-    /// ⇒ 「**任务失败导致的降权**」会被读成「**注入未命中导致的降权**」
-    /// ⇒ ⇒ ⇒ 这两种语义在既有代码里**完全不同** ⇒ ⇒ ⇒ **审计面会说假话**。
-    /// ⇒ ⇒ 现在**显式带来源** ⇒ ⇒ ⇒ 账本按来源措辞（老文案保持不变 ⇒ ⇒ 不破坏既有消费者）。
+    /// **为什么需要**：账本摘要原本硬编码「注入后命中回执」，
+    /// 「**任务失败导致的降权**」会被读成「**注入未命中导致的降权**」
+    /// 这两种语义在既有代码里**完全不同**，**审计面会说假话**。
+    /// 现在**显式带来源**，账本按来源措辞（老文案保持不变，不破坏既有消费者）。
     ///
-    /// ⚠️ **向后兼容**：`#[serde(default)]` ⇒ ⇒ 老证据读出来是
+    /// ⚠️ **向后兼容**：`#[serde(default)]`，老证据读出来是
     /// [`EvidenceOrigin::InjectionReceipt`]（与老行为一致）。
     #[serde(default)]
     pub origin: EvidenceOrigin,
@@ -289,14 +289,14 @@ pub struct EvidenceTally {
     pub negative: u64,
 }
 
-/// **一条质量样本至少要多少条证据**（不足 ⇒ 不产生样本）。
+/// **一条质量样本至少要多少条证据**（不足：不产生样本）。
 ///
-/// ⚠️ **为什么要有这个下限**：一条证据的命中率只能是 0 或 1 ⇒ ⇒ 噪声极大
-/// ⇒ ⇒ 单条证据足以触发「连续偏离」告警 ⇒ ⇒ **假告警**。
-/// ⇒ ⇒ 至少要 3 条 ⇒ 命中率才有分辨力（1/3、2/3、3/3）。
+/// ⚠️ **为什么要有这个下限**：一条证据的命中率只能是 0 或 1，噪声极大
+/// 单条证据足以触发「连续偏离」告警，**假告警**。
+/// 至少要 3 条：命中率才有分辨力（1/3、2/3、3/3）。
 pub const MIN_QUALITY_SAMPLE_EVIDENCE: usize = 3;
 
-/// **命中率指标名**（漂移监控器里的指标名 ⇒ ⇒ 跨批次可比）。
+/// **命中率指标名**（漂移监控器里的指标名，跨批次可比）。
 pub const RETRIEVAL_HIT_RATE_METRIC: &str = "retrieval/hit_rate";
 
 /// 有界权重: 基线锚定 + 走廊夹紧 + 固定小步 (防震荡的物理边界)。
@@ -359,7 +359,7 @@ pub struct RetrievalTuningEngine {
     next_seq: u64,
     /// **可选**的检索质量漂移监控（见 [`crate::quality_drift::QualityDriftMonitor`]）。
     ///
-    /// ⚠️ **缺省 = 无** ⇒ ⇒ 引擎行为**一字不变** ⇒ ⇒ 监控是**显式**的挂载。
+    /// ⚠️ **缺省 = 无**，引擎行为**一字不变**，监控是**显式**的挂载。
     quality_drift: Option<crate::quality_drift::QualityDriftMonitor>,
 }
 
@@ -385,12 +385,12 @@ impl RetrievalTuningEngine {
     /// 挂上**检索质量漂移监控**（**生产消费点**）。
     ///
     /// 每批证据到达时，引擎会算一个**命中率**样本
-    /// （`正信号 / (正信号 + 负信号)`）喂给监控器 ⇒ ⇒ 监控器据此判断
+    /// （`正信号 / (正信号 + 负信号)`）喂给监控器，监控器据此判断
     /// 「检索质量是不是在漂移」（连续多批偏离才告警）。
     ///
     /// ⚠️ **样本口径**：
-    /// - **一批一条样本**（不是每条证据一条）⇒ ⇒ 噪声可控；
-    /// - **没有任何证据的批次不产生样本**（无信号时**不猜**）⇒ ⇒
+    /// - **一批一条样本**（不是每条证据一条），噪声可控；
+    /// - **没有任何证据的批次不产生样本**（无信号时**不猜**），
     ///   监控器**不会**把「没数据」当成「质量差」。
     #[must_use]
     pub fn with_quality_drift(
@@ -401,7 +401,38 @@ impl RetrievalTuningEngine {
         self
     }
 
-    /// 当前挂着的漂移监控器（没挂 ⇒ `None`）。
+    /// * `Err(())`，**长度不匹配**，**拒绝**（不许补零）。
+    pub fn record_quality_metrics(
+        &mut self,
+        metrics: &[&str],
+        values: &[f64],
+        at_sec: i64,
+    ) -> Result<bool, ()> {
+        let Some(monitor) = self.quality_drift.as_mut() else {
+            return Ok(false);
+        };
+        if metrics.len() != values.len() {
+            // ⚠️ **长度不匹配，拒绝**（补零会污染 EMA 基线，不许）
+            return Err(());
+        }
+        let known = monitor.metrics();
+        let matches = metrics.len() == known.len()
+            && metrics
+                .iter()
+                .zip(known.iter())
+                .all(|(name, known)| *name == known.as_str());
+        if !matches {
+            // ⚠️ **指标名/顺序与监控器不一致，拒绝**
+            // （数值错位比不喂更坏，不许「凑合喂」）。
+            return Err(());
+        }
+        // ⚠️ **时刻必须由调用方给**（2026-11-06 修正）：硬编码 0，
+        // ：样本历史里的时间全是 0，**审计面看不出「什么时候退化的」**
+        // ，EMA 基线本身不受影响（它只看值不看时间），但**时间维度要真**。
+        monitor.record(at_sec, values);
+        Ok(true)
+    }
+    /// 当前挂着的漂移监控器（没挂：`None`）。
     #[must_use]
     pub fn quality_drift(&self) -> Option<&crate::quality_drift::QualityDriftMonitor> {
         self.quality_drift.as_ref()
@@ -505,10 +536,10 @@ impl RetrievalTuningEngine {
     /// 样本 = **命中率** = `正信号 / (正信号 + 负信号)`（**一批一条**）。
     ///
     /// ⚠️ **口径纪律**（三条，都是防「假告警」）：
-    /// - **没有任何证据 ⇒ 不产生样本** ⇒ ⇒ 「没数据」**不等于**「质量差」；
-    /// - **证据不足 [`MIN_QUALITY_SAMPLE_EVIDENCE`] ⇒ 不产生样本**
-    ///   ⇒ ⇒ 一条证据的命中率只能是 0 或 1 ⇒ ⇒ 噪声极大 ⇒ ⇒ 不让单条证据触发告警；
-    /// - **样本时刻取批里最后一条证据的时刻**（引擎不读时钟 ⇒ 时刻由证据携带）。
+    /// - **没有任何证据：不产生样本**，「没数据」**不等于**「质量差」；
+    /// - **证据不足 [`MIN_QUALITY_SAMPLE_EVIDENCE`]：不产生样本**
+    ///   一条证据的命中率只能是 0 或 1，噪声极大，不让单条证据触发告警；
+    /// - **样本时刻取批里最后一条证据的时刻**（引擎不读时钟：时刻由证据携带）。
     fn record_quality_sample(&mut self, evidence: &[TuningEvidence]) {
         let Some(monitor) = self.quality_drift.as_mut() else {
             return;
@@ -645,7 +676,7 @@ impl TargetEvidence {
             EvidenceSignal::Positive => self.tally.positive += 1,
             EvidenceSignal::Negative => self.tally.negative += 1,
         }
-        // ⭐ **失败来源单独计数**（2026-11-06）⇒ ⇒ 账本能说清「这步降权是失败导致的」。
+        // ⭐ **失败来源单独计数**（2026-11-06），账本能说清「这步降权是失败导致的」。
         if evidence.origin == EvidenceOrigin::TaskFailure {
             self.failure_negative += 1;
             let note = evidence.note.trim();
@@ -677,7 +708,7 @@ impl TargetEvidence {
             shown.push_str(", …");
         }
         // ⭐ **按来源措辞**（2026-11-06）：**老文案逐字保留**（既有消费者依赖它）
-        // ⇒ ⇒ 只有「**含失败来源**」的目标才换措辞 ⇒ ⇒ **不说假话**。
+        //，只有「**含失败来源**」的目标才换措辞，**不说假话**。
         if self.failure_negative > 0 {
             let notes = self.failure_notes.join("；");
             return format!(
@@ -700,19 +731,19 @@ impl TargetEvidence {
 ///
 /// # 为什么按会话分桶（而不是一个进程级单槽）
 ///
-/// 旧实现是 `static EFFECTIVE: Mutex<Option<EffectiveRanking>>` ⇒ ⇒ **进程级、
-/// 无 session 维度** ⇒ ⇒ A 会话调完权，B 会话**立刻**吃到同一份权重 ⇒ ⇒
+/// 旧实现是 `static EFFECTIVE: Mutex<Option<EffectiveRanking>>`，**进程级、
+/// 无 session 维度**，A 会话调完权，B 会话**立刻**吃到同一份权重，
 /// **多会话串扰**（一个会话的检索行为改变另一个会话的排序）。
 ///
-/// ⇒ ⇒ 现在按 `session key` **分桶**：A 的调权只进 A 的桶 ⇒ ⇒ 两个会话
+/// 现在按 `session key` **分桶**：A 的调权只进 A 的桶，两个会话
 /// 各调各的，**互不影响**（可测的隔离语义见
 /// `two_sessions_do_not_share_their_effective_ranking`）。
 ///
-/// ⚠️ **加锁不解决串扰** ⇒ ⇒ 这里的隔离靠的是**分桶**，不是锁。
+/// ⚠️ **加锁不解决串扰**，这里的隔离靠的是**分桶**，不是锁。
 static EFFECTIVE: std::sync::Mutex<BTreeMap<String, EffectiveRanking>> =
     std::sync::Mutex::new(BTreeMap::new());
 
-/// 进程级**默认桶**键（没有会话作用域的调用落在这里 ⇒ 旧口径保持不变）。
+/// 进程级**默认桶**键（没有会话作用域的调用落在这里：旧口径保持不变）。
 const DEFAULT_SESSION_KEY: &str = "\u{0}default";
 
 thread_local! {
@@ -721,7 +752,7 @@ thread_local! {
         const { std::cell::RefCell::new(Vec::new()) };
 }
 
-/// 会话作用域守卫（**panic 安全**：Drop 时弹栈 ⇒ 不会把作用域泄漏给后续调用）。
+/// 会话作用域守卫（**panic 安全**：Drop 时弹栈：不会把作用域泄漏给后续调用）。
 #[derive(Debug)]
 pub struct SessionScopeGuard {
     _private: (),
@@ -740,11 +771,11 @@ impl Drop for SessionScopeGuard {
 /// # 为什么需要「作用域」而不是到处传 session id
 ///
 /// 生效值的**读取点**在检索管线内部（`entry_salience`），那条路径**拿不到**
-/// 会话 id ⇒ ⇒ 用一个**作用域**把「当前会话」带进去（作用域内读到的桶 =
+/// 会话 id，用一个**作用域**把「当前会话」带进去（作用域内读到的桶 =
 /// 当前会话的桶）。
 ///
-/// ⚠️ 作用域是**线程局部**的 ⇒ ⇒ 只覆盖**同步**代码段（检索管线是同步的），
-/// 跨 `await` 不保持 ⇒ ⇒ 调用点必须**紧贴**读写点。
+/// ⚠️ 作用域是**线程局部**的，只覆盖**同步**代码段（检索管线是同步的），
+/// 跨 `await` 不保持，调用点必须**紧贴**读写点。
 #[must_use]
 pub fn enter_session_scope(session_key: &str) -> SessionScopeGuard {
     ACTIVE_SESSION_KEYS.with(|keys| {
@@ -753,20 +784,20 @@ pub fn enter_session_scope(session_key: &str) -> SessionScopeGuard {
     SessionScopeGuard { _private: () }
 }
 
-/// 当前会话作用域的键（没有作用域 ⇒ `None`）。
+/// 当前会话作用域的键（没有作用域：`None`）。
 fn active_session_key() -> Option<String> {
     ACTIVE_SESSION_KEYS.with(|keys| keys.borrow().last().cloned())
 }
 
 /// 当前**生效值桶**的键（**分桶的唯一口径**）。
 ///
-/// ⇒ 与 [`install_effective`] / [`effective_ranking_or`] / [`entry_salience`] /
-/// [`effective_installed`] 的落桶**完全同一个键**：有会话作用域 ⇒ 作用域的键;
-/// 没有 ⇒ 进程级默认桶键。
+/// 与 [`install_effective`] / [`effective_ranking_or`] / [`entry_salience`] /
+/// [`effective_installed`] 的落桶**完全同一个键**：有会话作用域：作用域的键;
+/// 没有：进程级默认桶键。
 ///
-/// ⚠️ **只读查询面**（**不引入第二套分桶语义**）⇒ ⇒ 接线层可以按**同一个键**
-/// 给「调权**学习**状态」分桶 ⇒ ⇒ 学习与生效值落地**同一会话口径**
-/// ⇒ ⇒ 多会话不串扰（否则 A 学出来的权重会被 B 的引擎继承）。
+/// ⚠️ **只读查询面**（**不引入第二套分桶语义**），接线层可以按**同一个键**
+/// 给「调权**学习**状态」分桶，学习与生效值落地**同一会话口径**
+/// 多会话不串扰（否则 A 学出来的权重会被 B 的引擎继承）。
 pub fn effective_bucket_key() -> String {
     active_session_key().unwrap_or_else(|| DEFAULT_SESSION_KEY.to_string())
 }
@@ -782,13 +813,13 @@ pub struct EffectiveRanking {
 
 /// 安装当前生效检索排序 (调权后调用)。
 ///
-/// ⚠️ **会话维度**：有会话作用域 ⇒ 装进**该会话的桶**；没有 ⇒ 装进进程级
-/// 默认桶（旧口径不变 ⇒ 既有调用点照旧可用）。
+/// ⚠️ **会话维度**：有会话作用域：装进**该会话的桶**；没有：装进进程级
+/// 默认桶（旧口径不变：既有调用点照旧可用）。
 pub fn install_effective(value: EffectiveRanking) {
     install_effective_for_session(&effective_bucket_key(), value);
 }
 
-/// 按**会话**安装生效检索排序（显式会话维度 ⇒ 不依赖作用域）。
+/// 按**会话**安装生效检索排序（显式会话维度：不依赖作用域）。
 pub fn install_effective_for_session(session_key: &str, value: EffectiveRanking) {
     let mut slots = EFFECTIVE
         .lock()
@@ -816,14 +847,14 @@ pub fn clear_effective_for_session(session_key: &str) {
 
 /// 读生效层权重: 有 override 取 override, 否则取调用方传入值 (零改动回落)。
 ///
-/// ⚠️ **会话维度**：有会话作用域 ⇒ 读**该会话的桶**（没有则回落进程级默认桶）。
+/// ⚠️ **会话维度**：有会话作用域：读**该会话的桶**（没有则回落进程级默认桶）。
 pub fn effective_ranking_or(fallback: MemoryRankingConfig) -> MemoryRankingConfig {
     effective_ranking_or_for_session(&effective_bucket_key(), fallback)
 }
 
 /// 按**会话**读生效层权重：**会话桶 → 进程级默认桶 → 调用方传入值**。
 ///
-/// ⇒ ⇒ 会话桶在场时**只看自己** ⇒ ⇒ 两个会话各装各的 ⇒ ⇒ 互不影响。
+/// 会话桶在场时**只看自己**，两个会话各装各的，互不影响。
 pub fn effective_ranking_or_for_session(
     session_key: &str,
     fallback: MemoryRankingConfig,
@@ -894,7 +925,7 @@ mod tests {
         }
     }
 
-    /// **生产消费点的测试**：证据批次 ⇒ 命中率样本 ⇒ 漂移监控器看得见。
+    /// **生产消费点的测试**：证据批次：命中率样本：漂移监控器看得见。
     #[test]
     fn quality_drift_monitor_sees_hit_rate_samples_from_evidence_batches() {
         use crate::quality_drift::QualityDriftMonitor;
@@ -902,25 +933,25 @@ mod tests {
         let monitor = QualityDriftMonitor::new(&[RETRIEVAL_HIT_RATE_METRIC], 0.05, 2.0, 3);
         let mut engine = RetrievalTuningEngine::new().with_quality_drift(monitor);
 
-        // ① 证据不足（2 条）⇒ **不产生样本** ⇒ ⇒ 监控器看不到任何采样
+        // ① 证据不足（2 条）：**不产生样本**，监控器看不到任何采样
         engine.observe_batch(&[
             evidence(EvidenceSignal::Positive, "m1", None),
             evidence(EvidenceSignal::Negative, "m2", None),
         ]);
         let monitor = engine.quality_drift().expect("monitor attached");
-        assert_eq!(monitor.observed(), 0, "证据不足 ⇒ 不该产生样本");
+        assert_eq!(monitor.observed(), 0, "证据不足：不该产生样本");
 
-        // ② 3 条证据（全正）⇒ 命中率 1.0 ⇒ 一个样本
+        // ② 3 条证据（全正）：命中率 1.0：一个样本
         engine.observe_batch(&[
             evidence(EvidenceSignal::Positive, "m1", None),
             evidence(EvidenceSignal::Positive, "m2", None),
             evidence(EvidenceSignal::Positive, "m3", None),
         ]);
         let monitor = engine.quality_drift().expect("monitor attached");
-        assert_eq!(monitor.observed(), 1, "够证据 ⇒ 该有一个样本");
+        assert_eq!(monitor.observed(), 1, "够证据：该有一个样本");
         assert_eq!(monitor.metrics(), [RETRIEVAL_HIT_RATE_METRIC]);
 
-        // ③ 混批（2 正 1 负）⇒ 命中率 2/3
+        // ③ 混批（2 正 1 负）：命中率 2/3
         engine.observe_batch(&[
             evidence(EvidenceSignal::Positive, "m4", None),
             evidence(EvidenceSignal::Negative, "m5", None),
@@ -1168,10 +1199,10 @@ mod tests {
         assert_eq!(entry_salience("mem-j"), 0.0);
     }
 
-    /// **两个会话各装各的生效权重 ⇒ 互不影响**（多会话串扰回归）。
+    /// **两个会话各装各的生效权重：互不影响**（多会话串扰回归）。
     ///
-    /// 旧实现是**进程级单槽** ⇒ A 装完 B 立刻读到同一份 ⇒ ⇒ 串扰。
-    /// 现在按会话分桶 ⇒ ⇒ 各自的桶只装自己的。
+    /// 旧实现是**进程级单槽**：A 装完 B 立刻读到同一份，串扰。
+    /// 现在按会话分桶，各自的桶只装自己的。
     #[test]
     fn two_sessions_do_not_share_their_effective_ranking() {
         let _guard = lock_effective();
@@ -1231,7 +1262,7 @@ mod tests {
         assert_eq!(
             effective_ranking_or_for_session("session-a", fallback),
             fallback,
-            "A 的桶已被清空 ⇒ 回落调用方传入值"
+            "A 的桶已被清空：回落调用方传入值"
         );
 
         clear_effective();
