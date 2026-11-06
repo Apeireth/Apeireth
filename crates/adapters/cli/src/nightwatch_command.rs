@@ -12,6 +12,28 @@ use std::sync::Arc;
 
 use super::{cognitive_db_path, default_panel_data_dir, guard_decision_wiring};
 
+/// **守夜守护循环的轮询调度**（具名间隔调度）。
+///
+/// # 为什么走 `cron::Schedule` + `validate_schedule`
+///
+/// 「调度要不要校验」是**正确性语义**（未校验的调度会跑错）⇒ ⇒ 调度**真正落地前**
+/// 必须过一遍规范校验（间隔必须为正）⇒ ⇒ 校验走**单一真源**
+/// （`apeireth_orchestration::cron::validate_schedule`），不在调用点各写各的。
+///
+/// ⚠️ 旧口径是 `interval_secs.max(1)` —— **0 被静默改写成 1 秒** ⇒ 用户要的
+/// 「0 秒轮询」变成「1 秒轮询」⇒ 调度跑的不是用户要的那个 ⇒ 现在改成**拒绝即帧**
+/// （如实报错，不静默改写）。
+fn watch_poll_schedule(
+    interval_secs: u64,
+) -> Result<apeireth_orchestration::cron::Schedule, String> {
+    let seconds = i64::try_from(interval_secs)
+        .map_err(|_| format!("拒绝调度: 轮询间隔秒数溢出 i64, got {interval_secs}"))?;
+    let schedule = apeireth_orchestration::cron::Schedule::new("nightwatch_watch_poll", seconds);
+    apeireth_orchestration::cron::validate_schedule(&schedule)
+        .map_err(|error| format!("拒绝调度: {error}"))?;
+    Ok(schedule)
+}
+
 pub async fn dispatch_nightwatch(session: Option<String>, limit: usize) -> Result<String, String> {
     use apeireth_memory::backend::sqlite::SqliteBackend;
     use apeireth_plugin::memory_backend::MemoryBackend;
@@ -103,6 +125,12 @@ pub async fn dispatch_nightwatch_watch(
     use apeireth_storage::SqliteConnectionPool;
     use std::time::{SystemTime, UNIX_EPOCH};
 
+    // **调度落地前校验** (W11 「调度要不要校验」是正确性语义): 间隔非法 ⇒
+    // 拒绝即帧, **在开库 / 进循环之前** ⇒ 不静默改写成 1 秒, 也不留半启动状态。
+    let poll_schedule = watch_poll_schedule(interval_secs)?;
+    let poll_interval =
+        std::time::Duration::from_secs(u64::try_from(poll_schedule.interval_secs).unwrap_or(1));
+
     // 引导档案激活（普通用户预设值; 无档案 = 0 行为变化）。
     crate::onboarding::activate_for_process();
     let pool = Arc::new(
@@ -147,6 +175,26 @@ pub async fn dispatch_nightwatch_watch(
             }
         }
 
-        tokio::time::sleep(std::time::Duration::from_secs(interval_secs.max(1))).await;
+        tokio::time::sleep(poll_interval).await;
+    }
+}
+
+#[cfg(test)]
+mod watch_schedule_tests {
+    use super::watch_poll_schedule;
+
+    /// **调度落地前校验**: 间隔必须为正 ⇒ 0 被拒绝（旧口径 `max(1)` 静默改写 ⇒ 跑错调度）。
+    #[test]
+    fn a_non_positive_poll_interval_is_refused() {
+        let error = watch_poll_schedule(0).expect_err("0 秒间隔必须被拒绝");
+        assert!(error.contains("拒绝调度"), "{error}");
+    }
+
+    /// 合法间隔照常通过（校验不误伤正常调度）。
+    #[test]
+    fn a_positive_poll_interval_passes_validation() {
+        let schedule = watch_poll_schedule(60).expect("60 秒间隔应通过");
+        assert_eq!(schedule.interval_secs, 60);
+        assert_eq!(schedule.name, "nightwatch_watch_poll");
     }
 }
