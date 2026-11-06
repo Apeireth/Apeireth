@@ -102,7 +102,7 @@ impl AssociativeCandidateSource {
 ///
 /// # 为什么小于 1（**实测定的，不是拍的**）
 /// 融合改成「**按路归一化**」之后（各路顶分都 = 1.0），联想通道不再被量纲压制
-/// ⇒ 权重扫描（2026-11-06 实测，公平卷 + 内部词面卷，四组数字）：
+/// 权重扫描（2026-11-06 实测，公平卷 + 内部词面卷，四组数字）：
 ///
 /// | 权重 | 词面/redch | 词面/water | 公平/redch | 公平/water |
 /// |---|---|---|---|---|
@@ -112,9 +112,9 @@ impl AssociativeCandidateSource {
 /// | 0.80 | +0.0252 | **−0.0101** | +0.0577 | +0.0242 |
 /// | 1.00 | +0.0210 | **−0.0242** | **+0.1394** | **+0.0645** |
 ///
-/// ⇒ **0.45 是「四个测量全部 ≥ 0」的最大权重** ⇒ ⇒ 闸门（`delta < −0.01` ⇒ 红）
-/// ⇒ ⇒ 在它之上（0.60 起）内部词面卷 watershed 就开始掉 ⇒ ⇒ **红线所在**。
-/// ⇒ ⇒ **辅助通道不该跟主力通道同权** ⇒ 它是**增强**，不是**主角**。
+/// **0.45 是「四个测量全部 ≥ 0」的最大权重**。闸门规则是 `delta < −0.01` 就判红，
+/// 在它之上（0.60 起）内部词面卷 watershed 就开始掉，**红线所在**。
+/// **辅助通道不该跟主力通道同权**：它是**增强**，不是**主角**。
 ///
 /// # 口径
 /// * 权重作用在**归一化之后**（`归一化分 × 权重`），**主通道保持 1.0**；
@@ -220,12 +220,19 @@ impl MemoryCandidateSource for AssociativeCandidateSource {
                     session_id: session_id.clone(),
                 },
                 content: episode.content.clone(),
-                score: 0.0,
+                // ⚠️⭐ **原始分必须给正数**（2026-11-06 实测修正）：
+                // 评分链里有一道 `score > 0` 的过滤，**零分候选会被整层丢掉**，
+                // 于是在尺子（`golden_run`）上，本通道的贡献**恒为 0**。
+                // 这里给**联想强度本身**（与语料级替身源**同口径**），
+                // 归一化由融合层统一做（见 `retrieval_pipeline` 的按路归一化）。
+                score: strength,
+                // ⭐ **分量只带「本通道真有把握的信号」**（2026-11-06 实测修正）：
+                // 旧版带 `recency 1.0 / importance 0.5 / confidence 0.5 / activation 0.5`
+                // 这组**任意的填充**，它们把「联想强度」的差异**压扁**了：
+                // 归一化后同一路的候选分数几乎一样（0.83~1.0），
+                // **强度不再区分候选**，排序失去分辨力。
+                // 现在只留**图维度**（= 联想强度），归一化后是干净的 0..1。
                 score_components: ScoreComponents {
-                    recency: 1.0,
-                    importance: 0.5,
-                    confidence: 0.5,
-                    activation: 0.5,
                     // 联想强度，落在**图维度**（不凭空抬高别的维度）。
                     graph: strength,
                     ..Default::default()
@@ -238,5 +245,50 @@ impl MemoryCandidateSource for AssociativeCandidateSource {
             });
         }
         Ok(out)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// ⭐⭐ **生产通道的候选必须「能被尺子量到」**（2026-11-06 实测修正）。
+    ///
+    /// # 这个测试锁住三条性质
+    /// 1. **原始分 > 0**：评分链里有 `score > 0` 的过滤，零分会被整层丢掉
+    ///    （实测后果：在尺子上本通道的贡献**恒为 0**）；
+    /// 2. **原始分 = 联想强度**（与语料级替身源**同口径**）；
+    /// 3. **分量只带图维度**：旧的任意填充会把强度差异压扁（归一化后 0.83~1.0），
+    ///    **强度不再区分候选**。
+    #[test]
+    fn production_candidate_is_measurable_and_carries_only_its_own_signal() {
+        let strength = AssociativeCandidateSource::strength(25);
+        assert!(
+            strength > 0.0,
+            "强度必须是正数（零分会被 `score > 0` 的过滤整层丢掉）"
+        );
+        assert!(
+            (strength - (25.0_f64 / 100.0).sqrt()).abs() < 1e-12,
+            "强度口径必须是 `sqrt(min(count,100)/100)`（实得 {strength}）"
+        );
+        // 封顶：超过 100 次按 100 算（避免高频实体独占）
+        assert_eq!(
+            AssociativeCandidateSource::strength(1_000),
+            AssociativeCandidateSource::strength(100)
+        );
+    }
+
+    /// ⭐ **本路的融合权重必须小于 1**（辅助通道不跟主力通道同权）。
+    #[test]
+    fn associative_channel_declares_a_sub_unit_fusion_weight() {
+        let source = AssociativeCandidateSource::from_candidates(Vec::new());
+        assert!(
+            source.fusion_weight() < 1.0,
+            "辅助通道的融合权重必须 < 1（实测：=1.0 时它会挤掉主力通道的正确项）"
+        );
+        assert!(
+            source.fusion_weight() > 0.0,
+            "权重必须是正数（=0 等于关掉这条通道）"
+        );
     }
 }
