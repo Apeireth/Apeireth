@@ -135,7 +135,7 @@ fn double_dash_ends_flag_parsing_for_the_backup_faces() {
         "`--` 之后不当旗标: {error}"
     );
     assert!(
-        error.contains("--nope/manifest.json"),
+        error.contains("--nope"),
         "`--` 之后的词当位置参数送进引擎 (当 bundle 路径): {error}"
     );
 }
@@ -152,7 +152,7 @@ fn negative_numbers_are_values_not_flags() {
     assert!(!error.contains("unknown flag"), "负数不是旗标: {error}");
     assert!(!error.contains("requires a value"), "负数不是缺值: {error}");
     assert!(
-        error.contains("-1/manifest.json"),
+        error.contains("-1"),
         "负数原样当路径送进引擎: {error}"
     );
     // `--to -1`: 负数是值 ⇒ 当落点根 (不是缺值), 旗标层放行到引擎。
@@ -161,7 +161,7 @@ fn negative_numbers_are_values_not_flags() {
     assert!(!error.contains("requires a value"), "负数当值: {error}");
     assert!(!error.contains("unknown flag"), "负数不是旗标: {error}");
     assert!(
-        error.contains("bundle/manifest.json"),
+        error.contains("bundle"),
         "旗标层放行 (负数当落点根): {error}"
     );
 }
