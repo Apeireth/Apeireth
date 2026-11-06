@@ -3,16 +3,16 @@
   "spec": "docs/01-architecture/memory-knowledge-depth-system-spec.md §8 B0-c",
   "board": "docs/status/spec-batch-status.md",
   "source": "scripts/audit_unwired_modules.py",
-  "module_count": 51,
+  "module_count": 53,
   "candidate_count": 22,
   "measured_count": 3,
   "not_measurable_count": 1,
   "left_pool_count": 3,
   "by_layer": {
-    "D4": 8,
+    "D4": 9,
     "D3": 3,
     "—": 24,
-    "D5": 7,
+    "D5": 8,
     "D1": 3,
     "D0": 2,
     "D2": 4
@@ -144,6 +144,20 @@
       "delta_grounded": null,
       "measure_note": null,
       "status": "out-of-scope"
+    },
+    {
+      "module": "reflexion_tuning",
+      "loc": 631,
+      "layer": "D5",
+      "kind": "weight",
+      "consumes": "Text",
+      "produces": "Weight",
+      "measurable_by": "not-applicable",
+      "note": "⚠️ 产出**权重 / 校准量**（失败 → 学习桥）⇒ ⇒ **不是检索排序信号** ⇒ ⇒ 不上卷子 ⇒ ⇒ 且**生产装配为零**（台账 §一 W12「待接线」）",
+      "status": "out-of-scope",
+      "delta_recall": null,
+      "delta_grounded": null,
+      "measure_note": null
     },
     {
       "module": "swap_flow",
@@ -284,6 +298,20 @@
       "delta_grounded": null,
       "measure_note": null,
       "status": "out-of-scope"
+    },
+    {
+      "module": "golden_fair",
+      "loc": 439,
+      "layer": "D4",
+      "kind": "exam",
+      "consumes": "Text",
+      "produces": "Annotation",
+      "measurable_by": "not-applicable",
+      "note": "⚠️ **评测设施**（通道公平考卷）⇒ ⇒ **不是排序信号** ⇒ ⇒ **不上检索卷子**",
+      "status": "out-of-scope",
+      "delta_recall": null,
+      "delta_grounded": null,
+      "measure_note": null
     },
     {
       "module": "robustness_metrics",

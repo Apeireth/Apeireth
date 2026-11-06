@@ -64,6 +64,7 @@
 # --- E1（4 条）：台账 §5.1「重复实现（不是债）」⇒ ⇒ **已被谁承担**
 #     ⇒ 同一能力另有主实现 ⇒ ⇒ 再接一次会引入第二份真相 ⇒ ⇒ 不是债。
 
+explained reflexion_tuning  # 台账 docs/status/unwired-ledger.md §一 W12 登记为「待接线」（能力已实现、测试已写，但生产装配为零 ⇒ ⇒ 不是「有意不接」）
 explained memory_rank        # 台账 docs/status/unwired-ledger.md §5.1「重复实现（不是债）」L82：排序由 `retrieval_pipeline.rs` + `scope::MemoryRankingConfig` 承担 ⇒ ⇒ 同能力另有主实现 ⇒ ⇒ 不是债
 explained preference_store   # 台账 docs/status/unwired-ledger.md §5.1「重复实现（不是债）」L83：偏好已走 `SQLitePreferenceStore`（`cli/src/lib.rs:1858`）⇒ ⇒ 同能力另有主实现 ⇒ ⇒ 不是债
 explained three_layer        # 台账 docs/status/unwired-ledger.md §5.1「重复实现（不是债）」L84：分层由 `layers.rs` + coordinator 承担（`production.rs:1435`）⇒ ⇒ 同能力另有主实现 ⇒ ⇒ 不是债

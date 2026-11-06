@@ -283,10 +283,10 @@ env APEIRETH_VOICE_SPEAK_SCOPE
 # --- size (80) ---
 size crates/adapters/cli/src/care_heartbeat.rs 1621
 size crates/adapters/cli/src/gateway_panels.rs 1526
-size crates/adapters/cli/src/lib.rs 3788
+size crates/adapters/cli/src/lib.rs 3775
 size crates/adapters/cli/src/main.rs 1467
-size crates/adapters/cli/src/onboarding.rs 1338
-size crates/adapters/gateway/src/canonical_entry.rs 2341
+size crates/adapters/cli/src/onboarding.rs 1332
+size crates/adapters/gateway/src/canonical_entry.rs 2291
 size crates/adapters/gateway/src/events.rs 1623
 size crates/adapters/gateway/src/panels.rs 1623
 size crates/adapters/gateway/src/presence.rs 1279
@@ -327,10 +327,11 @@ size crates/engine/image/doc/src/lib.rs 1520
 size crates/engine/image/geom/src/warp.rs 1374
 size crates/engine/image/psd/src/tiff.rs 2440
 size crates/engine/image/raster/src/lib.rs 1676
-size crates/engine/memory/src/coordinator.rs 1944
-size crates/engine/memory/src/golden_mining.rs 1323
+size crates/engine/memory/src/coordinator.rs 2346
+size crates/engine/memory/src/golden_mining.rs 1352
 size crates/engine/memory/src/persona_layer.rs 1680
 size crates/engine/memory/src/research_derived_memory.rs 1211
+size crates/engine/memory/src/retrieval_tuning.rs 1239
 size crates/engine/organ/src/causal_world_model.rs 1864
 size crates/engine/organ/src/emergence.rs 1224
 size crates/engine/organ/src/goal.rs 1619
@@ -346,14 +347,13 @@ size crates/engine/runtime-assembly/src/canonical/play_tools.rs 1412
 size crates/engine/runtime-assembly/src/canonical/production.rs 1897
 size crates/engine/runtime-assembly/src/canonical/self_status_source.rs 2064
 size crates/engine/runtime-assembly/src/canonical/tool_modules.rs 1395
-size crates/engine/runtime/src/canonical/execute.rs 4750
-size crates/engine/runtime/src/canonical/runtime.rs 1204
+size crates/engine/runtime/src/canonical/execute.rs 4731
 size crates/foundation/core/src/cost_router.rs 1399
 size crates/foundation/core/src/lib.rs 2483
 size crates/foundation/core/src/stored_doc.rs 1304
 size crates/foundation/credentials/src/keyring.rs 1825
 size crates/foundation/governance/src/chain.rs 1320
-size crates/foundation/governance/src/input_security.rs 1303
+size crates/foundation/governance/src/input_security.rs 1298
 size crates/foundation/governance/src/sandbox_ladder.rs 1220
 size crates/foundation/orchestration/src/durable_schedule.rs 1242
 size crates/foundation/orchestration/src/lib.rs 1426
