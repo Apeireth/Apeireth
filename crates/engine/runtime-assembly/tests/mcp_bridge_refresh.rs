@@ -51,10 +51,6 @@ fn test_options() -> McpBridgeOptions {
         })
 }
 
-fn demo_spec() -> McpServerSpec {
-    McpServerSpec::stdio(SERVER, "in-process-test-server")
-}
-
 /// 一个会在「开关打开」时拒绝开链的工厂: 用来把一台服务器打成**不可达**。
 ///
 /// 不可达必须同时满足两件事: 既有链路读不到工具（下一请求传输失败），

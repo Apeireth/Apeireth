@@ -1819,7 +1819,7 @@ pub async fn build_canonical_runtime_from_env_with_observability() -> Result<
         bio_approval,
         nociception,
     ) = build_canonical_runtime_assembly_from_env().await?;
-    let runtime = Arc::new(runtime);
+    // 合并后 runtime 已是 `Arc<Runtime>`（装配层直接产出 Arc）⇒ 此处不再二次包裹。
     // W3.6: 痛觉/再生 probe 绑定到装配时装入 runtime 的同一观察者实例。
     // 痛觉/再生账本归 `apeireth-organ::nociception`; runtime 只认识通用完成观察口
     // （runtime 侧的 `canonical::bio_pain` 模块已下线）⇒ 绑定点取 organ 观察者形态。

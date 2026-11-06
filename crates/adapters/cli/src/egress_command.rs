@@ -631,6 +631,7 @@ fn parse_arg(args: &[String], name: &str) -> Option<String> {
         }
         index += 1;
     }
+    found
 }
 
 #[cfg(test)]

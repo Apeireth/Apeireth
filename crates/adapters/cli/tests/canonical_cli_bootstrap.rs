@@ -569,7 +569,7 @@ async fn desktop_entries_share_managed_main_sessions_approval_stream_and_heartbe
         EnvGuard::set("APEIRETH_ENABLE_SHELL", Some("1")),
         EnvGuard::set("APEIRETH_ENABLE_ORGANS", None),
     ];
-    let runtime = Arc::new(build_canonical_runtime_from_env().await.unwrap());
+    let runtime = build_canonical_runtime_from_env().await.unwrap();
     let identity = runtime
         .managed_main()
         .expect("desktop main must be managed");

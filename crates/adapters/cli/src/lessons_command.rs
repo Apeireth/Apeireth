@@ -307,6 +307,8 @@ mod tests {
             std::env::temp_dir().join(format!("apeireth-lessons-cli-{tag}-{}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("dir");
         dir.join("cognitive.sqlite3")
+    }
+
     /// `lessons add`：没有出处经历 ⇒ 拒绝（**没有出处的教训按幻觉拒绝**）。
     #[test]
     fn add_without_episode_is_refused() {
