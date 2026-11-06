@@ -499,6 +499,42 @@ def tree_is_dirty() -> bool:
 
 def run_gate(gate: dict[str, Any], timeout: int) -> dict[str, Any]:
     """执行单个门禁；任何异常都被捕获 ⇒ 记 UNVERIFIED，不中断整轮。"""
+    # ── ⭐ 资源守卫：**跑之前**看一眼磁盘/内存 ──────────────────────
+    # 事故链（实测）：磁盘 85% → 跑测试 → 产出 60~100 G → 磁盘 100%
+    #   → 生成脚本写文件**不报错**（静默截断）→ 产物损坏 → 一切停摆。
+    # ⇒ ⇒ ⇒ 守卫的位置比清理本身更重要 ⇒ ⇒ ⇒ **每条门禁之前**都看一眼。
+    # ⚠️ 空间不足 ⇒ ⇒ **不硬跑**（跑出来的结论不可信）⇒ ⇒ 记 UNVERIFIED + 说明原因
+    # ⇒ ⇒ ⇒ 宁可「明确说没验」，也不要「假装验过」。
+    if os.environ.get("APEIRETH_HARNESS") == "1" or True:
+        try:
+            _guard = subprocess.run(
+                [
+                    sys.executable,
+                    str(ROOT / "scripts" / "disk_guard.py"),
+                    "--ensure",
+                    "2000",
+                ],
+                cwd=str(ROOT),
+                capture_output=True,
+                text=True,
+                timeout=300,
+                check=False,
+            )
+            if _guard.returncode != 0:
+                return {
+                    "id": gate.get("id", "?"),
+                    "status": S_UNVERIFIED,
+                    "reason": (
+                        "**资源不足 ⇒ 本门禁未执行**（磁盘/内存不够 ⇒ ⇒ 跑出来的结论不可信）"
+                        f" ⇒ ⇒ {_guard.stderr.strip().splitlines()[-1] if _guard.stderr.strip() else '见 disk_guard'}"
+                    ),
+                    "exit_code": None,
+                    "duration_ms": 0,
+                    "output": _guard.stdout[-2000:],
+                }
+        except Exception:  # noqa: BLE001 —— 守卫失败**不阻断**门禁（只是少一道保险）
+            pass
+
     env = os.environ.copy()
     env["LC_ALL"] = "C.UTF-8"
     env["PYTHONIOENCODING"] = "utf-8"
