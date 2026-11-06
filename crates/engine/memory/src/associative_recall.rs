@@ -147,9 +147,8 @@ impl MemoryCandidateSource for AssociativeCandidateSource {
         // ⇒ ⇒ 任一键查失败 ⇒ ⇒ 本通道**静默跳过** ⇒ ⇒ 其它通道照常。
         let mut edges: Vec<apeireth_plugin::experience::AssociationEdge> = Vec::new();
         for key in &lookup_keys {
-            match associations.top_associations(key, assoc_limit) {
-                Ok(found) => edges.extend(found),
-                Err(_) => continue,
+            if let Ok(found) = associations.top_associations(key, assoc_limit) {
+                edges.extend(found);
             }
         }
 

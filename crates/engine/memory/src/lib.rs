@@ -251,8 +251,8 @@ pub use online_calibration::{
 };
 
 pub use reflexion::{
-    Critic, FailureKind, FailureRecord, FileReflexionStore, InMemoryReflexionStore, ReflectionText,
-    ReflexionError, ReflexionStore, RuleCritic,
+    Critic, FailureAttribution, FailureKind, FailureRecord, FileReflexionStore,
+    InMemoryReflexionStore, ReflectionText, ReflexionError, ReflexionStore, RuleCritic,
 };
 
 pub use cross_diary::{link_core, CrossDiaryIndex, CrossLink, SNIPPET_MAX_CHARS};
