@@ -28,11 +28,15 @@ on:
     #    ⇒ ⇒ **GitHub 把「无 job 的 run」判为 `failure`** ⇒ ⇒ ⇒ **每次一封红邮件**；
     # ③ ⚠️ **实测**：加否定路径 `'!crates-ui/**'`（2026-11-01 曾试）**不能**阻止它
     #    ⇒ ⇒ 第 2 次 push（只改台账，**不碰** lock / workflow）**仍然**产生无 job run。
+    #    ⇒ ⇒ ⚠️ **2026-11-06 改名**：引擎线远端分支**新增 `ui-engine`**（旧名
+    #    ⇒ ⇒ `ui-engine-p0-2026-10-24` 冻结在 `b72ac26e`，不再推）
+    #    ⇒ ⇒ ⇒ ⇒ ⇒ 两个名字**都要列进来** ⇒ ⇒ 否则新分支 push ⇒ ⇒ **产生无 job 假失败**
+    #    ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ （机制见台账 **E-150**：无 job 的 run 被 GitHub 判 failure ⇒ ⇒ 发红邮件）。
     #
     # ⇒ ⇒ **正解**：把活跃分支**列进来** ⇒ ⇒ audit **真跑**（有 job）⇒ ⇒
     # ⇒ ⇒ run 的结论变成**真实的审计结论**（绿 ⇒ 无红邮件；红 ⇒ 是真问题）⇒ ⇒
     # ⇒ ⇒ **信息量更高**，而不是「制造一个假的失败」。
-    branches: [master, main, feature/cognitive-infrastructure-vnext, feature/memory-v2.2-production-completion, ui-engine-p0-2026-10-24]
+    branches: [master, main, feature/cognitive-infrastructure-vnext, feature/memory-v2.2-production-completion, ui-engine, ui-engine-p0-2026-10-24]
     # ⭐⭐ **只在依赖真的变了才跑**（2026-10-31 owner 报「一直发邮件」时修）：
     #   本 workflow 在 PR 分支同步时会生成**无 job 的失败 run** ⇒ ⇒ 每次 push 都发一封红邮件
     #   ⇒ ⇒ 而依赖没变时，RUSTSEC 结论与上次完全相同 ⇒ ⇒ 跑它**没有信息量**。

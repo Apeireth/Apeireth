@@ -10,11 +10,11 @@
 
 | 项 | 值 |
 |---|---|
-| 分支 | `ui-engine-p0-2026-10-24` |
+| 分支 | `ui-engine`（**2026-11-06 改名**；旧名 `ui-engine-p0-2026-10-24` **冻结于 `b72ac26e`**，不再推）|
 | 本地 HEAD | `a60f9dc1`（= 远端 HEAD） |
 | 工作树 | **干净**（`git status` 无改动） |
 | 主 worktree | `/home/bai/Projects/Apeireth-rust`（**另一条线在用**，有 68 个未提交改动 ⇒ **不要动**） |
-| 本线 worktree | `/home/bai/Projects/apeireth-ui-wt2`（分支 `ui-engine-w0`，与远端分支**同内容**） |
+| 本线 worktree | `/home/bai/Projects/apeireth-ui-wt2`（分支 `ui-engine`，与远端分支**同内容**） |
 | 台账 | `docs/04-internal/ui-engine-defect-ledger.md`（E-30…**E-153**） |
 
 ### 本批已闭的口子
@@ -152,10 +152,16 @@ cargo run --release -p apeireth-ui-dom --example patch_cost_probe          # 性
 **提交**：`pwsh scripts/commit.ps1 -MessageFile /home/bai/mNNN.txt`
 （正文必带 0 装真账 + O-6 三阶审查，否则 hook 直接拒）。
 
-**推送**：`/home/bai/Projects/apeireth-ops/push.sh HEAD refs/heads/ui-engine-p0-2026-10-24`
+**推送**：`/home/bai/Projects/apeireth-ops/push.sh HEAD refs/heads/ui-engine`
 - ⚠️ 网络间歇不通 ⇒ 会重试 5 轮；仍失败就**过几分钟再来**。
 - ⚠️ 若报 **非快进** ⇒ 说明别的线推了东西 ⇒
-  `git rebase origin/ui-engine-p0-2026-10-24`（对象通常已在共享 `.git` 里，
+  `git rebase origin/ui-engine`（对象通常已在共享 `.git` 里，
+- ⚠️ **旧名 `ui-engine-p0-2026-10-24` 已冻结**（停在 `b72ac26e`）⇒ ⇒ **不再推它**
+  ⇒ ⇒⇒ ⇒ 原因：那个名字带 `p0` + 日期，像**一次性推送信道**而不是长期分支
+  ⇒ ⇒⇒ ⇒ ⇒ 而长期分支应当有稳定名字（`ui-engine`）⇒ ⇒⇒ ⇒ ⇒ 交接文档不再引用它
+  ⇒ ⇒⇒ ⇒ ⇒ ⇒⇒ ⚠️ **但 CI 的 `push.branches` 两个名字都要列**（机制见台账 **E-150**：
+  ⇒ ⇒⇒ ⇒ ⇒ ⇒⇒ ⇒ 分支不在列表 ⇒ ⇒ 无 job 的 run ⇒ ⇒ **判 failure** ⇒ ⇒ **发红邮件**）
+  ⇒ ⇒⇒ ⇒ ⇒ ⇒⇒ ⇒ ⇒ 旧名**保留**是为了历史可回溯，不是为了继续推。
   不必先 fetch）⇒ 再推。
 
 ---
