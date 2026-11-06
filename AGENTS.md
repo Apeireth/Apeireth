@@ -92,6 +92,46 @@ cargo fmt --check                                                    # 期望 0 
 - 数字对外引用时对照 test-baseline.md 现行口径；不一致如实报「本批实测值 + 日期」，不代改真源。
 - 纯文档批同样跑校验；扫描类收尾（旧版本号 / 旧口径词）要求现值文档零命中、历史卷宗如实登记。
 
+### 5.2 ⭐ **并行线与磁盘纪律**（2026-11-06 补 · 实测踩坑固化）
+
+#### ① ⚠️ **`RUSTC_WRAPPER=` 必须置空**（否则你会撞 `Permission denied`）
+`/usr/local/cargo/config.toml` 设了 `[build] rustc-wrapper = "sccache"`
+⇒ ⇒ **sccache 守护进程以 root 运行** ⇒ ⇒ 它写的 `.d` / `.rmeta` / `.rlib` **root 拥有**
+⇒ ⇒ ⇒ **以 `bai` 跑 cargo 会读不了自己的产物** ⇒ ⇒ 报
+`E0786 invalid metadata files` / `could not parse/generate dep info … Permission denied`
+⇒ ⇒ ⇒ ⭐ **这不是代码问题**（会误导成「代码坏了」⇒ ⇒ 修错方向）
+⇒ ⇒ ⇒ **每条 cargo 命令都带 `RUSTC_WRAPPER=`**：
+
+```bash
+runuser -u bai -- env HOME=/home/bai LC_ALL=C.UTF-8 CARGO_INCREMENTAL=0 RUSTC_WRAPPER= \
+  bash -c 'cd /home/bai/wt-apeireth-r3 && cargo nextest run -p <crate> --offline'
+```
+
+#### ② ⚠️ **不要动不动跑全量**（磁盘 + 时间）
+* `--workspace` 只在**收口 wave** 跑 ⇒ ⇒ 平时**只跑你碰到的 crate**；
+* ⭐ **cargo 的磁盘占用 90% 来自测试二进制**（每个测试 = 一个可执行文件）
+  ⇒ ⇒ 实测：一次全量 nextest ⇒ ⇒ **1129 个 executables = 256.3 G**（vs 17.0 G 的 `.rlib`）
+  ⇒ ⇒ ⇒ 跑完立刻清（**保留 `*.so`** ⇒ ⇒ 那是 proc-macro ⇒ ⇒ 删了所有宏都要重编）：
+
+```bash
+find <target>/debug/deps -maxdepth 1 -type f -executable ! -name '*.so' -delete
+```
+
+* 磁盘守卫已入库：`python3 scripts/disk_guard.py`（磁盘 + 内存）
+  ⇒ ⇒ `harness.py` 的**每条门禁之前**都会看 ⇒ ⇒ 空间不足 ⇒ ⇒ 门禁记 UNVERIFIED
+  ⇒ ⇒ ⇒ **宁可「明确说没验」，也不「假装验过」**。
+
+#### ③ ⚠️ **并行线纪律**（本仓**同时有多条线**在推 `debt-round8`）
+* 开工前 `git fetch origin debt-round8` ⇒ ⇒ 看**远端最新提交**是谁的
+  ⇒ ⇒ ⚠️ **`paths` 过滤器在长命分支上无效**（比 PR 的**累积 diff**）⇒ ⇒ 别指望「只跑相关路径」；
+* ⚠️ **别用「逐文件 `git checkout`」落盘** ⇒ ⇒ 会**静默覆盖上游同文件的新代码**
+  ⇒ ⇒ ⇒ 落盘用 **patch** ⇒ ⇒ 合并后**逐项复核上游的修复还在**；
+* ⚠️ **不替别人的线做决定**：跨线在途的代码**不删**（⇒ ⇒ 走「登记 + 给理由」）
+  ⇒ ⇒ 尤其**最近 3 天引入的 API** ⇒ ⇒ 一律保护；
+* ⚠️ **别跑「零调用 ⇒ 可删」** ⇒ ⇒ 判据必须扫**全部消费者面**
+  ⇒ ⇒ ⚠️ **`fuzz/` 是独立 cargo workspace 且 CI 真跑**（审计脚本曾因此虚报「零调用」）
+  ⇒ ⇒ ⇒ 同族还有顶层 `benches/` · 顶层 `examples/`。
+
 ### 5.1 AI 高频批的快反馈（2026-10-20 效率批；全量仍按 §5 在 wave 收口跑）
 
 ```powershell
