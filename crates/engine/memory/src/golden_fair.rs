@@ -146,11 +146,8 @@ impl CorpusAssociations {
             let entities = association_entities(&record.content);
             for left in 0..entities.len() {
                 for right in (left + 1)..entities.len() {
-                    let _ = store.record_cooccurrence(
-                        &entities[left],
-                        &entities[right],
-                        &record.id,
-                    );
+                    let _ =
+                        store.record_cooccurrence(&entities[left], &entities[right], &record.id);
                 }
             }
         }
@@ -198,7 +195,10 @@ impl AssociationStore for CorpusAssociations {
             .edges
             .entry((left.clone(), right.clone(), episode_id.to_string()))
             .or_insert(0) += 1;
-        *inner.pair_counts.entry((left.clone(), right.clone())).or_insert(0) += 1;
+        *inner
+            .pair_counts
+            .entry((left.clone(), right.clone()))
+            .or_insert(0) += 1;
         inner
             .entity_records
             .entry(left)

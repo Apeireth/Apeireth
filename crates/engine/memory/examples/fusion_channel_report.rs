@@ -53,7 +53,7 @@ use std::process::ExitCode;
 use std::sync::Arc;
 
 use apeireth_memory::golden_fair::{
-    build_fair_exam, CorpusAssociativeSource, CorpusAssociations, FairExamConfig,
+    build_fair_exam, CorpusAssociations, CorpusAssociativeSource, FairExamConfig,
 };
 use apeireth_memory::golden_mining::MiningConfig;
 use apeireth_memory::golden_run::{
@@ -113,7 +113,10 @@ fn channel_only_recall(
     let mut batch = EvalBatch::default();
     for case in &golden.cases {
         let candidates = channel.candidates(&case.query, K)?;
-        let ids: Vec<String> = candidates.into_iter().map(|candidate| candidate.id).collect();
+        let ids: Vec<String> = candidates
+            .into_iter()
+            .map(|candidate| candidate.id)
+            .collect();
         batch.cases.push(case.clone());
         batch.results.push(Retrieved {
             ids,
