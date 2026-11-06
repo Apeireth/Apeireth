@@ -119,6 +119,23 @@ pub fn run_cold_start(cfg: &BenchConfig) -> Vec<Outcome> {
         cleanup_dir(&dir);
     }
 
+    // Full reassembly against already initialized files, with the first Runtime
+    // dropped before starting the clock. The async runtime and OS caches remain
+    // warm, just as in the first-init diagnostic; this is not process launch time.
+    let mut restart = Vec::with_capacity(samples);
+    for i in 0..(warmup + samples) {
+        let dir = temp_dir("prof-runtime-restart");
+        drop(rt.block_on(assemble_production_profiled(&dir)));
+        let tick = Instant::now();
+        let (runtime, _) = rt.block_on(assemble_production_profiled(&dir));
+        let elapsed = tick.elapsed().as_nanos() as f64;
+        drop(runtime);
+        if i >= warmup {
+            restart.push(elapsed);
+        }
+        cleanup_dir(&dir);
+    }
+
     let segment = |key: &str, title: &str, op: &str, values: Vec<f64>, note: &str| {
         Outcome::from_ns(key, title, op, "ms", 1, warmup, values, None, note)
     };
@@ -200,6 +217,13 @@ pub fn run_cold_start(cfg: &BenchConfig) -> Vec<Outcome> {
             "同库二次 SqliteSessionStore::open 单次 (迁移已应用, 版本检查短路)",
             session_reopen,
             "参照 (仅记录); 与 profile-cold-session-open 之差 ≈ 首建 schema DDL 成本; 重开走共享池时另有复用收益",
+        ),
+        segment(
+            "profile-runtime-restart",
+            "启动参照-已有库完整 Runtime 重建",
+            "首个 Runtime 销毁后, 同目录再次 assemble_production 到 ready",
+            restart,
+            "参照 (仅记录); 同进程重建, 已有库/OS 缓存热; 不含首次建库、tokio 创建、进程启动或 Runtime 销毁",
         ),
     ]
 }

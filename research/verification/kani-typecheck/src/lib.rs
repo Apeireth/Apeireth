@@ -7,5 +7,8 @@
 
 #![allow(dead_code, unused_imports, unused_variables, unused_qualifications)]
 
+extern crate self as apeireth_core;
+pub use mirror::storage_atomic;
+
 #[path = "../../kani/src/lib.rs"]
 pub mod mirror;

@@ -17,6 +17,7 @@
 //! implementations. Only the vendor HTTP edge is a local mock server, and the
 //! credential is a fake. No Internet, no real key, no `LegacyLlmCapability`.
 
+#![allow(dead_code)] // D-1（owner 裁定 2026-10-25）：测试夹具字段/方法（供用例构造完整对象，部分字段本文件内未被读取）
 use std::sync::Arc;
 use std::sync::Mutex;
 

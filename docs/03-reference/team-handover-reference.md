@@ -154,7 +154,7 @@ graph TD
 | O-5 不假装（0 装 PASS） | 绝不伪装 | 未接线写未接线；桩显式断言；未实测写未实测 |
 | O-6 永远追求最优 | 总体 > 系统 > 架构三阶审查 | 每条工程决策必写三段审查 + 拒掉的备选 + 拒理由 |
 
-细则见 [philosophy.md](../01-architecture/philosophy.md)；能力四级口径（IMPLEMENTED / PRODUCTION WIRED / DEFAULT ENABLED / HARDWARE VALIDATED）见 [system-capabilities.md](../01-architecture/system-capabilities.md) 头部。
+细则见 [philosophy.md](../01-architecture/philosophy.md)；能力口径阶梯（NOT IMPLEMENTED < IMPLEMENTED < PRODUCTION WIRED < HARDWARE VALIDATED；**`DEFAULT ENABLED` 不是一级，是横切属性**——默认开/关，与阶梯正交）见 [system-capabilities.md](../01-architecture/system-capabilities.md) 头部与 [claims.yaml](../status/claims.yaml) 头部。
 
 ### 3.3 O-6 三阶审查怎么写
 
@@ -198,7 +198,7 @@ IMPLEMENTED（库内可跑、测试过）≠ PRODUCTION WIRED（生产装配有�
 
 | # | 条目 | 现状（实证） | 处置 / owner |
 |---|---|---|---|
-| W1 | IM 桥生产构造 + 设备审批面注入 | 全仓仅测试调用，生产装配无构造点 ⇒ 高风险动作档「必须 IM 审批卡」在生产发不出卡 | owner 2026-10-23 裁定**暂不接**，按产品面专项做（[设计输入](../04-internal/backend-enhancement/im-channel-module-2026-10-23.md)）；在此之前该档维持「缺卡即拒」（有意为之，不是故障） |
+| W1 | IM 桥生产构造 + 设备审批面注入 | 全仓仅测试调用，生产装配无构造点 ⇒ 高风险动作档「必须 IM 审批卡」在生产发不出卡 | owner 2026-10-23 裁定**暂不接**，按产品面专项做（[设计输入](../04-internal/backend-enhancement/03-designs/im-channel-module-2026-10-23.md)）；在此之前该档维持「缺卡即拒」（有意为之，不是故障） |
 | W2 | `verify_multisig` / `multi_sign` | 全库多签调用点为零；高风险动作的人审只有占位 | 触发：v2.1 真多签（安全线） |
 | W7 | 教训对象 `Lesson` | L1 + L2 **PRODUCTION WIRED**；L3 反思步、L4 上下文注入仍缺 | 记忆线；L4 注入纪律需 owner 拍板预算 |
 
@@ -309,5 +309,5 @@ type ∈ feat / fix / refactor / docs / test / chore / perf / ci / build / rever
 
 **历史卷宗（只读、不改、不当现值）**
 
-- [TO-NEW-TEAM.md](../04-internal/TO-NEW-TEAM.md) / [HANDOFF-NOTES.md](../04-internal/HANDOFF-NOTES.md) — 2026-08 交接快照；本文已吸收其中可复用的部分（开篇三句实话、第一天基线验证、工作流与模板、接手建议），其过期数字与状态表不再引用。
-- [next-team-handbook.md](../04-internal/next-team-handbook.md) — **已归档**，其中 2026-08-18 的任务包已被现行 [00-backlog.md](../04-internal/backend-enhancement/00-backlog.md) 取代，任务包以 00-backlog.md 为准。
+- [TO-NEW-TEAM.md](team-handover-reference.md) / [HANDOFF-NOTES.md](team-handover-reference.md) — 2026-08 交接快照；本文已吸收其中可复用的部分（开篇三句实话、第一天基线验证、工作流与模板、接手建议），其过期数字与状态表不再引用。
+- [next-team-handbook.md](../04-internal/backend-enhancement/00-backlog.md) — **已归档**，其中 2026-08-18 的任务包已被现行 [00-backlog.md](../04-internal/backend-enhancement/00-backlog.md) 取代，任务包以 00-backlog.md 为准。

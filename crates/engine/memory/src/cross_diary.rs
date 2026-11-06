@@ -79,9 +79,41 @@ impl CrossDiaryIndex {
         min_shared: usize,
     ) -> Result<Self, DiaryError> {
         let days = diary.list_days()?;
+        Self::build_from_days(diary, &days, fact_items, min_shared)
+    }
+
+    /// 构建索引，但**只读最近 `max_days` 天** (限量扫描面).
+    ///
+    /// 检索路径每轮都要召回，全量扫描日记会让召回延迟随日记体积线性增长；
+    /// 只看最近若干天既够用（近况叙事），又给出确定的延迟上界.
+    ///
+    /// `max_days == 0` 语义为「不读任何一天」⇒ 空索引 (调用方显式关扫描面).
+    pub fn build_recent(
+        diary: &dyn DiaryStore,
+        fact_items: &[(String, String)],
+        min_shared: usize,
+        max_days: usize,
+    ) -> Result<Self, DiaryError> {
+        let mut days = diary.list_days()?;
+        days.sort();
+        if max_days == 0 {
+            days.clear();
+        } else if days.len() > max_days {
+            days.drain(..days.len() - max_days);
+        }
+        Self::build_from_days(diary, &days, fact_items, min_shared)
+    }
+
+    /// 按给定日期列表采集日记条目并建立关联 (两个 build 变体共用).
+    fn build_from_days(
+        diary: &dyn DiaryStore,
+        days: &[String],
+        fact_items: &[(String, String)],
+        min_shared: usize,
+    ) -> Result<Self, DiaryError> {
         let mut diary_items = Vec::new();
         for date in days {
-            let page = diary.read_day(&date)?;
+            let page = diary.read_day(date)?;
             for (idx, entry) in page.entries.iter().enumerate() {
                 diary_items.push((page.date.clone(), idx, entry.body.clone()));
             }

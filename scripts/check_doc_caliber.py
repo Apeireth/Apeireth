@@ -36,6 +36,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import sys
@@ -158,12 +159,50 @@ def check_file(path: Path) -> list[tuple[int, str]]:
     return violations
 
 
+def is_nested_worktree_root(path: Path) -> bool:
+    """该目录是否是**嵌套在本仓内**的另一个 git 工作树根。
+
+    判据：目录里有 `.git` **文件**（不是目录）。主仓的 `.git` 是**目录**；
+    而 `git worktree add` 出来的副本能是 `.git` **文件**（内容是 `gitdir: ...`）。
+
+    为什么要剪：嵌套工作树里带着**本仓的完整副本**（含 `docs/archive/` 等历史卷宗）。
+    若不剪，`is_historical()` 的路径判断会失准 —— 副本里的
+    `xxx-worktree/docs/archive/foo.md` 相对主仓是 `xxx-worktree/docs/archive/foo.md`：
+      ① 不以 `docs/archive/` 开头 → 跳过前缀不匹配；
+      ② 路径分段里也没有叫 `archive` 的目录名 → 目录名规则也不匹配。
+    结果：**历史卷宗被当成活跃文档**，凭空多出几十处「新增违规」。
+
+    实测（本机）：仓内建一个 worktree 后，口径门禁从「415 个活跃文档 / 0 新增违规」
+    变成「1190 个活跃文档 / 24 处新增违规」，全是副本造成的假阳性。
+    """
+    dotgit = path / ".git"
+    return dotgit.is_file()
+
+
 def iter_active_md(targets: list[Path]) -> list[tuple[Path, str | None]]:
     found: list[tuple[Path, str | None]] = []
     for t in targets:
         if t.is_dir():
-            for p in sorted(t.rglob("*.md")):
-                found.append((p, is_historical(p)))
+            # 自写遍历（不用 rglob）：rglob 不能剪枝，遇到嵌套工作树必须整棵跳过。
+            for dirpath, dirnames, filenames in os.walk(t):
+                here = Path(dirpath)
+                # 就地剪枝：跳过嵌套工作树根与已知历史目录
+                kept = []
+                for d in dirnames:
+                    child = here / d
+                    if is_nested_worktree_root(child):
+                        continue
+                    if d in SKIP_DIR_NAMES:
+                        continue
+                    if (child / ".git").exists() and (child / ".git").is_file():
+                        continue
+                    kept.append(d)
+                dirnames[:] = kept
+                for name in sorted(filenames):
+                    if not name.endswith(".md"):
+                        continue
+                    p = here / name
+                    found.append((p, is_historical(p)))
         elif t.suffix == ".md":
             found.append((t, is_historical(t)))
     return found

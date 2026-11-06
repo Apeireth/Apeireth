@@ -78,6 +78,22 @@ MECHANISM_WIRE_NAMES = {
 JSON_KEY_RE = re.compile(r'"([a-z0-9_]+)"\s*:')
 JSON_STR_RE = re.compile(r'"([^"\\]{2,40})"')
 
+# **读数标注标记**（D32 建议②，2026-10-26 落地）。
+#
+# 外部顾问的硬判据：「每一句自述都必须能对应到一个当前可验证的观察、一个明确的
+# 测量程序，或一个可追责的承诺」。14 条生物机制里有 5 条的 wire 名仍是**体验名**
+# （`nociception` / `attachment` / `ritual` / `quorum` / `play`）。
+#
+# 键位属**冻结合同**（改它要同步 render / schema / fixture 三侧）⇒ 本波不改键位
+# ⇒ 采用「**保留键位 + 在节旁显式标注是读数**」（`bio_mechanisms.note`）。
+#
+# **本检查器怎么跟这件事对齐**（关键：**不能靠人工记忆**）：
+# - 标注**在场**（渲染面出现本标记）⇒ 那 5 个 wire 名按「已标注读数」处理，
+#   **不算裸命中**（因为用户看到的那一行已经把它们说成读数了）；
+# - 标注**被撤掉**（标记消失）⇒ 那 5 个 wire 名**立刻回到命中**
+#   ⇒ **标注不是一劳永逸的豁免，它是有守卫的**（撤标注 = 立刻显形）。
+ANNOTATION_MARKER = "BIO_MECHANISMS_READING_NOTE"
+
 
 def tokens(key: str) -> list[str]:
     """把键名按下划线/驼峰切成 token（避免 `display` 误命中 `play`）。"""
@@ -142,13 +158,20 @@ def main() -> int:
     surface = render_surface_lines(text)
 
     term_hits: list[tuple[int, str, str]] = []
+    annotated_hits: list[tuple[int, str, str]] = []
     ignorance_hits: list[tuple[int, str]] = []
     seen: set[tuple[int, str]] = set()
+    # 读数标注是否在场（在场 ⇒ 机制 wire 名按「已标注读数」处理）。
+    annotated = any(ANNOTATION_MARKER in line for _, line in surface)
     for line_no, line in surface:
         for wire, why in MECHANISM_WIRE_NAMES.items():
             if f'"{wire}"' in line and (line_no, wire) not in seen:
                 seen.add((line_no, wire))
-                term_hits.append((line_no, wire, why))
+                if annotated:
+                    # 已标注读数 ⇒ **不计入裸命中**，但要单独记账（留痕）。
+                    annotated_hits.append((line_no, wire, why))
+                else:
+                    term_hits.append((line_no, wire, why))
         for match in JSON_KEY_RE.finditer(line):
             key = match.group(1).lower()
             key_tokens = set(tokens(match.group(1)))
@@ -179,6 +202,14 @@ def main() -> int:
         print("       或在机制名后显式标注是读数（例：pain_reading / detected_failure_class）")
     else:
         print("  ① 体验性词汇：0 命中 ✅")
+
+    if annotated_hits:
+        print(f"\n  ①' 已标注读数的机制 wire 名 {len(annotated_hits)} 处"
+              f"（**不计入裸命中**，键位属冻结合同，本波不改）：")
+        for line_no, word, why in annotated_hits:
+            print(f"     L{line_no}: 「{word}」 — {why}")
+        print(f"     → 依据：`{ANNOTATION_MARKER}` 在场（节旁已标注「这是检测读数」）")
+        print("     → **标注被撤 ⇒ 立刻回到裸命中**（本检查器守着这条）")
 
     if ignorance_hits:
         print(f"\n  ② 格式化无知 {len(ignorance_hits)} 处（单个体验变量写成 null）：")

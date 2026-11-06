@@ -34,12 +34,12 @@ pub use card::{
 };
 pub use distill::{
     authorized_skill_distill_policy, distill_into, distill_request_refusal, read_source,
-    skill_distill_capability, skill_distill_pipeline, skill_distill_summary,
-    source_request_refusal, SkillDistillApprovalHook, SkillDistillBoundaryGuard,
-    SkillDistillParams, SkillDistillReport, SkillDistillRiskMappingHook, SkillDistillTool,
-    SkillSourceInput, SKILL_DISTILL_CAPABILITY_ID, SKILL_DISTILL_TIMEOUT_MS,
-    SKILL_DISTILL_TOOL_DESCRIPTION, SKILL_DISTILL_TOOL_NAME, SKILL_SOURCE_INLINE_REF,
-    SKILL_SOURCE_MAX_BYTES,
+    skill_distill_capability, skill_distill_capability_with_slot, skill_distill_pipeline,
+    skill_distill_pipeline_with_slot, skill_distill_summary, source_request_refusal,
+    SkillDistillApprovalHook, SkillDistillBoundaryGuard, SkillDistillParams, SkillDistillReport,
+    SkillDistillRiskMappingHook, SkillDistillTool, SkillSourceInput, SKILL_DISTILL_CAPABILITY_ID,
+    SKILL_DISTILL_TIMEOUT_MS, SKILL_DISTILL_TOOL_DESCRIPTION, SKILL_DISTILL_TOOL_NAME,
+    SKILL_SOURCE_INLINE_REF, SKILL_SOURCE_MAX_BYTES,
 };
 pub use invocation::{
     build_skill_disclosure, name_pull, select_for_context, trigger_hit_count,

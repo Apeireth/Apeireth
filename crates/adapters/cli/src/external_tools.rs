@@ -37,21 +37,36 @@ use apeireth_runtime_assembly::canonical::{
     authorize_external_tool_family, wire_external_tools, McpModule,
 };
 use apeireth_runtime_assembly::ProductionModules;
-use apeireth_tools_canonical::mcp_bridge::McpToolBridge;
+use apeireth_tools_canonical::mcp_bridge::{McpDefinition, McpToolBridge};
 
 /// 装配期取出的外部工具桥句柄。
 ///
 /// 桥与模块袋必须在**装配模块被 move 之前**取出（`register_into` 取走所有
 /// 权）⇒ 组合根分两步：先取句柄，建成运行时后再接线。
+///
+/// 合并说明（2026-11-06）: 桥句柄取**资源工厂定义**（`McpDefinition`）而不是
+/// 一只另造的桥 —— 装配根只构造**一个**外部工具桥（资源工厂在运行时初始化时
+/// 交出活桥）⇒ 不重复连进程、不重复构造桥对象。模块袋仍是本线的**登记账袋**
+/// （自述面晚绑定「实际登记件数」）。
 pub struct ExternalToolHandles {
-    bridge: Option<Arc<McpToolBridge>>,
+    definition: Option<Arc<McpDefinition>>,
     module_bag: Option<Arc<McpModule>>,
+}
+
+impl ExternalToolHandles {
+    /// 启动期接线用的**活桥**：资源工厂在运行时初始化后交出（未初始化 = `None`
+    /// ⇒ 外部工具面没开 = 无事可接线）。
+    fn bridge(&self) -> Option<Arc<McpToolBridge>> {
+        self.definition
+            .as_ref()
+            .and_then(|definition| definition.current_bridge())
+    }
 }
 
 /// 从装配模块取出外部工具桥句柄（桥未装配时两项皆 `None`）。
 pub fn take_handles(modules: &ProductionModules) -> ExternalToolHandles {
     ExternalToolHandles {
-        bridge: modules.mcp_bridge().cloned(),
+        definition: modules.mcp_definition().cloned(),
         module_bag: modules.mcp_module().cloned(),
     }
 }
@@ -65,7 +80,7 @@ pub async fn wire_at_startup(
     handles: &ExternalToolHandles,
     policy: &Mutex<PermissionPolicy>,
 ) {
-    let Some(bridge) = handles.bridge.as_ref() else {
+    let Some(bridge) = handles.bridge() else {
         return;
     };
     // 族授权 + 族逐次人批: 族内能力运行时才发现, 无法逐个静态登记 ⇒ 族根是
@@ -73,7 +88,7 @@ pub async fn wire_at_startup(
     // `full` 会话预设不豁免 —— 由预设层的族地板兜住)。
     authorize_external_tool_family(&mut policy.lock().expect("policy mutex"));
     let module_bag = handles.module_bag.as_ref().map(|bag| bag.as_ref());
-    match wire_external_tools(runtime, bridge, module_bag, policy).await {
+    match wire_external_tools(runtime, bridge.as_ref(), module_bag, policy).await {
         Ok(wiring) => {
             if wiring.registered > 0 || wiring.unregistered > 0 {
                 eprintln!(
@@ -120,7 +135,7 @@ pub fn spawn_periodic_refresh(
     runtime: Arc<Runtime>,
     handles: &ExternalToolHandles,
 ) -> Option<tokio::task::JoinHandle<()>> {
-    let bridge = handles.bridge.as_ref()?.clone();
+    let bridge = handles.bridge()?;
     let interval_ms = bridge.options().refresh_interval_ms;
     if interval_ms == 0 {
         eprintln!("[external-tools] periodic refresh disabled (interval = 0)");

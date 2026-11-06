@@ -73,9 +73,9 @@
 
 ## 与既有决策记录的关系
 
-- 单点拍板（一次性决策、无后续讨论价值）→ 记入 [`docs/04-internal/design-intent.md`](../04-internal/design-intent.md) 拍板历史，不走 RFC；
+- 单点拍板（一次性决策、无后续讨论价值）→ 记入 [`docs/04-internal/design-intent.md`](../04-internal/05-plans/design-intent.md) 拍板历史，不走 RFC；
 - 多轮讨论、影响面大的设计 → RFC；
-- 调研未落地 → 登记 [`docs/04-internal/backlog.md`](../04-internal/backlog.md) 台账，不散落聊天记录。
+- 调研未落地 → 登记 [`docs/04-internal/backlog.md`](../04-internal/backend-enhancement/00-backlog.md) 台账，不散落聊天记录。
 
 ## 承诺
 

@@ -1,0 +1,1262 @@
+{
+  "version": "guard-wiring-ledger/v1",
+  "generated_at": "2026-10-27",
+  "generator": "scripts/check_guard_wiring.py",
+  "guard_crate": "crates/engine/guard",
+  "note": "本台账由 `python3 scripts/check_guard_wiring.py --update` 生成；「已接生产」必须有**代码锚点**支撑，手改后跑检查会因锚点对不上而退出码 1。",
+  "summary": {
+    "PRODUCTION WIRED": 19,
+    "PRODUCTION WIRED (crate 内生产路径)": 16,
+    "TEST ONLY": 11,
+    "NOT WIRED": 3,
+    "total": 49
+  },
+  "capabilities": [
+    {
+      "id": "hook.guard_hook",
+      "module": "hook",
+      "title": "守门本体（实现 GovernanceHook，决定动作放行 / 拦截）",
+      "anchors": [
+        "BehaviorChainGuardHook"
+      ],
+      "scope": "any",
+      "call_form": false,
+      "status": "PRODUCTION WIRED",
+      "production_sites": [
+        "crates/adapters/cli/src/gateway_panels.rs:124",
+        "crates/adapters/cli/src/gateway_panels.rs:84",
+        "crates/adapters/cli/src/guard_decision_wiring.rs:37",
+        "crates/adapters/cli/src/lib.rs:1031",
+        "crates/adapters/cli/src/lib.rs:1135",
+        "crates/adapters/cli/src/lib.rs:867",
+        "crates/adapters/cli/src/lib.rs:915",
+        "crates/adapters/gateway/src/panels.rs:508",
+        "crates/engine/runtime-assembly/src/canonical/guard_observer.rs:23",
+        "crates/engine/runtime-assembly/src/canonical/guard_observer.rs:39"
+      ],
+      "internal_sites": [],
+      "test_sites": [
+        "crates/adapters/cli/src/guard_decision_wiring.rs:288",
+        "crates/engine/guard/src/containment.rs:171",
+        "crates/engine/guard/src/containment.rs:185",
+        "crates/engine/guard/src/hook/tests.rs:122",
+        "crates/engine/guard/src/hook/tests.rs:72",
+        "crates/engine/guard/src/hook/tests.rs:73",
+        "crates/engine/guard/src/hook/tests.rs:88",
+        "crates/engine/guard/src/scenario.rs:330",
+        "crates/engine/guard/tests/containment_evidence.rs:117",
+        "crates/engine/guard/tests/containment_evidence.rs:130",
+        "crates/engine/guard/tests/guard_tests.rs:117",
+        "crates/engine/guard/tests/guard_tests.rs:33",
+        "crates/engine/guard/tests/guard_tests.rs:48",
+        "crates/engine/guard/tests/guard_tests.rs:84",
+        "crates/engine/guard/tests/guard_v31_correctness.rs:152",
+        "crates/engine/guard/tests/guard_v31_correctness.rs:184",
+        "crates/engine/guard/tests/guard_v31_correctness.rs:268",
+        "crates/engine/guard/tests/guard_v31_correctness.rs:341",
+        "crates/engine/guard/tests/p0_2_upstream_denial.rs:106",
+        "crates/engine/guard/tests/p0_2_upstream_denial.rs:74",
+        "crates/engine/guard/tests/session_state_bounds.rs:48",
+        "crates/engine/guard/tests/session_state_bounds.rs:71",
+        "crates/engine/guard/tests/session_state_bounds.rs:92",
+        "crates/engine/guard/tests/wiring_evidence.rs:252",
+        "crates/engine/guard/tests/wiring_evidence.rs:287",
+        "crates/engine/guard/tests/wiring_evidence.rs:61",
+        "crates/engine/guard/tests/wiring_evidence.rs:70",
+        "crates/engine/runtime-assembly/tests/bio_quorum_immune_wiring.rs:306",
+        "crates/engine/runtime-assembly/tests/cognitive_convergence_vertical.rs:323",
+        "crates/engine/runtime-assembly/tests/cognitive_vnext_production.rs:287",
+        "crates/engine/runtime-assembly/tests/convergence_production_integration.rs:187"
+      ],
+      "note": "生产治理栈的护栏闸；CLI 装配根把 hook 挂进 pipeline。"
+    },
+    {
+      "id": "hook.evaluate_detailed",
+      "module": "hook",
+      "title": "单动作明细判定读口（evaluate_detailed）",
+      "anchors": [
+        "evaluate_detailed"
+      ],
+      "scope": "any",
+      "call_form": true,
+      "status": "TEST ONLY",
+      "production_sites": [],
+      "internal_sites": [],
+      "test_sites": [
+        "crates/engine/guard/src/hook/tests.rs:128",
+        "crates/engine/guard/src/hook/tests.rs:150",
+        "crates/engine/guard/src/hook/tests.rs:184",
+        "crates/engine/guard/src/hook/tests.rs:98",
+        "crates/engine/guard/src/scenario.rs:403",
+        "crates/engine/runtime-assembly/tests/bio_quorum_immune_wiring.rs:309"
+      ],
+      "note": ""
+    },
+    {
+      "id": "hook.dry_run",
+      "module": "hook",
+      "title": "试算面（dry_run：算但不落链、不写账）",
+      "anchors": [
+        "dry_run"
+      ],
+      "scope": "any",
+      "call_form": true,
+      "status": "PRODUCTION WIRED",
+      "production_sites": [
+        "crates/adapters/cli/src/gateway_panels.rs:1001",
+        "crates/adapters/cli/src/gateway_panels.rs:1005",
+        "crates/adapters/gateway/src/panels.rs:1128",
+        "crates/adapters/gateway/src/panels.rs:504",
+        "crates/adapters/gateway/src/panels.rs:517",
+        "crates/adapters/gateway/src/panels.rs:518"
+      ],
+      "internal_sites": [],
+      "test_sites": [],
+      "note": "网关面板 SafetyGuardQuery 的试算口。"
+    },
+    {
+      "id": "hook.status",
+      "module": "hook",
+      "title": "运行状态自述面（GuardStatusDto）",
+      "anchors": [
+        "GuardStatusDto"
+      ],
+      "scope": "any",
+      "call_form": false,
+      "status": "PRODUCTION WIRED",
+      "production_sites": [
+        "crates/adapters/gateway/src/panels.rs:502",
+        "crates/adapters/gateway/src/panels.rs:509"
+      ],
+      "internal_sites": [
+        "crates/engine/guard/src/hook.rs:645",
+        "crates/engine/guard/src/hook.rs:654"
+      ],
+      "test_sites": [],
+      "note": ""
+    },
+    {
+      "id": "hook.recent_events",
+      "module": "hook",
+      "title": "近判定事件读口（recent_events）",
+      "anchors": [
+        "recent_events"
+      ],
+      "scope": "any",
+      "call_form": true,
+      "status": "PRODUCTION WIRED",
+      "production_sites": [
+        "crates/adapters/cli/src/gateway_panels.rs:1081",
+        "crates/adapters/cli/src/gateway_panels.rs:994",
+        "crates/adapters/cli/src/gateway_panels.rs:998",
+        "crates/adapters/gateway/src/panels.rs:1111",
+        "crates/adapters/gateway/src/panels.rs:503",
+        "crates/adapters/gateway/src/panels.rs:513",
+        "crates/adapters/gateway/src/panels.rs:514"
+      ],
+      "internal_sites": [],
+      "test_sites": [
+        "crates/engine/guard/src/containment.rs:208",
+        "crates/engine/guard/tests/containment_evidence.rs:233",
+        "crates/engine/guard/tests/containment_evidence.rs:397",
+        "crates/engine/guard/tests/containment_evidence.rs:401",
+        "crates/engine/guard/tests/guard_tests.rs:276",
+        "crates/engine/guard/tests/wiring_evidence.rs:213",
+        "crates/engine/guard/tests/wiring_evidence.rs:327"
+      ],
+      "note": ""
+    },
+    {
+      "id": "hook.update_action_execution",
+      "module": "hook",
+      "title": "执行结果回写（把动作成败写回行为链）",
+      "anchors": [
+        "update_action_execution"
+      ],
+      "scope": "any",
+      "call_form": true,
+      "status": "PRODUCTION WIRED",
+      "production_sites": [
+        "crates/engine/runtime-assembly/src/canonical/guard_observer.rs:143"
+      ],
+      "internal_sites": [],
+      "test_sites": [],
+      "note": ""
+    },
+    {
+      "id": "hook.with_decision_log",
+      "module": "hook",
+      "title": "判定落盘面挂载（with_decision_log）",
+      "anchors": [
+        "with_decision_log"
+      ],
+      "scope": "any",
+      "call_form": true,
+      "status": "PRODUCTION WIRED",
+      "production_sites": [
+        "crates/adapters/cli/src/guard_decision_wiring.rs:39"
+      ],
+      "internal_sites": [],
+      "test_sites": [
+        "crates/engine/guard/tests/wiring_evidence.rs:287"
+      ],
+      "note": ""
+    },
+    {
+      "id": "hook.with_immune_memory",
+      "module": "hook",
+      "title": "免疫记忆挂载（with_immune_memory，默认关）",
+      "anchors": [
+        "with_immune_memory"
+      ],
+      "scope": "any",
+      "call_form": true,
+      "status": "PRODUCTION WIRED",
+      "production_sites": [
+        "crates/adapters/cli/src/lib.rs:1200"
+      ],
+      "internal_sites": [],
+      "test_sites": [
+        "crates/engine/guard/src/hook/tests.rs:73",
+        "crates/engine/runtime-assembly/tests/bio_quorum_immune_wiring.rs:306"
+      ],
+      "note": ""
+    },
+    {
+      "id": "hook.with_dataset_recorder",
+      "module": "hook",
+      "title": "脱敏数据集记录器挂载（with_dataset_recorder，默认关）",
+      "anchors": [
+        "with_dataset_recorder"
+      ],
+      "scope": "any",
+      "call_form": true,
+      "status": "PRODUCTION WIRED",
+      "production_sites": [
+        "crates/adapters/cli/src/lib.rs:1033"
+      ],
+      "internal_sites": [],
+      "test_sites": [
+        "crates/engine/guard/tests/guard_v31_correctness.rs:269",
+        "crates/engine/runtime-assembly/tests/cognitive_convergence_vertical.rs:323",
+        "crates/engine/runtime-assembly/tests/cognitive_vnext_production.rs:287"
+      ],
+      "note": ""
+    },
+    {
+      "id": "hook.with_classifier",
+      "module": "hook",
+      "title": "本地模型分类器挂载（with_classifier，默认关）",
+      "anchors": [
+        "with_classifier"
+      ],
+      "scope": "any",
+      "call_form": true,
+      "status": "PRODUCTION WIRED",
+      "production_sites": [
+        "crates/adapters/cli/src/lib.rs:1150"
+      ],
+      "internal_sites": [],
+      "test_sites": [
+        "crates/engine/guard/tests/guard_v31_correctness.rs:270"
+      ],
+      "note": ""
+    },
+    {
+      "id": "hook.with_safety_provider",
+      "module": "hook",
+      "title": "能力安全元数据源注入（with_safety_provider）",
+      "anchors": [
+        "with_safety_provider"
+      ],
+      "scope": "any",
+      "call_form": true,
+      "status": "NOT WIRED",
+      "production_sites": [],
+      "internal_sites": [],
+      "test_sites": [],
+      "note": ""
+    },
+    {
+      "id": "hook.bind_turn_intent",
+      "module": "hook",
+      "title": "回合可信意图绑定（bind_turn_intent）",
+      "anchors": [
+        "bind_turn_intent"
+      ],
+      "scope": "any",
+      "call_form": true,
+      "status": "TEST ONLY",
+      "production_sites": [],
+      "internal_sites": [],
+      "test_sites": [
+        "crates/engine/guard/src/scenario.rs:369"
+      ],
+      "note": ""
+    },
+    {
+      "id": "hook.set_declared_scope",
+      "module": "hook",
+      "title": "声明任务范围（hook.set_declared_scope）",
+      "anchors": [
+        "hook.set_declared_scope"
+      ],
+      "scope": "any",
+      "call_form": true,
+      "status": "TEST ONLY",
+      "production_sites": [],
+      "internal_sites": [],
+      "test_sites": [
+        "crates/engine/guard/tests/guard_tests.rs:162"
+      ],
+      "note": "锚点带 `hook.` 前缀：与 `BehaviorChain::set_declared_scope` 区分开。"
+    },
+    {
+      "id": "hook.clear_session",
+      "module": "hook",
+      "title": "会话结束清理（clear_session）",
+      "anchors": [
+        "clear_session"
+      ],
+      "scope": "any",
+      "call_form": true,
+      "status": "PRODUCTION WIRED (crate 内生产路径)",
+      "production_sites": [],
+      "internal_sites": [
+        "crates/engine/guard/src/hook.rs:786"
+      ],
+      "test_sites": [
+        "crates/engine/guard/src/hook/tests.rs:134"
+      ],
+      "note": ""
+    },
+    {
+      "id": "hook.session_readouts",
+      "module": "hook",
+      "title": "会话行为摘要 / 风险史 / 行为链读口",
+      "anchors": [
+        "session_behavior_summary",
+        "session_risk_history",
+        "chain_for_trace",
+        "session_history"
+      ],
+      "scope": "any",
+      "call_form": true,
+      "status": "TEST ONLY",
+      "production_sites": [],
+      "internal_sites": [],
+      "test_sites": [
+        "crates/engine/guard/src/scenario.rs:405",
+        "crates/engine/guard/src/scenario.rs:457",
+        "crates/engine/guard/src/scenario.rs:469",
+        "crates/engine/guard/tests/guard_tests.rs:139",
+        "crates/engine/guard/tests/guard_v31_correctness.rs:173",
+        "crates/engine/guard/tests/guard_v31_correctness.rs:177",
+        "crates/engine/guard/tests/guard_v31_correctness.rs:374",
+        "crates/engine/guard/tests/guard_v31_correctness.rs:568",
+        "crates/engine/guard/tests/p0_2_upstream_denial.rs:117",
+        "crates/engine/guard/tests/p0_2_upstream_denial.rs:90",
+        "crates/engine/runtime-assembly/tests/convergence_production_integration.rs:203",
+        "crates/engine/runtime-assembly/tests/convergence_production_integration.rs:232",
+        "crates/engine/runtime-assembly/tests/convergence_production_integration.rs:238"
+      ],
+      "note": ""
+    },
+    {
+      "id": "hook.last_feature_snapshot",
+      "module": "hook",
+      "title": "特征快照诊断读口（last_feature_snapshot）",
+      "anchors": [
+        "last_feature_snapshot"
+      ],
+      "scope": "any",
+      "call_form": true,
+      "status": "TEST ONLY",
+      "production_sites": [],
+      "internal_sites": [],
+      "test_sites": [
+        "crates/engine/guard/src/hook/tests.rs:130",
+        "crates/engine/guard/src/hook/tests.rs:136",
+        "crates/engine/guard/src/scenario.rs:412"
+      ],
+      "note": ""
+    },
+    {
+      "id": "hook.last_immune_signal",
+      "module": "hook",
+      "title": "免疫信号读口（last_immune_signal）",
+      "anchors": [
+        "last_immune_signal"
+      ],
+      "scope": "any",
+      "call_form": true,
+      "status": "TEST ONLY",
+      "production_sites": [],
+      "internal_sites": [],
+      "test_sites": [
+        "crates/engine/guard/src/hook/tests.rs:210",
+        "crates/engine/guard/src/hook/tests.rs:236",
+        "crates/engine/guard/src/hook/tests.rs:307",
+        "crates/engine/guard/src/hook/tests.rs:310"
+      ],
+      "note": ""
+    },
+    {
+      "id": "intent.rule_interpreter",
+      "module": "intent",
+      "title": "规则意图解释器（RuleIntentInterpreter）",
+      "anchors": [
+        "RuleIntentInterpreter"
+      ],
+      "scope": "any",
+      "call_form": false,
+      "status": "PRODUCTION WIRED",
+      "production_sites": [
+        "crates/adapters/cli/src/lib.rs:2727",
+        "crates/adapters/gateway/src/canonical_entry.rs:342"
+      ],
+      "internal_sites": [],
+      "test_sites": [
+        "crates/adapters/cli/tests/file_write_knob.rs:246",
+        "crates/adapters/cli/tests/git_write_knob.rs:93",
+        "crates/engine/guard/src/intent.rs:811",
+        "crates/engine/guard/src/scenario.rs:332",
+        "crates/engine/guard/tests/containment_evidence.rs:162",
+        "crates/engine/guard/tests/guard_tests.rs:283",
+        "crates/engine/guard/tests/guard_v31_correctness.rs:21",
+        "crates/engine/guard/tests/wiring_evidence.rs:87"
+      ],
+      "note": "网关 / CLI 生产路径用它把用户原话变成可信信封。"
+    },
+    {
+      "id": "intent.alignment_guard",
+      "module": "intent",
+      "title": "意图-动作对齐守卫（IntentAlignmentGuard）",
+      "anchors": [
+        "IntentAlignmentGuard"
+      ],
+      "scope": "any",
+      "call_form": false,
+      "status": "PRODUCTION WIRED (crate 内生产路径)",
+      "production_sites": [],
+      "internal_sites": [
+        "crates/engine/guard/src/hook.rs:867"
+      ],
+      "test_sites": [],
+      "note": ""
+    },
+    {
+      "id": "intent.constrain_to_trusted",
+      "module": "intent",
+      "title": "模型提案向可信信封收窄（constrain_to_trusted）",
+      "anchors": [
+        "constrain_to_trusted"
+      ],
+      "scope": "any",
+      "call_form": true,
+      "status": "NOT WIRED",
+      "production_sites": [],
+      "internal_sites": [],
+      "test_sites": [],
+      "note": ""
+    },
+    {
+      "id": "intent.negation_extractor",
+      "module": "intent",
+      "title": "否定敏感操作抽取（NegationAwareOperationExtractor）",
+      "anchors": [
+        "NegationAwareOperationExtractor"
+      ],
+      "scope": "any",
+      "call_form": false,
+      "status": "PRODUCTION WIRED (crate 内生产路径)",
+      "production_sites": [],
+      "internal_sites": [
+        "crates/engine/guard/src/intent.rs:437"
+      ],
+      "test_sites": [
+        "crates/engine/guard/tests/guard_v31_correctness.rs:87"
+      ],
+      "note": ""
+    },
+    {
+      "id": "intent.confidence_policy",
+      "module": "intent",
+      "title": "意图置信度保守化（IntentConfidencePolicy）",
+      "anchors": [
+        "IntentConfidencePolicy"
+      ],
+      "scope": "any",
+      "call_form": false,
+      "status": "PRODUCTION WIRED (crate 内生产路径)",
+      "production_sites": [],
+      "internal_sites": [
+        "crates/engine/guard/src/intent.rs:563"
+      ],
+      "test_sites": [],
+      "note": ""
+    },
+    {
+      "id": "fast_guard.stage_a",
+      "module": "fast_guard",
+      "title": "A 段快守卫（FastGuard：确定性毫秒级风险筛）",
+      "anchors": [
+        "FastGuard"
+      ],
+      "scope": "any",
+      "call_form": false,
+      "status": "PRODUCTION WIRED (crate 内生产路径)",
+      "production_sites": [],
+      "internal_sites": [
+        "crates/engine/guard/src/chain_guard.rs:45",
+        "crates/engine/guard/src/decision.rs:13",
+        "crates/engine/guard/src/decision.rs:44",
+        "crates/engine/guard/src/decision.rs:64",
+        "crates/engine/guard/src/hook.rs:390",
+        "crates/engine/guard/src/hook.rs:433"
+      ],
+      "test_sites": [
+        "crates/adapters/cli/src/guard_decision_wiring.rs:202",
+        "crates/engine/guard/src/decision_log.rs:182",
+        "crates/engine/guard/src/fusion.rs:169"
+      ],
+      "note": ""
+    },
+    {
+      "id": "chain_guard.stage_b",
+      "module": "chain_guard",
+      "title": "B 段链守卫（ChainGuard：复合 / 升级 / 出网风险）",
+      "anchors": [
+        "ChainGuard"
+      ],
+      "scope": "any",
+      "call_form": false,
+      "status": "PRODUCTION WIRED (crate 内生产路径)",
+      "production_sites": [],
+      "internal_sites": [
+        "crates/engine/guard/src/chain_guard.rs:141",
+        "crates/engine/guard/src/decision.rs:14",
+        "crates/engine/guard/src/decision.rs:65",
+        "crates/engine/guard/src/hook.rs:333",
+        "crates/engine/guard/src/hook.rs:336",
+        "crates/engine/guard/src/hook.rs:391",
+        "crates/engine/guard/src/hook.rs:434"
+      ],
+      "test_sites": [
+        "crates/engine/guard/src/hook/tests.rs:194",
+        "crates/engine/guard/src/hook/tests.rs:394"
+      ],
+      "note": ""
+    },
+    {
+      "id": "fusion.decision_fusion",
+      "module": "fusion",
+      "title": "判定融合（DecisionFusion：规则结论 + 模型预测）",
+      "anchors": [
+        "DecisionFusion"
+      ],
+      "scope": "any",
+      "call_form": false,
+      "status": "PRODUCTION WIRED (crate 内生产路径)",
+      "production_sites": [],
+      "internal_sites": [
+        "crates/engine/guard/src/decision.rs:15",
+        "crates/engine/guard/src/decision.rs:66",
+        "crates/engine/guard/src/fusion.rs:115",
+        "crates/engine/guard/src/fusion.rs:138",
+        "crates/engine/guard/src/fusion.rs:74",
+        "crates/engine/guard/src/hook.rs:756",
+        "crates/engine/guard/src/hook.rs:910"
+      ],
+      "test_sites": [
+        "crates/engine/guard/src/fusion.rs:166",
+        "crates/engine/guard/src/fusion.rs:186",
+        "crates/engine/guard/src/fusion.rs:188",
+        "crates/engine/guard/src/fusion.rs:201",
+        "crates/engine/guard/tests/guard_v31_correctness.rs:115",
+        "crates/engine/guard/tests/guard_v31_correctness.rs:126",
+        "crates/engine/guard/tests/guard_v31_correctness.rs:137"
+      ],
+      "note": ""
+    },
+    {
+      "id": "classifier.joint",
+      "module": "classifier",
+      "title": "联合风险模型分类器（JointRiskClassifier）",
+      "anchors": [
+        "JointRiskClassifier"
+      ],
+      "scope": "any",
+      "call_form": false,
+      "status": "PRODUCTION WIRED",
+      "production_sites": [
+        "crates/adapters/cli/src/lib.rs:1148"
+      ],
+      "internal_sites": [],
+      "test_sites": [
+        "crates/engine/guard/src/classifier.rs:607",
+        "crates/engine/guard/src/classifier.rs:623",
+        "crates/engine/guard/src/classifier.rs:629",
+        "crates/engine/guard/src/classifier.rs:636",
+        "crates/engine/guard/tests/guard_v31_correctness.rs:399",
+        "crates/engine/guard/tests/guard_v31_correctness.rs:403",
+        "crates/engine/guard/tests/guard_v31_correctness.rs:406",
+        "crates/engine/guard/tests/guard_v32_evaluation.rs:190",
+        "crates/engine/guard/tests/guard_v32_evaluation.rs:193",
+        "crates/engine/guard/tests/guard_v32_evaluation.rs:196",
+        "crates/engine/guard/tests/guard_v32_evaluation.rs:201",
+        "crates/engine/guard/tests/security_scenarios.rs:74"
+      ],
+      "note": ""
+    },
+    {
+      "id": "classifier.threshold",
+      "module": "classifier",
+      "title": "阈值分类器（ThresholdClassifier）",
+      "anchors": [
+        "ThresholdClassifier"
+      ],
+      "scope": "any",
+      "call_form": false,
+      "status": "NOT WIRED",
+      "production_sites": [],
+      "internal_sites": [],
+      "test_sites": [],
+      "note": ""
+    },
+    {
+      "id": "classifier.no_classifier",
+      "module": "classifier",
+      "title": "空分类器（NoClassifier：护栏默认）",
+      "anchors": [
+        "NoClassifier"
+      ],
+      "scope": "any",
+      "call_form": false,
+      "status": "PRODUCTION WIRED (crate 内生产路径)",
+      "production_sites": [],
+      "internal_sites": [
+        "crates/engine/guard/src/hook.rs:445"
+      ],
+      "test_sites": [
+        "crates/engine/guard/tests/guard_v31_correctness.rs:243",
+        "crates/engine/guard/tests/guard_v31_correctness.rs:265"
+      ],
+      "note": ""
+    },
+    {
+      "id": "classifier.artifact_stamp",
+      "module": "classifier",
+      "title": "模型工件盖章 / 哈希（stamp_artifact_file / canonical_artifact_sha256 / feature_schema_hash）",
+      "anchors": [
+        "stamp_artifact_file",
+        "canonical_artifact_sha256",
+        "feature_schema_hash"
+      ],
+      "scope": "any",
+      "call_form": false,
+      "status": "TEST ONLY",
+      "production_sites": [],
+      "internal_sites": [],
+      "test_sites": [
+        "crates/engine/guard/examples/export_guard_scenarios.rs:204",
+        "crates/engine/guard/examples/stamp_guard_artifact.rs:10",
+        "crates/engine/guard/src/classifier.rs:275",
+        "crates/engine/guard/src/classifier.rs:346",
+        "crates/engine/guard/src/classifier.rs:350",
+        "crates/engine/guard/src/classifier.rs:371",
+        "crates/engine/guard/src/classifier.rs:381",
+        "crates/engine/guard/src/classifier.rs:383",
+        "crates/engine/guard/src/classifier.rs:596",
+        "crates/engine/guard/src/classifier.rs:600",
+        "crates/engine/guard/src/classifier.rs:649",
+        "crates/engine/guard/src/classifier.rs:664",
+        "crates/engine/guard/src/classifier.rs:668",
+        "crates/engine/guard/tests/guard_v31_correctness.rs:396",
+        "crates/engine/guard/tests/guard_v31_correctness.rs:397",
+        "crates/engine/guard/tests/guard_v32_evaluation.rs:186",
+        "crates/engine/guard/tests/guard_v32_evaluation.rs:188",
+        "crates/engine/guard/tests/guard_v32_evaluation.rs:199",
+        "crates/engine/guard/tests/security_scenarios.rs:68",
+        "crates/engine/guard/tests/security_scenarios.rs:72"
+      ],
+      "note": "离线模型工件工具面；护栏生产闭环里没有它。"
+    },
+    {
+      "id": "decision.guard_decision",
+      "module": "decision",
+      "title": "判定结构与 verdict 映射（GuardDecision）",
+      "anchors": [
+        "GuardDecision"
+      ],
+      "scope": "any",
+      "call_form": false,
+      "status": "PRODUCTION WIRED (crate 内生产路径)",
+      "production_sites": [],
+      "internal_sites": [
+        "crates/engine/guard/src/chain_guard.rs:136",
+        "crates/engine/guard/src/chain_guard.rs:28",
+        "crates/engine/guard/src/chain_guard.rs:35",
+        "crates/engine/guard/src/dataset.rs:259",
+        "crates/engine/guard/src/dataset.rs:410",
+        "crates/engine/guard/src/enforcement.rs:22",
+        "crates/engine/guard/src/fusion.rs:18",
+        "crates/engine/guard/src/fusion.rs:26",
+        "crates/engine/guard/src/fusion.rs:30",
+        "crates/engine/guard/src/fusion.rs:55",
+        "crates/engine/guard/src/hook.rs:104",
+        "crates/engine/guard/src/hook.rs:292",
+        "crates/engine/guard/src/hook.rs:315",
+        "crates/engine/guard/src/hook.rs:585"
+      ],
+      "test_sites": [
+        "crates/engine/guard/src/fusion.rs:162",
+        "crates/engine/guard/src/fusion.rs:174",
+        "crates/engine/guard/src/fusion.rs:196",
+        "crates/engine/guard/src/hook/tests.rs:185",
+        "crates/engine/guard/src/hook/tests.rs:389",
+        "crates/engine/guard/tests/guard_v31_correctness.rs:103",
+        "crates/engine/runtime-assembly/tests/convergence_production_integration.rs:329"
+      ],
+      "note": ""
+    },
+    {
+      "id": "enforcement.directive",
+      "module": "enforcement",
+      "title": "收容义务指令**计算**（EnforcementDirective::from_decision）",
+      "anchors": [
+        "EnforcementDirective"
+      ],
+      "scope": "any",
+      "call_form": false,
+      "status": "PRODUCTION WIRED",
+      "production_sites": [
+        "crates/adapters/cli/src/lib.rs:1566"
+      ],
+      "internal_sites": [
+        "crates/engine/guard/src/hook.rs:105",
+        "crates/engine/guard/src/hook.rs:108",
+        "crates/engine/guard/src/introspection.rs:65"
+      ],
+      "test_sites": [
+        "crates/engine/guard/src/containment.rs:128",
+        "crates/engine/guard/src/containment.rs:148",
+        "crates/engine/guard/src/containment.rs:276",
+        "crates/engine/guard/src/containment.rs:277",
+        "crates/engine/guard/src/containment.rs:395",
+        "crates/engine/guard/src/containment.rs:415",
+        "crates/engine/guard/tests/containment_evidence.rs:87"
+      ],
+      "note": ""
+    },
+    {
+      "id": "enforcement.directive_consumer",
+      "module": "enforcement",
+      "title": "收容义务**执行面**（撤销会话授权 / 标记高风险 trace / 补偿线索）",
+      "anchors": [
+        "EnforcementDirective"
+      ],
+      "scope": "external",
+      "call_form": false,
+      "status": "PRODUCTION WIRED",
+      "production_sites": [
+        "crates/adapters/cli/src/lib.rs:1566"
+      ],
+      "internal_sites": [],
+      "test_sites": [
+        "crates/engine/guard/tests/containment_evidence.rs:87"
+      ],
+      "note": "只看护栏 crate 之外：仓内**零消费者** ⇒ 义务算了没人执行。"
+    },
+    {
+      "id": "decision_log.ledger",
+      "module": "decision_log",
+      "title": "判定落盘账（GuardDecisionLog，append-only JSONL）",
+      "anchors": [
+        "GuardDecisionLog"
+      ],
+      "scope": "any",
+      "call_form": false,
+      "status": "PRODUCTION WIRED",
+      "production_sites": [
+        "crates/adapters/cli/src/guard_decision_wiring.rs:152",
+        "crates/adapters/cli/src/guard_decision_wiring.rs:163",
+        "crates/adapters/cli/src/guard_decision_wiring.rs:38"
+      ],
+      "internal_sites": [
+        "crates/engine/guard/src/hook.rs:420",
+        "crates/engine/guard/src/hook.rs:460"
+      ],
+      "test_sites": [
+        "crates/adapters/cli/src/guard_decision_wiring.rs:215",
+        "crates/adapters/cli/src/guard_decision_wiring.rs:232",
+        "crates/adapters/cli/src/guard_decision_wiring.rs:271",
+        "crates/engine/guard/src/decision_log.rs:195",
+        "crates/engine/guard/src/decision_log.rs:211",
+        "crates/engine/guard/src/decision_log.rs:226",
+        "crates/engine/guard/src/decision_log.rs:249",
+        "crates/engine/guard/tests/wiring_evidence.rs:286",
+        "crates/engine/guard/tests/wiring_evidence.rs:298"
+      ],
+      "note": ""
+    },
+    {
+      "id": "decision_log.risk_label",
+      "module": "decision_log",
+      "title": "风险分→档映射（risk_label_for_score）",
+      "anchors": [
+        "risk_label_for_score"
+      ],
+      "scope": "any",
+      "call_form": false,
+      "status": "PRODUCTION WIRED",
+      "production_sites": [
+        "crates/adapters/cli/src/guard_decision_wiring.rs:174"
+      ],
+      "internal_sites": [],
+      "test_sites": [
+        "crates/engine/guard/src/decision_log.rs:279",
+        "crates/engine/guard/src/decision_log.rs:294",
+        "crates/engine/guard/src/decision_log.rs:312"
+      ],
+      "note": ""
+    },
+    {
+      "id": "dataset.recorder",
+      "module": "dataset",
+      "title": "脱敏数据集记录器（DatasetRecorder，默认关）",
+      "anchors": [
+        "DatasetRecorder"
+      ],
+      "scope": "any",
+      "call_form": false,
+      "status": "PRODUCTION WIRED",
+      "production_sites": [
+        "crates/adapters/cli/src/lib.rs:1155",
+        "crates/adapters/cli/src/lib.rs:1166",
+        "crates/adapters/cli/src/lib.rs:899",
+        "crates/engine/runtime-assembly/src/canonical/guard_observer.rs:22",
+        "crates/engine/runtime-assembly/src/canonical/guard_observer.rs:30",
+        "crates/engine/runtime-assembly/src/canonical/guard_observer.rs:45"
+      ],
+      "internal_sites": [
+        "crates/engine/guard/src/hook.rs:407",
+        "crates/engine/guard/src/hook.rs:517",
+        "crates/engine/guard/src/hook.rs:525"
+      ],
+      "test_sites": [
+        "crates/engine/guard/src/dataset.rs:558",
+        "crates/engine/guard/tests/guard_v31_correctness.rs:262",
+        "crates/engine/guard/tests/guard_v31_correctness.rs:298",
+        "crates/engine/runtime-assembly/tests/cognitive_convergence_vertical.rs:318",
+        "crates/engine/runtime-assembly/tests/cognitive_vnext_production.rs:285",
+        "crates/engine/runtime-assembly/tests/convergence_production_integration.rs:307"
+      ],
+      "note": ""
+    },
+    {
+      "id": "dataset.execution_outcome",
+      "module": "dataset",
+      "title": "执行结果归类（GuardExecutionOutcome）",
+      "anchors": [
+        "GuardExecutionOutcome"
+      ],
+      "scope": "any",
+      "call_form": false,
+      "status": "PRODUCTION WIRED",
+      "production_sites": [
+        "crates/engine/runtime-assembly/src/canonical/guard_observer.rs:132",
+        "crates/engine/runtime-assembly/src/canonical/guard_observer.rs:134",
+        "crates/engine/runtime-assembly/src/canonical/guard_observer.rs:158",
+        "crates/engine/runtime-assembly/src/canonical/guard_observer.rs:170"
+      ],
+      "internal_sites": [
+        "crates/engine/guard/src/dataset.rs:326",
+        "crates/engine/guard/src/dataset.rs:335",
+        "crates/engine/guard/src/dataset.rs:363",
+        "crates/engine/guard/src/dataset.rs:378"
+      ],
+      "test_sites": [],
+      "note": ""
+    },
+    {
+      "id": "semantics.registry",
+      "module": "semantics",
+      "title": "能力安全注册表（CapabilitySafetyRegistry）",
+      "anchors": [
+        "CapabilitySafetyRegistry"
+      ],
+      "scope": "any",
+      "call_form": false,
+      "status": "PRODUCTION WIRED",
+      "production_sites": [
+        "crates/engine/runtime-assembly/src/canonical/parallel_dispatch.rs:45",
+        "crates/engine/runtime-assembly/src/canonical/parallel_dispatch.rs:65"
+      ],
+      "internal_sites": [
+        "crates/engine/guard/src/hook.rs:446",
+        "crates/engine/guard/src/semantics.rs:168",
+        "crates/engine/guard/src/semantics.rs:250"
+      ],
+      "test_sites": [
+        "crates/engine/guard/src/hook/tests.rs:47",
+        "crates/engine/runtime-assembly/src/canonical/parallel_dispatch.rs:131",
+        "crates/engine/runtime-assembly/src/canonical/parallel_dispatch.rs:83"
+      ],
+      "note": ""
+    },
+    {
+      "id": "semantics.descriptor_lookup",
+      "module": "semantics",
+      "title": "单能力描述符查询（descriptor_for_capability）",
+      "anchors": [
+        "descriptor_for_capability"
+      ],
+      "scope": "any",
+      "call_form": false,
+      "status": "TEST ONLY",
+      "production_sites": [],
+      "internal_sites": [],
+      "test_sites": [
+        "crates/engine/guard/src/semantics.rs:1020",
+        "crates/engine/guard/src/semantics.rs:211",
+        "crates/engine/guard/src/semantics.rs:971",
+        "crates/engine/guard/src/semantics.rs:991",
+        "crates/engine/guard/src/semantics.rs:997",
+        "crates/engine/guard/tests/backup_capability_descriptor.rs:13",
+        "crates/engine/guard/tests/guard_v31_correctness.rs:464",
+        "crates/engine/guard/tests/guard_v31_correctness.rs:478",
+        "crates/engine/guard/tests/guard_v31_correctness.rs:481",
+        "crates/engine/guard/tests/guard_v32_evaluation.rs:222"
+      ],
+      "note": "自由函数面只被评测 / 测试用；生产路径走的是注册表方法。"
+    },
+    {
+      "id": "semantics.coverage_report",
+      "module": "semantics",
+      "title": "描述符覆盖率报告（canonical_descriptor_coverage）",
+      "anchors": [
+        "canonical_descriptor_coverage"
+      ],
+      "scope": "any",
+      "call_form": false,
+      "status": "TEST ONLY",
+      "production_sites": [],
+      "internal_sites": [],
+      "test_sites": [
+        "crates/engine/guard/examples/export_guard_scenarios.rs:193",
+        "crates/engine/guard/tests/backup_capability_descriptor.rs:40",
+        "crates/engine/guard/tests/guard_v32_evaluation.rs:216"
+      ],
+      "note": ""
+    },
+    {
+      "id": "command_effect.analyzer",
+      "module": "command_effect",
+      "title": "命令效应解析（CommandEffectAnalyzer）",
+      "anchors": [
+        "CommandEffectAnalyzer"
+      ],
+      "scope": "any",
+      "call_form": false,
+      "status": "PRODUCTION WIRED (crate 内生产路径)",
+      "production_sites": [],
+      "internal_sites": [
+        "crates/engine/guard/src/semantics.rs:402"
+      ],
+      "test_sites": [
+        "crates/engine/guard/src/command_effect.rs:256",
+        "crates/engine/guard/src/command_effect.rs:264",
+        "crates/engine/guard/src/command_effect.rs:271",
+        "crates/engine/guard/src/command_effect.rs:282",
+        "crates/engine/guard/tests/guard_v31_correctness.rs:320",
+        "crates/engine/guard/tests/guard_v31_correctness.rs:325",
+        "crates/engine/guard/tests/guard_v31_correctness.rs:329",
+        "crates/engine/guard/tests/guard_v31_correctness.rs:331"
+      ],
+      "note": ""
+    },
+    {
+      "id": "observation.model",
+      "module": "observation",
+      "title": "安全观察模型（SafetyObservation）",
+      "anchors": [
+        "SafetyObservation"
+      ],
+      "scope": "any",
+      "call_form": false,
+      "status": "PRODUCTION WIRED (crate 内生产路径)",
+      "production_sites": [],
+      "internal_sites": [
+        "crates/engine/guard/src/chain.rs:151",
+        "crates/engine/guard/src/chain.rs:161",
+        "crates/engine/guard/src/chain_guard.rs:26",
+        "crates/engine/guard/src/dataset.rs:256",
+        "crates/engine/guard/src/dataset.rs:407",
+        "crates/engine/guard/src/fast_guard.rs:63",
+        "crates/engine/guard/src/hook.rs:199",
+        "crates/engine/guard/src/hook.rs:266",
+        "crates/engine/guard/src/hook.rs:291",
+        "crates/engine/guard/src/hook.rs:708",
+        "crates/engine/guard/src/hook/upstream_denial.rs:68",
+        "crates/engine/guard/src/intent.rs:616",
+        "crates/engine/guard/src/intent.rs:771",
+        "crates/engine/guard/src/session.rs:36"
+      ],
+      "test_sites": [
+        "crates/engine/guard/src/hook/tests.rs:36",
+        "crates/engine/guard/src/hook/tests.rs:48",
+        "crates/engine/runtime-assembly/tests/convergence_production_integration.rs:326"
+      ],
+      "note": ""
+    },
+    {
+      "id": "chain.behavior_chain",
+      "module": "chain",
+      "title": "行为链（BehaviorChain）",
+      "anchors": [
+        "BehaviorChain"
+      ],
+      "scope": "any",
+      "call_form": false,
+      "status": "PRODUCTION WIRED (crate 内生产路径)",
+      "production_sites": [],
+      "internal_sites": [
+        "crates/engine/guard/src/chain_guard.rs:25",
+        "crates/engine/guard/src/dataset.rs:257",
+        "crates/engine/guard/src/dataset.rs:408",
+        "crates/engine/guard/src/features.rs:210",
+        "crates/engine/guard/src/features.rs:211",
+        "crates/engine/guard/src/features.rs:51",
+        "crates/engine/guard/src/features_v2.rs:353",
+        "crates/engine/guard/src/features_v2.rs:354",
+        "crates/engine/guard/src/features_v2.rs:83",
+        "crates/engine/guard/src/features_v2.rs:88",
+        "crates/engine/guard/src/hook.rs:392",
+        "crates/engine/guard/src/hook.rs:628",
+        "crates/engine/guard/src/hook.rs:742",
+        "crates/engine/guard/src/hook.rs:832",
+        "crates/engine/guard/src/hook/upstream_denial.rs:56",
+        "crates/engine/guard/src/session.rs:35"
+      ],
+      "test_sites": [
+        "crates/engine/guard/src/features.rs:222",
+        "crates/engine/runtime-assembly/tests/convergence_production_integration.rs:327"
+      ],
+      "note": ""
+    },
+    {
+      "id": "features.v1",
+      "module": "features",
+      "title": "V1 特征（AgentChainFeatureV1）",
+      "anchors": [
+        "AgentChainFeatureV1"
+      ],
+      "scope": "any",
+      "call_form": false,
+      "status": "PRODUCTION WIRED (crate 内生产路径)",
+      "production_sites": [],
+      "internal_sites": [
+        "crates/engine/guard/src/chain.rs:478",
+        "crates/engine/guard/src/classifier.rs:113",
+        "crates/engine/guard/src/classifier.rs:141",
+        "crates/engine/guard/src/classifier.rs:175",
+        "crates/engine/guard/src/classifier.rs:494",
+        "crates/engine/guard/src/features_v2.rs:30",
+        "crates/engine/guard/src/features_v2.rs:91",
+        "crates/engine/guard/src/fusion.rs:83"
+      ],
+      "test_sites": [
+        "crates/engine/guard/src/features.rs:223",
+        "crates/engine/guard/src/fusion.rs:165",
+        "crates/engine/guard/src/fusion.rs:184",
+        "crates/engine/guard/tests/guard_v31_correctness.rs:248"
+      ],
+      "note": ""
+    },
+    {
+      "id": "features.v2",
+      "module": "features_v2",
+      "title": "V2 特征 + 跨轮摘要（AgentChainFeatureV2）",
+      "anchors": [
+        "AgentChainFeatureV2"
+      ],
+      "scope": "any",
+      "call_form": false,
+      "status": "PRODUCTION WIRED (crate 内生产路径)",
+      "production_sites": [],
+      "internal_sites": [
+        "crates/engine/guard/src/chain.rs:483",
+        "crates/engine/guard/src/classifier.rs:115",
+        "crates/engine/guard/src/classifier.rs:207",
+        "crates/engine/guard/src/classifier.rs:461",
+        "crates/engine/guard/src/classifier.rs:495",
+        "crates/engine/guard/src/dataset.rs:418",
+        "crates/engine/guard/src/fusion.rs:29",
+        "crates/engine/guard/src/fusion.rs:58",
+        "crates/engine/guard/src/hook.rs:754",
+        "crates/engine/guard/src/hook.rs:907",
+        "crates/engine/guard/src/snapshot.rs:13",
+        "crates/engine/guard/src/snapshot.rs:17"
+      ],
+      "test_sites": [
+        "crates/engine/guard/src/classifier.rs:608",
+        "crates/engine/guard/src/fusion.rs:199",
+        "crates/engine/guard/src/scenario.rs:476",
+        "crates/engine/guard/tests/guard_v31_correctness.rs:113",
+        "crates/engine/guard/tests/guard_v31_correctness.rs:178",
+        "crates/engine/guard/tests/guard_v31_correctness.rs:244",
+        "crates/engine/guard/tests/guard_v31_correctness.rs:252",
+        "crates/engine/guard/tests/security_scenarios.rs:14",
+        "crates/engine/guard/tests/security_scenarios.rs:6",
+        "crates/engine/runtime-assembly/tests/convergence_production_integration.rs:333"
+      ],
+      "note": ""
+    },
+    {
+      "id": "session.history",
+      "module": "session",
+      "title": "跨轮行为史（SessionBehaviorHistory）",
+      "anchors": [
+        "SessionBehaviorHistory"
+      ],
+      "scope": "any",
+      "call_form": false,
+      "status": "PRODUCTION WIRED (crate 内生产路径)",
+      "production_sites": [],
+      "internal_sites": [
+        "crates/engine/guard/src/hook.rs:396"
+      ],
+      "test_sites": [
+        "crates/engine/guard/tests/guard_v31_correctness.rs:213"
+      ],
+      "note": ""
+    },
+    {
+      "id": "snapshot.store",
+      "module": "snapshot_store",
+      "title": "特征快照存储（SnapshotStore）",
+      "anchors": [
+        "SnapshotStore"
+      ],
+      "scope": "any",
+      "call_form": false,
+      "status": "PRODUCTION WIRED (crate 内生产路径)",
+      "production_sites": [],
+      "internal_sites": [
+        "crates/engine/guard/src/hook.rs:399",
+        "crates/engine/guard/src/hook.rs:441"
+      ],
+      "test_sites": [],
+      "note": ""
+    },
+    {
+      "id": "scenario.catalog",
+      "module": "scenario",
+      "title": "场景目录与跑批（ScenarioCatalog / run_scenario / family_split）",
+      "anchors": [
+        "ScenarioCatalog",
+        "run_scenario",
+        "run_scenario_checked",
+        "family_split"
+      ],
+      "scope": "any",
+      "call_form": false,
+      "status": "TEST ONLY",
+      "production_sites": [],
+      "internal_sites": [],
+      "test_sites": [
+        "crates/engine/guard/examples/export_guard_scenarios.rs:242",
+        "crates/engine/guard/examples/export_guard_scenarios.rs:247",
+        "crates/engine/guard/examples/export_guard_scenarios.rs:30",
+        "crates/engine/guard/examples/export_guard_scenarios.rs:55",
+        "crates/engine/guard/examples/export_guard_scenarios.rs:67",
+        "crates/engine/guard/examples/export_guard_scenarios.rs:70",
+        "crates/engine/guard/src/scenario.rs:499",
+        "crates/engine/guard/tests/guard_v31_correctness.rs:411",
+        "crates/engine/guard/tests/guard_v31_correctness.rs:434",
+        "crates/engine/guard/tests/guard_v31_correctness.rs:522",
+        "crates/engine/guard/tests/guard_v31_correctness.rs:548",
+        "crates/engine/guard/tests/guard_v31_correctness.rs:588",
+        "crates/engine/guard/tests/guard_v31_correctness.rs:592",
+        "crates/engine/guard/tests/guard_v31_correctness.rs:611",
+        "crates/engine/guard/tests/guard_v32_evaluation.rs:115",
+        "crates/engine/guard/tests/guard_v32_evaluation.rs:116",
+        "crates/engine/guard/tests/guard_v32_evaluation.rs:15",
+        "crates/engine/guard/tests/guard_v32_evaluation.rs:35",
+        "crates/engine/guard/tests/guard_v32_evaluation.rs:71",
+        "crates/engine/guard/tests/guard_v32_evaluation.rs:73",
+        "crates/engine/guard/tests/guard_v32_evaluation.rs:9"
+      ],
+      "note": ""
+    },
+    {
+      "id": "oracle.security_scenario",
+      "module": "oracle",
+      "title": "安全场景 oracle（SecurityScenarioOracle / ActionOracleLabel）",
+      "anchors": [
+        "SecurityScenarioOracle",
+        "ActionOracleLabel"
+      ],
+      "scope": "any",
+      "call_form": false,
+      "status": "TEST ONLY",
+      "production_sites": [],
+      "internal_sites": [],
+      "test_sites": [
+        "crates/engine/guard/src/oracle.rs:149",
+        "crates/engine/guard/src/oracle.rs:315",
+        "crates/engine/guard/src/oracle.rs:323",
+        "crates/engine/guard/src/oracle.rs:334",
+        "crates/engine/guard/src/oracle.rs:343",
+        "crates/engine/guard/src/oracle.rs:76",
+        "crates/engine/guard/src/scenario.rs:1841",
+        "crates/engine/guard/src/scenario.rs:414",
+        "crates/engine/guard/src/scenario.rs:416",
+        "crates/engine/guard/src/scenario.rs:418",
+        "crates/engine/guard/src/scenario.rs:80",
+        "crates/engine/guard/tests/guard_v32_evaluation.rs:66"
+      ],
+      "note": ""
+    },
+    {
+      "id": "introspection.dto",
+      "module": "introspection",
+      "title": "自述 DTO（GuardEventDto / GuardDryRunRequest / GuardDryRunResponse）",
+      "anchors": [
+        "GuardEventDto",
+        "GuardDryRunRequest",
+        "GuardDryRunResponse"
+      ],
+      "scope": "any",
+      "call_form": false,
+      "status": "PRODUCTION WIRED",
+      "production_sites": [
+        "crates/adapters/gateway/src/panels.rs:1123",
+        "crates/adapters/gateway/src/panels.rs:503",
+        "crates/adapters/gateway/src/panels.rs:504",
+        "crates/adapters/gateway/src/panels.rs:513",
+        "crates/adapters/gateway/src/panels.rs:517"
+      ],
+      "internal_sites": [
+        "crates/engine/guard/src/decision_log.rs:112",
+        "crates/engine/guard/src/decision_log.rs:118",
+        "crates/engine/guard/src/decision_log.rs:121",
+        "crates/engine/guard/src/decision_log.rs:93",
+        "crates/engine/guard/src/hook.rs:1022",
+        "crates/engine/guard/src/hook.rs:410",
+        "crates/engine/guard/src/hook.rs:676",
+        "crates/engine/guard/src/hook.rs:707",
+        "crates/engine/guard/src/hook.rs:764"
+      ],
+      "test_sites": [
+        "crates/adapters/cli/src/guard_decision_wiring.rs:195",
+        "crates/adapters/cli/src/guard_decision_wiring.rs:196",
+        "crates/engine/guard/src/containment.rs:273",
+        "crates/engine/guard/src/decision_log.rs:175",
+        "crates/engine/guard/src/decision_log.rs:176"
+      ],
+      "note": ""
+    }
+  ]
+}

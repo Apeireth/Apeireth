@@ -98,11 +98,6 @@ impl PersonaKind {
             _ => None,
         }
     }
-
-    /// 保真分级: 是否属于**逐字保留区** (绕过压缩).
-    pub fn is_verbatim_zone(&self) -> bool {
-        matches!(self, PersonaKind::CoreBelief | PersonaKind::Boundary)
-    }
 }
 
 /// 语句极性 (张力判定用).

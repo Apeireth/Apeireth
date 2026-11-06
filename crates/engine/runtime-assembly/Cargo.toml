@@ -12,18 +12,33 @@ categories.workspace = true
 readme = "README.md"
 description = "Production assembly for the Apeireth runtime kernel"
 
+[features]
+default = ["desktop"]
+desktop = ["memory", "profile-store", "dep:apeireth-guard", "dep:apeireth-organ", "dep:apeireth-tools-canonical"]
+memory = ["dep:apeireth-memory"]
+profile-store = ["dep:apeireth-storage", "dep:rusqlite"]
+
 [dependencies]
+# 依赖并集（2026-11-06 合并）: 两侧依赖**集合完全相同**（同样 11 个内部 crate）,
+# 差别只在「路径来源」与「是否 optional」:
+#   * 路径来源取本线的 `{ workspace = true }` —— 根 `Cargo.toml` 的
+#     `[workspace.dependencies]` 统一声明 `{ path, version }`（publish 硬要求:
+#     每个 path 依赖必须同时带 version, 否则 `cargo package` 失败）。对方线的
+#     裸 `{ path = ... }` 没有 version ⇒ 发布面直接断。
+#   * optional 取对方线的显式标注: 本线靠 feature 段的 `dep:` 前缀隐式可选,
+#     对方线是显式 `optional = true`; 两者语义等价, 这里取显式形态（更易读）。
+# ⇒ 合并未新增任何依赖 ⇒ 生产边数不变（实测见 arch_guard 报告）。
 apeireth-core = { workspace = true }
 apeireth-protocol = { workspace = true }
 apeireth-plugin = { workspace = true }
 apeireth-governance = { workspace = true }
 apeireth-orchestration = { workspace = true }
 apeireth-runtime = { workspace = true }
-apeireth-memory = { workspace = true }
-apeireth-guard = { workspace = true }
-apeireth-organ = { workspace = true }
-apeireth-storage = { workspace = true }
-apeireth-tools-canonical = { workspace = true }
+apeireth-memory = { workspace = true, optional = true }
+apeireth-guard = { workspace = true, optional = true }
+apeireth-organ = { workspace = true, optional = true }
+apeireth-storage = { workspace = true, optional = true }
+apeireth-tools-canonical = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["full"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -32,7 +47,7 @@ thiserror = { workspace = true }
 async-trait = { workspace = true }
 parking_lot = "0.12"
 chrono = { workspace = true }
-rusqlite = { workspace = true }
+rusqlite = { workspace = true, optional = true }
 
 [dev-dependencies]
 tempfile = "3"

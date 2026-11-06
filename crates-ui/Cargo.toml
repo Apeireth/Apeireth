@@ -7,6 +7,12 @@
 #               id = "ui_engine"（契约登记：path=crates-ui / crates=7 /
 #               ci=.github/workflows/ui-engine-ci.yml）
 #
+# 【收敛提取的独立记录】本 workspace 另有一条「聚焦响应式库切片」的独立记录：
+#   docs/adr/0021-consolidation-ui-core-slice.md（该 ADR 只授权把
+#   `apeireth-ui-core` 及其未改动的测试作为独立切片并入本 workspace；
+#   渲染 / DOM / GPU / 演示与历史证据仍属后续范围）。
+#   ⚠️ 同号 ADR 撞号（0021-）待 owner 裁决，本处按**文件名**引用。
+#
 # 【为什么独立 workspace】
 #   本引擎是**持续迭代中的活代码**（owner 2026-10-24 明示：渲染引擎永远自己
 #   维护），与主仓「已交付即冻结」的静态内核家族（image_family，129,828 行）

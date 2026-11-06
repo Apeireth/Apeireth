@@ -1,0 +1,433 @@
+# 核心输入面 fuzz（2026-10-24）
+#
+# 为什么单独一个 workspace：cargo-fuzz 要 nightly + sanitizer flags，
+# 主 workspace 的 lint/glob 不适用（与 crates/engine/image/codecs/fuzz 同一范式）。
+#
+# 面的选择依据：**吃外部输入的解析/判据函数**，不是"随便找个函数 fuzz"。
+[package]
+name = "apeireth-input-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+license = "MIT OR Apache-2.0"
+
+[package.metadata]
+cargo-fuzz = true
+
+[workspace]
+
+[dependencies]
+libfuzzer-sys = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+apeireth-protocol = { path = "../crates/foundation/protocol" }
+apeireth-gateway = { path = "../crates/adapters/gateway" }
+apeireth-tools-canonical = { path = "../crates/capabilities/tools" }
+apeireth-runtime = { path = "../crates/engine/runtime" }
+apeireth-sdk = { path = "../crates/adapters/sdk" }
+apeireth-plugin = { path = "../crates/foundation/plugin" }
+apeireth-governance = { path = "../crates/foundation/governance" }
+apeireth-credentials = { path = "../crates/foundation/credentials" }
+apeireth-core = { path = "../crates/foundation/core" }
+
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "protocol_decode"
+path = "fuzz_targets/protocol_decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "gateway_guards"
+path = "fuzz_targets/gateway_guards.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "resident_parse"
+path = "fuzz_targets/resident_parse.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "sentence_split"
+path = "fuzz_targets/sentence_split.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "tool_schema"
+path = "fuzz_targets/tool_schema.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "im_config"
+path = "fuzz_targets/im_config.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "mcp_config"
+path = "fuzz_targets/mcp_config.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "plugin_bounds"
+path = "fuzz_targets/plugin_bounds.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "content_sanitize"
+path = "fuzz_targets/content_sanitize.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "guardrail_security"
+path = "fuzz_targets/guardrail_security.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "device_actions"
+path = "fuzz_targets/device_actions.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "untrusted_envelope"
+path = "fuzz_targets/untrusted_envelope.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "client_tokens"
+path = "fuzz_targets/client_tokens.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "stored_doc"
+path = "fuzz_targets/stored_doc.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "approval_risk"
+path = "fuzz_targets/approval_risk.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "recon_scope"
+path = "fuzz_targets/recon_scope.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "sensitive_path"
+path = "fuzz_targets/sensitive_path.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "write_intent"
+path = "fuzz_targets/write_intent.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "domain_context"
+path = "fuzz_targets/domain_context.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "filesystem"
+path = "fuzz_targets/filesystem.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "external"
+path = "fuzz_targets/external.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "apply_patch"
+path = "fuzz_targets/apply_patch.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "egress"
+path = "fuzz_targets/egress.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "git_write"
+path = "fuzz_targets/git_write.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "canonical_entry"
+path = "fuzz_targets/canonical_entry.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "input_security"
+path = "fuzz_targets/input_security.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "chain_audit"
+path = "fuzz_targets/chain_audit.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "mcp_governance"
+path = "fuzz_targets/mcp_governance.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "approval_policy"
+path = "fuzz_targets/approval_policy.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "im_payload"
+path = "fuzz_targets/im_payload.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "exec_pipeline"
+path = "fuzz_targets/exec_pipeline.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "canonical_binding"
+path = "fuzz_targets/canonical_binding.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "mcp_schema"
+path = "fuzz_targets/mcp_schema.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "post_execute"
+path = "fuzz_targets/post_execute.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "credentials"
+path = "fuzz_targets/credentials.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "tool_params"
+path = "fuzz_targets/tool_params.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "proposal"
+path = "fuzz_targets/proposal.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "spill_access"
+path = "fuzz_targets/spill_access.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "stealth_crawler"
+path = "fuzz_targets/stealth_crawler.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "guard_supervisor"
+path = "fuzz_targets/guard_supervisor.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fetch_image"
+path = "fuzz_targets/fetch_image.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "self_status"
+path = "fuzz_targets/self_status.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "backup"
+path = "fuzz_targets/backup.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "search"
+path = "fuzz_targets/search.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "repo_map"
+path = "fuzz_targets/repo_map.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "exposure_audit"
+path = "fuzz_targets/exposure_audit.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "weather"
+path = "fuzz_targets/weather.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "device_sense"
+path = "fuzz_targets/device_sense.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "education"
+path = "fuzz_targets/education.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "skill_search"
+path = "fuzz_targets/skill_search.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "guard_watch"
+path = "fuzz_targets/guard_watch.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "device_control"
+path = "fuzz_targets/device_control.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "path_guard"
+path = "fuzz_targets/path_guard.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "doc_ops"
+path = "fuzz_targets/doc_ops.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "content_feed"
+path = "fuzz_targets/content_feed.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "worktree_apply"
+path = "fuzz_targets/worktree_apply.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "sheet_ops"
+path = "fuzz_targets/sheet_ops.rs"
+test = false
+doc = false
+bench = false

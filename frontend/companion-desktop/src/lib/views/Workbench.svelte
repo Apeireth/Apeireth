@@ -86,10 +86,13 @@
     gap: 14px;
     min-width: 0;
   }
+  /* 2026-10-18 美术走查：工作台卡片与工具卡/指标卡统一「浮起」语汇；
+     卡头原来是 --surface 实心块 + 硬边，读作表格表头，改为留空的卡头。 */
   .cp-card {
     border: 1px solid var(--line);
     border-radius: 12px;
     background: var(--surface-2);
+    box-shadow: inset 0 1px 0 var(--ap-hairline-top), var(--ap-shadow-card);
     overflow: hidden;
   }
   .cp-head {
@@ -97,9 +100,8 @@
     align-items: center;
     justify-content: space-between;
     gap: 10px;
-    padding: 10px 14px;
+    padding: 11px 14px;
     border-bottom: 1px solid var(--line);
-    background: var(--surface);
   }
   .cp-title {
     display: flex;
@@ -108,7 +110,7 @@
     font-size: 12px;
     font-weight: 600;
     letter-spacing: 0.04em;
-    color: var(--muted);
+    color: var(--text);
   }
   .cp-tools {
     display: flex;

@@ -15,7 +15,7 @@
 #
 # 0 装口径：没有证据的声明不写在这里；grep 不到的写进 notes 而不是假装验证。
 version: 1
-updated_at: "2026-10-22"
+updated_at: "2026-11-01"
 
 claims:
   - id: rt.provider_router
@@ -27,12 +27,13 @@ claims:
       - crates/engine/runtime/src/canonical/provider.rs
       - crates/engine/runtime/src/canonical/runtime.rs
     tests:
+      - crates/engine/runtime/src/canonical/provider/compat_tests.rs
       - crates/engine/runtime/tests/canonical_multi_provider.rs
-    verified_at: 357e9780
+    verified_at: f45f4d6fbc6bd33d7431095e8cbafe8eb1af98d7
     verify_cmd: "cargo test -p apeireth-runtime --test canonical_multi_provider"
     owner: runtime
     next_review: "2026-11-20"
-    notes: "Runtime 持有 ProviderRouter；fallback 顺序/健康 EMA/retryable 才下抛/permanent 立即失败。"
+    notes: "Runtime 持有 ProviderRouter；fallback 顺序/健康 EMA/retryable 才下抛/permanent 立即失败。；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）；2026-10-27 KC-2 复核：runtime.rs 新增控制命令/插件工具同名启动期拒绝，本 claim 语义未变（实测见 75ee2464 正文）；2026-10-28 Phase 3 复核：Runtime 工具目录与模块装配改变，ProviderRouter 的路由/fallback/健康与并发边界未改；原回归随本批全量门禁通过。；本批复核：实际请求边界新增 owner 用量、可取消 Provider semaphore 与 Retry-After 退避；原 fallback/egress 测试保留，实例并发/限流/失败用量验收通过。；2026-10-28 生产收敛复核：源码变更及回归证据见 kernel-convergence-final-acceptance-2026-10-28.md；不将 Legacy SubLoop 或旧数据 Profile 映射宣称已迁移。；2026-10-29 S1 复核：任务 gate 在实际 Provider 候选请求处预留共享预算，fallback/overflow 不绕预算；原路由、并发、出网和核算边界保持，证据见 kernel-convergence-s1-2026-10-29.md。；2026-10-29 S3 复核：builder 兼容行为统一注册工具路径，Provider routing/default 与限流语义不变；canonical_multi_provider 及 workspace 原命令通过，见 kernel-convergence-s3-2026-10-29.md。；2026-10-29 S4 复核：Runtime 新增可选 Host epoch，回合与审批恢复受撤销约束；Provider 路由、fallback、并发、预算与默认不变。runtime all-targets 及本轮包级 clippy 通过，见 kernel-convergence-s4-2026-10-29.md。；2026-10-29 S5：桌面执行经 managed main 委托同一 Kernel/ProviderRouter；路由、fallback、治理与限流算法未改。真实 bootstrap、多入口和 runtime all-targets 回归通过；不声明外部 API 实测。 证据见 kernel-convergence-s5-2026-10-29.md。；2026-10-29 D3：仅新增兼容 Host 路由契约并移除未调用的内部 Arc getter，生产 gated 请求路径未变；fallback/逐候选 tool 投影、流式回落、会话计量与拒绝测试通过。；2026-10-30 P2：新增可选 Host 监督服务与执行回执；原能力默认、Provider 路由与确定性权限机制保持，定向及原 MainOnly 测试/clippy/fmt 回归通过。未将兼容入口声明为已受 System One 保护，无 live model/硬件声明。；2026-10-30 P3：可选 owner-bound 消息复用 Registry/Dispatcher，委托交集与独立后台授权分离；真实 Runtime 定向及原 MainOnly test/clippy/fmt 回归通过。默认与既有等级保持，本地幂等非持久 exactly-once，新消息变体需新 reader；无 live model/硬件声明。"
 
   - id: core.cost_router
     title: "成本分级路由（H-P2，四档选模）"
@@ -48,7 +49,7 @@ claims:
     verify_cmd: "cargo test -p apeireth-core cost_router"
     owner: core
     next_review: "2026-11-20"
-    notes: "默认关 fail-closed；CLI chat 任务选型已接；网关任务源路由/显式档 CLI 旗标未接线（H-P2 记录）。；2026-10-22 批次复核：core cost_router 12 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立"
+    notes: "默认关 fail-closed；CLI chat 任务选型已接；网关任务源路由/显式档 CLI 旗标未接线（H-P2 记录）。；2026-10-22 批次复核：core cost_router 12 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）；2026-10-28 生产收敛复核：源码变更及回归证据见 kernel-convergence-final-acceptance-2026-10-28.md；不将 Legacy SubLoop 或旧数据 Profile 映射宣称已迁移。；2026-10-29 S5：CLI 变更限于 Host bootstrap，任务选型与该可选成本路由开关的原分支未改；本批作源码差异复核，bootstrap 与所触包 clippy 通过，不声称网关任务选型新增接线。 证据见 kernel-convergence-s5-2026-10-29.md。"
 
   - id: tool.task_board
     title: "任务簿（V6-a 持久任务队列工具面）"
@@ -66,7 +67,7 @@ claims:
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test task_board_tool"
     owner: runtime-assembly
     next_review: "2026-11-20"
-    notes: "写面每次人批；失败只能人判；无 failed/retry 动作面。；2026-10-22 批次复核：assembly task_board_tool 6 + cli task_board_knob 2 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立"
+    notes: "写面每次人批；失败只能人判；无 failed/retry 动作面。；2026-10-22 批次复核：assembly task_board_tool 6 + cli task_board_knob 2 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）；2026-10-28 生产收敛复核：源码变更及回归证据见 kernel-convergence-final-acceptance-2026-10-28.md；不将 Legacy SubLoop 或旧数据 Profile 映射宣称已迁移。；2026-10-29 S5：完整请求适配保留生产所选工具、显式授权和冻结审批；task_board 注册/开关/写入治理分支未改。本批作源码差异复核并通过 bootstrap、生产认知与包级 clippy，未扩展工具动作或默认开关。 证据见 kernel-convergence-s5-2026-10-29.md。"
 
   - id: tool.mcp_bridge
     title: "MCP 外部工具桥（catalog/连接/治理映射/配置面）"
@@ -116,12 +117,15 @@ claims:
     verify_cmd: "cargo test -p apeireth-tools-canonical --test voice_speak"
     owner: tools
     next_review: "2026-11-20"
-    notes: "情绪→语气微调生产情绪源未接线（无数据 = 零微调，如实）；定制音色后置。；2026-10-22 批次复核：voice_speak 16 passed / 2 ignored；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立"
+    notes: "2026-10-31 复核：**情绪源已接线**（CLI lib.rs:2161 with_emotion_reader），下面「未接线」表述作废（保留历史）；定制音色后置。；情绪→语气微调生产情绪源未接线（无数据 = 零微调，如实）；定制音色后置。；2026-10-22 批次复核：voice_speak 16 passed / 2 ignored；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）；2026-10-28 生产收敛复核：源码变更及回归证据见 kernel-convergence-final-acceptance-2026-10-28.md；不将 Legacy SubLoop 或旧数据 Profile 映射宣称已迁移。；2026-10-29 S5：CLI 变更限于 Host bootstrap，语音注册、权限及默认开关的原分支未改；本批作源码差异复核并通过 bootstrap 与包级 clippy，无硬件/播放实测声明。 证据见 kernel-convergence-s5-2026-10-29.md。"
 
   - id: sec.egress_control
     title: "受控出网（域名/地址许可 + 策略档；fetch 工具走同一闸）"
     level: PRODUCTION WIRED
-    default: "ON"
+    # 2026-10-31 复核：闸本身**不可关且每请求强制**（fetch.rs:416），
+    # 但**唯一生产出网面** fetch 由 `APEIRETH_ENABLE_FETCH`（默认未设=关）门控
+    # ⇒「不依赖开关即可用」不成立 ⇒ default 改为 OFF（level 不变）。
+    default: "OFF"
     switch_env: null
     sources:
       - crates/capabilities/tools/src/egress.rs
@@ -144,16 +148,17 @@ claims:
       - crates/capabilities/tools/src/object_access.rs
       - crates/capabilities/tools/src/shell.rs
       - crates/capabilities/tools/src/observed_gate.rs
+      - crates/capabilities/tools/src/shell/execution.rs
     tests:
       - crates/capabilities/tools/src/object_access.rs
     verified_at: 85c18d41
     verify_cmd: "cargo test -p apeireth-tools-canonical --lib object_access"
     owner: capabilities
     next_review: "2026-12-01"
-    notes: "对象级判定（32KB）：`ObjectAccessJudge` 按「对象域 × 主体」判是否越界，shell 工具面注入（`object_judgment`），越界即帧 + `sandbox.object_violation` 审计。这是顾问所说「比连接器开关更接近真实人类边界」的那一层。"
+    notes: "对象级判定（32KB）：`ObjectAccessJudge` 按「对象域 × 主体」判是否越界，shell 工具面注入（`object_judgment`），越界即帧 + `sandbox.object_violation` 审计。这是顾问所说「比连接器开关更接近真实人类边界」的那一层。；2026-10-28 Phase 3 复核：Shell 具体执行提取至 shell/execution.rs，原对象判定、写总闸、冻结参数与 cwd TOCTOU 校验保留；新增取消/lease 不授予额外权限，原审批与安全回归通过。"
 
   - id: sec.exposure_audit
-    title: "暴露面体检（五个暴露面只读扫描 + 同一内核两出口）"
+    title: "暴露面体检（六个暴露面只读扫描 + 同一内核两出口）"
     level: PRODUCTION WIRED
     default: "OFF"
     switch_env: APEIRETH_ENABLE_EXPOSURE_AUDIT
@@ -169,7 +174,7 @@ claims:
     verify_cmd: "cargo test -p apeireth-tools-canonical --lib exposure_audit"
     owner: capabilities
     next_review: "2026-12-01"
-    notes: "五个暴露面（credential / binding / backup / listener / funnel）只读体检：工具面 `tool.exposure_audit` 与 CLI `apeireth exposure report` **同一内核两出口**；自述面也读它（暴露面计数）。默认关（按 grant 开启）。体检只读，不写被测面任何字节，报告是唯一产出。"
+    notes: "六个暴露面（credential / binding / backup / listener / funnel / external_surface；其中 external_surface **显式「未测」**）只读体检：工具面 `tool.exposure_audit` 与 CLI `apeireth exposure report` **同一内核两出口**；自述面也读它（暴露面计数）。默认关（按 grant 开启）。体检只读，不写被测面任何字节，报告是唯一产出。"
 
   - id: sec.egress_gate
     title: "模型出网闸（上下文→provider 边界；出境脱敏 + fail-closed 拒绝）"
@@ -191,6 +196,7 @@ claims:
       - crates/adapters/cli/src/egress_command.rs
       - crates/adapters/cli/src/lib.rs
     tests:
+      - crates/engine/runtime/src/canonical/provider/compat_tests.rs
       - crates/engine/runtime/src/canonical/provider.rs
       - crates/engine/runtime-assembly/src/egress_gate.rs
       - crates/engine/runtime-assembly/src/egress_ledger.rs
@@ -217,16 +223,19 @@ claims:
     switch_env: null
     sources:
       - crates/engine/memory/src/lesson.rs
+      - crates/engine/memory/src/migrations/list.rs
       - crates/engine/memory/src/migrations.rs
+      - crates/engine/memory/src/migrations/fresh_tables.sql
       - crates/adapters/cli/src/lessons_command.rs
     tests:
+      - crates/engine/memory/src/migrations/tests.rs
       - crates/engine/memory/src/lesson.rs
       - crates/adapters/cli/src/lessons_command.rs
     verified_at: d24505af
     verify_cmd: "cargo test -p apeireth-memory --lib lesson && cargo test -p apeireth-cli --lib lessons_command"
     owner: memory
     next_review: "2026-12-01"
-    notes: "四条硬约束由单测钉死：出处非空且必须真实存在（无出处=幻觉拒绝）/ 撤回必填理由 / 验证不得用来源经历自证 / rev CAS。消费面：CLI 只读出口 `apeireth lessons` + 自述面 memory_ledger.verified_lessons/candidate_lessons。L3 反思步与 L4 上下文注入未做（不注入=候选不注入上下文）。"
+    notes: "四条硬约束由单测钉死：出处非空且必须真实存在（无出处=幻觉拒绝）/ 撤回必填理由 / 验证不得用来源经历自证 / rev CAS。消费面：CLI 只读出口 `apeireth lessons` + 自述面 memory_ledger.verified_lessons/candidate_lessons。L3 反思步与 L4 上下文注入未做（不注入=候选不注入上下文）。2026-10-29 A1 复核：空库完整 schema 安装优化保留全部迁移效果与版本记录，历史升级、约束与 lesson 治理语义不变；Memory 库/迁移回归及 CLI lessons_command 定向验证通过，默认状态不变。证据见 kernel-convergence-a1-cold-start-2026-10-29.md 与 /tmp/apeireth-a1/a1-commit-claim-*.log。"
 
   - id: gap.memory_update
     title: "记忆更新/更正（既有事实编辑）——已接线（治理面 + 面板路由）"
@@ -245,7 +254,7 @@ claims:
     verify_cmd: "cargo test -p apeireth-gateway --test panel_routes memory_update"
     owner: gateway
     next_review: "2026-11-20"
-    notes: "2026-10-22 接通：存储层 `MemoryGovernanceStore::update_episode_content` 早已实现（重写治理视图内容、原始 append-only 行不动、乐观 rev CAS、检索走 override），缺口只在面板没接电。现已补 `PUT /v1/apeireth/memory/episodes/:id/content` + 治理端口 `update_episode`（默认实现对未接线 embedder 诚实报错）+ 能力清单 `memory.update` 与治理面同源。未做：桌面 MemoryView 的「纠正」入口（台账 SG-08 记为待补）。"
+    notes: "2026-10-22 接通：存储层 `MemoryGovernanceStore::update_episode_content` 早已实现（重写治理视图内容、原始 append-only 行不动、乐观 rev CAS、检索走 override），缺口只在面板没接电。现已补 `PUT /v1/apeireth/memory/episodes/:id/content` + 治理端口 `update_episode`（默认实现对未接线 embedder 诚实报错）+ 能力清单 `memory.update` 与治理面同源。未做：桌面 MemoryView 的「纠正」入口（台账 SG-08 记为待补）。；2026-10-28 Phase 3 复核：gateway_panels.rs 仅工具清单改读单一目录及真实 owner；Memory 面板更新/治理路径未改，原回归通过；自动 Memory overlay 尚未迁为模块工具 Hook。"
 
   - id: gap.prompt_stabilizer_unwired
     title: "PromptCacheStabilizer 已归档（R7-4a，可逆保留）——生产中不存在该能力"
@@ -256,7 +265,7 @@ claims:
       - legacy/archived/prompt-stabilizer/prompt_stabilizer.rs
     tests:
       - legacy/archived/prompt-stabilizer/prompt_stabilizer.rs
-    verified_at: 357e9780
+    verified_at: c9251271
     verify_cmd: "Test-Path legacy/archived/prompt-stabilizer/prompt_stabilizer.rs; git grep -n PromptCacheStabilizer -- crates"
     owner: orchestration
     next_review: "2026-11-20"
@@ -269,14 +278,14 @@ claims:
     switch_env: null
     sources:
       - crates/capabilities/tools/src/process/linux.rs
-      - crates/capabilities/tools/src/process/platform.rs
+      - crates/capabilities/tools/src/process/mod.rs
     tests:
       - crates/capabilities/tools/tests/process_executor.rs
-    verified_at: 357e9780
+    verified_at: fb4953decd207b5305e361411903964f158c4b13
     verify_cmd: "cargo test -p apeireth-tools-canonical --test process_executor"
     owner: tools
     next_review: "2026-11-20"
-    notes: "进程组 + setrlimit(AS/CPU/FSIZE/NPROC) + PR_SET_PDEATHSIG + PR_SET_NO_NEW_PRIVS；不承诺 cgroup/seccomp/namespace/网络隔离；memory/process-count 为 partial。"
+    notes: "进程组 + setrlimit(AS/CPU/FSIZE/NPROC) + PR_SET_PDEATHSIG + PR_SET_NO_NEW_PRIVS；不承诺 cgroup/seccomp/namespace/网络隔离；memory/process-count 为 partial。；2026-10-28 Phase 3 复核：原进程组/rlimit/降权语义保留，增加期限/取消与退出后清理后代；实进程 PID 回归通过。不保证回收主动脱离进程组的后代，维持 PARTIAL，不升级为强隔离或硬件验证。"
 
   - id: sec.gateway_tls
     title: "Gateway TLS 真接线（PEM 真加载 fail-closed + TLS listener + 三态状态面）"
@@ -294,7 +303,7 @@ claims:
     verify_cmd: "cargo test -p apeireth-gateway --test tls_serve"
     owner: gateway
     next_review: "2026-11-20"
-    notes: "APEIRETH_TLS_CERT + APEIRETH_TLS_KEY 指向 PEM 才启用；缺/坏 PEM fail-closed；状态三态 + 审计事件 gateway.tls_enabled；非默认开。；2026-10-22 批次复核：gateway tls_serve 7 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立"
+    notes: "APEIRETH_TLS_CERT + APEIRETH_TLS_KEY 指向 PEM 才启用；缺/坏 PEM fail-closed；状态三态 + 审计事件 gateway.tls_enabled；非默认开。；2026-10-22 批次复核：gateway tls_serve 7 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）；2026-10-28 生产收敛复核：源码变更及回归证据见 kernel-convergence-final-acceptance-2026-10-28.md；不将 Legacy SubLoop 或旧数据 Profile 映射宣称已迁移。；2026-10-29 S5：listener/TLS/CORS 与域/用户归属逻辑未改；同一 gateway Runtime 执行入口委托 managed main。原 HTTP、审批、多客户端、域隔离和真实 bootstrap 回归通过，不新增暴露面或提升默认开关。 证据见 kernel-convergence-s5-2026-10-29.md。"
 
   - id: sec.storage_envelope_crypto
     title: "会话/记忆静态信封加密 + 备份恢复（B6 库级 + B6-2a sessions.data 试点）"
@@ -329,7 +338,7 @@ claims:
     tests:
       - crates/foundation/governance/src/chain.rs
       - crates/adapters/cli/tests/governance_chain_equivalence.rs
-    verified_at: 357e9780
+    verified_at: 9db4418d5bba94b432555732a7434f638929a636
     verify_cmd: "cargo test -p apeireth-governance --lib"
     owner: governance
     next_review: "2026-11-20"
@@ -351,7 +360,7 @@ claims:
     verify_cmd: "cargo test -p apeireth-governance --lib"
     owner: governance
     next_review: "2026-11-20"
-    notes: "R8-B1 b6d902ce 适配器（ChainOutcome → GovernanceVerdict 四态映射）；R8-B2 已接生产装配根：builder.with_governance(governance_chain::production(...))，回滚 = 换回 Arc<GovernancePipeline> 一行；既有 CLI 治理/审批测试期望不变。2026-10-22 抬级：原「零生产接线」口径失效。"
+    notes: "R8-B1 b6d902ce 适配器（ChainOutcome → GovernanceVerdict 四态映射）；R8-B2 已接生产装配根：builder.with_governance(governance_chain::production(...))，回滚 = 换回 Arc<GovernancePipeline> 一行；既有 CLI 治理/审批测试期望不变。2026-10-22 抬级：原「零生产接线」口径失效。；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）；2026-10-28 生产收敛复核：源码变更及回归证据见 kernel-convergence-final-acceptance-2026-10-28.md；不将 Legacy SubLoop 或旧数据 Profile 映射宣称已迁移。；2026-10-29 S5：完整 TurnRequest 和审批续跑均委托原 Kernel，未改生产治理链或工具审批规则；真实 bootstrap 的冻结审批、原 cognitive_module_abi、生产 permission/receipt 和 runtime all-targets 通过。 证据见 kernel-convergence-s5-2026-10-29.md。"
 
   - id: gov.reflection_queue
     title: "R8-C 进程内延迟反思队列——默认未装配、零行为变化"
@@ -362,7 +371,7 @@ claims:
       - crates/foundation/governance/src/chain.rs
     tests:
       - crates/foundation/governance/src/chain.rs
-    verified_at: 357e9780
+    verified_at: 5c74f955e62cebcb1979fb3606e804d9fb10d73c
     verify_cmd: "cargo test -p apeireth-governance --lib"
     owner: governance
     next_review: "2026-11-20"
@@ -377,11 +386,13 @@ claims:
       - .github/workflows/rust.yml
     tests:
       - crates/foundation/governance/tests/governance_chain_drill.rs
-    verified_at: 357e9780
+
+    verified_at: 4eb9539f3fa9a4e00a1999ca2c3cb8a15e5776e4
+
     verify_cmd: "cargo test -p apeireth-governance --test governance_chain_drill --locked"
     owner: governance
     next_review: "2026-11-20"
-    notes: "R8-D 60627d8e：rust-tests job 增治理链演练显式步骤；本地等价命令 cargo test -p apeireth-governance --test governance_chain_drill 3 passed。远端仍 0 次执行：该步骤排在 cargo nextest --workspace 之后，三平台 nextest 常红（基座既有）导致 job 早停、步骤被 skip（2026-10-22 复核 rust.yml 运行实况）；故仅登记 IMPLEMENTED 证据面，待 nextest 基线转绿后自动进入执行面。"
+    notes: "R8-D 60627d8e：rust-tests job 增治理链演练显式步骤；本地等价命令 cargo test -p apeireth-governance --test governance_chain_drill 4 passed（2026-10-31：多签守卫用例已去 #[ignore]）。远端仍 0 次执行：该步骤排在 cargo nextest --workspace 之后，三平台 nextest 常红（基座既有）导致 job 早停、步骤被 skip（2026-10-22 复核 rust.yml 运行实况）；故仅登记 IMPLEMENTED 证据面，待 nextest 基线转绿后自动进入执行面。；2026-10-29 D3：rust.yml 只修 secret-scan shell 引导并增加扫描器行为自检；governance chain drill 步骤、三路径判据与权限不变；本批 workspace 主门禁包含原回归。"
 
   - id: sec.governance_chain_drill
     title: "M-of-N 逻辑票链三路径端到端合练（B7 验证证据）"
@@ -393,7 +404,7 @@ claims:
       - docs/04-internal/governance-chain-drill-2026-10-20.md
     tests:
       - crates/foundation/governance/tests/governance_chain_drill.rs
-    verified_at: 357e9780
+    verified_at: 5c74f955e62cebcb1979fb3606e804d9fb10d73c
     verify_cmd: "cargo test -p apeireth-governance --test governance_chain_drill"
     owner: governance
     next_review: "2026-11-20"
@@ -428,11 +439,31 @@ claims:
       - frontend/companion-desktop/src-tauri/src/sqlite_workbench.rs
       - frontend/companion-desktop/src-tauri/src/pg_client.rs
       - frontend/companion-desktop/src-tauri/src/mysql_client.rs
-    verified_at: 357e9780
+    verified_at: c9251271
     verify_cmd: "cd frontend/companion-desktop/src-tauri && cargo test --locked"
     owner: companion-desktop
     next_review: "2026-11-20"
     notes: "词法级写类拒绝（DML / CTE 内嵌 DML / EXPLAIN ANALYZE / SELECT INTO / FOR UPDATE 全拒，fail-closed）+ PG `BEGIN READ ONLY` / MySQL `START TRANSACTION READ ONLY` 纵深。桌面 CI 执行面（2026-10-22 复核）：companion-desktop-ci.yml 的 `cargo test --workspace --all-targets`（src-tauri 独立 workspace）执行本断言；PR #36 起该 gate 3/3 success。 残余：无跨平台 live E2E（如实）。"
+
+  - id: sec.credential_endpoint_binding
+    title: "凭据 ↔ 端点绑定（凭据只发往 audience ∪ 显式绑定内的端点；运行时换端点默认拒绝）"
+    level: PRODUCTION WIRED
+    default: "ON"
+    switch_env: null
+    sources:
+      - crates/engine/provider/src/endpoint_binding.rs
+      - crates/engine/provider/src/canonical_anthropic.rs
+      - crates/engine/provider/src/canonical_minimax.rs
+      - crates/engine/provider/src/canonical_openai_compatible.rs
+      - crates/foundation/plugin/src/credentials.rs
+      - crates/foundation/credentials/src/hot_store.rs
+    tests:
+      - crates/engine/provider/tests/endpoint_binding.rs
+    verified_at: a9d689ed8f095975e9210ad54b7b67dfcf44f3fa
+    verify_cmd: "cargo test -p apeireth-provider --test endpoint_binding --locked"
+    owner: provider
+    next_review: "2026-12-01"
+    notes: "2026-11-01 安全审计 P1 的设计落点：凭据与端点是两份独立配置，只改端点那一份会把旧凭据发给新主机。判定（并集口径）：允许集合 = audience（构造时确定）∪ 显式绑定（凭据库维度：HotCredentialStore::set_with_endpoints；admin 同笔提交 base_url+api_key 时自动登记）；两者皆空则不拦截，否则端点不在集合内即拒绝。audience：厂商 provider（anthropic/minimax）的 from_env() = {厂商默认端点} ∪ {启动时配置的端点}；协议族 provider（openai-compatible）= **空**（端点本就由部署方选，且 admin 的合法热更新必须能工作）。⇒ 真正被挡住的是**运行时**换端点（admin 热改 base_url / apply_hot_config）：新主机不在允许集合里 ⇒ 拿不到凭据。校验点在 resolve_key 取密钥之前 ⇒ 未绑定的端点根本取不到凭据；错误里只有端点与凭据名，没有凭据内容。残余边界（如实）：① 绑定是部署方的显式声明，不是密码学证明，防的是「只改端点就泄漏」，不防能同时改端点与声明的对手；② 启动时的端点配置不拦（同一份配置里也放着凭据，能改它的人本来就能读到凭据）；③ 协议族未声明绑定时不拦（否则打死自建端点与 admin 热更新）—— 想要保护就显式声明绑定；④ 绑定只活在进程内（OS keyring 的值模型没有附加元数据的位置）⇒ 重启后需重新声明。"
 
   - id: sec.provider_proxy_ssrf
     title: "Provider 中继 SSRF 面收紧（B2：目标类闸 + DNS 钉址 + 重定向逐跳闸 + 头白名单）"
@@ -443,7 +474,7 @@ claims:
       - frontend/companion-desktop/src-tauri/src/provider_proxy.rs
     tests:
       - frontend/companion-desktop/src-tauri/src/provider_proxy.rs
-    verified_at: 357e9780
+    verified_at: c9251271
     verify_cmd: "cd frontend/companion-desktop/src-tauri && cargo test --locked provider_proxy"
     owner: companion-desktop
     next_review: "2026-11-20"
@@ -458,7 +489,7 @@ claims:
       - frontend/companion-desktop/src-tauri/src/workspace_list.rs
     tests:
       - frontend/companion-desktop/src-tauri/src/workspace_list.rs
-    verified_at: 357e9780
+    verified_at: c9251271
     verify_cmd: "cd frontend/companion-desktop/src-tauri && cargo test --locked workspace_list"
     owner: companion-desktop
     next_review: "2026-11-20"
@@ -474,7 +505,7 @@ claims:
       - docs/02-guides/permission-surfaces.md
     tests:
       - frontend/companion-desktop/tests/starport-face-apps.mjs
-    verified_at: 357e9780
+    verified_at: c9251271
     verify_cmd: "cd frontend/companion-desktop && pnpm test"
     owner: companion-desktop
     next_review: "2026-11-20"
@@ -490,7 +521,7 @@ claims:
       - crates/engine/organ/src/tone.rs
     tests:
       - crates/engine/runtime-assembly/src/canonical/bio_tone.rs
-    verified_at: 357e9780
+    verified_at: c9251271
     verify_cmd: "cargo test -p apeireth-runtime-assembly bio_tone"
     owner: runtime-assembly
     next_review: "2026-11-20"
@@ -507,11 +538,11 @@ claims:
       - crates/adapters/cli/src/care_heartbeat.rs
     tests:
       - crates/engine/runtime-assembly/tests/bio_circadian_production.rs
-    verified_at: 357e9780
+    verified_at: 0d8041ee4aac88e0d2443505a83246faa60ae30d
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_circadian_production"
     owner: cli
     next_review: "2026-11-20"
-    notes: "心跳最前 decide()；显式 UTC 缺省 tz offset；睡眠压力生产源未接（门内压力恒 0，如实）。"
+    notes: "心跳最前 decide()；显式 UTC 缺省 tz offset；睡眠压力生产源未接（门内压力恒 0，如实）。；2026-10-29 S5：bootstrap 与心跳提交改为同一 managed main，原昼夜节律/关怀开关和候选逻辑未改。实际 heartbeat producer 的启动/关闭闸与会话/用量归属回归通过，无设备实测声明。 证据见 kernel-convergence-s5-2026-10-29.md。"
 
   - id: bio.nociception_pain
     title: "痛觉→失败链（W3.4 接失败链，默认关）"
@@ -519,8 +550,9 @@ claims:
     default: "OFF"
     switch_env: APEIRETH_ENABLE_BIO_PAIN
     sources:
-      - crates/engine/runtime/src/canonical/bio_pain.rs
+      - crates/engine/organ/src/nociception.rs
       - crates/foundation/orchestration/src/nociception.rs
+      - crates/foundation/plugin/src/observation.rs
       - crates/adapters/cli/src/lib.rs
     tests:
       - crates/engine/runtime/tests/bio_pain_wiring.rs
@@ -528,7 +560,7 @@ claims:
     verify_cmd: "cargo test -p apeireth-runtime --test bio_pain_wiring"
     owner: runtime
     next_review: "2026-11-20"
-    notes: "只观测记账、不改错误/重试决策（0 装边界）；失败分类为近似。；2026-10-22 批次复核：runtime bio_pain_wiring 4 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立"
+    notes: "只观测记账、不改错误/重试决策（0 装边界）；失败分类为近似。；2026-10-22 批次复核：runtime bio_pain_wiring 4 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）；2026-10-28 生产收敛复核：源码变更及回归证据见 kernel-convergence-final-acceptance-2026-10-28.md；不将 Legacy SubLoop 或旧数据 Profile 映射宣称已迁移。；2026-10-29 S5：CLI 只改 Host 装配委托，原观察口、痛觉开关与错误策略未改；本批作源码差异复核，runtime all-targets、bootstrap 及包级 clippy 通过，默认仍 OFF。 证据见 kernel-convergence-s5-2026-10-29.md。"
 
   - id: bio.recovery_protocol
     title: "再生→恢复协议接失败链（W3.4，与 bio_pain 同开关，默认关）"
@@ -536,12 +568,511 @@ claims:
     default: "OFF"
     switch_env: APEIRETH_ENABLE_BIO_PAIN
     sources:
-      - crates/engine/runtime/src/canonical/bio_pain.rs
+      - crates/engine/organ/src/nociception.rs
       - crates/foundation/orchestration/src/recovery_protocol.rs
     tests:
       - crates/engine/runtime/tests/bio_pain_wiring.rs
-    verified_at: 357e9780
+      - crates/engine/organ/src/nociception.rs
+    verified_at: 5c74f955e62cebcb1979fb3606e804d9fb10d73c
     verify_cmd: "cargo test -p apeireth-runtime --test bio_pain_wiring"
     owner: orchestration
     next_review: "2026-11-20"
-    notes: "RecoveryCase 状态机已接失败链；ScarLedger::learn 未接（如实）。"
+    notes: "RecoveryCase 状态机已接失败链；ScarLedger::learn 未接（如实）。；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）"
+
+  - id: bio.homeostasis
+    title: "异稳态体征→上下文策略（SG-14，生产装配，默认关）"
+    level: PRODUCTION WIRED
+    default: "OFF"
+    switch_env: APEIRETH_ENABLE_BIO_CONTEXT_POLICY
+    sources:
+      - crates/engine/organ/src/homeostasis.rs
+      - crates/engine/organ/src/context_assembly.rs
+      - crates/engine/runtime-assembly/src/canonical/cognitive.rs
+      - crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs
+      - crates/engine/runtime-assembly/src/canonical/bio_extra_probes.rs
+      - crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs
+      - crates/capabilities/tools/src/self_status.rs
+    tests:
+      - crates/engine/runtime-assembly/tests/bio_observation_cells.rs
+      - crates/engine/runtime-assembly/tests/bio_cognitive_wiring.rs
+    verified_at: da43dcf7ccadbc7b8bd56ba35cead4a5e7f79504
+    verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_observation_cells"
+    owner: organ
+    next_review: "2026-11-20"
+    notes: "① 接在：装配根 install_bio_modules 注册 BioAssemblyModule（canonical/cognitive.rs）+ ObservedBioAssemblyModule 观测装饰器（canonical/bio_production_wiring.rs）；开关值经 NervousSwitchboard::BioSwitch::ContextPolicy 单入口解析，env 只认 \"1\"，默认关。② 自述在：capabilities.bio_mechanisms 的 homeostasis 格（BioMechanismKind::Homeostasis，经 BioProbeSlots::fill_homeostasis 迟绑定同源句柄）+ 聚合面 capabilities.nervous_system 的 SG-14.homeostasis 行。③ 边界：仅 ContextPressure 为实测值，其余 4 维沿用 VitalSignSet::healthy() 中性基线（nervous_snapshot.rs 记 vital_sign_inputs = partial）；观测格只读，不剪枝、不改行为。"
+
+  - id: bio.immune_memory
+    title: "免疫记忆→守卫证据（SG-15，生产装配，默认关）"
+    level: PRODUCTION WIRED
+    default: "OFF"
+    switch_env: APEIRETH_ENABLE_IMMUNE_MEMORY
+    sources:
+      - crates/engine/guard/src/immune_memory.rs
+      - crates/engine/guard/src/hook.rs
+      - crates/adapters/cli/src/lib.rs
+      - crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs
+      - crates/engine/runtime-assembly/src/canonical/bio_mechanism_probes.rs
+      - crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs
+      - crates/capabilities/tools/src/self_status.rs
+    tests:
+      - crates/engine/runtime-assembly/tests/bio_quorum_immune_wiring.rs
+      - crates/engine/guard/src/immune_memory.rs
+    verified_at: 9db4418d5bba94b432555732a7434f638929a636
+    verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_quorum_immune_wiring"
+    owner: guard
+    next_review: "2026-11-20"
+    notes: "① 接在：CLI 生产入口把同一份共享免疫账挂到 BehaviorChainGuardHook（crates/adapters/cli/src/lib.rs 的 ENABLE_IMMUNE_MEMORY_ENV，只认 \"1\"）；机制内核 apeireth-guard::immune_memory 的 ImmuneMemory::observe 只向 guard evidence/verdict 追加 immune 字段，不改主结论。② 自述在：capabilities.bio_mechanisms 的 immune_memory 格（BioMechanismKind::ImmuneMemory，经 BioProbeSlots::fill_immune_memory 迟绑定 guard 同一份 SharedImmuneMemory）+ 聚合面 capabilities.nervous_system 的 SG-15.immune_memory 行。③ 边界：只观察 Deny/RequireApproval 两类事件；升级信号另作审议门 Conflict 外部源（同 record_key 出现次数节流）；自述格脱敏，不回 record key / 路径 / 原文。"
+
+  - id: bio.attachment
+    title: "依恋/分离-重聚→关怀候选（SG-19，生产装配，默认关）"
+    level: PRODUCTION WIRED
+    default: "OFF"
+    switch_env: APEIRETH_ENABLE_BIO_CARE_CANDIDATES
+    sources:
+      - crates/engine/organ/src/attachment.rs
+      - crates/engine/runtime-assembly/src/canonical/care_heartbeat.rs
+      - crates/adapters/cli/src/care_heartbeat.rs
+      - crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs
+      - crates/engine/runtime-assembly/src/canonical/bio_mechanism_probes.rs
+      - crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs
+      - crates/capabilities/tools/src/self_status.rs
+    tests:
+      - crates/engine/runtime-assembly/tests/bio_care_wiring.rs
+      - crates/engine/runtime-assembly/tests/bio_mechanisms_self_status.rs
+    verified_at: 0d8041ee4aac88e0d2443505a83246faa60ae30d
+    verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_care_wiring"
+    owner: organ
+    next_review: "2026-11-20"
+    notes: "① 接在：CLI care_heartbeat 心跳宿主供给 presence Turn 帧 + SessionStore 可续线索 → apeireth-organ::attachment / care::reunion 产出 reunion_candidate（非 Brief）→ care 纪律管道；开关 APEIRETH_ENABLE_BIO_CARE_CANDIDATES 只认 \"1\"。② 自述在：capabilities.bio_mechanisms 的 attachment 格（BioMechanismKind::Attachment，槽由 CLI 的 fill_care_status 填 CareHeartbeatStatus 读取口，与关怀生产者同一状态闭包）+ 聚合面 capabilities.nervous_system 的 SG-19.attachment 行。③ 边界：quiet 窗口抑制候选；未挂心跳宿主的运行面槽空 ⇒ 该格 null + 真因「未接线」，不编值；候选只进关怀纪律管道，不改回合决策。"
+
+  - id: bio.social_repair
+    title: "社会修复→提示词修复指令（SG-20，生产装配，默认关）"
+    level: PRODUCTION WIRED
+    default: "OFF"
+    switch_env: APEIRETH_ENABLE_BIO_REPAIR_GUIDANCE
+    sources:
+      - crates/engine/organ/src/social_repair.rs
+      - crates/engine/runtime-assembly/src/canonical/bio_social_repair.rs
+      - crates/engine/runtime-assembly/src/canonical/cognitive.rs
+      - crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs
+      - crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs
+      - crates/capabilities/tools/src/self_status.rs
+    tests:
+      - crates/engine/runtime-assembly/tests/bio_cognitive_wiring.rs
+      - crates/engine/runtime-assembly/tests/bio_observation_cells.rs
+    verified_at: da43dcf7ccadbc7b8bd56ba35cead4a5e7f79504
+    verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_cognitive_wiring"
+    owner: organ
+    next_review: "2026-11-20"
+    notes: "① 接在：装配根 install_bio_modules 注册 BioAssemblyModule（canonical/cognitive.rs），APEIRETH_ENABLE_BIO_REPAIR_GUIDANCE 只认 \"1\"；生产装配**不注入** RepairPlan（install_bio_modules 只注入 context budget）⇒ 修复指令块在生产实际未产出；自述侧 SocialRepairObservationSource 订阅 NervousBus 的 ApprovalSocial::Rejected 并只读折算修复计划。② 自述在：capabilities.bio_mechanisms 的 social_repair 格（BioMechanismKind::SocialRepair，经 fill_social_repair 迟绑定同源观测源）+ 聚合面 capabilities.nervous_system 的 SG-20.social_repair 行。③ 边界：会话事件源未接（UncertaintySignal 采集未接，plan_repair 只能由调用方显式注入；nervous_snapshot.rs 记 session_event_source = not_wired）；观测格只读，不改行为。"
+
+  - id: bio.quorum
+    title: "群体感应→审议门（SG-24，生产装配，默认关）"
+    level: PRODUCTION WIRED
+    default: "OFF"
+    switch_env: APEIRETH_ENABLE_QUORUM_GATE
+    sources:
+      - crates/foundation/orchestration/src/quorum.rs
+      - crates/foundation/orchestration/src/council/mod.rs
+      - crates/engine/runtime-assembly/src/canonical/orchestrator.rs
+      - crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs
+      - crates/engine/runtime-assembly/src/canonical/bio_mechanism_probes.rs
+      - crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs
+      - crates/capabilities/tools/src/self_status.rs
+    tests:
+      - crates/engine/runtime-assembly/tests/bio_quorum_wiring.rs
+      - crates/engine/runtime-assembly/tests/bio_quorum_immune_wiring.rs
+    verified_at: 0d8041ee4aac88e0d2443505a83246faa60ae30d
+    verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_quorum_wiring"
+    owner: orchestration
+    next_review: "2026-11-20"
+    notes: "① 接在：OrganModule → OrganOrchestrator（canonical/orchestrator.rs）的 QuorumGate → decide_with_invoker_gated，开关 APEIRETH_ENABLE_QUORUM_GATE 只认 \"1\"；含 guard 免疫升级转 Conflict 的外部源（按 (record_key,occurrences) 节流）。② 自述在：capabilities.bio_mechanisms 的 quorum 格（BioMechanismKind::Quorum，经 fill_from_organ_module 读 organ 模块 last_quorum_trace 门账）+ 聚合面 capabilities.nervous_system 的 SG-24.quorum 行。③ 边界：Hold/Cooldown 不召开顾问、不伪造否决；自述格只回计数与裁决档位，不回理由原文；门账仅进程内、不持久化。"
+
+  - id: bio.lifecycle
+    title: "资产生命周期→五态账本（SG-18，生产装配，默认关）"
+    level: PRODUCTION WIRED
+    default: "OFF"
+    switch_env: APEIRETH_ENABLE_BIO_LIFECYCLE
+    sources:
+      - crates/foundation/orchestration/src/lifecycle.rs
+      - crates/engine/runtime-assembly/src/canonical/bio_lifecycle.rs
+      - crates/engine/runtime-assembly/src/canonical/lifecycle_state_store.rs
+      - crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs
+      - crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs
+      - crates/capabilities/tools/src/self_status.rs
+    tests:
+      - crates/engine/runtime-assembly/tests/bio_lifecycle_wiring.rs
+      - crates/engine/runtime-assembly/tests/bio_lifecycle_production.rs
+    verified_at: 4041ea70
+    verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_lifecycle_wiring"
+    owner: orchestration
+    next_review: "2026-11-20"
+    notes: "① 接在：装配根 install_bio_modules 注册 BioLifecycleModule（canonical/bio_lifecycle.rs），APEIRETH_ENABLE_BIO_LIFECYCLE 只认 \"1\"，关 = 不构造状态 / 不注册模块 / 一次时钟都不读；真实工具结果经 nervous.bridge → NervousBus 订阅驱动记账（R1b-2b），AfterTurn 只做 evaluate。② 自述在：capabilities.bio_mechanisms 的 lifecycle 格（BioMechanismKind::Lifecycle，经 fill_lifecycle_state 迟绑定与注册模块同一 Arc）+ 聚合面 capabilities.nervous_system 的 SG-18.lifecycle 行。③ 边界：持久化 <care_dir>/lifecycle_state.json（StoredDoc v1，坏档拒开；目录缺省 = 纯内存）；AfterTurn 评估仍走钩子、未迁总线。"
+
+  - id: bio.play
+    title: "游戏练习场四工具面（SG-21，生产装配，默认关）"
+    level: PRODUCTION WIRED
+    default: "OFF"
+    switch_env: APEIRETH_ENABLE_BIO_PLAY
+    sources:
+      - crates/engine/organ/src/play.rs
+      - crates/engine/runtime-assembly/src/canonical/play_tools.rs
+      - crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs
+      - crates/engine/runtime-assembly/src/canonical/bio_mechanism_probes.rs
+      - crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs
+      - crates/capabilities/tools/src/self_status.rs
+    tests:
+      - crates/engine/runtime-assembly/tests/bio_play_wiring.rs
+      - crates/engine/runtime-assembly/tests/bio_mechanisms_self_status.rs
+    verified_at: 4041ea70
+    verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_play_wiring"
+    owner: organ
+    next_review: "2026-11-20"
+    notes: "① 接在：装配根 install_bio_play 注册四工具 tool.play_propose/start/finish/abort（canonical/play_tools.rs），APEIRETH_ENABLE_BIO_PLAY 只认 \"1\" 且必须注入工作区根（缺根 = 无法证明 sandbox_dir 包含性 = 不注册）；四工具共享同一本内存练习账。② 自述在：capabilities.bio_mechanisms 的 play 格（BioMechanismKind::Play，play_probe 读同一本练习账；练习开关未开 ⇒ 该格 wired:false + 真因）+ 聚合面 capabilities.nervous_system 的 SG-21.play 行。③ 边界：无 IM 卡 / 无持久化（账本只在内存，重启丢 session）/ 沙箱非 OS 隔离（不创建目录）；产物只走 PlayOutcome.artifacts 元数据、不写主体记忆；审批钩子由适配器接线，本装配根不注册。"
+
+  - id: bio.ritual
+    title: "仪式→关怀完成面（SG-22，生产装配，默认关）"
+    level: PRODUCTION WIRED
+    default: "OFF"
+    switch_env: APEIRETH_ENABLE_BIO_CARE_CANDIDATES
+    sources:
+      - crates/engine/organ/src/ritual.rs
+      - crates/engine/runtime-assembly/src/canonical/ritual_state_store.rs
+      - crates/engine/runtime-assembly/src/canonical/ritual_tools.rs
+      - crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs
+      - crates/engine/runtime-assembly/src/canonical/bio_extra_probes.rs
+      - crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs
+      - crates/capabilities/tools/src/self_status.rs
+    tests:
+      - crates/engine/runtime-assembly/tests/bio_ritual_tools.rs
+      - crates/engine/runtime-assembly/tests/bio_observation_cells.rs
+    verified_at: 4041ea70
+    verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_ritual_tools"
+    owner: organ
+    next_review: "2026-11-20"
+    notes: "① 接在：装配根 install_bio_ritual_tools 注册两工具 tool.ritual_done / tool.ritual_skip（canonical/ritual_tools.rs），复用 APEIRETH_ENABLE_BIO_CARE_CANDIDATES（只认 \"1\"）且必须注入关怀数据目录（缺目录 = 无处落盘 = 不注册）；状态存 <care_dir>/ritual_state.json（StoredDoc v1 + 原子写）。② 自述在：capabilities.bio_mechanisms 的 ritual 格（BioMechanismKind::Ritual，经 fill_ritual_store 读同一本仪式账，只读统计、不投递不打卡）+ 聚合面 capabilities.nervous_system 的 SG-22.ritual 行。③ 边界：半程 —— 纯 CLI chat 无心跳宿主时仪式写入暂无候选消费（nervous_snapshot.rs 该行 level = HALF；claims 四级无 HALF 档，故本条记 PRODUCTION WIRED 并在此如实标注半程缺口）；工具面是唯一生产写者，显式 record_ritual_done/skip 注入口保留且无跨实例锁。"
+
+  - id: bio.ecosystem_health
+    title: "工具生态健康度观测（SG-25，生产装配，默认关）"
+    level: PRODUCTION WIRED
+    default: "OFF"
+    switch_env: APEIRETH_ENABLE_BIO_SELF_STATUS
+    sources:
+      - crates/capabilities/tools/src/ecosystem_health.rs
+      - crates/engine/runtime-assembly/src/canonical/tool_ecosystem_probe.rs
+      - crates/engine/runtime-assembly/src/canonical/tool_taxonomy.rs
+      - crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs
+      - crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs
+      - crates/capabilities/tools/src/self_status.rs
+    tests:
+      - crates/engine/runtime-assembly/tests/bio_tool_ecosystem.rs
+    verified_at: 4041ea70
+    verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_tool_ecosystem"
+    owner: tools
+    next_review: "2026-11-20"
+    notes: "① 接在：装配末端 production.rs 调 bio_probe_slots.fill_ecosystem_profiles(&capabilities) 把静态工具能力表剖面填入迟绑定槽；探针在 canonical/tool_ecosystem_probe.rs，纯函数在 apeireth-tools-canonical::ecosystem_health::analyze，策展表在 canonical/tool_taxonomy.rs（代码内常量快照）。② 自述在：capabilities.bio_mechanisms 的 ecosystem_health 格（BioMechanismKind::EcosystemHealth）+ 聚合面 capabilities.nervous_system 的 SG-25.ecosystem_health 行。③ 边界：本机制无专属开关，随观测面总闸 APEIRETH_ENABLE_BIO_SELF_STATUS 开合（nervous_snapshot.rs 该行 enabled_env = null）；快照 = 装配期静态注册面，运行期动态发现的 MCP 工具不在其中（未覆盖工具如实计 untagged）；完整 taxonomy 合同（工具声明自带标签）仍属 B 类 ADR 前置、未做；只读不剪枝。"
+
+  - id: bio.capacity
+    title: "承载力/演替/关键种→自述格（SG-26，生产装配，默认关）"
+    level: PRODUCTION WIRED
+    default: "OFF"
+    switch_env: APEIRETH_ENABLE_BIO_SELF_STATUS
+    sources:
+      - crates/foundation/orchestration/src/capacity.rs
+      - crates/engine/runtime-assembly/src/canonical/bio_mechanism_probes.rs
+      - crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs
+      - crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs
+      - crates/capabilities/tools/src/self_status.rs
+    tests:
+      - crates/engine/runtime-assembly/tests/bio_mechanisms_self_status.rs
+    verified_at: 4041ea70
+    verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_mechanisms_self_status"
+    owner: orchestration
+    next_review: "2026-11-20"
+    notes: "① 接在：capacity_bio_probe(queue, limit) 读与 tool.task_board 同一本任务队列（apeireth-orchestration::capacity）；注册点 install_bio_self_status（canonical/bio_production_wiring.rs），随观测面总闸 APEIRETH_ENABLE_BIO_SELF_STATUS（只认 \"1\"）。② 自述在：capabilities.bio_mechanisms 的 capacity 格（BioMechanismKind::Capacity；挂在既有 capabilities 节内，不是新的顶层节）+ 聚合面 capabilities.nervous_system 的 SG-26.capacity 行（observed 由 bio_mechanisms 同源推导）。③ 边界：只读（不认领 / 不改派 / 不结算任务）；未配任务板 ⇒ probe 不注册 ⇒ 该格 wired:false + 真因；并发上限 active_task_limit 未配置时阈值显式 null，不编阈值。"
+
+  - id: rt.registered_module_v1
+    title: "注册模块生命周期、固定 V1 Hook 与唯一治理工具目录"
+    level: PRODUCTION WIRED
+    default: "ON"
+    switch_env: null
+    sources:
+      - crates/engine/runtime/src/canonical/module.rs
+      - crates/foundation/plugin/src/manager.rs
+      - crates/foundation/plugin/src/plugin.rs
+      - crates/foundation/plugin/src/hooks.rs
+      - crates/foundation/plugin/src/task_scope.rs
+      - crates/engine/runtime/src/canonical/runtime.rs
+      - crates/engine/runtime/src/canonical/execute.rs
+      - crates/engine/runtime/src/canonical/dispatch_admission.rs
+      - crates/engine/runtime/src/canonical/dispatcher.rs
+      - crates/engine/runtime/src/canonical/module_host.rs
+      - crates/engine/runtime/src/canonical/registered_hooks.rs
+      - crates/foundation/plugin/src/tool.rs
+      - crates/foundation/plugin/src/tool_module.rs
+      - crates/foundation/plugin/src/tool_execution.rs
+      - crates/engine/runtime/src/canonical/capability.rs
+      - crates/engine/runtime/src/canonical/subloop.rs
+      - crates/engine/runtime-assembly/src/canonical/production.rs
+      - crates/engine/runtime-assembly/src/canonical/tool_modules.rs
+      - crates/capabilities/tools/src/shell/execution.rs
+      - crates/capabilities/tools/src/process/mod.rs
+      - crates/capabilities/tools/src/exec_pipeline/mod.rs
+      - crates/engine/runtime/src/canonical/behavior_adapter.rs
+      - crates/engine/runtime/src/canonical/behavior_projection.rs
+      - crates/engine/runtime-assembly/src/canonical/cognitive_registry.rs
+      - crates/engine/runtime/src/canonical/principal_authority.rs
+      - crates/engine/runtime/src/canonical/session.rs
+    tests:
+      - crates/engine/runtime/tests/legacy_tool_adapter_contract.rs
+      - crates/engine/runtime/tests/cognitive_module_abi.rs
+      - crates/engine/runtime/tests/cache_prefix.rs
+      - crates/engine/runtime/tests/context_budget.rs
+      - crates/engine/runtime/tests/context_overflow.rs
+      - crates/engine/runtime/tests/registry_runtime_v1.rs
+      - crates/engine/runtime-assembly/tests/capability_modules_v1.rs
+      - crates/adapters/cli/tests/gateway_panels.rs
+      - crates/engine/runtime-assembly/tests/production_cognitive_v1.rs
+      - crates/engine/runtime-assembly/tests/profile_memory_authorization.rs
+    verified_at: 9db4418d5bba94b432555732a7434f638929a636
+    verify_cmd: "cargo test -p apeireth-runtime --test registry_runtime_v1 --locked && cargo test -p apeireth-runtime-assembly --test capability_modules_v1 --locked"
+    owner: runtime
+    next_review: "2026-11-28"
+    notes: "Kernel 不自动安装业务工具；Desktop 将原配置选择的工具注册为普通 ToolModule，注册后沿用 V1 协议。default ON 只表示该生产装配机制，未新开 Shell/网络/文件写权限，原业务开关不变。复用唯一 PluginManager 与 CapabilityRegistry；自动 Hook 输出仍经同一治理/冻结审批入口与 ToolEventV1 成对投影。新增执行上下文、局部并发、原生取消/排水；旧参数/日志兼容及 AfterToolCall 串行屏障保留。真实 Runtime 模拟模型回合覆盖四协议 Adapter。动态 MCP 完整 owner 生命周期、Memory 自动 overlay、专有设备原生清理、共享 Arc 热插拔与完整多实例仍未完成；无云 API/设备实测。Phase 2 历史 default OFF 不追改；Phase 3 接线证据见 docs/04-internal/capability-modules-phase3-2026-10-28.md。；本批复核：动态 MCP owner、独立 Agent Scope/Principal、Memory 固定 Hook 已在真实 Runtime 测试；Managed Runtime 无模块也使用 V1。Desktop 默认旧 Memory/Persona/Organ Overlay 和旧 SubLoop 尚未退出，不声称完整 Convergence。；2026-10-28 生产收敛：桌面认知回调经 RegisteredBehavior 私有工具与固定 Hook 注入 V1；空观察审计消费、模型猜名拒绝、旧投影不被重新学习有真实生产回归。with_module / SubLoop 仍为明确残留，不能视为全部 Legacy 后端退出。；2026-10-29 S1：SubLoop 已委托同一 AgentInstance/execute_outcome，独立 provider/round 循环已删除；注册 owner 世代、共享预算、隔离审批与原生排水经真实 Runtime 验证。with_module/Overlay 和两种 ModuleInvoker 后端仍留后续，见 kernel-convergence-s1-2026-10-29.md。；2026-10-29 S2：两种 ModuleInvoker 均委托既有 AgentInstance 单次私有任务，直接 Router 后端已删除；无工具声明/派发、无递归 Hook、完整响应与 served_by 保真、child/真实模块 owner 用量和父来源经真实 Runtime 验证。with_module/Overlay、Profile 映射与桌面 managed 默认仍留后续，整体 Convergence 为 Partial，见 kernel-convergence-s2-2026-10-29.md。；2026-10-29 S3：with_module / with_behavior 与 with_registered_behavior 共用 RegisteredBehavior、固定 Hook、原治理/Dispatcher 与 V1；execute 直接 callback fallback 和动态 system Overlay 插槽已删除。动态数据只成对投影一次，空观察仅审计，预算/spill/溢出收缩重组认证工具载荷；静态 Host policy、审批/指令时序及旧 reader 保留。Host grant、模型假 receipt/同名工具拒绝、开放批闭合、stop/unload 无回退及 principal 跳过旧全局引擎有真实 Runtime/旧 DB 回归。整体 Convergence 仍 Partial，S4 映射/S5 桌面主入口未实施，见 kernel-convergence-s3-2026-10-29.md。；2026-10-29 S4：兼容 callback receipt 与 Dispatcher 上下文绑定完整 principal/epoch，未映射私有引擎继续默认拒绝；Host 显式选择的映射属于 IMPLEMENTED，映射未默认启用，原注册/治理/V1 机制等级与默认不变。指定窄门禁与真实 Runtime 对抗场景通过；整体 Convergence 仍 Partial，S5 桌面受管主入口未实施，见 kernel-convergence-s4-2026-10-29.md。；2026-10-29 S5：生产认知 load/stop/permission/guessed receipt/module-only 原用例切入 managed desktop；兼容 builder 另保留原装配并扩展 managed/private principal 回归。主实例与模块 child 使用同一实例服务及短锁执行视图；注册仍不授权，整体 Convergence 保持 Partial。 证据见 kernel-convergence-s5-2026-10-29.md。；2026-10-29 S6：兼容子执行经既有实例、Kernel 与 Dispatcher，未新增 Provider 后端或重复计量；真实 Runtime 验证多 child/round 复用 wire id 的独立事实、前端隔离、取消保账、native drain 后的持久 AgentTaskInterrupted 与重复 stop 幂等。新 reader 保留旧日志，新增变体不承诺旧二进制降级读取；pending 只表示最后 checkpoint 未闭合，不证明副作用回滚。原五段 gate_full 清理磁盘后重试通过；宽泛等级与默认不变，平台/性能及最终结论见 kernel-convergence-s6-2026-10-29.md。；2026-10-29 D3：只移除已无调用的内部旧 invoker getter；注册/生命周期生产边界不变，新增保留 Host adapter 的 schema、session scope 与 shutdown 拒绝契约通过。；2026-10-29 P1：显式 Host 选择的 ModuleToolContract 与任务句柄/状态查询经真实 Runtime 回归；既有目录/生命周期/默认权限不变，完整五段门禁通过。监督门禁仍待 P2，无新默认启用或硬件声明。；2026-10-30 P2：新增可选 Host 监督服务与执行回执；原能力默认、Provider 路由与确定性权限机制保持，定向及原 MainOnly 测试/clippy/fmt 回归通过。未将兼容入口声明为已受 System One 保护，无 live model/硬件声明。；2026-10-30 P3：可选 owner-bound 消息复用 Registry/Dispatcher，委托交集与独立后台授权分离；真实 Runtime 定向及原 MainOnly test/clippy/fmt 回归通过。默认与既有等级保持，本地幂等非持久 exactly-once，新消息变体需新 reader；无 live model/硬件声明。"
+
+  - id: rt.owned_agents
+    title: "同一 Runtime 的模块拥有独立 Agent 与分层核算"
+    level: IMPLEMENTED
+    default: null
+    switch_env: null
+    sources:
+      - crates/engine/runtime/src/canonical/module.rs
+      - crates/engine/runtime/src/canonical/runtime.rs
+      - crates/engine/runtime/src/canonical/behavior_adapter.rs
+      - crates/engine/runtime/src/canonical/instances.rs
+      - crates/engine/runtime/src/canonical/instances/tasks.rs
+      - crates/engine/runtime/src/canonical/subloop.rs
+      - crates/engine/runtime/src/canonical/instances/control.rs
+      - crates/engine/runtime/src/canonical/accounting.rs
+      - crates/foundation/plugin/src/agents.rs
+      - crates/engine/runtime/src/canonical/execution_view.rs
+      - crates/engine/runtime/src/canonical/instances/hot.rs
+      - crates/engine/runtime/src/canonical/principal_authority.rs
+      - crates/engine/runtime/src/canonical/session.rs
+      - crates/engine/runtime/src/canonical/instances/main.rs
+      - crates/engine/runtime-assembly/src/canonical/desktop_host.rs
+      - crates/adapters/cli/src/lib.rs
+      - crates/adapters/cli/src/care_heartbeat.rs
+      - crates/engine/runtime/src/canonical/instances/audit.rs
+      - crates/engine/runtime/src/canonical/session_events.rs
+      - crates/engine/runtime/src/canonical/event_log.rs
+    tests:
+      - crates/engine/runtime/tests/cognitive_module_abi.rs
+      - crates/engine/runtime-assembly/tests/canonical_invoker_handle.rs
+      - crates/engine/runtime-assembly/tests/canonical_organ_module.rs
+      - crates/engine/runtime-assembly/tests/organ_llm_bridge_compat.rs
+      - crates/engine/runtime/tests/canonical_subloop.rs
+      - crates/engine/runtime-assembly/tests/convergence_agents.rs
+      - crates/engine/runtime-assembly/tests/profile_memory_authorization.rs
+      - crates/engine/runtime-assembly/tests/managed_main.rs
+      - crates/adapters/cli/tests/canonical_cli_bootstrap.rs
+      - crates/adapters/cli/tests/care_heartbeat_host.rs
+    verified_at: 9db4418d5bba94b432555732a7434f638929a636
+    verify_cmd: "cargo test -p apeireth-runtime --test cognitive_module_abi --locked -j 2 && cargo test -p apeireth-runtime --test canonical_subloop --locked -j 2 && cargo test -p apeireth-runtime-assembly --test convergence_agents --locked -j 2"
+    owner: runtime
+    next_review: "2026-11-20"
+    notes: "可由 Host API 组合；12 项真实实例测试覆盖并发、私有历史、预算、取消、模块自主创建及原生资源排水。不是桌面后台任务全面迁移，也不替代旧 SubLoop。；2026-10-28 生产收敛：请求使用共享服务的只读执行目录视图，模型等待期间不持控制读锁；热注册获得受限 ModuleAgents 端口，模块停止不影响主 Agent。PortableHost 已接线；桌面 Raw Runtime 和旧 SubLoop 的完整多实例迁移仍未完成，维持 IMPLEMENTED 口径。；2026-10-29 S1：SubLoop 路径为 PRODUCTION WIRED；规范化任务端口保留完整响应及本次 usage，父子身份/历史隔离、持久工具对、预算与 native drain 经真实 Runtime 验证。桌面 managed 默认及全部 Legacy 迁移仍未完成，整体维持 IMPLEMENTED，见 kernel-convergence-s1-2026-10-29.md。；2026-10-29 S2：生产与独立 ModuleInvoker 共用 SingleShot 任务策略，意外 tool_calls 原样返回但不执行；请求事实归 child 与真实注册 owner，来源关联父 request/trace，适配器无重复计量。共享预算、跨 turn/session、失败/取消、未知缓存与缺失 usage 的 fail-closed 已实测；原 with_module 的兼容 Host owner 留 S3，不抬升整体等级，见 kernel-convergence-s2-2026-10-29.md。；2026-10-29 S3：旧 builder 回调也绑定真实注册模块 owner 与世代，受原生命周期、内部 capability、父 scope 和模块 child grant 约束；原 SubLoop/Invoker 用量、预算与取消回归通过。未改桌面 managed 默认或旧数据 Profile 映射，不抬升整体等级，见 kernel-convergence-s3-2026-10-29.md。；2026-10-29 S4：子任务核对父 principal/epoch，旧 invoker、fork、reload、审批与后台整理不能复用替换后的 grant；Profile 切换取消旧执行，新 main 不继承旧缓存。runtime all-targets 与 profile_memory_authorization 通过；维持 IMPLEMENTED，S5 默认主入口未实施，见 kernel-convergence-s4-2026-10-29.md。；2026-10-29 S5：默认桌面 Host-owned main 使用现有 ManagedAgent；完整请求、流式、审批、CLI/gateway 和实际 heartbeat producer 共享同一 AgentRuntime/AgentId，历史按 Session 保留，用量在原实际边界记账后按身份汇总。Host 显式选择 SessionQuota，有限实例/共享预算仍默认拒绝未知用量；别实例 Session 认领、跨会话预算、阻塞 Provider 期间热控制/并发/关闭与原实例回归通过。该默认路径另有独立 PRODUCTION WIRED claim，宽泛本项维持 IMPLEMENTED，整体仍 Partial。 证据见 kernel-convergence-s5-2026-10-29.md。；2026-10-29 S6：兼容子执行经既有实例、Kernel 与 Dispatcher，未新增 Provider 后端或重复计量；真实 Runtime 验证多 child/round 复用 wire id 的独立事实、前端隔离、取消保账、native drain 后的持久 AgentTaskInterrupted 与重复 stop 幂等。新 reader 保留旧日志，新增变体不承诺旧二进制降级读取；pending 只表示最后 checkpoint 未闭合，不证明副作用回滚。原五段 gate_full 清理磁盘后重试通过；宽泛等级与默认不变，平台/性能及最终结论见 kernel-convergence-s6-2026-10-29.md。；2026-10-29 S6 Android 库复验：aarch64-linux-android 的 runtime 库 check/build 与 assembly no-default-features 库 check 均 exit 0，精确命令与日志见 kernel-convergence-s6-2026-10-29.md。仅库编译，无设备/JNI/UI/HARDWARE VALIDATED；冷启动目标未达，整体仍 Partial，能力等级与默认不变。；2026-10-29 D3：移除仅内部且无调用的 providers_arc；受管实例仍用原 gated router/执行视图，不把兼容 Host API 测试宣称新增生产接线；原实例回归随 workspace 主门禁通过。；2026-10-30 P2：新增可选 Host 监督服务与执行回执；原能力默认、Provider 路由与确定性权限机制保持，定向及原 MainOnly 测试/clippy/fmt 回归通过。未将兼容入口声明为已受 System One 保护，无 live model/硬件声明。；2026-10-30 P3：可选 owner-bound 消息复用 Registry/Dispatcher，委托交集与独立后台授权分离；真实 Runtime 定向及原 MainOnly test/clippy/fmt 回归通过。默认与既有等级保持，本地幂等非持久 exactly-once，新消息变体需新 reader；无 live model/硬件声明。"
+
+  - id: mem.registered_namespace
+    title: "注册式 Memory 工具、固定 Hook 与通用 Profile 隔离"
+    level: IMPLEMENTED
+    default: null
+    switch_env: null
+    sources:
+      - crates/engine/runtime-assembly/src/canonical/memory_module.rs
+      - crates/engine/runtime-assembly/src/canonical/memory_module/execution.rs
+      - crates/engine/runtime-assembly/src/canonical/memory_module/organizer.rs
+      - crates/engine/runtime/src/canonical/session.rs
+      - crates/engine/runtime/src/canonical/dispatcher.rs
+      - crates/engine/runtime-assembly/src/profile_store.rs
+      - crates/engine/runtime/src/canonical/profiles.rs
+      - crates/engine/runtime-assembly/src/profile_memory.rs
+      - crates/engine/runtime-assembly/src/canonical/cognitive.rs
+      - crates/engine/runtime-assembly/src/canonical/memory_typed_sink.rs
+      - crates/engine/runtime-assembly/src/canonical/production.rs
+      - crates/engine/runtime/src/canonical/principal_authority.rs
+      - crates/engine/memory/src/coordinator.rs
+      - crates/engine/memory/src/layers.rs
+    tests:
+      - crates/engine/runtime-assembly/tests/convergence_memory.rs
+      - crates/engine/runtime-assembly/tests/profile_memory_authorization.rs
+    verified_at: 42d3addfa0b8ec1e3e4664c38d3f505ae79551da
+    verify_cmd: "cargo test -p apeireth-runtime-assembly --test profile_memory_authorization --locked -j 2 && cargo test -p apeireth-runtime-assembly --test convergence_memory --locked -j 2"
+    owner: runtime
+    next_review: "2026-11-20"
+    notes: "新 Host 组合中的 9 项真实 Runtime 测试通过；七工具、合法 V1 检索、后台 Agent、审批 CAS、持久化与 fork Scope 隔离。默认 ProductionCognitiveModules 的旧 Memory/Persona/Organ 尚未替换，旧数据不自动归属新 Namespace。；2026-10-28 生产收敛复核：源码变更及回归证据见 kernel-convergence-final-acceptance-2026-10-28.md；不将 Legacy SubLoop 或旧数据 Profile 映射宣称已迁移。；2026-10-29 S1 复核：父范围约束仅由 SubLoop 适配显式绑定，原模块整理 Agent 独立 Host grant 与 Namespace 语义保持；convergence_memory 原断言复跑通过，旧数据 Profile 映射仍待 S4。证据见 kernel-convergence-s1-2026-10-29.md。；2026-10-29 S4：IMPLEMENTED（可选 Host 组合）的 ProfileMemoryMappings 显式绑定完整 Profile/Namespace 与旧 scope、Preference 来源会话、专属认知 store；共享来源只读，写回归目标私有分区，未映射与过期授权默认拒绝且无全局回退。精确 scope 在原排序前过滤并在工具边界复核，治理/protected/CAS/typed sink/真实来源保持；带回执或调优的 recall 不允许只读共享。撤销、审批、后台整理、fork/reload 与切换由真实 Runtime 对抗测试覆盖。旧数据库不自动迁移，映射未默认启用；整体 Convergence 仍 Partial，S5 未实施，无外部 API/硬件实测。证据见 kernel-convergence-s4-2026-10-29.md。；2026-10-29 P1：显式 Host 选择的 ModuleToolContract 与任务句柄/状态查询经真实 Runtime 回归；既有目录/生命周期/默认权限不变，完整五段门禁通过。监督门禁仍待 P2，无新默认启用或硬件声明。；2026-10-30 P2：新增可选 Host 监督服务与执行回执；原能力默认、Provider 路由与确定性权限机制保持，定向及原 MainOnly 测试/clippy/fmt 回归通过。未将兼容入口声明为已受 System One 保护，无 live model/硬件声明。；2026-10-30 P3：可选 owner-bound 消息复用 Registry/Dispatcher，委托交集与独立后台授权分离；真实 Runtime 定向及原 MainOnly test/clippy/fmt 回归通过。默认与既有等级保持，本地幂等非持久 exactly-once，新消息变体需新 reader；无 live model/硬件声明。"
+
+  - id: rt.desktop_managed_main
+    title: "默认桌面 main：同一受管 Host 的 CLI、gateway、审批、流式与心跳"
+    level: PRODUCTION WIRED
+    default: "ON"
+    switch_env: null
+    sources:
+      - crates/adapters/cli/src/lib.rs
+      - crates/adapters/cli/src/care_heartbeat.rs
+      - crates/adapters/gateway/src/canonical_entry.rs
+      - crates/engine/runtime-assembly/src/canonical/desktop_host.rs
+      - crates/engine/runtime/src/canonical/instances.rs
+      - crates/engine/runtime/src/canonical/instances/main.rs
+      - crates/engine/runtime/src/canonical/accounting.rs
+      - crates/engine/runtime/src/canonical/execute.rs
+    tests:
+      - crates/adapters/cli/tests/canonical_cli_bootstrap.rs
+      - crates/adapters/cli/tests/care_heartbeat_host.rs
+      - crates/engine/runtime-assembly/tests/managed_main.rs
+      - crates/engine/runtime-assembly/tests/production_cognitive_v1.rs
+      - crates/engine/runtime-assembly/tests/portable_host.rs
+    verified_at: 9db4418d5bba94b432555732a7434f638929a636
+    verify_cmd: "cargo test -p apeireth-cli --test canonical_cli_bootstrap --test care_heartbeat_host --locked -j 2 && cargo test -p apeireth-runtime-assembly --test managed_main --test production_cognitive_v1 --locked -j 2"
+    owner: runtime
+    next_review: "2026-11-20"
+    notes: "2026-10-29 S5：真实 bootstrap 的默认 main 为现有 ManagedAgent。完整 TurnRequest、Session 连续性、静态 system/security、域/用户校验、写闸、审批 ID/冻结恢复和增量 delta 保留；Host 显式选择模块 child grants 与原 SessionQuota，有限实例及共享预算仍默认拒绝未知用量。ProfileMemoryMappings 保持可选，principal 未映射时旧全局认知默认拒绝。PortableHost normal feature graph 无桌面组合。整体 Production Convergence 仍 Partial，S6/最终 gates 未实施，无外部 API、原生 UI 或硬件实测。证据见 kernel-convergence-s5-2026-10-29.md。；2026-10-29 S6：兼容子执行经既有实例、Kernel 与 Dispatcher，未新增 Provider 后端或重复计量；真实 Runtime 验证多 child/round 复用 wire id 的独立事实、前端隔离、取消保账、native drain 后的持久 AgentTaskInterrupted 与重复 stop 幂等。新 reader 保留旧日志，新增变体不承诺旧二进制降级读取；pending 只表示最后 checkpoint 未闭合，不证明副作用回滚。原五段 gate_full 清理磁盘后重试通过；宽泛等级与默认不变，平台/性能及最终结论见 kernel-convergence-s6-2026-10-29.md。；2026-10-30 P2：新增可选 Host 监督服务与执行回执；原能力默认、Provider 路由与确定性权限机制保持，定向及原 MainOnly 测试/clippy/fmt 回归通过。未将兼容入口声明为已受 System One 保护，无 live model/硬件声明。；2026-10-30 P3：可选 owner-bound 消息复用 Registry/Dispatcher，委托交集与独立后台授权分离；真实 Runtime 定向及原 MainOnly test/clippy/fmt 回归通过。默认与既有等级保持，本地幂等非持久 exactly-once，新消息变体需新 reader；无 live model/硬件声明。"
+
+
+  - id: rt.module_execution_contract
+    title: "Module public/private contract and task receipts"
+    level: IMPLEMENTED
+    default: "OFF"
+    switch_env: null
+    sources:
+      - crates/foundation/plugin/src/module_contract.rs
+      - crates/foundation/plugin/src/capability.rs
+      - crates/foundation/plugin/src/manager.rs
+      - crates/foundation/plugin/src/tool_module.rs
+      - crates/engine/runtime/src/canonical/capability.rs
+      - crates/engine/runtime/src/canonical/module_host.rs
+      - crates/engine/runtime-assembly/src/canonical/memory_module.rs
+      - crates/engine/runtime-assembly/src/canonical/memory_module/organizer.rs
+    tests:
+      - crates/foundation/plugin/tests/module_contract.rs
+      - crates/engine/runtime-assembly/tests/modular_ale.rs
+    verified_at: 5c74f955e62cebcb1979fb3606e804d9fb10d73c
+    verify_cmd: "cargo test -p apeireth-plugin --test module_contract --locked -j 2 && cargo test -p apeireth-runtime-assembly --test modular_ale --locked -j 2"
+    owner: runtime
+    next_review: "2026-11-20"
+    notes: "Explicit Host composition only. Existing shell wire name/frozen payload, private organizer Session, accepted task receipt, authorized status and internal-name guessing refusal use real Runtime tests with scripted providers. No supervisor enforcement claim before P2; no live model/device evidence; no new default permissions. ADR-0023 and external P1 report contain boundaries and rollback.；2026-10-30 P2：新增可选 Host 监督服务与执行回执；原能力默认、Provider 路由与确定性权限机制保持，定向及原 MainOnly 测试/clippy/fmt 回归通过。未将兼容入口声明为已受 System One 保护，无 live model/硬件声明。；2026-10-30 P3：可选 owner-bound 消息复用 Registry/Dispatcher，委托交集与独立后台授权分离；真实 Runtime 定向及原 MainOnly test/clippy/fmt 回归通过。默认与既有等级保持，本地幂等非持久 exactly-once，新消息变体需新 reader；无 live model/硬件声明。"
+
+
+  - id: rt.system_one_internal
+    title: "Mandatory System One internal execution review"
+    level: IMPLEMENTED
+    default: "OFF"
+    switch_env: null
+    sources:
+      - crates/foundation/plugin/src/system_one.rs
+      - crates/foundation/plugin/src/module_contract.rs
+      - crates/foundation/plugin/src/tool_execution.rs
+      - crates/engine/runtime/src/canonical/system_one.rs
+      - crates/engine/runtime/src/canonical/dispatcher/system_one.rs
+      - crates/engine/runtime/src/canonical/dispatcher.rs
+      - crates/engine/runtime/src/canonical/module_host.rs
+      - crates/engine/runtime/src/canonical/runtime.rs
+      - crates/engine/runtime-assembly/src/system_one.rs
+      - crates/engine/runtime-assembly/src/canonical/memory_module.rs
+    tests:
+      - crates/engine/runtime-assembly/tests/system_one_execution.rs
+      - crates/engine/runtime-assembly/tests/modular_ale.rs
+    verified_at: 9db4418d5bba94b432555732a7434f638929a636
+    verify_cmd: "cargo test -p apeireth-runtime-assembly --test system_one_execution --test modular_ale --locked -j 2"
+    owner: runtime
+    next_review: "2026-11-20"
+    notes: "Explicit Host contract and exact supervisor provider/model only. Existing Dispatcher enforces scope/approval/epoch/cancel/lifecycle/native policy before and after asynchronous review; missing/deny/escalate/malformed/timeout/audit failure refuses effects. Durable audit and tool-free SingleShot adapter use existing Runtime/AgentInstance; scripted provider plus real file/store effects are software evidence, not live model or hardware validation. Compatibility C01/C02/C03 remains open; no universal/default protection claim. P2 MainOnly gate passed; P4 full image closure remains. See ale-system-one-p2-2026-10-30.md.；2026-10-30 P3：可选 owner-bound 消息复用 Registry/Dispatcher，委托交集与独立后台授权分离；真实 Runtime 定向及原 MainOnly test/clippy/fmt 回归通过。默认与既有等级保持，本地幂等非持久 exactly-once，新消息变体需新 reader；无 live model/硬件声明。；2026-10-30 P4 复验：最终原五段与定向/文档测试通过。C03 在新消息口完成显式委托交集和长期授权分离，C01/C02 默认兼容纳管仍待验收；嵌套审查撤权及未决幂等窗口拒绝重试均有真实 Runtime 证据。固定回环 Mesh 复用同一门禁，无 live model/外部设备网络/硬件声明。"
+
+
+  - id: rt.module_messages
+    title: "Bounded owner-authenticated module message pipeline"
+    level: IMPLEMENTED
+    default: "OFF"
+    switch_env: null
+    sources:
+      - crates/foundation/plugin/src/module_messages.rs
+      - crates/foundation/plugin/src/tool_execution.rs
+      - crates/engine/runtime/src/canonical/module_messages.rs
+      - crates/engine/runtime/src/canonical/instances/messages.rs
+      - crates/engine/runtime/src/canonical/message_execution.rs
+      - crates/engine/runtime/src/canonical/module_host.rs
+      - crates/engine/runtime/src/canonical/instances/audit.rs
+      - crates/foundation/protocol/src/canonical/tool_event.rs
+    tests:
+      - crates/engine/runtime-assembly/tests/module_message_pipeline.rs
+    verified_at: 5392e56c3218c147f055edca9288c0fc169a2f5c
+    verify_cmd: "cargo test -p apeireth-runtime-assembly --test module_message_pipeline --locked -j 2"
+    owner: runtime
+    next_review: "2026-11-20"
+    notes: "Optional Host policy only. Real Runtime Command/Query/Event/Reply, actual file effect, owner generations/trace, private facts, explicit grant/caller intersection, Internal Allow/Deny, zero Main Provider forwarding, bounded loop/backpressure/cancel/deadline/dedupe and old-port refusal are software tested. Local retained-key refusal is not durable exactly-once. New message variants require the updated reader; old logs remain readable. No external model/network/device validation; compatibility C01/C02 default rollout remains open. See ale-system-one-p3-2026-10-30.md.；2026-10-30 P4 复验：最终原五段与定向/文档测试通过。C03 在新消息口完成显式委托交集和长期授权分离，C01/C02 默认兼容纳管仍待验收；嵌套审查撤权及未决幂等窗口拒绝重试均有真实 Runtime 证据。固定回环 Mesh 复用同一门禁，无 live model/外部设备网络/硬件声明。；2026-10-30 CI 修复复核：未决幂等回归在 endpoint 确认进入后取消独立请求，再核验重复拒绝、窗口背压与副作用不重放；原超时回归保留。定向零重试重复运行、普通定向测试及 workspace 全量 test/clippy/fmt 本地通过，能力等级与默认不变，远端平台结果另验收。"
+
+
+  - id: rt.mesh_local_worker
+    title: "Governed module-owned local Mesh worker and public status"
+    level: IMPLEMENTED
+    default: "OFF"
+    switch_env: null
+    sources:
+      - crates/engine/runtime-assembly/src/mesh.rs
+      - crates/engine/runtime-assembly/src/lib.rs
+    tests:
+      - crates/engine/runtime-assembly/tests/mesh_execution.rs
+      - crates/engine/runtime-assembly/tests/module_message_pipeline.rs
+    verified_at: 5c74f955e62cebcb1979fb3606e804d9fb10d73c
+    verify_cmd: "cargo test -p apeireth-runtime-assembly --test mesh_execution --test module_message_pipeline --locked -j 2"
+    owner: runtime
+    next_review: "2026-11-20"
+    notes: "Optional portable Host composition, fixed configured loopback UDP peer only. Lifecycle-owned worker calls its registered Internal exchange through the same deterministic Dispatcher/System One gate before each bind/send/receive. Public connect acknowledges the existing Host-scheduled task; it does not authorize arbitrary user-delegated destinations. Accepted/Handle/status, private packet isolation, authorized status Event, Main-stop independence, module drain/new generation, Deny/unavailable/no datagram and reply correlation use real Runtime/socket tests with scripted supervision. Plaintext software correlation is not cryptographic authentication/encryption. No live selected model, external device/LAN/NAT/discovery or durable job recovery validation; no default/universal protection claim. C01/C02 and D35 remain open. See ale-system-one-p4-2026-10-30.md.；2026-10-30 CI 修复复核：普通消息期限不再从短原生 socket 超时倍乘，原生策略与 Host 上限保留；丢包 fixture 不补发旧回复，回归核验闭合错误与同一实例/Session 的后续成功。原生回归超时保持，定向零重试重复运行、普通定向测试及 workspace 全量 test/clippy/fmt 本地通过；默认 OFF/Partial 保留，远端平台结果另验收。"
+
+  - id: mem.retrieval_ranking
+    title: "检索排序契约（混合打分：BM25 词面 + 向量 + coverage 权重 0.5）"
+    level: PRODUCTION WIRED
+    default: "ON"
+    switch_env: null
+    sources:
+      - crates/engine/memory/src/retrieval_pipeline.rs
+      - crates/engine/memory/src/coordinator.rs
+    tests:
+      - crates/engine/memory/src/retrieval_pipeline.rs
+      - crates/engine/memory/src/coordinator.rs
+    verified_at: 65fd1caedc4b79ad2e48dfbff0eb38ad2d525709
+    verify_cmd: "cargo test -p apeireth-memory --lib"
+    owner: memory
+    next_review: "2026-12-04"
+    notes: "总指挥 2026-11-04 登记（记忆线收口清单 §6 报备的口径缺位）。生产路径：tool.memory.retrieve → MemoryCoordinator::recall（coordinator.rs:685）→ HybridRetrievalPipeline；coverage 以固定权重 0.5 参与打分（retrieval_pipeline.rs:137，COVERAGE_WEIGHT 常量在 :469），与 BM25 词面分、向量源共同构成混合排序。⚠️ 此前该契约在真源里无记录 ⇒ 「coverage 接进生产排序」这条成果查不到。"
+  - id: mem.injection_contract
+    title: "注入契约（召回片段按预算硬上限截断，预算不可超）"
+    level: PRODUCTION WIRED
+    default: "ON"
+    switch_env: null
+    sources:
+      - crates/engine/memory/src/coordinator.rs
+      - crates/engine/memory/tests/golden_injection2.rs
+    tests:
+      - crates/engine/memory/tests/golden_injection2.rs
+    verified_at: 65fd1caedc4b79ad2e48dfbff0eb38ad2d525709
+    verify_cmd: "cargo test -p apeireth-memory --test golden_injection2"
+    owner: memory
+    next_review: "2026-12-04"
+    notes: "总指挥 2026-11-04 登记（记忆线收口清单 §6 报备的口径缺位）。注入侧的可核验契约 = 注入预算为**硬上限**（golden_injection2.rs 的 total_budget_is_a_hard_cap 等用例）；片段取窗口内的正文子串，不得改写。⚠️ 此前该契约在真源里无记录。"
+  - id: sec.output_injection_guard
+    title: "回合层消费工具**输出侧**的提示注入标记 ⇒ 可见告警（固定措辞，恒不阻断）"
+    level: PRODUCTION WIRED
+    default: "ON"
+    switch_env: null
+    sources:
+      - crates/engine/runtime-assembly/src/canonical/prompt_injection_guard.rs
+      - crates/engine/runtime-assembly/src/canonical/production.rs
+      - crates/capabilities/tools/src/fetch.rs
+    tests:
+      - crates/engine/runtime-assembly/tests/prompt_injection_turn_warning.rs
+    verified_at: 42d3addfa0b8ec1e3e4664c38d3f505ae79551da
+    verify_cmd: "cargo test -p apeireth-runtime-assembly --test prompt_injection_turn_warning"
+    owner: runtime-assembly
+    next_review: "2026-12-05"
+    notes: "总指挥 2026-11-05 登记（外部审计 P0-2 的连带残留）。前批已在 fetch **产出输出处**写下 `prompt_injection` 标记（fetch.rs:54/489，用治理面**同一个**启发式 `PromptInjectionHeuristic`）⇒ 但**全仓无任何消费者** ⇒ 治理面的 `input_security.prompt_injection` 只扫**入参**（`Action::CapabilityDispatch` 的 arguments）⇒ ⇒ 「间接提示词注入」在治理管线里没有落点。本条 = 回合层在 `HookPoint::AfterToolResult`（工具结果刚进 transcript 之后、下一次 completion 组装之前）读该标记 ⇒ 通过 `ModuleOutcome::with_system_overlay` 投影进**下一次 provider 请求**（模型真的看得见）⇒ 并落 session 事件审计面；告警账（计数 + 有界记录表 256 条）经 `ProductionModules::prompt_injection_report()` 暴露。⚠️ **恒不阻断**（directive 恒 `Continue`，已单测钉住）⇒ 「命中即拒工具结果」是独立的产品决策。⚠️ 告警措辞**固定**（逐字复用 `FETCH_PROMPT_INJECTION_WARNING`）⇒ 敌意载荷无法「说服」告警本身。⚠️ 与治理面的入参扫描**互补不重叠**（入参扫「模型要调什么」，输出侧扫「远端给模型看什么」）。"

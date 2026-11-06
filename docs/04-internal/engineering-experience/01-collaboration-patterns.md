@@ -3,7 +3,7 @@
 > `Status: ✅ 批 L1 交付（2026-10-15，纯文档批 · 未 commit）`
 > 一事：从本战役各批交付文档的「报备/接棒/协同注」与 git 提交历史提炼**可复用的协同模式**；
 > 每模式 =【情境→做法→效果】三段，每条注明素材出处（文内链接）。
-> 矿脉图：[L-experience-distillation.md](../backend-enhancement/L-experience-distillation.md)（本批挖第一矿）；
+> 矿脉图：[L-experience-distillation.md](../../archive/backend-enhancement/L-experience-distillation-2026-10-15.md)（本批挖第一矿）；
 > 施工宪章：[CONSTRUCTION-DISCIPLINE.md](../backend-enhancement/CONSTRUCTION-DISCIPLINE.md)。
 > 素材口径：全部可指回仓内交付文档 / 债栏注记 / git log；会话记录侧的补充批注仅作旁证并如实标注。
 
@@ -15,7 +15,7 @@
 
 【效果】多线同树施工全程零互相覆盖事故；取而代之的只是可定性的瞬时红（见模式 6），交付报告可以同时写出"本批全绿"与"他线在途红非本批引入"两句真话。
 
-> 出处：[zero-debt-opening-clearance-2026-10-12.md](../backend-enhancement/zero-debt-opening-clearance-2026-10-12.md) §6 收尾备注（叠加不覆盖 + `Cargo.lock` 共享收敛点）；[git-write-tiering-delivery.md](../backend-enhancement/git-write-tiering-delivery.md) §6 共树说明；[quick-capture-delivery.md](../backend-enhancement/quick-capture-delivery.md) §4.3（他线战场禁入、零代改）。
+> 出处：[zero-debt-opening-clearance-2026-10-12.md](../backend-enhancement/04-delivery/zero-debt-opening-clearance-2026-10-12.md) §6 收尾备注（叠加不覆盖 + `Cargo.lock` 共享收敛点）；[git-write-tiering-delivery.md](../backend-enhancement/git-write-tiering-delivery.md) §6 共树说明；[quick-capture-delivery.md](../backend-enhancement/quick-capture-delivery.md) §4.3（他线战场禁入、零代改）。
 
 ## 模式 2 · 跨线补位：编译断点按"对方口径"补位
 
@@ -25,7 +25,7 @@
 
 【效果】全树编译当场恢复、门禁继续取证；W3-① 线随后真接线**无缝覆盖占位**（占位语义与其真实接线同形），零返工零冲突、零口径漂移。
 
-> 出处：[W3-2-user-identity-roles.md](../backend-enhancement/W3-2-user-identity-roles.md)「共树协同注（W3-① 并行线）」段（两次编译中断的补位记录）。
+> 出处：[W3-2-user-identity-roles.md](../backend-enhancement/04-delivery/home-W-axis-delivery.md)「共树协同注（W3-① 并行线）」段（两次编译中断的补位记录）。
 
 ## 模式 3 · 占位互保：为在途线留位，而不是替它完工
 
@@ -35,7 +35,7 @@
 
 【效果】并行线互不阻塞；占位不会沉淀成"看起来能用"的假功能（零假旋钮纪律在并行面的延伸）。
 
-> 出处：[W3-1-multi-user-data-isolation.md](../backend-enhancement/W3-1-multi-user-data-isolation.md) §7「并行批接缝互保」段；[W2-2-remote-access-auth-delivery.md](../backend-enhancement/W2-2-remote-access-auth-delivery.md) 测试表 `tls_placeholder_knobs_are_reported_as_unwired` 行。
+> 出处：[W3-1-multi-user-data-isolation.md](../backend-enhancement/04-delivery/home-W-axis-delivery.md) §7「并行批接缝互保」段；[W2-2-remote-access-auth-delivery.md](../backend-enhancement/W2-2-remote-access-auth-delivery.md) 测试表 `tls_placeholder_knobs_are_reported_as_unwired` 行。
 
 ## 模式 4 · 报备先行、接棒兑现：接缝当合同写
 
@@ -45,7 +45,7 @@
 
 【效果】两线并行交付后接缝零错位、零事后对账改口径；接缝测试让"报备"从口头承诺变成可执行合同。
 
-> 出处：[W3-1-multi-user-data-isolation.md](../backend-enhancement/W3-1-multi-user-data-isolation.md) 文档头「接缝」注（"已兑现其报备"）+ §6 测试表；[W3-2-user-identity-roles.md](../backend-enhancement/W3-2-user-identity-roles.md) 文档头「接缝」注 + §4 测试表。
+> 出处：[W3-1-multi-user-data-isolation.md](../backend-enhancement/04-delivery/home-W-axis-delivery.md) 文档头「接缝」注（"已兑现其报备"）+ §6 测试表；[W3-2-user-identity-roles.md](../backend-enhancement/04-delivery/home-W-axis-delivery.md) 文档头「接缝」注 + §4 测试表。
 
 ## 模式 5 · 协调者归并节奏：波次收卷，口径只在收卷点刷新
 
@@ -65,7 +65,7 @@
 
 【效果】门禁报告保持诚实（红就是红），责任面清晰；随各线收口自然转绿，零冤案零甩锅；真 flake 被逼着定根而不是被复跑掩盖。
 
-> 出处：[quick-capture-delivery.md](../backend-enhancement/quick-capture-delivery.md) §4.3 注（抢锁扰动定性）；[W3-2-user-identity-roles.md](../backend-enhancement/W3-2-user-identity-roles.md) §6 门禁证据（"并行线两次瞬时红……均非本批引入"）；[zero-debt-opening-clearance-2026-10-12.md](../backend-enhancement/zero-debt-opening-clearance-2026-10-12.md) §1 第 3b 行 + §6（flake 定根与定性口径）。
+> 出处：[quick-capture-delivery.md](../backend-enhancement/quick-capture-delivery.md) §4.3 注（抢锁扰动定性）；[W3-2-user-identity-roles.md](../backend-enhancement/04-delivery/home-W-axis-delivery.md) §6 门禁证据（"并行线两次瞬时红……均非本批引入"）；[zero-debt-opening-clearance-2026-10-12.md](../backend-enhancement/04-delivery/zero-debt-opening-clearance-2026-10-12.md) §1 第 3b 行 + §6（flake 定根与定性口径）。
 
 ## 模式 7 · "见债必还"的顺手修尺度：修 / 报 / 登记三判
 
@@ -78,7 +78,7 @@
 
 【效果】债在清、界不越、报告可审计；"路过就算"与"顺手大改"两种病都不得流行。
 
-> 出处：[worktree-apply-delivery.md](../backend-enhancement/worktree-apply-delivery.md) §五「还债与报备」（修 + 报两判实例）；[zero-debt-opening-clearance-2026-10-12.md](../backend-enhancement/zero-debt-opening-clearance-2026-10-12.md) §4 逐条裁决（清 3 条 / 留账带理由）+ §5 新债与 R1/R2 登记不实施；[quick-capture-delivery.md](../backend-enhancement/quick-capture-delivery.md) §4.3（标红不代改）。
+> 出处：[worktree-apply-delivery.md](../backend-enhancement/worktree-apply-delivery.md) §五「还债与报备」（修 + 报两判实例）；[zero-debt-opening-clearance-2026-10-12.md](../backend-enhancement/04-delivery/zero-debt-opening-clearance-2026-10-12.md) §4 逐条裁决（清 3 条 / 留账带理由）+ §5 新债与 R1/R2 登记不实施；[quick-capture-delivery.md](../backend-enhancement/quick-capture-delivery.md) §4.3（标红不代改）。
 
 ## 模式 8 · 接棒制遗嘱：接棒清单 + 就地收口标记
 
@@ -88,7 +88,7 @@
 
 【效果】跨批接续成本低（worktree 两级开关的组装根注册由总装批按清单原样收口）；接棒清单是活文档而非墓碑，"未完"列表随时反映真实残余。
 
-> 出处：[worktree-apply-delivery.md](../backend-enhancement/worktree-apply-delivery.md) §六「接棒清单（未完）」（含 ✅ 收口注）；[D-doing-work.md](../backend-enhancement/D-doing-work.md)「组装根注册接线见交付记录接棒清单」。
+> 出处：[worktree-apply-delivery.md](../backend-enhancement/worktree-apply-delivery.md) §六「接棒清单（未完）」（含 ✅ 收口注）；[D-doing-work.md](../backend-enhancement/02-axes/D-doing-work.md)「组装根注册接线见交付记录接棒清单」。
 
 ## 附：模式 ↔ 宪章条款对照
 

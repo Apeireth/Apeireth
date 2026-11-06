@@ -307,9 +307,13 @@ fn auto_tune_off_keeps_presets_but_skips_budget_knobs() {
 
 #[test]
 fn tuning_state_evolution_reshapes_budgets_during_use() {
-    // 用量回写内部读进程级 env（逃生门 `APEIRETH_DISABLE_ONBOARDING`）⇒ 必须开
-    // env 作用域：否则并行用例写进去的逃生门会让回写被**静默跳过**，回合数断言假红。
-    let _guard = EnvGuard::enter();
+    // ⚠️ **持锁 + 清 env**（2026-10-26 修并行 flake）：本测试读档案/调参状态，
+    // 而别的测试会**临时**设 `APEIRETH_DISABLE_ONBOARDING=1`（逃生门）。
+    // ⇒ 与「设 env」的测试**串行**，并把自己的 env 清干净。
+    // 本仓写法: `EnvGuard::enter()` 取进程级 env 串行锁 + 作用域, 再 `apply`
+    // 清整组激活 env（隔离更彻底）。
+    let mut _guard = EnvGuard::enter();
+    _guard.apply(&activation_env_overrides(&[]));
     let (_dir, paths) = temp_paths("tuning");
     onboarding::save_profile_at(&paths, &casual_profile()).expect("save");
 
@@ -340,8 +344,10 @@ fn tuning_state_evolution_reshapes_budgets_during_use() {
 
 #[test]
 fn tuning_recording_is_a_noop_without_casual_auto_tune_profile() {
-    // 回写内部读进程级 env ⇒ 同样必须开作用域（否则读侧与写侧不同步）。
-    let _guard = EnvGuard::enter();
+    // ⚠️ 同上：持锁 + 清 env（并行 flake 修复）。
+    // 本仓写法: `EnvGuard::enter()` 取串行锁 + 作用域, 再 `apply` 清整组激活 env。
+    let mut _guard = EnvGuard::enter();
+    _guard.apply(&activation_env_overrides(&[]));
     let (_dir, paths) = temp_paths("tuning-noop");
     onboarding::record_usage_at(&paths, 100, 2, 10, 5);
     assert!(
@@ -399,7 +405,10 @@ fn wizard_casual_flow_end_to_end_feeds_identity_and_activation() {
 
 #[test]
 fn wizard_pro_flow_writes_nothing() {
-    let _guard = EnvGuard::enter();
+    // ⚠️ 同上：持锁 + 清 env（并行 flake 修复）—— 向导流程读档案与 env。
+    // 本仓写法: `EnvGuard::enter()` 取串行锁 + 作用域, 再 `apply` 清整组激活 env。
+    let mut _guard = EnvGuard::enter();
+    _guard.apply(&activation_env_overrides(&[]));
     let (_dir, paths) = temp_paths("wizard-pro-e2e");
     let mut input = Cursor::new(b"2\n".to_vec());
     let mut output: Vec<u8> = Vec::new();

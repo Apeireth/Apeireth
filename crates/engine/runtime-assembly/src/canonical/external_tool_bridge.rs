@@ -145,11 +145,6 @@ impl<'a> RuntimeExternalToolRegistry<'a> {
         }
     }
 
-    /// 运行时句柄（借用形态与共享形态统一到这里）。
-    fn runtime(&self) -> &Runtime {
-        self.handle.runtime()
-    }
-
     /// 登记一个动态工具（撞能力 id 或模型面名 ⇒ 拒, fail-closed）。
     ///
     /// **幂等**: 同一件能力已经在能力表里 ⇒ 视为成功。周期刷新与启动期接线
@@ -184,12 +179,28 @@ impl<'a> RuntimeExternalToolRegistry<'a> {
     }
 
     /// 能力表里是否已经有这件能力（幂等判定用: 能力 id **与**模型面名都要对上）。
+    ///
+    /// **两个登记面都要看**（2026-11-06 合并）: 运行时能力表 + **插件目录**
+    /// （资源工厂路径登记的外部工具在插件目录里可见）。运行时拒登记的判据是
+    /// 「与任何**已可见**的模块或插件工具撞名」⇒ 幂等判定若只看运行时能力表,
+    /// 插件面已登记的同一件工具会被误判成「真撞名」⇒ 登记被拒（而它其实
+    /// 已经登记过了）。
     fn holds_capability(&self, tool: &Arc<dyn ToolCapability>) -> bool {
         let model_name = tool.declaration().name;
-        self.handle
-            .runtime()
+        let runtime = self.handle.runtime();
+        let in_capability_table = runtime
             .capability_registry()
             .capabilities()
+            .iter()
+            .any(|capability| {
+                capability.id() == tool.id() && capability.declaration().name == model_name
+            });
+        if in_capability_table {
+            return true;
+        }
+        runtime
+            .plugins()
+            .active_tools()
             .iter()
             .any(|capability| {
                 capability.id() == tool.id() && capability.declaration().name == model_name

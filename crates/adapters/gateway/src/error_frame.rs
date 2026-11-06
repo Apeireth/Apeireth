@@ -77,12 +77,27 @@ impl ErrorCode {
     /// The actionable Chinese hint attached to this code.
     pub fn solution(self) -> &'static str {
         match self {
-            Self::AuthMissingKey => "在「设置 → 模型」中保存 API 密钥后重试",
-            Self::AuthInvalidKey => "检查密钥是否过期或被撤销, 在设置中重新保存",
+            // **两种凭据共用这两个码**（模型 provider 密钥 / 网关访问令牌），
+            // 所以提示必须把两条路都说出来。此前只写「在设置→模型 保存 API 密钥」——
+            // 网关令牌缺失时（401 `auth_missing_key`，message 明说
+            // "gateway token required"）却让人去配模型密钥，是**错误建议**
+            // （真机实测 2026-10-25）。
+            Self::AuthMissingKey => {
+                "缺凭据：网关访问令牌由部署者用 APEIRETH_GATEWAY_TOKEN 配置；模型密钥在「设置 → 模型」中保存"
+            }
+            Self::AuthInvalidKey => {
+                "凭据无效或已撤销：网关令牌请核对 APEIRETH_GATEWAY_TOKEN；模型密钥请在「设置 → 模型」重新保存"
+            }
             Self::ProviderUnreachable => "检查 base_url 与网络连通性后重试",
             Self::ProviderError => "查看 message 中的上游信息, 必要时联系服务商",
             Self::InvalidRequest => "检查参数后重试",
-            Self::PermissionDenied => "当前用户角色无此操作权限; 需要更高角色请联系 owner 调整用户表",
+            // 同一个码被两个不同原因共用：①令牌没绑定用户（客户端身份未归属）
+            // ②绑定了但角色不足。此前只讲角色 ⇒ 未绑定用户时给不出正确动作
+            // （真机实测 2026-10-25：403 message 说 "not bound to any user"，
+            // 提示却让人去找 owner 提权）。两条路都说出来。
+            Self::PermissionDenied => {
+                "若提示「未绑定用户」：用 apeireth user add --user-id <ID> --clients <令牌名> 绑定；若提示角色不足：需更高角色请 owner 调整用户表"
+            }
             Self::DomainForbidden => "该操作不在本用户域的开放面内; 域面按用户域隔离, 越域访问一律拒绝",
             Self::DomainRefused => "本用户域的数据面未打开 (域配置可能损坏); 请联系 owner 检查 users/<id>/domain.json",
             Self::SessionNotFound => "回到会话列表重新选择",
@@ -159,7 +174,7 @@ mod tests {
         assert_eq!(body["error"]["code"], "auth_missing_key");
         assert_eq!(
             body["error"]["solution"],
-            "在「设置 → 模型」中保存 API 密钥后重试"
+            "缺凭据：网关访问令牌由部署者用 APEIRETH_GATEWAY_TOKEN 配置；模型密钥在「设置 → 模型」中保存"
         );
         // The contract is a stable wire shape; assert the exact JSON.
         assert_eq!(

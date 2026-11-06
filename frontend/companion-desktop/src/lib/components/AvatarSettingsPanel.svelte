@@ -25,6 +25,7 @@
     EMPTY_USER_AVATAR_META,
     type UserAvatarMeta,
   } from '../pet/user-avatar';
+  import {getPetEnabled, setPetEnabled} from '../tauri-bridge';
 
   const LAYER_KEY = 'apeireth:pet:avatar-layer';
   const RELOAD_KEY = 'apeireth:pet:avatar-reload';
@@ -40,11 +41,17 @@
   let userName = $state<string | null>(null);
   let avatarMeta = $state<UserAvatarMeta>(EMPTY_USER_AVATAR_META);
   let notice = $state<string | null>(null);
+  let petEnabled = $state(false);
+  let petNotice = $state<string | null>(null);
   let disclaimerFile = $state<File | null>(null);
   let fileInput = $state<HTMLInputElement | null>(null);
 
   onMount(() => {
     layerId = localStorage.getItem(LAYER_KEY) ?? DEFAULT_AVATAR_LAYER_ID;
+    void (async () => {
+      // 桌宠自动接管初值（Rust 侧 pet-prefs.json；桌面外恒 false = 关闭）
+      petEnabled = await getPetEnabled();
+    })();
     void (async () => {
       try {
         const stored = await getUserAvatar();
@@ -61,6 +68,21 @@
   function selectLayer(id: string): void {
     layerId = id;
     localStorage.setItem(LAYER_KEY, id);
+  }
+
+  /** 桌宠总开关：写 Rust 侧 pet-prefs.json（跨启动生效），关闭即刻收起在场桌宠。 */
+  async function setPetTakeover(next: boolean): Promise<void> {
+    petEnabled = next;
+    const ok = await setPetEnabled(next);
+    const text = ok
+      ? next
+        ? '已开启：主窗收起时桌宠自动接管右下角'
+        : '已关闭：桌宠不再自动接管（在场桌宠已收起）'
+      : '当前不是桌面环境，设置未保存';
+    petNotice = text;
+    window.setTimeout(() => {
+      if (petNotice === text) petNotice = null;
+    }, 8000);
   }
 
   function showNotice(text: string): void {
@@ -124,6 +146,24 @@
 </script>
 
 <div class="avatar-settings">
+  <div class="pet-master">
+    <h3 class="block-title">桌宠</h3>
+    <p class="block-desc">主窗收起（关进托盘）时，桌宠是否自动接管屏幕右下角。默认关闭；托盘菜单「桌宠」仍可手动召唤。</p>
+    <label class="layer-option" class:selected={petEnabled}>
+      <input
+        type="checkbox"
+        name="pet-auto-takeover"
+        checked={petEnabled}
+        onchange={(event) => setPetTakeover((event.currentTarget as HTMLInputElement).checked)}
+      />
+      <span class="layer-name">主窗收起时自动接管</span>
+      <span class="layer-desc">{petEnabled ? '已开启 · 收起主窗即出现在右下角' : '已关闭 · 桌宠不会自动出现'}</span>
+    </label>
+    {#if petNotice}
+      <div class="byo-notice">{petNotice}</div>
+    {/if}
+  </div>
+
   <h3 class="block-title">形象</h3>
   <p class="block-desc">桌宠穿什么：形象层与自带形象。切换即写入本地配置，桌宠窗即时生效。</p>
 
@@ -179,6 +219,12 @@
 <style>
   .avatar-settings {
     display: block;
+  }
+
+  .pet-master {
+    margin-bottom: 18px;
+    padding-bottom: 14px;
+    border-bottom: 1px dashed color-mix(in srgb, var(--border) 60%, transparent);
   }
 
   .layer-list {

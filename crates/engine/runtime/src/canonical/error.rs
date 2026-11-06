@@ -13,6 +13,8 @@ pub type RuntimeResult<T> = Result<T, RuntimeError>;
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum RuntimeError {
+    #[error(transparent)]
+    AgentTask(#[from] apeireth_plugin::agents::AgentError),
     /// A primitive-layer failure.
     #[error(transparent)]
     Core(#[from] CoreError),

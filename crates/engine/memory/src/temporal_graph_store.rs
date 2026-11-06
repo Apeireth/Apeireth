@@ -283,13 +283,6 @@ impl SqliteTemporalGraphStore {
         self.append(fact).await
     }
 
-    pub async fn append_fact(
-        &self,
-        fact: TemporalGraphFact,
-    ) -> Result<TemporalGraphFact, TemporalGraphError> {
-        self.append(fact).await
-    }
-
     /// Appends a correction linked to an existing revision by `supersedes_id`.
     /// The logical relation key is immutable across the chain.
     pub async fn supersede(
@@ -413,15 +406,6 @@ impl SqliteTemporalGraphStore {
             .map_err(Into::into)
     }
 
-    pub async fn retract_relation(
-        &self,
-        relation_key: &str,
-        at_ms: i64,
-        created_at_ms: i64,
-    ) -> Result<TemporalGraphFact, TemporalGraphError> {
-        self.retract(relation_key, at_ms, created_at_ms).await
-    }
-
     /// Returns the effective revision for every matching relation at the
     /// requested valid and belief times. Results are sorted by stable key.
     pub fn query(
@@ -514,22 +498,8 @@ impl SqliteTemporalGraphStore {
             .map_err(Into::into)
     }
 
-    pub fn query_facts(
-        &self,
-        query: &TemporalGraphQuery,
-    ) -> Result<Vec<TemporalGraphFact>, TemporalGraphError> {
-        self.query(query)
-    }
-
     pub fn query_as_of(&self, as_of_ms: i64) -> Result<Vec<TemporalGraphFact>, TemporalGraphError> {
         self.query(&TemporalGraphQuery::new(as_of_ms))
-    }
-
-    pub fn facts_as_of(
-        &self,
-        query: &TemporalGraphQuery,
-    ) -> Result<Vec<TemporalGraphFact>, TemporalGraphError> {
-        self.query(query)
     }
 
     /// Returns all immutable revisions for one stable relation key.
@@ -611,15 +581,6 @@ impl SqliteTemporalGraphStore {
             facts,
             truncated,
         })
-    }
-
-    pub fn traverse_from(
-        &self,
-        start: &str,
-        query: &TemporalGraphQuery,
-        budget: TraversalBudget,
-    ) -> Result<TraversalResult, TemporalGraphError> {
-        self.traverse(start, query, budget)
     }
 }
 

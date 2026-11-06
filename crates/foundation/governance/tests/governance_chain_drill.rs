@@ -174,6 +174,11 @@ fn chain_pass_path_ratifies_and_persists_audit() {
         "登记真人空集必须被 V3 拒（fail-closed）"
     );
 
+    // 对抗（**同族第二形态**，2026-10-28 补）：`MultiHuman` 但**忘配 `multi_sign`** ⇒
+    // 当年策略侧 `map_or(1, ...)` 把门槛降成 1 ⇒ ⇒ **静默退化为单签**（fail-open）。
+    // ✅ **2026-10-31 已修**：策略侧改成与校验器侧同口径 fail-closed（未配置 ⇒ 拒绝）
+    // ⇒ 该形态由下面那条**已去 `#[ignore]`** 的常驻回归守卫钉住（债栏 D8 结项）。
+    //
     // ② 审议意见记名：7 席具名票（5 赞成 / 1 反对 / 1 弃权）。
     let ballots = vec![
         Ballot::new("advisor-safety", StanceKind::StrongApprove, 0.9, 1.0),
@@ -512,4 +517,47 @@ fn chain_timeout_path_holds_and_fails_closed() {
         "超时路径 3 步审计记录齐（谁/何时/什么决定）"
     );
     persist_verify_and_tamper_check(&chain, "timeout");
+}
+
+/// **常驻回归守卫（2026-10-31 起 `#[ignore]` 已去掉）**：`MultiHuman` 忘配 `multi_sign` ⇒ 必须**拒绝**（不得静默退化为单签）。
+///
+/// ## 背景（债栏 **D8** 2026-10-25 核查批判定的「一处口径不一致待裁决」）
+/// - **策略侧** `crates/foundation/core/src/gate.rs:225`：
+///   `ha.multi_sign.as_ref().map_or(1, |policy| policy.required)`
+///   ⇒ ⇒ **未配置策略时 `required = 1`** ⇒ `MultiHuman` 与 `SingleHuman` 等价（**fail-open**）；
+/// - **校验器侧** `PlaceholderMultiSignVerifier::verify()` 返回 `NotConfigured`（**fail-closed**）；
+/// - ⇒ ⇒ 两处口径不一致 ⇒ **最弱的一条生效**：想要求多人审批的系统，
+///   **只要忘了配 `multi_sign`** 就变成「1 人即可」，而且**没有任何提示**。
+///
+/// ## 为什么现有测试没抓到
+/// 我核对过：`core/src/onion.rs` 与 `core/tests/integration_v1v2v3.rs` 里**所有**
+/// `HAMode::MultiHuman` 的构造**都配了** `multi_sign: Some(MultiSignPolicy { .. })`
+/// ⇒ ⇒ `map_or(1, ...)` 的**默认分支从未被任何测试执行**。
+///
+/// ## ✅ 已修（2026-10-31）
+/// core 侧已按**校验器侧同口径**改为 fail-closed：
+/// ```rust
+/// // 修前（fail-open）：忘配策略 ⇒ required = 1 ⇒ 1 人即可
+/// let required = ha.multi_sign.as_ref().map_or(1, |policy| policy.required);
+///
+/// // 修后（fail-closed，与 `PlaceholderMultiSignVerifier` 的 `NotConfigured ⇒ Denied` 同口径）
+/// let Some(policy) = ha.multi_sign.as_ref() else { return false };
+/// let required = usize::from(policy.required.max(2)); // MultiHuman 至少 2 人
+/// ```
+/// ⇒ ⇒ 本测试的 `#[ignore]` **已去掉** ⇒ 它现在是**常驻回归守卫**。
+/// ⇒ 附带修掉同处的一个**窄化转换**隐患：`real_humans.len() as u8` 在 ≥256 人时**回绕**
+/// ⇒ ⇒ 改用 `usize` 比较。
+#[test]
+fn multi_human_without_policy_must_not_degrade_to_single_human() {
+    let mut ha = ha_2of3();
+    ha.multi_sign = None; // ← 「忘配策略」（配置缺位，不是有人故意降级）
+    ha.real_humans.truncate(1); // ← 只剩 1 名登记真人
+
+    let verdict =
+        ActionGuard::check_action(&proposal(), &PermissivePhilosophy, &permission_onion(), &ha);
+    assert!(
+        !matches!(verdict, ActionVerdict::Allow),
+        "MultiHuman 模式**忘配 `multi_sign` 策略**时不得退化为「1 人即可」(fail-open)；\
+         实测 {verdict:?} ⇒ 应与校验器侧（`NotConfigured` ⇒ 拒绝）同口径 fail-closed"
+    );
 }

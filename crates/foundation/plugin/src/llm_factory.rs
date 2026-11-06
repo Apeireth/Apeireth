@@ -187,6 +187,7 @@ pub trait LlmFactory: Send + Sync {
 /// **为何 0 装**: alpha 阶段没真 LLM API key, 也不该假装"我能调". runtime 拿 NoopLlmFactory
 /// 启动时, 所有 LLM 调用返 NotImplemented, governance 把 NotImplemented 转 Deny 或
 /// Abstain (per scene-d §2.2). 不假装有 AI 决策.
+#[allow(dead_code)]
 pub struct NoopLlmInstance {
     role: SubagentRole,
     model: String,

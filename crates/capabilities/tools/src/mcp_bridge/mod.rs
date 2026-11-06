@@ -52,9 +52,13 @@ pub mod bridge;
 pub mod catalog;
 pub mod config;
 pub mod connection;
+pub mod definition;
 pub mod family;
 pub mod governance;
 pub mod mock;
+pub mod module;
+mod process_owner;
+pub use module::McpPlugin;
 pub mod tool;
 pub mod transport;
 
@@ -66,6 +70,7 @@ pub use config::{
     MCP_READONLY_PRESET_ENV, MCP_SERVERS_ENV, MCP_SERVERS_FILE,
 };
 pub use connection::{parse_tool_list, DiscoveredTool, McpServerConnection};
+pub use definition::McpDefinition;
 pub use family::{is_capability_in_family, MCP_FAMILY_ROOT};
 pub use governance::{McpPermissionMapping, McpRiskMappingHook, McpToolDenyGuard};
 pub use mock::{InProcessChannel, InProcessChannelFactory, InProcessMcpServer, MockToolSpec};

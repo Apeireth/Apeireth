@@ -326,7 +326,12 @@ async fn mcp_row_reports_external_tools_only_when_the_bridge_serves() {
     config.mcp_data_dir = Some(PathBuf::from(dir.path()));
     let modules = ProductionModules::build(config, ProductionBackends::default(), clock())
         .expect("assembly builds");
-    assert!(modules.mcp_bridge().is_some(), "桥必须装配");
+    // 合并裁决（2026-11-06）: 两侧断言**并集**, 但 `mcp` 行取**本线的如实口径**
+    // （实际登记进运行时能力表的外部工具件数 ≥ 1）—— 装配期一件工具都没登记 ⇒
+    // 照实 false。对方线的旧口径（「桥已装配 且 有可用服务器」⇒ true）在此报 true
+    // ⇒ 主人会误以为「MCP 工具可用」= 0 装诚实禁止的读数陷阱。对方线的
+    // 「桥必须装配」断言改用合并后的访问器形态（`mcp_definition()`）。
+    assert!(modules.mcp_definition().is_some(), "桥必须装配");
     // 装配期**一件外部工具都没登记** ⇒ `mcp` 行照实 false（fail-closed:
     // 不宣称未证实的工具面）。旧口径在这里报 true（「服务器列表已加载」）⇒
     // 主人会误以为「MCP 工具可用」—— 那正是本批要消灭的读数陷阱。
@@ -349,7 +354,7 @@ async fn mcp_row_reports_external_tools_only_when_the_bridge_serves() {
     config.mcp_data_dir = Some(PathBuf::from(empty.path()));
     let modules = ProductionModules::build(config, ProductionBackends::default(), clock())
         .expect("assembly builds");
-    assert!(modules.mcp_bridge().is_some());
+    assert!(modules.mcp_definition().is_some());
     assert_eq!(
         roster_of(&modules).await["mcp"],
         false,
@@ -364,7 +369,7 @@ async fn mcp_row_reports_external_tools_only_when_the_bridge_serves() {
     // 开关关: 不装配、照实 false。
     let modules = ProductionModules::build(base_config(), ProductionBackends::default(), clock())
         .expect("assembly builds");
-    assert!(modules.mcp_bridge().is_none());
+    assert!(modules.mcp_definition().is_none());
     assert_eq!(roster_of(&modules).await["mcp"], false);
 }
 

@@ -522,8 +522,9 @@ async fn timeout_failures_close_in_the_timeout_code_family() {
         .await;
     assert!(refused.is_failed(), "{}", refused.result.render());
     match refused.failure {
-        Some(PipelineFailure::Timeout { code }) => {
+        Some(PipelineFailure::Timeout { code, started }) => {
             assert!(code.starts_with("timeout."), "{code}");
+            assert!(!started, "取值被拒 ⇒ 工具从未被进入 ⇒ 未开始");
             assert!(
                 refused.result.render().contains("timeout."),
                 "{}",
@@ -557,8 +558,13 @@ async fn timeout_failures_close_in_the_timeout_code_family() {
         .await;
     assert!(expired.is_failed(), "{}", expired.result.render());
     match expired.failure {
-        Some(PipelineFailure::Timeout { code }) => {
+        Some(PipelineFailure::Timeout { code, started }) => {
             assert!(code.starts_with("timeout."), "{code}");
+            assert!(started, "慢调用已被进入 ⇒ 已开始 ⇒ 副作用可能已落地");
+            assert!(
+                !expired.result.outcome.is_retryable(),
+                "已开始的超时不得报可重试"
+            );
         }
         other => panic!("expected a timeout-family failure, got {other:?}"),
     }

@@ -32,6 +32,10 @@
 use rusqlite::{params, OptionalExtension};
 use serde::{Deserialize, Serialize};
 
+use crate::forget_access_guard::ForgetPermit;
+use crate::universal_forget::{
+    audit_access_guard_decision, resolve_access_permit, AccessGuardStatus, GuardDecision,
+};
 use crate::{MemoryError, MemoryResult, SqliteMemoryStore};
 use apeireth_core::kernel::memory::Episode;
 
@@ -167,6 +171,60 @@ pub trait MemoryGovernanceStore: Send + Sync {
         reason: Option<&str>,
         expected_rev: i64,
     ) -> Result<GovernedEpisode, MemoryGovernanceError>;
+
+    /// **访问史守卫版**的单条遗忘 (PRODUCTION WIRED 面): 必须带 permit。
+    ///
+    /// # 为什么要有它 (纪律: 先记访问史, 再忘记)
+    ///
+    /// 顺序纪律要**不可绕过**, 令牌就必须是**参数**
+    /// ([`ForgetPermit`] 的签发标记是模块私有类型 ⇒ 外部造不出假 permit);
+    /// 而 permit 又必须对准本次目标、且对应事件**真的落库**
+    /// (内部再反查一次 `memory_access_events`) ⇒ 「有个 permit 就行」不成立。
+    ///
+    /// # 默认实现 = 未接线
+    ///
+    /// 本 trait 面向**所有**存储实现 (含测试替身) ⇒ 新方法给默认实现,
+    /// 不打断既有实现者; 未接线的实现**明确报错**, 不静默成功。
+    fn forget_episode_guarded(
+        &self,
+        _episode_id: &str,
+        _reason: Option<&str>,
+        _expected_rev: i64,
+        _permit: ForgetPermit,
+    ) -> Result<GovernedEpisode, MemoryGovernanceError> {
+        Err(MemoryGovernanceError::Invalid(
+            "访问史守卫未接线（本 store 不提供访问史面）".into(),
+        ))
+    }
+
+    /// **按主体全量遗忘**（被遗忘权）：跨 5 账（episode / preference /
+    /// commitment / temporal / persona）一个事务清完。
+    ///
+    /// # 为什么加在 trait 上
+    ///
+    /// 删用户（`DELETE /v1/admin/users/:id`）原来**只改用户表** ——
+    /// 用户的记忆还留着。而「删除主体」在隐私语义上是**连记忆一起删**。
+    /// 单条 `forget_episode` 不够：那是用户手动点某一条。
+    ///
+    /// # 语义（与 `forget_principal_on_conn` 一致）
+    ///
+    /// - **一个事务**：要么全清、要么不清 —— 分多次删会出现「删了一半」的
+    ///   中间态，那种状态比没删更糟（用户以为已删，实际还留着）；
+    /// - **protected persona 整体拒绝**：那是用户明确要求保留的记录。
+    ///   撞上它 ⇒ 整体拒绝并说明，**不静默跳过**（静默跳过会让用户以为
+    ///   「全删了」而实际留了一部分）。
+    ///
+    /// 默认实现 = 未接线（返回明确错误），不静默成功。
+    fn forget_principal(
+        &self,
+        _principal_id: &str,
+        _at_ms: i64,
+        _reason: Option<&str>,
+    ) -> Result<crate::universal_forget::UniversalForgetOutcome, MemoryGovernanceError> {
+        Err(MemoryGovernanceError::Invalid(
+            "forget_principal 未接线（本 store 不提供主体遗忘面）".into(),
+        ))
+    }
 
     /// 保护 (防自动遗忘/压缩).
     fn protect_episode(
@@ -377,6 +435,43 @@ pub(crate) fn forget_episode_impl(
         .ok_or(MemoryGovernanceError::NotFound(episode_id.to_string()))
 }
 
+/// **守卫版**的单条遗忘核心 (permit 是**必填参数** ⇒ 顺序不可绕过).
+///
+/// # 检查顺序 (为什么治理态先查)
+///
+/// `protected` / `AlreadyForgotten` / `NotFound` 是**治理规则**, 优先级高于
+/// 访问史纪律 —— 否则「受保护的记录」会被误报成「缺访问史」, 调用方拿到的
+/// 理由会错。访问史纪律在治理态检查之后、真正销毁之前执行。
+pub(crate) fn forget_episode_guarded_on_conn(
+    conn: &rusqlite::Connection,
+    episode_id: &str,
+    reason: Option<&str>,
+    expected_rev: i64,
+    permit: ForgetPermit,
+) -> Result<GovernedEpisode, MemoryGovernanceError> {
+    if episode_id.trim().is_empty() {
+        return Err(MemoryGovernanceError::Invalid("episode id is empty".into()));
+    }
+    let governed = fetch_governed_on_conn(conn, episode_id)?
+        .ok_or_else(|| MemoryGovernanceError::NotFound(episode_id.to_string()))?;
+    if governed.protected {
+        return Err(MemoryGovernanceError::Protected(episode_id.to_string()));
+    }
+    if governed.status == MemoryGovernanceStatus::Forgotten {
+        return Err(MemoryGovernanceError::AlreadyForgotten(
+            episode_id.to_string(),
+        ));
+    }
+    // 访问史纪律: permit 必须对准目标, 且真实访问史里查得到 (反伪造).
+    crate::universal_forget::verify_permit_against_history(
+        conn,
+        &permit,
+        &[episode_id.to_string()],
+    )
+    .map_err(MemoryGovernanceError::Invalid)?;
+    forget_episode_impl(conn, episode_id, reason, expected_rev)
+}
+
 pub(crate) fn protect_episode_impl(
     conn: &rusqlite::Connection,
     episode_id: &str,
@@ -513,37 +608,24 @@ impl SqliteMemoryStore {
     pub fn read_governed_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<GovernedEpisode> {
         read_governed_row(row)
     }
-
-    pub fn ensure_governance(
-        &self,
-        episode_id: &str,
-    ) -> Result<(MemoryGovernanceStatus, bool, i64), MemoryGovernanceError> {
-        let conn = self.conn()?;
-        ensure_governance_on_conn(&conn, episode_id)
-    }
-
-    pub fn fetch_governed(
-        &self,
-        episode_id: &str,
-    ) -> Result<Option<GovernedEpisode>, MemoryGovernanceError> {
-        let conn = self.conn()?;
-        fetch_governed_on_conn(&conn, episode_id)
-    }
-
-    pub fn governance_cas_failure(
-        &self,
-        episode_id: &str,
-        expected_rev: i64,
-    ) -> MemoryGovernanceError {
-        let conn = match self.conn() {
-            Ok(c) => c,
-            Err(e) => return MemoryGovernanceError::Invalid(e.to_string()),
-        };
-        cas_failure_on_conn(&conn, episode_id, expected_rev)
-    }
 }
 
 impl MemoryGovernanceStore for SqliteMemoryStore {
+    fn forget_principal(
+        &self,
+        principal_id: &str,
+        at_ms: i64,
+        reason: Option<&str>,
+    ) -> Result<crate::universal_forget::UniversalForgetOutcome, MemoryGovernanceError> {
+        crate::universal_forget::UniversalForgetFacade::forget_principal(
+            self,
+            principal_id,
+            at_ms,
+            reason,
+        )
+        .map_err(MemoryGovernanceError::Invalid)
+    }
+
     fn get_governed(
         &self,
         episode_id: &str,
@@ -563,6 +645,17 @@ impl MemoryGovernanceStore for SqliteMemoryStore {
         update_episode_content_impl(&conn, episode_id, new_content, updated_by, expected_rev)
     }
 
+    /// 既有入口 (签名不变): 内部「反查真实访问史 → 取 permit → 执行」。
+    ///
+    /// # 兼容面 (为什么没有访问史时仍然执行)
+    ///
+    /// 本方法是既有调用方 (retention sweep / coordinator / CLI 面板) 的入口,
+    /// 它们**不带访问史** ⇒ 硬拒会直接打断既有行为 (retention 扫描、治理面板、
+    /// 既有集成测试)。按「不破坏既有调用方 + 如实标注」处理: 访问史未覆盖 /
+    /// 不可用时**保持既有行为**, 但把判定写进 append-only 审计账
+    /// (`research_lineage_events`) ⇒ 不静默降级成「没记也算过」。
+    /// 需要硬拒纪律的调用方请走 [`MemoryGovernanceStore::forget_episode_guarded`]
+    /// (permit 必填; 缺覆盖即拒)。
     fn forget_episode(
         &self,
         episode_id: &str,
@@ -570,7 +663,42 @@ impl MemoryGovernanceStore for SqliteMemoryStore {
         expected_rev: i64,
     ) -> Result<GovernedEpisode, MemoryGovernanceError> {
         let conn = self.conn()?;
-        forget_episode_impl(&conn, episode_id, reason, expected_rev)
+        let targets = vec![episode_id.to_string()];
+        match resolve_access_permit(&conn, &targets, now_ms()) {
+            GuardDecision::Permitted { permit, .. } => {
+                forget_episode_guarded_on_conn(&conn, episode_id, reason, expected_rev, permit)
+            }
+            GuardDecision::Uncovered { missing } => {
+                let _ = audit_access_guard_decision(
+                    &conn,
+                    episode_id,
+                    &AccessGuardStatus::uncovered(missing),
+                );
+                forget_episode_impl(&conn, episode_id, reason, expected_rev)
+            }
+            GuardDecision::Unavailable { reason: why } => {
+                let _ = audit_access_guard_decision(
+                    &conn,
+                    episode_id,
+                    &AccessGuardStatus::unavailable(why),
+                );
+                forget_episode_impl(&conn, episode_id, reason, expected_rev)
+            }
+            GuardDecision::NoTargets => {
+                forget_episode_impl(&conn, episode_id, reason, expected_rev)
+            }
+        }
+    }
+
+    fn forget_episode_guarded(
+        &self,
+        episode_id: &str,
+        reason: Option<&str>,
+        expected_rev: i64,
+        permit: ForgetPermit,
+    ) -> Result<GovernedEpisode, MemoryGovernanceError> {
+        let conn = self.conn()?;
+        forget_episode_guarded_on_conn(&conn, episode_id, reason, expected_rev, permit)
     }
 
     fn protect_episode(
@@ -643,6 +771,10 @@ impl MemoryGovernanceStore for crate::backend::sqlite::SqliteBackend {
             .map_err(|e| MemoryGovernanceError::Invalid(e.to_string()))?
     }
 
+    /// 既有入口 (签名不变): 内部「反查真实访问史 → 取 permit → 执行」。
+    ///
+    /// 兼容面说明见 [`SqliteMemoryStore`] 的同名实现 (无访问史时保持既有行为 +
+    /// 审计留痕)。
     fn forget_episode(
         &self,
         episode_id: &str,
@@ -651,13 +783,82 @@ impl MemoryGovernanceStore for crate::backend::sqlite::SqliteBackend {
     ) -> Result<GovernedEpisode, MemoryGovernanceError> {
         let episode_id = episode_id.to_owned();
         let reason = reason.map(str::to_owned);
+        let decision = self
+            .pool()
+            .read(|conn| Ok(resolve_access_permit(conn, &[episode_id.clone()], now_ms())))
+            .map_err(|e| MemoryGovernanceError::Invalid(e.to_string()))?;
+        match decision {
+            GuardDecision::Permitted { permit, .. } => self
+                .pool()
+                .write_sync(move |conn| {
+                    Ok(forget_episode_guarded_on_conn(
+                        conn,
+                        &episode_id,
+                        reason.as_deref(),
+                        expected_rev,
+                        permit,
+                    ))
+                })
+                .map_err(|e| MemoryGovernanceError::Invalid(e.to_string()))?,
+            GuardDecision::Uncovered { missing } => {
+                let status = AccessGuardStatus::uncovered(missing);
+                self.pool()
+                    .write_sync(move |conn| {
+                        let _ = audit_access_guard_decision(conn, &episode_id, &status);
+                        Ok(forget_episode_impl(
+                            conn,
+                            &episode_id,
+                            reason.as_deref(),
+                            expected_rev,
+                        ))
+                    })
+                    .map_err(|e| MemoryGovernanceError::Invalid(e.to_string()))?
+            }
+            GuardDecision::Unavailable { reason: why } => {
+                let status = AccessGuardStatus::unavailable(why);
+                self.pool()
+                    .write_sync(move |conn| {
+                        let _ = audit_access_guard_decision(conn, &episode_id, &status);
+                        Ok(forget_episode_impl(
+                            conn,
+                            &episode_id,
+                            reason.as_deref(),
+                            expected_rev,
+                        ))
+                    })
+                    .map_err(|e| MemoryGovernanceError::Invalid(e.to_string()))?
+            }
+            GuardDecision::NoTargets => self
+                .pool()
+                .write_sync(move |conn| {
+                    Ok(forget_episode_impl(
+                        conn,
+                        &episode_id,
+                        reason.as_deref(),
+                        expected_rev,
+                    ))
+                })
+                .map_err(|e| MemoryGovernanceError::Invalid(e.to_string()))?,
+        }
+    }
+
+    fn forget_episode_guarded(
+        &self,
+        episode_id: &str,
+        reason: Option<&str>,
+        expected_rev: i64,
+        permit: ForgetPermit,
+    ) -> Result<GovernedEpisode, MemoryGovernanceError> {
+        let episode_id = episode_id.to_owned();
+        let reason = reason.map(str::to_owned);
         self.pool()
             .write_sync(move |conn| {
-                Ok(forget_episode_impl(
+                Ok(forget_episode_guarded_on_conn(
                     conn,
                     &episode_id,
                     reason.as_deref(),
                     expected_rev,
+                    permit,
                 ))
             })
             .map_err(|e| MemoryGovernanceError::Invalid(e.to_string()))?

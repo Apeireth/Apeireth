@@ -96,10 +96,6 @@ impl WorldState {
         self.entities.iter().find(|e| e.id == id)
     }
 
-    pub fn entity_mut(&mut self, id: &str) -> Option<&mut Entity> {
-        self.entities.iter_mut().find(|e| e.id == id)
-    }
-
     pub fn prop(&self, id: &str, key: &str) -> Option<f64> {
         self.entity(id).and_then(|e| e.props.get(key)).copied()
     }

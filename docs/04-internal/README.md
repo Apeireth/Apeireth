@@ -14,7 +14,7 @@
 | 当时怎么做的 | [`04-logs/`](04-logs/README.md) |
 | 下一步做什么 | [`05-plans/`](05-plans/README.md) |
 | 交接现场（合并稿） | [`../03-reference/team-handover-reference.md`](../03-reference/team-handover-reference.md) |
-| 批次交接索引 | [`handover-ledger.md`](handover-ledger.md) |
+| 批次交接索引 | [`handover-ledger.md`](01-handoffs/handover-ledger.md) |
 
 ## 台账地图
 

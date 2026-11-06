@@ -1,0 +1,403 @@
+#[path = "support/convergence.rs"]
+mod support;
+use apeireth_core::kernel::{CapabilityId, SessionId, TraceId};
+use apeireth_plugin::resource_factory::{
+    module_from_definition, ModuleDefinition, ModuleResources, OwnedModuleResource,
+};
+use apeireth_plugin::{
+    Plugin, PluginContext, PluginManifest, PluginResult, ToolCapability, ToolModule,
+};
+use apeireth_protocol::canonical::{NormalizedTool, ToolCall, ToolParameters, ToolResult};
+use apeireth_runtime::TurnRequest;
+use async_trait::async_trait;
+use serde_json::json;
+use std::sync::{
+    atomic::{AtomicBool, AtomicUsize, Ordering},
+    Arc, Mutex,
+};
+use support::*;
+#[derive(Default)]
+struct Resource {
+    closed: AtomicBool,
+    calls: AtomicUsize,
+}
+#[async_trait]
+impl OwnedModuleResource for Resource {
+    fn revoke(&self) {
+        self.closed.store(true, Ordering::SeqCst);
+    }
+    async fn close(&self) -> Result<(), String> {
+        self.revoke();
+        Ok(())
+    }
+}
+struct Echo {
+    id: CapabilityId,
+    resource: Arc<Resource>,
+}
+#[async_trait]
+impl ToolCapability for Echo {
+    fn id(&self) -> &CapabilityId {
+        &self.id
+    }
+    fn declaration(&self) -> NormalizedTool {
+        NormalizedTool {
+            name: "factory_echo".into(),
+            description: Some("Independent instance".into()),
+            parameters: ToolParameters::new(),
+            strict: false,
+        }
+    }
+    async fn invoke(&self, call: &ToolCall) -> ToolResult {
+        assert!(!self.resource.closed.load(Ordering::SeqCst));
+        self.resource.calls.fetch_add(1, Ordering::SeqCst);
+        ToolResult::ok(&call.id, json!("factory echo"))
+    }
+}
+fn module(resource: Arc<Resource>) -> ToolModule {
+    ToolModule::new(
+        pid("module.factory_echo"),
+        vec![Arc::new(Echo {
+            id: CapabilityId::new("tool.factory_echo").unwrap(),
+            resource,
+        })],
+    )
+    .unwrap()
+}
+struct Definition {
+    manifest: PluginManifest,
+    resources: Mutex<Vec<Arc<Resource>>>,
+}
+#[async_trait]
+impl ModuleDefinition for Definition {
+    fn manifest(&self) -> &PluginManifest {
+        &self.manifest
+    }
+    async fn instantiate(
+        &self,
+        ctx: &PluginContext,
+        resources: &ModuleResources,
+    ) -> PluginResult<Arc<dyn Plugin>> {
+        assert!(ctx.module_instance().is_some());
+        let resource = Arc::new(Resource::default());
+        resources.own("echo", resource.clone()).unwrap();
+        self.resources.lock().unwrap().push(resource.clone());
+        Ok(Arc::new(module(resource)))
+    }
+}
+#[tokio::test]
+async fn real_runtime_dispatches_factory_tool_then_revokes_old_arc_across_replacement() {
+    let definition = Arc::new(Definition {
+        manifest: module(Arc::new(Resource::default())).manifest().clone(),
+        resources: Mutex::new(vec![]),
+    });
+    let provider = Provider::new(vec![vec![call("factory_echo", json!({}))]]);
+    let plugin = module_from_definition(definition.clone());
+    let mut runtime = builder(provider.clone())
+        .with_plugin(plugin.clone())
+        .build()
+        .await
+        .unwrap();
+    let session = SessionId::new();
+    runtime
+        .execute(TurnRequest::new(session, "echo"))
+        .await
+        .unwrap();
+    assert_eq!(
+        definition.resources.lock().unwrap()[0]
+            .calls
+            .load(Ordering::SeqCst),
+        1
+    );
+    assert!(facts(&runtime, session)
+        .await
+        .iter()
+        .any(|fact| fact.call().name == "factory_echo"));
+    let raw_handle = plugin.tools().pop().unwrap();
+    let old_instance = runtime
+        .plugins()
+        .instance_id(&definition.manifest.id)
+        .unwrap();
+    runtime.stop_module(&definition.manifest.id).await.unwrap();
+    runtime.unregister_module(&definition.manifest.id).unwrap();
+    assert!(plugin
+        .resource_statuses()
+        .iter()
+        .all(|status| status.closed));
+    let ctx = PluginContext::new(
+        runtime.clock().clone(),
+        Arc::new(apeireth_plugin::credentials::NoCredentials),
+        TraceId::new(),
+    );
+    runtime
+        .register_module(module_from_definition(definition.clone()), &ctx)
+        .await
+        .unwrap();
+    assert_ne!(
+        old_instance,
+        runtime
+            .plugins()
+            .instance_id(&definition.manifest.id)
+            .unwrap()
+    );
+    assert!(!raw_handle
+        .invoke(&call("factory_echo", json!({})))
+        .await
+        .is_ok());
+    provider.enqueue_tools(vec![call("factory_echo", json!({}))]);
+    runtime
+        .execute(TurnRequest::new(SessionId::new(), "new echo"))
+        .await
+        .unwrap();
+    let resources = definition.resources.lock().unwrap();
+    assert_eq!(resources[0].calls.load(Ordering::SeqCst), 1);
+    assert_eq!(resources[1].calls.load(Ordering::SeqCst), 1);
+    drop(resources);
+    assert!(runtime.shutdown().await.is_empty());
+}
+
+#[tokio::test]
+async fn hot_replacement_during_model_call_preserves_snapshot_and_refuses_old_generation() {
+    use apeireth_plugin::agents::AgentConfig;
+    use apeireth_runtime::AgentHostPolicy;
+    use std::time::Duration;
+    let definition = Arc::new(Definition {
+        manifest: module(Arc::new(Resource::default())).manifest().clone(),
+        resources: Mutex::new(vec![]),
+    });
+    let provider = Provider::new(vec![vec![call("factory_echo", json!({}))]]);
+    let hold = provider.hold_next();
+    let old = module_from_definition(definition.clone());
+    let runtime = builder(provider.clone())
+        .with_plugin(old.clone())
+        .build_agent_runtime(AgentHostPolicy::default())
+        .await
+        .unwrap();
+    let agent = runtime
+        .spawn_agent(
+            "main",
+            AgentConfig {
+                tools: vec![CapabilityId::new("tool.factory_echo").unwrap()],
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    let working = agent.clone();
+    let worker = tokio::spawn(async move { working.run("old model snapshot".into()).await });
+    tokio::time::timeout(Duration::from_secs(2), async {
+        while provider.requests().is_empty() {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    let context = {
+        let kernel = runtime.kernel().await;
+        PluginContext::new(
+            kernel.clock().clone(),
+            Arc::new(apeireth_plugin::credentials::NoCredentials),
+            TraceId::new(),
+        )
+    };
+    tokio::time::timeout(
+        Duration::from_secs(2),
+        runtime.unregister_module(&definition.manifest.id),
+    )
+    .await
+    .expect("model request must not retain the lifecycle read lock")
+    .unwrap();
+    runtime
+        .register_module(module_from_definition(definition.clone()), context)
+        .await
+        .unwrap();
+    hold.notify_one();
+    assert_eq!(worker.await.unwrap().unwrap().text, "done");
+    assert_eq!(
+        definition.resources.lock().unwrap()[0]
+            .calls
+            .load(Ordering::SeqCst),
+        0
+    );
+    assert_eq!(
+        definition.resources.lock().unwrap()[1]
+            .calls
+            .load(Ordering::SeqCst),
+        0,
+        "old model call cannot acquire replacement permissions"
+    );
+    assert!(provider
+        .results()
+        .iter()
+        .any(|result| result.contains("stopp") || result.contains("running")));
+    provider.enqueue_tools(vec![call("factory_echo", json!({}))]);
+    assert_eq!(
+        agent.run("new model snapshot".into()).await.unwrap().text,
+        "done"
+    );
+    assert_eq!(
+        definition.resources.lock().unwrap()[1]
+            .calls
+            .load(Ordering::SeqCst),
+        1
+    );
+    for request in provider.requests() {
+        apeireth_protocol::canonical::validate_closed_tool_context(&request.messages).unwrap();
+    }
+    runtime.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn refused_provider_stop_does_not_cancel_shared_provider_or_regular_turns() {
+    let provider = Provider::new(vec![]);
+    let runtime = builder(provider.clone())
+        .build_agent_runtime(apeireth_runtime::AgentHostPolicy::default())
+        .await
+        .unwrap();
+    assert!(runtime.stop_module(&pid("provider.fixture")).await.is_err());
+    assert!(runtime
+        .kernel()
+        .await
+        .plugins()
+        .task_scope(&pid("provider.fixture"))
+        .unwrap()
+        .is_open());
+    let agent = runtime
+        .spawn_agent("main", apeireth_plugin::agents::AgentConfig::default())
+        .await
+        .unwrap();
+    assert_eq!(
+        agent.run("still available".into()).await.unwrap().text,
+        "done"
+    );
+    runtime.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn approval_for_old_instance_cannot_authorize_same_named_replacement() {
+    use apeireth_governance::{Permission, PermissionGovernanceHook, PermissionPolicy};
+    use apeireth_runtime::{ApprovalDecision, ApprovalResolution, TurnOutcome};
+    let definition = Arc::new(Definition {
+        manifest: module(Arc::new(Resource::default())).manifest().clone(),
+        resources: Mutex::new(vec![]),
+    });
+    let provider = Provider::new(vec![vec![call("factory_echo", json!({}))]]);
+    let mut policy = PermissionPolicy::new();
+    policy.grant(Permission::ExecuteTool("tool.factory_echo".into()));
+    policy.require_approval_for("tool.factory_echo");
+    let mut runtime = builder(provider.clone())
+        .with_governance(Arc::new(PermissionGovernanceHook::new(policy)))
+        .with_plugin(module_from_definition(definition.clone()))
+        .build()
+        .await
+        .unwrap();
+    let session = SessionId::new();
+    let TurnOutcome::PendingApproval(view) = runtime
+        .execute_outcome(TurnRequest::new(session, "needs approval"))
+        .await
+        .unwrap()
+    else {
+        panic!("operation must pause for approval")
+    };
+    runtime.stop_module(&definition.manifest.id).await.unwrap();
+    runtime.unregister_module(&definition.manifest.id).unwrap();
+    let context = PluginContext::new(
+        runtime.clock().clone(),
+        Arc::new(apeireth_plugin::credentials::NoCredentials),
+        TraceId::new(),
+    );
+    runtime
+        .register_module(module_from_definition(definition.clone()), &context)
+        .await
+        .unwrap();
+    let resolution = runtime
+        .resolve_approval(session, view.approval_id, ApprovalDecision::Approve)
+        .await
+        .unwrap();
+    assert!(matches!(
+        resolution,
+        ApprovalResolution::Resumed(TurnOutcome::Completed(_))
+    ));
+    assert!(definition
+        .resources
+        .lock()
+        .unwrap()
+        .iter()
+        .all(|resource| resource.calls.load(Ordering::SeqCst) == 0));
+    assert!(provider
+        .results()
+        .iter()
+        .any(|result| result.contains("expired module instance")));
+    for request in provider.requests() {
+        apeireth_protocol::canonical::validate_closed_tool_context(&request.messages).unwrap();
+    }
+    assert!(runtime.shutdown().await.is_empty());
+}
+
+#[tokio::test]
+async fn bounded_native_drain_publishes_stopping_and_retry_preserves_resource_owner() {
+    use apeireth_core::kernel::Lifecycle;
+    use apeireth_runtime::AgentHostPolicy;
+    let definition = Arc::new(Definition {
+        manifest: module(Arc::new(Resource::default())).manifest().clone(),
+        resources: Mutex::new(vec![]),
+    });
+    let policy = AgentHostPolicy {
+        stop_timeout: std::time::Duration::from_millis(20),
+        ..Default::default()
+    };
+    let runtime = builder(Provider::new(vec![]))
+        .with_plugin(module_from_definition(definition.clone()))
+        .build_agent_runtime(policy)
+        .await
+        .unwrap();
+    let scope = runtime
+        .kernel()
+        .await
+        .plugins()
+        .task_scope(&definition.manifest.id)
+        .unwrap();
+    let native_lease = scope.lease().unwrap();
+    assert!(runtime.stop_module(&definition.manifest.id).await.is_err());
+    assert_eq!(
+        runtime
+            .kernel()
+            .await
+            .plugins()
+            .state(&definition.manifest.id)
+            .unwrap(),
+        Lifecycle::Stopping
+    );
+    assert!(runtime.kernel().await.tools().is_empty());
+    assert!(
+        !runtime
+            .kernel()
+            .await
+            .plugins()
+            .plugins()
+            .get(&definition.manifest.id)
+            .unwrap()
+            .resource_statuses()[0]
+            .closed,
+        "revocation is distinct from completed resource close"
+    );
+    assert!(definition.resources.lock().unwrap()[0]
+        .closed
+        .load(Ordering::SeqCst));
+    drop(native_lease);
+    runtime.stop_module(&definition.manifest.id).await.unwrap();
+    assert_eq!(
+        runtime
+            .kernel()
+            .await
+            .plugins()
+            .state(&definition.manifest.id)
+            .unwrap(),
+        Lifecycle::Stopped
+    );
+    runtime
+        .unregister_module(&definition.manifest.id)
+        .await
+        .unwrap();
+    runtime.shutdown().await.unwrap();
+}

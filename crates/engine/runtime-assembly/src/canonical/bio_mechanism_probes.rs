@@ -23,8 +23,8 @@ use std::sync::Arc;
 use apeireth_guard::hook::SharedImmuneMemory;
 use apeireth_guard::immune_memory::{ImmuneMemoryStore as _, IncidentStatus};
 use apeireth_orchestration::quorum::QuorumDecision;
+use apeireth_organ::nociception::BioPainSnapshot;
 use apeireth_organ::play::PlayStatus;
-use apeireth_runtime::canonical::BioPainSnapshot;
 use apeireth_tools_canonical::self_status::{
     bio_self_status_enabled_from_env_value, BioMechanismKind, BioMechanismProbe,
     BioMechanismReading, BioMechanismsStatus, BIO_MECHANISM_NOT_WIRED_REASON,
@@ -193,7 +193,7 @@ impl BioMechanismProbe for CapacityTaskQueueProbe {
 //   闭包返回 `Err(真因)` = 该格 `null` + 原因 (例如 runtime 尚未挂上)。
 
 /// 痛觉观测快照读取口 (迟绑定): 运行时构造后由装配根绑定
-/// `Runtime::bio_pain_snapshot` 的只读投影; `Err(真因)` = 该格 `null` + 原因。
+/// `organ::nociception::NociceptionObserver::snapshot` 的只读投影; `Err(真因)` = 该格 `null` + 原因。
 pub type PainSnapshotReader = Arc<dyn Fn() -> Result<BioPainSnapshot, String> + Send + Sync>;
 
 /// 生物机制「免疫记忆」(SG-15) 只读探测口: 读 guard hook 正在使用的**同一份**
@@ -427,7 +427,7 @@ impl BioMechanismProbe for BioPlayLedgerProbe {
 /// ([`BioPainSnapshot`])。
 ///
 /// 迟绑定原因: 自述源在 runtime **之前**构造, 构造期拿不到 runtime 句柄; 因此由
-/// 装配根在 runtime 建好后把 `Runtime::bio_pain_snapshot` 绑进读取闭包。闭包
+/// 装配根把已装入 runtime 的 `NociceptionObserver` 快照绑进读取闭包。闭包
 /// 返回 `Err(真因)` (例如 runtime 尚未挂上) = 该格 `null` + 原因, 不整帧失败。
 ///
 /// 口径: `enabled` = 运行时痛觉开关真值 (默认关时其余计数为零, 如实);
@@ -468,7 +468,7 @@ impl BioMechanismProbe for PainSnapshotProbe {
 }
 
 /// 生物机制「再生四期」(SG-17) 只读探测口: 读同一 runtime 痛觉快照里的再生案例账
-/// ([`BioPainSnapshot::recovery`], 与 `Runtime::bio_recovery_snapshot` 同源投影)。
+/// ([`BioPainSnapshot::recovery`], 与 `NociceptionObserver::recovery_snapshot` 同源投影)。
 ///
 /// 与 [`pain_probe`] 共用**同一读取口** (同一个 runtime 开关、同一把账本锁):
 /// 装配根绑一个闭包即可同时接两格。闭包返回 `Err(真因)` = 该格 `null` + 原因。

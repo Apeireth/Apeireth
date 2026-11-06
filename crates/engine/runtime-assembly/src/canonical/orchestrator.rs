@@ -1750,9 +1750,6 @@ impl<RS: RelationshipState + 'static> OrganOrchestrator<RS> {
     }
 
     /// 测试用: 拿 `&mut OrchestratorLoopConfig`.
-    pub fn loop_config_mut_for_test(&mut self) -> &mut OrchestratorLoopConfig {
-        &mut self.loop_config
-    }
 
     /// 测试用: 拿 `parking_lot::MutexGuard<RS>` (relationship 短期可变访问).
     pub fn relationship_mut_for_test(&mut self) -> parking_lot::MutexGuard<'_, RS> {

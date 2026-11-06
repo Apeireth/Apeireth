@@ -820,11 +820,12 @@ async fn a_broken_user_table_refuses_to_open_on_the_admin_faces() {
 #[tokio::test]
 async fn without_the_admin_services_the_faces_stay_unsupported() {
     let runtime = Arc::new(Runtime::builder().build().await.unwrap());
-    let state = build_gateway_state_with_services(runtime, GatewayServices::default());
-    let state = GatewayState {
-        token_gate: GatewayTokenGate::Enforced(GATE_TOKEN.to_string()),
-        ..state
-    };
+    let mut state = build_gateway_state_with_services(runtime, GatewayServices::default());
+    state.token_gate = GatewayTokenGate::Enforced(GATE_TOKEN.to_string());
+    // 角色面**激活** (P0-1 · 2026-11-04): 这四个端点属管理面 (`AdminControl`
+    // 档), 角色面未激活 ⇒ 管理面 fail-closed 403 ⇒ 本用例钉的是**端口诚实**
+    // (未注入管理服务 ⇒ 501 unsupported), 角色门的前置条件由这里显式装上。
+    state.user_access = UserAccess::from_table(owner_table());
     let router = canonical_router_with_state(state);
     for (method, uri, body) in user_endpoints() {
         let (status, text) = status_and_body(
@@ -842,4 +843,16 @@ async fn without_the_admin_services_the_faces_stay_unsupported() {
         );
         assert!(text.contains("unsupported"), "{method} {uri}: {text}");
     }
+}
+
+/// 一名 owner, 绑定本用例的过门署名名 (env 面单令牌 = `env`)。
+fn owner_table() -> UserTable {
+    let users = UserTable::new(vec![UserRecord {
+        user_id: "user-owner".to_string(),
+        role: "owner".to_string(),
+        client_names: vec![GatewayTokenGate::ENV_FACE_CLIENT_NAME.to_string()],
+        domain: None,
+    }]);
+    users.validate().expect("valid user table");
+    users
 }

@@ -24,12 +24,13 @@ use apeireth_gateway::{
     GatewayServices, GrantCommand, GrantDto, GrantMutationDto, GrantQuery, GraphEdgeDto,
     GraphNodeDto, GuardDryRunRequest, GuardDryRunResponse, GuardEventDto, GuardStatusDto,
     MemoryCommand, MemoryGovernanceCommand, MemoryGraphDto, MemoryQuery, ModuleQuery, OrganDto,
-    PanelData, SafetyGuardQuery, SessionQuery, SessionSummaryDto, SkillMetaDto, SkillRefusalDto,
-    SkillShelfQuery, SkillShelfScanDto, SkillSourceDto, TaskBoardPanel, TaskBoardSnapshotDto,
-    TaskCountsDto, TaskPanelDto, TaskPanelError, TaskTimelineDto, ToolCatalogQuery, ToolDto,
-    TraceCommand, TraceDetailDto, TraceQuery, TraceSpanDto, TraceSummaryDto, TraitLocksDto,
-    TraitMoveDto, TraitPanelDto, TraitPanelQuery, TraitValuesDto, TuningRecordDto,
-    WorkbenchMemoryProvenanceDto, WorkbenchQuery, WorkbenchToolExecutionDto, WorkbenchTurnDto,
+    PanelData, PrincipalForgetDto, SafetyGuardQuery, SessionQuery, SessionSummaryDto, SkillMetaDto,
+    SkillRefusalDto, SkillShelfQuery, SkillShelfScanDto, SkillSourceDto, TaskBoardPanel,
+    TaskBoardSnapshotDto, TaskCountsDto, TaskPanelDto, TaskPanelError, TaskTimelineDto,
+    ToolCatalogQuery, ToolDto, TraceCommand, TraceDetailDto, TraceQuery, TraceSpanDto,
+    TraceSummaryDto, TraitLocksDto, TraitMoveDto, TraitPanelDto, TraitPanelQuery, TraitValuesDto,
+    TuningRecordDto, WorkbenchMemoryProvenanceDto, WorkbenchQuery, WorkbenchToolExecutionDto,
+    WorkbenchTurnDto,
 };
 use apeireth_governance::{Permission, PermissionPolicy};
 use apeireth_memory::{GovernedEpisode, MemoryGovernanceStore};
@@ -72,7 +73,7 @@ pub struct CliPanelData {
     memory: Arc<dyn MemoryBackend>,
     /// Authoritative governance service in production. `None` is retained
     /// only for the legacy constructor used by compatibility tests.
-    governance: Option<Arc<dyn MemoryGovernanceStore>>,
+    pub(crate) governance: Option<Arc<dyn MemoryGovernanceStore>>,
     policy: Arc<std::sync::Mutex<PermissionPolicy>>,
     tools: Vec<ToolDto>,
     organs: Vec<OrganDto>,
@@ -350,7 +351,7 @@ fn project_live_tool_catalog(
     policy: &std::sync::Mutex<PermissionPolicy>,
 ) -> Vec<ToolDto> {
     let policy = policy.lock().ok();
-    let mut tools = runtime
+    runtime
         .capability_registry()
         .entries()
         .into_iter()
@@ -370,21 +371,7 @@ fn project_live_tool_catalog(
                 available: true,
             }
         })
-        .collect::<Vec<_>>();
-
-    for capability in runtime.plugins().active_tools() {
-        let declaration = capability.declaration();
-        tools.push(ToolDto {
-            name: declaration.name,
-            description: declaration.description.unwrap_or_default(),
-            args_schema: (!declaration.parameters.is_empty())
-                .then(|| serde_json::Value::Object(declaration.parameters)),
-            source: "plugin".to_string(),
-            permission: "plugin-managed".to_string(),
-            available: true,
-        });
-    }
-    tools
+        .collect::<Vec<_>>()
 }
 
 fn project_live_behavior_catalog(runtime: &Runtime) -> Vec<OrganDto> {
@@ -759,6 +746,15 @@ impl PanelData for CliPanelData {
             return Ok(Self::mutation_dto(episode));
         }
         self.mutate_flag(id, expected_rev, |entry| entry.tombstoned = true)
+    }
+
+    /// **按主体全量遗忘**（被遗忘权）。
+    async fn forget_principal(
+        &self,
+        principal_id: &str,
+        reason: Option<&str>,
+    ) -> Result<PrincipalForgetDto, String> {
+        crate::principal_forget_port::cli_forget_principal(self, principal_id, reason).await
     }
 
     async fn memory_graph(&self) -> Result<MemoryGraphDto, String> {

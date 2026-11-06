@@ -73,6 +73,8 @@ pub mod care_heartbeat;
 /// 关怀候选 (同源打扰纪律; 守护例外档)。
 #[path = "canonical/care_reminder.rs"]
 pub mod care_reminder;
+#[path = "canonical/care_signals.rs"]
+mod care_signals;
 #[path = "canonical/causal_world_model.rs"]
 pub mod causal_world_model;
 #[path = "canonical/cognitive.rs"]
@@ -81,6 +83,12 @@ pub mod cognitive;
 pub mod context_budget;
 #[path = "canonical/cost_telemetry.rs"]
 pub mod cost_telemetry;
+/// D-2：council ballot 的 append-only 落盘面（JSONL）。
+#[path = "canonical/council_ballot_log.rs"]
+pub mod council_ballot_log;
+/// D-2：顾问评价 ⇒ 立场票的折算（唯一的折算点）。
+#[path = "canonical/council_ballots.rs"]
+pub mod council_ballots;
 #[path = "canonical/dream_llm.rs"]
 pub mod dream_llm;
 /// W3 实现批: 自我改进闭环实验侧 (2026-10-10)。
@@ -113,6 +121,7 @@ pub mod nervous_switchboard;
 #[path = "canonical/nightwatch.rs"]
 pub mod nightwatch;
 /// W3 三洋葱 L3-L5 物理执行面: 双洋葱判定的治理 hook (2026-10-10)。
+#[path = "canonical/onion_layer.rs"]
 pub mod onion_layer;
 #[path = "canonical/orchestrator.rs"]
 pub mod orchestrator;
@@ -120,6 +129,8 @@ pub mod orchestrator;
 pub mod organ_llm_bridge;
 #[path = "canonical/organ_module.rs"]
 pub mod organ_module;
+#[path = "canonical/parallel_dispatch.rs"]
+pub mod parallel_dispatch;
 #[path = "canonical/permission_preset.rs"]
 pub mod permission_preset;
 /// 生物机制族 W3.3 · 游戏练习场工具面 (`tool.play_propose` / `tool.play_start` /
@@ -131,6 +142,12 @@ pub mod play_tools;
 pub mod preference_learning;
 #[path = "canonical/production.rs"]
 pub mod production;
+/// 回合层提示注入告警面 (2026-11-05): 消费 fetch 工具**输出侧**写下的
+/// `prompt_injection` 标记 ⇒ ⇒ 在回合层如实报一条**可见**告警 (固定措辞,
+/// 恒不阻断)。标记的写出面在 `apeireth_tools_canonical::fetch`; 治理面的
+/// `PromptInjectionHook` 只扫**入参**, 此前无人读这个输出侧标记。
+#[path = "canonical/prompt_injection_guard.rs"]
+pub mod prompt_injection_guard;
 #[path = "canonical/repetition_advisory.rs"]
 pub mod repetition_advisory;
 /// V4-c 检索维度自进化接线层 (证据账 + `retrieval_tuning.jsonl` 落盘 + 调权落地)。
@@ -148,6 +165,7 @@ pub mod self_status_roster;
 pub mod self_status_source;
 #[path = "canonical/self_tuning_wire.rs"]
 pub mod self_tuning_wire;
+#[path = "canonical/session_seal.rs"]
 pub mod session_seal;
 /// 任务簿工具面 (`tool.task_board`, V6-a): 增/列/改派/完成 + 治理档钩子
 /// (写面 = write_intent 同族, failed 只能人判无工具面)。
@@ -199,6 +217,9 @@ pub use care_heartbeat::{
 pub use care_reminder::{
     guard_alert_to_candidate, weather_signal_to_candidate, CompositeReminderFeed, GuardAlertFeed,
     WeatherSignalFeed,
+};
+pub use care_signals::{
+    CarePotentialDriver, CarePotentialFeed, CareSignals, DISTRESS_FULL_FAILURES, FATIGUE_FULL_HOURS,
 };
 pub use context_budget::{
     context_budget_chars_from_env, context_budget_chars_from_env_value, CONTEXT_BUDGET_ENV,
@@ -266,7 +287,7 @@ pub use preference_learning::{
 // 生物机制族 W3.7 · 仪式完成面 (默认关): 装配门 + 两件套 + 种类词表。
 pub use production::{
     with_memory_context_projection, BuildInstrumentation, CognitiveBackends, CognitiveModuleConfig,
-    CountingBuildProbe, MemoryContextProjector, ModuleBuildProbe, ModuleFamily, ProductionBackends,
+    CountingBuildProbe, MemoryContextProjector, ModuleBuildProbe, ProductionBackends,
     ProductionCognitiveModules, ProductionModules, ProductionModulesConfig,
 };
 pub use retrieval_tuning_wire::{
@@ -301,8 +322,8 @@ pub use tool_ecosystem_probe::{
 };
 pub use tool_modules::{
     BackupExportModule, DeviceControlModule, DocOpsModule, EducationModule, FetchModule,
-    FilesystemModule, GitWriteModule, GuardWatchModule, ImageOpsModule, McpModule, RepoModule,
-    SearchModule, SelfStatusModule, SheetOpsModule, ShellModule, TraitReportModule,
+    FilesystemModule, GitWriteModule, GuardWatchModule, ImageOpsModule, McpModule, ProcessModule,
+    RepoModule, SearchModule, SelfStatusModule, SheetOpsModule, ShellModule, TraitReportModule,
     VoiceSpeakModule, SELF_STATUS_TIMEOUT_MS, TRAIT_REPORT_TIMEOUT_MS,
 };
 pub use tool_taxonomy::{
@@ -325,3 +346,123 @@ pub use typed_recall::SqliteTypedMemoryRecallSource;
 pub use apeireth_tools_canonical::backup::backup_status_probe;
 // V3-b 发声面勿扰窗口的同源接缝导出 (care_rules 窗口优先, 最小 env 兜底)。
 pub use voice_quiet::voice_quiet_hours_from_care_rules;
+
+#[path = "canonical/memory_module.rs"]
+pub mod memory_module;
+
+#[path = "canonical/cognitive_registry.rs"]
+mod cognitive_registry;
+
+#[path = "canonical/desktop_host.rs"]
+pub mod desktop_host;
+
+/// 模块族枚举（构造探针的计数单位）。
+///
+/// ⭐ **住在门面这一层**（2026-11-05）：该枚举被**三处**共用
+/// （装配根 `production` / 生物机制族装配块 `bio_production_wiring` /
+/// 回合层告警面 `prompt_injection_guard`）⇒ ⇒ 一处定义、三处引用
+/// ⇒ ⇒ 它的家是**装配面这一层** ⇒ ⇒ 而装配根 `production.rs` 的尺寸棘轮
+/// 额度有限 ⇒ ⇒ 搬到这里（门面）⇒ ⇒ **不占装配根的额度**。
+///
+/// 路径全保：`canonical::ModuleFamily`（本体）与
+/// `canonical::production::ModuleFamily`（兼容再导出）⇒ ⇒ **外部调用点零改动**。
+/// 模块族 (懒加载断言单位): 一族 = 一个开关族在 [`ProductionModules::build`] 里的构造点。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum ModuleFamily {
+    /// 文件读工具族 (`filesystem`)。
+    Filesystem,
+    /// 搜索工具族 (`search`)。
+    Search,
+    /// 仓库检视工具族 (`repo`)。
+    Repo,
+    /// 受控写文件族 (`file_write`)。
+    ApplyPatch,
+    /// 工作树改单族 (`worktree_plan`)。
+    WorktreePlan,
+    /// 工作树落盘族 (`worktree_apply`)。
+    WorktreeApply,
+    /// git 写族 (`git_write`)。
+    GitWrite,
+    /// 技能沉淀族 (`skill_distill`)。
+    SkillDistill,
+    /// 技能检索族 (`skill_search`)。
+    SkillSearch,
+    /// Dx-Check 检查族 (`education`)。
+    Education,
+    /// 受控 shell 族 (`shell`)。
+    Shell,
+    /// 受控抓取族 (`fetch`)。
+    Fetch,
+    /// 回合层提示注入告警族 (`guard.prompt_injection`): 消费 fetch **输出侧**
+    /// 写下的 `prompt_injection` 标记 ⇒ ⇒ 回合层报一条可见告警 (恒不阻断)。
+    ///
+    /// 构造条件与 [`ModuleFamily::Fetch`] 同源 (fetch 工具开着才有它的输出);
+    /// 两族一起构 = 抓取面一开, 它的输出侧标记就**一定**有人读。
+    PromptInjectionGuard,
+    /// 内容流族 (`content_feed`)。
+    ContentFeed,
+    /// 关怀规则族 (`care_schedule`)。
+    CareSchedule,
+    /// 备份导出族 (`backup`)。
+    BackupExport,
+    /// 发声族 (`voice_speak`)。
+    VoiceSpeak,
+    /// 任务簿族 (`task_board`)。
+    TaskBoard,
+    /// 性格周报族 (`trait_report`)。
+    TraitReport,
+    /// 暴露面体检族 (`exposure_audit`)。
+    ExposureAudit,
+    /// 创作工具面 W1 · 图像操作族 (`image_ops`)。
+    ImageOps,
+    /// 创作工具面 W2 · 文档操作族 (`doc_ops`)。
+    DocOps,
+    /// 创作工具面 K3 · 表格操作族 (`sheet_ops`)。
+    SheetOps,
+    /// K 轴 L1 在场感知族 (`device_sense`)。
+    DeviceSense,
+    /// K 轴 L1 天气感知族 (`weather`)。
+    Weather,
+    /// K 轴 L3/L4 受控执行族 (`device_control`)。
+    DeviceControl,
+    /// K 轴 L5 看家骨架族 (`guard_watch`)。
+    GuardWatch,
+    /// 生物机制族 W3.3 · 游戏练习场工具族 (`play_*`, 默认关): 四个工具模块各自
+    /// 一个构造点 (propose/start/finish/abort, 共享同一本内存账本);
+    /// env `APEIRETH_ENABLE_BIO_PLAY` 只认 `"1"` 且工作区根注入才构造。
+    BioPlay,
+    /// 自省通道族 (`self_status`)。
+    SelfStatus,
+    /// 安全/逆向侦察族 (`tool.recon.*`, 9 件, 默认关)。
+    Recon,
+    /// 外部适配器族 (`ext.*`, 10 件, 默认关; 子进程封装)。
+    ExternalTools,
+    /// 外部工具桥族 (`mcp`)。
+    Mcp,
+    /// 记忆协调器 (memory_recall / memory_writeback 共用)。
+    MemoryCoordinator,
+    /// 记忆召回族 (`memory_recall`)。
+    MemoryRecall,
+    /// 偏好召回族 (`preference_recall`)。
+    PreferenceRecall,
+    /// 偏好学习族 (`preference_learning`)。
+    PreferenceLearning,
+    /// 评判族 (`judge`)。
+    Judge,
+    /// 自评族 (`self_assessment`)。
+    SelfAssessment,
+    /// 议事族 (`council`)。
+    Council,
+    /// 器官网族 (`organs`)。
+    Organs,
+    /// 反思族 (`reflexion`)。
+    Reflexion,
+    /// 吸收洞察族 (`absorption_insight`)。
+    AbsorptionInsight,
+    /// 羁绊族 (`partner_bond`)。
+    PartnerBond,
+    /// 恒定人格注入族 (人格层槽)。
+    PersonaConstantInjection,
+    /// 记忆写回族 (`memory_writeback`)。
+    MemoryWriteback,
+}

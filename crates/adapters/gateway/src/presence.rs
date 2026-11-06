@@ -546,7 +546,8 @@ pub struct PresenceService {
     bus: EventBus,
     synthesizer: Mutex<PresenceSynthesizer>,
     frames: Arc<ResourceRegistry<PresenceState>>,
-    heartbeat: Arc<HeartbeatDriver>,
+    #[allow(dead_code)]
+    heartbeat: Arc<HeartbeatDriver>, // D-1（owner 裁定 2026-10-25）：心跳驱动器句柄**仅测试读**（断言开流即起心跳产出）⇒ 非测试构建下是死字段。
 }
 
 impl PresenceService {
@@ -727,27 +728,6 @@ pub async fn presence_snapshot_handler(
         &state.presence.frame_snapshot(),
     ))
     .into_response()
-}
-
-/// Spawn the 60 s heartbeat task. It holds the service weakly: once the
-/// gateway state (and with it the runtime's sink fan-out) is dropped, the task
-/// exits instead of leaking. Outside a tokio runtime it degrades honestly to
-/// turn-level frames only — no executor, no heartbeat, no panic.
-pub fn spawn_presence_heartbeat(service: &Arc<PresenceService>) {
-    let Ok(handle) = tokio::runtime::Handle::try_current() else {
-        return;
-    };
-    let weak = Arc::downgrade(service);
-    handle.spawn(async move {
-        let mut interval = tokio::time::interval(Duration::from_secs(HEARTBEAT_INTERVAL_SECS));
-        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-        interval.tick().await; // the first tick is immediate; skip it
-        loop {
-            interval.tick().await;
-            let Some(service) = weak.upgrade() else { break };
-            service.emit_heartbeat();
-        }
-    });
 }
 
 #[cfg(test)]

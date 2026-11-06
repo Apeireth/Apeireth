@@ -149,6 +149,15 @@ pub struct McpToolBridge {
     deny_guard: Arc<McpToolDenyGuard>,
     pipeline: Arc<ToolExecutionPipeline>,
     tools: Mutex<BTreeMap<String, McpToolHandle>>,
+    /// The capabilities the read-only preset released in the **previous**
+    /// round.
+    ///
+    /// The set is what makes the preset **revocable**: a server that stops
+    /// declaring a tool read-only must not keep the grant the preset gave it.
+    preset_grants: Mutex<BTreeSet<CapabilityId>>,
+    /// Serializes the refresh rounds: two concurrent rounds would race on
+    /// the same directory and the same policy.
+    refresh_lock: tokio::sync::Mutex<()>,
 }
 
 /// One wrapped dynamic tool plus the directory entry it was built from.
@@ -299,6 +308,8 @@ impl McpToolBridge {
             deny_guard,
             pipeline,
             tools: Mutex::new(BTreeMap::new()),
+            preset_grants: Mutex::new(BTreeSet::new()),
+            refresh_lock: tokio::sync::Mutex::new(()),
         })
     }
 
@@ -354,6 +365,23 @@ impl McpToolBridge {
         self.config.redacted_startup_log()
     }
 
+    /// A new module activation gets a fresh catalog and fresh generation-bound tools.
+    pub(crate) fn reopen(&self) {
+        self.tools.lock().unwrap_or_else(|e| e.into_inner()).clear();
+        for connection in &self.connections {
+            // Removing an existing server cannot create a name collision.
+            let _ = self
+                .catalog
+                .replace_server(connection.server_name(), Vec::new());
+            connection.reopen();
+        }
+    }
+    pub(crate) fn revoke(&self) {
+        for connection in &self.connections {
+            connection.revoke();
+        }
+    }
+
     /// Refresh the whole dynamic catalog: (re)connect where needed, run
     /// `tools/list` everywhere, reconcile, and report the delta.
     ///
@@ -362,6 +390,7 @@ impl McpToolBridge {
     /// one. Use [`McpToolBridge::refresh_outcome`] when the servers must be
     /// refreshed independently.
     pub async fn refresh(&self) -> Result<DiscoveryReport, McpBridgeError> {
+        let _refresh = self.refresh_lock.lock().await;
         let mut registered = Vec::new();
         let mut removed = Vec::new();
         let mut removed_names: BTreeSet<String> = BTreeSet::new();
@@ -543,6 +572,27 @@ impl McpToolBridge {
     /// exempt them.
     fn authorize_discovered(&self) {
         if self.options.readonly_preset {
+            // **预设撤销**：上一轮被预设放行的能力，若服务器这一轮不再声明
+            // 只读 ⇒ 撤销那条授权（否则「曾经只读」会变成永久授权）。
+            // 撤销只撤**预设放行**的那条，不动人批标记。
+            {
+                let mut policy = self
+                    .policy
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                let previous = self
+                    .preset_grants
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner());
+                for id in previous
+                    .iter()
+                    .filter(|id| !self.catalog.is_declared_read_only(id))
+                {
+                    policy.revoke(&apeireth_governance::Permission::ExecuteTool(
+                        id.to_string(),
+                    ));
+                }
+            }
             let mut policy = self
                 .policy
                 .lock()
@@ -551,6 +601,16 @@ impl McpToolBridge {
                 &mut policy,
                 &self.catalog,
             );
+            *self
+                .preset_grants
+                .lock()
+                .unwrap_or_else(|e| e.into_inner()) = self
+                .catalog
+                .list()
+                .into_iter()
+                .filter(|entry| entry.declared_read_only)
+                .map(|entry| entry.capability_id)
+                .collect();
         }
 
         // Operator-authored per-server allowlists become explicit grants,

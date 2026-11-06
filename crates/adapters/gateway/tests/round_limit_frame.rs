@@ -7,6 +7,7 @@
 //! budget is exhausted — is reported as the pending state (202) and never as
 //! `turn_not_converged`.
 
+#![allow(dead_code)]
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 

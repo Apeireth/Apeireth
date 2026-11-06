@@ -78,7 +78,14 @@ pub mod redaction;
 ///
 /// Bumped whenever the payload shape changes; a resumed call carrying another
 /// version is refused instead of executed with a half-understood payload.
-const MCP_FROZEN_VERSION: u32 = 1;
+///
+/// **Version 2** — the payload carries the **descriptor receipt** next to the
+/// call inputs: the frozen server, the frozen remote tool name, the frozen
+/// arguments, **and** the descriptor the human approved (server, tool, schema,
+/// read-only declaration). A resumed call whose descriptor no longer matches
+/// the live one is refused — the human approved *that* descriptor, not a
+/// different one wearing the same name.
+const MCP_FROZEN_VERSION: u32 = 2;
 
 /// The exact, versioned execution inputs frozen at approval time.
 ///
@@ -95,6 +102,13 @@ struct McpFrozenInvocation {
     remote_name: String,
     /// The arguments the approved call carries.
     arguments: serde_json::Value,
+    /// The descriptor receipt the human approved (server, tool, schema,
+    /// read-only declaration).
+    ///
+    /// The resumed call compares it against the live receipt: a descriptor
+    /// that changed since the approval is a **different** call wearing the
+    /// same name, and it needs a new approval.
+    descriptor: serde_json::Value,
 }
 
 /// The declared output shape every MCP result must normalize into.
@@ -264,6 +278,14 @@ pub struct McpDynamicTool {
     /// shared behind a mutex because one tool serves concurrent calls and the
     /// sweep needs the registry and the ledger of a single domain.
     sweeper: Arc<Mutex<EgressSweeper>>,
+    /// The module generation this tool was built in.
+    ///
+    /// A tool whose module generation expired is not callable any more: the
+    /// generation is the module's aliveness token, and a call on a dead
+    /// generation would run against a link nobody owns any more.
+    generation: u64,
+    /// The task scope that bounds this tool's calls to its generation.
+    generation_scope: apeireth_plugin::task_scope::ModuleTaskScope,
 }
 
 impl McpDynamicTool {
@@ -289,11 +311,31 @@ impl McpDynamicTool {
         connection: Arc<McpServerConnection>,
         sweeper: Arc<Mutex<EgressSweeper>>,
     ) -> Self {
+        let generation = connection.generation();
+        let generation_scope = connection.generation_scope();
         Self {
             entry,
             connection,
             sweeper,
+            generation,
+            generation_scope,
         }
+    }
+
+    /// The receipt of the descriptor this tool exposes.
+    ///
+    /// The receipt is what a human approved: the server, the remote tool
+    /// name, the declared input schema and the read-only declaration. It is
+    /// frozen into the approval payload and compared again when the approved
+    /// call resumes — a descriptor that changed in the meantime needs a new
+    /// approval.
+    fn descriptor_receipt(&self) -> serde_json::Value {
+        serde_json::json!({
+            "server": self.entry.server,
+            "tool": self.entry.remote_name,
+            "schema": self.entry.input_schema,
+            "read_only": self.entry.declared_read_only,
+        })
     }
 
     /// The catalog entry backing this tool.
@@ -320,12 +362,17 @@ impl McpDynamicTool {
     /// The freeze takes the **current** entry (server, remote tool name) and
     /// the call's arguments — this is the shape a not-yet-approved call
     /// executes in. The resumed call uses the frozen payload instead.
+    ///
+    /// The payload carries the **descriptor receipt** too: the human approved
+    /// that descriptor, and the resumed call compares it against the live one
+    /// before it runs.
     fn build_frozen(&self, call: &ToolCall) -> McpFrozenInvocation {
         McpFrozenInvocation {
             version: MCP_FROZEN_VERSION,
             server: self.entry.server.clone(),
             remote_name: self.entry.remote_name.clone(),
             arguments: call.arguments.clone(),
+            descriptor: self.descriptor_receipt(),
         }
     }
 
@@ -400,12 +447,23 @@ impl McpDynamicTool {
 
     /// Execute one frozen call: the frozen server, the frozen remote tool
     /// name, the frozen arguments.
+    ///
+    /// The call runs **inside the module's generation scope** and through
+    /// the descriptor-checked path: the scope stops the call when the module
+    /// generation died while it waited, and the checked path refuses a
+    /// descriptor that changed since the discovery.
     async fn execute_frozen(&self, call: &ToolCall, frozen: &McpFrozenInvocation) -> ToolResult {
         let name = self.entry.model_name.as_str();
         match self
-            .connection
-            .call_tool(&frozen.remote_name, frozen.arguments.clone())
+            .generation_scope
+            .run(self.connection.call_tool_checked(
+                &frozen.remote_name,
+                frozen.arguments.clone(),
+                &self.entry.input_schema,
+                self.entry.declared_read_only,
+            ))
             .await
+            .unwrap_or_else(|_| Err(McpError::Transport("module generation stopped".into())))
         {
             Ok(result) => {
                 let (swept, report) = self.sweep_remote_result(&result);
@@ -518,10 +576,31 @@ impl ToolCapability for McpDynamicTool {
             .with_name(&self.entry.model_name);
         }
 
+        // The descriptor the human approved must still be the live one: the
+        // approval covers **that** descriptor, not a different one wearing
+        // the same name. A changed descriptor needs a new approval.
+        if mcp_frozen.descriptor != self.descriptor_receipt() {
+            return ToolResult::permanent_error(
+                &call.id,
+                "external tool descriptor changed since approval; approve a new call",
+            )
+            .with_name(&self.entry.model_name);
+        }
+
         self.execute_frozen(call, &mcp_frozen).await
     }
 
     async fn invoke(&self, call: &ToolCall) -> ToolResult {
+        let name = self.entry.model_name.as_str();
+        // The module generation is the tool's aliveness token: a tool whose
+        // generation died must not run any more.
+        if !self.connection.accepts_generation(self.generation) {
+            return ToolResult::permanent_error(
+                &call.id,
+                "external tool belongs to an expired module generation",
+            )
+            .with_name(name);
+        }
         let frozen = self.build_frozen(call);
         self.execute_frozen(call, &frozen).await
     }

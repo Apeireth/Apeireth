@@ -9,10 +9,22 @@ pub mod backup;
 pub mod env_switches;
 // 审批面分派 (W3.7 拆分: 装配根文件尺寸棘轮已到顶; 公开路径经下方 re-export 不变).
 pub mod canonical_approval;
+/// **主体 → 会话**归属写面实现（持有记忆库；审计 P1 收口）。
+pub mod principal_recorder;
 // 心跳关怀常驻宿主接线面: FnInitiativeGate 注入 CareEngine + dispatch 接 Runtime::execute + 自述心跳两列.
+pub mod bio_command;
+mod bio_pain_wiring;
+pub mod bio_switches;
+pub mod bundle_command;
 pub mod care_heartbeat;
+pub mod memory_export_command;
+pub mod memory_handover_command;
+pub mod memory_migrate_command;
+pub mod memory_verify_command;
 // B6 会话/记忆静态加密（隐患 #6）密钥面：engine `apeireth_storage::crypto` 的 CLI 出口（密钥丢失 = 显式不可恢复）。
 pub mod crypto_keys;
+pub mod diary_store;
+pub mod nightwatch_command;
 pub mod egress_command;
 pub mod external_tools; // 外部工具（协议桥）启动期接线面.
                         // V5-b 暴露面体检 CLI 面 (只读零写; 与 `tool.exposure_audit` 同一内核两出口).
@@ -20,9 +32,16 @@ pub mod exposure;
 pub mod flags; // crate 级旗标判据 (CLI 参数层单一真源: 各收口面的旗标扫描共用同一判据).
 pub mod gateway_panels;
 pub mod governance_chain;
+pub mod guard_decision_wiring;
 pub mod keyring_bootstrap;
 pub mod lessons_command;
 pub mod mcp_command; // 外部工具（协议桥）主人管理面: list / deny / undeny / authorize / unauthorize.
+pub(crate) mod llm_factory_env;
+pub mod parallel_dispatch_wiring;
+pub mod principal_forget_port;
+pub mod rate_limit_wire;
+pub mod read_only_grants;
+pub mod relationship_stores;
 mod self_status_probe;
 
 use self_status_probe::self_status_ledger_probe;
@@ -36,6 +55,7 @@ pub mod user_admin;
 
 pub use canonical_approval::dispatch_canonical_approval;
 pub use care_heartbeat::CareHeartbeatSource;
+pub use nightwatch_command::{dispatch_nightwatch, dispatch_nightwatch_watch};
 pub use portable_bundle::{PortableBundleManifest, PortableBundleSynthesizer};
 
 use std::{path::PathBuf, sync::Arc};
@@ -47,11 +67,16 @@ use apeireth_governance::{
     PermissionPolicy, PromptInjectionHook,
 };
 use apeireth_guard::{
+    containment::{
+        apply as apply_containment_directive, ContainmentConsumer, ContainmentDirective,
+        ContainmentGate, GrantRevocations,
+    },
     immune_memory::{ImmuneMemory, DEFAULT_CAPACITY},
-    ClassifierEnforcementMode, DatasetRecorder, IntentInput, IntentInterpreter,
-    JointRiskClassifier, RuleIntentInterpreter,
+    ClassifierEnforcementMode, DatasetRecorder, EnforcementDirective, IntentInput,
+    IntentInterpreter, JointRiskClassifier, RuleIntentInterpreter,
 };
 use apeireth_plugin::memory_backend::MemoryBackend;
+
 use apeireth_runtime::canonical::{
     ApprovalDecision, ApprovalResolution, PendingApprovalView, Runtime, SessionStore, TurnOutcome,
     TurnRequest, TurnResponse,
@@ -59,6 +84,7 @@ use apeireth_runtime::canonical::{
 use apeireth_runtime_assembly::canonical::BioApprovalSocialSource;
 use apeireth_runtime_assembly::{canonical::production::BioProbeSlots, SqliteSessionStore};
 use apeireth_tools_canonical::{FetchConfig, TrustedShellConfig, APPLY_PATCH_CAPABILITY_ID};
+pub(crate) use llm_factory_env::{council_config_from_env, llm_factory_from_env};
 
 /// One persistent SQLite database is shared by the cognitive backends; `APEIRETH_COGNITIVE_DB` may override the path; Judge remains opt-in.
 const COGNITIVE_DB_ENV: &str = "APEIRETH_COGNITIVE_DB";
@@ -215,7 +241,6 @@ pub const ENABLE_PERSONA_CONSOLIDATION_ENV: &str = "APEIRETH_ENABLE_PERSONA_CONS
 pub const ENABLE_CONSOLIDATION_HASH_GATE_ENV: &str = "APEIRETH_ENABLE_CONSOLIDATION_HASH_GATE";
 const ENABLE_REFLEXION_ENV: &str = "APEIRETH_ENABLE_REFLEXION";
 const REFLEXION_DIR_ENV: &str = "APEIRETH_REFLEXION_DIR";
-const CONTEXT_BUDGET_CHARS_ENV: &str = "APEIRETH_CONTEXT_BUDGET_CHARS";
 const TURN_ROUNDS_ENV: &str = "APEIRETH_MAX_TURN_ROUNDS";
 const TOOL_CALLS_ENV: &str = "APEIRETH_MAX_TOOL_CALLS";
 const QUOTA_MAX_TOKENS_ENV: &str = "APEIRETH_QUOTA_MAX_TOKENS";
@@ -887,19 +912,10 @@ fn build_production_governance_parts_with_dataset(
     Arc<std::sync::Mutex<PermissionPolicy>>,
     Arc<BehaviorChainGuardHook>,
 ) {
-    let mut policy = PermissionPolicy::new();
-    policy.grant(Permission::ExecuteTool("tool.repo".to_string()));
-    // 自省通道: `tool.self_status` 只读档 —— 默认可用、零审批 (无
-    // require_approval)。模型可实测自身状态再发言, 不靠翻文件撞见自己。
-    policy.grant(Permission::ExecuteTool("tool.self_status".to_string()));
-    // 性格周报 (`tool.trait_report`, 裁定 ⑤): 只读档 —— 默认可用、零审批
-    // (与 `tool.self_status` 同档: 只读成长计既有账的数字与调整原因, 不写
-    // 不执行不外联)。
-    policy.grant(Permission::ExecuteTool("tool.trait_report".to_string()));
-    if enable_local_read_tools {
-        policy.grant(Permission::ExecuteTool("tool.filesystem".to_string()));
-        policy.grant(Permission::ExecuteTool("tool.search".to_string()));
-    }
+    // 默认可用的**只读**工具授予 (自省 / 代码概览 / 性格周报) —— 清单与理由见
+    // `read_only_grants` 模块 (尺寸棘轮: 装配根只留一次调用)。
+    let mut policy =
+        read_only_grants::grant_read_only_tools(PermissionPolicy::new(), enable_local_read_tools);
     // 件一风险映射: 受控文件写入 (`tool.apply_patch`) 的三档授权。
     // 默认档 grant + require_approval 标记 = 每次写入都停在人工审批 (本地
     // 审批面板 + IM 审批卡同链); 自动放行档只 grant, 放行规则交给写入风险
@@ -1008,7 +1024,9 @@ fn build_production_governance_parts_with_dataset(
         policy.require_approval_for(apeireth_tools_canonical::IMAGE_OPS_CAPABILITY_ID);
     }
     let policy = Arc::new(std::sync::Mutex::new(policy));
-    let mut guard = BehaviorChainGuardHook::new();
+    // 判定落盘面（append-only）：守卫判定此前只在内存、重启即散。
+    // 纪律与原因见 `guard_decision_wiring` 模块（尺寸棘轮：装配根只留一行）。
+    let mut guard = guard_decision_wiring::attach_decision_log(BehaviorChainGuardHook::new());
     if let Some(dataset) = dataset {
         guard = guard.with_dataset_recorder(dataset);
     }
@@ -1084,6 +1102,9 @@ fn build_production_governance_parts_with_dataset(
             apeireth_runtime_assembly::TaskBoardApprovalHook::new(),
         ));
     }
+    // 限流守门 (授权之后、内容风险之前, 同一审批链)。默认挂载, 见
+    // `rate_limit_wire` 模块的说明 (为什么默认挂载、阈值从哪来)。
+    pipeline = rate_limit_wire::attach_rate_limit(pipeline);
     let mut pipeline = pipeline
         .with(Arc::new(CredentialDisclosureHook::new()))
         .with(Arc::new(PromptInjectionHook::new()))
@@ -1309,10 +1330,10 @@ fn build_production_governance_parts_from_env() -> (
         pipeline
     };
     // K 轴 L1 在场感知 (`tool.device_sense` + `tool.weather`): **开关开 = 注册 +
-    // 授权同源** (同一开关值同时决定装配侧注册与本授权面)。只读档 = **grant
-    // 即用** (零审批, 与 `tool.self_status` 同档): 白名单设备读 + 天气公开读;
-    // 摄像头类敏感读面的显式授权 + 审计在工具边界强制 (审计缺位不放行)。
-    if apeireth_tools_canonical::device::sense::device_sense_enabled_from_env() {
+    // 授权同源** (只读档 grant 即用); 摄像头类**敏感读**另走宿主审批门
+    // (`DeviceSenseApprovalHook`, 无自动放行档) + 决定账批准记录 —— 模型参数
+    // 不再充当授权人 (2026-11-01 安全审计)。
+    let pipeline = if apeireth_tools_canonical::device::sense::device_sense_enabled_from_env() {
         policy
             .lock()
             .expect("permission policy lock poisoned (0 装诚实)")
@@ -1325,13 +1346,19 @@ fn build_production_governance_parts_from_env() -> (
             .grant(Permission::ExecuteTool(
                 apeireth_tools_canonical::device::weather::WEATHER_CAPABILITY_ID.to_string(),
             ));
-    }
+        pipeline.with(Arc::new(
+            apeireth_tools_canonical::device::sense::DeviceSenseApprovalHook::under_data_dir(
+                default_panel_data_dir(),
+            ),
+        ))
+    } else {
+        pipeline
+    };
     // K 轴 L3/L4 受控执行 (`tool.device_control`): **双闸开 = 注册 + 授权同源**
-    // (`APEIRETH_ENABLE_DEVICE_SENSE` + `APEIRETH_ENABLE_DEVICE_CONTROL` 齐开,
-    // 默认关 fail-closed)。只 grant「工具面有人拍板」, **分级审批档由
-    // [`DeviceControlApprovalHook`] 唯一承载** —— reversible 审批档 (自动档
-    // 子开关只此档可配) / irreversible **永远逐次人批** / money **永远逐次
-    // 人批 + IM 审批卡** (与本地审批面板 / IM 审批卡同一链)。
+    // (默认关 fail-closed)。只 grant「工具面有人拍板」, **分级审批档由
+    // [`DeviceControlApprovalHook`] 唯一承载** —— reversible 审批档 / irreversible
+    // **永远逐次人批** / money **永远逐次人批 + IM 审批卡**; 「谁批」只认宿主
+    // 决定账 (模型自称的 `approved_by` 不作数, 2026-11-01 安全审计)。
     let pipeline =
         if apeireth_tools_canonical::device::device_control::device_control_enabled_from_env() {
             policy
@@ -1350,11 +1377,9 @@ fn build_production_governance_parts_from_env() -> (
         } else {
             pipeline
         };
-    // K 轴 L5 看家骨架 (`tool.guard_watch`): **双闸开 = 注册 + 授权同源**
-    // (`APEIRETH_ENABLE_DEVICE_SENSE` + `APEIRETH_ENABLE_GUARD_WATCH` 齐开,
-    // 默认关 fail-closed)。只读档 = grant 即用 (零审批, 与 `tool.self_status`
-    // 同档): 守护规则读 + 白名单设备感知 + 告警账 append。**只看不动**: 告警
-    // 零设备动作 (动手仍走 `tool.device_control` 三拍人批)。
+    // K 轴 L5 看家骨架 (`tool.guard_watch`): **双闸开 = 注册 + 授权同源** (默认
+    // 关 fail-closed)。只读档 = grant 即用: 守护规则读 + 白名单设备感知 + 告警
+    // 账 append。**只看不动** (动手仍走 `tool.device_control` 三拍人批)。
     if apeireth_tools_canonical::device::guard_watch::guard_watch_enabled_from_env() {
         policy
             .lock()
@@ -1414,16 +1439,24 @@ type CanonicalRuntimeParts = (
 );
 
 type BioHandle = Option<Arc<BioApprovalSocialSource>>;
-type BioParts = (CanonicalRuntimeParts, BioProbeSlots, BioHandle);
+/// W3.3 SG-16/17: 痛觉/再生领域观察者句柄（开关关 = None，内核零接线）。
+type NociceptionHandle = Option<Arc<apeireth_organ::nociception::NociceptionObserver>>;
+type BioParts = (
+    CanonicalRuntimeParts,
+    BioProbeSlots,
+    BioHandle,
+    NociceptionHandle,
+);
 
 pub async fn build_canonical_runtime_with_sessions_and_voice_emotion_from_env(
 ) -> Result<CanonicalRuntimeParts, String> {
-    let (parts, _slots, _approval) = build_canonical_runtime_assembly_from_env().await?;
+    let (parts, _slots, _approval, _nociception) =
+        build_canonical_runtime_assembly_from_env().await?;
     Ok(parts)
 }
 
-/// 装配本体: 额外回传 W3.6 probe 槽与 R1b-2c 审批社交源句柄 (开关关 = None)。
-async fn build_canonical_runtime_assembly_from_env() -> Result<BioParts, String> {
+/// 装配本体 (回传 W3.6 probe 槽与 R1b-2c 审批社交源句柄, 开关关 = None)。**网关形态的装配根**（`gateway serve` 走这条）; 公开以便测试钉住两条根共用部件。
+pub async fn build_canonical_runtime_assembly_from_env() -> Result<BioParts, String> {
     // B-P1 并行构造独立模块: 会话存储打开与认知侧组装互不依赖 (不同库/不同表),
     // 双任务并行推进 —— 启动到 ready 的等待 ≈ max(两侧) 而非两者之和。
     // 拆任务后各自持票进运行时工作线程; 顺序语义不变 (运行时组装仍等两侧齐备)。
@@ -1454,6 +1487,9 @@ async fn build_canonical_runtime_assembly_from_env() -> Result<BioParts, String>
     // W3.6: 自述关怀心跳 probe 迟绑定 (槽未武装 = no-op, 默认关零变化)。
     let bio_probe_slots = cognitive.bio_probe_slots();
     bio_probe_slots.fill_care_status(care_heartbeat.status_probe());
+    // D-3 关怀势能场信号源绑定: 生命周期开关开 ⇒ 句柄存在 ⇒ 势能场接线
+    // (真实工具结果作信号); 开关关 ⇒ None ⇒ 势能场不构造、零读取。
+    care_heartbeat.bind_bio_lifecycle(cognitive.bio_lifecycle_state());
     // R1b-2c: 审批社交源句柄必须在模块被装配根消费前取出 (开关关 = None)。
     let bio_approval = cognitive.bio_approval_social_source();
     // W3-①: 默认用户域的会话写闸在此预组装 —— 组合根注册进域平面 (每域恰一把)。
@@ -1461,7 +1497,7 @@ async fn build_canonical_runtime_assembly_from_env() -> Result<BioParts, String>
         Arc::clone(&session_store),
         Arc::clone(&clock),
     ));
-    let (runtime, policy, guard_hook) =
+    let (runtime, policy, guard_hook, nociception) =
         build_canonical_runtime_with_parts(sessions, cognitive, clock).await?;
     Ok((
         (
@@ -1476,17 +1512,8 @@ async fn build_canonical_runtime_assembly_from_env() -> Result<BioParts, String>
         ),
         bio_probe_slots,
         bio_approval,
+        nociception,
     ))
-}
-
-/// W3.6: 迟绑定痛觉/再生读取口到已 `Arc` 化的 runtime (Weak 无环; Fill 前 = 该格真因)。
-fn bind_bio_pain_reader(slots: &BioProbeSlots, runtime: &Arc<Runtime>) {
-    let weak = Arc::downgrade(runtime);
-    slots.fill_pain_reader(Arc::new(move || {
-        weak.upgrade()
-            .map(|runtime| runtime.bio_pain_snapshot())
-            .ok_or_else(|| "runtime 已释放: 痛觉迟绑定读取口失效".to_string())
-    }));
 }
 
 /// W3-③ 逐域伙伴运行时组装 (星群正身): 该域自己的会话写闸 + 独立记忆库 + 同款旋钮。
@@ -1512,9 +1539,60 @@ async fn build_domain_partner_runtime(
     cognitive
         .bio_probe_slots()
         .fill_care_status(care_heartbeat.status_probe());
-    let (runtime, _policy, _guard_hook) =
+    let (runtime, _policy, _guard_hook, _nociception) =
         build_canonical_runtime_with_parts(sessions, cognitive, clock).await?;
     Ok(runtime)
+}
+
+/// **执行面**：消费护栏发布的收容义务 ⇒ **撤销该会话的授权**。
+///
+/// # 为什么在 CLI（护栏 crate 外）
+///
+/// 护栏只**产出**义务（它不该知道 CLI 怎么执行）；「撤销会话授权」是**执行方**的活。
+/// 这里就是那个执行方：拿到护栏发布的 [`EnforcementDirective`] ⇒ 转成可执行的
+/// [`ContainmentDirective`] ⇒ 落到**会话授权撤销状态**上。
+///
+/// # 口径
+///
+/// * 撤销是**会话级**的（不是全局能力授权）：一个会话触发了高危越权 ⇒ 只有它
+///   失去授权，**别的会话不受影响**；
+/// * 撤销**不自动恢复**（fail-closed）：要恢复必须显式重新授权；
+/// * 义务里**仍需别的执行面处理**的部分（标记高风险 trace / 补偿线索）**不静默吞**：
+///   `apply` 把它们原样返回，这里说清给运维。
+struct SessionGrantContainmentConsumer {
+    revocations: Arc<std::sync::Mutex<GrantRevocations>>,
+}
+
+impl ContainmentConsumer for SessionGrantContainmentConsumer {
+    fn consume(&self, obligation: &EnforcementDirective, session_id: &str) {
+        let directive = ContainmentDirective::from_enforcement(obligation, session_id);
+        // 锁只护住状态变更；打印（IO）不持锁 ⇒ 不把慢 IO 压在互斥量上。
+        let (mark_high_risk, hint) = {
+            let mut revocations = self
+                .revocations
+                .lock()
+                .expect("grant revocations lock poisoned (0 装诚实)");
+            let pending = apply_containment_directive(&mut revocations, &directive);
+            (
+                pending.mark_trace_high_risk,
+                pending
+                    .compensation_hint
+                    .clone()
+                    .unwrap_or_else(|| "无".to_string()),
+            )
+        };
+        eprintln!(
+            "[guard-containment] 会话 {session_id} 的授权已撤销（高危拒绝 ⇒ 收容义务）; \
+             高风险 trace 标记: {mark_high_risk}; 补偿线索: {hint}"
+        );
+    }
+
+    fn is_revoked(&self, session_id: &str) -> bool {
+        self.revocations
+            .lock()
+            .expect("grant revocations lock poisoned (0 装诚实)")
+            .is_revoked(session_id)
+    }
 }
 
 async fn build_canonical_runtime_with_parts(
@@ -1526,6 +1604,7 @@ async fn build_canonical_runtime_with_parts(
         Arc<Runtime>,
         Arc<std::sync::Mutex<PermissionPolicy>>,
         Arc<BehaviorChainGuardHook>,
+        NociceptionHandle,
     ),
     String,
 > {
@@ -1554,7 +1633,19 @@ async fn build_canonical_runtime_with_parts(
             Arc::new(governance),
             Arc::clone(sessions.store()),
         );
-    builder = builder.with_governance(governance_chain::production(preset_governance));
+    // 收容执行面（W-37 / 审计 P0-1）：护栏**高危拒绝** ⇒ **撤销该会话的授权**
+    // ⇒ 同会话再来一次**仍被拒**（此前「拒绝了但授权还在」⇒ 可重复越权）。
+    //
+    // 位置：治理链入口与 runtime 之间。**不改** pipeline 内部顺序 —— 护栏仍是
+    // pipeline 的末位闸（那是审计 P0-2 的事，本批不碰）。
+    let containment = ContainmentGate::new(
+        Arc::new(preset_governance),
+        Arc::clone(&guard_hook),
+        Arc::new(SessionGrantContainmentConsumer {
+            revocations: Arc::new(std::sync::Mutex::new(GrantRevocations::default())),
+        }),
+    );
+    builder = builder.with_governance(governance_chain::production(containment));
     // 出网闸 (ADR-0014 §1.2: 把上下文发给模型就是行动): 默认关
     // (`APEIRETH_ENABLE_EGRESS_GATE=1` 才装配; 值也可以直接是授权策略 JSON),
     // 关时请求逐字节不变。
@@ -1574,13 +1665,25 @@ async fn build_canonical_runtime_with_parts(
     ) {
         builder = builder.with_egress_gate(gate);
     }
-    // 生物机制族 W3.3: 痛觉评估（默认关；`APEIRETH_ENABLE_BIO_PAIN=1` 才开
-    // 观测记账；只观测不改变错误/重试/错误处理决策，真账见 runtime 侧测试）。
-    if std::env::var("APEIRETH_ENABLE_BIO_PAIN")
-        .ok()
-        .is_some_and(|value| value.trim() == "1")
-    {
-        builder = builder.with_bio_pain(true);
+    // 生物机制族 W3.3: 痛觉评估（默认关）。开关三层优先级（ADR-0015）：
+    // env `APEIRETH_ENABLE_BIO_PAIN`（最高，含 =0 显式覆盖）→ 用户配置
+    // `bio-mechanisms.json`（`apeireth bio enable nociception`）→ 默认关。
+    // 只观测记账，不改变错误/重试/错误处理决策，真账见 runtime 侧测试。
+    let bio_switches = crate::bio_switches::BioMechanismSwitches::load(&egress_data_root)
+        .unwrap_or_else(|error| {
+            // 配置坏了 = 不猜：全关 + stderr 如实报错（不静默、不假装已开）。
+            eprintln!("[bio] 生物机制配置读取失败（{error}）—— 全部按关闭处理");
+            crate::bio_switches::BioMechanismSwitches::default()
+        });
+    // 痛觉/再生领域观察者：装配层构造并装入通用完成观察口。内核不认识
+    // `nociception`、不持有领域状态；开关关 = 不构造 = 零接线 (逐字节不变)。
+    let nociception = bio_pain_wiring::observer_from_switch(
+        bio_switches
+            .raw_for("nociception")
+            .is_some_and(|value| value.trim() == "1"),
+    );
+    if let Some(observer) = &nociception {
+        builder = builder.with_tool_completion_observer(observer.clone());
     }
     // W3-①/③: 注入预组装写闸 (每域恰一把 —— 默认域与域平面共用同一实例,
     // 伙伴域用自己的那一把)。
@@ -1589,9 +1692,18 @@ async fn build_canonical_runtime_with_parts(
     // The CLI is the composition root. Gateway reuses this function, while
     // SDK remains an HTTP client and does not host a second Runtime.
     // Builtin tools are owned by ProductionModules, not BuiltinToolsPlugin.
-    builder = cognitive.register_context_projection(builder);
+    //
+    // 桌面 Host 面: 显式授权 —— 认知模块的行为能力按 `ExecuteTool` 授权进生产
+    // 治理策略，并由 `register_with_policy` 一次性完成「上下文投影 + 模块注册」
+    // （只走 `register_into` 会漏授权）。
+    // 并行派发调度器必须装上，否则窗口恒为 1（生产形同无并行）;
+    // 外部工具（协议桥）接线句柄必须在**装配模块被 move 之前**取出
+    // （`register_with_policy` 取走所有权）⇒ 先取句柄，再注册。
+    // 顺序: 先算策略与授权，再装调度器，再取句柄，最后注册（注册取走所有权）。
+    let agent_policy = cognitive.desktop_agent_policy()?;
+    builder = parallel_dispatch_wiring::attach(builder);
     let external_handles = external_tools::take_handles(&cognitive);
-    builder = cognitive.register_into(builder);
+    builder = cognitive.register_with_policy(builder, &policy)?;
     let mut fallback_order: Vec<CapabilityId> = Vec::new();
 
     let minimax = MinimaxProviderPlugin::from_env()
@@ -1644,12 +1756,13 @@ async fn build_canonical_runtime_with_parts(
     }
 
     // `Arc<Runtime>`: 组合根的后台任务要活过本函数栈帧 ⇒ 先 Arc 化.
-    let runtime = Arc::new(
-        builder
-            .build()
-            .await
-            .map_err(|error| format!("canonical runtime bootstrap failed: {error}"))?,
-    );
+    let runtime = apeireth_runtime_assembly::canonical::desktop_host::build_desktop_main_runtime(
+        builder,
+        agent_policy,
+    )
+    .await
+    .map_err(|error| format!("canonical runtime bootstrap failed: {error}"))?;
+    let runtime = Arc::new(runtime);
     external_tools::wire_at_startup(&runtime, &external_handles, &policy).await;
     external_tools::spawn_periodic_refresh(Arc::clone(&runtime), &external_handles);
     if let Some(recorder) = guard_hook.dataset_recorder() {
@@ -1658,7 +1771,7 @@ async fn build_canonical_runtime_with_parts(
                 .with_hook(guard_hook.clone()),
         ));
     }
-    Ok((runtime, policy, guard_hook))
+    Ok((runtime, policy, guard_hook, nociception))
 }
 
 async fn production_session_store() -> Result<Arc<dyn apeireth_runtime::SessionStore>, String> {
@@ -1704,13 +1817,26 @@ pub async fn build_canonical_runtime_from_env_with_observability() -> Result<
         ),
         bio_probe_slots,
         bio_approval,
+        nociception,
     ) = build_canonical_runtime_assembly_from_env().await?;
-    // W3.6: 痛觉/再生 probe 迟绑定到 runtime 自身 (Weak 无环)。
-    bind_bio_pain_reader(&bio_probe_slots, &runtime);
+    let runtime = Arc::new(runtime);
+    // W3.6: 痛觉/再生 probe 绑定到装配时装入 runtime 的同一观察者实例。
+    // 痛觉/再生账本归 `apeireth-organ::nociception`; runtime 只认识通用完成观察口
+    // （runtime 侧的 `canonical::bio_pain` 模块已下线）⇒ 绑定点取 organ 观察者形态。
+    bio_pain_wiring::bind_reader(&bio_probe_slots, nociception.as_ref());
     let governance = Arc::new(
         apeireth_memory::SqliteMemoryStore::open(cognitive_db_path())
             .map_err(|error| format!("memory governance store open failed: {error}"))?,
     );
+    // **主体 → 会话**归属写面（2026-11-01 安全审计 P1 收口）：
+    // episode 维度的「被遗忘权」要成立 ⇒ 必须能把 episode 归到主体
+    // ⇒ 靠 memory 侧的 `memory_principal_sessions` 映射连接
+    // ⇒ 生产侧原先**无写入方** ⇒ 那一维的被遗忘权无法生效。
+    // ⇒ 装进 runtime 的进程级端口（gateway 只认端口、不依赖 memory）。
+    // ⚠️ 用**同一本**认知库 ⇒ 与治理面同源。
+    apeireth_runtime::canonical::principal_sessions::install_principal_session_recorder(Arc::new(
+        crate::principal_recorder::MemoryPrincipalSessionRecorder::new(Arc::clone(&governance)),
+    ));
     let enable_local_read_tools = local_read_tools_enabled_from_env();
     let panel = Arc::new(
         crate::gateway_panels::CliPanelData::new_with_runtime(
@@ -2023,6 +2149,7 @@ async fn build_cognitive_modules_at(
         morphology_recall: morphology_recall_enabled_from_env(),
         community_triage: community_triage_enabled_from_env(),
         education: education_enabled_from_env(),
+        repo_map: true,
         absorption_insight: absorption_insight_enabled_from_env(),
         // shell/fetch 旋钮: 只注册工具; 执行许可由治理层 grant+approval 决定.
         // W1 §2.4 (2026-10-10): shell 沙箱全局旋钮, 默认**开** (设计拍板
@@ -2109,9 +2236,8 @@ async fn build_cognitive_modules_at(
         // 写总闸由组装根注入 (`file_write` 同一开关值, 关 = 拒写不拒读);
         // 自述创作节与工具面同一计数器 (探针随配置注入)。
         sheet_ops: apeireth_tools_canonical::SheetOpsConfig::from_env(workspace_root.clone()),
-        // K 轴 L1 在场感知 (`tool.device_sense` + `tool.weather`): 注册即闸
-        // (`APEIRETH_ENABLE_DEVICE_SENSE` 旋钮开才注入落位, 默认关 fail-closed)。
-        // 设备表 = 数据目录 `devices.json` (StoredDoc 拒开, 白名单制默认零设备);
+        // K 轴 L1 在场感知 (`tool.device_sense` + `tool.weather`): 注册即闸 (默认
+        // 关 fail-closed)。设备表 = 数据目录 `devices.json` (白名单制默认零设备);
         // 天气 = mock 档 (如实标注数据源); 自述在场节与工具面同表同源。
         device_sense: apeireth_tools_canonical::device::sense::DeviceSenseConfig::from_env(
             default_panel_data_dir(),
@@ -2119,20 +2245,16 @@ async fn build_cognitive_modules_at(
         weather: apeireth_tools_canonical::device::weather::WeatherConfig::from_env(
             default_panel_data_dir(),
         ),
-        // K 轴 L3/L4 受控执行 (`tool.device_control`): 注册即闸 (双闸
-        // `APEIRETH_ENABLE_DEVICE_SENSE` + `APEIRETH_ENABLE_DEVICE_CONTROL`
-        // 齐开才注入配置, 默认关 fail-closed)。白名单 = `devices.json` 同一本
-        // 设备表 (只读消费); 执行面 = mock 适配器 (真实协议族后插) + 状态账
-        // `device-actions.jsonl` (append-only); 自述设备节与工具面同账。
+        // K 轴 L3/L4 受控执行 (`tool.device_control`): 注册即闸 (双闸齐开才注入,
+        // 默认关 fail-closed)。白名单 = `devices.json` 同一本设备表 (只读消费);
+        // 执行面 = mock 适配器 + 状态账 `device-actions.jsonl` (append-only)。
         device_control:
             apeireth_tools_canonical::device::device_control::DeviceControlConfig::from_env(
                 default_panel_data_dir(),
             ),
-        // K 轴 L5 看家骨架 (`tool.guard_watch`): 注册即闸 (双闸
-        // `APEIRETH_ENABLE_DEVICE_SENSE` + `APEIRETH_ENABLE_GUARD_WATCH` 齐开才
-        // 注入配置, 默认关 fail-closed)。守护规则 = `guard-rules.json` (StoredDoc
-        // 拒开, 规则 = 阈值/时序条件); 告警 = `guard-alerts.jsonl` (关怀候选高
-        // 优先, 打扰纪律守护例外档); **只看不动** (零设备动作)。
+        // K 轴 L5 看家骨架 (`tool.guard_watch`): 注册即闸 (双闸齐开才注入, 默认
+        // 关 fail-closed)。守护规则 = `guard-rules.json` (阈值/时序条件); 告警 =
+        // `guard-alerts.jsonl` (关怀候选高优先); **只看不动** (零设备动作)。
         guard_watch: apeireth_tools_canonical::device::guard_watch::GuardWatchConfig::from_env(
             default_panel_data_dir(),
         ),
@@ -2182,6 +2304,8 @@ async fn build_cognitive_modules_at(
         embedding_provider: embedding_provider_from_env()
             .map_err(|error| format!("embedding provider config invalid: {error}"))?,
         access_history: Some(access_history),
+        // 跨日记检索接线面 (只读): `<data>/diary` 存在才挂 (缺省零行为变化).
+        diary: diary_store::diary_store_for_data_dir(&default_panel_data_dir()),
         memory_extractor: None,
         memory_materializer: None,
         typed_recall: typed_recall_enabled.then(|| Arc::clone(&typed_source)),
@@ -2197,12 +2321,12 @@ async fn build_cognitive_modules_at(
         // 默认关) 与自述记忆节的去重计数真值同源。
         ingest_gate: Some(persona_store.clone()),
         reflexion_store,
-        // W2 §4.2: partner 羁绊存储 (InMemory —— 进程内, 重启即散; 持久后端为
-        // 后续 sqlite 实现, trait 落点已备)。
-        partner_store: partner_bond_enabled_from_env().then(
-            || -> Arc<dyn apeireth_memory::partner::PartnerStore> {
-                Arc::new(apeireth_memory::partner::InMemoryPartnerStore::new())
-            },
+        // 关系面两个存储（羁绊 + 里程碑）：同开关、同认知库、都必须跨重启存活。
+        // 构造与理由见 `relationship_stores` 模块（尺寸棘轮：装配根只留调用）。
+        partner_store: relationship_stores::partner_store(partner_bond_enabled_from_env(), &pool),
+        milestone_store: relationship_stores::milestone_store(
+            partner_bond_enabled_from_env(),
+            &pool,
         ),
         // 「性格养成」第一铲: 「从使用中学习」默认关; `APEIRETH_ENABLE_SELF_TUNING=1`
         // 才接自校准接线层 (真接检索命中/未命中信号, 调整可见/可撤销/记录透明,
@@ -2223,6 +2347,22 @@ async fn build_cognitive_modules_at(
             reflexion_store_root_from_env(),
             apeireth_runtime_assembly::retrieval_tuning_log_path(),
         )),
+        // 自省通道: 问责计数探测口（影响声明 / 后果三态 / 待补救）。
+        //
+        // **不与出网闸共用同一个实例**是有意的：出网闸在另一个装配函数里。
+        // 两者读**同一个 append-only 账本文件**（`impact-ledger.jsonl` /
+        // `consequence-ledger.jsonl`）—— 而闸写事件时**先落盘再进内存**，
+        // 所以从文件读能拿到最新真值。**文件就是共享真源**，不需要跨函数传状态。
+        self_status_accountability: Some(
+            apeireth_runtime_assembly::accountability_probe::accountability_status_probe(
+                default_panel_data_dir(),
+                Arc::new(tokio::sync::Mutex::new(
+                    apeireth_runtime_assembly::consequence::ConsequenceTracker::with_ledger(
+                        default_panel_data_dir().join("consequence-ledger.jsonl"),
+                    ),
+                )),
+            ),
+        ),
         self_status_credentials: Some(self_status_credentials_probe(default_panel_data_dir())),
         self_status_extras: vec![apeireth_tools_canonical::CapabilitySwitch::new(
             "local_read_tools",
@@ -2644,6 +2784,16 @@ pub async fn resolve_canonical_cli_approval(
     approval: ApprovalId,
     decision: ApprovalDecision,
 ) -> Result<ApprovalResolution, String> {
+    // **设备面：先把宿主决定落进决定账，再续跑**（2026-11-01 安全审计 P3-1/P3-2 闭环）。
+    //
+    // 原先错在哪：设备面的放行**只认宿主决定账**（模型自称的授权人不作数），
+    // 但决定账原先**只有 IM 审批卡链会写** ⇒ 面板/CLI 批了却不落账
+    // ⇒ 执行面查无批准 ⇒ **永远拒绝**（人批了也执行不了 = 流程断链）。
+    //
+    // 现在为什么这样：宿主拍板这一步**接上**决定账 ⇒ 闭环。
+    // ⚠️ 顺序：**先落账、后续跑**（续跑会执行工具 ⇒ 决定账必须已就位）。
+    // ⚠️ 落账失败 ⇒ **不续跑**（与 IM 面同口径：「拒绝落账 ⇒ 拒绝即帧」）。
+    canonical_approval::record_device_host_decision(runtime, session, approval, &decision).await?;
     runtime
         .resolve_approval(session, approval, decision)
         .await
@@ -2683,136 +2833,6 @@ pub async fn dispatch_canonical_chat(
         }
     }
     result
-}
-
-/// **守夜人 Nightwatch** (2026-10-10, 主人批准设计): 显式命令即授权 ——
-/// 离线闲时审计 (report-only)。读近 N 条 episodes 为被动快照 → 五件组合审计
-/// (risk 核词扫描 / eval 行为质量 / no-degrade 复盘 / evidence 断言缺口 /
-/// rubric 平衡 / colang 健康) → 报告落 `<data>/nightwatch/`。
-/// **不阻塞不批准**: approval_policy 留热路径; 审计链/ballot 未持久化 = 具名缺口。
-pub async fn dispatch_nightwatch(session: Option<String>, limit: usize) -> Result<String, String> {
-    use apeireth_memory::backend::sqlite::SqliteBackend;
-    use apeireth_plugin::memory_backend::MemoryBackend;
-    use apeireth_runtime_assembly::canonical::nightwatch::{EpisodeSnapshot, NightwatchInputs};
-    use apeireth_storage::SqliteConnectionPool;
-
-    // 引导档案激活（普通用户预设值; 无档案 = 0 行为变化）。
-    crate::onboarding::activate_for_process();
-    let pool = Arc::new(
-        SqliteConnectionPool::open(cognitive_db_path())
-            .await
-            .map_err(|error| format!("cognitive backend open failed: {error}"))?,
-    );
-    let backend = SqliteBackend::from_arc(Arc::clone(&pool));
-
-    let episodes = match &session {
-        Some(session_id) => backend
-            .recent_episodes(session_id, limit)
-            .map_err(|error| format!("read recent episodes failed: {error}"))?,
-        None => Vec::new(),
-    };
-    let snapshots: Vec<EpisodeSnapshot> = episodes
-        .iter()
-        .map(|episode| EpisodeSnapshot {
-            id: episode.id.clone(),
-            session: session.clone().unwrap_or_else(|| "unknown".to_string()),
-            role: episode.role.clone(),
-            content: episode.content.clone(),
-        })
-        .collect();
-
-    let inputs = NightwatchInputs {
-        episodes: snapshots,
-        ..Default::default()
-    };
-    let report = apeireth_runtime_assembly::canonical::nightwatch_audit(&inputs);
-    let report_dir = default_panel_data_dir().join("nightwatch");
-    let path = apeireth_runtime_assembly::canonical::write_nightwatch_report(&report_dir, &report)
-        .map_err(|error| format!("nightwatch report write failed: {error}"))?;
-
-    let mut text = format!(
-        "守夜复盘完成 (report-only, 不阻塞不批准):\n{}\n报告: {}\n",
-        report.summary,
-        path.display()
-    );
-    for finding in &report.findings {
-        text.push_str(&format!(
-            " - [{}] {:?}: {}\n",
-            finding.severity, finding.area, finding.detail
-        ));
-    }
-    for gap in &report.advisory_gaps {
-        text.push_str(&format!(" - [gap] {gap}\n"));
-    }
-    Ok(text)
-}
-
-/// **守夜人后台守护** (2026-10-10, 设计闭环最后一块): `nightwatch --watch`
-/// = 显式授权的长跑循环。**只在用户空闲时复盘** (双闸, 纯状态机):
-/// ① 活动闸: 距最近活动 ≥ `idle_secs` —— 活动信号 = 认知库 episode 时间戳
-///    (用户说话 = 新 episode; `--session` 指定观测会话);
-/// ② 冷却闸: 距上次复盘 ≥ `cooldown_secs` (复盘不刷屏)。
-/// 轮询间隔 `interval_secs`; 复盘复用单次审计路径 (同 DB 读 + 报告落盘)。
-/// Ctrl-C 退出 (信号即终止; 报告已落盘, 无中间态)。
-pub async fn dispatch_nightwatch_watch(
-    session: Option<String>,
-    limit: usize,
-    idle_secs: i64,
-    cooldown_secs: i64,
-    interval_secs: u64,
-) -> Result<String, String> {
-    use apeireth_memory::backend::sqlite::SqliteBackend;
-    use apeireth_plugin::memory_backend::MemoryBackend;
-    use apeireth_runtime_assembly::canonical::{IdleGate, NightwatchIdleScheduler};
-    use apeireth_storage::SqliteConnectionPool;
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    // 引导档案激活（普通用户预设值; 无档案 = 0 行为变化）。
-    crate::onboarding::activate_for_process();
-    let pool = Arc::new(
-        SqliteConnectionPool::open(cognitive_db_path())
-            .await
-            .map_err(|error| format!("cognitive backend open failed: {error}"))?,
-    );
-    let backend = SqliteBackend::from_arc(Arc::clone(&pool));
-
-    let now_ms = || {
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_millis() as i64)
-            .unwrap_or_default()
-    };
-    let mut scheduler = NightwatchIdleScheduler::new(idle_secs, cooldown_secs, now_ms());
-    let mut runs = 0usize;
-
-    loop {
-        let now = now_ms();
-        // 活动探测: 观测会话最近一条 episode 的时间戳 (epoch 秒 → 毫秒)。
-        if let Some(session_id) = &session {
-            if let Ok(episodes) = backend.recent_episodes(session_id, 1) {
-                if let Some(latest) = episodes.first() {
-                    scheduler.note_activity(latest.timestamp.saturating_mul(1000));
-                }
-            }
-        }
-
-        match scheduler.should_run(now) {
-            IdleGate::IdleOk => {
-                scheduler.mark_ran(now);
-                runs += 1;
-                let summary = dispatch_nightwatch(session.clone(), limit).await?;
-                println!("[nightwatch --watch] 第 {runs} 次空闲复盘:\n{summary}");
-            }
-            IdleGate::ActiveSoon { wait_secs } => {
-                eprintln!("[nightwatch --watch] 用户仍活跃, {wait_secs}s 后再判");
-            }
-            IdleGate::RecentlyRan { wait_secs } => {
-                eprintln!("[nightwatch --watch] 冷却中, {wait_secs}s 后再判");
-            }
-        }
-
-        tokio::time::sleep(std::time::Duration::from_secs(interval_secs.max(1))).await;
-    }
 }
 
 /// **W3 onering 账本消费旋钮** (2026-10-10, 默认关):
@@ -2959,75 +2979,6 @@ pub async fn dispatch_dream(
     ))
 }
 
-/// 从 env 找真 LLM 工厂 (openai-compatible 优先, MiniMax 回退) + 首个模型 id。
-/// 都未配 → Err (0 装: 不造"调用时才失败"的假可用)。
-fn llm_factory_from_env(
-) -> Result<(Arc<dyn apeireth_plugin::llm_factory::LlmFactory>, String), String> {
-    if std::env::var("APEIRETH_OPENAI_MODELS")
-        .ok()
-        .is_some_and(|v| !v.trim().is_empty())
-    {
-        if let Ok(factory) = apeireth_provider::openai_compatible_llm_factory::OpenAiCompatibleLlmFactory::from_env_with_resolver(
-            llm_credential_resolver(),
-        ) {
-            let model = factory
-                .model_ids()
-                .into_iter()
-                .next()
-                .unwrap_or_else(|| "deepseek-v4-flash".to_string());
-            return Ok((
-                Arc::new(factory) as Arc<dyn apeireth_plugin::llm_factory::LlmFactory>,
-                model,
-            ));
-        }
-    }
-    if std::env::var("APEIRETH_API_KEY")
-        .ok()
-        .is_some_and(|v| !v.trim().is_empty())
-    {
-        if let Ok(factory) =
-            apeireth_provider::minimax_llm_factory::MinimaxLlmFactory::from_env_with_resolver(
-                llm_credential_resolver(),
-            )
-        {
-            let model = factory
-                .model_ids()
-                .into_iter()
-                .next()
-                .unwrap_or_else(|| "MiniMax-M3".to_string());
-            return Ok((
-                Arc::new(factory) as Arc<dyn apeireth_plugin::llm_factory::LlmFactory>,
-                model,
-            ));
-        }
-    }
-    Err("no llm factory configured".to_string())
-}
-
-/// **council 旋钮** (2026-10-10 拍板, 默认 3): `APEIRETH_COUNCIL_ADVISORS=N` (1-7) =
-/// 裁决顾问数 (规范序取前 N: Safety/Performance/Philosophy/History/Strategy/
-/// Ethics/Legal, Safety 恒首位); `APEIRETH_COUNCIL_TIMEOUT_MS` = 单顾问超时
-/// (默认 30000, 台账 #46 实测: 思考型模型 reasoning 余量下 10s 不够)。
-fn council_config_from_env() -> apeireth_orchestration::CouncilConfig {
-    use apeireth_orchestration::CouncilConfig;
-    use std::time::Duration;
-    let max_advisors = std::env::var("APEIRETH_COUNCIL_ADVISORS")
-        .ok()
-        .and_then(|v| v.trim().parse::<usize>().ok())
-        .map(|n| n.clamp(1, 7))
-        .unwrap_or(3);
-    let per_advisor_timeout = std::env::var("APEIRETH_COUNCIL_TIMEOUT_MS")
-        .ok()
-        .and_then(|v| v.trim().parse::<u64>().ok())
-        .map(Duration::from_millis)
-        .unwrap_or(Duration::from_millis(30_000));
-    CouncilConfig {
-        max_advisors,
-        per_advisor_timeout,
-        ..CouncilConfig::default()
-    }
-}
-
 /// **council 决策环节 D —— 显式咨询** (2026-10-10 拍板): `apeireth council "<议题>"`。
 ///
 /// council 语义改造 (主人 2026-10-10): 从"每轮评审器"改为"决策环节顾问"。触发位点:
@@ -3127,19 +3078,6 @@ fn build_dream_llm_thinker() -> Result<apeireth_runtime_assembly::canonical::Llm
         factory, model,
     ))
 }
-
-pub async fn dispatch_gateway_serve(port: u16) -> Result<String, String> {
-    dispatch_gateway_serve_on("127.0.0.1", port).await
-}
-
-/// Start the HTTP Gateway on an explicitly selected bind address.
-///
-/// Loopback is the safe default. Binding a non-loopback address is an
-/// intentional operator decision and is called out before the listener starts.
-pub async fn dispatch_gateway_serve_on(bind: &str, port: u16) -> Result<String, String> {
-    dispatch_gateway_serve_with(bind, port, None).await
-}
-
 /// Start the HTTP Gateway in the daemon-friendly ("resident") form
 /// (W2-①): optional single-instance PID-file claim, explicit "already
 /// running" refusals, and a graceful shutdown that finishes its audit and
@@ -3221,10 +3159,11 @@ pub async fn dispatch_gateway_serve_with(
         ),
         bio_probe_slots,
         _bio_approval,
+        nociception,
     ) = build_canonical_runtime_assembly_from_env().await?;
     let runtime = Arc::new(runtime);
-    // W3.6: 常驻宿主同样把痛觉/再生 probe 迟绑定到 runtime。
-    bind_bio_pain_reader(&bio_probe_slots, &runtime);
+    // W3.6: 常驻宿主同样把痛觉/再生 probe 绑定到装配时装入的观察者。
+    bio_pain_wiring::bind_reader(&bio_probe_slots, nociception.as_ref());
     let governance = Arc::new(
         apeireth_memory::SqliteMemoryStore::open(cognitive_db_path())
             .map_err(|error| format!("memory governance store open failed: {error}"))?,
@@ -3469,16 +3408,10 @@ async fn graceful_shutdown_signal() {
 
 /// Data directory for panel archives. `APEIRETH_DATA_DIR` overrides; the
 /// default is `~/.apeireth` (same place as the keyring and session dbs).
-pub(crate) fn default_panel_data_dir() -> PathBuf {
-    if let Ok(dir) = std::env::var("APEIRETH_DATA_DIR") {
-        if !dir.trim().is_empty() {
-            return PathBuf::from(dir);
-        }
-    }
-    let home = std::env::var("USERPROFILE")
-        .or_else(|_| std::env::var("HOME"))
-        .unwrap_or_else(|_| ".".to_string());
-    PathBuf::from(home).join(".apeireth")
+pub fn default_panel_data_dir() -> PathBuf {
+    // 单一真源在 `apeireth_runtime_assembly::paths`（此前这里是**第二份逐字相同**
+    // 的实现 ⇒ 改一处忘另一处会让「生产写账」与「CLI 读账」指向不同文件）。
+    apeireth_runtime_assembly::paths::default_data_root()
 }
 
 #[cfg(test)]

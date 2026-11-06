@@ -287,3 +287,163 @@ mod tests {
         assert_eq!(ms, decoded);
     }
 }
+
+// ============================================================================
+// 关系里程碑的**生产记录面**（2026-10-24 接电）
+// ============================================================================
+//
+// 此前 `MilestoneStore` 只有内存实现、**没有任何生产写入方** ——
+// 契约齐全但一份里程碑都不会被记下来。
+//
+// 缺的其实不是存储，而是「**什么时候算里程碑**」这个判定。这里只做
+// **确定性**的那两个（不猜、不用 LLM、不看内容）：
+//
+// 1. **初见**：某个主体第一次建立伙伴记录时（`FirstMeeting`）；
+// 2. **阶段跃迁**：羁绊阶段从 A 变成 B 时（`StageTransition`）——
+//    `Bond::evolve` 的阶段推进是纯确定性阈值（0.15/0.40/0.65/0.85），
+//    所以「变了」这件事本身没有歧义。
+//
+// 其余类型（首次分享 / 情绪共鸣 / 决策 / 冲突 / 修复）需要**语义判定**，
+// 本模块不猜 —— 由上层在有明确信号时自行 `record`。
+
+/// 里程碑记录面: 幂等 + 只记确定性事件。
+///
+/// 幂等是硬要求：装配处每回合都会调，初见只能记一次。
+pub struct MilestoneRecorder {
+    store: std::sync::Arc<dyn MilestoneStore>,
+}
+
+impl std::fmt::Debug for MilestoneRecorder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MilestoneRecorder").finish_non_exhaustive()
+    }
+}
+
+impl MilestoneRecorder {
+    /// 绑定一个里程碑存储。
+    pub fn new(store: std::sync::Arc<dyn MilestoneStore>) -> Self {
+        Self { store }
+    }
+
+    /// 记「初见」——**已记过就不再记**（返回 `false`）。
+    ///
+    /// 之所以要幂等：伙伴记录在每回合都会被 `get_or_create`，
+    /// 没有这道闸会写出一堆重复的「初次相遇」。
+    pub fn record_first_meeting(
+        &self,
+        session_id: &SessionId,
+        at_epoch_ms: i64,
+    ) -> Result<bool, MemoryError> {
+        if self
+            .store
+            .has_milestone(session_id, MilestoneKind::FirstMeeting)?
+        {
+            return Ok(false);
+        }
+        let milestone = Milestone::new(
+            *session_id,
+            MilestoneKind::FirstMeeting,
+            MilestonePayload::Text("第一次建立伙伴关系".to_string()),
+            at_epoch_ms,
+        );
+        self.store.record(&milestone)?;
+        Ok(true)
+    }
+
+    /// 记一次**阶段跃迁**；`from == to` 时什么都不做（返回 `false`）。
+    ///
+    /// 只在阶段**真的变了**的时候落一条 —— 否则每回合都会写一条噪声。
+    pub fn record_stage_transition(
+        &self,
+        session_id: &SessionId,
+        from: &str,
+        to: &str,
+        at_epoch_ms: i64,
+    ) -> Result<bool, MemoryError> {
+        if from == to {
+            return Ok(false);
+        }
+        let milestone = Milestone::new(
+            *session_id,
+            MilestoneKind::StageTransition,
+            MilestonePayload::Stage {
+                from: from.to_string(),
+                to: to.to_string(),
+            },
+            at_epoch_ms,
+        );
+        self.store.record(&milestone)?;
+        Ok(true)
+    }
+
+    /// 查询某会话的关系里程碑（按时间正序）。
+    pub fn query(
+        &self,
+        session_id: &SessionId,
+        kind: Option<MilestoneKind>,
+    ) -> Result<Vec<Milestone>, MemoryError> {
+        self.store.query(session_id, kind)
+    }
+}
+
+#[cfg(test)]
+mod recorder_tests {
+    use super::*;
+
+    fn session() -> SessionId {
+        SessionId::new()
+    }
+
+    #[test]
+    fn first_meeting_is_recorded_exactly_once() {
+        let recorder = MilestoneRecorder::new(std::sync::Arc::new(InMemoryMilestoneStore::new()));
+        let session = session();
+        assert!(recorder.record_first_meeting(&session, 1_000).unwrap());
+        // 第二、三次都不得重复记（装配处每回合都会调）
+        assert!(!recorder.record_first_meeting(&session, 2_000).unwrap());
+        assert!(!recorder.record_first_meeting(&session, 3_000).unwrap());
+        let list = recorder
+            .query(&session, Some(MilestoneKind::FirstMeeting))
+            .unwrap();
+        assert_eq!(list.len(), 1, "初见只能有一条: {list:?}");
+        assert_eq!(list[0].at_epoch_ms, 1_000, "记的是第一次的时间");
+    }
+
+    #[test]
+    fn stage_transition_is_only_recorded_when_the_stage_changes() {
+        let recorder = MilestoneRecorder::new(std::sync::Arc::new(InMemoryMilestoneStore::new()));
+        let session = session();
+        // 阶段没变 ⇒ 不记（否则每回合一条噪声）
+        assert!(!recorder
+            .record_stage_transition(&session, "familiar", "familiar", 1_000)
+            .unwrap());
+        assert!(recorder
+            .record_stage_transition(&session, "familiar", "trusted", 2_000)
+            .unwrap());
+        assert!(recorder
+            .record_stage_transition(&session, "trusted", "intimate", 3_000)
+            .unwrap());
+
+        let list = recorder
+            .query(&session, Some(MilestoneKind::StageTransition))
+            .unwrap();
+        assert_eq!(list.len(), 2, "{list:?}");
+        match &list[0].payload {
+            MilestonePayload::Stage { from, to } => {
+                assert_eq!((from.as_str(), to.as_str()), ("familiar", "trusted"));
+            }
+            other => panic!("阶段跃迁应带 Stage 载荷: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn different_sessions_keep_separate_first_meetings() {
+        let recorder = MilestoneRecorder::new(std::sync::Arc::new(InMemoryMilestoneStore::new()));
+        let one = session();
+        let two = session();
+        assert!(recorder.record_first_meeting(&one, 1_000).unwrap());
+        assert!(recorder.record_first_meeting(&two, 2_000).unwrap());
+        assert_eq!(recorder.query(&one, None).unwrap().len(), 1);
+        assert_eq!(recorder.query(&two, None).unwrap().len(), 1);
+    }
+}

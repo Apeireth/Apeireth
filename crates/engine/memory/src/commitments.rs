@@ -744,11 +744,6 @@ END;
             })
             .map_err(Into::into)
     }
-
-    /// Alias for callers preferring an explicit name over `events_lossless`.
-    pub fn events_with_ids(&self, id: &str) -> Result<Vec<CommitmentEventRecord>, CommitmentError> {
-        self.events_lossless(id)
-    }
 }
 
 fn event_numeric(id: &str) -> i64 {

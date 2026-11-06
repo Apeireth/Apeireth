@@ -102,6 +102,10 @@ use crate::exec_pipeline::{
     AroundPolicy, OutputSchema, PreExecuteHook, PreExecuteRequest, PreVerdict, SchemaKind,
     DEFAULT_MAX_TIMEOUT_MS,
 };
+use crate::live_policy::{
+    current_live_policy, live_policy_allows, shared_live_permission_policy_slot,
+    LivePermissionPolicySlot,
+};
 use crate::observed_gate::{
     gated_write_atomic, FsVersionProbe, ObservedGate, WriteKind, WriteRequest,
 };
@@ -717,6 +721,7 @@ fn slice(bytes: &[u8], at: usize, len: usize) -> Result<&[u8], DocOpsError> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ZipCompression {
     /// 不压缩 (method 0)。
+    #[allow(dead_code)]
     Stored,
     /// 原始 deflate (method 8)。
     Deflate,
@@ -1590,14 +1595,6 @@ impl PdfObject {
             _ => None,
         }
     }
-
-    /// 取字符串原始字节。
-    fn as_bytes(&self) -> Option<&[u8]> {
-        match self {
-            Self::Str(bytes) => Some(bytes),
-            _ => None,
-        }
-    }
 }
 
 /// 解析出的 PDF 文档 (对象表 + 目录 + 版本)。
@@ -1710,13 +1707,7 @@ impl PdfDocument {
         for (key, value) in merged {
             dict.entry(key).or_insert(value);
         }
-        out.push(PdfPage {
-            obj_ref: PdfRef {
-                num: node_ref.num,
-                gen: node_ref.gen,
-            },
-            dict,
-        });
+        out.push(PdfPage { dict });
         Ok(())
     }
 
@@ -1752,9 +1743,8 @@ impl PdfDocument {
 
 /// 页 (对象引用 + 物化后的页字典)。
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct PdfPage {
-    /// 页对象引用。
-    obj_ref: PdfRef,
     /// 页字典 (继承属性已物化)。
     dict: BTreeMap<String, PdfObject>,
 }
@@ -4324,13 +4314,40 @@ pub fn doc_ops_approval_reason(action: &str) -> String {
 ///
 /// **写面每次人批** ([`DOC_OPS_WRITE_ACTIONS`], 无自动放行档); 读面放行;
 /// 词表外动作 fail-closed 停审批 (不静默放行)。
-#[derive(Debug, Clone, Copy, Default)]
-pub struct DocOpsApprovalHook;
+///
+/// # 宿主授权同源 (2026-11-01 安全审计 P3-6)
+///
+/// 原先错在哪: 本钩子**只**判档位 (写面人批 / 读面放行), **从不问宿主是否
+/// 还授权** ⇒ 面板上把 `tool.doc_ops` 撤销掉之后, 本钩子照样「读面放行」
+/// ⇒ 热撤销对这个面**无效**, 且从外面**看不出来**。
+///
+/// 现在为什么这样: 钩子持有**共享 live 策略槽** ([`LivePermissionPolicySlot`]),
+/// 每次评估**现读**槽里当前指向的宿主策略 (不是构造时的快照) ⇒ 撤销立刻可见。
+/// 槽为 `None` (宿主策略尚未装入) ⇒ **不表态** ⇒ 沿用本面原有档位判定 ⇒
+/// **零行为变化** (不制造回归)。
+#[derive(Debug, Clone)]
+pub struct DocOpsApprovalHook {
+    /// 共享 live 策略槽 (P3-6): 每次评估现读槽里当前指向的宿主策略 (不是快照)。
+    slot: LivePermissionPolicySlot,
+}
 
 impl DocOpsApprovalHook {
-    /// 空构造 (无状态钩子)。
+    /// 构造: 挂**进程内共享槽** (宿主策略装入后自动跟随, 不需要改调用点)。
     pub fn new() -> Self {
-        Self
+        Self {
+            slot: shared_live_permission_policy_slot(),
+        }
+    }
+
+    /// 挂在**指定共享 live 策略槽**上的审批档钩子 (P3-6): 装配根注入用。
+    pub fn with_slot(slot: LivePermissionPolicySlot) -> Self {
+        Self { slot }
+    }
+}
+
+impl Default for DocOpsApprovalHook {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -4351,6 +4368,17 @@ impl GovernanceHook for DocOpsApprovalHook {
         if capability.as_str() != DOC_OPS_CAPABILITY_ID {
             return Decision::Allow;
         }
+        // 宿主授权检查 (2026-11-01 安全审计 P3-6): 未授权 / 已被撤销 ⇒ **停审批档（零落盘）**。
+        // 分工: 治理链那一层是**拒绝即帧**（撤销 ⇒ 派发前就被拒）;
+        // stage-1 这一层是**落盘前的最后一道**（未授权 ⇒ 不落盘）。
+        // 槽为 None (宿主策略未装入) ⇒ 不表态 ⇒ 沿用本面原有口径 (零回归)。
+        // 读面 / 写面**同等适用** (能力 id 相同) ⇒ 撤销后读写一起停。
+        if let Some(false) = live_policy_allows(&self.slot, capability.as_str()) {
+            return Decision::deny(format!(
+                "能力 {} 未获宿主授权或已被撤销 ⇒ 停 require-approval 档（零落盘）",
+                capability.as_str()
+            ));
+        }
         let action = arguments
             .get("action")
             .and_then(Value::as_str)
@@ -4367,18 +4395,47 @@ impl GovernanceHook for DocOpsApprovalHook {
     }
 }
 
-/// 写入风险映射 (pre-execute 瀑布): 未显式授权 = require-approval 档。
+/// 写入风险映射 (pre-execute 瀑布): 显式授权 → 放行; 被标人工审批 → `ask`。
 ///
 /// 与外部工具风险映射同一语义: 显式授权 (grant 且未标审批) → 放行;
-/// 授权被标人工审批 / 无授权 → `ask` (拒绝即帧 `pipeline.pre_ask`)。
+/// 授权被标人工审批 → `ask` (拒绝即帧 `pipeline.pre_ask`);
+/// **未授权 / 已被撤销** → `deny` (硬拒, fail-closed; 2026-11-01 安全审计 P3-6)。
+///
+/// # 宿主授权同源 (2026-11-01 安全审计 P3-6)
+///
+/// 原先错在哪: 本钩子查的是**工具自建**的一份策略
+/// ([`authorized_doc_ops_policy`] 新建 `PermissionPolicy`, 只 grant 一条) ——
+/// 它与治理链正在评估的那一份**不是同一个对象** ⇒ 面板上的热撤销
+/// (`PermissionPolicy::revoke`) 对这个 stage-1 闸**完全无效**。
+///
+/// 现在为什么这样: 策略改成**可换指针的槽**
+/// ([`LivePermissionPolicySlot`]): 组装根把宿主策略装进槽里 ⇒ 本钩子与
+/// 治理链读**同一份** ⇒ 撤销立即生效。钩子每次检查都**现读**槽里的当前策略。
+/// 槽为 `None` (宿主策略尚未装入) ⇒ **不表态** ⇒ 沿用本面原有的自建口径
+/// ([`authorized_doc_ops_policy`]) ⇒ **零行为变化**。
 pub struct DocOpsRiskMappingHook {
-    policy: Arc<Mutex<PermissionPolicy>>,
+    /// 共享 live 策略槽: 每次检查都**现读**槽里当前指向的策略 (不是快照)。
+    slot: LivePermissionPolicySlot,
+    /// **宿主策略未装入时**沿用的本面授权口径 (`None` = 不表态 ⇒ 零回归)。
+    fallback: Arc<Mutex<PermissionPolicy>>,
 }
 
 impl DocOpsRiskMappingHook {
-    /// 挂在共享授权策略上的风险映射钩子。
+    /// 挂在共享授权策略上的风险映射钩子 (签名不变: 策略照旧装进本钩子自带的槽)。
     pub fn new(policy: Arc<Mutex<PermissionPolicy>>) -> Self {
-        Self { policy }
+        Self {
+            slot: Arc::new(Mutex::new(Some(policy))),
+            fallback: authorized_doc_ops_policy(),
+        }
+    }
+
+    /// 挂在**共享 live 策略槽**上的风险映射钩子 (P3-6): 槽里当前指向的策略
+    /// 就是治理链正在评估的那一份 ⇒ 热撤销对本工具面立即生效。
+    pub fn with_slot(slot: LivePermissionPolicySlot) -> Self {
+        Self {
+            slot,
+            fallback: authorized_doc_ops_policy(),
+        }
     }
 }
 
@@ -4388,11 +4445,32 @@ impl PreExecuteHook for DocOpsRiskMappingHook {
     }
 
     fn pre_verdict(&self, request: &PreExecuteRequest<'_>) -> PreVerdict {
-        let decision = self
-            .policy
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .decision_for_capability(request.capability.as_str());
+        // 宿主授权检查 (2026-11-01 安全审计 P3-6): 未授权 / 已被撤销 ⇒ **停审批档（零落盘）**。
+        // 分工: 治理链那一层是**拒绝即帧**（撤销 ⇒ 派发前就被拒）;
+        // stage-1 这一层是**落盘前的最后一道**（未授权 ⇒ 不落盘）。
+        // 槽为 None (宿主策略未装入) ⇒ 不表态 ⇒ 沿用本面原有口径 (零回归)。
+        // 只在能力 id 命中本面能力时才有话说 (别的面不归本钩子管)。
+        if let Some(false) = live_policy_allows(&self.slot, request.capability.as_str()) {
+            return PreVerdict::Ask {
+                reason: format!(
+                    "能力 {} 未获宿主授权或已被撤销 ⇒ 停 require-approval 档（零落盘）",
+                    request.capability.as_str()
+                ),
+            };
+        }
+        // 档位判定: 现读槽里当前指向的策略; 槽为 None ⇒ 用本面自建口径
+        // (`authorized_doc_ops_policy`) ⇒ 与改动前逐字一致。
+        let decision = match current_live_policy(&self.slot) {
+            Some(policy) => policy
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .decision_for_capability(request.capability.as_str()),
+            None => self
+                .fallback
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .decision_for_capability(request.capability.as_str()),
+        };
         match decision {
             Decision::Allow => PreVerdict::Allow,
             Decision::RequireApproval { reason } => PreVerdict::Ask { reason },
@@ -4453,6 +4531,10 @@ pub fn authorized_doc_ops_policy() -> Arc<Mutex<PermissionPolicy>> {
 }
 
 /// 组装文档操作五段流水线: 风险映射 → 单调边界 Guard → 超时 → 输出归一合同。
+///
+/// 风险映射挂的是**本面自建**策略 (与改动前一致) ⇒ 本函数**零行为变化**;
+/// 要让 stage-1 闸跟宿主策略同源 (面板热撤销立即生效), 用
+/// [`doc_ops_pipeline_with_slot`]。
 pub fn doc_ops_pipeline(config: DocOpsConfig) -> Arc<crate::exec_pipeline::ToolExecutionPipeline> {
     let guard: Arc<dyn ToolGuard> = Arc::new(DocOpsBoundaryGuard::new(config));
     Arc::new(
@@ -4468,9 +4550,28 @@ pub fn doc_ops_pipeline(config: DocOpsConfig) -> Arc<crate::exec_pipeline::ToolE
     )
 }
 
-/// 组装生产工具面: 受控读写族 + 五段流水线 (模型侧一个能力)。
-pub fn doc_ops_capability(config: DocOpsConfig) -> Arc<dyn ToolCapability> {
-    doc_ops_capability_shared(config, DocOpsCounters::new())
+/// 组装文档操作五段流水线 + **共享 live 策略槽** (2026-11-01 安全审计 P3-6)。
+///
+/// 原先错在哪: [`doc_ops_pipeline`] 的 stage-1 风险映射查的是**工具自建**的
+/// 策略 ⇒ 面板上的热撤销对它无效。
+/// 现在为什么这样: 风险映射改挂**共享槽** ⇒ 与治理链同源 ⇒ 撤销立即生效;
+/// 槽为 `None` (宿主策略未装入) ⇒ 沿用本面自建口径 ⇒ 零行为变化。
+///
+/// ⚠️ 宿主策略必须 **grant `tool.doc_ops`** ⇒ 否则 stage-1 直接硬拒 (fail-closed)。
+pub fn doc_ops_pipeline_with_slot(
+    config: DocOpsConfig,
+    slot: LivePermissionPolicySlot,
+) -> Arc<crate::exec_pipeline::ToolExecutionPipeline> {
+    let guard: Arc<dyn ToolGuard> = Arc::new(DocOpsBoundaryGuard::new(config));
+    Arc::new(
+        crate::exec_pipeline::ToolExecutionPipeline::new()
+            .with_pre_hook(Arc::new(DocOpsRiskMappingHook::with_slot(slot)))
+            .with_guard(guard)
+            .with_around(
+                AroundPolicy::new().with_timeout(DOC_OPS_TIMEOUT_MS, DEFAULT_MAX_TIMEOUT_MS),
+            )
+            .with_output_schema(DocOpsTool::output_schema()),
+    )
 }
 
 /// 组装生产工具面 + 共享计数器 (自述创作节与工具面同一真值源)。
@@ -4483,6 +4584,22 @@ pub fn doc_ops_capability_shared(
     Arc::new(crate::exec_pipeline::PipelinedCapability::new(
         tool,
         doc_ops_pipeline(config),
+    ))
+}
+
+/// 组装生产工具面 + 共享计数器 + **共享 live 策略槽** (P3-6)。
+///
+/// 装配根用这个入口把宿主策略装进工具面 ⇒ 面板热撤销对 `tool.doc_ops` 生效。
+pub fn doc_ops_capability_shared_with_slot(
+    config: DocOpsConfig,
+    counters: Arc<DocOpsCounters>,
+    slot: LivePermissionPolicySlot,
+) -> Arc<dyn ToolCapability> {
+    let tool: Arc<dyn ToolCapability> =
+        Arc::new(DocOpsTool::with_counters(config.clone(), counters));
+    Arc::new(crate::exec_pipeline::PipelinedCapability::new(
+        tool,
+        doc_ops_pipeline_with_slot(config, slot),
     ))
 }
 
@@ -4863,9 +4980,9 @@ mod tests {
 
     /// 每测试独立临时工作区。
     fn workspace(tag: &str) -> PathBuf {
-        let dir =
-            std::env::temp_dir().join(format!("apeireth-doc-ops-{tag}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
+        let p = std::env::temp_dir().join(format!("apeireth-doc-ops-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&p);
+        let dir = p.join("ws");
         std::fs::create_dir_all(&dir).expect("创建测试工作区");
         dir
     }
@@ -5298,24 +5415,12 @@ mod tests {
     /// ⑯ 开关 fail-closed: 只认显式 `"1"`。
     #[test]
     fn the_switch_is_fail_closed_except_the_exact_opt_in() {
-        static ENV_LOCK: Mutex<()> = Mutex::new(());
-        let _guard = ENV_LOCK
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        std::env::remove_var(DOC_OPS_ENABLE_ENV);
-        assert!(!doc_ops_enabled_from_env());
-        assert!(DocOpsConfig::from_env(".").is_none());
-        for value in ["0", "true", "on", " 1 0 ", ""] {
-            std::env::set_var(DOC_OPS_ENABLE_ENV, value);
-            assert!(!doc_ops_enabled_from_env(), "必须拒绝 {value:?}");
-            assert!(DocOpsConfig::from_env(".").is_none(), "必须拒绝 {value:?}");
-        }
-        std::env::set_var(DOC_OPS_ENABLE_ENV, "1");
-        assert!(doc_ops_enabled_from_env());
-        assert!(DocOpsConfig::from_env(".").is_some());
-        std::env::set_var(DOC_OPS_ENABLE_ENV, " 1 ");
-        assert!(doc_ops_enabled_from_env(), "前后空白容忍");
-        std::env::remove_var(DOC_OPS_ENABLE_ENV);
+        crate::test_support::assert_switch_fails_closed_except_exact_one(
+            DOC_OPS_ENABLE_ENV,
+            &["0", "true", "on", " 1 0 ", ""],
+            doc_ops_enabled_from_env,
+            Some(|| DocOpsConfig::from_env(".").is_some()),
+        );
     }
 
     // ---- 治理面行为钉 ----

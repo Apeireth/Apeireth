@@ -62,10 +62,6 @@ impl Layer {
     pub fn top() -> Self {
         Layer::L4
     }
-    /// 最低层 (L1).
-    pub fn bottom() -> Self {
-        Layer::L1
-    }
     /// 正序上升一层.
     pub fn promote_from(self) -> Option<Self> {
         match self {

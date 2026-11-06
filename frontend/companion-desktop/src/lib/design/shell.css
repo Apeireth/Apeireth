@@ -146,28 +146,32 @@
   position: relative;
   width: 100%;
   min-height: 52px;
-  border-radius: 8px;
+  /* 美术走查（2026-10-18）：圆角进 10px 阶梯，hover 切到微交互档（140ms
+     ease-out）——常驻 chrome 用 0.25s 会读作迟滞。 */
+  border-radius: 10px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
+  gap: 4px;
   color: var(--ap-bone-42);
   border: 0;
   background: transparent;
   padding: 6px 4px;
   cursor: pointer;
-  transition: color 0.25s ease, background 0.25s ease;
+  transition: color var(--ap-dur-fast) var(--ap-ease-out),
+    background var(--ap-dur-fast) var(--ap-ease-out),
+    box-shadow var(--ap-dur-fast) var(--ap-ease-out);
 }
 .rail-btn .icon {
   flex: none;
 }
 .rail-label {
-  font-size: 10px;
+  font-size: 10.5px;
   line-height: 1.15;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   color: inherit;
-  opacity: 0.72;
+  opacity: 0.78;
   text-align: center;
   max-width: 100%;
   overflow: hidden;
@@ -176,14 +180,16 @@
 }
 .rail-btn:hover {
   color: var(--ap-bone);
-  background: color-mix(in srgb, var(--ap-bone) 8%, transparent);
+  background: color-mix(in srgb, var(--ap-bone) 7%, transparent);
 }
 .rail-btn:hover .rail-label {
   opacity: 0.95;
 }
 .rail-btn.active {
   color: var(--ap-accent-ui);
-  background: color-mix(in srgb, var(--ap-accent-ui) 9%, transparent);
+  background: color-mix(in srgb, var(--ap-accent-ui) 11%, transparent);
+  /* 内环让激活块从「色块」读成「选中件」：1px 亮边收住边缘，不再靠大范围发光。 */
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ap-accent-ui) 20%, transparent);
 }
 .rail-btn.active .rail-label {
   opacity: 1;
@@ -196,17 +202,24 @@
   top: 10px;
   bottom: 10px;
   width: 2px;
-  border-radius: 2px;
+  border-radius: 999px;
   background: var(--ap-accent-ui);
-  box-shadow: 0 0 8px color-mix(in srgb, var(--ap-accent-ui) 60%, transparent);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--ap-accent-ui) 45%, transparent);
 }
 .rail-btn .tip {
   display: none;
 }
 .rail-sep {
-  width: calc(100% - 16px);
+  width: calc(100% - 20px);
   height: 1px;
-  background: var(--ap-line);
+  /* 两端渐隐的发丝线：比等宽实测线更像「分隔」而不是「横扛一条」 */
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--ap-line) 24%,
+    var(--ap-line) 76%,
+    transparent
+  );
   margin: 8px auto;
 }
 
@@ -253,9 +266,9 @@
 }
 .drawer-head h2 {
   margin: 0;
-  font-size: 17px;
-  font-weight: 500;
-  letter-spacing: 0.06em;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
   color: var(--ap-bone);
 }
 .drawer-head .sub {
@@ -296,24 +309,33 @@
    修复：全局伪元素 + 令牌驱动（--ap-scrollbar-*，tokens.css 按主题覆写），
    任何滚动容器、任何主题都不再出现默认白滚动条。 */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  /* 6px 槽 + 2px 透明边 = 只剩 2px 可见滑块（太细，滚动手感/可见性都不够）。
+     精确配平：10px 槽 − 3px×2 透明边 = 4px 可见药丸。 */
+  width: 10px;
+  height: 10px;
 }
 ::-webkit-scrollbar-track {
   background: var(--ap-scrollbar-track);
 }
 ::-webkit-scrollbar-thumb {
+  /* 2026-10-18 美术走查：6px 条在深底上仍偏「白杠」。透明边 + padding-box
+     把可见滑块收到 ~4px，hover 时才显出全宽，滚动条退回「在但不显眼」。 */
   background: var(--ap-scrollbar-thumb);
-  border-radius: 3px;
+  background-clip: padding-box;
+  border: 3px solid transparent;
+  border-radius: 999px;
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--ap-scrollbar-thumb-hover);
+  background-clip: padding-box;
+  border: 3px solid transparent;
+  border-radius: 999px;
 }
-html {
-  /* 标准属性兜底（可继承到全部滚动容器；Chromium 里 webkit 伪元素优先）。 */
-  scrollbar-width: thin;
-  scrollbar-color: var(--ap-scrollbar-thumb) var(--ap-scrollbar-track);
-}
+/* 2026-10-18 美术走查：这里原本还有 html { scrollbar-width: thin; scrollbar-color: … }
+   作为「标准属性兜底」。实测 Chromium/WebView2 里标准属性**优先于** webkit 伪元素，
+   于是上面那套 6px / 4px 可见的细药丸滑块从未生效，面板右侧一直是 8px 方角滑块
+   （像素取样 rgb(37,36,35)，宽 12 物理 px = dpr1.5 下的 8 CSS px）。
+   删掉标准属性，让 webkit 伪元素接管，滚动条回到细药丸。 */
 .drawer-body .page-head {
   display: none !important;
 }
@@ -449,24 +471,41 @@ html {
 }
 .stats {
   display: flex;
-  gap: 7px;
+  align-items: stretch;
+  gap: 9px;
   flex-wrap: wrap;
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
+/* 活动模型卡要装下 deepseek-v4-flash 这种长 id：给它双倍权重，
+   其余指标卡只装数字。比截断（丢版本号）和折行（卡片参差）都干净。 */
+.stats .stat:nth-child(3) {
+  flex: 2.1;
+}
+/* 2026-10-18 美术走查：指标卡原为 5px 直角小方块，读作「表格框」。加圆角 +
+   顶沿内高光 + 卡片投影，与工具卡/主题卡同一套「浮起」语汇。 */
 .stat {
   flex: 1;
-  min-width: 104px;
+  min-width: 96px;
   border: 1px solid var(--ap-line);
-  border-radius: 5px;
-  padding: 10px 12px;
+  border-radius: 12px;
+  padding: 11px 14px 12px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 60%);
+  box-shadow: inset 0 1px 0 var(--ap-hairline-top), var(--ap-shadow-card);
 }
 .stat .num {
   font-family: var(--ap-font-mono);
-  font-size: 19px;
+  font-size: 17px;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
   color: var(--ap-bone);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .stat .num small {
   font-size: 10px;
+  letter-spacing: 0;
   color: var(--ap-bone-42);
 }
 .stat .num.ok {
@@ -477,8 +516,9 @@ html {
 }
 .stat .lbl {
   font-size: 10.5px;
+  letter-spacing: 0.06em;
   color: var(--ap-bone-42);
-  margin-top: 2px;
+  margin-top: 4px;
 }
 .rowline {
   display: flex;
@@ -612,15 +652,18 @@ html {
    （night 黑洞亮环 / essence 山脉）上实测不可读——走查 rev-night-hour2 实证。 */
 .bg-hint {
   margin: 0;
-  padding: 10px 24px;
-  border: 1px solid var(--ap-line);
+  /* 美术走查（2026-10-18）：空态是「一句话」，不该像按钮。边框压到 8%、
+     内边距放宽、字距略收（CJK 下 0.18em 断句感过强）。 */
+  padding: 11px 26px;
+  border: 1px solid color-mix(in srgb, var(--ap-bone) 8%, transparent);
   border-radius: 999px;
   background: var(--ap-shell-chip);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
+  box-shadow: inset 0 1px 0 var(--ap-hairline-top);
   font-family: var(--ap-font-voice);
   font-size: 15px;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.14em;
   color: var(--ap-bone-68);
 }
 .bg-caption {
@@ -854,8 +897,8 @@ p.lede {
 .statusline {
   display: flex;
   align-items: center;
-  gap: 7px;
-  margin-top: 3px;
+  gap: 11px;
+  margin-top: 4px;
   /* 独占会话头第二行（打回修复②轮）：操作组 flex:none 占走第一行右半，
      状态行若留在同一 flex 行会被挤到控件文字竖排；flex-wrap 下取整宽。 */
   flex: none;
@@ -864,7 +907,9 @@ p.lede {
 .mono-note {
   font-family: var(--ap-font-mono);
   font-size: 10px;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.1em;
+  /* 计数会跳动：等宽数字位宽固定，行尾不抖。 */
+  font-variant-numeric: tabular-nums;
   color: var(--ap-bone-42);
   background: transparent;
   border: 0;
@@ -1128,18 +1173,20 @@ p.lede {
   border: 1px solid var(--ap-line);
   border-radius: 12px;
   backdrop-filter: blur(14px);
+  box-shadow: inset 0 1px 0 var(--ap-hairline-top), var(--ap-shadow-card);
   padding: 0 4px;
-  transition: border-color 0.3s, box-shadow 0.3s;
+  transition: border-color var(--ap-dur-quick) var(--ap-ease-out),
+    box-shadow var(--ap-dur-quick) var(--ap-ease-out);
 }
 .composer-caps:has(.cap-btn[aria-expanded="true"]) {
-  border-color: rgba(255, 210, 122, 0.45);
-  box-shadow: 0 0 0 1px rgba(255, 210, 122, 0.12);
+  border-color: color-mix(in srgb, var(--ap-gold) 38%, transparent);
+  box-shadow: inset 0 1px 0 var(--ap-hairline-top), var(--ap-focus-ring);
 }
 .cap-btn {
   width: 36px;
   height: 36px;
   border: 0;
-  border-radius: 7px;
+  border-radius: 8px;
   background: transparent;
   display: grid;
   place-items: center;
@@ -1190,11 +1237,15 @@ p.lede {
   border: 1px solid var(--ap-line);
   border-radius: 12px;
   backdrop-filter: blur(14px);
-  transition: border-color 0.3s, box-shadow 0.3s;
+  /* 美术走查（2026-10-18）：输入条是主操作面，给它一条顶沿内高光 + 极淡投影，
+     从「贴在墙上的框」变成「浮在内容上的台」。 */
+  box-shadow: inset 0 1px 0 var(--ap-hairline-top), var(--ap-shadow-card);
+  transition: border-color var(--ap-dur-quick) var(--ap-ease-out),
+    box-shadow var(--ap-dur-quick) var(--ap-ease-out);
 }
 .composer:focus-within {
-  border-color: rgba(255, 210, 122, 0.5);
-  box-shadow: 0 0 0 1px rgba(255, 210, 122, 0.18), 0 8px 32px -12px rgba(255, 210, 122, 0.2);
+  border-color: color-mix(in srgb, var(--ap-gold) 38%, transparent);
+  box-shadow: inset 0 1px 0 var(--ap-hairline-top), var(--ap-focus-ring);
 }
 .editor {
   display: flex;
@@ -1328,17 +1379,31 @@ p.lede {
 .send {
   width: 34px;
   height: 34px;
-  border-radius: 8px;
+  border-radius: 10px;
   display: grid;
   place-items: center;
-  background: var(--ap-gold);
+  /* 美术走查（2026-10-18）：平涂金读作色块，加一层自上而下的金梯度 +
+     内高光 + 外投影，才有「按得下去」的实体感（金仍是存在色，不越界）。 */
+  background: linear-gradient(180deg, var(--ap-gold-white-hot), var(--ap-gold) 46%, var(--ap-gold-amber));
   color: #19120a;
   border: 0;
   padding: 0;
   cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    0 6px 16px -10px color-mix(in srgb, var(--ap-gold) 55%, transparent);
+  transition: filter var(--ap-dur-fast) var(--ap-ease-out),
+    transform var(--ap-dur-fast) var(--ap-ease-out),
+    box-shadow var(--ap-dur-fast) var(--ap-ease-out);
 }
 .send:hover:not(:disabled) {
-  background: var(--ap-gold-white-hot);
+  filter: brightness(1.06) saturate(1.04);
+  transform: translateY(-1px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    0 8px 20px -10px color-mix(in srgb, var(--ap-gold) 65%, transparent);
+}
+.send:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.32);
 }
 .send:disabled {
   opacity: 0.32;
@@ -1348,6 +1413,7 @@ p.lede {
   background: transparent;
   border: 1px solid rgba(192, 88, 78, 0.5);
   color: var(--ap-danger);
+  box-shadow: none;
 }
 .hint {
   margin: 6px 4px 0;
@@ -1367,7 +1433,8 @@ p.lede {
   max-width: min(356px, calc(100vw - 80px));
   background: var(--ap-shell-elevated);
   border: 1px solid var(--ap-line);
-  border-radius: 7px;
+  border-radius: 12px;
+  box-shadow: var(--ap-shadow-pop);
   /* 2026-09-23 真机实证修复： backdrop-filter 与父级 .composer-caps 的
      backdrop-filter 嵌套触发 Edge 合成 bug——打开面板时整个窗口被糊化。
      本层底 --ap-shell-elevated 实为近不透明（深 0.96/浅 0.94），
@@ -1730,14 +1797,18 @@ p.lede {
   font-size: 9px;
   padding-top: 4px;
 }
+/* 2026-10-18 美术走查：中文整句在 10px/0.16em 下折成「…这 / 里。」的孤字行，
+   加 text-wrap: balance 让两行字数匀开；颜色从 30% 提到 42%（30% 在纯黑上过于
+   难辨，空态不该比副标题还暗）。 */
 .wb-empty {
-  padding: 26px 4px;
+  padding: 26px 6px;
   text-align: center;
+  text-wrap: balance;
   font-family: var(--ap-font-mono);
   font-size: 10px;
   letter-spacing: 0.16em;
-  color: var(--ap-bone-30);
-  line-height: 2;
+  color: var(--ap-bone-42);
+  line-height: 1.95;
 }
 
 .scroll-bottom-btn {

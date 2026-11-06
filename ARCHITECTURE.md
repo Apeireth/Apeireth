@@ -1,5 +1,7 @@
 # Apeireth Architecture
 
+> **Independent workspace**: `crates-ui/` is a separate Cargo workspace (not one of the 30 members, no dependency edge to/from the root workspace) with 1 crate, `apeireth-ui-core` — pure reactive core, IMPLEMENTED, no production frontend consumer (ADR-0021).
+
 This document describes the current product baseline in the root repository.
 Historical design proposals and archived implementations live under `docs/archive/`,
 `legacy/`, and `reports/`; they are not part of the built product workspace.
@@ -31,7 +33,7 @@ apeireth/
 └── previews/              # design/reference assets
 ```
 
-The root `Cargo.toml` is the only product Rust workspace. It contains thirty-one
+The root `Cargo.toml` is the only product Rust workspace. It contains thirty
 workspace members — thirty product crates plus the bench-only harness
 (`benches`, `publish = false`).
 

@@ -10,10 +10,12 @@
 #   3. 棘轮: 允许集合只减不增; 新增依赖边/开关/结构必须 ADR + 本文件变更。
 #   4. 不替代、不修改 LOCKED 5 项; 与 LOCKED 冲突时以 LOCKED 为准。
 #
-# 0 装边界 (2026-10-20 实测来源):
-#   - 依赖边: cargo metadata --no-deps (kind != dev) = 118 条生产边
-#   - 开关名: `rg -o 'APEIRETH_[A-Z0-9_]+' crates --glob '*.rs'` = 158 distinct
-#   - 最大 src 文件: 实测 ~6150 行 (crates/capabilities/tools/src/doc_ops.rs)
+# 0 装边界 (实测来源; 2026-11-04 文档真源批按当前树复测):
+#   - 依赖边: cargo metadata --no-deps (kind != dev, workspace 内) = 111 条生产边
+#              （= scripts/arch-baseline.txt 的 111 条 edge 条目；arch_guard --strict 报 edges=111）
+#   - 开关名: `rg -o 'APEIRETH_[A-Z0-9_]+' crates --glob '*.rs'` = 173 distinct（全 crates 含 tests 口径）；
+#              守卫按 workspace src 口径实测 = 160（见 [env] max_distinct_names）
+#   - 最大 src 文件: 实测 6255 行 (crates/capabilities/tools/src/doc_ops.rs)
 # ============================================================================
 
 [meta]
@@ -125,6 +127,14 @@ cross_repo_dep = "git+rev(exact-sha)"
 #   契约 crates-ui 的可发布清单（届时 crates-ui/ 会多出 ui-app / ui-scene / ui-time）。
 publish_freeze = "crates-ui @ 2.0.0-rc.5"
 
+[[workspace.independent_workspaces]]
+id = "ui_core_slice"
+path = "crates-ui"
+crates = 1
+ci = ".github/workflows/ui-core-ci.yml"
+adr = "docs/adr/0021-consolidation-ui-core-slice.md"
+note = "Independent Cargo workspace: NOT one of the 30 root members, no dependency edge to/from the root workspace; holds 1 crate (apeireth-ui-core). IMPLEMENTED pure reactive library only; no production frontend consumer/DOM/GPU wiring; root metadata and budgets unchanged."
+
 [locked]
 # 只引用, 不复制数值; 守卫检查契约批不触碰这些文件。
 nine_anchors = "crates/foundation/core/src/eight_anchors.rs"
@@ -208,6 +218,55 @@ to = "apeireth-orchestration"
 why = "foundation 内反向依赖: LlmFactory/SubagentRole mirror (llm_orchestration_mirror.rs 自认反向依赖成环)"
 target = "R2 (单项 ADR 待出, Wave 3): 删除 mirror, 契约下沉 plugin 或 protocol"
 
+# ============================================================================
+# 机制型微内核边界 (KC-1, 2026-10-27)
+# ============================================================================
+# runtime 是机制内核: 只持有通用机制, 不依赖领域实现 crate, 不在执行循环里按
+# 业务工具名分支。新增生产依赖 / 执行循环字面量 / 领域类型必须先出 ADR 并改本表。
+# 静态扫描是预警手段, 不是完整架构证明。
+[kernel]
+crate = "apeireth-runtime"
+allowed_production_deps = [
+  "apeireth-core",
+  "apeireth-protocol",
+  "apeireth-plugin",
+  "apeireth-governance",
+  "apeireth-orchestration",
+]
+forbidden_production_deps = [
+  "apeireth-organ",
+  "apeireth-memory",
+  "apeireth-guard",
+  "apeireth-storage",
+  "apeireth-provider",
+  "apeireth-tools-canonical",
+]
+execution_loop_files = [
+  "crates/engine/runtime/src/canonical/execute.rs",
+  "crates/engine/runtime/src/canonical/dispatch_admission.rs",
+  "crates/engine/runtime/src/canonical/dispatcher.rs",
+  "crates/engine/runtime/src/canonical/registered_hooks.rs",
+  "crates/engine/runtime/src/canonical/subloop.rs",
+  "crates/engine/runtime/src/canonical/capability.rs",
+  "crates/engine/runtime/src/canonical/module_host.rs",
+]
+forbidden_dispatch_literals = [
+  "exit_plan_mode",
+  "shell",
+  "bash",
+  "filesystem",
+  "process",
+]
+forbidden_domain_types = [
+  "BioPainState",
+  "BioRecoveryLedger",
+  "BioPainSnapshot",
+  "NociceptionObserver",
+  "CarePotentialField",
+  "care_potential_field",
+  "nociception",
+]
+
 # 现役装配根 (允许多个但必须登记; 目标收敛到 runtime-assembly + 薄适配器)。
 [[composition_roots]]
 crate = "apeireth-runtime-assembly"
@@ -231,6 +290,10 @@ role = "Gateway 引导 (目标同上)"
 # ExtensionCatalog（现存 PluginManager 与 BehaviorRegistry 两个实现）。
 module_trait = "crates/engine/runtime/src/canonical/module.rs::BehaviorModule"
 plugin_trait = "crates/foundation/plugin/src/plugin.rs::Plugin"
+# KC-1 (ADR-0017): 通用工具完成观察口 + 注册式内部控制命令。
+tool_completion_observer = "crates/foundation/plugin/src/observation.rs::ToolCompletionObserver"
+control_command = "crates/engine/runtime/src/canonical/control.rs::ControlCommand"
+# Compatibility behavior registry; V1 module lifecycle reuses plugin_manager below (ADR-0019).
 module_registry = "crates/engine/runtime/src/canonical/module.rs::BehaviorRegistry"
 capability_registry = "crates/engine/runtime/src/canonical/capability.rs::CapabilityRegistry"
 plugin_manager = "crates/foundation/plugin/src/manager.rs::PluginManager"
@@ -247,6 +310,60 @@ ui_component_trait = "crates-ui/apeireth-ui-core/src/component.rs::UiComponent"
 # 已登记技术债: R2 收口（2026-10-20）后清零。新增结构变更须先出 ADR 再登记。
 
 # 去重黑名单: 同名概念只允许一个 canonical 定义; known_debt 为实测债务 (只减不增)。
+[[concepts]]
+name = "ToolEventV1"
+canonical = "crates/foundation/protocol/src/canonical/tool_event.rs"
+known_debt = []
+target = "ADR-0018/0019: 统一来源/执行身份/相关性与成对消息投影；V1 注册模块在 Runtime 接线，旧行为模块显式兼容"
+
+[[concepts]]
+name = "ToolDispatcher"
+canonical = "crates/engine/runtime/src/canonical/dispatcher.rs"
+known_debt = []
+target = "ADR-0019/0020: 单一 CapabilityRegistry 执行目录、统一调用上下文/策略与生命周期适配，不拥有竞争注册表"
+
+[[concepts]]
+name = "ToolExecutionContext"
+canonical = "crates/foundation/plugin/src/tool_execution.rs"
+known_debt = []
+target = "ADR-0020: 逐调用身份/Scope/授权/期限/取消上下文，兼容旧工具但无共享全局 Agent 状态"
+
+[[concepts]]
+name = "ToolModule"
+canonical = "crates/foundation/plugin/src/tool_module.rs"
+known_debt = []
+target = "ADR-0020: 现有 Plugin 生命周期的工具模块实现，不构成第二注册表"
+
+[[concepts]]
+name = "AgentRuntime"
+canonical = "crates/engine/runtime/src/canonical/instances.rs"
+known_debt = []
+target = "ADR-0021 / S5: 复用 Runtime/Session/Dispatcher 的拥有权与核算；桌面 main 的完整请求适配共享一个 AgentRuntime，短控制锁与独立会话写闸；PortableHost 保持桌面无依赖"
+
+[[concepts]]
+name = "UsageAccounting"
+canonical = "crates/engine/runtime/src/canonical/accounting.rs"
+known_debt = []
+target = "ADR-0021 / S5: Provider/Dispatcher 独占实际记账；main 跨 Session 聚合 AgentId，有限实例/owner 预算不重置；桌面显式沿用 SessionQuota，未知用量如实记录"
+
+[[concepts]]
+name = "ProfileConfig"
+canonical = "crates/engine/runtime/src/canonical/profiles.rs"
+known_debt = []
+target = "ADR-0021: 复用既有 Runtime/Session/Dispatcher 的拥有权、核算与隔离机制；不复制 Agent Loop"
+
+[[concepts]]
+name = "ModuleAgents"
+canonical = "crates/foundation/plugin/src/agents.rs"
+known_debt = []
+target = "ADR-0021: PluginContext 的 owner 绑定服务端口或 Host 存储端口；不构成第二模块扩展系统"
+
+[[concepts]]
+name = "ProfileStore"
+canonical = "crates/engine/runtime/src/canonical/profiles.rs"
+known_debt = []
+target = "ADR-0021: PluginContext 的 owner 绑定服务端口或 Host 存储端口；不构成第二模块扩展系统"
+
 [[concepts]]
 name = "ContextAssembler"
 canonical = "crates/foundation/orchestration/src/context_budget.rs"
@@ -309,3 +426,495 @@ approval_policy = { structural = "owner", debt = "engineering-lead", size_doc = 
 strict_requires_adr_above_weight = 10
 register_file = "docs/architecture/exceptions.toml"
 release_freeze = false              # release authority 在冻结窗口置 true
+
+# =============================================================================
+# [ci_gates] —— **门禁登记表**（harness 的唯一真源）
+# =============================================================================
+# 2026-10-30 新增（owner 转来 Astra 评审 → 裁定记录 docs/status/harness-convergence-decision-2026-10-30.md）
+#
+# 为什么加这一节：
+#   本仓的门禁**散落在 42 个 workflow + 40+ 个脚本里**，且**没有机器可读的登记表**。
+#   ⇒ 「哪些检查对什么变更是必需的」「跳过算不算通过」只能靠人记 ⇒ 正是漂移的温床。
+#
+# 字段语义：
+#   id       = 稳定 kebab-case 标识（脚本/文档引用它，不要复制命令）
+#   cmd      = 复现命令（argv）
+#   scope    = 变更分类标签；["*"] = 总是跑
+#   blocking = true ⇒ 违规即红（false ⇒ 只报告）
+#   required = true ⇒ 参与合并裁决（**SKIPPED 也算不通过**）
+#   env      = "python" | "cargo" | "ci"（ci = 只能在 GitHub Actions 跑）
+#   timeout  = 秒（默认 900）
+#
+# ⚠️ 纪律：**本节是唯一真源**。PR 模板 / AGENTS.md 里出现的门禁清单与数字
+#    由 `scripts/gen_gate_manifest.py` **生成**，`scripts/check_gate_manifest.py` **校验**；
+#    手改副本 ⇒ 守卫变红。（与 [locked] 同一套「禁手抄」原则，见 rust.yml hard-walls 注释）
+
+[ci_gates]
+
+[[ci_gates.gate]]
+id = "docs-truth"
+cmd = ["python3", "scripts/docs_truth.py", "--verify", "--block-stale"]
+stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
+scope = ["docs", "claims", "rust", "ci"]
+blocking = true
+required = true
+timeout = 300
+note = "文档声明的证据真源 + 陈旧检测（claims 29 条 fail/stale/review_due）"
+
+[[ci_gates.gate]]
+id = "doc-class"
+cmd = ["python3", "scripts/check_doc_class.py", "--check"]
+stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
+scope = ["docs"]
+blocking = true
+required = true
+timeout = 300
+note = "9 类文档强制结构 + 存量棘轮"
+
+[[ci_gates.gate]]
+id = "yaml-duplicate-keys"
+cmd = ["python3", "scripts/check_yaml_duplicate_keys.py"]
+stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
+scope = ["ci"]
+blocking = true
+required = true
+timeout = 120
+note = "严格 YAML 重复键守卫（GitHub 遇重复键会拒解析整个 workflow ⇒ 0 job 秒红；PyYAML/Ruby 静默取最后一个键 ⇒ 常规自检查不出）"
+
+[[ci_gates.gate]]
+id = "matrix-module-paths"
+cmd = ["python3", "scripts/check_matrix_module_paths.py"]
+stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
+scope = ["docs"]
+blocking = true
+required = true
+timeout = 120
+note = "能力矩阵的模块路径必须**真实存在**（矩阵是对外的能力宣称 ⇒ 指到不存在的模块 = 说谎）"
+
+[[ci_gates.gate]]
+id = "doc-caliber"
+cmd = ["python3", "scripts/check_doc_caliber.py"]
+stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
+scope = ["docs"]
+blocking = true
+required = true
+timeout = 300
+note = "四级口径标记须与「已实现」同段"
+
+[[ci_gates.gate]]
+id = "doc-numbers"
+cmd = ["python3", "scripts/check_doc_numbers.py"]
+stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
+scope = ["docs"]
+blocking = true
+required = true
+timeout = 300
+note = "文档里的数字须与真源一致"
+
+[[ci_gates.gate]]
+id = "doc-paths"
+cmd = ["python3", "scripts/check_doc_paths.py"]
+stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
+scope = ["docs"]
+blocking = true
+required = true
+timeout = 300
+note = "文档引用路径须存在"
+
+[[ci_gates.gate]]
+id = "docs-links"
+cmd = ["python3", "scripts/docs_links.py", "--check"]
+stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
+scope = ["docs"]
+blocking = true
+required = true
+timeout = 300
+note = "断链 = 0"
+
+[[ci_gates.gate]]
+id = "batch-status"
+cmd = ["python3", "scripts/check_batch_status.py", "--check"]
+stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
+scope = ["docs"]
+blocking = true
+required = true
+timeout = 300
+note = "进度页事实块与代码一致"
+
+[[ci_gates.gate]]
+id = "claims-verify"
+cmd = ["python3", "scripts/check_claims_verify.py", "--wired-gate"]
+stage = "deep"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
+scope = ["docs", "claims", "rust"]
+blocking = true
+required = true
+timeout = 900
+note = "每条 claim 的 verify_cmd 真跑；高口径不许 skip/defer"
+
+[[ci_gates.gate]]
+id = "arch-strict"
+cmd = ["python3", "scripts/arch_guard.py", "--strict"]
+stage = "deep"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
+scope = ["rust", "contract"]
+blocking = true
+required = true
+timeout = 600
+note = "架构契约（层/边/尺寸/权重）"
+
+[[ci_gates.gate]]
+id = "arch-doc"
+cmd = ["python3", "scripts/arch_doc.py", "--check"]
+stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
+scope = ["rust", "contract", "docs"]
+blocking = true
+required = true
+timeout = 600
+note = "架构文档与契约一致"
+
+[[ci_gates.gate]]
+id = "crate-budget"
+cmd = ["python3", "scripts/check_crate_budget.py", "--check"]
+stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
+scope = ["rust"]
+blocking = true
+required = true
+timeout = 600
+note = "crate 体量棘轮（防「搬家式漂移」）"
+
+[[ci_gates.gate]]
+id = "dead-code"
+cmd = ["python3", "scripts/check_dead_code.py"]
+stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
+scope = ["rust"]
+blocking = true
+required = true
+timeout = 900
+note = "死代码棘轮"
+
+[[ci_gates.gate]]
+id = "unwired"
+cmd = ["python3", "scripts/audit_unwired.py", "--check"]
+stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
+scope = ["rust"]
+blocking = true
+required = true
+timeout = 900
+note = "未接线模块基线（142）"
+
+[[ci_gates.gate]]
+id = "unwired-groups"
+cmd = ["python3", "scripts/group_unwired_baseline.py", "--check"]
+stage = "deep"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
+scope = ["rust"]
+blocking = true
+required = true
+timeout = 900
+note = "未接线分组基线"
+
+[[ci_gates.gate]]
+id = "stale-binaries"
+cmd = ["python3", "scripts/check_stale_binaries.py"]
+stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
+scope = ["rust"]
+blocking = true
+required = true
+timeout = 600
+note = "编译期 CARGO_MANIFEST_DIR 产物防陈旧"
+
+[[ci_gates.gate]]
+id = "mod-targets"
+cmd = ["python3", "scripts/check_mod_targets.py"]
+stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
+scope = ["rust"]
+blocking = true
+required = true
+timeout = 600
+note = "mod.rs 目标声明"
+
+[[ci_gates.gate]]
+id = "guard-wiring"
+cmd = ["python3", "scripts/check_guard_wiring.py"]
+stage = "deep"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
+scope = ["rust"]
+blocking = true
+required = true
+timeout = 600
+note = "护栏能力接线台账"
+
+[[ci_gates.gate]]
+id = "quality-metrics"
+cmd = ["python3", "scripts/check_quality_metrics.py"]
+stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
+scope = ["rust"]
+blocking = true
+required = true
+timeout = 900
+note = "质量指标台账"
+
+[[ci_gates.gate]]
+id = "golden-baseline"
+cmd = ["python3", "scripts/check_golden_baseline.py"]
+stage = "deep"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
+scope = ["rust", "docs"]
+blocking = true
+required = true
+timeout = 900
+note = "检索基线不许劣化（内部卷 + 小说语料）"
+
+[[ci_gates.gate]]
+id = "golden-no-leak"
+cmd = ["python3", "scripts/check_golden_no_leak.py"]
+stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
+scope = ["rust"]
+blocking = true
+required = true
+timeout = 600
+note = "黄金集不得泄漏答案"
+
+[[ci_gates.gate]]
+id = "internal-golden"
+cmd = ["python3", "scripts/internal_golden.py", "--check"]
+stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
+scope = ["rust", "docs"]
+blocking = true
+required = true
+timeout = 600
+note = "内部卷 301 题片段须是记录正文逐字子串"
+
+[[ci_gates.gate]]
+id = "d4-ledger"
+cmd = ["python3", "scripts/d4_ledger.py", "--check"]
+stage = "deep"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
+scope = ["rust", "docs"]
+blocking = true
+required = true
+timeout = 600
+note = "B0-c 候选池台账与代码一致"
+
+[[ci_gates.gate]]
+id = "wiring-report"
+cmd = ["python3", "scripts/wiring_report.py", "--verify"]
+stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
+scope = ["rust", "docs"]
+blocking = true
+required = true
+timeout = 600
+note = "接线报告与实际调用点一致"
+
+[[ci_gates.gate]]
+id = "verify-ledger"
+cmd = ["python3", "scripts/verify_ledger.py"]
+stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
+scope = ["docs", "claims"]
+blocking = true
+required = true
+timeout = 600
+note = "四层验收台账"
+
+[[ci_gates.gate]]
+id = "failure-knowledge"
+cmd = ["python3", "scripts/check_failure_knowledge.py"]
+scope = ["docs", "ci", "contract"]
+blocking = true
+required = true
+timeout = 300
+note = "**失败知识库不许陈旧**：条目里指向的守卫必须真实存在（改名/删除 ⇒ 知识失效）"
+
+[[ci_gates.gate]]
+id = "guard-inventory"
+cmd = ["python3", "scripts/check_guard_inventory.py"]
+stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
+scope = ["ci", "contract", "rust"]
+blocking = true
+required = true
+timeout = 300
+note = "**守卫清单同步**：全仓守卫的机读清单须与实际一致（漏登记 ⇒ 裁决层会漏门禁）"
+
+[[ci_gates.gate]]
+id = "toolchain-pin"
+cmd = ["python3", "scripts/check_toolchain_pin.py"]
+stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
+scope = ["ci", "contract", "rust"]
+blocking = true
+required = true
+timeout = 300
+note = "CI 工具链必须与 `rust-toolchain.toml` 的 channel 一致（禁浮动 `@stable`）"
+
+[[ci_gates.gate]]
+id = "gate-manifest"
+cmd = ["python3", "scripts/gen_gate_manifest.py", "--check"]
+stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
+scope = ["docs", "ci", "contract"]
+blocking = true
+required = true
+timeout = 300
+note = "**门禁清单的漂移守卫**：PR 模板等人读副本必须与本契约一致"
+
+[[ci_gates.gate]]
+id = "self-status-vocab"
+cmd = ["python3", "scripts/check_self_status_vocab.py"]
+stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
+scope = ["docs"]
+blocking = true
+required = false
+timeout = 300
+note = "自述口径词表一致"
+
+# ---- 只在 GitHub Actions 能跑的（本地跳过 ⇒ 状态必须是 SKIPPED，不等于 PASS）----
+[[ci_gates.gate]]
+id = "ci-rust"
+cmd = ["cargo", "build", "--workspace", "--tests", "--locked"]
+stage = "deep"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
+scope = ["rust"]
+blocking = true
+required = true
+env = "cargo"
+delegated_to = ".github/workflows/rust.yml"   # 由该 workflow 负责 ⇒ 裁决层不重复执行
+timeout = 3600
+note = "CI 专属：全工作区编译"
+
+[[ci_gates.gate]]
+id = "ci-nextest"
+cmd = ["cargo", "nextest", "run", "--workspace", "--profile", "ci", "--locked"]
+stage = "deep"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
+scope = ["rust"]
+blocking = true
+required = true
+env = "cargo"
+delegated_to = ".github/workflows/rust.yml"   # 由该 workflow 负责 ⇒ 裁决层不重复执行
+timeout = 3600
+note = "CI 专属：全工作区测试"
+
+[[ci_gates.gate]]
+id = "ci-clippy"
+cmd = ["cargo", "clippy", "--workspace", "--all-targets", "--locked", "--", "-D", "warnings"]
+stage = "deep"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
+scope = ["rust"]
+blocking = true
+required = true
+env = "cargo"
+delegated_to = ".github/workflows/rust-lint.yml"   # 由该 workflow 负责 ⇒ 裁决层不重复执行
+timeout = 3600
+note = "CI 专属：clippy 零警告"
+
+[[ci_gates.gate]]
+id = "ci-fmt"
+cmd = ["cargo", "fmt", "--all", "--", "--check"]
+stage = "deep"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
+scope = ["rust"]
+blocking = true
+required = true
+env = "cargo"
+delegated_to = ".github/workflows/rustfmt.yml"   # 由该 workflow 负责 ⇒ 裁决层不重复执行
+timeout = 900
+note = "CI 专属：格式"
+
+[[ci_gates.gate]]
+id = "ci-doc-test"
+cmd = ["cargo", "test", "--workspace", "--doc", "--locked"]
+stage = "deep"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
+scope = ["rust", "docs"]
+blocking = true
+required = true
+env = "cargo"
+delegated_to = ".github/workflows/rustdoc-test.yml"   # 由该 workflow 负责 ⇒ 裁决层不重复执行
+timeout = 3600
+note = "CI 专属：文档测试"
+
+[[ci_gates.gate]]
+id = "ci-cargo-deny"
+cmd = ["bash", "scripts/audit/run-cargo-audit-deny.sh"]
+stage = "deep"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
+scope = ["rust", "lock"]
+blocking = true
+required = true
+env = "ci"
+delegated_to = ".github/workflows/cargo-deny.yml"   # 由该 workflow 负责 ⇒ 裁决层不重复执行
+timeout = 1800
+note = "CI 专属：依赖策略（cargo deny）"
+
+[[ci_gates.gate]]
+id = "ci-promise-audit"
+cmd = ["bash", "scripts/audit/8-promise-audit.sh"]
+stage = "deep"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
+scope = ["rust", "contract"]
+blocking = true
+required = false
+env = "ci"
+delegated_to = "(无 workflow 调用 · 仓外手工执行)"
+timeout = 900
+note = "CI 专属：8 项不修改承诺审计"
+
+[[concepts]]
+name = "PrincipalAuthorizations"
+canonical = "crates/engine/runtime/src/canonical/principal_authority.rs"
+known_debt = []
+target = "S4: Host-only revocable execution epoch; store/scope mapping stays in assembly, not a second module registry"
+
+[[concepts]]
+name = "ModuleToolContract"
+canonical = "crates/foundation/plugin/src/module_contract.rs"
+known_debt = []
+target = "ADR-0023 P1: versioned manifest metadata and restricted views over the existing catalog; explicit Host composition, no permission grant"
+
+[[concepts]]
+name = "ModuleTaskHandle"
+canonical = "crates/foundation/plugin/src/module_contract.rs"
+known_debt = []
+target = "ADR-0023 P1: module-generation-bound task receipt; status authorization remains module-owned; no new lifecycle registry"
+
+
+[[concepts]]
+name = "SystemOneGate"
+canonical = "crates/engine/runtime/src/canonical/system_one.rs"
+known_debt = []
+target = "ADR-0023 P2: mandatory review/audit service at the existing dispatcher seam; model decisions do not grant deterministic authority"
+
+[[concepts]]
+name = "SystemOneRequest"
+canonical = "crates/foundation/plugin/src/system_one.rs"
+known_debt = []
+target = "ADR-0023 P2: runtime-owned versioned action/provenance context; no model-writable execution receipt"
+
+[[concepts]]
+name = "SystemOneVerdict"
+canonical = "crates/foundation/plugin/src/system_one.rs"
+known_debt = []
+target = "ADR-0023 P2: bound Allow/Deny/Escalate review; invalid version/digest/review id refuses execution"
+
+
+[[concepts]]
+name = "SystemOneSupervisor"
+canonical = "crates/foundation/plugin/src/system_one.rs"
+known_debt = []
+target = "ADR-0023 P2: Host policy port analogous to ModuleAgents, not an ExtensionCatalog family or module registry"
+
+[[concepts]]
+name = "SystemOneAudit"
+canonical = "crates/foundation/plugin/src/system_one.rs"
+known_debt = []
+target = "ADR-0023 P2: Host audit policy port; requires acknowledgement before effect, no extension/lifecycle authority"
+
+[[concepts]]
+name = "ModuleMessages"
+canonical = "crates/foundation/plugin/src/module_messages.rs"
+known_debt = []
+target = "ADR-0023 P3: owner-bound Host transport port; routes existing active public capabilities without granting authority"
+
+[[concepts]]
+name = "ModuleMessageEnvelope"
+canonical = "crates/foundation/plugin/src/module_messages.rs"
+known_debt = []
+target = "ADR-0023 P3: runtime-minted versioned causal provenance and bounded payload; not another event/lifecycle authority"
+
+[[concepts]]
+name = "ModuleMessagePipeline"
+canonical = "crates/engine/runtime/src/canonical/module_messages.rs"
+known_debt = []
+target = "ADR-0023 P3: bounded admission and local refusal window only; existing Registry/PluginManager remain authoritative"
+
+[[concepts]]
+name = "MeshModule"
+canonical = "crates/engine/runtime-assembly/src/mesh.rs"
+known_debt = []
+target = "ADR-0023 P4: opt-in fixed loopback peer worker and whitelist status; existing Internal Dispatcher gate, no external device or encryption claim"

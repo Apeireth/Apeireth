@@ -128,6 +128,14 @@ pub trait McpChannel: Send + Sync {
     /// Send one request and await its response.
     async fn request(&self, request: JsonRpcRequest) -> Result<JsonRpcResponse, McpError>;
 
+    /// Non-blocking invalidation; explicit close subsequently joins/reaps owned work.
+    fn revoke(&self) {}
+
+    /// Close owned transport resources; in-process channels need no cleanup.
+    async fn close(&self) -> Result<(), McpError> {
+        Ok(())
+    }
+
     /// Send one notification (no response is expected).
     async fn notify(&self, notification: JsonRpcRequest) -> Result<(), McpError>;
 
@@ -336,13 +344,17 @@ struct PendingRouter {
 
 impl PendingRouter {
     /// Register interest in the response for `id`.
-    fn register(&self, id: &Id) -> oneshot::Receiver<JsonRpcResponse> {
+    fn register(self: &Arc<Self>, id: &Id) -> PendingReply {
         let (tx, rx) = oneshot::channel();
         self.pending
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .insert(id.clone(), tx);
-        rx
+        PendingReply {
+            receiver: Some(rx),
+            router: Arc::downgrade(self),
+            id: id.clone(),
+        }
     }
 
     /// Deliver one response to its caller. Returns whether anyone was waiting.
@@ -401,15 +413,17 @@ impl PendingRouter {
     ///
     /// A deadline that passes **drops the pending entry**: the caller gives
     /// up, so the routing table must not keep a waiter nobody will ever
-    /// satisfy.
+    /// satisfy. The [`PendingReply`] guard does that on its own — dropping
+    /// the reply removes the entry — and the explicit [`PendingRouter::forget`]
+    /// below is the belt-and-braces second removal.
     async fn wait_for(
         &self,
         id: &Id,
-        waiter: oneshot::Receiver<JsonRpcResponse>,
+        waiter: PendingReply,
         deadline: Duration,
         source: &str,
     ) -> Result<JsonRpcResponse, McpError> {
-        match tokio::time::timeout(deadline, waiter).await {
+        match tokio::time::timeout(deadline, waiter.receive()).await {
             Ok(Ok(response)) => Ok(response),
             Ok(Err(_)) => Err(McpError::Transport(format!(
                 "{source} closed before the response arrived"
@@ -422,14 +436,39 @@ impl PendingRouter {
     }
 }
 
-fn transport_error(context: &str, error: impl std::fmt::Display) -> McpError {
+pub(super) fn transport_error(context: &str, error: impl std::fmt::Display) -> McpError {
     McpError::Transport(format!("{context}: {error}"))
+}
+
+// A cancelled request cannot leave a routing entry until an external reply.
+struct PendingReply {
+    receiver: Option<oneshot::Receiver<JsonRpcResponse>>,
+    router: std::sync::Weak<PendingRouter>,
+    id: Id,
+}
+impl PendingReply {
+    async fn receive(mut self) -> Result<JsonRpcResponse, oneshot::error::RecvError> {
+        self.receiver.take().expect("receiver used once").await
+    }
+}
+impl Drop for PendingReply {
+    fn drop(&mut self) {
+        if let Some(router) = self.router.upgrade() {
+            router
+                .pending
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .remove(&self.id);
+        }
+    }
 }
 
 /// A local child process speaking newline-delimited JSON-RPC on stdio.
 pub struct StdioChannel {
     stdin: tokio::sync::Mutex<ChildStdin>,
     child: Mutex<Option<Child>>,
+    process_owner: Mutex<Option<super::process_owner::ProcessOwner>>,
+    reader: Mutex<Option<tokio::task::JoinHandle<()>>>,
     router: Arc<PendingRouter>,
     broken: Arc<AtomicBool>,
     malformed: Arc<AtomicU64>,
@@ -454,7 +493,9 @@ impl StdioChannel {
         args: &[String],
         response_deadline: Duration,
     ) -> Result<Arc<dyn McpChannel>, McpError> {
-        let mut child = Command::new(command)
+        let mut process = Command::new(command);
+        super::process_owner::ProcessOwner::configure(&mut process);
+        let mut child = process
             .args(args)
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
@@ -462,6 +503,7 @@ impl StdioChannel {
             .kill_on_drop(true)
             .spawn()
             .map_err(|e| transport_error(&format!("spawning {command}"), e))?;
+        let process_owner = super::process_owner::ProcessOwner::attach(&child)?;
         let stdin = child
             .stdin
             .take()
@@ -477,7 +519,7 @@ impl StdioChannel {
         let reader_router = Arc::clone(&router);
         let reader_broken = Arc::clone(&broken);
         let reader_malformed = Arc::clone(&malformed);
-        tokio::spawn(async move {
+        let reader = tokio::spawn(async move {
             let mut lines = BufReader::new(stdout).lines();
             loop {
                 match lines.next_line().await {
@@ -505,6 +547,8 @@ impl StdioChannel {
         Ok(Arc::new(Self {
             stdin: tokio::sync::Mutex::new(stdin),
             child: Mutex::new(Some(child)),
+            process_owner: Mutex::new(Some(process_owner)),
+            reader: Mutex::new(Some(reader)),
             router,
             broken,
             malformed,
@@ -534,6 +578,60 @@ impl StdioChannel {
 
 #[async_trait]
 impl McpChannel for StdioChannel {
+    fn revoke(&self) {
+        self.broken.store(true, Ordering::SeqCst);
+        self.router.fail_all();
+        if let Some(reader) = self
+            .reader
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+        {
+            reader.abort();
+        }
+        if let Some(owner) = self
+            .process_owner
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+        {
+            let _ = owner.terminate();
+        }
+    }
+
+    async fn close(&self) -> Result<(), McpError> {
+        self.broken.store(true, Ordering::SeqCst);
+        self.router.fail_all();
+        let reader = self.reader.lock().unwrap_or_else(|e| e.into_inner()).take();
+        if let Some(reader) = reader {
+            reader.abort();
+            let _ = reader.await;
+        }
+        let owner = self
+            .process_owner
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take();
+        if let Some(owner) = owner {
+            owner.terminate()?;
+        }
+        let child = self.child.lock().unwrap_or_else(|e| e.into_inner()).take();
+        if let Some(mut child) = child {
+            if child
+                .try_wait()
+                .map_err(|e| transport_error("checking owned server", e))?
+                .is_none()
+            {
+                let _ = child.start_kill();
+            }
+            child
+                .wait()
+                .await
+                .map_err(|e| transport_error("reaping owned server", e))?;
+        }
+        Ok(())
+    }
+
     async fn request(&self, request: JsonRpcRequest) -> Result<JsonRpcResponse, McpError> {
         let Some(id) = request.id.clone() else {
             return Err(McpError::Transport(
@@ -566,6 +664,9 @@ impl McpChannel for StdioChannel {
 
 impl Drop for StdioChannel {
     fn drop(&mut self) {
+        if let Some(reader) = self.reader.lock().unwrap_or_else(|e| e.into_inner()).take() {
+            reader.abort();
+        }
         if let Ok(mut guard) = self.child.lock() {
             if let Some(mut child) = guard.take() {
                 let _ = child.start_kill();
@@ -653,6 +754,7 @@ pub struct SseChannel {
     malformed: Arc<AtomicU64>,
     unrouted: Arc<AtomicU64>,
     response_deadline: Duration,
+    reader: Mutex<Option<tokio::task::JoinHandle<()>>>,
 }
 
 impl SseChannel {
@@ -717,7 +819,7 @@ impl SseChannel {
         let reader_malformed = Arc::clone(&malformed);
         let reader_unrouted = Arc::clone(&unrouted);
         let base_url = url.to_string();
-        tokio::spawn(async move {
+        let reader = tokio::spawn(async move {
             let mut stream = response.bytes_stream();
             let mut buffer = SseBuffer::new();
             while let Some(chunk) = stream.next().await {
@@ -766,6 +868,7 @@ impl SseChannel {
             malformed,
             unrouted,
             response_deadline,
+            reader: Mutex::new(Some(reader)),
         };
         channel.wait_for_endpoint().await?;
         Ok(Arc::new(channel))
@@ -823,6 +926,30 @@ impl SseChannel {
 
 #[async_trait]
 impl McpChannel for SseChannel {
+    fn revoke(&self) {
+        self.broken.store(true, Ordering::SeqCst);
+        self.router.fail_all();
+        if let Some(reader) = self
+            .reader
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+        {
+            reader.abort();
+        }
+    }
+
+    async fn close(&self) -> Result<(), McpError> {
+        self.broken.store(true, Ordering::SeqCst);
+        self.router.fail_all();
+        let reader = self.reader.lock().unwrap_or_else(|e| e.into_inner()).take();
+        if let Some(reader) = reader {
+            reader.abort();
+            let _ = reader.await;
+        }
+        Ok(())
+    }
+
     async fn request(&self, request: JsonRpcRequest) -> Result<JsonRpcResponse, McpError> {
         let Some(id) = request.id.clone() else {
             return Err(McpError::Transport(
@@ -861,6 +988,15 @@ impl SseChannel {
     }
 }
 
+impl Drop for SseChannel {
+    fn drop(&mut self) {
+        if let Some(reader) = self.reader.lock().unwrap_or_else(|e| e.into_inner()).take() {
+            reader.abort();
+        }
+        self.router.fail_all();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -878,7 +1014,7 @@ mod tests {
     /// an entry nobody will ever satisfy.
     #[tokio::test]
     async fn a_response_wait_that_runs_out_of_time_leaves_no_pending_waiter() {
-        let router = PendingRouter::default();
+        let router = Arc::new(PendingRouter::default());
         let id = request_id(7);
         let waiter = router.register(&id);
         assert_eq!(router.pending_len(), 1);
@@ -905,7 +1041,7 @@ mod tests {
     /// died before the answer came.
     #[tokio::test]
     async fn the_timeout_error_is_tellable_apart_from_the_neighbouring_failures() {
-        let router = PendingRouter::default();
+        let router = Arc::new(PendingRouter::default());
         let id = request_id(8);
         let waiter = router.register(&id);
         let timed_out = router
@@ -921,7 +1057,7 @@ mod tests {
         assert!(!reason.contains("closed before the response arrived"));
 
         // The link died: the sender is dropped, the waiter is woken.
-        let router = PendingRouter::default();
+        let router = Arc::new(PendingRouter::default());
         let id = request_id(9);
         let waiter = router.register(&id);
         router.fail_all();
@@ -961,9 +1097,12 @@ mod tests {
     /// A request that never made it out leaves no waiter behind either.
     #[tokio::test]
     async fn an_abandoned_request_leaves_no_pending_waiter() {
-        let router = PendingRouter::default();
+        let router = Arc::new(PendingRouter::default());
         let id = request_id(11);
-        router.register(&id);
+        // The reply handle is **held**: `PendingReply` drops the routing entry
+        // when it dies, so a discarded handle would remove the entry right
+        // away and the assertion below would no longer test the abandon path.
+        let _waiter = router.register(&id);
         assert_eq!(router.pending_len(), 1);
         router.forget(&id);
         assert_eq!(router.pending_len(), 0);

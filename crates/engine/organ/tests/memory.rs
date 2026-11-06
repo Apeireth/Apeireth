@@ -9,7 +9,7 @@
 //! - 真生产路径: `MemoryMergerOrgan::with_default()` (无 LLM 注入 — 跨 organ 合并是
 //!   确定性无 LLM 抽象).
 //! - dev 测试路径: 直接用 `MemoryMerger` 引擎 + `MemoryMergerOrgan::process()` 两条路并行.
-//! - `#[ignore]` 测试: trait 边界 shape 验 (per 子代理 R1-R7 同模式)
+//! - Noop 工厂合同测试默认运行，不依赖密钥或外部服务。
 //!
 //! **承接**:
 //! - 子代理 R1/R2/R3/R4/R5/R6/R7 8 个 organ 真实现已就位, Memory 是第 8 organ 真实现
@@ -305,13 +305,12 @@ async fn memory_merger_organ_query_finds_by_keyword() {
 }
 
 // ============================================
-// Test 4 (#[ignore]): trait 边界 shape 验 (per 子代理 R1-R7 同模式)
+// Noop factory contract (default regression).
 // ============================================
 
-/// **0 装诚实**: trait 边界完整 + 跨 organ trait 抽象.
-
+/// 离线 Noop 工厂合同：默认回归，不读取密钥或调用外部服务。
+/// 保留历史函数名与原断言；通过不代表真实模型服务已验证。
 #[tokio::test]
-#[ignore = "manual run: cargo test -p apeireth-organ --test memory -- --ignored; 验 trait shape"]
 async fn memory_organ_trait_shape_with_noop_llm_factory() {
     use apeireth_plugin::llm_factory::{LlmFactory, NoopLlmFactory};
     use std::sync::Arc;

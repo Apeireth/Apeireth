@@ -1,0 +1,12 @@
+# 前端依赖与构建产物
+node_modules/
+dist/
+build/
+
+# Tauri 构建时**自动生成**的 schema（每次 `cargo test` / `tauri` 都会重写）
+# ⇒ 生成物不入库（仓里若有需要，由构建产生；入库会和构建结果打架）
+src-tauri/gen/schemas/
+
+# 本地测试产物
+tests/.tmp/
+*.log

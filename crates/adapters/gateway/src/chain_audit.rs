@@ -12,8 +12,18 @@
 //!    「这次审批进了哪条链」); savepoint 回滚 = 文件截断 + 链重建, 与
 //!    [`commit_approval_audit_pair`] 的「整对回滚」语义一致。
 //!
-//! 0 装口径: 单写者假设 —— 链 sequence = 记录数, 多进程并发追加会分叉;
-//! 生产装配单进程单 sink。`approve` 事件的 subject 编码见 [`ChainApprovalAudit`]
+//! 0 装口径: **单写者（现已强制，不再只是假设）** —— 链 sequence = 记录数,
+//! 多写者并发追加会**分叉**（后写者的 `previous_hash` 基于过期链尾）。
+//!
+//! - 强制手段：`open` 时抢 `<ledger>.lock`（`create_new` 原子创建 + 写 pid）；
+//!   第二个写者得到**如实错误**（不是静默分叉），调用方据此降级内存账；
+//!   陈旧锁（pid 已不存在）自动接管，崩溃不会永久锁死审计。
+//! - 进程内共享：CLI 装配根用**按路径单例**（`cli::governance_chain::shared_audit_sink`），
+//!   同一进程多个 runtime 共用一条链 —— 否则同进程多 sink 同样会分叉。
+//! - 坏链恢复：分叉历史文件由装配根**隔离**（改名保留证据）后重建空链，
+//!   审计恢复持久化而不是永久降级（真实事故见 2026-10-25 记录）。
+//!
+//! `approve` 事件的 subject 编码见 [`ChainApprovalAudit`]
 //! 模块内 [`encode_pair_record`], 解析严格 (解析失败 = 拒开/拒读, 不冒充)。
 
 use std::path::PathBuf;
@@ -34,6 +44,83 @@ use crate::im_approval::ImApprovalAuditCommit;
 pub struct FileChainAuditSink {
     path: PathBuf,
     state: Arc<Mutex<ChainState>>,
+    /// 单写者锁（见 [`SingleWriterLock`]）：本实例持有期间别的进程/实例不得再开。
+    ///
+    /// 为什么必须强制：链的 sequence = 记录数，两个写者各自持一条内存链、
+    /// 共用同一文件 ⇒ 后写者的 `previous_hash` 基于**过期**的链尾 ⇒ **分叉**。
+    /// 分叉文件在下次打开时必然校验失败 ⇒ 审计**永久降级内存账**（不持久）。
+    /// 该失效模式已在真实数据根上发生过（2026-10-25：3 条记录同一 prev）。
+    _lock: SingleWriterLock,
+}
+
+/// 单写者锁：`<audit>.lock` 文件 + **OS 文件锁**（内核保证互斥）。
+///
+/// # 原先错在哪（2026-11-01 安全审计收口）
+///
+/// 旧实现是 `create_new` 原子创建 + 靠 **pid 猜陈旧锁**：
+/// * **TOCTOU 竞态**：两个进程同时看到陈旧锁 ⇒ 都 `remove` ⇒ 都 `create_new`
+///   ⇒ **两个写者并存** ⇒ 链分叉（后写者的 `previous_hash` 基于过期链尾）
+///   ⇒ 下次打开必然校验失败 ⇒ 审计**永久降级内存账**（不持久）。
+/// * 进程崩溃留下陈旧锁 ⇒ 要靠 pid 存活去猜 ⇒ 猜错就永久锁死或误抢。
+/// * 同进程内多实例的互斥语义**按账本**（不是按进程）⇒ 落盘顺序敏感。
+///
+/// # 现在为什么这样
+///
+/// 改用**平台原生文件锁**（unix: `libc::flock`；windows: `LockFileEx`）：
+/// * **内核保证**互斥 ⇒ 没有 TOCTOU、没有陈旧锁（进程退出内核自动释放）；
+/// * 文件锁挂在**打开文件描述**上 ⇒ 同进程内**不同 fd 也会互斥**
+///   ⇒ 「同进程多实例」不再需要靠 drop 顺序 ⇒ 测试不再顺序敏感。
+/// * 不加新依赖（仓库纪律）⇒ 直接用平台原生调用，不引 flock 库。
+///
+/// # 失败口径
+///
+/// 抢不到锁 ⇒ 如实报「已被另一个进程持有」⇒ 调用方**降级内存账**（审计不持久）
+/// ⇒ **不静默并发写**（宁可不持久，也不能写出一个分叉的链）。
+struct SingleWriterLock {
+    path: PathBuf,
+    /// 锁文件句柄（**必须持有** ⇒ 句柄关闭/进程退出 ⇒ 锁自动释放）。
+    _file: std::fs::File,
+}
+
+impl SingleWriterLock {
+    fn acquire(ledger: &std::path::Path) -> Result<Self, String> {
+        let path = ledger.with_extension("lock");
+        let file = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(&path)
+            .map_err(|error| format!("审计账本锁文件打开失败: {error}"))?;
+        // 写 pid（**仅供人排查**；互斥由内核的文件锁保证，不依赖这个值）。
+        {
+            use std::io::{Seek, SeekFrom, Write as _};
+            let mut handle = file
+                .try_clone()
+                .map_err(|error| format!("审计账本锁文件复制失败: {error}"))?;
+            let _ = handle.set_len(0);
+            let _ = handle.seek(SeekFrom::Start(0));
+            let _ = handle.write_all(std::process::id().to_string().as_bytes());
+            let _ = handle.flush();
+        }
+        if let Err(reason) = apeireth_core::storage_atomic::try_lock_exclusive(&file) {
+            let holder = std::fs::read_to_string(&path).unwrap_or_default();
+            let _ = std::fs::remove_file(&path);
+            return Err(format!(
+                "审计账本已被另一个进程持有（pid={}，单写者：链 sequence 不允许并发追加）；\
+                 本进程改用内存账（审计不持久），如需接管请确认该进程已退出（{reason}）",
+                holder.trim()
+            ));
+        }
+        Ok(Self { path, _file: file })
+    }
+}
+
+impl Drop for SingleWriterLock {
+    fn drop(&mut self) {
+        // 顺序重要：**先让内核释放锁，再删锁文件**。
+        // （先删文件会让另一个进程立刻建新文件并锁它，而本进程还锁着旧 inode。）
+        let _ = std::fs::remove_file(&self.path);
+    }
 }
 
 struct ChainState {
@@ -52,12 +139,18 @@ impl FileChainAuditSink {
         if let Some(parent) = path.parent() {
             fs_err::create_dir_all(parent).map_err(|error| error.to_string())?;
         }
+        // 先抢单写者锁：读之前就确保没有别人在写（否则可能读到半个追加）。
+        let lock = SingleWriterLock::acquire(&path)?;
         if !path.exists() {
             fs_err::write(&path, b"").map_err(|error| error.to_string())?;
         }
         let bytes = fs_err::read(&path).map_err(|error| error.to_string())?;
         let mut chain = AuditHashChain::new();
         let mut boundaries = vec![0u64];
+        // 已消费字节数 (物理偏移): 边界必须记**物理偏移**, 不能靠上一条边界累加 ——
+        // 累加会在账本含空行 (非记录行) 时与真实偏移错位, savepoint 回滚就会截在
+        // 记录中间, 把账本截坏 (链面 fuzz 回归: rollback_with_blank_line_*)。
+        let mut offset = 0u64;
         let mut rest = &bytes[..];
         while !rest.is_empty() {
             let (line, tail, consumed) = match rest.iter().position(|byte| *byte == b'\n') {
@@ -68,6 +161,7 @@ impl FileChainAuditSink {
                 ),
                 None => (rest, &rest[..0], rest.len() as u64),
             };
+            offset += consumed;
             if !line.is_empty() {
                 let record: AuditRecord = serde_json::from_slice(line).map_err(|error| {
                     format!(
@@ -80,6 +174,17 @@ impl FileChainAuditSink {
                     record.subject.clone(),
                     record.timestamp,
                 );
+                // 落盘的 `sequence` 必须在信封内: 它是记录的位置声明
+                // (`AuditRecord::sequence` 文档 "Position in the chain, counting
+                // from zero"), 而重放哈希用的是**链下标** —— 不比对落盘值的话,
+                // 改写落盘 sequence 查不出来 (顺序被伪造)。链面 fuzz 回归:
+                // tampered_sequence_field_is_refused。
+                if appended.sequence != record.sequence {
+                    return Err(format!(
+                        "governance audit record {} sequence mismatch (tamper detected)",
+                        boundaries.len() - 1
+                    ));
+                }
                 if appended.previous_hash != record.previous_hash
                     || appended.current_hash != record.current_hash
                 {
@@ -88,7 +193,8 @@ impl FileChainAuditSink {
                         boundaries.len() - 1
                     ));
                 }
-                boundaries.push(boundaries[boundaries.len() - 1] + consumed);
+                // 边界 = 该条记录所在行的物理末尾 (含其换行符)。
+                boundaries.push(offset);
             }
             rest = tail;
         }
@@ -98,6 +204,7 @@ impl FileChainAuditSink {
         Ok(Self {
             path,
             state: Arc::new(Mutex::new(ChainState { chain, boundaries })),
+            _lock: lock,
         })
     }
 
@@ -160,16 +267,35 @@ impl AuditSink for FileChainAuditSink {
         let record = state.chain.append(event_kind, subject, timestamp).clone();
         let line = serde_json::to_string(&record).map_err(|error| error.to_string())?;
         let mut file = fs_err::OpenOptions::new()
+            .read(true)
             .append(true)
             .open(&self.path)
             .map_err(|error| error.to_string())?;
-        use std::io::Write as _;
+        use std::io::{Read as _, Seek as _, SeekFrom, Write as _};
+        // 记录分隔符修复: 账本末行缺 '\n' (撕裂写 —— 上个进程死在「写行体」与
+        // 「写换行」之间) 时, 新记录会粘在旧行尾 ⇒ 账本从此再也开不出来
+        // (「每行一个 AuditRecord」被破坏 ⇒ 审计永久降级到内存)。
+        // 此处只**追加**一个换行 (append-only 不变), 让账本继续合法。
+        let file_len = file.metadata().map_err(|error| error.to_string())?.len();
+        let mut separator = 0u64;
+        if file_len > 0 {
+            file.seek(SeekFrom::End(-1))
+                .map_err(|error| error.to_string())?;
+            let mut last = [0u8; 1];
+            file.read_exact(&mut last)
+                .map_err(|error| error.to_string())?;
+            if last[0] != b'\n' {
+                file.write_all(b"\n").map_err(|error| error.to_string())?;
+                separator = 1;
+            }
+        }
         file.write_all(line.as_bytes())
             .map_err(|error| error.to_string())?;
         file.write_all(b"\n").map_err(|error| error.to_string())?;
         file.sync_all().map_err(|error| error.to_string())?;
-        let previous_end = state.boundaries[state.boundaries.len() - 1];
-        state.boundaries.push(previous_end + line.len() as u64 + 1);
+        state
+            .boundaries
+            .push(file_len + separator + line.len() as u64 + 1);
         Ok(record.current_hash)
     }
 
@@ -186,8 +312,28 @@ impl AuditSink for FileChainAuditSink {
 ///
 /// 契约: `pair_id`/`subject` 不含 `#` 与 `:` (approval id 与 capability id
 /// 满足); 解析严格, 遇未知形状即错 (不猜、不冒充)。
-fn encode_pair_record(record: &ApprovalAuditRecord) -> (&'static str, String) {
-    match record {
+///
+/// **编码面强制 (链面 fuzz 实测)**: `pair_id`/`subject` 自带 `#` 时, 编码结果
+/// **不可唯一解码** —— 解码按第一个 `#` 切, 于是 pair_id 被截断、round 串位、
+/// subject 吞掉后半段, 读面**冒充**另一条记录 (且不报错)。故编码面直接拒收
+/// 带 `#` 的 `pair_id`/`subject` (fail-closed: 写不进去 ⇒ 账本永远可读, 不留
+/// 半截冒充记录; 写面与读面口径一致 ⇒ 不会出现「写成功但读不回来」)。
+fn encode_pair_record(record: &ApprovalAuditRecord) -> Result<(&'static str, String), String> {
+    let pair_id = record.pair_id();
+    if pair_id.contains('#') {
+        return Err(format!(
+            "approval audit pair id must not contain '#' (chain subject encoding is \
+             ambiguous): {pair_id:?}"
+        ));
+    }
+    let subject = record.subject();
+    if subject.contains('#') {
+        return Err(format!(
+            "approval audit subject must not contain '#' (chain subject encoding is \
+             ambiguous): {subject:?}"
+        ));
+    }
+    Ok(match record {
         ApprovalAuditRecord::Asked {
             pair_id,
             round,
@@ -202,7 +348,7 @@ fn encode_pair_record(record: &ApprovalAuditRecord) -> (&'static str, String) {
             AUDIT_EVENT_DECISION,
             format!("{pair_id}#{round}:{subject}:{}", outcome_label(*outcome)),
         ),
-    }
+    })
 }
 
 fn outcome_label(outcome: ApprovalOutcome) -> &'static str {
@@ -241,6 +387,15 @@ fn decode_pair_record(
         .parse()
         .map_err(|_| format!("approval audit round not numeric: {subject:?}"))?;
     if event_kind == AUDIT_EVENT_ASKED {
+        // 契约: subject 不含 `#` ⇒ 解出来的 subject 带 `#` ⇒ 形状未知 ⇒ 报错
+        // (不猜、不冒充)。这一条正是「pair_id 自带 '#' ⇒ 字段串位」的护栏:
+        // 串位后 round 与 subject 会错位, 而错位后的 subject 必带 '#'。
+        if tail.contains('#') {
+            return Err(format!(
+                "approval audit subject carries '#' in the subject part (ambiguous \
+                 shape): {subject:?}"
+            ));
+        }
         Ok(Some(ApprovalAuditRecord::Asked {
             pair_id: pair_part.to_string(),
             round,
@@ -250,6 +405,12 @@ fn decode_pair_record(
         let (subject_part, outcome_part) = tail
             .rsplit_once(':')
             .ok_or_else(|| format!("approval decision subject missing outcome: {subject:?}"))?;
+        if subject_part.contains('#') {
+            return Err(format!(
+                "approval audit subject carries '#' in the subject part (ambiguous \
+                 shape): {subject:?}"
+            ));
+        }
         Ok(Some(ApprovalAuditRecord::Decision {
             pair_id: pair_part.to_string(),
             round,
@@ -286,11 +447,6 @@ impl ChainApprovalAudit {
             committed: Arc::new(Mutex::new(committed)),
         })
     }
-
-    /// 系统时钟口径 (生产)。
-    pub fn with_system_clock(sink: Arc<FileChainAuditSink>) -> Result<Self, String> {
-        Self::open(sink, Arc::new(SystemChainClock))
-    }
 }
 
 impl ApprovalAuditSink for ChainApprovalAudit {
@@ -301,7 +457,7 @@ impl ApprovalAuditSink for ChainApprovalAudit {
     }
 
     fn write(&mut self, record: ApprovalAuditRecord) -> Result<(), Self::Error> {
-        let (event_kind, subject) = encode_pair_record(&record);
+        let (event_kind, subject) = encode_pair_record(&record)?;
         let index = self.sink.len();
         self.sink.append(event_kind, &subject, self.clock.now())?;
         self.committed
@@ -363,6 +519,224 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("chain-audit-test-{}", std::process::id()));
         fs_err::create_dir_all(&dir).expect("temp dir");
         dir.join(format!("{label}.jsonl"))
+    }
+
+    /// 本次运行独有的账本路径 (pid + 纳秒 + 标签): 共享临时名会互撞。
+    fn unique_path(label: &str) -> PathBuf {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|value| value.as_nanos())
+            .unwrap_or_default();
+        let dir = std::env::temp_dir().join(format!(
+            "chain-audit-regress-{}-{nanos}-{label}",
+            std::process::id()
+        ));
+        fs_err::create_dir_all(&dir).expect("temp dir");
+        dir.join("governance-audit.jsonl")
+    }
+
+    /// 回归 (链面 fuzz 实测): `pair_id` 自带 `#` ⇒ 链内 subject **不可唯一解码**
+    /// ⇒ 编码面必须拒收 (fail-closed), 解码面必须拒读 (不猜、不冒充)。
+    ///
+    /// 缺陷原文 (修复前): 编码面照写, 解码面按第一个 `#` 切 ⇒ pair_id 被截断、
+    /// round 串位、subject 吞掉后半段 ⇒ 读面**冒充**另一条记录且不报错。
+    /// **同进程**第二个 sink 拿不到锁 ⇒ 互斥是真的（不是靠「同进程不算」）。
+    ///
+    /// 这条正是旧实现要靠 `drop(audit); drop(sink); drop(reopened);` 绕开的地方
+    /// （顺序敏感 ⇒ 测试之间互相影响）。新实现靠**内核**保证 ⇒ 不依赖顺序。
+    #[test]
+    fn a_second_sink_on_the_same_ledger_is_refused() {
+        let path = unique_path("single-writer");
+        let first = FileChainAuditSink::open(path.clone()).expect("第一次开应成功");
+        let second = FileChainAuditSink::open(path.clone());
+        assert!(
+            second.is_err(),
+            "同一账本的第二个 sink 必须被拒（单写者：链 sequence 不允许并发追加）"
+        );
+        let Err(reason) = second else {
+            panic!("第二个 sink 不该开成功");
+        };
+        assert!(
+            reason.contains("单写者"),
+            "拒绝原因必须说清是单写者约束（真因如实），实际: {reason}"
+        );
+        drop(first);
+    }
+
+    /// 第一个 sink **放掉**之后，第二个能拿到锁 ⇒ 锁随**句柄**释放
+    /// （不是靠删文件 ⇒ 不会与「另一个进程已建新文件并锁它」竞态）。
+    #[test]
+    fn the_lock_is_reusable_after_the_holder_is_dropped() {
+        let path = unique_path("single-writer-reuse");
+        {
+            let _first = FileChainAuditSink::open(path.clone()).expect("第一次开应成功");
+            assert!(
+                FileChainAuditSink::open(path.clone()).is_err(),
+                "持锁期间第二个必须拿不到"
+            );
+        }
+        let _second = FileChainAuditSink::open(path.clone()).expect("放掉之后应能再拿到");
+    }
+
+    #[test]
+    fn ambiguous_pair_id_is_refused_on_write_and_on_read() {
+        let path = unique_path("ambiguous");
+        let sink = Arc::new(FileChainAuditSink::open(path.clone()).expect("open"));
+        let mut audit = ChainApprovalAudit::open(
+            sink.clone(),
+            Arc::new(FixedChainClock::new(1_700_000_000_000)),
+        )
+        .expect("open pair ledger");
+        let pair = ApprovalAuditPair::new("a#7:b", 5, "tool.shell", ApprovalOutcome::AllowedOnce);
+        // 写面: 拒收 (契约: pair_id 不含 '#')。
+        assert!(
+            audit.commit(&pair).is_err(),
+            "含 '#' 的 pair_id 必须拒写 (链内编码不可唯一解码)"
+        );
+        // 写面: subject 带 '#' 同样拒收 (否则「写成功但读面拒读」= 账本中毒)。
+        let poisoned =
+            ApprovalAuditPair::new("pair-2", 5, "tool#shell", ApprovalOutcome::AllowedOnce);
+        assert!(
+            audit.commit(&poisoned).is_err(),
+            "含 '#' 的 subject 必须拒写 (写读口径必须一致)"
+        );
+        assert_eq!(sink.len(), 0, "拒写后链里不得留下半截记录");
+        assert!(audit.committed().is_empty(), "拒写后读面必须为空");
+        sink.verify().expect("拒写后链仍完整");
+        drop(audit);
+        drop(sink);
+
+        // 读面: 手工塞一条同形状的链内记录 (模拟被伪造的账本) ⇒ 必须拒读。
+        let sink = FileChainAuditSink::open(path.clone()).expect("reopen");
+        sink.append("approval.asked", "a#7:b#5:tool.shell", Timestamp::now())
+            .expect("append forged shape");
+        drop(sink);
+        let sink = Arc::new(FileChainAuditSink::open(path.clone()).expect("reopen"));
+        let parsed =
+            ChainApprovalAudit::open(sink, Arc::new(FixedChainClock::new(1_700_000_000_000)));
+        assert!(parsed.is_err(), "串位形状必须拒读 (不猜、不冒充)");
+        let _ = fs_err::remove_file(&path);
+    }
+
+    /// 回归 (链面 fuzz 实测): 落盘的 `sequence` 字段在信封内 —— 改写它
+    /// (顺序被伪造) 必须拒开。
+    ///
+    /// 缺陷原文 (修复前): 重放哈希用的是**链下标**, 落盘 `sequence` 从不比对
+    /// ⇒ `"sequence":1` 改成 `"sequence":999` 后账本照开, 顺序声明可被伪造。
+    #[test]
+    fn tampered_sequence_field_is_refused() {
+        let path = unique_path("seq");
+        let sink = FileChainAuditSink::open(path.clone()).expect("open");
+        sink.append("governance.allowed", "tool.repo", Timestamp::now())
+            .expect("append 0");
+        sink.append("governance.denied.gate", "tool.shell", Timestamp::now())
+            .expect("append 1");
+        drop(sink);
+        let text = fs_err::read_to_string(&path).expect("read");
+        for (from, to) in [
+            ("\"sequence\":0", "\"sequence\":7"),
+            ("\"sequence\":1", "\"sequence\":999"),
+        ] {
+            let tampered = text.replacen(from, to, 1);
+            assert_ne!(tampered, text, "篡改必须落到文件里: {from}");
+            fs_err::write(&path, tampered.as_bytes()).expect("write tampered");
+            assert!(
+                FileChainAuditSink::open(path.clone()).is_err(),
+                "改写落盘 sequence 必须拒开 (顺序被伪造)"
+            );
+        }
+        // 未改动的原账本仍开得出 (自检: 拒开不是因为别的坏)。
+        fs_err::write(&path, text.as_bytes()).expect("restore");
+        let sink = FileChainAuditSink::open(path.clone()).expect("reopen pristine ledger");
+        assert_eq!(sink.len(), 2);
+        sink.verify().expect("pristine chain verifies");
+        let _ = fs_err::remove_file(&path);
+    }
+
+    /// 回归 (链面 fuzz 实测): 撕裂写 (末行缺换行) 之后追加, 账本必须仍是
+    /// 「每行一个 AuditRecord」⇒ 追加后仍开得出、链仍完整。
+    ///
+    /// 缺陷原文 (修复前): 追加直接接在末行尾 ⇒ 两记录挤成一行 ⇒
+    /// `open` 永久报 "malformed: trailing characters" ⇒ 审计永久降级内存。
+    #[test]
+    fn append_after_a_torn_line_keeps_the_ledger_openable() {
+        let path = unique_path("torn");
+        let sink = FileChainAuditSink::open(path.clone()).expect("open");
+        sink.append("governance.allowed", "tool.repo", Timestamp::now())
+            .expect("append");
+        drop(sink);
+        // 模拟撕裂写: 去掉末行换行 (上个进程死在写行体与写换行之间)。
+        let mut bytes = fs_err::read(&path).expect("read");
+        bytes.pop();
+        fs_err::write(&path, &bytes).expect("write torn");
+        let reopened = FileChainAuditSink::open(path.clone()).expect("reopen torn ledger");
+        assert_eq!(reopened.len(), 1, "撕裂写末行仍是一条完整记录");
+        reopened
+            .append("governance.denied.gate", "tool.shell", Timestamp::now())
+            .expect("append after torn");
+        drop(reopened);
+        let after = FileChainAuditSink::open(path.clone()).expect("reopen after append");
+        assert_eq!(after.len(), 2, "撕裂写后追加必须仍是两条记录 (每行一个)");
+        after.verify().expect("chain verifies");
+        let _ = fs_err::remove_file(&path);
+    }
+
+    /// 回归 (链面 fuzz 实测): 账本里的空行 (非记录行) 不得让 savepoint 回滚
+    /// 截在记录中间 —— 回滚必须精确落在第 `committed_len` 条末尾, 且回滚后
+    /// 账本仍开得出、追加后仍开得出。
+    ///
+    /// 缺陷原文 (修复前): 边界按「上一条边界 + 本行长度」累加 ⇒ 空行字节被
+    /// 漏计 ⇒ 回滚截断偏移少 ⇒ 记录被截半 ⇒ 账本永久开不出。
+    #[test]
+    fn rollback_with_a_blank_line_truncates_at_the_record_boundary() {
+        let path = unique_path("blank");
+        let sink = Arc::new(FileChainAuditSink::open(path.clone()).expect("open"));
+        sink.append("governance.allowed", "tool.repo", Timestamp::now())
+            .expect("r0");
+        sink.append("governance.denied.gate", "tool.shell", Timestamp::now())
+            .expect("r1");
+        sink.append("governance.allowed", "tool.filesystem", Timestamp::now())
+            .expect("r2");
+        drop(sink);
+        // 插入一个空行 (外部改动: 空行不是 AuditRecord, 但链不因它失效)。
+        let text = fs_err::read_to_string(&path).expect("read");
+        let mut rebuilt = String::new();
+        for (index, line) in text.lines().enumerate() {
+            if index == 1 {
+                rebuilt.push('\n');
+            }
+            rebuilt.push_str(line);
+            rebuilt.push('\n');
+        }
+        fs_err::write(&path, rebuilt.as_bytes()).expect("write blank");
+        let sink = Arc::new(FileChainAuditSink::open(path.clone()).expect("reopen blank"));
+        assert_eq!(sink.len(), 3, "空行不是记录, 链长不变");
+        let mut audit = ChainApprovalAudit::open(
+            sink.clone(),
+            Arc::new(FixedChainClock::new(1_700_000_000_000)),
+        )
+        .expect("open pair ledger");
+        audit.rollback(2);
+        assert_eq!(sink.len(), 2, "回滚后链回到存档点");
+        sink.verify().expect("回滚后链仍完整");
+        // ⚠️ **2026-10-31 合并批**：本仓的单写者锁（`SingleWriterLock`）是**按账本**
+        // 而非按调用方计数的 ⇒ 同一账本**只能有一个 sink 句柄**（同进程也一样，见
+        // `second_sink_on_the_same_ledger_is_rejected`）。本用例来自 main 侧，按
+        // 「无锁实现」写在 `audit` / `sink` 仍存活时就重开 ⇒ 与本仓纪律冲突。
+        // ⇒ 重开前先放掉全部句柄（这才是生产里「关掉再开」的顺序）。
+        drop(audit);
+        drop(sink);
+        let reopened = FileChainAuditSink::open(path.clone()).expect("reopen after rollback");
+        assert_eq!(reopened.len(), 2, "回滚后账本必须仍开得出");
+        reopened
+            .append("governance.allowed", "tool.repo", Timestamp::now())
+            .expect("append after rollback");
+        // 同上：单写者锁按**账本**计 ⇒ 重开前必须放掉上一个句柄。
+        drop(reopened);
+        let after = FileChainAuditSink::open(path.clone()).expect("reopen after append");
+        assert_eq!(after.len(), 3, "回滚后追加必须仍是三条记录");
+        after.verify().expect("chain verifies");
+        let _ = fs_err::remove_file(&path);
     }
 
     /// 验收②: 追加失败 fail-closed —— sink 报错, chain 的 run() 出
@@ -513,5 +887,60 @@ mod tests {
             vec![pair.asked().clone(), pair.decision().clone()]
         );
         let _ = fs_err::remove_file(&path);
+    }
+}
+
+#[cfg(test)]
+mod single_writer_tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    fn scratch(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "apeireth-audit-lock-{tag}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        std::fs::create_dir_all(&dir).expect("mkdir");
+        dir.join("governance-audit.jsonl")
+    }
+
+    /// **第二个写者必须被拒**（而不是各写各的把链写分叉）。
+    ///
+    /// 真实事故：两个实例各持一条内存链共用同一文件，3 条记录出现同一
+    /// `previous_hash` ⇒ 下次打开校验失败 ⇒ 审计永久降级内存账。
+    #[test]
+    fn second_sink_on_the_same_ledger_is_rejected() {
+        let path = scratch("reject");
+        let _first = FileChainAuditSink::open(path.clone()).expect("第一个写者应成功");
+        let Err(error) = FileChainAuditSink::open(path.clone()) else {
+            panic!("第二个写者必须被拒");
+        };
+        assert!(
+            error.contains("另一个进程持有"),
+            "原因要如实说清单写者: {error}"
+        );
+    }
+
+    /// 第一个写者 drop（进程内释放）后，第二个可以接管 —— 锁不能变成永久占用。
+    #[test]
+    fn lock_is_released_on_drop() {
+        let path = scratch("release");
+        {
+            let _first = FileChainAuditSink::open(path.clone()).expect("第一个写者");
+        }
+        let _second = FileChainAuditSink::open(path.clone()).expect("前者释放后应能接管");
+    }
+
+    /// **陈旧锁**（持有进程已不存在）可以被接管 —— 否则一次崩溃永久锁死审计。
+    #[test]
+    fn stale_lock_from_dead_process_is_taken_over() {
+        let path = scratch("stale");
+        // 造一个肯定不存在的 pid
+        std::fs::write(path.with_extension("lock"), "99999999").expect("写陈旧锁");
+        let _sink = FileChainAuditSink::open(path.clone()).expect("陈旧锁应被接管");
     }
 }

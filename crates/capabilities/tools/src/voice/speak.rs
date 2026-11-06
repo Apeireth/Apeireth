@@ -29,6 +29,14 @@
 //! - **单调边界 Guard** ([`VoiceSpeakBoundaryGuard`]): 坏参数 / 勿扰窗口
 //!    一律拒绝即帧, 任何后续阶段不得翻回。
 //!
+//! # 宿主授权同源 (2026-11-01 安全审计 P3-6)
+//!
+//! 本面的 stage-1 闸 ([`VoiceSpeakRiskMappingHook`]) 读**共享 live 策略槽**
+//! ([`crate::live_policy`]): 槽里当前指向的就是治理链正在评估的那一份 ⇒
+//! 面板上的热撤销 (`POST /v1/panel/grants/revoke`) 对本面**立即生效**
+//! (撤销 ⇒ 拒绝即帧, 不发声)。槽为 `None` (宿主策略未装入) ⇒ **不表态** ⇒
+//! 沿用本面原有档位口径 ⇒ **零行为变化**。
+//!
 //! # 脱敏口径 (如实定档)
 //!
 //! 合成文本**全文只进语句账本**; 错误帧 / 输出帧 / 审批载荷只带字符数、
@@ -54,6 +62,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::exec_pipeline::{
     AroundPolicy, OutputSchema, PreExecuteHook, PreExecuteRequest, PreVerdict, SchemaKind,
+};
+use crate::live_policy::{
+    current_live_policy, live_policy_allows, shared_live_permission_policy_slot,
+    LivePermissionPolicySlot,
 };
 use crate::voice::emotion_tune::{tune_voice_params, EmotionReader};
 use crate::voice::ledger::{
@@ -624,21 +636,57 @@ fn epoch_ms() -> i64 {
 ///    显式挂了审批档的宿主仍走同一条人工审批链 (`Ask`);
 /// 2. **坏参数拒绝即帧** (不进审批、不钳制);
 /// 3. **勿扰窗口拒绝即帧** (安静纪律, 与工具面同窗口同文案)。
+///
+/// # 宿主授权同源 (2026-11-01 安全审计 P3-6)
+///
+/// **原先错在哪**: 本钩子查的是**工具面自建**的一份策略
+/// ([`authorized_voice_speak_policy`] 只 grant 一条), 它与治理链正在评估的
+/// **宿主策略** (`PermissionGovernanceHook` 持有的那一份) **不是同一个对象**
+/// ⇒ 面板上的热撤销 (`POST /v1/panel/grants/revoke` → `PermissionPolicy::revoke`)
+/// 对发声面**完全无效** (闸恒放行, 且从外面看不出来)。
+///
+/// **现在为什么这样**: 策略改成**可换指针的槽**
+/// ([`LivePermissionPolicySlot`]): 每次判定**现读**槽里当前指向的那一份
+/// ⇒ 撤销立即可见。判定顺序: ① 宿主授权闸 (未授权 / 已撤销 ⇒ **拒绝即帧**,
+/// 槽为 `None` = 宿主策略未装入 ⇒ **不表态** ⇒ 沿用本面原有口径, 零回归);
+/// ② 档位判定 (授权在 ⇒ 放行; 宿主标了人工审批 ⇒ 停 ask 档, 与治理链同一条
+/// 人工审批链)。
 pub struct VoiceSpeakRiskMappingHook {
-    policy: Arc<Mutex<PermissionPolicy>>,
+    /// 共享 live 策略槽: 每次检查都**现读**槽里当前指向的策略 (不是快照)。
+    slot: LivePermissionPolicySlot,
+    /// **宿主策略未装入时**沿用的本面授权口径 (`None` = 不表态 ⇒ 零回归)。
+    fallback: Arc<Mutex<PermissionPolicy>>,
+    /// 勿扰窗口 (安静纪律: 与工具面同窗口同文案)。
     quiet: QuietHours,
+    /// 勿扰窗口时钟 (组装根注入)。
     quiet_clock: QuietClock,
 }
 
 impl VoiceSpeakRiskMappingHook {
-    /// 挂在共享授权策略上的风险映射钩子 (勿扰窗口与时钟同源注入)。
+    /// 挂在共享授权策略上的风险映射钩子 (勿扰窗口与时钟同源注入; 签名不变)。
     pub fn new(
         policy: Arc<Mutex<PermissionPolicy>>,
         quiet: QuietHours,
         quiet_clock: QuietClock,
     ) -> Self {
         Self {
-            policy,
+            slot: Arc::new(Mutex::new(Some(policy))),
+            fallback: authorized_voice_speak_policy(),
+            quiet,
+            quiet_clock,
+        }
+    }
+
+    /// 挂在**共享 live 策略槽**上的风险映射钩子 (P3-6): 槽里当前指向的策略
+    /// 就是治理链正在评估的那一份 ⇒ 热撤销对发声面立即生效。
+    pub fn with_slot(
+        slot: LivePermissionPolicySlot,
+        quiet: QuietHours,
+        quiet_clock: QuietClock,
+    ) -> Self {
+        Self {
+            slot,
+            fallback: authorized_voice_speak_policy(),
             quiet,
             quiet_clock,
         }
@@ -654,11 +702,37 @@ impl PreExecuteHook for VoiceSpeakRiskMappingHook {
         if request.capability.as_str() != VOICE_SPEAK_CAPABILITY_ID {
             return PreVerdict::Allow;
         }
-        let decision = self
-            .policy
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .decision_for_capability(request.capability.as_str());
+        // 宿主授权检查 (2026-11-01 安全审计 P3-6): 未授权 / 已被撤销 ⇒ **停审批档（零落盘）**。
+        // 分工: 治理链那一层是**拒绝即帧**（撤销 ⇒ 派发前就被拒）;
+        // stage-1 这一层是**落盘前的最后一道**（未授权 ⇒ 不落盘）。
+        // 槽为 None (宿主策略未装入) ⇒ 不表态 ⇒ 沿用本面原有口径 (零回归)。
+        // 判定位置: 本面原有档位判定**之前** (撤销 ⇒ 不发声, 拒绝即帧)。
+        if let Some(false) = live_policy_allows(&self.slot, request.capability.as_str()) {
+            // ⚠️ **本面用 `Deny` 而不是 `Ask`**（2026-11-01 核实后修正）：
+            // voice 面的**既有契约**就是「未授权 = 拒绝即帧（不降级成审批）」
+            // （既有测试 `governance_tier_is_the_voice_tier_and_fails_closed` 钉住）
+            // ⇒ 新增的宿主授权检查**沿用本面既有口径** ⇒ 既有契约零破坏。
+            // （跨面既有契约本就不同：worktree_apply / skill_distill 等面是 `Ask`。）
+            return PreVerdict::Deny {
+                reason: format!(
+                    "能力 {} 未获宿主授权或已被撤销 ⇒ 停 require-approval 档（零落盘）",
+                    request.capability.as_str()
+                ),
+            };
+        }
+        // 档位判定: 现读槽里当前指向的策略; 槽为 None ⇒ 用本面自建口径
+        // (`authorized_voice_speak_policy`) ⇒ 与改动前逐字一致。
+        let decision = match current_live_policy(&self.slot) {
+            Some(policy) => policy
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .decision_for_capability(request.capability.as_str()),
+            None => self
+                .fallback
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .decision_for_capability(request.capability.as_str()),
+        };
         match decision {
             Decision::Allow => {}
             Decision::Deny { reason } => {
@@ -732,6 +806,10 @@ pub fn authorized_voice_speak_policy() -> Arc<Mutex<PermissionPolicy>> {
 }
 
 /// 组装发声五段流水线: 风险映射 → 单调边界 Guard → 超时 → 输出归一合同。
+///
+/// 风险映射挂的是**本面自建**策略 (与改动前一致) ⇒ 本函数**零行为变化**;
+/// 要让 stage-1 闸跟宿主策略同源 (面板热撤销立即生效), 用
+/// [`voice_speak_pipeline_with_slot`]。
 pub fn voice_speak_pipeline(
     policy: Arc<Mutex<PermissionPolicy>>,
     quiet: QuietHours,
@@ -742,6 +820,38 @@ pub fn voice_speak_pipeline(
         crate::exec_pipeline::ToolExecutionPipeline::new()
             .with_pre_hook(Arc::new(VoiceSpeakRiskMappingHook::new(
                 policy,
+                quiet,
+                quiet_clock,
+            )))
+            .with_guard(Arc::new(guard))
+            .with_around(
+                AroundPolicy::new()
+                    .with_timeout(VOICE_SPEAK_TIMEOUT_MS, VOICE_SPEAK_MAX_TIMEOUT_MS),
+            )
+            .with_output_schema(VoiceSpeakTool::output_schema()),
+    )
+}
+
+/// 组装发声五段流水线 + **共享 live 策略槽** (2026-11-01 安全审计 P3-6)。
+///
+/// **原先错在哪**: [`voice_speak_pipeline`] 的 stage-1 风险映射查的是**工具面
+/// 自建**的策略 ⇒ 面板上的热撤销对它无效。
+/// **现在为什么这样**: 风险映射改挂**共享槽** ⇒ 与治理链同源 ⇒ 撤销立即生效
+/// (撤销 ⇒ 拒绝即帧, 不发声); 槽为 `None` (宿主策略未装入) ⇒ 沿用本面自建
+/// 口径 ⇒ 零行为变化。
+///
+/// ⚠️ 宿主策略必须 **grant `tool.voice_speak`** ⇒ 否则 stage-1 直接硬拒
+/// (fail-closed, 注册即闸)。
+pub fn voice_speak_pipeline_with_slot(
+    slot: LivePermissionPolicySlot,
+    quiet: QuietHours,
+    quiet_clock: QuietClock,
+) -> Arc<crate::exec_pipeline::ToolExecutionPipeline> {
+    let guard = VoiceSpeakBoundaryGuard::new(quiet.clone(), Arc::clone(&quiet_clock));
+    Arc::new(
+        crate::exec_pipeline::ToolExecutionPipeline::new()
+            .with_pre_hook(Arc::new(VoiceSpeakRiskMappingHook::with_slot(
+                slot,
                 quiet,
                 quiet_clock,
             )))
@@ -766,6 +876,24 @@ pub fn voice_speak_capability(
     Arc::new(crate::exec_pipeline::PipelinedCapability::new(
         tool,
         voice_speak_pipeline(policy, quiet, quiet_clock),
+    ))
+}
+
+/// 组装生产工具面 + **共享 live 策略槽** (2026-11-01 安全审计 P3-6)。
+///
+/// 装配根用这个入口把宿主策略装进发声面 ⇒ 面板热撤销对 `tool.voice_speak`
+/// 立即生效 (stage-1 闸与治理链同源)。
+pub fn voice_speak_capability_with_slot(
+    config: VoiceSpeakConfig,
+    engine: Arc<dyn SynthEngine>,
+    slot: LivePermissionPolicySlot,
+) -> Arc<dyn ToolCapability> {
+    let quiet = config.quiet.clone();
+    let quiet_clock = Arc::clone(&config.quiet_clock);
+    let tool: Arc<dyn ToolCapability> = Arc::new(VoiceSpeakTool::new(config, engine));
+    Arc::new(crate::exec_pipeline::PipelinedCapability::new(
+        tool,
+        voice_speak_pipeline_with_slot(slot, quiet, quiet_clock),
     ))
 }
 

@@ -168,7 +168,7 @@ rust.yml 另有本地 `make ci` 不覆盖的步骤（legacy 依赖检查 / 3 OS 
 
 ### 3.2 提交纪律
 
-来源：[commit.md](../../docs/archive/conventions/06-commit.md) + [team-work-doc.md](team-work-doc.md) §2.3。
+来源：[commit.md](../../docs/archive/conventions/06-commit.md) + [team-work-doc.md](05-plans/team-work-doc.md) §2.3。
 
 - scope: `docs:` / `R17-<topic>` / `Manual-Rev-X` / `Design-X.Y` / `Fix-N` / `crate:<name>` / `ci` / `sec` / `perf` / `round<N>-<NN>`
 - subject ≤ 72 字符
@@ -178,7 +178,7 @@ rust.yml 另有本地 `make ci` 不覆盖的步骤（legacy 依赖检查 / 3 OS 
 
 ### 3.3 添加新 capability 的 checklist
 
-来源：[plugin-authoring-guide.md](plugin-authoring-guide.md)（v2 插件契约）+ team-work-doc §2.1 + conventions/02-path.md。
+来源：[plugin-authoring-guide.md](00-governance/plugin-authoring-guide.md)（v2 插件契约）+ team-work-doc §2.1 + conventions/02-path.md。
 
 1. `crates/foundation/plugin/` 或**新 crate**（推荐：把 plugin 放进一个新 crate 而非塞 `crates/foundation/plugin` 的源码树）
 2. 模块头 `//!` 写职责 + 0 装 PASS（什么没做）
@@ -197,7 +197,7 @@ rust.yml 另有本地 `make ci` 不覆盖的步骤（legacy 依赖检查 / 3 OS 
 1. `git log -- <file>` 看责任链（per `07-hash.md` 修正链）
 2. 对照 [ARCHITECTURE.md](../../ARCHITECTURE.md) "Ownership boundaries" 表确认职责
 3. **不要碰** deprecated / frozen 标记（v1 字段在源码里仍存但有 `#[deprecated]` 注释）
-4. 改公共 API → `grep` 全部构造点（[team-work-doc.md](team-work-doc.md) §2.4 红线 4）
+4. 改公共 API → `grep` 全部构造点（[team-work-doc.md](05-plans/team-work-doc.md) §2.4 红线 4）
 5. 全量门禁绿：`make gate-full`（`pwsh scripts/gate_full.ps1 -FailIfBusy`）exit 0 + `cargo doc` 无新 warning
    （唯一全量执行器与基线口径见 [test-baseline.md](../03-reference/test-baseline.md) §1）
 
@@ -251,7 +251,7 @@ rust.yml 另有本地 `make ci` 不覆盖的步骤（legacy 依赖检查 / 3 OS 
 | `on_unload` 撤销 v1 授权 pack | `bridge.packs.revoke_by_name(...)` | R**做（v2 governance 接管授权——P0 接线） | 责任分离 |
 | 让 plugin 自己做拒绝逻辑 | `if user_is_bad { return Err(...) }` | `CapabilityDescriptor.with_metadata("risk", ...)` + governance 闸 | policy 不该散在 plugin |
 | `crates/apeireth-*` 顶层 crate 名 | `crates/apeireth-companion/` | `crates/foundation|engine|capabilities|adapters/<name>/` + `apeireth-*` package | 顶层目录按责任分组（foundation/engine/capabilities/adapters），package 名仍 `apeireth-*` |
-| 测试用 `cargo test --workspace` 全量 | 团队协作无脑跑全量 | `cargo test -p <your_crate> -j 4`（per [team-work-doc.md](team-work-doc.md) §2.2）；确需全量门禁走唯一执行器 `pwsh scripts/gate_full.ps1 -FailIfBusy`（per [test-baseline.md](../03-reference/test-baseline.md) §1） | Windows 页文件易耗尽 |
+| 测试用 `cargo test --workspace` 全量 | 团队协作无脑跑全量 | `cargo test -p <your_crate> -j 4`（per [team-work-doc.md](05-plans/team-work-doc.md) §2.2）；确需全量门禁走唯一执行器 `pwsh scripts/gate_full.ps1 -FailIfBusy`（per [test-baseline.md](../03-reference/test-baseline.md) §1） | Windows 页文件易耗尽 |
 
 ---
 

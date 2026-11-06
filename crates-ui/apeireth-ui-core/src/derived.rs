@@ -5,6 +5,12 @@
 //!
 //! 为什么选惰性：死枝不计算（条件块不显示时没人读它）、求值顺序不外泄、
 //! 与 `ui-core` 的零依赖目标一致。
+//!
+//! ## 生命周期（长跑 SPA 的内存账）
+//!
+//! 运行时**只弱引用**派生节点 ⇒ 派生句柄全部丢弃后，节点与求值闭包一起被回收
+//! （否则闭包捕获的 DOM 节点 / 组件状态永远不释放）。需要**提前**释放时用
+//! [`Derived::dispose`]。
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -22,10 +28,18 @@ pub(crate) trait DerivedOps {
 /// 派生节点内部状态。
 pub(crate) struct DerivedNode<T> {
     id: NodeId,
-    compute: Rc<dyn Fn() -> T>,
+    /// 求值闭包；销毁后置空 ⇒ 闭包（及其捕获物）可被回收。
+    compute: RefCell<Option<Box<dyn Fn() -> T>>>,
+    /// 缓存（最后一次成功算出的值）。
     cache: RefCell<Option<T>>,
+    /// 是否已算过（用于区分「没算过」与「算出的值恰好是 None」）。
+    computed: Cell<bool>,
+    /// 缓存是否已失效（待重算）。
     dirty: Cell<bool>,
+    /// 是否已销毁。
+    disposed: Cell<bool>,
 }
+
 impl<T> DerivedOps for DerivedNode<T> {
     fn invalidate(&self) {
         self.dirty.set(true);
@@ -42,6 +56,7 @@ impl<T> std::fmt::Debug for Derived<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Derived")
             .field("id", &self.node.id)
+            .field("dirty", &self.node.dirty.get())
             .finish()
     }
 }
@@ -62,59 +77,57 @@ impl<T: Clone + 'static> Derived<T> {
         let id = inner.alloc_id();
         let node = Rc::new(DerivedNode {
             id,
-            compute: Rc::new(compute),
+            compute: RefCell::new(Some(Box::new(compute))),
             cache: RefCell::new(None),
+            computed: Cell::new(false),
             dirty: Cell::new(true),
+            disposed: Cell::new(false),
         });
-        inner.derived_nodes.borrow_mut().insert(id, node.clone());
+        // 运行时**弱引用**登记 ⇒ 派生句柄全部丢弃后节点可被回收（内存账）。
+        inner.register_derived(id, node.clone());
         Self { node, inner }
     }
 
-    /// 读派生值：脏则重算（求值期间登记依赖边），否则命中缓存。
-    ///
-    /// # Panics
-    ///
-    /// 求值形成环时 panic，见 [`ReactiveError::CycleDetected`]。
-    pub fn get(&self) -> T {
-        match self.try_get() {
-            Ok(value) => value,
-            Err(err) => panic!("{err}"),
-        }
-    }
-
     /// 读派生值（可失败版本）：求值环以错误返回，不 panic。
+    ///
+    /// 这是派生读路径的**显式错误出口**：求值环（派生 A 读派生 B，派生 B 又读回
+    /// A）在这里被检出，并以 [`ReactiveError::CycleDetected`] 带**完整环路径**报出。
     pub fn try_get(&self) -> Result<T, ReactiveError> {
+        if self.node.disposed.get() {
+            return Err(ReactiveError::DisposedNode { node: self.node.id });
+        }
         if self.inner.tracking_contains(self.node.id) {
             let path = self.inner.tracking_path(self.node.id);
             return Err(ReactiveError::CycleDetected { path });
         }
 
-        let needs_compute = {
-            let cached = self.node.cache.borrow();
-            self.node.dirty.get() || cached.is_none()
-        };
+        let needs_compute = self.node.dirty.get() || !self.node.computed.get();
         if needs_compute {
             // 重算前清空旧依赖 ⇒ 条件依赖正确。
             self.inner
                 .graph
                 .borrow_mut()
                 .clear_dependencies(self.node.id);
+            let compute = self.node.compute.borrow();
+            let Some(compute) = compute.as_ref() else {
+                return Err(ReactiveError::DisposedNode { node: self.node.id });
+            };
             {
                 let _guard = self.inner.push_frame(TrackingFrame::Derived(self.node.id));
-                let value = (self.node.compute)();
+                let value = compute();
                 *self.node.cache.borrow_mut() = Some(value);
             }
+            self.node.computed.set(true);
             self.node.dirty.set(false);
         }
 
         // 登记「外层追踪域 依赖 本派生」⇒ 派生变脏时外层 effect 会重跑。
         self.inner.track(self.node.id);
-        Ok(self
-            .node
-            .cache
-            .borrow()
-            .clone()
-            .expect("派生缓存：重算后必定有值"))
+        // 缓存：算过 ⇒ 必有值（`computed` 标记保证）⇒ 这里不 panic。
+        match self.node.cache.borrow().clone() {
+            Some(value) => Ok(value),
+            None => Err(ReactiveError::DisposedNode { node: self.node.id }),
+        }
     }
 
     /// 本派生的节点编号。
@@ -125,6 +138,55 @@ impl<T: Clone + 'static> Derived<T> {
     /// 本派生当前是否被标脏（缓存已失效、待重算）。
     pub fn is_dirty(&self) -> bool {
         self.node.dirty.get()
+    }
+
+    /// 销毁派生：释放求值闭包与缓存、从运行时表摘除、清掉依赖图里的边。
+    ///
+    /// **幂等**：重复调用安全。
+    ///
+    /// 销毁后 [`Derived::try_get`] 返回 [`ReactiveError::DisposedNode`]；
+    /// [`Derived::get`] 回退到最后一次算出的值（没有则回退到默认值）。
+    pub fn dispose(&self) {
+        if self.node.disposed.get() {
+            return;
+        }
+        self.node.disposed.set(true);
+        // 释放闭包与缓存 ⇒ 闭包捕获的 DOM 节点 / 组件状态可被回收。
+        *self.node.compute.borrow_mut() = None;
+        *self.node.cache.borrow_mut() = None;
+        self.node.computed.set(false);
+        self.inner.derived_nodes.borrow_mut().remove(&self.node.id);
+        // 依赖图：双向边 + 标签一并摘掉。
+        self.inner.graph.borrow_mut().remove_node(self.node.id);
+    }
+
+    /// 本派生是否已销毁。
+    pub fn is_disposed(&self) -> bool {
+        self.node.disposed.get()
+    }
+}
+
+/// 派生读路径的「无条件」变体：**不 panic**。
+///
+/// 失败（求值环 / 已销毁）时：
+/// - 错误被**记录到运行期错误槽**（[`crate::Runtime::take_flush_error`] 可取走）
+///   ⇒ 不静默降级；
+/// - 返回**最后一次成功算出的值**；若从未算过 ⇒ 返回 `T::default()`。
+///
+/// 为什么要求 `T: Default`：读路径不得 panic（wasm 侧 panic = 整页 abort），
+/// 而「环被检出」时必须能给出**某个**值 ⇒ 需要一个可构造的兜底值。
+/// `T` 没有 `Default` 时请用 [`Derived::try_get`]（显式错误出口）。
+impl<T: Clone + Default + 'static> Derived<T> {
+    /// 读派生值（**不 panic**）。
+    pub fn get(&self) -> T {
+        match self.try_get() {
+            Ok(value) => value,
+            Err(err) => {
+                // 失败必须能被回传（不许静默降级）：记入运行期错误槽。
+                self.inner.record_error(err);
+                self.node.cache.borrow().clone().unwrap_or_default()
+            }
+        }
     }
 }
 
@@ -195,11 +257,18 @@ mod tests {
         *slot_a.borrow_mut() = Some(a);
         *slot_b.borrow_mut() = Some(b);
 
-        // 求值环：内层检出后由 get() 以 panic 报出（错误类型 CycleDetected）。
+        // 求值环：内层检出后由 `get()` 记录到错误槽（**不 panic**）。
         let result = catch_unwind(AssertUnwindSafe(|| {
             slot_a.borrow().as_ref().expect("a 已装入").get()
         }));
-        assert!(result.is_err(), "求值环必须被检出");
+        assert!(
+            result.is_ok(),
+            "读路径不得 panic（wasm 侧 panic = 整页 abort）"
+        );
+        assert!(
+            runtime.take_flush_error().is_some(),
+            "求值环必须被记录（不许静默降级）"
+        );
     }
 
     // ── 判别测试（钉行为不钉字面）──────────────────────────────────────────
@@ -381,5 +450,52 @@ mod tests {
         assert_eq!(derived.get(), 3);
         base.set(4);
         assert_eq!(derived.get(), 12, "写后读派生必须立刻是新值");
+    }
+
+    // ── 本批重构新增的判别测试 ─────────────────────────────────────────────
+
+    /// 派生句柄丢弃后，运行时**不得**再持有求值闭包（内存账）。
+    #[test]
+    fn dropping_the_derived_handle_releases_the_compute_closure() {
+        let runtime = Runtime::new();
+        let captured = Rc::new(Cell::new(0u32));
+        {
+            let c = captured.clone();
+            let derived = runtime.derived(move || {
+                c.set(c.get() + 1);
+                1u32
+            });
+            assert_eq!(derived.get(), 1);
+            assert_eq!(
+                Rc::strong_count(&captured),
+                2,
+                "运行时（弱引用登记 ⇒ 实际由派生句柄持有）应持有闭包"
+            );
+        }
+        assert_eq!(
+            Rc::strong_count(&captured),
+            1,
+            "派生句柄丢弃后闭包必须被释放"
+        );
+    }
+
+    /// 显式 `dispose()` ⇒ 闭包立刻释放（不必等句柄丢弃）。
+    #[test]
+    fn dispose_releases_the_compute_closure() {
+        let runtime = Runtime::new();
+        let captured = Rc::new(Cell::new(0u32));
+        let derived = {
+            let c = captured.clone();
+            runtime.derived(move || {
+                c.set(c.get() + 1);
+                1u32
+            })
+        };
+        assert_eq!(Rc::strong_count(&captured), 2);
+
+        derived.dispose();
+        assert_eq!(Rc::strong_count(&captured), 1, "dispose 后闭包必须被释放");
+        assert!(derived.is_disposed());
+        assert!(derived.try_get().is_err(), "已销毁的派生必须显式报错");
     }
 }

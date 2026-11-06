@@ -1,3 +1,4 @@
+
 [package]
 name = "apeireth-core"
 version.workspace = true
@@ -13,6 +14,7 @@ readme = "README.md"
 description = "Apeireth 主路径核心类型 (Episode/Note/Session/IdentityCard) — R14 Phase 1 入口"
 
 [dependencies]
+sha2 = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -29,3 +31,12 @@ path = "src/lib.rs"
 # 业界来源: wasmtime + qdrant 子 crate 都用 `workspace = true` 统一继承
 [lints]
 workspace = true
+
+# 审计账本单写者锁：Windows 侧用原生 `LockFileEx`（unix 侧走手写 FFI，不加依赖）。
+[target."cfg(windows)".dependencies]
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_Storage_FileSystem",
+    # `OVERLAPPED` 在 `Win32::System::IO`（不是 Foundation）⇒ 必须开这个 feature。
+    "Win32_System_IO",
+] }

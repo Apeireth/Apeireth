@@ -21,7 +21,11 @@
 //!   [`Recommendation::Backoff`]，不写账本、不累计慢性。
 //! - **0 unsafe / 0 新外部依赖 / 0 系统时间依赖**。
 //!
-//! # IMPLEMENTED（未接线）
+//! # IMPLEMENTED；装配面已接（默认关，2026-10-25 核对）
+//!
+//! 生产经 `RuntimeBuilder::with_bio_pain` 接上（开关 `APEIRETH_ENABLE_BIO_PAIN` /
+//! `bio-mechanisms.json`，默认关）；开启后痛觉评估进 runtime 快照与自述 SG-16 格。
+//! 原文「未接线」已过期 —— 有装配面，只是默认不开。
 //! 本模块是机制内核 v0：类型、判定规则、固定容量与单元测试齐备，落 **IMPLEMENTED** 级；
 //! **未接 `harness_patch`、未进失败处理链、无 `self_status` 自述节**，
 //! 生产路径 0 调用点（缺口见

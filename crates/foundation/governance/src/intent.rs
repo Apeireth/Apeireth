@@ -273,13 +273,6 @@ impl TurnSecurityContext {
             intent: None,
         }
     }
-
-    #[must_use]
-    pub fn with_task_scope(mut self, scope: impl Into<String>) -> Self {
-        self.task_scope = Some(scope.into());
-        self
-    }
-
     #[must_use]
     pub fn with_intent(mut self, intent: TaskIntentEnvelopeV1) -> Self {
         self.intent = Some(intent);

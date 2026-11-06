@@ -3,7 +3,7 @@
 > `Status: ✅ 批 L2 交付（2026-10-16，纯文档批 · 未 commit）`
 > 一事：沉淀本战役**已验证**的作业配方与执行细则——每配方 =【情境 → 配方 → 验收形状】；
 > 附接棒遗嘱格式、门禁分层三级、「无脚本不发布数字」执行细则（复测注记写法）。
-> 矿脉图：[L-experience-distillation.md](../backend-enhancement/L-experience-distillation.md) §二.4（本批挖第四矿）；
+> 矿脉图：[L-experience-distillation.md](../../archive/backend-enhancement/L-experience-distillation-2026-10-15.md) §二.4（本批挖第四矿）；
 > 施工宪章：[CONSTRUCTION-DISCIPLINE.md](../backend-enhancement/CONSTRUCTION-DISCIPLINE.md)；姊妹矿：[01-collaboration-patterns.md](01-collaboration-patterns.md)（协同面）/ [02-failure-anatomy.md](02-failure-anatomy.md)（死法面）。
 > 出处标注：**★** = 仓内锚点（可链接复核）；**☆** = 会话记录侧（案例现场未落仓，不编造）。
 > 读法：02 矿记死法，本矿记活法——配方条目与 02 矿药方互为对偶，重叠处互相链接不重抄。
@@ -28,7 +28,7 @@
 
 【验收形状】任何"批开工"动作先产出骨架文件再展开内容；产出按小文件族组织、每单元完成即落盘（断点可续）；交付文档能指回「已完成/未完清单」。
 
-> 出处：★[CONSTRUCTION-DISCIPLINE.md](../backend-enhancement/CONSTRUCTION-DISCIPLINE.md) §六.1（渐进落盘三律，2026-10-15 批 L1 实战回写）；★[next-team-handbook.md](../next-team-handbook.md) §1 渐进式披露条（35k→920 token 对照）；★[philosophy-study/02-memory-family.md](../philosophy-study/02-memory-family.md) 抬头「产出纪律（渐进式落盘）」。
+> 出处：★[CONSTRUCTION-DISCIPLINE.md](../backend-enhancement/CONSTRUCTION-DISCIPLINE.md) §六.1（渐进落盘三律，2026-10-15 批 L1 实战回写）；★[next-team-handbook.md](../backend-enhancement/00-backlog.md) §1 渐进式披露条（35k→920 token 对照）；★[philosophy-study/02-memory-family.md](../philosophy-study/02-memory-family.md) 抬头「产出纪律（渐进式落盘）」。
 
 ### 配方 3 · 单项目粒度
 
@@ -38,7 +38,7 @@
 
 【验收形状】调研/取材文件每项目一节独立成段、每节自带三段式；项目间零混读；任意时点截断，已完成项目节即成品。
 
-> 出处：★[philosophy-study/02-memory-family.md](../philosophy-study/02-memory-family.md)（"逐项目序贯处理、每项目即时落盘；单项目读取量有界"）+ 逐项目 README 限读口径；★[absorption-candidates-2026-10.md](../absorption-candidates-2026-10.md)（"一项目一小节、机制假说+实证+吸收裁定三段式"调研纪律）。
+> 出处：★[philosophy-study/02-memory-family.md](../philosophy-study/02-memory-family.md)（"逐项目序贯处理、每项目即时落盘；单项目读取量有界"）+ 逐项目 README 限读口径；★[absorption-candidates-2026-10.md](../03-audits/absorption-candidates-2026-10.md)（"一项目一小节、机制假说+实证+吸收裁定三段式"调研纪律）。
 
 ### 配方 4 · 源头净化防过滤
 
@@ -68,7 +68,7 @@
 
 【验收形状】门禁报告红就是红（零假绿）；flake 定性行必带扰动证据与归属线；真 flake 有定根提交与防复发断言，不是复跑掩盖。
 
-> 出处：★[01-collaboration-patterns.md](01-collaboration-patterns.md) 模式 6（先定性再定罪 + flake 定根口径）；★[quick-capture-delivery.md](../backend-enhancement/quick-capture-delivery.md) §4.3（抢锁扰动定性、标红不代改）；★[zero-debt-opening-clearance-2026-10-12.md](../backend-enhancement/zero-debt-opening-clearance-2026-10-12.md) §1/§6（flake 定根与定性口径、file_lock 案）；★[J-life-integration.md](../backend-enhancement/J-life-integration.md) 门禁证据注 1（隔离复跑转绿、非本批引入亦非本批遗留的定性句式）。
+> 出处：★[01-collaboration-patterns.md](01-collaboration-patterns.md) 模式 6（先定性再定罪 + flake 定根口径）；★[quick-capture-delivery.md](../backend-enhancement/quick-capture-delivery.md) §4.3（抢锁扰动定性、标红不代改）；★[zero-debt-opening-clearance-2026-10-12.md](../backend-enhancement/04-delivery/zero-debt-opening-clearance-2026-10-12.md) §1/§6（flake 定根与定性口径、file_lock 案）；★[J-life-integration.md](../backend-enhancement/02-axes/J-life-integration.md) 门禁证据注 1（隔离复跑转绿、非本批引入亦非本批遗留的定性句式）。
 
 ## 二、接棒遗嘱格式
 
@@ -126,7 +126,7 @@ N. **<接棒项名>**（<落点文件>，<并发注意事项>）：<注册条件
 
 【验收形状】任何对外数字都能三步复核：命令可重跑、log 可对数、真源可对照；差异有归因行。
 
-> 出处：★[CONSTRUCTION-DISCIPLINE.md](../backend-enhancement/CONSTRUCTION-DISCIPLINE.md) §三.1；★[AGENTS.md](../../../AGENTS.md) §1（每个数字必须可复核：命令+日期+工具链）/§3（测试数字单一真源）/§5（数字对外引用对照现行口径，不一致如实报）；★[test-baseline.md](../../03-reference/test-baseline.md) §1 复测注记 + §2 口径定义（套件/例/ignored 三分）；★[audit-gap-behavior-fixes-2026-10-16.md](../backend-enhancement/audit-gap-behavior-fixes-2026-10-16.md) §5「数字口径注」（链路自洽对账 + 他口径定义差异如实注明实形）；★[J-life-integration.md](../backend-enhancement/J-life-integration.md) 数字口径注（"未实跑不发布数字"）。
+> 出处：★[CONSTRUCTION-DISCIPLINE.md](../backend-enhancement/CONSTRUCTION-DISCIPLINE.md) §三.1；★[AGENTS.md](../../../AGENTS.md) §1（每个数字必须可复核：命令+日期+工具链）/§3（测试数字单一真源）/§5（数字对外引用对照现行口径，不一致如实报）；★[test-baseline.md](../../03-reference/test-baseline.md) §1 复测注记 + §2 口径定义（套件/例/ignored 三分）；★[audit-gap-behavior-fixes-2026-10-16.md](../backend-enhancement/audit-gap-behavior-fixes-2026-10-16.md) §5「数字口径注」（链路自洽对账 + 他口径定义差异如实注明实形）；★[J-life-integration.md](../backend-enhancement/02-axes/J-life-integration.md) 数字口径注（"未实跑不发布数字"）。
 
 ## 附一：配方 ↔ 一行速查
 

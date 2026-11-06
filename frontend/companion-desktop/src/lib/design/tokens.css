@@ -54,8 +54,10 @@
      深底主题（night/heritage-void/ocean/forest）继承本组骨白低透；
      浅底主题（essence/day/paper）在各自块覆写为墨色低透，星舰覆写冷白。
      纪律：任何主题下禁止默认白滚动条/发白滑块（shell.css 全局规则消费本组）。 */
-  --ap-scrollbar-thumb: rgba(232, 224, 204, 0.18);
-  --ap-scrollbar-thumb-hover: rgba(232, 224, 204, 0.32);
+  /* 2026-10-18 美术走查：深底上 18% 骨白滑块读作「白杠」（截图实证），
+     压到 12%，hover 才到 24%——滚动条在，但不抢视线。 */
+  --ap-scrollbar-thumb: rgba(232, 224, 204, 0.12);
+  --ap-scrollbar-thumb-hover: rgba(232, 224, 204, 0.24);
   --ap-scrollbar-track: transparent;
 
   /* ---------- 语义色 🟡 待确认（规范 §2.4 / 附录 B-5；纪律已确认，数值提案） ----------
@@ -141,6 +143,20 @@
   --ap-dur-timeline: 90s;   /* 照明档位过渡默认 🟡 §3.3 */
   --ap-dur-timeline-min: 60s; /* 照明档位过渡下限 🟡 §3.3 */
   --ap-ease: var(--ap-ease-standard);
+
+  /* ---------- 表面层级 / 发丝高光 / 浮起（2026-10-18 美术走查新增） ----------
+     目的：黑底上「面板 / 卡片 / 弹出层」要有可读的浮起次序，而不是同色贴底。
+     纪律：只引入中性高光与影，不新增色相、不碰金色家族（金色仍只属于存在状态）。 */
+  --ap-hairline-top: rgba(255, 255, 255, 0.05);   /* 卡片/输入条顶沿 1px 内高光 */
+  --ap-shadow-card: 0 1px 1px rgba(0, 0, 0, 0.3), 0 10px 26px -20px rgba(0, 0, 0, 0.9);
+  --ap-shadow-pop: 0 2px 6px -2px rgba(0, 0, 0, 0.5), 0 24px 56px -28px rgba(0, 0, 0, 0.95);
+  /* 微交互动效档：--ap-dur-ui(2s) 是「界面过渡通则下限」，hover/focus 不能用它 */
+  --ap-dur-fast: 140ms;
+  --ap-dur-quick: 220ms;
+  --ap-ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
+  /* 焦点环：金色取 accent-ui，只做 1px 亮边 + 4px 淡晕，不抢内容 */
+  --ap-focus-ring: 0 0 0 1px color-mix(in srgb, var(--ap-accent-ui) 40%, transparent),
+    0 0 0 4px color-mix(in srgb, var(--ap-accent-ui) 10%, transparent);
 }
 
 /* ---------- Essence 浅色主题（星空山脉壁纸 + 雾面玻璃 UI） ----------
@@ -414,7 +430,7 @@ html[data-theme='starship'] {
    #8a6d1f 在深底不可读）。浅色系（essence/day/paper）保持纸面原值。
    ⚠ 深空舰桥 = 默认主题，applyDocumentTheme 对它**移除** data-theme 属性
    （theme.ts）——必须 :not([data-theme]) 选中，写 [data-theme='night'] 永不命中。 */
-html:not([data-theme]),
+html:not([data-theme]), /* 深空舰桥 = 默认主题，同为深底，留在本组深舱反色里 */
 html[data-theme='heritage-void'],
 html[data-theme='ocean'],
 html[data-theme='forest'] {
@@ -436,6 +452,18 @@ html[data-theme='forest'] {
   --ap-register-archive-ink-gold: #ecc271;    /* 深底文字级强调用亮金 */
   --ap-register-archive-surface-2: #23262b;
   --ap-register-archive-surface-3: #2b2f34;
+}
+
+/* 浅底主题的浮起参数（2026-10-18 美术走查）：白卡上的 1px 内高光要更亮、
+   投影要更淡更散，否则黑投影在浅底上读作脏边。深底（含默认深空舰桥）沿用
+   :root 的中性高光 + 深投影，故本组只列浅色系。 */
+html[data-theme='essence'],
+html[data-theme='day'],
+html[data-theme='paper'],
+html[data-theme='origin'] {
+  --ap-hairline-top: rgba(255, 255, 255, 0.9);
+  --ap-shadow-card: 0 1px 1px rgba(24, 22, 28, 0.05), 0 10px 26px -20px rgba(24, 22, 28, 0.32);
+  --ap-shadow-pop: 0 2px 6px -2px rgba(24, 22, 28, 0.1), 0 24px 56px -28px rgba(24, 22, 28, 0.38);
 }
 
 /* ---------- UI 配色方案覆写（规范 §8 增补⑤）----------

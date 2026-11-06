@@ -247,3 +247,52 @@ impl MemoryTypedMaterializationSink for CanonicalMemoryTypedSink {
         Ok(MemoryMaterializationOutcome::Applied)
     }
 }
+
+/// Rechecks the extraction boundary before a private typed store is touched.
+pub(crate) struct ProfileTypedSink<'a> {
+    pub inner: &'a dyn MemoryTypedMaterializationSink,
+    pub scope: MemoryScope,
+    pub provenance: MemoryProvenance,
+    pub cancellation: apeireth_plugin::ToolCancellation,
+}
+impl ProfileTypedSink<'_> {
+    fn check(&self, scope: &MemoryScope) -> Result<(), MemoryError> {
+        if self.cancellation.is_cancelled() || scope != &self.scope {
+            return Err(MemoryError::Invalid(
+                "private typed materialization scope denied".into(),
+            ));
+        }
+        Ok(())
+    }
+}
+#[async_trait]
+impl MemoryTypedMaterializationSink for ProfileTypedSink<'_> {
+    async fn materialize_commitment(
+        &self,
+        candidate: &CommitmentCandidate,
+        signal: &CommitmentSignal,
+    ) -> Result<MemoryMaterializationOutcome, MemoryError> {
+        self.check(&candidate.scope)?;
+        let mut candidate = candidate.clone();
+        candidate.provenance = self.provenance.clone();
+        self.inner.materialize_commitment(&candidate, signal).await
+    }
+    async fn materialize_persona(
+        &self,
+        delta: &PersonaProfileDelta,
+    ) -> Result<MemoryMaterializationOutcome, MemoryError> {
+        self.check(&self.scope)?;
+        let mut delta = delta.clone();
+        delta.provenance = self.provenance.clone();
+        self.inner.materialize_persona(&delta).await
+    }
+    async fn materialize_relation(
+        &self,
+        candidate: &RelationCandidate,
+    ) -> Result<MemoryMaterializationOutcome, MemoryError> {
+        self.check(&candidate.scope)?;
+        let mut candidate = candidate.clone();
+        candidate.provenance = self.provenance.clone();
+        self.inner.materialize_relation(&candidate).await
+    }
+}

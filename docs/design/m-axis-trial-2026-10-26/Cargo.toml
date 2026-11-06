@@ -1,0 +1,20 @@
+# ⚠️ **独立 workspace**（自带 `[workspace]`）⇒ 不进主仓依赖图、不碰主 `Cargo.lock`、不碰 `deny.toml`。
+# 这是 D19 裁定的硬要求（侦察报告 §10「后续若要推进，先做隔离试验田」）。
+#
+# ⚠️ **本目录在仓内，但它是独立 cargo 工作区** ⇒ 主仓的 `cargo test/clippy/fmt/deny` 都不碰它。
+[workspace]
+members = ["."]
+
+[package]
+name = "m-axis-trial"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+wgpu = "30"
+wgpu-3dgs-core = "0.8"
+wgpu-3dgs-viewer = "0.8"
+glam = "0.33"      # ⚠️ 必须 0.33：两个 3dgs crate 都要求 glam 0.33（pin 0.30 会拉出第二份 glam）
+png = "0.17"
+pollster = "0.3"

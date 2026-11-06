@@ -16,6 +16,7 @@
 //! **0 装诚实**：`production.rs` 未注册本模块（Lead 总装）；无 live E2E；
 //! 技能/记忆/插件三类资产无真实信号源，本测试也不编造。
 
+#![allow(dead_code)] // D-1（owner 裁定 2026-10-25）：测试夹具字段/方法（供用例构造完整对象，部分字段本文件内未被读取）
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 

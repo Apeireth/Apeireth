@@ -254,21 +254,28 @@
     align-items: stretch;
     gap: 0;
     padding: 0;
-    border: 1px solid var(--line-strong);
-    border-radius: 10px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
     background: var(--surface-2);
+    box-shadow: inset 0 1px 0 var(--ap-hairline-top), var(--ap-shadow-card);
     overflow: hidden;
     cursor: pointer;
     text-align: left;
-    transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
+    transition: border-color var(--ap-dur-fast) var(--ap-ease-out),
+      box-shadow var(--ap-dur-fast) var(--ap-ease-out),
+      transform var(--ap-dur-fast) var(--ap-ease-out);
   }
   .theme-card:hover {
     border-color: var(--amber-line);
-    transform: translateY(-1px);
+    transform: translateY(-2px);
   }
+  /* 美术走查（2026-10-18）：选中原为满强度金 1px + 45% 金环，深底上读作
+     「白描边」压过缩略图。改为 60% 金边 + 20% 金环 + 内亮，选中清楚但不刺。 */
   .theme-card.selected {
-    border-color: var(--ap-accent-ui);
-    box-shadow: 0 0 0 1px color-mix(in srgb, var(--ap-accent-ui) 45%, transparent), 0 8px 28px -8px rgba(0, 0, 0, 0.2);
+    border-color: color-mix(in srgb, var(--ap-accent-ui) 60%, transparent);
+    box-shadow: inset 0 1px 0 var(--ap-hairline-top),
+      0 0 0 1px color-mix(in srgb, var(--ap-accent-ui) 18%, transparent),
+      var(--ap-shadow-card);
   }
   .theme-swatch {
     height: 72px;

@@ -18,6 +18,7 @@
 |---|---|
 | `development.md` | 开发指南（代码地图 / 模式 / 陷阱 / 提交规范） |
 | `fast-feedback-gate.md` | 快反馈门禁用法（`verify_changed.py` / `docs_truth.py` / `commit.ps1`） |
+| `fuzz-target-authoring.md` | **写 fuzz target 之前先读**：选面标准 / 契约断言 / 8 条硬坑（每条都来自真实返工） |
 | `multi-ai-construction-guide.md` | 多 AI 并发施工指南 |
 | `adding-a-module.md`（在 `../development/`） | 新增模块 |
 

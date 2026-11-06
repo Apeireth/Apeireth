@@ -306,50 +306,6 @@ enum WindowsChild {
     Raw(WindowsRawChild),
 }
 
-impl ManagedChild for WindowsChild {
-    fn try_wait(&mut self) -> Result<Option<ChildStatus>, ProcessError> {
-        match self {
-            Self::Std(child) => child.try_wait(),
-            Self::Raw(child) => child.try_wait(),
-        }
-    }
-
-    fn wait(&mut self) -> Result<ChildStatus, ProcessError> {
-        match self {
-            Self::Std(child) => child.wait(),
-            Self::Raw(child) => child.wait(),
-        }
-    }
-
-    fn wait_timeout(&mut self, timeout: Duration) -> Result<Option<ChildStatus>, ProcessError> {
-        match self {
-            Self::Std(child) => child.wait_timeout(timeout),
-            Self::Raw(child) => child.wait_timeout(timeout),
-        }
-    }
-
-    fn terminate(&mut self) -> Result<(), ProcessError> {
-        match self {
-            Self::Std(child) => child.terminate(),
-            Self::Raw(child) => child.terminate(),
-        }
-    }
-
-    fn take_stdout(&mut self) -> Option<Box<dyn std::io::Read + Send>> {
-        match self {
-            Self::Std(child) => child.take_stdout(),
-            Self::Raw(child) => child.take_stdout(),
-        }
-    }
-
-    fn take_stderr(&mut self) -> Option<Box<dyn std::io::Read + Send>> {
-        match self {
-            Self::Std(child) => child.take_stderr(),
-            Self::Raw(child) => child.take_stderr(),
-        }
-    }
-}
-
 struct WindowsStdChild {
     child: Child,
     job: JobObject,
@@ -432,6 +388,10 @@ impl ManagedChild for WindowsStdChild {
             Ok(()) => Ok(()),
             Err(_) => self.child.kill().map_err(io_error),
         }
+    }
+
+    fn terminate_remaining(&mut self) -> Result<(), ProcessError> {
+        self.job.terminate()
     }
 
     fn take_stdout(&mut self) -> Option<Box<dyn std::io::Read + Send>> {
@@ -676,13 +636,28 @@ fn spawn_plain_raw_child(
         si.hStdError = stderr_write;
 
         let mut pi: PROCESS_INFORMATION = std::mem::zeroed();
+        // ⚠️ `CREATE_UNICODE_ENVIRONMENT` **只在环境块非 NULL 时**才设
+        // （2026-11-04 CI 实测修：`os error 87` = ERROR_INVALID_PARAMETER）。
+        //
+        // 机制：`EnvironmentSpec::Inherit` ⇒ `build_environment_block` ⇒ `None`
+        // ⇒ ⇒ `lpEnvironment = NULL`（子进程继承父环境）
+        // ⇒ 但标志里**无条件**带着 `CREATE_UNICODE_ENVIRONMENT`
+        // ⇒ ⇒ Win32 语义：该标志声明「环境块是 UTF-16」
+        // ⇒ ⇒ **块为 NULL 时这个声明自相矛盾** ⇒ ⇒ `CreateProcessW` 回 87。
+        //
+        // ⇒ 旁证：Windows 上**只有「默认请求（Inherit）」这一类**失败，
+        //   显式环境（块非 NULL）的用例**都过了** ⇒ 与本修法精确吻合。
+        let mut creation_flags = CREATE_SUSPENDED;
+        if environment_block.is_some() {
+            creation_flags |= CREATE_UNICODE_ENVIRONMENT;
+        }
         let ret = CreateProcessW(
             application.as_ptr(),
             command_line.as_mut_ptr(),
             std::ptr::null_mut(),
             std::ptr::null_mut(),
             1,
-            CREATE_SUSPENDED | CREATE_UNICODE_ENVIRONMENT,
+            creation_flags,
             environment_block
                 .as_ref()
                 .map(|b| b.as_ptr().cast::<c_void>())
@@ -820,6 +795,10 @@ impl ManagedChild for WindowsRawChild {
             }
         }
         Ok(())
+    }
+
+    fn terminate_remaining(&mut self) -> Result<(), ProcessError> {
+        self.job.terminate()
     }
 
     fn take_stdout(&mut self) -> Option<Box<dyn std::io::Read + Send>> {
@@ -1480,3 +1459,5 @@ fn status(status: std::process::ExitStatus) -> ChildStatus {
 fn io_error(e: std::io::Error) -> ProcessError {
     ProcessError::Io(e.to_string())
 }
+
+mod managed_child;

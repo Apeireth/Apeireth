@@ -138,6 +138,23 @@ impl DailyNoteStore {
     }
 
     /// List notes with a given tag.
+    /// **列出全部笔记的 id**（按创建时间倒序 ⇒ **新在前**）。
+    ///
+    /// ⚠️ **为什么需要它**（2026-11-03 自查发现）：
+    /// `EnhancedDailyNote::search` 在**无 tag 过滤**时只能靠它拿候选
+    /// ⇒ ⇒ 此前 store **没有**这个能力 ⇒ ⇒ 那条路径只能返回空（假实现）。
+    pub fn list_all(&self) -> Result<Vec<NoteId>, DailyNoteError> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT id FROM notes ORDER BY created_at DESC, id DESC")?;
+        let rows = stmt.query_map(params![], |row| row.get::<_, String>(0))?;
+        let mut out = Vec::new();
+        for row in rows {
+            out.push(NoteId(row?));
+        }
+        Ok(out)
+    }
+
     pub fn list_by_tag(&self, tag: &str) -> Result<Vec<NoteId>, DailyNoteError> {
         let mut stmt = self
             .conn

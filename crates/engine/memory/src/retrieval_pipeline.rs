@@ -129,7 +129,15 @@ impl MemoryCandidateSource for Bm25LexicalCandidateSource {
                 } else {
                     c.score_components.lexical = 0.0;
                 }
-                c.score = c.score_components.lexical;
+                // ⚠️ **覆盖率融合**（2026-10-28 两语料实测正收益）：
+                // 只在**已被 BM25 命中**的条目上加（`lexical > 0`），
+                // 否则会把「一个词都没命中的长记录」抬上来 ⇒ 噪声。
+                if c.score_components.lexical > 0.0 {
+                    c.score = c.score_components.lexical
+                        + COVERAGE_WEIGHT * query_coverage(query, &c.content);
+                } else {
+                    c.score = 0.0;
+                }
                 out.push(c);
             }
         }
@@ -187,6 +195,44 @@ pub struct RetrievalStatus {
     pub reranked: bool,
 }
 
+/// **会话上下文** —— 检索管线内「生效条目显著性」的**会话维度**取值方式。
+///
+/// # 为什么需要它
+///
+/// 生效条目显著性按**会话分桶**存放（[`crate::retrieval_tuning`]）⇒ ⇒ 管线给
+/// 候选条目加显著性加成时**必须知道当前是哪个会话**。
+///
+/// 旧实现只能靠**会话作用域**（线程局部）把会话「带进去」⇒ ⇒
+/// * 读代码的人看不出这里依赖了一个**隐式**上下文；
+/// * 管线一旦被**跨线程 / 跨 `await`** 调用 ⇒ ⇒ 线程局部作用域失效 ⇒ ⇒
+///   **静默**回落到进程级默认桶 ⇒ ⇒ 又变成多会话串扰。
+///
+/// ⇒ ⇒ 现在有两条通道：
+/// * [`SessionContext::Explicit`] —— **显式** session id（首选；与线程无关）；
+/// * [`SessionContext::Ambient`] —— **兼容兜底**：沿用会话作用域（旧口径不变）。
+#[derive(Debug, Clone, Copy)]
+enum SessionContext<'a> {
+    /// 显式会话 id（调用方直接传 ⇒ 不依赖任何隐式上下文）。
+    Explicit(&'a str),
+    /// 兼容兜底：按**会话作用域**（线程局部）解析当前会话。
+    Ambient,
+}
+
+impl SessionContext<'_> {
+    /// 读该会话下的条目显著性加成（未调条目 = 0）。
+    ///
+    /// ⚠️ 显式通道**不查作用域** —— 这是「显式优先」的保证：即使当前线程
+    /// 正处在**别的**会话作用域里，显式 session 也照样生效。
+    fn entry_salience(self, memory_id: &str) -> f64 {
+        match self {
+            Self::Explicit(session_id) => {
+                crate::retrieval_tuning::entry_salience_for_session(session_id, memory_id)
+            }
+            Self::Ambient => crate::retrieval_tuning::entry_salience(memory_id),
+        }
+    }
+}
+
 /// Deterministic two-stage retrieval with explicit governance and budgets.
 #[derive(Debug, Clone)]
 pub struct HybridRetrievalPipeline {
@@ -213,8 +259,27 @@ impl HybridRetrievalPipeline {
         }
     }
 
+    /// 按**会话**构造管线：生效层权重取**该会话桶**的值（无 override ⇒ 用传入值）。
+    ///
+    /// ⚠️ **层权重**由调用方在构造期解析（既有契约：管线自己不读生效权重）
+    /// ⇒ ⇒ 这里只是把「按会话解析生效权重」这一步也显式化
+    /// （[`crate::retrieval_tuning::effective_ranking_or_for_session`]）。
+    ///
+    /// ⚠️ **条目显著性**在检索时读 ⇒ ⇒ 想让它也按会话隔离，**必须**用
+    /// [`Self::retrieve_for_session`] / [`Self::retrieve_with_status_for_session`]
+    /// （或作用域内的旧入口）。
+    pub fn new_for_session(session_id: &str, ranking: MemoryRankingConfig) -> Self {
+        Self::new(crate::retrieval_tuning::effective_ranking_or_for_session(
+            session_id, ranking,
+        ))
+    }
+
     /// Run scope filter, union, deduplication, ranking, diversity, and budget
     /// without mutating storage or access metadata.
+    ///
+    /// ⚠️ **会话维度走兼容兜底**：生效条目显著性按**会话作用域**（线程局部）
+    /// 解析（没有作用域 ⇒ 进程级默认桶 ⇒ 旧口径不变）。
+    /// ⇒ ⇒ 想要**显式**会话，用 [`Self::retrieve_for_session`]。
     pub fn retrieve(
         &self,
         query: &str,
@@ -223,12 +288,98 @@ impl HybridRetrievalPipeline {
         limit: usize,
         max_chars: usize,
     ) -> Result<Vec<MemoryCandidate>, MemoryError> {
-        self.retrieve_with_status(query, visible_scopes, sources, limit, max_chars)
-            .map(|(items, _)| items)
+        self.retrieve_with_status_in(
+            SessionContext::Ambient,
+            query,
+            visible_scopes,
+            sources,
+            limit,
+            max_chars,
+        )
+        .map(|(items, _)| items)
     }
 
+    /// **显式会话**的检索入口（与 [`Self::retrieve`] 等价，但**会话 id 显式传入**）。
+    ///
+    /// # 为什么要有它
+    ///
+    /// 生效条目显著性按**会话分桶**存 ⇒ ⇒ 管线必须知道当前是哪个会话。
+    /// [`Self::retrieve`] 只能靠**会话作用域**（线程局部）⇒ ⇒ 跨线程 / 跨
+    /// `await` 的调用会**静默**读不到会话桶 ⇒ ⇒ 回落到默认桶 ⇒ ⇒ 又变串扰。
+    ///
+    /// ⇒ ⇒ 这里把 session **显式**带进来 ⇒ ⇒ **与线程无关**，作用域只当兜底。
+    ///
+    /// ⚠️ **显式优先**：即使当前线程处在**别的**会话作用域里，本入口也只读
+    /// `session_id` 自己的桶 ⇒ ⇒ 作用域内的旧调用照旧工作（旧口径不变）。
+    pub fn retrieve_for_session(
+        &self,
+        session_id: &str,
+        query: &str,
+        visible_scopes: &[MemoryScope],
+        sources: &[&dyn MemoryCandidateSource],
+        limit: usize,
+        max_chars: usize,
+    ) -> Result<Vec<MemoryCandidate>, MemoryError> {
+        self.retrieve_with_status_in(
+            SessionContext::Explicit(session_id),
+            query,
+            visible_scopes,
+            sources,
+            limit,
+            max_chars,
+        )
+        .map(|(items, _)| items)
+    }
+
+    /// 同 [`Self::retrieve`]，但生效条目显著性按**会话作用域**（兼容兜底）解析。
     pub fn retrieve_with_status(
         &self,
+        query: &str,
+        visible_scopes: &[MemoryScope],
+        sources: &[&dyn MemoryCandidateSource],
+        limit: usize,
+        max_chars: usize,
+    ) -> Result<(Vec<MemoryCandidate>, RetrievalStatus), MemoryError> {
+        self.retrieve_with_status_in(
+            SessionContext::Ambient,
+            query,
+            visible_scopes,
+            sources,
+            limit,
+            max_chars,
+        )
+    }
+
+    /// **显式会话**的检索入口（带状态投影）；会话 id 显式传入 ⇒ 不依赖作用域。
+    ///
+    /// ⚠️ **显式优先**：本入口只读 `session_id` 自己的桶（不吃作用域里的
+    /// 别的会话）⇒ ⇒ 多会话不串扰。
+    pub fn retrieve_with_status_for_session(
+        &self,
+        session_id: &str,
+        query: &str,
+        visible_scopes: &[MemoryScope],
+        sources: &[&dyn MemoryCandidateSource],
+        limit: usize,
+        max_chars: usize,
+    ) -> Result<(Vec<MemoryCandidate>, RetrievalStatus), MemoryError> {
+        self.retrieve_with_status_in(
+            SessionContext::Explicit(session_id),
+            query,
+            visible_scopes,
+            sources,
+            limit,
+            max_chars,
+        )
+    }
+
+    /// 检索管线的**会话维度**内部实现（两条通道共用一条代码路径）。
+    ///
+    /// ⚠️ 显著性加成**只在这里**读（[`SessionContext::entry_salience`]）⇒ ⇒
+    /// 显式通道与兜底通道**语义完全一致**（不是两套算法）。
+    fn retrieve_with_status_in(
+        &self,
+        session: SessionContext<'_>,
         query: &str,
         visible_scopes: &[MemoryScope],
         sources: &[&dyn MemoryCandidateSource],
@@ -250,7 +401,8 @@ impl HybridRetrievalPipeline {
                 }
                 candidate.score = candidate.score_components.weighted(&self.ranking);
                 // V4-c: 条目显著性加成 (调权生效值; 未调条目 = 0, 零改动)。
-                candidate.score += crate::retrieval_tuning::entry_salience(&candidate.id);
+                // ⚠️ **会话维度**: 显式 session 优先, 否则按会话作用域兜底。
+                candidate.score += session.entry_salience(&candidate.id);
                 match by_id.get_mut(&candidate.id) {
                     Some(existing) => {
                         existing.score_components.semantic = existing
@@ -262,7 +414,7 @@ impl HybridRetrievalPipeline {
                             .lexical
                             .max(candidate.score_components.lexical);
                         existing.score = existing.score_components.weighted(&self.ranking)
-                            + crate::retrieval_tuning::entry_salience(&existing.id);
+                            + session.entry_salience(&existing.id);
                     }
                     None => {
                         by_id.insert(candidate.id.clone(), candidate);
@@ -349,6 +501,9 @@ impl HybridRetrievalPipeline {
 
     /// Optional model reranking is bounded and falls back to deterministic
     /// ranking if the adapter fails by returning an empty result.
+    ///
+    /// ⚠️ **会话维度走兼容兜底**（会话作用域）；显式会话用
+    /// [`Self::retrieve_with_reranker_for_session`]。
     pub async fn retrieve_with_reranker(
         &self,
         query: &str,
@@ -358,8 +513,60 @@ impl HybridRetrievalPipeline {
         max_chars: usize,
         reranker: Option<&dyn MemoryReranker>,
     ) -> Result<(Vec<MemoryCandidate>, RetrievalStatus), MemoryError> {
-        let (mut items, mut status) =
-            self.retrieve_with_status(query, visible_scopes, sources, limit, max_chars)?;
+        self.retrieve_with_reranker_in(
+            SessionContext::Ambient,
+            query,
+            visible_scopes,
+            sources,
+            limit,
+            max_chars,
+            reranker,
+        )
+        .await
+    }
+
+    /// **显式会话**的检索入口（带模型重排）；会话 id 显式传入 ⇒ 不依赖作用域。
+    pub async fn retrieve_with_reranker_for_session(
+        &self,
+        session_id: &str,
+        query: &str,
+        visible_scopes: &[MemoryScope],
+        sources: &[&dyn MemoryCandidateSource],
+        limit: usize,
+        max_chars: usize,
+        reranker: Option<&dyn MemoryReranker>,
+    ) -> Result<(Vec<MemoryCandidate>, RetrievalStatus), MemoryError> {
+        self.retrieve_with_reranker_in(
+            SessionContext::Explicit(session_id),
+            query,
+            visible_scopes,
+            sources,
+            limit,
+            max_chars,
+            reranker,
+        )
+        .await
+    }
+
+    /// 重排检索的**会话维度**内部实现（两条通道共用一条代码路径）。
+    async fn retrieve_with_reranker_in(
+        &self,
+        session: SessionContext<'_>,
+        query: &str,
+        visible_scopes: &[MemoryScope],
+        sources: &[&dyn MemoryCandidateSource],
+        limit: usize,
+        max_chars: usize,
+        reranker: Option<&dyn MemoryReranker>,
+    ) -> Result<(Vec<MemoryCandidate>, RetrievalStatus), MemoryError> {
+        let (mut items, mut status) = self.retrieve_with_status_in(
+            session,
+            query,
+            visible_scopes,
+            sources,
+            limit,
+            max_chars,
+        )?;
         if let Some(reranker) = reranker {
             let reranked = reranker
                 .rerank(query, items.clone(), self.max_rerank_tokens)
@@ -420,6 +627,45 @@ fn jaccard_similarity(left: &HashSet<String>, right: &HashSet<String>) -> f64 {
         intersection / union
     }
 }
+
+/// **查询词覆盖率**：query 的实词有多少**出现在** document 文本里（0..1）。
+///
+/// # 为什么需要它（2026-10-28 实测）
+///
+/// BM25 是**加权**的（IDF + 长度归一）⇒ 它可能把「命中长词一次」排在
+/// 「命中所有短词」前面。覆盖率是**朴素计数**，与 BM25 **不共线**
+/// ⇒ ⇒ 融合后两语料**同向正收益**：
+/// * LoCoMo（真实对话 1,122 题）：`recall@10` 0.6221 → **0.6346**（**+0.0125**）；
+/// * 内部卷（工程文档 301 题）：0.8738 → **0.9003**（**+0.0266**）。
+///
+/// # 口径
+///
+/// * 只算**长度 ≥ 2** 的实词（去掉单字噪声）；
+/// * 按**子串包含**判定（与生产分词口径一致：CJK 二字组 / ASCII 词）；
+/// * `query` 无实词 ⇒ 返回 0（**不加分**，不制造偏向）。
+fn query_coverage(query: &str, document_text: &str) -> f64 {
+    let terms: Vec<String> = query
+        .split(|ch: char| !ch.is_alphanumeric())
+        .filter(|term| term.chars().count() >= 2)
+        .map(str::to_lowercase)
+        .collect();
+    if terms.is_empty() {
+        return 0.0;
+    }
+    let haystack = document_text.to_lowercase();
+    let hit = terms
+        .iter()
+        .filter(|term| haystack.contains(term.as_str()))
+        .count();
+    hit as f64 / terms.len() as f64
+}
+
+/// 覆盖率在最终分数里的权重（**实测值**，不是拍的）。
+///
+/// 两语料扫描 {0.1, 0.5, 1.0} 后取**两语料都正收益**的档位：
+/// 内部卷在 ×0.5 与 ×1.0 同为 0.9003，LoCoMo 在 ×1.0 最高（0.6346）
+/// ⇒ 取 **0.5**：两头都有正收益、且对长记录的长度偏向更小（更保守）。
+const COVERAGE_WEIGHT: f64 = 0.5;
 
 fn token_overlap_score(query: &[String], document: &[String]) -> f64 {
     if query.is_empty() || document.is_empty() {
@@ -695,6 +941,232 @@ mod tests {
             vec!["b", "a"],
             "调权后的显著性加成必须真进排序 (不装学习)"
         );
+        crate::retrieval_tuning::clear_effective();
+    }
+
+    /// 取候选条目的分数（断言条目在场）。
+    fn score_of(items: &[MemoryCandidate], id: &str) -> f64 {
+        items
+            .iter()
+            .find(|item| item.id == id)
+            .map(|item| item.score)
+            .expect("候选条目在场")
+    }
+
+    /// **显式 session ≡ 作用域 session**（两条通道读到的显著性加成**逐条相等**）。
+    ///
+    /// 显式通道（`retrieve_for_session`）与兼容兜底通道（作用域内的
+    /// `retrieve`）必须读**同一份会话桶** ⇒ ⇒ 分数逐条相等（**不是两套语义**）。
+    ///
+    /// ⚠️ 显式调用**故意在作用域外**做 ⇒ ⇒ 证明它真的不依赖线程局部作用域。
+    #[test]
+    fn explicit_session_and_scope_session_read_the_same_salience() {
+        let _guard = crate::retrieval_tuning::EFFECTIVE_TEST_GUARD
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        crate::retrieval_tuning::clear_effective();
+        let scope = MemoryScope::Global;
+        let source = BasicLexicalCandidateSource::new(vec![
+            candidate("a", "rust memory retrieval design", scope.clone()),
+            candidate("b", "rust memory retrieval notes", scope.clone()),
+        ]);
+        let pipeline = HybridRetrievalPipeline::default();
+
+        // 会话 A: 把 b 的条目显著性提上去 (+ENTRY_STEP)。
+        let mut engine = crate::retrieval_tuning::RetrievalTuningEngine::new();
+        engine.observe(&crate::retrieval_tuning::TuningEvidence::positive(
+            "b", None, 1_000,
+        ));
+        crate::retrieval_tuning::install_effective_for_session("session-a", engine.effective());
+
+        // ① 显式通道 (**作用域外** => 不依赖线程局部作用域)。
+        let explicit = pipeline
+            .retrieve_for_session(
+                "session-a",
+                "rust memory",
+                &[scope.clone()],
+                &[&source],
+                2,
+                1_000,
+            )
+            .unwrap();
+
+        // ② 兼容兜底通道 (作用域内)。
+        let ambient = {
+            let _scope = crate::retrieval_tuning::enter_session_scope("session-a");
+            pipeline
+                .retrieve("rust memory", &[scope.clone()], &[&source], 2, 1_000)
+                .unwrap()
+        };
+
+        assert_eq!(
+            explicit
+                .iter()
+                .map(|item| (item.id.as_str(), item.score))
+                .collect::<Vec<_>>(),
+            ambient
+                .iter()
+                .map(|item| (item.id.as_str(), item.score))
+                .collect::<Vec<_>>(),
+            "显式 session 与作用域 session 必须读到同一份显著性加成 (两条通道等价)"
+        );
+
+        // ⚠️ 防「假相等」: 两边都得**真的**读到提权 (否则「相等」可能只是
+        // 「都没读到」)。
+        assert_eq!(
+            explicit
+                .iter()
+                .map(|item| item.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["b", "a"],
+            "会话 A 的提权必须真进排序"
+        );
+
+        crate::retrieval_tuning::clear_effective();
+    }
+
+    /// **显式 session 不吃别会话的生效值**（多会话串扰回归）。
+    ///
+    /// 形态照 `retrieval_tuning::tests::two_sessions_do_not_share_their_effective_ranking`:
+    /// A 会话与 B 会话各装各的生效值 ⇒ ⇒ 显式查 A 只吃到 A 的显著性，显式查 B
+    /// 只吃到 B 的 ⇒ ⇒ 互不影响。
+    #[test]
+    fn explicit_session_does_not_see_another_session_salience() {
+        let _guard = crate::retrieval_tuning::EFFECTIVE_TEST_GUARD
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        crate::retrieval_tuning::clear_effective();
+        let scope = MemoryScope::Global;
+        let source = BasicLexicalCandidateSource::new(vec![
+            candidate("a", "rust memory retrieval design", scope.clone()),
+            candidate("b", "rust memory retrieval notes", scope.clone()),
+        ]);
+        let pipeline = HybridRetrievalPipeline::default();
+
+        // 基线 (未装任何生效值 => 零显著性加成)。
+        let baseline = pipeline
+            .retrieve("rust memory", &[scope.clone()], &[&source], 2, 1_000)
+            .unwrap();
+        let base_a = score_of(&baseline, "a");
+        let base_b = score_of(&baseline, "b");
+
+        // A 会话提 b; B 会话提 a (各自只动自己的条目)。
+        let mut engine_a = crate::retrieval_tuning::RetrievalTuningEngine::new();
+        engine_a.observe(&crate::retrieval_tuning::TuningEvidence::positive(
+            "b", None, 1_000,
+        ));
+        let mut engine_b = crate::retrieval_tuning::RetrievalTuningEngine::new();
+        engine_b.observe(&crate::retrieval_tuning::TuningEvidence::positive(
+            "a", None, 1_000,
+        ));
+        crate::retrieval_tuning::install_effective_for_session("session-a", engine_a.effective());
+        crate::retrieval_tuning::install_effective_for_session("session-b", engine_b.effective());
+
+        // A 显式查 => 只吃到 A 的 b 提权。
+        let a_items = pipeline
+            .retrieve_for_session(
+                "session-a",
+                "rust memory",
+                &[scope.clone()],
+                &[&source],
+                2,
+                1_000,
+            )
+            .unwrap();
+        assert!(
+            (score_of(&a_items, "b") - base_b - crate::retrieval_tuning::ENTRY_STEP).abs() < 1e-12,
+            "A 必须读到自己的 b 提权: {:?}",
+            a_items
+                .iter()
+                .map(|item| (item.id.as_str(), item.score))
+                .collect::<Vec<_>>()
+        );
+        assert!(
+            (score_of(&a_items, "a") - base_a).abs() < 1e-12,
+            "A 不得吃到 B 的 a 提权 (不许串扰)"
+        );
+
+        // B 显式查 => 只吃到 B 的 a 提权 (**吃不到** A 的 b 提权)。
+        let b_items = pipeline
+            .retrieve_for_session(
+                "session-b",
+                "rust memory",
+                &[scope.clone()],
+                &[&source],
+                2,
+                1_000,
+            )
+            .unwrap();
+        assert!(
+            (score_of(&b_items, "a") - base_a - crate::retrieval_tuning::ENTRY_STEP).abs() < 1e-12,
+            "B 必须读到自己的 a 提权"
+        );
+        assert!(
+            (score_of(&b_items, "b") - base_b).abs() < 1e-12,
+            "B 不得吃到 A 的 b 提权 (不许串扰)"
+        );
+
+        crate::retrieval_tuning::clear_effective();
+    }
+
+    /// **显式 session 优先于作用域**（作用域是**兼容兜底**，不是唯一通道）。
+    ///
+    /// 当前线程处在**别的**会话作用域里时，显式入口仍只读显式 session 的桶
+    /// ⇒ ⇒ 作用域不会把显式调用「拽」到别的会话 ⇒ ⇒ 跨线程/跨 `await` 的
+    /// 调用不会因为作用域失效而静默串扰。
+    #[test]
+    fn explicit_session_wins_over_the_ambient_session_scope() {
+        let _guard = crate::retrieval_tuning::EFFECTIVE_TEST_GUARD
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        crate::retrieval_tuning::clear_effective();
+        let scope = MemoryScope::Global;
+        let source = BasicLexicalCandidateSource::new(vec![
+            candidate("a", "rust memory retrieval design", scope.clone()),
+            candidate("b", "rust memory retrieval notes", scope.clone()),
+        ]);
+        let pipeline = HybridRetrievalPipeline::default();
+
+        let baseline = pipeline
+            .retrieve("rust memory", &[scope.clone()], &[&source], 2, 1_000)
+            .unwrap();
+        let base_a = score_of(&baseline, "a");
+        let base_b = score_of(&baseline, "b");
+
+        let mut engine_a = crate::retrieval_tuning::RetrievalTuningEngine::new();
+        engine_a.observe(&crate::retrieval_tuning::TuningEvidence::positive(
+            "b", None, 1_000,
+        ));
+        let mut engine_b = crate::retrieval_tuning::RetrievalTuningEngine::new();
+        engine_b.observe(&crate::retrieval_tuning::TuningEvidence::positive(
+            "a", None, 1_000,
+        ));
+        crate::retrieval_tuning::install_effective_for_session("session-a", engine_a.effective());
+        crate::retrieval_tuning::install_effective_for_session("session-b", engine_b.effective());
+
+        // 作用域在 session-b, 显式传 session-a => 读 A 的桶 (不是 B 的)。
+        let explicit = {
+            let _scope = crate::retrieval_tuning::enter_session_scope("session-b");
+            pipeline
+                .retrieve_for_session(
+                    "session-a",
+                    "rust memory",
+                    &[scope.clone()],
+                    &[&source],
+                    2,
+                    1_000,
+                )
+                .unwrap()
+        };
+        assert!(
+            (score_of(&explicit, "b") - base_b - crate::retrieval_tuning::ENTRY_STEP).abs() < 1e-12,
+            "显式 session 优先: 必须读 A 的 b 提权"
+        );
+        assert!(
+            (score_of(&explicit, "a") - base_a).abs() < 1e-12,
+            "显式 session 优先: 不得吃作用域里 B 的 a 提权"
+        );
+
         crate::retrieval_tuning::clear_effective();
     }
 }

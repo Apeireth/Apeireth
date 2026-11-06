@@ -53,6 +53,7 @@ pub use apeireth_plugin::organ::{
 
 pub mod attachment;
 pub mod care;
+pub mod care_potential_field;
 pub mod causal_world_model;
 pub mod causal_world_model_edges;
 pub mod circadian;
@@ -68,6 +69,7 @@ pub mod memory;
 pub mod morphology;
 pub mod motivation;
 pub mod neuromodulation;
+pub mod nociception;
 pub mod play;
 pub mod prompt_assembly;
 pub mod ritual;
@@ -76,6 +78,7 @@ pub mod tone;
 pub mod value_cases;
 pub mod world_model;
 
+pub use care_potential_field::{CareAction, CarePotentialField};
 pub use context_assembly::{
     assemble_tiered, AssemblyPolicyHook, ContextAssembler, ContextAssemblerPolicyExt, ContextBlock,
     OrganAssemblyPolicy,
@@ -96,6 +99,11 @@ pub use morphology::{
 pub use motivation::{
     motivation_score, AutonomyConsistency, IntrinsicIntensity, MotivationScore, ValueStability,
     MIN_MOTIVATION_THRESHOLD, MOTIVATION_THRESHOLD, MOTIVATION_WEIGHTS,
+};
+pub use nociception::{
+    classify_retryability, failure_cause_key, failure_class_for_result, recovery_target_phase,
+    BioPainObservation, BioPainSnapshot, BioRecoveryCaseSnapshot, BioRecoveryPhaseCounts,
+    BioRecoverySnapshot, NociceptionObserver, DEFAULT_BIO_PAIN_OBSERVATIONS,
 };
 pub use prompt_assembly::{
     AssemblerError, AssemblyGuard, AssemblyRole, ExpansionReport, PromptAssembler, SourceKind,

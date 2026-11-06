@@ -94,7 +94,7 @@ refactor(runtime): OrganOrchestrator 完整化 stage N — <一句话>
 
 ### 改动
 
-`crates/engine/runtime/src/canonical/orchestrator.rs`:
+`crates/engine/runtime-assembly/src/canonical/orchestrator.rs`:
 
 1. **加 helper struct** (记 4 transition 结果):
 ```rust
@@ -140,7 +140,7 @@ pub fn ratify_fresh_policy(&mut self) -> Result<RatificationChain, ()> {
 
 ### 测试
 
-新增 1 integration test (per `crates/engine/runtime/tests/orchestrator.rs`):
+新增 1 integration test (per `crates/engine/runtime-assembly/tests/orchestrator.rs`):
 ```rust
 #[tokio::test]
 async fn orchestrator_ratify_fresh_policy_walks_5_state_chain() {

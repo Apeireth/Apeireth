@@ -525,7 +525,7 @@ async fn the_external_tool_rows_always_exist_and_are_false_when_the_switch_is_of
 async fn the_mcp_row_is_false_when_no_external_tool_is_registered() {
     let _guard = env_lock();
     let modules = external_tool_face("mcp-unwired").await;
-    assert!(modules.mcp_bridge().is_some(), "桥必须装配");
+    assert!(modules.mcp_definition().is_some(), "桥必须装配");
     let frame = self_status_frame(&modules).await;
     assert_eq!(
         frame["capabilities"]["mcp"], false,

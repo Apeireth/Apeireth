@@ -7,7 +7,7 @@
 // docs/04-internal/license-port/gate1-license.md. Original license terms unchanged.
 //! Shared helpers for integration tests: deterministic PRNG, synthetic
 //! image generators, comparison metrics.
-#![allow(dead_code)]
+#![allow(dead_code)] // D-1（owner 裁定 2026-10-25）：测试夹具字段/方法（供用例构造完整对象，部分字段本文件内未被读取）
 
 pub mod tiffgen;
 

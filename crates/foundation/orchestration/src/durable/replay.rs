@@ -773,7 +773,8 @@ mod tests {
         assert_eq!(exec.hits(), before);
     }
 
-    /// JSONL 往返后仍可 resume 重放 (continuation 存储路径证明, 未接线)。
+    /// JSONL 往返后仍可 resume 重放（存储路径已接：`cli::continuation_guard
+    /// 用 `FileContinuationStore` 做回合级中断检测；**重放**未接 = 产品语义待定）。
     #[test]
     fn jsonl_round_trip_resume_replays() {
         let exec = CountingEcho::new();

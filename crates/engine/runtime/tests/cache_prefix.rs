@@ -10,6 +10,9 @@
 //! at the tail (after history, before the live query), the committed history is
 //! byte-identical between two turns, and the moving overlays never disturb it.
 
+#[path = "support/behavior_v1.rs"]
+mod behavior_v1;
+
 use std::sync::{Arc, Mutex};
 
 use apeireth_core::kernel::{CapabilityId, ModelId, PluginId, SessionId};
@@ -212,8 +215,8 @@ async fn two_turn_prefix_is_byte_stable_and_overlays_sit_at_the_tail() {
     let r1 = &requests[1].messages;
 
     // Each request carries one dynamic overlay at the very tail (the marker).
-    let ov0 = text_of(r0.last().unwrap());
-    let ov1 = text_of(r1.last().unwrap());
+    let ov0 = behavior_v1::texts(r0).pop().unwrap();
+    let ov1 = behavior_v1::texts(r1).pop().unwrap();
     assert!(ov0.starts_with("recall-turn-"), "overlay at tail: {ov0}");
     assert!(ov1.starts_with("recall-turn-"), "overlay at tail: {ov1}");
     assert_ne!(ov0, ov1, "overlays churn between turns");
@@ -322,7 +325,7 @@ async fn cross_source_overlay_keeps_its_envelope_and_source_label_at_the_tail() 
         .unwrap();
 
     let requests = provider.requests();
-    let texts: Vec<String> = requests[0].messages.iter().map(text_of).collect();
+    let texts = behavior_v1::texts(&requests[0].messages);
 
     // The dynamic block sits at the tail, after the committed history
     // (system persona + the live user query), never at the front.

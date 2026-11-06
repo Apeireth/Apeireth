@@ -1,0 +1,47 @@
+name: Mod targets (mod 行 ↔ 文件存在性守门)
+
+# 2026-10-26 新增：守住「每个 `mod xxx;` 指向的源文件确实存在」。
+#
+# 为什么要有：2026-10-26 实测事故 —— 提交 `crates/engine/memory/src/lib.rs` 时，
+# 工作树里已有一行并行开发加进来的 `pub mod git_corpus;`，但 `git_corpus.rs`
+# **本体当时还是未跟踪文件** ⇒ **引用提交了、文件没提交** ⇒
+# 那两个 commit 单独 checkout **编译不过** ⇒ 连带 PR 的 **10 个 workflow 全红**
+# （clippy / fmt / rustdoc / test --doc / tarpaulin …）。
+#
+# 这类错误的危险在于：**它发生在提交的一瞬**，而 CI 只在**推上去之后**才告诉你。
+# ⇒ 本守卫把这条不变量变成**提交前**就能查的东西。
+#
+# 口径：
+# * MISSING —— `mod xxx;` 指向的 `xxx.rs` / `xxx/mod.rs` 都不存在（= 那次事故的形态）；
+# * DUPLICATE —— 两个候选都存在（Rust 会报 "file for module found at both"）。
+#
+# ⚠️ **不检查**「`xxx/` 目录存在但没有 mod.rs」：那是 Rust 的**标准布局**
+# （`xxx.rs` 内的 `mod yyy;` ⇒ `xxx/yyy.rs`）⇒ 常态，不是问题。
+
+on:
+  push:
+    branches: [master, main]
+    paths:
+      - '**/src/lib.rs'
+      - '**/src/main.rs'
+      - 'scripts/check_mod_targets.py'
+  pull_request:
+    paths:
+      - '**/src/lib.rs'
+      - '**/src/main.rs'
+      - 'scripts/check_mod_targets.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mod-targets:
+    name: mod declaration target gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check every `mod` declaration points at an existing file
+        run: python3 scripts/check_mod_targets.py

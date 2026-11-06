@@ -11,17 +11,17 @@
 //! SG-26) 的只读探测口收成 `capabilities.bio_mechanisms` 子对象 (不新增顶层
 //! 节)。开关 `APEIRETH_ENABLE_BIO_SELF_STATUS` 只认 `"1"`, 默认关; 关时整节
 //! `mechanisms: null` + 原因「未启用」, 一格也不采。默认不注册任何 probe =
-//! 全部 `wired: false` + 原因「未接线」, 绝不编数值。本批 (W3.5) 提供 6 条
-//! **已有运行时数据源**的只读 probe 实现 (免疫记忆 SG-15 / 审议门 SG-24 /
-//! 关怀心跳 SG-19 / 练习账 SG-21 / 痛觉 SG-16 / 再生 SG-17) + 承载力 SG-26
-//! ([`capacity_bio_probe`]); **probe 实现 ≠ 装配根已注册**: 生产装配根当前只
-//! 注册承载力一格, 其余 6 格要 Lead 在装配根按可用句柄注册 (默认关, 关时零
-//! 采集)。注册但读失败 = 单格 `null` + 真因, 整帧仍成功。
+//! 全部 `wired: false` + 原因「未接线」, 绝不编数值。W3.5 提供 6 条只读 probe
+//! (免疫 SG-15 / 审议门 SG-24 / 关怀心跳 SG-19 / 练习账 SG-21 / 痛觉 SG-16 /
+//! 再生 SG-17) + 承载力 SG-26 ([`capacity_bio_probe`])。
 //!
-//! ADR-0003 R1a 神经系统只读聚合: [`nervous_snapshot`] 以
-//! `capabilities.nervous_system` 子对象挂载 (与 `bio_mechanisms` 并列, **仍非
-//! 顶层节**); 开关与 `APEIRETH_ENABLE_BIO_SELF_STATUS` 共用, 关时不读 env、
-//! 不构造快照且旧帧逐字节不变。
+//! **装配现状（2026-10-25 对账：原注释「只注册承载力一格，其余 6 格要 Lead 注册」已过期）**：
+//! 生产根（含 CLI 迟绑定）已填满 10 个槽 + 工具生态剖面 ⇒ 实测 **wired = 12/14**
+//! （E2E 断言 `bio_observation_cells.rs` 的 `wired, 12`）；未接 2 格真因：承载力
+//! （未配任务板）、练习账（`BIO_PLAY` 未开）。单格读失败 = `null` + 真因, 整帧仍成功。
+//!
+//! ADR-0003 R1a 神经系统 [`nervous_snapshot`] 挂 `capabilities.nervous_system`
+//! (与 `bio_mechanisms` 并列, 非顶层节); 共用自述开关, 关时不读 env、旧帧逐字节不变。
 
 use std::path::PathBuf;
 use std::sync::Arc;

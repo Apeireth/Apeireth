@@ -24,12 +24,19 @@ serde_json = { workspace = true }
 sha2 = "0.10"
 thiserror = { workspace = true }
 async-trait = { workspace = true }
+jsonschema = { version = "0.33", default-features = false }
 parking_lot = "0.12"
 
 [dev-dependencies]
 tempfile = "3"
 chrono = { workspace = true }
+# 依赖并集（2026-11-06 合并）: 本线的 `apeireth-provider` + 对方线的
+# `apeireth-organ`（领域观察者接线测试用; 痛觉/再生账本已迁至 organ, runtime
+# 只认识通用观察口）。路径来源统一取本线的 `{ workspace = true }`（根
+# `Cargo.toml` 统一声明 `{ path, version }`）⇒ dev-dependency, 不计生产边。
 apeireth-provider = { workspace = true }
+# 领域观察者接线测试 (痛觉/再生账本已迁至 organ; runtime 只认识通用观察口).
+apeireth-organ = { workspace = true }
 reqwest = { workspace = true }
 
 [lints]

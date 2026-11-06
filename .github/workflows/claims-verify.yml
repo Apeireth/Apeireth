@@ -1,0 +1,105 @@
+name: Claims verify (verify_cmd 真跑)
+
+# **H2 修复**（2026-10-28 审计认定）：
+# `docs/status/claims.yaml` 里每条状态声明都写了 `verify_cmd`，
+# 但 `docs_truth.py --verify` **只用 git grep/git diff**，**从不执行它**
+# ⇒ ⇒ `verify_cmd` 曾是**装饰品** ⇒ 一条声明可以标 `PRODUCTION WIRED`，
+# 而它声称的验证命令**早已失败或被删**，无人发现。
+#
+# 本 workflow 把「要么真跑，要么显式说明为什么不能跑」变成**强制**：
+#   · 能跑的命令 ⇒ 真跑，要求退出码 0 且（cargo test 系）`0 failed`；
+#   · 跑不了的（`<占位符>` / 本机缺工具）⇒ 必须在该 claim 写 `verify_skip_reason`，否则红。
+#
+# 为什么独立成 job 而不塞进 docs-truth：
+#   它会**编译并跑测试**（分钟级），而 docs-truth 是秒级的纯文档检查
+#   ⇒ ⇒ 混在一起会让文档检查失去"快反馈"的价值。
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    # ⭐ **paths 过滤**（2026-11-04 加）：CI 积压的根因是**PR 侧无过滤**
+    # ⇒ ⇒ 每个 push 都触发全部 34 个 workflow（含 Kani / Miri / Coverage / OS matrix）
+    # ⇒ ⇒ GitHub runner 排队 ⇒ ⇒ 积压 32 个。
+    # ⇒ ⇒ 纯文档/台账改动**不触发**本 workflow（它守的是代码）
+    # ⇒ ⇒ 代码 / 依赖 / 工具链 / 本 workflow 自身的改动**照跑**。
+    paths:
+      - 'crates/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'rust-toolchain.toml'
+      - '.cargo/**'
+      - 'fuzz/**'
+      - 'frontend/**/src-tauri/**'
+      - 'frontend/**/package.json'
+      - 'frontend/**/pnpm-lock.yaml'
+      - '.github/workflows/claims-verify.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  claims-verify:
+    name: 状态声明 verify_cmd 真跑
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 安装系统依赖（dbus / wayland / pipewire / egl / **Tauri 桌面壳**）
+        # ⚠️ Tauri 那几条声明（`sec.sql_readonly_gate` / `sec.provider_proxy_ssrf` /
+        # `sec.desktop_file_roots`）要跑 `cd frontend/companion-desktop/src-tauri && cargo test --locked`
+        # ⇒ 需要 webkit2gtk / gtk3 / cairo / soup ⇒ 不装就会**红**
+        # （2026-10-28 实测：装齐后本地 `11 passed / 0 failed`）。
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libdbus-1-dev libwayland-dev libpipewire-0.3-dev \
+            libspa-0.2-dev libegl1-mesa-dev libgbm-dev pkg-config \
+            libwebkit2gtk-4.1-dev libgtk-3-dev libcairo2-dev libsoup-3.0-dev \
+            libjavascriptcoregtk-4.1-dev
+
+      # Tauri 桌面壳要一个 **sidecar 占位**才能通过构建期校验
+      # （与 `companion-desktop-ci.yml` 同一口径）。
+      - name: 准备 Tauri sidecar 占位
+        run: |
+          mkdir -p frontend/companion-desktop/src-tauri/binaries
+          touch frontend/companion-desktop/src-tauri/binaries/apeireth-x86_64-unknown-linux-gnu
+          chmod +x frontend/companion-desktop/src-tauri/binaries/apeireth-x86_64-unknown-linux-gnu
+
+      - uses: dtolnay/rust-toolchain@1.97.1
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: claims-verify
+
+      # ⭐ **磁盘减负**（2026-11-05 · CI runner 曾因磁盘爆而 exit 101）：
+      # 预构建两个 workspace 会吃掉 runner 的全部空间 ⇒ ⇒ `rustls`/`reqwest` 编译期
+      # archive 写失败 ⇒ ⇒ claims-verify 假红（**不是** claim 内容问题）。
+      # ⇒ ⇒ 清 apt 缓存与 rustup 旧组件 ⇒ ⇒ 把空间还给编译。
+      - name: 腾空间（apt 缓存 + rustup 旧组件）
+        run: |
+          sudo rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*.deb || true
+          rustup self update --no-self-update 2>/dev/null || true
+          rustup component remove rustfmt clippy 2>/dev/null || true
+          df -h / | tail -1
+
+      - name: 预构建测试产物（根 workspace；避免每条命令各自冷启动）
+        run: cargo build --workspace --tests --locked
+
+      # `src-tauri` 是**独立 [workspace]**（不能落到根 workspace）⇒ 单独预构建。
+      # ⚠️ **不用 `--all-targets`**（2026-11-05 修正）：它会额外构建 bench / example
+      # ⇒ ⇒ 而 Tauri 侧那两条 claim 的 verify_cmd 只跑 `cargo test --locked <filter>`
+      # ⇒ ⇒ ⇒ `--tests` 足够 ⇒ ⇒ **不降低任何验证** ⇒ ⇒ 只省磁盘。
+      - name: 预构建 Tauri 桌面壳（独立 workspace）
+        working-directory: frontend/companion-desktop/src-tauri
+        run: cargo build --workspace --tests --locked
+
+      # **H5 真值闸**：口径为 PRODUCTION WIRED / DEFAULT ENABLED / HARDWARE VALIDATED
+      # 的声明**不许**靠「豁免 / 延后」成立 ⇒ 否则「已接线」只是个词。
+      - name: 高口径声明必须真验（H5）
+        run: python3 scripts/check_claims_verify.py --wired-gate
+
+      - name: 跑每条 claim 的 verify_cmd
+        run: python3 scripts/check_claims_verify.py --check --timeout 600

@@ -42,7 +42,10 @@ $licensed = 0
 
 # 结构性豁免：命中若仅来自这些**真实字符串**（真实路径/真实文件名/本表自身）
 # 则按"路径保持准确"规则保留、不计违规；豁免计数随输出给出便于审计。
-$exemptRe = 'legacy/donor/|donor/apeireth-|donor/\.\.\.|governance-donor-primitives\.md'
+# 2026-11-06 合并补齐（最小）：上面第 1 项带斜杠，只覆盖 legacy/donor/ 这一种拼写；
+# 同一真实路径的另两种字面形式漏网 —— ① 无斜杠 legacy/donor；② 花括号变体 legacy/{donor,frozen}。
+# 只补这两种**同一路径**的形式；**不扩到裸词 donor**（散文里的「donor 移植源」等仍必须命中）。
+$exemptRe = 'legacy/donor/|donor/apeireth-|donor/\.\.\.|governance-donor-primitives\.md|legacy/donor\b|legacy/\{donor,frozen\}'
 # 文件级豁免 = 事实引注特权（研究的天职是引注，同真实路径豁免原则）：
 #   - 扫描器与搬运工具自身：替换规则必须含源标识字面量；
 #   - 设计调研文档：事实引注；
@@ -66,10 +69,19 @@ $exemptFiles = @(
 )
 $exempted = 0
 
+function Invoke-ScanGit {
+  param([string[]]$GitArgs)
+  $lines = @(& git @GitArgs 2>$null)
+  if ($LASTEXITCODE -ne 0) {
+    throw "git $($GitArgs -join ' ') failed with exit $LASTEXITCODE; scan incomplete"
+  }
+  return $lines
+}
+
 $changed = @()
-$changed += (git diff --name-only HEAD 2>$null)
-$changed += (git diff --cached --name-only 2>$null)
-$changed += (git ls-files --others --exclude-standard 2>$null)
+$changed += @(Invoke-ScanGit -GitArgs @('diff', '--name-only', 'HEAD'))
+$changed += @(Invoke-ScanGit -GitArgs @('diff', '--cached', '--name-only'))
+$changed += @(Invoke-ScanGit -GitArgs @('ls-files', '--others', '--exclude-standard'))
 $changed = $changed | Where-Object { $_ } | Sort-Object -Unique
 
 $targets = $changed | Where-Object {
@@ -84,7 +96,7 @@ if (-not $targets) {
 }
 
 $untracked = @{}
-foreach ($f in (git ls-files --others --exclude-standard 2>$null)) { if ($f) { $untracked[$f] = $true } }
+foreach ($f in (Invoke-ScanGit -GitArgs @('ls-files', '--others', '--exclude-standard'))) { if ($f) { $untracked[$f] = $true } }
 
 $hits = 0
 foreach ($file in $targets) {
@@ -105,7 +117,7 @@ foreach ($file in $targets) {
     }
     continue
   }
-  $diff = @(git diff -U0 HEAD -- "$file" 2>$null)
+  $diff = @(Invoke-ScanGit -GitArgs @('diff', '-U0', 'HEAD', '--', $file))
   $lineNo = 0
   foreach ($row in $diff) {
     if ($row -match '^@@ -\d+(?:,\d+)? \+(\d+)') { $lineNo = [int]$matches[1]; continue }

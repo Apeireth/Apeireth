@@ -27,7 +27,7 @@ use crate::flags;
 use crate::COGNITIVE_DB_ENV;
 
 /// 用法帧。
-pub const USAGE: &str = "apeireth lessons [--db <COGNITIVE_DB>] [--scope <problem|file|interaction|tool>] [--status <candidate|verified|retracted>]\n\n  只读列出教训对象（四拍状态机：candidate → verified → retracted）。\n  认知库优先级: --db > 环境变量 APEIRETH_COGNITIVE_DB > CLI 默认库（当前工作目录下的 .apeireth/cognitive.sqlite3）。\n  默认库不存在时拒绝即帧并报出实际查询路径（不静默建空库）。";
+pub const USAGE: &str = "apeireth lessons [--db <COGNITIVE_DB>] [--scope <problem|file|interaction|tool>] [--status <candidate|verified|retracted>]\napeireth lessons add --statement <一句话教训> --scope <scope> --episode <经历ID> [--episode ...] --evidence <证据摘要>\n\n  list  = 只读列出教训对象（四拍状态机：candidate → verified → retracted）。\n  add   = 写入一条**候选**教训（只能写 candidate）。\n\n  **硬约束由存储层把关，CLI 不绕过**：出处经历必须真实存在（防编造）、语句与证据非空。\n  没有出处的教训按幻觉拒绝。\n  认知库优先级: --db > 环境变量 APEIRETH_COGNITIVE_DB > CLI 默认库（当前工作目录下的 .apeireth/cognitive.sqlite3）。\n  默认库不存在时拒绝即帧并报出实际查询路径（不静默建空库）。";
 
 /// 认知库落点的来源（决定错误帧措辞）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -51,6 +51,11 @@ pub struct DbResolution {
 
 /// 命令入口。
 pub fn run_lessons(args: &[String]) -> Result<String, String> {
+    // 子命令：`add` 是**写入路径**（教训表此前全仓零写入 ⇒ `apeireth lessons`
+    // 永远空表 = 「能力齐全但没接电」的教科书案例）；其余走 list（默认，向后兼容）。
+    if args.first().map(String::as_str) == Some("add") {
+        return run_add(&args[1..]);
+    }
     let flags = parse_flags(args)?;
     let scope = match flags.scope.as_deref() {
         Some(raw) => Some(LessonScope::parse(raw).map_err(|error| error.to_string())?),
@@ -216,6 +221,83 @@ fn ensure_db_present(db: &DbResolution) -> Result<(), String> {
     Err(frame)
 }
 
+/// `apeireth lessons add` —— 写入一条**候选**教训。
+///
+/// # 为什么只写 `candidate`
+///
+/// 四拍状态机的后两拍（`verified` / `retracted`）需要**真实消费方**才该动：
+/// `verified` 要「新场景验证」（不得用来源经历自证），`retracted` 要「撤回理由 +
+/// 影响追踪」（与问责闭环的通知义务耦合）。这两件事没有真实入口前，
+/// 只开 `add` 一个动作，**不假装状态机能完整转**。
+///
+/// # 硬约束不绕过
+///
+/// 出处经历（`--episode`）必须**真实存在**：存储层会给 `UnknownSource`，
+/// 本命令原样报错。这是「没有出处的教训按幻觉拒绝」那条纪律的执行点。
+fn run_add(args: &[String]) -> Result<String, String> {
+    use apeireth_memory::lesson::NewLesson;
+
+    let db = parse_arg(args, "--db")
+        .map(PathBuf::from)
+        .or_else(|| {
+            std::env::var("APEIRETH_COGNITIVE_DB")
+                .ok()
+                .map(PathBuf::from)
+        })
+        .ok_or_else(|| format!("lessons add 需要 --db 或 APEIRETH_COGNITIVE_DB\n{USAGE}"))?;
+    let statement = parse_arg(args, "--statement")
+        .ok_or_else(|| format!("lessons add 需要 --statement\n{USAGE}"))?;
+    let scope_raw =
+        parse_arg(args, "--scope").ok_or_else(|| format!("lessons add 需要 --scope\n{USAGE}"))?;
+    let evidence = parse_arg(args, "--evidence")
+        .ok_or_else(|| format!("lessons add 需要 --evidence\n{USAGE}"))?;
+    let episodes = parse_all(args, "--episode");
+    if episodes.is_empty() {
+        return Err(format!(
+            "lessons add 需要至少一个 --episode（教训必须有出处；\
+             没有出处的教训按幻觉拒绝）\n{USAGE}"
+        ));
+    }
+    let scope = LessonScope::parse(&scope_raw).map_err(|error| error.to_string())?;
+
+    let store = SqliteMemoryStore::open(&db).map_err(|error| format!("认知库打开失败: {error}"))?;
+    let lesson = store
+        .append_lesson_candidate(NewLesson {
+            statement,
+            scope,
+            source_episodes: episodes,
+            evidence,
+        })
+        .map_err(|error| format!("教训写入被拒: {error}"))?;
+    Ok(format!(
+        "已写入候选教训 #{}（status=candidate）\n\
+         它还不是「学到」—— 要经过新场景验证才成为 verified。\n语句: {}\n",
+        lesson.id, lesson.statement
+    ))
+}
+
+/// 收集某个旗标的全部出现值（`--episode` 可重复）。
+fn parse_all(args: &[String], name: &str) -> Vec<String> {
+    let mut found = Vec::new();
+    let mut index = 0;
+    while index < args.len() {
+        if args[index] == name {
+            if let Some(value) = args.get(index + 1) {
+                found.push(value.clone());
+            }
+            index += 2;
+            continue;
+        }
+        index += 1;
+    }
+    found
+}
+
+fn parse_arg(args: &[String], flag: &str) -> Option<String> {
+    let index = args.iter().position(|arg| arg == flag)?;
+    args.get(index + 1).cloned()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -225,6 +307,47 @@ mod tests {
             std::env::temp_dir().join(format!("apeireth-lessons-cli-{tag}-{}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("dir");
         dir.join("cognitive.sqlite3")
+    /// `lessons add`：没有出处经历 ⇒ 拒绝（**没有出处的教训按幻觉拒绝**）。
+    #[test]
+    fn add_without_episode_is_refused() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let db = dir.path().join("cognitive.sqlite3");
+        let args: Vec<String> = vec![
+            "add".into(),
+            "--db".into(),
+            db.to_string_lossy().to_string(),
+            "--statement".into(),
+            "试试这条".into(),
+            "--scope".into(),
+            "tool".into(),
+            "--evidence".into(),
+            "某次失败".into(),
+        ];
+        let err = run_lessons(&args).expect_err("没有出处必须拒绝");
+        assert!(err.contains("--episode"), "理由应可读: {err}");
+        assert!(err.contains("幻觉"), "应说明纪律: {err}");
+    }
+
+    /// `lessons add`：出处经历不存在 ⇒ 存储层拒绝（防编造）。
+    #[test]
+    fn add_with_unknown_episode_is_refused_by_store() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let db = dir.path().join("cognitive.sqlite3");
+        let args: Vec<String> = vec![
+            "add".into(),
+            "--db".into(),
+            db.to_string_lossy().to_string(),
+            "--statement".into(),
+            "试试这条".into(),
+            "--scope".into(),
+            "tool".into(),
+            "--episode".into(),
+            "ep-does-not-exist".into(),
+            "--evidence".into(),
+            "某次失败".into(),
+        ];
+        let err = run_lessons(&args).expect_err("编造出处必须被拒");
+        assert!(err.contains("教训写入被拒"), "理由应可读: {err}");
     }
 
     #[test]

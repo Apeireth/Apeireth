@@ -342,11 +342,6 @@ impl CareHeartbeatPoll {
             .as_ref()
             .and_then(BioCircadianGate::last_decision)
     }
-
-    /// 内核本体 (喂交互观察等进程内值的入口)。
-    pub fn engine_mut(&mut self) -> &mut CareEngine {
-        &mut self.engine
-    }
 }
 
 /// 一轮生物候选: 开关门 → 取供给 → 产候选 → 逐条走 `poll_bio_candidate`

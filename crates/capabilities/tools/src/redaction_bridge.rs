@@ -572,8 +572,22 @@ impl NormalizedShadow {
                 continue;
             }
             let char_end = index + character.len_utf8();
+            // 影子串与映射表必须**逐字节一一对应** (`orig_start` 的下标就是
+            // `norm` 的字节下标)。
+            //
+            // 修复前 (2026-10-25 fuzz 发现的真实泄密路径): 这里在「每字节一轮」的
+            // 循环里 `norm.push(character)` —— 推的是**整个字符**而不是那一个字节,
+            // 于是多字节字符 (中文 / emoji / U+FFFD) 会把 `norm` 撑成
+            // `len_utf8()²` 字节, 而 `orig_start`/`orig_end` 只各加一条 → 两者下标
+            // 彻底错位。后果 (V5 拆分串防御在非 ASCII 文本里失效):
+            //   ① 命中区间算不出来 → **真值原样出境**;
+            //   ② 命中区间算到**错误位置** → 误伤正常文本 + 真值碎片残留。
+            // 实测修复前:
+            //   "中文 h u n t e r 2 - p l a i n - v a l u e 结尾" → 原样出境 (未脱敏)
+            //   "é h u n t e r 2 - p l a i n - v a l u e 结尾"    → 扫错区间
+            // 现在: 字符只 push 一次, 映射表按该字符的**字节数**补齐 → 下标恒对齐。
+            norm.push(character);
             for _ in 0..character.len_utf8() {
-                norm.push(character);
                 orig_start.push(index);
                 orig_end.push(char_end);
             }
@@ -846,6 +860,96 @@ mod tests {
         );
     }
 
+    /// **V5 拆分串变体在非 ASCII 文本里也必须被拦**（2026-10-25 fuzz 发现的真实
+    /// 泄密路径 —— 回归测试）。
+    ///
+    /// 修复前 `NormalizedShadow::new` 在「每字节一轮」的循环里 `norm.push(character)`
+    /// —— 推的是**整个字符**而不是那一个字节。多字节字符 (中文 / emoji / U+FFFD)
+    /// 于是把影子串撑成 `len_utf8()²` 字节, 而 `orig_start`/`orig_end` 只各加一条
+    /// → 影子串字节下标与映射表下标**彻底错位**。V5 拆分串防御在非 ASCII 文本里
+    /// 随之失效, 两种失败形态都实测到过:
+    ///
+    /// ① 命中区间算不出来 → **真值原样出境**:
+    /// ```text
+    /// 输入  "中文 h u n t e r 2 - p l a i n - v a l u e 结尾"
+    /// 输出  "中文 h u n t e r 2 - p l a i n - v a l u e 结尾"    ← 一字未脱
+    /// ```
+    /// ② 命中区间算到**错误位置** → 误伤正常文本 + 真值碎片残留:
+    /// ```text
+    /// 输入  "é h u n t e r 2 - p l a i n - v a l u e 结尾"
+    /// 输出  "é h u n __AP_ENV_SECRET_xxx__尾"                 ← 区间错位
+    /// ```
+    ///
+    /// 契约依据: 模块头 §变体绕过防御面「对**本会话登记簿中已登记的值**, 回扫/出境扫
+    /// 额外清扫以下形态并换回同一占位符」(V5 = 字符间插空白/零宽字符) +
+    /// [`RedactionBridge::redact_for_egress`]「输出只含占位族, 永不含真值」。
+    #[test]
+    fn split_form_variant_is_defended_in_non_ascii_text() {
+        let mut bridge = bridge(17);
+        let token = bridge.register_value(PiiKind::EnvSecret, SECRET);
+        let spaced = SECRET
+            .chars()
+            .map(|c| format!("{c} "))
+            .collect::<String>()
+            .trim()
+            .to_string();
+        let zero_width = SECRET
+            .chars()
+            .map(|c| format!("{c}\u{200B}"))
+            .collect::<String>()
+            .trim_end_matches('\u{200B}')
+            .to_string();
+
+        // 非 ASCII 出现在**变体之前** —— 修复前正是在这里偏移错位。
+        for (label, variant) in [("空格拆分", &spaced), ("零宽拆分", &zero_width)] {
+            let mut history = vec![format!("中文 {variant} 结尾")];
+            bridge.rescan_history(&mut history);
+            assert!(
+                !history[0].contains(variant),
+                "{label}: 非 ASCII 文本里的拆分串变体仍明文留在历史里: {}",
+                history[0]
+            );
+            assert!(
+                history[0].contains(&token.render()),
+                "{label}: 变体必须换成同一占位符: {}",
+                history[0]
+            );
+            // 正常文本不得被误伤 (修复前命中区间会算到错误位置)。
+            assert!(
+                history[0].contains("中文") && history[0].contains("结尾"),
+                "{label}: 正常文本被误伤: {}",
+                history[0]
+            );
+        }
+    }
+
+    /// **多字节真值本身**的拆分串变体同样必须被拦（修复前影子串里多字节字符被重复
+    /// 撑开, 影子串与真值根本匹配不上）。
+    #[test]
+    fn split_form_variant_of_multibyte_value_is_defended() {
+        let value = "秘密-取值-1234";
+        let mut bridge = bridge(18);
+        let token = bridge.register_value(PiiKind::EnvSecret, value);
+        let spaced = value
+            .chars()
+            .map(|c| format!("{c} "))
+            .collect::<String>()
+            .trim()
+            .to_string();
+        let mut history = vec![format!("前文 {spaced} 后文")];
+        bridge.rescan_history(&mut history);
+        assert!(
+            !history[0].contains(&spaced),
+            "多字节真值的拆分串变体仍明文留在历史里: {}",
+            history[0]
+        );
+        assert!(
+            history[0].contains(&token.render()),
+            "多字节真值变体必须换成同一占位符: {}",
+            history[0]
+        );
+    }
+
     /// 变体形态辅助函数对齐公共向量 (base64 RFC 4648)。
     #[test]
     fn variant_encoding_helpers_match_known_vectors() {
@@ -1020,5 +1124,30 @@ mod tests {
         let report = bridge.restore_for_local(&egress.text);
         assert_eq!(report.text, spoken);
         assert_eq!(report.restored, vec![token.fingerprint.clone()]);
+    }
+
+    /// **独立验证**（副总指挥自写，非子代理测试）：非 ASCII 文本里的
+    /// **多字节字符**不得让影子串与映射表错位 ⇒ 拆分串变体必须被拦。
+    ///
+    /// 漏洞机理：修复前在「每字节一轮」循环里 `norm.push(character)` 推的是**整个字符**，
+    /// 多字节字符把影子串撑成 `len_utf8()²` 字节而映射表只加一条 ⇒ 下标错位。
+    #[test]
+    fn multibyte_prefix_does_not_break_the_shadow_index_alignment() {
+        let mut bridge = bridge(29);
+        let token = bridge.register_value(PiiKind::EnvSecret, SECRET);
+        for prefix in ["中文", "é", "😀", "中文😀é", "ﬁ"] {
+            let mut history = vec![format!("{prefix} {SECRET} 结尾")];
+            bridge.rescan_history(&mut history);
+            assert!(
+                !history[0].contains(SECRET),
+                "前缀 {prefix:?} 导致真值明文留在历史里: {}",
+                history[0]
+            );
+            assert!(
+                history[0].contains(&token.render()),
+                "前缀 {prefix:?} 时真值必须换成占位符: {}",
+                history[0]
+            );
+        }
     }
 }

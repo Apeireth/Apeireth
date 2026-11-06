@@ -87,7 +87,13 @@ impl ProviderCapability for ScriptedProvider {
             model: request.model.clone(),
             content: format!("echo: {content}"),
             finish_reason: Some(NormalizedFinishReason::Stop),
-            usage: NormalizedUsage::default(),
+            // Scripted normal calls report usage so owner budgets remain usable.
+            usage: NormalizedUsage {
+                prompt_tokens: 1,
+                completion_tokens: 1,
+                total_tokens: 2,
+                prompt_cache_hit_tokens: None,
+            },
             tool_calls: Vec::new(),
             raw_metadata: serde_json::Map::new(),
         })
@@ -170,6 +176,13 @@ impl GovernanceHook for SequenceHook {
     }
 
     async fn evaluate(&self, request: &GovernanceRequest<'_>) -> Decision {
+        if let apeireth_governance::Action::CapabilityDispatch { capability, .. } = request.action {
+            return if capability.as_str() == "tool.behavior.probe.invoker_handle" {
+                Decision::Allow
+            } else {
+                Decision::deny("fixture has no grant for this capability")
+            };
+        }
         self.captures
             .lock()
             .unwrap()
@@ -399,6 +412,52 @@ async fn different_turns_have_independent_budgets() {
 // C. session/trace context does not cross turns
 // ---------------------------------------------------------------------
 
+async fn assert_child_origin(
+    runtime: &Runtime,
+    child: (SessionId, TraceId),
+    parent: (SessionId, TraceId),
+) {
+    // S2: governed calls now use actual child identity. The durable task event
+    // must link that identity back to exactly the originating parent turn.
+    assert_ne!(child.0, parent.0);
+    assert_ne!(child.1, parent.1);
+    let private = runtime.sessions().load(&child.0).await.unwrap().unwrap();
+    let public = runtime.sessions().load(&parent.0).await.unwrap().unwrap();
+    let event = private
+        .events
+        .iter()
+        .find(|e| {
+            matches!(
+                e.event,
+                apeireth_runtime::canonical::SessionEventKind::AgentTaskStarted { .. }
+            )
+        })
+        .unwrap();
+    assert_eq!(event.trace, child.1);
+    match &event.event {
+        apeireth_runtime::canonical::SessionEventKind::AgentTaskStarted {
+            agent,
+            parent_session,
+            parent_request,
+            parent_trace,
+            ..
+        } => {
+            assert_eq!(*parent_session, parent.0);
+            assert_eq!(*parent_trace, parent.1);
+            assert_ne!(event.request, *parent_request);
+            assert!(public
+                .events
+                .iter()
+                .any(|e| e.request == *parent_request && e.trace == *parent_trace));
+            assert!(runtime
+                .agent_instances()
+                .iter()
+                .any(|a| a.id == *agent && a.session == child.0 && a.usage.requests == 1));
+        }
+        _ => unreachable!(),
+    }
+}
+
 #[tokio::test]
 async fn side_call_context_is_scoped_to_its_own_turn() {
     let provider = ScriptedProvider::new();
@@ -418,17 +477,16 @@ async fn side_call_context_is_scoped_to_its_own_turn() {
 
     // Four governed completions in order: turn-one side-call, turn-one main
     // round, turn-two side-call, turn-two main round. Side-call requests must
-    // carry their own turn's trace, never another turn's.
+    // carry independent child identities linked to their own parent turn.
     let captures = governance.captures();
     assert_eq!(captures.len(), 4, "got {captures:?}");
-    assert!(
-        captures.iter().all(|(sid, _)| *sid == session),
-        "every governed call belongs to the one session"
-    );
-    let trace_one = captures[0].1;
-    let trace_two = captures[2].1;
-    assert_eq!(captures[1].1, trace_one, "turn one shares one trace");
-    assert_eq!(captures[3].1, trace_two, "turn two shares one trace");
+    assert_eq!(captures[1].0, session);
+    assert_eq!(captures[3].0, session);
+    assert_child_origin(&runtime, captures[0], captures[1]).await;
+    assert_child_origin(&runtime, captures[2], captures[3]).await;
+    assert_ne!(captures[0].0, captures[2].0);
+    let trace_one = captures[1].1;
+    let trace_two = captures[3].1;
     assert_ne!(
         trace_one, trace_two,
         "a second turn must never inherit the first turn's trace"
@@ -467,15 +525,42 @@ async fn concurrent_sessions_do_not_share_budget_or_context() {
         captures.iter().map(|(sid, _)| *sid).collect();
     let traces: std::collections::BTreeSet<TraceId> =
         captures.iter().map(|(_, tid)| *tid).collect();
+    assert_eq!(captures.len(), 4);
     assert_eq!(
-        sessions,
-        std::collections::BTreeSet::from([session_a, session_b]),
-        "exactly the two executed sessions, no fabricated ids"
+        sessions.len(),
+        4,
+        "two parents and two independent children"
     );
+    assert_eq!(traces.len(), 4);
+    let children = runtime.agent_instances();
+    assert_eq!(children.len(), 2);
+    let mut origins = std::collections::BTreeSet::new();
+    for child in children {
+        let private = runtime
+            .sessions()
+            .load(&child.session)
+            .await
+            .unwrap()
+            .unwrap();
+        let parent_session = private
+            .events
+            .iter()
+            .find_map(|e| match e.event {
+                apeireth_runtime::canonical::SessionEventKind::AgentTaskStarted {
+                    parent_session,
+                    ..
+                } => Some(parent_session),
+                _ => None,
+            })
+            .unwrap();
+        origins.insert(parent_session);
+        let parent_capture = *captures.iter().find(|(s, _)| *s == parent_session).unwrap();
+        let child_capture = *captures.iter().find(|(s, _)| *s == child.session).unwrap();
+        assert_child_origin(&runtime, child_capture, parent_capture).await;
+    }
     assert_eq!(
-        traces.len(),
-        2,
-        "two concurrent turns carry two distinct traces"
+        origins,
+        std::collections::BTreeSet::from([session_a, session_b])
     );
 }
 

@@ -423,6 +423,9 @@ jobs:
     # R21 续 D-1 100%: 条件
     # - workflow_run + 上游 success: sign success → verify
     # - workflow_dispatch + skip_sign=true (默认 verify-only 模式): sign skipped → verify 单独跑
+    # ⚠️ **`skipped` 在这里当「成功」是**有意为之**（审计 R12 · 2026-10-30）：
+    #    verify-only 模式下**本来就不产签名** ⇒ 跳过 ≠ 失败。
+    #    ⇒ 但**只限本处**；仓内其余聚合门一律严格判 `!= success`（skipped ≠ pass）。
     if: |
       (github.event_name == 'workflow_run' && needs.sign.result == 'success') ||
       (github.event_name == 'workflow_dispatch' && (needs.sign.result == 'success' || needs.sign.result == 'skipped'))
@@ -594,6 +597,7 @@ jobs:
           echo "  run_url: ${{ inputs.run_url || '(workflow_run 自动)' }}"
           echo "  8 包:    deb / rpm / brew / scoop / tarball / zip / msi / docker"
           echo ""
+          # ⚠️ `skipped` 当通过是**有意为之**（verify-only 模式本就不签名）⇒ 见上方注释。
           if [[ "${{ needs.sign.result }}" == "success" ]] || [[ "${{ needs.sign.result }}" == "skipped" ]]; then
             echo "  ✅ sign job: ${{ needs.sign.result }} (verify 守门通过)"
           else

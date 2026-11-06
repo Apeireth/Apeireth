@@ -323,46 +323,6 @@ impl ScheduleTrigger {
             },
         }
     }
-
-    /// 严格晚于 `after_ms` 的下一个发生时点 (没有则为空)。
-    pub fn next_occurrence_after(&self, after_ms: i64) -> Option<i64> {
-        match self {
-            Self::After { at_ms } => (*at_ms > after_ms).then_some(*at_ms),
-            Self::Every {
-                every_ms,
-                anchor_ms,
-            } => {
-                if after_ms < *anchor_ms {
-                    return Some(*anchor_ms);
-                }
-                Some(*anchor_ms + ((after_ms - *anchor_ms).div_euclid(*every_ms) + 1) * *every_ms)
-            }
-            Self::Cron { spec } => match spec {
-                CronSubset::Daily {
-                    hour,
-                    minute,
-                    utc_offset_minutes,
-                } => {
-                    let target = fixed_time_target_ms(*hour, *minute);
-                    fixed_time_next(after_ms, target, *utc_offset_minutes, None)
-                }
-                CronSubset::Weekly {
-                    weekday,
-                    hour,
-                    minute,
-                    utc_offset_minutes,
-                } => {
-                    let target = fixed_time_target_ms(*hour, *minute);
-                    fixed_time_next(
-                        after_ms,
-                        target,
-                        *utc_offset_minutes,
-                        Some(i64::from(*weekday)),
-                    )
-                }
-            },
-        }
-    }
 }
 
 /// 固定时刻的日内毫秒 (时*3600 + 分*60) * 1000。
@@ -418,34 +378,6 @@ fn fixed_time_latest(
     };
     let occ_local = day
         .checked_sub(back)?
-        .checked_mul(DAY_MS)?
-        .checked_add(target_tod_ms)?;
-    occ_local.checked_sub(off_ms)
-}
-
-/// 固定时刻: 严格晚于 `after_ms` 的下一个发生时点; `weekday` 为空 = 每日。
-fn fixed_time_next(
-    after_ms: i64,
-    target_tod_ms: i64,
-    utc_offset_minutes: i32,
-    weekday: Option<i64>,
-) -> Option<i64> {
-    let off_ms = i64::from(utc_offset_minutes) * 60_000;
-    let local = after_ms.checked_add(off_ms)?;
-    let day = local.div_euclid(DAY_MS);
-    let tod = local.rem_euclid(DAY_MS);
-    let fwd = match weekday {
-        None => i64::from(tod >= target_tod_ms),
-        Some(target) => {
-            let mut gap = (target - weekday_of_day(day)).rem_euclid(7);
-            if gap == 0 && tod >= target_tod_ms {
-                gap = 7;
-            }
-            gap
-        }
-    };
-    let occ_local = day
-        .checked_add(fwd)?
         .checked_mul(DAY_MS)?
         .checked_add(target_tod_ms)?;
     occ_local.checked_sub(off_ms)

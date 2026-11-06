@@ -1,5 +1,11 @@
 # v2 Gateway Frontend Integration Spec (2026-08-28, 子代理 R9 写, 主代理 Mavis 待审)
 
+
+> **历史口径横幅（2026-08-28 编制时口径；2026-10-25 复核留痕，正文历史值不改写）**：
+> 本文写于 **v2.0.0-rc.1 收盘后**，其中的路径 / 数字 / 接口均为**写作时点**口径。
+> 现行口径以 `docs/status/claims.yaml`、`docs/03-reference/test-baseline.md`、
+> `docs/03-reference/capabilities-matrix.md` 为准；**本文不作为现状真源**。
+
 > **本文档定位**: v2 canonical gateway ↔ companion-desktop 集成 spec. 真实生产前阻塞 #2 (估 4-6 周, 2027-Q1 启动).
 > **HEAD 状态**: `7d990297` (Round 6 完). 历史 v2.0.0-rc.1 tag @ `b9026186`.
 > **何时写**: 子代理 R9 在 rc.1 收盘后, 整合 #2 commit 拍板 + 9 organ 全 done 状态下写本 spec (真实施由主代理后续派 sub-agent).

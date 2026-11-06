@@ -3814,14 +3814,16 @@
        全开预算 502px ≤ 实测 532px，留 30px 余量。 */
     padding: 3px 12px;
     line-height: 16px;
-    border-radius: 6px;
+    border-radius: 8px;
     border: 0;
     background: transparent;
     color: var(--muted);
     font-size: 12px;
     text-align: left;
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: background var(--ap-dur-fast) var(--ap-ease-out),
+      color var(--ap-dur-fast) var(--ap-ease-out),
+      box-shadow var(--ap-dur-fast) var(--ap-ease-out);
   }
   .subnav-btn:hover {
     background: var(--surface-2);
@@ -3831,6 +3833,8 @@
     background: var(--amber-wash);
     color: var(--amber);
     font-weight: 500;
+    /* 内环收边，激活行不再是一块没有轮廓的色斑。 */
+    box-shadow: inset 0 0 0 1px var(--amber-line);
   }
 
   .settings-content {
@@ -4407,6 +4411,7 @@
     border: 1px solid var(--line);
     border-radius: 12px;
     background: var(--surface-2);
+    box-shadow: inset 0 1px 0 var(--ap-hairline-top), var(--ap-shadow-card);
     overflow: hidden;
   }
   .cap-card-head {
@@ -4438,13 +4443,13 @@
     align-items: center;
     gap: 12px;
     width: 100%;
-    padding: 11px 14px;
+    padding: 12px 14px;
     border: 0;
     border-bottom: 1px solid var(--line);
     background: transparent;
     text-align: left;
     cursor: pointer;
-    transition: background 0.15s ease;
+    transition: background var(--ap-dur-fast) var(--ap-ease-out);
     color: var(--text);
   }
   .cap-row:last-child {

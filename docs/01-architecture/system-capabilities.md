@@ -119,11 +119,25 @@ graph TD
   * `Drop`: 过期闲聊与低优先级弹幕丢弃（支持 TTL 超时淘汰）
   * `Interrupt`: 用户开口或高危警报立即打断当前发言者并抢占麦克风
 
-### 2.6 Prompt Cache 字节级稳定器 (`prompt_stabilizer.rs`)
-* **定位**：最大化 Anthropic/OpenAI/DeepSeek 的 Prompt Cache 命中率（80%+）。
-* **核心法则**：
-  * 前缀锁定：System Prompt + Persona + 历史消息字节流保持绝对不变；
-  * 单点挥发注入：时间、电量、心流状态等动态环境（`EphemeralContextSnapshot`）严格限制仅在最新一条 User 消息顶部注入。
+### 2.6 Prompt Cache 字节级稳定器 (`prompt_stabilizer.rs`) —— ⚠️ **已归档，生产不存在**
+
+* **口径（2026-11-03 复核）**：本节描述的能力**已不在生产仓里** ⇒
+  **不作为当前能力宣称**。
+* **归档事实**：owner 2026-10-20 裁定归档（**ADR-0007** / R7-4a，commit `51bb6cfa`）
+  ⇒ 原路径 = \`crates/foundation/orchestration/src/\` 下的 \`prompt_stabilizer.rs\`
+    （**该路径已不存在** ⇒ 归档后才移走）
+  ⇒ 现于 `legacy/archived/prompt-stabilizer/prompt_stabilizer.rs`
+  （**legacy 不参与构建**；同目录 `MANIFEST.md` 记着归档原因与恢复步骤）
+  ⇒ 归档理由：**无生产消费点**（外部引用仅 `lib.rs` re-export + organ 注释），
+  静态度量 5 个公开项（`StabilizedRole` / `StabilizedMessage` /
+  `EphemeralContextSnapshot` / `PromptCacheStabilizer` / `assemble_tiered`）**全为 export-only**。
+* **当时的设想（历史，非现状）**：最大化 Anthropic/OpenAI/DeepSeek 的 Prompt Cache 命中率（80%+）；
+  前缀锁定（System Prompt + Persona + 历史消息字节流绝对不变）+ 单点挥发注入
+  （动态环境仅在最新一条 User 消息顶部注入）。
+* **现行等价物**：上下文 / 前缀稳定的**单管线**在 `apeireth-orchestration::context_budget`
+  （`ContextBlock` 化，见 ADR-0007 R7-2）⇒ **要按旧文档去找会走空**。
+* **对应缺口条目**：`docs/status/claims.yaml` 的 `gap.prompt_stabilizer_unwired`
+  = **NOT IMPLEMENTED**（`docs/status/STATUS.md` 同步）。
 
 ---
 

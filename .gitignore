@@ -207,6 +207,7 @@ crates/apeireth-integration-e2e/.*.log
 # 习惯: .r<round>-<task>-*.<ext> = sub-agent scratch, 0 必进 git (整合 #4 commit 已含 3 实际文件)
 .r[0-9][0-9][0-9]-*-*
 *.py
+<<<<<<< HEAD
 # 2026-11-04 工具链清理批收窄: scripts/ 是仓内工具目录, 其下的 python 脚本默认入库.
 # 收窄理由 (实测): 全局 `*.py` 规则让**新** scripts/*.py 静默不入库, 且仓内已有 5 个
 # scripts/*.py 当初只能靠 `git add -f` 才勉强入库 (check_doc_caliber / check_no_legacy_deps /
@@ -215,6 +216,19 @@ crates/apeireth-integration-e2e/.*.log
 # 引用 UUID path, 跨机器不可用) —— 必须在下面的通配豁免**之后**重新声明才会生效.
 !scripts/**/*.py
 scripts/_*.py
+=======
+# 仓库常驻工具脚本：scripts/ **一级**的全部 .py 入库（2026-10-24 修正）。
+#
+# 为什么要整目录放行，而不是逐个 `!scripts/xxx.py`：
+# 逐个放行的模式有个**静默失败**——新建一个工具脚本忘了加例外行，
+# `git add` 会跳过它、`git status` 也不显示（被 ignore 规则吃掉），
+# 于是**本地全绿、提交里没有、CI 红了**。
+# 2026-10-24 实测踩过：`unwired_baseline_common.py` 等三个文件因此没进提交，
+# 而 `audit_unwired.py` import 它 ⇒ CI 的「孤儿 API 棘轮」直接失败。
+# 静默忽略比报错更危险 —— 所以这里改成整目录放行，
+# 让「忘了加例外」这类事故**不可能发生**（新增脚本会正常出现在 git status 里）。
+!scripts/*.py
+>>>>>>> 7ed1e3ed
 !scripts/guard_ml/*.py
 # DTS（文档事实体系）常驻脚本：跨批使用，必须入库（2026-10-20 第三线）
 !scripts/docs_truth.py
@@ -230,6 +244,8 @@ scripts/_*.py
 !scripts/verify_ledger.py
 # 未接线审计（2026-10-22 接线治理批）：仓库常驻工具，必须入库
 !scripts/audit_unwired.py
+# 覆盖率棘轮（2026-10-24 输入面/覆盖率治理批）：仓库常驻工具，必须入库
+!scripts/check_coverage_ratchet.py
 # 自述词表纪律检查器（2026-10-23 ADR-0014 §6 落地）：仓库常驻工具（CI 报告项）
 !scripts/check_self_status_vocab.py
 # 文档治理门禁（2026-10-23 文档治理批）：链接完整性 + 索引分层校验器，必须入库
@@ -328,6 +344,13 @@ frontend/companion-desktop/src-tauri/binaries/
 # 不入库以免 100MB+ 二进制进 git；INDEX.md 等清单文件仍被跟踪。
 artifacts/*.png
 artifacts/*.txt
+# 2026-10-30: harness 的**证据包**是**运行时产物**（每次运行重写、绑 commit SHA）
+# ⇒ 不入库（CI 里作 artifact 上传即可）；**清单** `scripts/guard-inventory.json` 是真源 ⇒ 入库。
+artifacts/harness/
+scripts/harness-last-run.json
+# 2026-10-30: 上下文包是**每次任务重新生成**的临时产物（绑当前 commit）
+# ⇒ 不入库（`.harness/tasks/*.yaml` 任务边界**入库** ⇒ owner 2026-10-30 裁定）
+.harness/context/
 frontend/companion-desktop/shot-*.png
 
 # 外部源码抽取暂存（研究线临时区）：绝不入库（借鉴源码产物不留痕迹），收口即删
@@ -349,3 +372,24 @@ research/praisonai-git/
 # Python 缓存（scripts/ 运行副产物，不入库；2026-10-20 效率线）
 __pycache__/
 *.pyc
+# 本地跑 scripts/audit/run-cargo-audit-deny.sh 生成的审计报告（CI 上作为 artifact 上传，不提交）
+reports/r20-cargo-audit-stdout-*.txt
+reports/r20-cargo-deny-stdout-*.txt
+# Guard ML 4 大可再生导出件（F-02 执行批已外置，见 scripts/guard_ml/README.md）；
+# 本地跑 export_guard_scenarios 会再生成，**不应入库**（曾因 git add -A 误提交 22MB）
+scripts/guard_ml/action_samples.jsonl
+scripts/guard_ml/generated_features.jsonl
+scripts/guard_ml/trace_samples.jsonl
+scripts/guard_ml/pair_samples.jsonl
+# guard 数据集清单（export_guard_scenarios 再生；CI 每次导出后读取，库内不存放）
+artifacts/guard-dataseton
+# 覆盖率测量产物（tarpaulin 输出，非源码）
+cobertura.xml
+# 覆盖率插桩产物（tarpaulin 的 .profraw）—— 构建产物, 0 必进 git。
+# 它们会被 tarpaulin 当作覆盖率数据 merge 进去, 污染测量。
+#
+# 订正（2026-10-24）: 本批早段我曾在提交正文里写「仓里曾有 2 个被误提交」——
+# **那是错的**。`origin/main` 上 .profraw 数量为 0; 那 2 个
+# （crates/capabilities/tools/default_*.profraw）是**我自己**在执行 tarpaulin 后
+# 用 `git add -A` 卷进提交的。已从本分支删除, 本条规则防止再次发生。
+*.profraw

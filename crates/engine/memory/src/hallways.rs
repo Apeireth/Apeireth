@@ -47,12 +47,6 @@ use serde::{Deserialize, Serialize};
 use crate::session_note::{NoteRecord, NoteStore};
 use crate::{MemoryError, MemoryResult, SqliteMemoryStore};
 
-/// Default minimum co-occurrence count required to materialize a hallway
-/// (matches the reference design `min_count=2`).
-pub fn default_min_count() -> usize {
-    2
-}
-
 /// Hallway record (persisted to `hallways` table).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Hallway {

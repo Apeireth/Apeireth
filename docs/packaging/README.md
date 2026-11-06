@@ -5,4 +5,4 @@
 | `windows-packaging-lifecycle.md` | Windows 打包生命周期 |
 | `release-asset-verification.md` | 发布资产校验与签名流程（哈希三口径 + 发布者/用户两侧 + 排期） |
 
-发布前完整检查清单见 [`../04-internal/release-checklist.md`](../04-internal/release-checklist.md)。
+发布前完整检查清单见 [`../04-internal/release-checklist.md`](../04-internal/00-governance/release-checklist.md)。

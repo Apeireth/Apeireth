@@ -431,3 +431,40 @@ async fn grants_list_revoke_and_organ_catalog() {
     assert!(organs.iter().all(|o| !o.enabled));
     assert!(organs.iter().any(|o| o.id == "Memory"));
 }
+
+#[tokio::test]
+async fn live_catalog_lists_each_registered_plugin_tool_once_with_its_actual_owner() {
+    let dir = tempfile::tempdir().unwrap();
+    let runtime = Arc::new(
+        apeireth_runtime::Runtime::builder()
+            .with_tool_module(&apeireth_runtime_assembly::FilesystemModule::new(
+                dir.path(),
+            ))
+            .unwrap()
+            .build()
+            .await
+            .unwrap(),
+    );
+    let governance = Arc::new(
+        apeireth_memory::SqliteMemoryStore::open(dir.path().join("catalog-memory.sqlite")).unwrap(),
+    );
+    let panels = CliPanelData::new_with_runtime(
+        runtime,
+        Arc::new(InMemorySessionStore::new()),
+        FakeMemory::new(),
+        governance,
+        test_policy(),
+        true,
+        dir.path().to_path_buf(),
+    );
+    let tools = panels.list_tools().await.unwrap();
+    assert_eq!(
+        tools.len(),
+        1,
+        "a managed tool must not be projected from both registry and plugin views"
+    );
+    assert_eq!(tools[0].name, "filesystem");
+    assert_eq!(tools[0].source, "module.tool.filesystem");
+    assert_eq!(tools[0].permission, "granted");
+    assert!(tools[0].available);
+}
