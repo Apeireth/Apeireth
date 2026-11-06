@@ -3,6 +3,8 @@ use std::process::ExitCode;
 
 use apeireth_cli::flags;
 mod continuation_guard;
+mod entry_flags;
+mod help_text;
 
 use apeireth_cli::onboarding::UserTier;
 use apeireth_cli::{
@@ -10,89 +12,11 @@ use apeireth_cli::{
     dispatch_gateway_serve_with, CanonicalCliTurn,
 };
 use apeireth_runtime::ApprovalDecision;
-
-/// 帮助文本（单一真源；`print_help` 与防漂移测试共用）。
-///
-/// 纪律：**分发里有的命令，帮助里必须出现**（`help_covers_every_dispatched_command`
-/// 机检）。此前这里是手写的一小撮命令，实测漏掉了 `dream` / `nightwatch` /
-/// `lessons` / `egress` / `bundle` / `bio` / `council` / `subagent` —— 用户从
-/// `--help` 根本发现不了这些能力（帮助低估产品，同样是 0 装问题）。
-const HELP_TEXT: &str = "\
-apeireth — 本地优先的个人 AI 运行时（单二进制，多入口）
-
-Usage:
-  [会话]
-    apeireth session      就绪自检：构建运行时、打印就绪与 provider 后退出（非交互）
-    apeireth chat <PROMPT> [--model MODEL] [--session SESSION]
-    apeireth onboard [--tier casual|pro] [--show | --reset]
-  [审批]
-    apeireth approve --session SESSION --approval APPROVAL
-    apeireth reject  --session SESSION --approval APPROVAL [--reason REASON]
-    apeireth cancel  --session SESSION --approval APPROVAL [--reason REASON]
-  [服务]
-    apeireth gateway serve [--bind ADDR] [--port PORT] [--pid-file PATH]
-  [身份与访问]
-    apeireth user add --user-id ID --role owner|member|guest [--clients NAME[,NAME...]] [--domain DOMAIN] [--token TOKEN]
-    apeireth user list [--token TOKEN]
-    apeireth user role --user-id ID --role owner|member|guest [--token TOKEN]
-    apeireth user remove --user-id ID [--token TOKEN]
-  [记忆与认知]
-    apeireth dream
-    apeireth nightwatch [--session SESSION] [--limit N] [--watch] [--interval S [--cooldown S [--idle S]]]
-    apeireth lessons [--db DB] [--scope problem|file|interaction|tool] [--status candidate|verified|retracted] [--limit N]
-    apeireth lessons add --statement 一句话教训 --scope SCOPE --episode 经历ID [--episode ...] --evidence 证据摘要
-    apeireth council <主题...>
-    apeireth subagent <标题...> [--payload JSON]
-    apeireth memory verify [--db DB] [--subject SUBJECT]
-    apeireth memory export --out FILE [--db DB] [--subject SUBJECT] [--limit N]
-    apeireth memory handover --out FILE [--db DB] [--issue TEXT]... [--next TEXT]
-    apeireth memory migrate-subject --from ANCHOR --to ANCHOR [--db DB]
-  [治理与安全]
-    apeireth trait report
-    apeireth trait lock <SLIDER>
-    apeireth trait unlock <SLIDER>
-    apeireth bio list
-    apeireth bio enable <mechanism>
-    apeireth bio disable <mechanism>
-    apeireth crypto wrap --partition <ID> --keys <FILE> --recovery-out <FILE>
-    apeireth crypto recovery-export --keys <FILE> --out <FILE>
-    apeireth crypto unlock --keys <FILE> [--recovery <FILE>] [--out <KEYFILE>]
-    apeireth egress ledger [--path LEDGER_JSONL] [--limit N] [--json]
-    apeireth egress impact [--path IMPACT_JSONL] [--limit N] [--json]
-    apeireth egress outcome <ACTION_ID> <confirmed|failed>
-    apeireth egress bind <ACTION_ID> <TOOL_CALL_ID>
-    apeireth egress notify <FACT_ID> <wording|partial|refuted>
-    apeireth exposure report [--json] [--out PATH] [--bundle BUNDLE]
-  [外部工具（协议桥）]
-    apeireth mcp list [--live]
-    apeireth mcp deny <server>.<tool>
-    apeireth mcp undeny <server>.<tool>
-    apeireth mcp authorize <server>.<tool>
-    apeireth mcp unauthorize <server>.<tool>
-  [数据与迁移]
-    apeireth backup export <DIR>
-    apeireth backup restore <BUNDLE> [--to ROOT]
-    apeireth backup verify <BUNDLE>
-    apeireth bundle --out DIR [--now EPOCH_S]
-
-其它二进制（同一 workspace 的其它入口，不属 `apeireth` 子命令）:
-  apeireth-tui [--endpoint URL] [--token TOKEN]   终端驾驶舱（全屏 TUI 客户端）
-  apeireth-gateway 形态由 `apeireth gateway serve` 提供；SDK 见 crates/adapters/sdk
-
-Options:
-  -h, --help       Show this help (leading position only: apeireth --help / apeireth chat --help)
-  -V, --version    Show the version (leading position only: apeireth --version)
-  --               End flag parsing: every following word is a positional argument
-
-Notes:
-  Unknown flags are refused (never silently treated as text); to pass a word that
-  starts with '-', put it after `--` (e.g. apeireth chat -- --modle gpt-4 hello).
-
-Environment:
-  APEIRETH_LISTEN  gateway serve 绑定地址 (缺省 127.0.0.1; --bind 显式旗标优先)
-  APEIRETH_GATEWAY_TOKEN  全 API 面令牌门 (缺省回环; 非回环绑定必须设令牌)
-  APEIRETH_DATA_DIR  数据根 (缺省 ~/.apeireth)
-";
+use entry_flags::{
+    frame, scan, APPROVAL_FLAGS, CHAT_FLAGS, COUNCIL_FLAGS, DREAM_FLAGS, GATEWAY_FLAGS,
+    NIGHTWATCH_FLAGS, ONBOARD_FLAGS, SUBAGENT_FLAGS,
+};
+use help_text::HELP_TEXT;
 
 fn print_help() {
     println!("{HELP_TEXT}");
@@ -262,83 +186,6 @@ fn run_gateway(bind: String, port: u16, pid_file: Option<std::path::PathBuf>) ->
             ExitCode::FAILURE
         }
     }
-}
-
-// ---------------------------------------------------------------------------
-// 旗标扫描口径 (crate 级单一真源 = `apeireth_cli::flags`; 本面只保留自己的
-// **措辞档**: 本面用法文本是英文的 ⇒ 错误帧走英文档, 与用法帧同语言):
-// - `--` 之后一律位置参数 (不解析成旗标);
-// - 未知旗标 → 拒绝即帧 (指出旗标名 + `--` 分隔提示), 不静默吞成正文;
-// - 悬空旗标 / 旗标值本身像旗标 → 报「缺值」, 不报「未知参数」;
-// - 负数是**值**不是旗标 (`--cooldown -1` ⇒ 报「值不合法」, 不报「缺值」);
-// - `--help` / `-h` / `--version` / `-V` 只在首参数位生效 (首参数位之外当正文,
-//   所以 `apeireth chat how --help` 的正文照发模型, 不被帮助吞掉)。
-// ---------------------------------------------------------------------------
-
-/// `apeireth chat` 的旗标白名单 (元旗标当正文: 正文不被帮助吞掉)。
-const CHAT_FLAGS: flags::FlagSpec = flags::FlagSpec {
-    value: &["--model", "--session"],
-    boolean: &[],
-    meta_as_positional: true,
-};
-
-/// `apeireth council` 的旗标白名单 (本命令不收旗标; 元旗标当议题正文)。
-const COUNCIL_FLAGS: flags::FlagSpec = flags::FlagSpec {
-    value: &[],
-    boolean: &[],
-    meta_as_positional: true,
-};
-
-/// `apeireth subagent` 的旗标白名单 (元旗标当标题正文)。
-const SUBAGENT_FLAGS: flags::FlagSpec = flags::FlagSpec {
-    value: &["--payload"],
-    boolean: &[],
-    meta_as_positional: true,
-};
-
-/// `apeireth approve|reject|cancel` 的旗标白名单 (本组命令不收位置参数)。
-const APPROVAL_FLAGS: flags::FlagSpec = flags::FlagSpec {
-    value: &["--session", "--approval", "--reason"],
-    boolean: &[],
-    meta_as_positional: false,
-};
-
-/// `apeireth dream` 的旗标白名单。
-const DREAM_FLAGS: flags::FlagSpec = flags::FlagSpec {
-    value: &["--session", "--limit", "--date"],
-    boolean: &[],
-    meta_as_positional: false,
-};
-
-/// `apeireth nightwatch` 的旗标白名单 (`--watch` 是布尔旗标: 不带值、不吞词)。
-const NIGHTWATCH_FLAGS: flags::FlagSpec = flags::FlagSpec {
-    value: &["--session", "--limit", "--idle", "--cooldown", "--interval"],
-    boolean: &["--watch"],
-    meta_as_positional: false,
-};
-
-/// `apeireth onboard` 的旗标白名单 (`--show` / `--reset` 是布尔旗标)。
-const ONBOARD_FLAGS: flags::FlagSpec = flags::FlagSpec {
-    value: &["--tier"],
-    boolean: &["--show", "--reset"],
-    meta_as_positional: false,
-};
-
-/// `apeireth gateway serve` 的旗标白名单。
-const GATEWAY_FLAGS: flags::FlagSpec = flags::FlagSpec {
-    value: &["--bind", "--port", "--pid-file"],
-    boolean: &[],
-    meta_as_positional: false,
-};
-
-/// 入口面的错误帧上下文 (英文档 + 「未知旗标」措辞)。
-fn frame(command: &str) -> flags::FrameContext<'_> {
-    flags::FrameContext::new(command, flags::UnknownNoun::Flag)
-}
-
-/// 按白名单扫描本命令的参数 (判据与措辞都在 crate 级共享模块里)。
-fn scan(args: &[String], spec: &flags::FlagSpec, command: &str) -> Result<flags::Scan, String> {
-    flags::scan(args, spec).map_err(|error| error.frame(flags::Style::En, &frame(command)))
 }
 
 fn parse_chat(args: &[String]) -> Result<(String, Option<String>, Option<String>), String> {

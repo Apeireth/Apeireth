@@ -72,7 +72,29 @@ fn main() {
             idle_footprint::run_probe();
         }
         startup::PROBE_ARG => {
-            startup::probe::run(&args[1..]).expect("startup child probe");
+            // TEMP-DIAGNOSTIC (orchestration triage, reverted after the run):
+            // record the child's outcome on disk so the parent's captured stderr
+            // can be correlated. No effect before the failure point.
+            let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                startup::probe::run(&args[1..])
+            }));
+            match outcome {
+                Ok(Ok(())) => {}
+                Ok(Err(error)) => {
+                    let path = std::env::var("APEIRETH_PROBE_OUTCOME_LOG").unwrap_or_else(|_| {
+                        "/var/tmp/apeireth-tmp/probe-child-outcome.log".to_string()
+                    });
+                    let _ = std::fs::write(&path, format!("probe-err: {error:?}\n"));
+                    panic!("startup child probe: {error:?}");
+                }
+                Err(payload) => {
+                    let path = std::env::var("APEIRETH_PROBE_OUTCOME_LOG").unwrap_or_else(|_| {
+                        "/var/tmp/apeireth-tmp/probe-child-outcome.log".to_string()
+                    });
+                    let _ = std::fs::write(&path, format!("probe-panic: {payload:?}\n"));
+                    std::panic::resume_unwind(payload);
+                }
+            }
         }
         name if startup::NAMES.contains(&name) => {
             if let Err(error) = startup::run(name, &cfg) {

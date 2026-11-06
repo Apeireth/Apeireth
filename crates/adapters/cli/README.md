@@ -9,9 +9,14 @@ apeireth-cli 是 Apeireth v2 (AGI 操作系统) 工作区 crate 之一。完整�
 
 ## 主入口
 
-- `src/main.rs` — `apeireth` 二进制入口（`Cargo.toml` 里 `[[bin]] name = "apeireth"`）。
-  `HELP_TEXT` 是帮助文本的单一真源，`print_help()` 与防漂移测试
-  `help_covers_every_dispatched_command` 共用它（分发面有的命令，帮助面必须出现）。
+- `src/main.rs` — `apeireth` 二进制入口（`Cargo.toml` 里 `[[bin]] name = "apeireth"`）：
+  入口面的参数解析、命令分发与执行。入口面自己的两块声明式内容已拆成独立模块 ——
+  帮助文本在 `src/help_text.rs`，旗标白名单与措辞档在 `src/entry_flags.rs`
+  （旗标判据与共享实现仍在 crate 级共享模块 `apeireth_cli::flags`）。
+- `src/help_text.rs` — 入口面帮助文本（用户可见静态产物）：`HELP_TEXT` 是帮助文本的
+  单一真源，`print_help()` 与防漂移测试 `help_covers_every_dispatched_command` 共用它
+  （分发面有的命令，帮助面必须出现）。
+- `src/entry_flags.rs` — 入口面旗标白名单（各命令收哪些旗标）与措辞档（错误帧走英文档）。
 - `src/lib.rs` — 库入口与公共 API：`build_canonical_runtime_from_env()`（从环境变量装配唯一
   那套规范运行时）、`execute_canonical_cli_turn()`（构造 `TurnRequest` 并调
   `Runtime::execute_outcome`）、`dispatch_canonical_chat()` / `dispatch_canonical_approval()`、
