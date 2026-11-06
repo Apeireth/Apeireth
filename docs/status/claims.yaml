@@ -257,6 +257,7 @@ claims:
       - legacy/archived/prompt-stabilizer/prompt_stabilizer.rs
     verified_at: c9251271
     verify_cmd: "Test-Path legacy/archived/prompt-stabilizer/prompt_stabilizer.rs; git grep -n PromptCacheStabilizer -- crates"
+    verify_skip_reason: "命令含 PowerShell 专用 cmdlet `Test-Path` ⇒ ⇒ 只能在 pwsh（Windows）下跑 ⇒ ⇒ Linux CI 不可执行；本条是**有意不接**的归档模块 ⇒ ⇒ 由 Windows 侧人工核对归档路径与符号残留"
     owner: orchestration
     next_review: "2026-11-20"
     notes: "2026-10-21 复核：R7-4a（51bb6cfa，ADR-0007 Accepted）将 prompt-cache 孤岛归档至 legacy/archived/prompt-stabilizer（含 MANIFEST，可逆）；workspace crates 仅剩注释引用、无生产消费点，故由 IMPLEMENTED 改为 NOT IMPLEMENTED。"
@@ -412,6 +413,7 @@ claims:
     tests: []
     verified_at: c9251271
     verify_cmd: "pwsh -NoProfile -File scripts/verify-release-assets.ps1 -ExpectedSha256 <hex> -Path <asset>"
+    verify_skip_reason: "命令含 `<hex>` / `<asset>` **占位符** ⇒ ⇒ 需**发布资产的真实 SHA-256 与路径**才能跑 ⇒ ⇒ CI 无从取得 ⇒ ⇒ 由发布流程执行时人工传入真实参数（pwsh 下）⇒ ⇒ 不在 CI 判"
     owner: release
     next_review: "2026-11-20"
     notes: "7/7 手工用例见 B8 登记（无自动测试，如实登记 tests 为空）；签名/可复现构建属排期待办。；2026-10-22 批次复核：generate-release-manifest exit 0 / verify-release-assets PASS exit 0（rc.4 exe 本地 smoke）；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）"
@@ -905,7 +907,7 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/convergence_memory.rs
       - crates/engine/runtime-assembly/tests/profile_memory_authorization.rs
-    verified_at: 42d3addfa0b8ec1e3e4664c38d3f505ae79551da
+    verified_at: e1127c32d57ba8444264d1f207e9213c612ac8f7
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test profile_memory_authorization --locked -j 2 && cargo test -p apeireth-runtime-assembly --test convergence_memory --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
@@ -1039,7 +1041,7 @@ claims:
     tests:
       - crates/engine/memory/src/retrieval_pipeline.rs
       - crates/engine/memory/src/coordinator.rs
-    verified_at: 65fd1caedc4b79ad2e48dfbff0eb38ad2d525709
+    verified_at: e1127c32d57ba8444264d1f207e9213c612ac8f7
     verify_cmd: "cargo test -p apeireth-memory --lib"
     owner: memory
     next_review: "2026-12-04"
@@ -1054,7 +1056,7 @@ claims:
       - crates/engine/memory/tests/golden_injection2.rs
     tests:
       - crates/engine/memory/tests/golden_injection2.rs
-    verified_at: 65fd1caedc4b79ad2e48dfbff0eb38ad2d525709
+    verified_at: e1127c32d57ba8444264d1f207e9213c612ac8f7
     verify_cmd: "cargo test -p apeireth-memory --test golden_injection2"
     owner: memory
     next_review: "2026-12-04"
