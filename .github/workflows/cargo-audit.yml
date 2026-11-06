@@ -126,10 +126,17 @@ jobs:
         run: |
           cargo audit --json --deny warnings \
             --ignore RUSTSEC-2024-0436 \
-            --ignore RUSTSEC-2026-0370 \
-            --ignore RUSTSEC-2026-0371 \
-            --ignore RUSTSEC-2026-0372 \
             > audit-report.json
+          # ⚠️ **ignore 列表的处置口径**（2026-11-06 实测复核，台账 E-191）：
+          # - `RUSTSEC-2024-0436`（`paste` 1.0.15 不再维护）⇒ ⇒ **保留**：
+          #   实测 `paste` **在当前依赖图里**（`cargo metadata` 确认）⇒ ⇒ 它是**真依赖**
+          #   ⇒ ⇒ 且该 advisory 是「unmaintained」类（`patched = []`）⇒ ⇒ **没有可升版本**
+          #   ⇒ ⇒ ⇒ ⇒ ignore 是**唯一可行处置**（除非移除依赖 ⇒ ⇒ 超出本 workflow 范围）。
+          # - 原有的 `RUSTSEC-2026-0370/0371/0372`（`zvariant` / `zbus_names` / `zvariant_derive`）
+          #   ⇒ ⇒ **已删除**：实测这三个包**既不在依赖图、也不在 `Cargo.lock` 里**
+          #   ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ 属于**历史残留的冗余 ignore**
+          #   ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ （cargo audit 只审计 lock 里的包 ⇒ ⇒⇒ ⇒ ⇒ ⇒⇒ ⇒ ⇒ ⇒ 删掉它们
+          #   ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ **不放宽任何真实覆盖**）。
           # 2026-10-23 修「绿灯骗人」: 原 `|| echo ...` 把 cargo audit 的非零退出吞掉,
           # 整条 workflow 恒为绿。审计发现即应让作业失败; 报告已先落盘, 上传步骤
           # 用 if: always() 保证失败时也留证据 (见下两步)。
