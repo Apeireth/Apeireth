@@ -1084,6 +1084,38 @@ def cmd_check(args: argparse.Namespace) -> int:
     print(f"结果文件: {rel_path(LAST_RUN_PATH)}", file=table_stream)
     print(f"VERDICT: {verdict}", file=table_stream)
 
+    # ── ⭐ 收尾：清 cargo 测试二进制（可再生产物）─────────────────────
+    # **为什么**：实测的坑 —— 磁盘 100% 时生成脚本写文件**不报错** ⇒ ⇒ 留下
+    # 0 字节 / 半截的 JSON ⇒ ⇒ 症状是下游报 `JSONDecodeError` ⇒ ⇒ 真因在磁盘
+    # ⇒ ⇒ ⇒ 跑完门禁就清测试二进制 ⇒ ⇒ **根治**（而不是「记得手动清」）。
+    # ⚠️ **安全**：只删**最终产物**（可执行测试二进制）⇒ ⇒ 不打断任何正在跑的
+    # cargo/rustc；**保留 `*.so`**（proc-macro ⇒ ⇒ 删了会让所有宏重编）；
+    # **正在运行**的（扫 `/proc/<pid>/exe`）**排除** ⇒ ⇒ 不会让测试进程崩。
+    # ⚠️ **清理失败绝不影响退出码** ⇒ ⇒ 清理不是门禁的一部分。
+    try:
+        import subprocess as _sp
+
+        _proc = _sp.run(
+            [sys.executable, str(ROOT / "scripts" / "clean_test_binaries.py")],
+            cwd=str(ROOT),
+            capture_output=True,
+            text=True,
+            timeout=180,
+            check=False,
+        )
+        # ⚠️ **可观测**：清理**做了多少**要看得见 ⇒ ⇒ 否则「挂了没挂」无法判断
+        # ⇒ ⇒ （实测教训：我曾因 deputy 持续编译导致「删了又产出」⇒ ⇒ 误判成「挂钩没生效」）
+        _tail = (_proc.stdout or "").strip().splitlines()
+        if _tail:
+            print(f"  [清理] {_tail[-1].strip()}", file=sys.stderr)
+        elif _proc.returncode != 0:
+            print(
+                f"  [清理] 未执行（退出码 {_proc.returncode}）⇒ ⇒ 不影响门禁结论",
+                file=sys.stderr,
+            )
+    except Exception as _exc:  # noqa: BLE001 —— 清理是**尽力而为**，绝不影响门禁结论
+        print(f"  [清理] 跳过（{_exc!r}）⇒ ⇒ 不影响门禁结论", file=sys.stderr)
+
     if args.json:
         print(json.dumps(run_doc, ensure_ascii=False, indent=2))
 
