@@ -24,10 +24,10 @@ pub mod memory_verify_command;
 // B6 会话/记忆静态加密（隐患 #6）密钥面：engine `apeireth_storage::crypto` 的 CLI 出口（密钥丢失 = 显式不可恢复）。
 pub mod crypto_keys;
 pub mod diary_store;
-pub mod nightwatch_command;
 pub mod egress_command;
-pub mod external_tools; // 外部工具（协议桥）启动期接线面.
-                        // V5-b 暴露面体检 CLI 面 (只读零写; 与 `tool.exposure_audit` 同一内核两出口).
+pub mod external_tools;
+pub mod nightwatch_command; // 外部工具（协议桥）启动期接线面.
+                            // V5-b 暴露面体检 CLI 面 (只读零写; 与 `tool.exposure_audit` 同一内核两出口).
 pub mod exposure;
 pub mod flags; // crate 级旗标判据 (CLI 参数层单一真源: 各收口面的旗标扫描共用同一判据).
 pub mod gateway_panels;
@@ -35,8 +35,8 @@ pub mod governance_chain;
 pub mod guard_decision_wiring;
 pub mod keyring_bootstrap;
 pub mod lessons_command;
-pub mod mcp_command; // 外部工具（协议桥）主人管理面: list / deny / undeny / authorize / unauthorize.
 pub(crate) mod llm_factory_env;
+pub mod mcp_command; // 外部工具（协议桥）主人管理面: list / deny / undeny / authorize / unauthorize.
 pub mod parallel_dispatch_wiring;
 pub mod principal_forget_port;
 pub mod rate_limit_wire;

@@ -151,10 +151,7 @@ fn negative_numbers_are_values_not_flags() {
     let error = run_backup_at(&paths, &args(&["restore", "-1"])).expect_err("bundle 不存在");
     assert!(!error.contains("unknown flag"), "负数不是旗标: {error}");
     assert!(!error.contains("requires a value"), "负数不是缺值: {error}");
-    assert!(
-        error.contains("-1"),
-        "负数原样当路径送进引擎: {error}"
-    );
+    assert!(error.contains("-1"), "负数原样当路径送进引擎: {error}");
     // `--to -1`: 负数是值 ⇒ 当落点根 (不是缺值), 旗标层放行到引擎。
     let error = run_backup_at(&paths, &args(&["restore", "bundle", "--to", "-1"]))
         .expect_err("bundle 不存在");

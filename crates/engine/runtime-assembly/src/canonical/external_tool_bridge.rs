@@ -188,23 +188,20 @@ impl<'a> RuntimeExternalToolRegistry<'a> {
     fn holds_capability(&self, tool: &Arc<dyn ToolCapability>) -> bool {
         let model_name = tool.declaration().name;
         let runtime = self.handle.runtime();
-        let in_capability_table = runtime
-            .capability_registry()
-            .capabilities()
-            .iter()
-            .any(|capability| {
-                capability.id() == tool.id() && capability.declaration().name == model_name
-            });
+        let in_capability_table =
+            runtime
+                .capability_registry()
+                .capabilities()
+                .iter()
+                .any(|capability| {
+                    capability.id() == tool.id() && capability.declaration().name == model_name
+                });
         if in_capability_table {
             return true;
         }
-        runtime
-            .plugins()
-            .active_tools()
-            .iter()
-            .any(|capability| {
-                capability.id() == tool.id() && capability.declaration().name == model_name
-            })
+        runtime.plugins().active_tools().iter().any(|capability| {
+            capability.id() == tool.id() && capability.declaration().name == model_name
+        })
     }
 }
 

@@ -15,8 +15,8 @@
 
 use std::path::PathBuf;
 
-use apeireth_runtime_assembly::egress_ledger::EgressLedger;
 use crate::flags;
+use apeireth_runtime_assembly::egress_ledger::EgressLedger;
 
 pub const USAGE: &str = "apeireth egress ledger [--path <LEDGER_JSONL>] [--limit <N>] [--json]\napeireth egress impact [--path <IMPACT_JSONL>] [--limit <N>] [--json]\napeireth egress outcome [--path <CONSEQUENCE_JSONL>] [--json] <ACTION_ID> <confirmed|failed>\napeireth egress bind <ACTION_ID> <TOOL_CALL_ID>\napeireth egress notify <FACT_ID> <wording|partial|refuted>\n\n  ledger = 出域账本（观测面：判定 / 对象类型 / 指纹 / 目的地 / 用途）。\n  impact = 问责账本（责任面：授权 / 可逆性 / 影响谁 / 后果）。\n  outcome = 后果回填（**唯一写面**：把外部行动的结果 confirmed / failed 追加进后果账本）。\n  两个只读账本**都零真值**：只有指涉 id，没有内容原文。\n  bind = 显式登记「行动 ↔ 工具调用」的 1:1 归属（工具失败 ⇒ 自动回填 failed）。\n  旗标：--path = 账本路径；--limit = 显示条数（ledger / impact）；--json = JSON 输出（布尔旗标，不带值）。\n  位置参数：只有 outcome 要 <ACTION_ID> <confirmed|failed>；ledger / impact 不收位置参数。\n  未知旗标一律拒绝（不静默忽略）；`--` 之后的词一律当位置参数。\n  缺省 path = 数据根（APEIRETH_DATA_DIR 或默认目录）下的 egress-ledger.jsonl / impact-ledger.jsonl / consequence-ledger.jsonl。";
 
