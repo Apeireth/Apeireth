@@ -69,6 +69,23 @@ Author: deputy
 | **`admission_gate`** | 291 | 零消费（内部零消费） | ⭐ **准入控制**（什么记忆准进来）⇒ ⇒ **安全面** | 中（安全面 ⇒ 需裁决） |
 | **`identity`** | 499 | 零消费（内部零消费） | 身份卡跨载体存储 ⇒ ⇒ 主体连续性 | 中 |
 
+## 三之二、⭐ **2026-11-06 实测更新：这 17 个零件现在的真状态**
+
+**（子代理复核时发现「17」已过期 ⇒ ⇒ 自己重测了一遍）**
+
+| 原清单里的零件 | 2026-11-06 实测 | 依据 |
+|---|---|---|
+| `amem_graph` · `graph_algo` | ✅ **已可达** | A1 联想召回通道上线（`associative_recall.rs`）|
+| `bitemporal_graph` · `signal_sources` | ✅ **已可达** | A2 时间锚点对图事实生效 + `query_signals` 运行时入口 |
+| `reflexion` · `dreaming` · `meta_thinking` | ✅ **已可达** | `reflexion_tuning` 桥把 reflexion 接进了学习面 |
+| `signal_sources` 本身 | ✅ **已可达** | 但**实测 NO-GO ⇒ ⇒ 它的信号没进运行时**（见 `memory-fusion-decisions-2026-11-05.md`）|
+| **`calibration`** | ❌ **仍不可达** | ⚠️ **我的 A4 消费端还没接进生产链**（观测已能算指标，但**没有生产调用点**）|
+| `persistent_vector` · `vector_rebuild` · `vector_distance` · `offline_embed` | ❌ **仍不可达** | 向量面整族没接线 |
+| `ensemble` · `session_lifecycle` · `principles` · `admission_gate` · `identity` | ❌ **仍不可达** | 会话/原则/准入/身份面 |
+
+⇒ ⇒ ⇒ **现缺 10 个**（不是 17）⇒ ⇒ **总不可达模块 64 个**（分母 134）
+⇒ ⇒ ⇒ **可达率 70/134 = 52%**（`check_memory_reachability.py --check` 实测）。
+
 ## 四、📌 **给 owner / 总指挥的选项**
 
 ### 选项 A：**先接「成本最低 + 融合收益最高」的 5 个**（**我建议**）

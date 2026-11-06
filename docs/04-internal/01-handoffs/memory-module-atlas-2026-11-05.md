@@ -5,14 +5,14 @@ Status: 🟢 实测生成
 Last-Modified: 2026-11-05
 Author: deputy
 
-# 记忆引擎 · 模块图谱（**132 个顶层模块逐个说清是干嘛的**）
+# 记忆引擎 · 模块图谱（**134 个顶层模块逐个说清是干嘛的**）
 
 > **性质**：**实测生成的事实清单**（不是方案）⇒ ⇒ 每个模块的「职责 / 能力域 / 生产可达性」都带判据。
 > **四级口径**：本文件描述的是**「库侧 IMPLEMENTED」到「PRODUCTION WIRED」的可达性判定**
 > ⇒ ⇒ **不是「全部 PRODUCTION WIRED」** ⇒ ⇒ 逐模块的口径见下表的「生产可达性」列
 > （✅ = 该模块能力在生产链路上可达；❌ = 库级 IMPLEMENTED 但生产零消费；
 > 🅿 = 有意默认关；📊 = 评估/报告工具）。
-> **代码版本**：`debt-round8` @ `b844fa30bd58` · 记忆 crate **132 顶层模块 + 7 子目录 / 81108 行**。
+> **代码版本**：`debt-round8` @ `1a233629ec79` · 记忆 crate **134 顶层模块 + 7 子目录 / 81108 行**。
 > **生成方式**：`doc` 首句取自模块自身的 `//!` 文档（**不是我编的**）· 可达性按**生产链路传递闭包**判定。
 
 ## 一、判据（**先说清楚「可达」怎么定义的**）
@@ -266,7 +266,7 @@ Author: deputy
 ```sh
 cd /home/bai/Projects/apeireth-debt94-wt
 find crates/engine/memory/src -maxdepth 1 -name '*.rs' | wc -l   # 132
-find crates/engine/memory/src -name '*.rs' -exec cat {} + | wc -l  # 81108
+find crates/engine/memory/src -name '*.rs' -exec cat {} + | wc -l  # 82776（2026-11-06 实测）
 python3 scripts/audit_unwired.py --check                          # 孤儿基线 119 条
 ```
 

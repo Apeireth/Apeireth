@@ -4,7 +4,7 @@
 # 判据见脚本头部（生产入口 + 词法依赖闭包 + BFS 到不动点）。
 # 方向：宁可漏报未接线，不可虚报已接线。
 reachable_modules = 79
-total_modules = 134
+total_modules = 135
 reachable_ratio = 58%
 
 # ── 可达模块清单 ──
@@ -132,6 +132,7 @@ unreachable preference_store_sqlite
 unreachable principles
 unreachable quality_metrics
 unreachable reconciler
+unreachable reflexion_tuning
 unreachable research_non_interference
 unreachable research_roaming_memory
 unreachable robustness_metrics
