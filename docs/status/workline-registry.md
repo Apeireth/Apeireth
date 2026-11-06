@@ -22,6 +22,7 @@ Author: lead
 | **护栏接线 / 越权拦截** | [guard-wiring-audit-2026-10-27.md](guard-wiring-audit-2026-10-27.md)（审计即设计依据 + 缺口清单） | [guard-wiring-audit-2026-10-27.md](guard-wiring-audit-2026-10-27.md) §4（缺口清单，逐条标「已修/未修」） | `python3 scripts/check_guard_wiring.py`（台账↔代码互校） |
 | **记忆质量路线**（已证/已否的路） | [memory-quality-route-map-2026-10-27.md](memory-quality-route-map-2026-10-27.md) | 同文件（§〇 2026-10-28 更新块） | `python3 scripts/check_golden_baseline.py`（准确度不许降 + 送达率观察项） |
 | **状态声明（29 条能力口径）** | [claims.yaml](claims.yaml) | `claims.yaml` 的 `verified_at` / `docs_truth --verify` 输出 | `python3 scripts/docs_truth.py --verify --block-stale` |
+| ⭐ **后端 L4 零债收敛**（2026-11-06 起）<br>（L2 声明自洽 → L3 骨架完整 → L4 零债） | [l3-skeleton-claims-2026-11-06.md](../04-internal/01-handoffs/l3-skeleton-claims-2026-11-06.md)（7 条骨架声明审计）<br>+ [unwired-ledger.md](unwired-ledger.md) §一（待接线 W1–W34）· §五（分类）· §六（L3 骨架缺口） | 同上两处（**逐条带文件:行号实证**）<br>+ [claims.yaml](claims.yaml) 的 `level` 字段 | `python3 scripts/check_memory_reachability.py --check`（**未解释缺口** = 行动目标 · 上限只减不增）<br>· `python3 scripts/docs_truth.py --verify --block-stale`（L2 声明自洽）<br>· `python3 scripts/audit_unwired.py --check`（L4 孤儿棘轮）<br>· `python3 scripts/harness.py verify`（总闸） |
 
 ## 二、登记规则（四条）
 

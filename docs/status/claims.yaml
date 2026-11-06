@@ -363,7 +363,11 @@ claims:
     tests:
       - crates/foundation/governance/src/chain.rs
     verified_at: 5c74f955e62cebcb1979fb3606e804d9fb10d73c
-    verify_cmd: "cargo test -p apeireth-governance --lib"
+    # ⚠️ **2026-11-06 收窄**（主指挥拍板）：原命令是 crate 级宽命令
+    # ⇒ ⇒ 跑 governance crate **全部** lib 单测（241 个）⇒ ⇒ 而本声明只相关 6 个
+    # ⇒ ⇒ ⇒ 其余 235 个任一红 ⇒ ⇒ **本声明就红** ⇒ ⇒ 「捎带别人的红」
+    # ⇒ ⇒ ⇒ 与两个兄弟声明同形（`provider_proxy` / `workspace_list` 各只跑自己的）
+    verify_cmd: "cargo test -p apeireth-governance --lib -- reflection && cargo test -p apeireth-governance --lib -- scheduler"
     owner: governance
     next_review: "2026-11-20"
     notes: "R8-C da7e224f：Immediate/Delayed ReflectionScheduler + 到期审计；仅库内注入面。R8-B2 装配未启用反射调度器（production 只注入 gate + 审计 sink），生产仍零反射、零行为变化 —— 保持 IMPLEMENTED，不冒称接线。"
