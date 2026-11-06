@@ -186,11 +186,33 @@ impl EvidenceSignal {
     }
 }
 
+/// ⭐ **证据来源**（2026-11-06）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum EvidenceOrigin {
+    /// 注入后的命中回执（**既有证据面**：正 = 又命中，负 = 在场却没再命中）。
+    #[default]
+    InjectionReceipt,
+    /// **任务失败**：召回给了这些记忆 ⇒ ⇒ 结果仍失败 ⇒ ⇒ 该记忆「**被选中却没用上**」。
+    TaskFailure,
+}
+
 /// 一条使用证据 (信号 + 归因 + 回执摘要)。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TuningEvidence {
     /// 信号方向。
     pub signal: EvidenceSignal,
+    /// ⭐ **证据来源**（2026-11-06）：这条证据**从哪来**。
+    ///
+    /// **为什么需要**：账本摘要原本硬编码「注入后命中回执」⇒ ⇒
+    /// ⇒ 「**任务失败导致的降权**」会被读成「**注入未命中导致的降权**」
+    /// ⇒ ⇒ ⇒ 这两种语义在既有代码里**完全不同** ⇒ ⇒ ⇒ **审计面会说假话**。
+    /// ⇒ ⇒ 现在**显式带来源** ⇒ ⇒ ⇒ 账本按来源措辞（老文案保持不变 ⇒ ⇒ 不破坏既有消费者）。
+    ///
+    /// ⚠️ **向后兼容**：`#[serde(default)]` ⇒ ⇒ 老证据读出来是
+    /// [`EvidenceOrigin::InjectionReceipt`]（与老行为一致）。
+    #[serde(default)]
+    pub origin: EvidenceOrigin,
     /// 涉及的记忆条目。
     pub memory_id: String,
     /// 归因维度 (注入时的显著维度); `None` = 无分量数据不编造。
@@ -211,6 +233,7 @@ impl TuningEvidence {
         let memory_id = memory_id.into();
         Self {
             signal: EvidenceSignal::Positive,
+            origin: EvidenceOrigin::InjectionReceipt,
             note: format!("注入后命中回执: {memory_id} 于下个有选中回执的检索轮再次命中"),
             memory_id,
             dimension,
@@ -227,6 +250,7 @@ impl TuningEvidence {
         let memory_id = memory_id.into();
         Self {
             signal: EvidenceSignal::Negative,
+            origin: EvidenceOrigin::InjectionReceipt,
             note: format!("注入后命中回执: {memory_id} 在下个有选中回执的检索轮未再命中"),
             memory_id,
             dimension,
@@ -582,6 +606,10 @@ struct TargetEvidence {
     tally: EvidenceTally,
     at_epoch_ms: i64,
     ids: Vec<String>,
+    /// ⭐ **失败来源的证据条数**（2026-11-06）：账本据此**不说假话**。
+    failure_negative: u64,
+    /// 失败来源的**人可读摘要**（去重、最多 2 条）。
+    failure_notes: Vec<String>,
 }
 
 enum TuningTarget {
@@ -596,6 +624,8 @@ impl TargetEvidence {
             tally: EvidenceTally::default(),
             at_epoch_ms: i64::MIN,
             ids: Vec::new(),
+            failure_negative: 0,
+            failure_notes: Vec::new(),
         }
     }
 
@@ -605,6 +635,8 @@ impl TargetEvidence {
             tally: EvidenceTally::default(),
             at_epoch_ms: i64::MIN,
             ids: Vec::new(),
+            failure_negative: 0,
+            failure_notes: Vec::new(),
         }
     }
 
@@ -612,6 +644,17 @@ impl TargetEvidence {
         match evidence.signal {
             EvidenceSignal::Positive => self.tally.positive += 1,
             EvidenceSignal::Negative => self.tally.negative += 1,
+        }
+        // ⭐ **失败来源单独计数**（2026-11-06）⇒ ⇒ 账本能说清「这步降权是失败导致的」。
+        if evidence.origin == EvidenceOrigin::TaskFailure {
+            self.failure_negative += 1;
+            let note = evidence.note.trim();
+            if !note.is_empty()
+                && self.failure_notes.len() < 2
+                && !self.failure_notes.iter().any(|n| n == note)
+            {
+                self.failure_notes.push(note.to_string());
+            }
         }
         self.at_epoch_ms = self.at_epoch_ms.max(evidence.at_epoch_ms);
         if !self.ids.contains(&evidence.memory_id) {
@@ -632,6 +675,15 @@ impl TargetEvidence {
             .join(", ");
         if ids.len() > MAX_IDS {
             shown.push_str(", …");
+        }
+        // ⭐ **按来源措辞**（2026-11-06）：**老文案逐字保留**（既有消费者依赖它）
+        // ⇒ ⇒ 只有「**含失败来源**」的目标才换措辞 ⇒ ⇒ **不说假话**。
+        if self.failure_negative > 0 {
+            let notes = self.failure_notes.join("；");
+            return format!(
+                "检索证据（含失败轨迹 {} 条）: 正 {} / 负 {} ({shown}){notes}",
+                self.failure_negative, self.tally.positive, self.tally.negative
+            );
         }
         format!(
             "注入后命中回执: 正 {} / 负 {} ({shown})",

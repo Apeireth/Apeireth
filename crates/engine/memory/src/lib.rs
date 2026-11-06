@@ -127,6 +127,7 @@ pub mod procedural;
 pub mod query_expand;
 pub mod query_signals; // 题面「信号增强」的量化 (查询判别力体检): 状态 NOT IMPLEMENTED (新增未接线).
 pub mod reflexion;
+pub mod reflexion_tuning;
 pub mod residual_pyramid;
 pub mod river_topology;
 pub mod semantic_axis;
@@ -251,8 +252,8 @@ pub use online_calibration::{
 };
 
 pub use reflexion::{
-    Critic, FailureKind, FailureRecord, FileReflexionStore, InMemoryReflexionStore, ReflectionText,
-    ReflexionError, ReflexionStore, RuleCritic,
+    Critic, FailureAttribution, FailureKind, FailureRecord, FileReflexionStore,
+    InMemoryReflexionStore, ReflectionText, ReflexionError, ReflexionStore, RuleCritic,
 };
 
 pub use cross_diary::{link_core, CrossDiaryIndex, CrossLink, SNIPPET_MAX_CHARS};
