@@ -33,7 +33,7 @@ pub mod governance_chain;
 pub mod guard_decision_wiring;
 pub mod keyring_bootstrap;
 pub mod lessons_command;
-pub(crate) mod llm_factory_env;
+pub mod llm_factory_env;
 pub mod parallel_dispatch_wiring;
 pub mod principal_forget_port;
 pub mod rate_limit_wire;
@@ -83,6 +83,8 @@ use apeireth_runtime_assembly::canonical::BioApprovalSocialSource;
 use apeireth_runtime_assembly::{canonical::production::BioProbeSlots, SqliteSessionStore};
 use apeireth_tools_canonical::{FetchConfig, TrustedShellConfig, APPLY_PATCH_CAPABILITY_ID};
 pub(crate) use llm_factory_env::{council_config_from_env, llm_factory_from_env};
+// 内部执行强制复核 (System One) 的 env 面 + 生效模型 id 的解析口径 (尺寸棘轮平移; 公开路径不变)。
+pub use llm_factory_env::{active_model_id, system_one_enabled_from_env, ENABLE_SYSTEM_ONE_ENV};
 
 /// One persistent SQLite database is shared by the cognitive backends.
 /// `APEIRETH_COGNITIVE_DB` may override the path; Judge remains opt-in.
@@ -493,21 +495,6 @@ pub fn quota_max_cost_micros_from_env() -> Option<u64> {
     apeireth_runtime::canonical::parse_quota_max_cost_micros(
         std::env::var(QUOTA_MAX_COST_MICROS_ENV).ok().as_deref(),
     )
-}
-
-/// 生效模型 id (与运行时 `with_default_model` 同一解析口径):
-/// `APEIRETH_MODEL` 显式覆盖 > minimax 族首个默认模型 (提供商面规范 id,
-/// 小写)。无模型在力回 `None` (自述模型节显式 null + 原因, 不编造)。
-pub fn active_model_id() -> Option<String> {
-    if let Some(model) = std::env::var("APEIRETH_MODEL")
-        .ok()
-        .filter(|model| !model.trim().is_empty())
-    {
-        return Some(model);
-    }
-    apeireth_provider::canonical_minimax::MinimaxProviderPlugin::from_env()
-        .ok()
-        .and_then(|plugin| plugin.model_ids().first().cloned())
 }
 
 /// 模型画像表 (H-P1 配置面): 内置基线 ← 数据目录 `model-profiles.json`
@@ -1623,7 +1610,7 @@ async fn build_canonical_runtime_with_parts(
     // (alpha 0 装路径, 0 行为变化). 详见 `keyring_bootstrap` 模块.
     let resolver: Arc<dyn apeireth_plugin::CredentialResolver> =
         keyring_bootstrap::build_keyring_resolver();
-    builder = builder.with_credentials(resolver);
+    builder = builder.with_credentials(Arc::clone(&resolver));
     let (governance, policy, guard_hook) = build_production_governance_parts_from_env();
     // 生物机制族 W3.3 外部事件源: 免疫记忆只在 `APEIRETH_ENABLE_IMMUNE_MEMORY=1`
     // 时挂到 guard hook; `shared_immune_memory()` 取回的是 hook 正在使用的同一份
@@ -1669,6 +1656,13 @@ async fn build_canonical_runtime_with_parts(
         Some(consequence_ledger_path),
     ) {
         builder = builder.with_egress_gate(gate);
+    }
+    // 内部执行强制复核 (System One, `rt.system_one_internal`): 默认关
+    // (`APEIRETH_ENABLE_SYSTEM_ONE=1` 才装配; 审计账本落数据根)。关 ⇒ 不构造门
+    // ⇒ 不调 `with_system_one` ⇒ 与接线前逐字节同行为。
+    let system_one = llm_factory_env::system_one_gate_from_env(&egress_data_root).await;
+    if let Some(gate) = &system_one {
+        builder = builder.with_system_one(Arc::clone(gate));
     }
     // 生物机制族 W3.3: 痛觉评估（默认关）。开关三层优先级（ADR-0015）：
     // env `APEIRETH_ENABLE_BIO_PAIN`（最高，含 =0 显式覆盖）→ 用户配置
@@ -1768,6 +1762,11 @@ async fn build_canonical_runtime_with_parts(
     )
     .await
     .map_err(|error| format!("canonical runtime bootstrap failed: {error}"))?;
+    // 监督 provider 在运行时起来之后绑 (它要一个托管身份跑单轮复核); 绑不上 ⇒
+    // 门保持无监督 ⇒ 内部执行一律被拒 (fail-closed, 与接线前同码)。
+    if let Some(gate) = &system_one {
+        llm_factory_env::bind_system_one_supervisor(&runtime, gate, resolver.as_ref()).await;
+    }
     if let Some(recorder) = guard_hook.dataset_recorder() {
         runtime.add_event_sink(Arc::new(
             apeireth_runtime_assembly::GuardDatasetObserver::new(recorder)

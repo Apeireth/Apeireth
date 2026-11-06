@@ -1642,3 +1642,13 @@ purpose = "通用嗓 TTS 面 (`tool.voice_speak`) —— 让它开口说话 (V3-
 level = "UNCLASSIFIED"
 status = "current"
 evidence = "direct:crates/capabilities/tools/src/lib.rs:314;direct:crates/capabilities/tools/src/voice/mod.rs:88;direct:crates/capabilities/tools/src/voice/speak.rs:105"
+
+[[entries]]
+name = "APEIRETH_ENABLE_SYSTEM_ONE"
+default = "off"
+layer = "adapters"
+owner = "apeireth-cli"
+purpose = "内部执行强制复核 (System One, rt.system_one_internal) 装配开关：默认关 (fail-closed)；开 = 装配复核门 (持久审计账本 system-one-review.jsonl) + 绑定真实 provider 监督 (无真实凭据 ⇒ 不装配 ⇒ 内部执行被拒)"
+level = "PRODUCTION WIRED"
+status = "current"
+evidence = "direct:crates/adapters/cli/src/llm_factory_env.rs:118;direct:crates/adapters/cli/src/lib.rs:1663"
