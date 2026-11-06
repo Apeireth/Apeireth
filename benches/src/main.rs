@@ -72,9 +72,11 @@ fn main() {
             idle_footprint::run_probe();
         }
         startup::PROBE_ARG => {
-            // TEMP-DIAGNOSTIC (orchestration triage, reverted after the run):
-            // record the child's outcome on disk so the parent's captured stderr
-            // can be correlated. No effect before the failure point.
+            // 探针子进程的**现场留痕**：子进程若在组装期 panic，父进程捕获到的
+            // stderr 只有一行 `probe ...` 断言 ⇒ 真实原因（如存储打开被拒）被吞掉。
+            // ⇒ 这里把子进程的结局（正常 Err / panic）落盘，供父进程侧对照。
+            // ⚠️ 这是 **bench harness（开发脚手架）** 的诊断能力，不是产品面逻辑；
+            // 落盘路径由 `BENCH_PROBE_OUTCOME_LOG` 覆盖（默认在 /var/tmp 下）。
             let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 startup::probe::run(&args[1..])
             }));

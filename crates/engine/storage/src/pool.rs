@@ -4,12 +4,18 @@
 //! a dedicated connection owned by a background thread; all mutations must go
 //! through [`SqliteConnectionPool::write`]. Readers are short-lived closures
 //! over the `r2d2` pool and should be used for queries only.
+//!
+//! **写线程同步收口**: 池被弃用 (最后一个引用释放) 时, 写线程**同步**退出并
+//! 关闭写连接 ⇒「池已弃」=「写连接已关」。旧实现只丢 mpsc `Sender`, 写线程
+//! **异步**醒来才关连接 ⇒「池已弃」与「连接已关」之间留了一个窗口 ⇒ 同路径
+//! reopen 撞上 WAL 索引重建的排他锁 ⇒ `database is locked` (SQLITE_BUSY)。
+//! 收口是**有界**的 (见 [`WRITER_SHUTDOWN_GRACE`]), 不会让 `Drop` 无限期阻塞。
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc as std_mpsc;
-use std::sync::{Arc, OnceLock, Weak};
+use std::sync::{Arc, Mutex as StdMutex, OnceLock, Weak};
 use std::time::Duration;
 
 use r2d2::ManageConnection;
@@ -189,17 +195,187 @@ impl Drop for ReplyGuard {
     }
 }
 
+/// 写线程收口等待的**额外**余量 (叠加在配置的 `busy_timeout` 之上)。
+///
+/// 收口等待必须**有界**: 写线程有可能正卡在一次长事务 / IO 上, `Drop`
+/// 不得无限期等一个可能在等 IO 的线程。超时 ⇒ 放弃 join (分离写线程), 它
+/// 退出时写连接照常关闭。
+const WRITER_SHUTDOWN_GRACE: Duration = Duration::from_secs(5);
+
+/// SQLITE_BUSY 退避重试: 首次等待时长。
+const BUSY_RETRY_INITIAL_DELAY: Duration = Duration::from_millis(5);
+/// SQLITE_BUSY 退避重试: 单次等待上限 (指数退避封顶)。
+const BUSY_RETRY_MAX_DELAY: Duration = Duration::from_millis(250);
+/// SQLITE_BUSY 退避重试: 最多尝试次数 (含首次)。
+const BUSY_RETRY_ATTEMPTS: u32 = 8;
+
+/// 写线程句柄: 池弃用时**同步收口**写线程 ⇒「池已弃」=「写连接已关」。
+///
+/// 取案 (2026-11-06, 三树同窗取证): 旧实现 `drop(pool)` 只丢 mpsc `Sender`
+/// ⇒ 写线程**异步**醒来才退出并关写连接, `drop` **立即返回** ⇒「池已弃」与
+/// 「连接已关」之间存在窗口 ⇒ 同路径 reopen 时 WAL 索引重建要取**排他锁**
+/// (SQLite 的 WAL 恢复路径直接取排他锁, **不走** busy handler ⇒ `busy_timeout`
+/// 兜不住) ⇒ 与尚未退净的旧连接抢锁 ⇒ SQLITE_BUSY (`database is locked`)。
+///
+/// 本句柄把「写线程退出」变成 `Drop` 里的**有界同步等待**: 退出信号在写连接
+/// **关闭之后**才发 ⇒ 收到信号即「连接已关」⇒ 窗口被**消除**, 而不是靠重试
+/// 把 BUSY 拖过去。
+struct WriterHandle {
+    /// 写线程退出信号: **写连接已关之后**才发 (收到 ⇒ 连接确已关闭)。
+    exited: StdMutex<std_mpsc::Receiver<()>>,
+    /// 写线程是否已退出 (= 写连接已关)。写线程在**写连接关闭之后**置位。
+    closed: Arc<AtomicBool>,
+    /// 写线程句柄: 收口成功后 join; 超时则分离 (不 join, 避免无限期阻塞)。
+    join: StdMutex<Option<std::thread::JoinHandle<()>>>,
+    /// 写线程自身的 thread id: 写线程内释放最后一个池引用时不得 join 自己。
+    thread_id: std::thread::ThreadId,
+    /// 收口等待上限 (有界 ⇒ `Drop` 不会无限期阻塞)。
+    grace: Duration,
+}
+
+impl WriterHandle {
+    /// 有界等待写线程退出。返回 `true` 表示写连接已确认关闭。
+    fn await_exit(&self) -> bool {
+        let receiver = self
+            .exited
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        match receiver.recv_timeout(self.grace) {
+            Ok(()) => true,
+            // 写线程已死 (panic / 提前退出) ⇒ 写连接随线程栈一起 drop ⇒ 已关。
+            Err(std_mpsc::RecvTimeoutError::Disconnected) => true,
+            Err(std_mpsc::RecvTimeoutError::Timeout) => false,
+        }
+    }
+
+    /// 写线程是否已退出 (= 写连接已关)。诊断快照。
+    fn is_closed(&self) -> bool {
+        self.closed.load(Ordering::SeqCst)
+    }
+}
+
+impl Drop for WriterHandle {
+    fn drop(&mut self) {
+        // 写线程自身释放最后一个池引用 (在 write body 里 drop 池) ⇒ 不能 join
+        // 自己 (join 自己 = 死锁)。此时写线程本来就要退出, 写连接照样会关。
+        if self.thread_id == std::thread::current().id() {
+            return;
+        }
+        // 有界等待写线程退出 (= 写连接已关)。超时 ⇒ **不 join** (join 会无限期
+        // 阻塞在一次长写 / 长事务上) ⇒ 分离写线程, 它退出时连接照常关闭。
+        if !self.await_exit() {
+            return;
+        }
+        let mut slot = self
+            .join
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if let Some(handle) = slot.take() {
+            let _ = handle.join();
+        }
+    }
+}
+
+/// 带 SQLITE_BUSY 退避重试的连接管理器。
+///
+/// 包装 [`SqliteConnectionManager`]: 建连接 (含初始化 PRAGMA) 撞上
+/// `SQLITE_BUSY` 时**有界**退避重试, 而不是一次即失败。
+///
+/// 论证 (为什么这是**加固**而不是掩盖根因):
+/// - 根因是「池已弃但写连接还活着」这个窗口, 由 [`WriterHandle`] 的同步收口
+///   **消除**; 本包装不参与、也不依赖那个窗口。
+/// - 本包装只覆盖**别的**活连接造成的瞬时争用 (同路径另一套池句柄 / 另一进程 /
+///   另一连接正在跑 WAL 索引恢复) —— 这类争用本来就该等, 不该一次即失败。
+/// - 预算有界 (≤ `BUSY_RETRY_ATTEMPTS` 次、累计 < 1s), 不会把「真被锁死」
+///   变成无限等待。
+struct BusyRetryManager {
+    inner: SqliteConnectionManager,
+}
+
+impl BusyRetryManager {
+    fn new(inner: SqliteConnectionManager) -> Self {
+        Self { inner }
+    }
+}
+
+impl std::fmt::Debug for BusyRetryManager {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BusyRetryManager")
+            .field("inner", &self.inner)
+            .finish_non_exhaustive()
+    }
+}
+
+impl ManageConnection for BusyRetryManager {
+    type Connection = Connection;
+    type Error = rusqlite::Error;
+
+    fn connect(&self) -> Result<Connection, Self::Error> {
+        connect_with_busy_retry(&self.inner)
+    }
+
+    fn is_valid(&self, conn: &mut Connection) -> Result<(), Self::Error> {
+        self.inner.is_valid(conn)
+    }
+
+    fn has_broken(&self, conn: &mut Connection) -> bool {
+        self.inner.has_broken(conn)
+    }
+}
+
+/// 建连接撞上 SQLITE_BUSY 时**有界**退避重试 (见 [`BusyRetryManager`]）。
+fn connect_with_busy_retry(
+    manager: &SqliteConnectionManager,
+) -> Result<Connection, rusqlite::Error> {
+    let mut delay = BUSY_RETRY_INITIAL_DELAY;
+    let mut attempt = 0u32;
+    loop {
+        attempt += 1;
+        match manager.connect() {
+            Ok(conn) => return Ok(conn),
+            Err(error) => {
+                if !is_busy(&error) || attempt >= BUSY_RETRY_ATTEMPTS {
+                    return Err(error);
+                }
+                std::thread::sleep(delay);
+                delay = delay.saturating_mul(2).min(BUSY_RETRY_MAX_DELAY);
+            }
+        }
+    }
+}
+
+/// 判断一个 rusqlite 错误是否是 SQLITE_BUSY / SQLITE_LOCKED。
+fn is_busy(error: &rusqlite::Error) -> bool {
+    match error {
+        rusqlite::Error::SqliteFailure(inner, _) => matches!(
+            inner.code,
+            rusqlite::ErrorCode::DatabaseBusy | rusqlite::ErrorCode::DatabaseLocked
+        ),
+        _ => false,
+    }
+}
+
 /// SQLite connection pool with one serialized writer and a reader pool.
 #[derive(Clone)]
 pub struct SqliteConnectionPool {
-    pool: r2d2::Pool<SqliteConnectionManager>,
+    /// 读池 (短命读连接; `min_idle = 0` ⇒ 读用到才建)。
+    pool: r2d2::Pool<BusyRetryManager>,
+    /// 写任务队列的发送端: 最后一个发送端被丢 ⇒ 写线程退出循环。
     write_tx: mpsc::Sender<WriteTask>,
+    /// 写线程句柄: 最后一个池引用释放时**同步收口**写线程 (关闭写连接)。
+    ///
+    /// **字段顺序即 drop 顺序** (Rust 按声明顺序 drop 字段): 读池先关 (读连接
+    /// 释放共享锁) → 再丢 `write_tx` (通知写线程退出) → 最后 drop 本句柄
+    /// (等写线程真正退出 = 写连接已关) ⇒ 池弃用后同路径 reopen 不再撞锁。
+    writer: Arc<WriterHandle>,
 }
 
 impl std::fmt::Debug for SqliteConnectionPool {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SqliteConnectionPool")
             .field("pool_state", &self.pool.state())
+            // 写线程是否已收口（`true` = 写线程已退出 ⇒ 写连接已关闭）。
+            .field("writer_closed", &self.writer.as_ref().is_closed())
             .finish_non_exhaustive()
     }
 }
@@ -228,8 +404,10 @@ impl SqliteConnectionPool {
         }
 
         let init_sql = config.init_sql();
-        let manager = SqliteConnectionManager::file(&path)
-            .with_init(move |conn| conn.execute_batch(&init_sql));
+        let manager = BusyRetryManager::new(
+            SqliteConnectionManager::file(&path)
+                .with_init(move |conn| conn.execute_batch(&init_sql)),
+        );
 
         let writer = manager.connect().map_err(|e| StorageError::Open {
             path: path.clone(),
@@ -249,7 +427,11 @@ impl SqliteConnectionPool {
                 message: e.to_string(),
             })?;
 
-        Ok(Self::from_pool_and_writer(pool, writer))
+        Ok(Self::from_pool_and_writer(
+            pool,
+            writer,
+            shutdown_grace(&config),
+        ))
     }
 
     /// Opens a shared in-memory pool.
@@ -261,8 +443,9 @@ impl SqliteConnectionPool {
         config.validate()?;
 
         let init_sql = config.init_sql();
-        let manager =
-            SqliteConnectionManager::memory().with_init(move |conn| conn.execute_batch(&init_sql));
+        let manager = BusyRetryManager::new(
+            SqliteConnectionManager::memory().with_init(move |conn| conn.execute_batch(&init_sql)),
+        );
 
         let writer = manager.connect().map_err(|e| StorageError::Open {
             path: PathBuf::from(":memory:"),
@@ -279,7 +462,11 @@ impl SqliteConnectionPool {
                 message: e.to_string(),
             })?;
 
-        Ok(Self::from_pool_and_writer(pool, writer))
+        Ok(Self::from_pool_and_writer(
+            pool,
+            writer,
+            shutdown_grace(&config),
+        ))
     }
 
     /// Opens a shared in-memory pool with default configuration.
@@ -412,10 +599,12 @@ impl SqliteConnectionPool {
     }
 
     fn from_pool_and_writer(
-        pool: r2d2::Pool<SqliteConnectionManager>,
-        mut writer: Connection,
+        pool: r2d2::Pool<BusyRetryManager>,
+        writer: Connection,
+        grace: Duration,
     ) -> Self {
         let (write_tx, mut write_rx) = mpsc::channel::<WriteTask>(1000);
+        let (exit_tx, exit_rx) = std_mpsc::channel::<()>();
 
         // M8: writer 线程不得因任一调用方闭包 panic 而死亡. 旧实现
         // `task(&mut writer)` 直接调 — 任一 panic → 线程 unwind 死亡 →
@@ -423,19 +612,54 @@ impl SqliteConnectionPool {
         // "writer channel is closed", 且不自动重启. 现在 catch_unwind
         // 捕获 panic (panic = "abort" 构建下仍会终止进程, 这是 Rust 的
         // 固有限制), 向该调用方回 "writer task panicked" 后继续循环.
-        std::thread::spawn(move || {
-            while let Some(task) = write_rx.blocking_recv() {
-                let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    (task.body)(&mut writer);
-                }));
-                if outcome.is_err() {
-                    task.panicked.store(true, Ordering::SeqCst);
+        // `closed` 标志：写线程**退出后**置位（诊断快照：写连接是否已关）。
+        let closed = Arc::new(AtomicBool::new(false));
+        let closed_for_thread = Arc::clone(&closed);
+        let handle = std::thread::spawn(move || {
+            {
+                // 内层作用域: 写连接在作用域结束时关闭。
+                let mut writer = writer;
+                while let Some(task) = write_rx.blocking_recv() {
+                    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        (task.body)(&mut writer);
+                    }));
+                    if outcome.is_err() {
+                        task.panicked.store(true, Ordering::SeqCst);
+                    }
                 }
+                // ← 作用域结束 ⇒ 写连接在此**关闭** (SQLite 侧的文件锁随之释放)。
             }
+            // 退出信号在**写连接已关之后**才发 ⇒ 收到信号即「连接已关」。
+            // 池弃用方 (`WriterHandle::drop`) 等这个信号 ⇒ 同路径 reopen 时
+            // 旧连接已退净 ⇒ 不再撞 WAL 索引重建的排他锁。
+            closed_for_thread.store(true, Ordering::SeqCst);
+            let _ = exit_tx.send(());
+        });
+        let thread_id = handle.thread().id();
+
+        let writer = Arc::new(WriterHandle {
+            exited: StdMutex::new(exit_rx),
+            closed,
+            join: StdMutex::new(Some(handle)),
+            thread_id,
+            grace,
         });
 
-        Self { pool, write_tx }
+        Self {
+            pool,
+            write_tx,
+            writer,
+        }
     }
+}
+
+/// 写线程收口等待上限 = 配置的 `busy_timeout` + [`WRITER_SHUTDOWN_GRACE`]。
+///
+/// 收口最多要等「写线程做完手上那次写」—— 一次写最长卡在 SQLite 的
+/// `busy_timeout` 上 ⇒ 上限必须 **>** `busy_timeout`, 否则会在写线程刚好
+/// 要收尾时放弃 join (窗口就又回来了)。上限之上再加固定余量吸收调度延迟。
+fn shutdown_grace(config: &SqliteConfig) -> Duration {
+    config.busy_timeout.saturating_add(WRITER_SHUTDOWN_GRACE)
 }
 
 /// 写任务回复端断开时的根因判定 (M8).
@@ -566,6 +790,89 @@ mod tests {
             .unwrap();
         assert_eq!(value, "x");
         drop(pool);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// **根因钉子测试（2026-11-06）**：池被弃时若**写事务仍在进行**，
+    /// 写连接此刻**持有 WAL 写锁** ⇒ 随后对**同一路径** reopen 要重建 `-shm`
+    /// ⇒ 需要排他锁 ⇒ 旧连接未关 ⇒ `SQLITE_BUSY`（`database is locked`）。
+    ///
+    /// 修复前：`drop(pool)` 只丢 `Sender`、**立即返回** ⇒ 写事务仍在跑、旧连接仍开着
+    /// ⇒ reopen 撞锁。修复后：`drop` 等写线程收口 ⇒ **连接已关** ⇒ reopen 必成。
+    ///
+    /// ⚠️ 复现要点：写任务必须**真的在跑**（持锁）时 drop ⇒ 用一个带闸门的写任务，
+    /// 由测试侧在事务中途放行 ⇒ 避免依赖时间窗口。
+    #[tokio::test]
+    async fn dropping_the_last_pool_while_a_write_is_in_flight_lets_the_same_path_reopen() {
+        let _guard = serialize().await;
+        let path = temp_db("reopen-after-drop");
+        let _ = std::fs::remove_file(&path);
+
+        let pool = SqliteConnectionPool::open_shared(&path).await.unwrap();
+        pool.write(|conn| {
+            conn.execute_batch("CREATE TABLE IF NOT EXISTS t (id INTEGER PRIMARY KEY, v TEXT);")?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+
+        // 一笔**长写事务**：写线程持写锁时等待测试侧放行。
+        // 闸门用 `Arc<(Mutex<bool>, Condvar)>`（可跨线程共享）⇒ 不依赖时间窗口。
+        let gate = Arc::new((StdMutex::new(false), std::sync::Condvar::new()));
+        let writer_pool = pool.clone();
+        let write_gate = Arc::clone(&gate);
+        let write_task = tokio::task::spawn(async move {
+            writer_pool
+                .write(move |conn| {
+                    conn.execute_batch(
+                        "INSERT INTO t (id, v) VALUES (2, 'y');
+                         BEGIN IMMEDIATE;
+                         INSERT INTO t (id, v) VALUES (3, 'z');",
+                    )?;
+                    // 持着写锁等测试侧放行。
+                    let (lock, cvar) = &*write_gate;
+                    let mut released = lock.lock().unwrap_or_else(|p| p.into_inner());
+                    while !*released {
+                        released = cvar.wait(released).unwrap_or_else(|p| p.into_inner());
+                    }
+                    conn.execute_batch("COMMIT;")?;
+                    Ok(())
+                })
+                .await
+        });
+
+        // 等写事务真正进入（写线程已取到任务）。
+        tokio::time::sleep(Duration::from_millis(200)).await;
+
+        // **关键动作**：弃掉最后一个池引用（写线程本身不持有池 ⇒ 不会自 join）。
+        drop(pool);
+
+        // 放行写事务（若 drop 已同步收口，此刻写线程已在等这个信号）。
+        {
+            let (lock, cvar) = &*gate;
+            let mut released = lock.lock().unwrap_or_else(|p| p.into_inner());
+            *released = true;
+            cvar.notify_all();
+        }
+        let _ = write_task.await;
+
+        // 同路径**立即** reopen：修复前此处会撞 `database is locked`。
+        let reopened = SqliteConnectionPool::open_shared(&path).await;
+        assert!(
+            reopened.is_ok(),
+            "同路径 reopen 必须成功（写连接已随池收口而关闭）: {:?}",
+            reopened.err()
+        );
+        if let Ok(reopened) = reopened {
+            let value: i64 = reopened
+                .read(|conn| {
+                    Ok(conn
+                        .query_row("SELECT COUNT(*) FROM t WHERE id = 3", [], |row| row.get(0))?)
+                })
+                .unwrap();
+            assert_eq!(value, 1, "被封的那笔写事务必须已落库（不能丢写）");
+            drop(reopened);
+        }
         let _ = std::fs::remove_file(&path);
     }
 }
