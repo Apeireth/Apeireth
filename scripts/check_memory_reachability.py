@@ -140,7 +140,10 @@ def production_entries(module_names: set[str]) -> set[str]:
     return entries
 
 
-def module_edges(module_names: set[str]) -> dict[str, set[str]]:
+def module_edges(
+    module_names: set[str],
+    type_owner: dict[str, str] | None = None,
+) -> dict[str, set[str]]:
     """crate 内模块依赖边（A → B：A 的源文件提到 `B::`）。
 
     ⚠️ **`lib.rs` 是「模块清单」不是「模块」** ⇒ ⇒ 它**不作为依赖边的来源**。
@@ -163,6 +166,17 @@ def module_edges(module_names: set[str]) -> dict[str, set[str]]:
             cand = m.group(1)
             if cand in module_names and cand != name:
                 deps.add(cand)
+        # ⭐ **按类型名反查模块**（2026-11-06 修判据的洞·二）
+        # 现有 `DEP_RE` 只认 `mod_name::` 形态 ⇒ ⇒ **按类型名分组导入**不产生边
+        # ⇒ ⇒ 例：`use crate::{… MemoryReconciler …}` ⇒ ⇒ `→ reconciler` 这条边**丢了**
+        # ⇒ ⇒ ⇒ 而 `lib.rs` 的 `pub use <mod>::{Type}` 映射**能**告诉我们该类型属于谁
+        # ⇒ ⇒ ⇒ ⚠️ 只认**大写类型名**且该类型**真在映射里** ⇒ ⇒ **不是虚报**
+        # ⇒ ⇒ ⇒ （方向纪律不变：宁可漏报未接线，不可虚报已接线）
+        if type_owner:
+            for type_name, owner in type_owner.items():
+                if owner != name and owner in module_names:
+                    if re.search(rf"\b{re.escape(type_name)}\b", text):
+                        deps.add(owner)
         edges[name] = deps
     return edges
 
@@ -206,7 +220,7 @@ def compute() -> tuple[set[str], set[str], set[str], dict[str, set[str]]]:
     entries = production_entries(names)
     # ⭐ 重导出面：类型名 → 所属模块（生产只按类型名引用能力时必需）
     reexports = read_reexport_map(names)
-    edges = module_edges(names)
+    edges = module_edges(names, type_owner=reexports)
 
     # 入口 ⇒ ⇒ 它引用的记忆模块 = 起点（从入口文件里找 `apeireth_memory::X` 形态）
     seeds: set[str] = set()
@@ -227,6 +241,15 @@ def compute() -> tuple[set[str], set[str], set[str], dict[str, set[str]]]:
                 part = part.strip().split(" as ")[0].strip()
                 if part in names:
                     seeds.add(part)
+                # ⭐ **`mod::Type` 形态**（2026-11-06 修判据的洞·三）
+                # 生产写的是 `use apeireth_memory::{experience_store_sqlite::SQLiteExperienceStore, …};`
+                # ⇒ ⇒ 而 `lib.rs` 里那是 **`pub mod`**（不是 `pub use`）⇒ ⇒ 重导出映射里没有
+                # ⇒ ⇒ ⇒ 旧解析只按裸类型名比 ⇒ ⇒ **两头都落空** ⇒ ⇒ 误判不可达
+                # ⇒ ⇒ ⇒ 这里按 `::` 拆一次 ⇒ ⇒ 取模块名 ⇒ ⇒ **生产确实按模块路径引用了它**
+                if "::" in part:
+                    mod_path = part.split("::", 1)[0].strip()
+                    if mod_path in names:
+                        seeds.add(mod_path)
                 # ⭐ **类型名**（大写）⇒ ⇒ 经 `lib.rs` 的重导出面回溯到模块
                 # （2026-11-06 修判据的洞：生产**只按类型名**引用能力，
                 #   如 `use apeireth_memory::{SqliteCommitmentStore, …};`

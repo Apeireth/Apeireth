@@ -90,7 +90,6 @@ explained wiki_fs                 # 台账 docs/status/unwired-ledger.md §5.5�
 #     ⇒ ⇒ 终局台账裁定「维持未接」⇒ ⇒ 有意不接 ⇒ ⇒ 不是债。
 
 explained admission_gate  # 台账 docs/status/unwired-ledger.md §5.5「C 类（有意不接）」L1310：终局台账裁定「维持未接」⇒ ⇒ 有意不接 ⇒ ⇒ 不是债
-explained intent_brier    # 台账 docs/status/unwired-ledger.md §5.5「C 类（有意不接）」L1310：终局台账裁定「维持未接」⇒ ⇒ 有意不接 ⇒ ⇒ 不是债
 
 # --- E5（1 条）：台账 §三「死 API」的**保留**条目 ⇒ ⇒ **判据盲区**，不是缺口
 #     ⇒ ⇒ 本模块只含 `#[test]` 与 `#[cfg(kani)]` 证明 ⇒ ⇒ stable 生产面看不见它
@@ -113,4 +112,4 @@ explained organ_kani_proofs  # 台账 docs/status/unwired-ledger.md §三「死 
 #   * `--update` **只许往下压**（缺口变小才压）⇒ ⇒ 涨了不许自动抬。
 # ============================================================================
 
-max_unexplained_gap = 40
+max_unexplained_gap = 33

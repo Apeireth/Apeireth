@@ -76,6 +76,11 @@ def run_report() -> tuple[dict | None, str]:
         return None, "缺语料（$APEIRETH_DATA_DIR/novels 或 ~/.apeireth/novels）"
 
     env = dict(os.environ)
+    # ⭐ **专属 target 目录**（2026-11-06）：本机有**别的 root 身份的 cargo 进程**
+    # 在往**共享** target 目录里写文件 ⇒ ⇒ 本脚本复用它时会出现
+    # `E0786 Permission denied`（产物 root 拥有 ⇒ ⇒ bai 读不了）
+    # ⇒ ⇒ ⇒ 那是**环境干扰**（不是代码问题）⇒ ⇒ 用**专属** target 隔离。
+    env.setdefault("CARGO_TARGET_DIR", "/var/tmp/apeireth-fusion-gate-target")
     # ⭐ **语料路径**：示例自己认 `APEIRETH_DATA_DIR`（它的 `novels` 挂在数据根下）
     # ⇒ ⇒ 这里传**数据根**（不是 novels 目录）。
     if not (Path(env.get("APEIRETH_DATA_DIR", "/nonexistent")) / "novels").is_dir():

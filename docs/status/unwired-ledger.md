@@ -63,6 +63,66 @@
 > ⇒ ⇒ ⇒ **能力缺失被当成冗余删掉** ⇒ ⇒ 那才是真的债
 > ⇒ ⇒ **分类错 ⇒ 处置错 ⇒ 后果错** ⇒ ⇒ 故单列。
 
+### W14–W32：记忆 crate「能力可达率」分诊 · **待接线**（19 条 · 分诊执行者 2026-11-06）
+
+> **本批来源**：`scripts/check_memory_reachability.py` 报「**未解释缺口 = 40**」
+> ⇒ ⇒ 去掉 15 条**评估/基准/语料族**（`golden_*` · `*_corpus` · `*_metrics` · `shadow_run` ·
+> `d4_eval` · `golden_diag` · `five_dimensional` · `locomo` · `novel_corpus` · `git_corpus` ·
+> `perltqa` · `robustness` —— **不是产品能力**）⇒ ⇒ **剩 25 条** ⇒ ⇒ **本节逐条分诊**。
+>
+> ⭐ **口径纪律（三条，必须写清）**：
+> * **本批不改变缺口数字** —— 登记（`scripts/memory-reachability-explained.txt`）由主代理统一做；
+> * ⚠️ **本表没有一条被判「有意不接」** —— 台账**既有明写**里没有它们（§5.2 / §5.5 C 类都没有）
+>   ⇒ ⇒ 按纪律**不许**判「有意不接」（`ensemble` / `derived_repair` 两条的「自述默认关」
+>   已**如实标注**在行内，但**分类仍登记为待接线** ⇒ 是否改判由台账所有者写明才算数）；
+> * ⇒ ⇒ **19 条待接线 + 2 条已被谁承担（W33–W34）+ 4 条判据洞候选（见下节）= 25 条**。
+
+| # | 符号 / 能力 | 现状（实证 · 证据 文件:行号） | 决策 / 触发（**最小改法**） | owner |
+|---|---|---|---|---|
+| W14 | `agent_trace` · **执行轨迹落库 + 查询**（span 树 / `parent_span_id` 因果链 / 禁存 CoT） | 库级 IMPLEMENTED（`crates/engine/memory/src/agent_trace.rs:263` `TraceStore` trait，`:293` impl on `SqliteMemoryStore`；表由迁移 V7 建：`crates/engine/memory/src/migrations/list.rs:111-127`）⇒ **生产 0 调用**（`TraceStore`/`put_trace_span` 全仓无仓外调用点）⇒ ⚠️ **不是** `runtime` 的 `ExecutionTrace`（`crates/engine/runtime/src/canonical/trace.rs:173-182` 是**纯内存**、不落库、不可查 ⇒ **同名不同物**） | **待接线**。**谁该用**：runtime 的回合执行面（`crates/engine/runtime/src/canonical/execute.rs:789` 构造 `ExecutionTrace` 处）—— ⚠️ `apeireth-runtime` **不依赖** `apeireth-memory`（`crates/engine/runtime/Cargo.toml:14-33`）⇒ **不能**在 `runtime` 里直接调 ⇒ 最小改法 = 在 `runtime-assembly`（`crates/engine/runtime-assembly/Cargo.toml:26` 已有 memory 可选依赖）侧把每条 `TraceEntry` 映射成 `TraceSpan` 后经 `TraceStore::put_trace_span` 落库 | 记忆线 |
+| W15 | `arbitration` · **多源事件唯一事实时间线 + 不可篡改审计仲裁**（SHA-256 内容哈希 + `prev_hash` 链 + Merkle 根 + 常数时间比较） | 库级 IMPLEMENTED（`crates/engine/memory/src/arbitration.rs:107` `compute_hash`、`:153` `ArbitrationEngine`、`:216` `verify_integrity`、`:262` `compute_merkle_root`；`EventSource` 六源 `:46-61`：Frontend/Cli/Gateway/AgentComm/System/External）⇒ **生产 0 调用** ⇒ ⚠️ **不是** `memory_chain`（`crates/engine/memory/src/memory_chain.rs:1-30`：按 subject 分链的**记录级**链，走 `apeireth_core::hash_chain` 冻结布局）也**不是** `governance` 审计账本（`crates/foundation/governance/src/audit.rs:41`）⇒ ⇒ **粒度不同（事件级 vs 记录级）＋ Merkle 根 ＋ 跨源定序** ⇒ **不是重复实现** | **待接线**。**谁该用**：网关 `EventBus`（`crates/adapters/gateway/src/events.rs:155`）—— 它现在只投递 SSE 帧，**没有**跨源统一可验时间线 ⇒ 最小改法 = 在 `EventBus` 的发布侧按 `EventSource` 归口进 `ArbitrationEngine::append_event`（⚠️ 该引擎是**纯内存** `Arc<Mutex<Vec<…>>>` ⇒ 真接线还要定「是否落库」） | 记忆线 + 安全线 |
+| W16 | `calibration` · **Murphy Brier 三分解 + 校准分箱 + ECE**（让「自信度」这一维可信） | 库级 IMPLEMENTED（`crates/engine/memory/src/calibration.rs:97` `BrierDecomposition`、`:173` `calibration_bins`、`:205` `expected_calibration_error`）⇒ **生产 0 调用**（库内消费者 `calibration_critic`/`ensemble`/`reflexion_tuning` 也全不可达）⇒ 进度页已记：「❌ `calibration*` 生产 0 调用」（`docs/status/spec-batch-status.md:62`） | **待接线**。⚠️ **并行线提醒**：`deputy` 正在接这条（「⚠️ **我的 A4 消费端还没接进生产链**（观测已能算指标，但**没有生产调用点**）」——`docs/04-internal/01-handoffs/memory-fusion-gap-2026-11-05.md:82`）⇒ ⇒ **按「待接线」登记，不重复排产**；**谁该用**：融合打分面（`crates/engine/memory/src/retrieval_pipeline.rs:283` `retrieve` 之后的分数维度）—— 最小改法 = 在打分结果旁算 ECE 并进 `quality_drift`（`crates/engine/memory/src/quality_drift.rs`）监控面 | 记忆线（deputy 在途） |
+| W17 | `calibration_critic` · **校准感知批判器**（Brier + ECE ⇒ Continue / Revise / Reject） | 库级 IMPLEMENTED（`crates/engine/memory/src/calibration_critic.rs:82` `CalibrationCritic`、`:105` `critique`、`:139` `critique_single`）⇒ **生产 0 调用**（库内依赖 `calibration` + `reflexion`，两者都不可达）⇒ 同上进度页 `:62` 已记 `calibration_critic` 生产 0 调用 | **待接线**。**谁该用**：有状态机的反思/进化决策面 —— 模块自述「**Decoupled from the 6-state evolution machine**…Callers that still have a state machine map `CritiqueAction` themselves」（`calibration_critic.rs:110-122`）⇒ ⇒ 它**不自带**消费面 ⇒ 最小改法 = 先接 W16 的 ECE 观测，再在反思回路（`crates/engine/memory/src/reflexion.rs`）里把 `CritiqueAction` 映射到「继续 / 改写 / 丢弃」三种处置 | 记忆线 |
+| W18 | `cold_archive` · **单条记忆冷层归档**（归档 ≠ 删除：只打标记 + 降权，归档件**仍可检索**，独立账本表 `memory_cold_archive`） | 库级 IMPLEMENTED（`crates/engine/memory/src/cold_archive.rs:46` `COLD_ARCHIVE_TABLE`、`:134` `archive_episode`、`:256` `weight_for`、`:227` `verify_ledger`）⇒ **生产 0 调用**（仅 `crates/engine/memory/tests/cold_archive.rs` + example `cold_archive_report.rs`）⇒ 进度页同口径：「**D-9 降权权重模型未接生产**」（`docs/status/spec-batch-status.md:62`） | **待接线**。**谁该用**：保留面 `crates/engine/memory/src/retention.rs:117` `sweep_session` / `:138` `sweep_session_with_audit`（可达）+ 检索打分 `crates/engine/memory/src/retrieval_pipeline.rs:283` ⇒ 最小改法 = sweep 把「衰减到阈值下但仍在保真期」的 episode 写进冷归档账本，并在打分时乘 `cold_archive::weight_for`（⚠️ 权重因子**不许 0**，模块硬拒：`cold_archive.rs:99-112`） | 记忆线 |
+| W19 | `confidence` · **可复用有状态 Beta-Binomial 后验 + Wilson 95% 区间 + 强度档** | 库级 IMPLEMENTED（`crates/engine/memory/src/confidence.rs:16` `BetaBinomial`、`:72` `observe`、`:101` `interval95`、`:116` `strength`）⇒ **生产 0 调用** ⇒ ⚠️ **同名不同物排除**：`crates/engine/organ/src/world_model.rs:269-287` 有一份**内联简化版**（自承「BetaBinomial (1,1) 简化版」「区间端点用**正态近似**」）—— 它**无增量 `observe`**、**非精确 Wilson** ⇒ ⇒ **不是**同一能力 ⇒ ⇒ 本条**不是**「已被承担」 | **待接线**。**谁该用**：D5 判断面（置信度/校准）⇒ 最小改法 = 把 `BetaBinomial` 接到「对照预测成功/失败」的反馈源（`crates/engine/memory/src/retrieval_tuning.rs` 的使用证据 / `quality_drift`）⚠️ **注意依赖方向**：`apeireth-organ` **不依赖** `apeireth-memory`（`crates/engine/organ/Cargo.toml:11-38`）⇒ 若要**替换** organ 那份内联实现 ⇒ 需**新增依赖边** ⇒ 属架构决策 | 记忆线 + 架构线 |
+| W20 | `daily_summary` · **每日记忆摘要与结构化统计**（记忆写入 / 做梦整合 / 反思 / 工具调用四类计数 + 摘录） | 库级 IMPLEMENTED（`crates/engine/memory/src/daily_summary.rs:52` `build_daily_summary`、`:31` `render`）⇒ **生产 0 调用** ⇒ 进度页同口径：「❌ `daily_summary` 生产 0 调用」（`docs/status/spec-batch-status.md:60`）⇒ ⚠️ **接线前必须先修判据**：`build_daily_summary` 按 **id 前缀** `mem-` / `mem-dream-` / `reflect-` 计数（`daily_summary.rs:59-68`），而 v2 生产写路径产出的 episode id 是 `hash_id("ep-user"/"ep-assistant", …)`（`crates/engine/runtime-assembly/src/canonical/cognitive.rs:1910,1919`）与 `stable_episode_id`（`crates/engine/memory/src/memory_materializer.rs:420`）⇒ ⇒ **直接接线会得到「全 0」摘要** | **待接线**（**带前置条件**）。**谁该用**：夜间整编 / 日记面（`crates/adapters/cli/src/lib.rs:2908` `dispatch_dream` · `crates/engine/memory/src/diary.rs`）⇒ 最小改法 = **① 先把判据从「id 前缀」改成「provenance/来源字段」**（`crates/engine/memory/src/provenance.rs`）**② 再接进 dream/日记出口** | 记忆线 |
+| W21 | `dedup` · **窗口指纹去重**（规范化 SHA-256 指纹 + 24h 窗口 + LRU + SQLite 侧车表 `dedup_fingerprints`，跨重启存活） | 库级 IMPLEMENTED（`crates/engine/memory/src/dedup.rs:166` `DedupIndex`、`:204` `accept`、`:221` `accept_persisted`；表由迁移 V15 建：`crates/engine/memory/src/migrations/list.rs:276-285`）⇒ **生产 0 调用** ⇒ ⚠️ **定位已被实测钉死**：进度页记「`overlap_ratio` 是**字符集 Jaccard** ⇒ 把大量轮次判成重复 ⇒ 它的定位是**写入门禁**，不是检索侧重排」（`docs/status/spec-batch-status.md:89`） | **待接线**。**谁该用**：**写侧**（不是检索侧重排）—— `crates/engine/memory/src/memory_materializer.rs`（生产写入面，`runtime-assembly/src/canonical/cognitive.rs:1767` 构造）⇒ 最小改法 = 在 `MemoryMaterializer` 落库前调 `DedupIndex::accept_persisted(&store, namespace, fingerprint, now_ms)` 拒重复（⚠️ 命名空间要按来源分桶 ⇒ 否则跨会话误杀） | 记忆线 |
+| W22 | `derived_repair` · **派生状态级联失效修复**（源工件被更正/删除后，撤回全部可见后代 → 用保留支撑重建 → 只放行「前驱闭包已验证」的后继；单次 t-t 最小割精确求解） | 库级 IMPLEMENTED（`crates/engine/memory/src/derived_repair.rs:73` `RepairExecutor`、`:78` `affected_closure`、`:112` `select_repair_set`、`:192` `execute`）⇒ **生产 0 调用**（库内唯一消费者 `forget_coordinator`（W24）也不可达）⇒ ⚠️ **模块自述**：「**Research 前缀，默认关闭**」「真持久化（撤回/重建/再发布的落库动作）留部署层接线（0 装）」（`derived_repair.rs:290`、`:301`）⇒ ⇒ 台账**既有明写**里**没有**它（§5.2 / §5.5 C 类都无）⇒ ⇒ **按纪律登记为「待接线」**，**不判「有意不接」** | **待接线**（⚠️ **建议台账所有者按「有意不接」补写**：同族的 `research_non_interference` / `research_roaming_memory` 都已在 §5.2「有意不接」里，`derived_repair` 是同族同因却漏登记 ⇒ **补写后**本条才可改判）· **谁该用**：`forget_coordinator` 的 P2 派生面（`crates/engine/memory/src/forget_coordinator.rs`） | 记忆线 |
+| W23 | `ensemble` · **集成预测聚合 + Hanson LMSR 预测市场** | 库级 IMPLEMENTED（`crates/engine/memory/src/ensemble.rs:81` `EnsembleForecast`、`:99` `aggregate`、`:259` `PredictionMarket`、`:319` `cost`、`:358` `execute_buy`）⇒ **生产 0 调用** ⇒ ⚠️ **设计稿已列为「砍掉」**：「研究吸收批不进主线：…`ensemble`…⇒ **处置**：全部归 **D4**，默认关」（`docs/01-architecture/memory-knowledge-depth-system-spec.md` §9「明确不做（砍掉的）」）⇒ 进度页同口径：「❌ …`ensemble` 未接」（`docs/status/spec-batch-status.md:61`）⇒ ⇒ **台账既有明写里仍没有它** ⇒ ⇒ **按纪律登记为「待接线」**，**不判「有意不接」** | **待接线**（⚠️ **建议台账所有者按「有意不接」补写**：设计稿 §9 + 进度页 §1 两处都明写它归 D4 默认关 ⇒ **补写后**本条才可改判）· **谁该用**：D4 模式层（默认关；只通过「离线增量价值数字」决定是否开启） | 记忆线 |
+| W24 | `forget_coordinator` · **三段式协调遗忘**（P1 明文 + P2 派生面 + P3 执行态，一次性清；遗忘后行为等价于从未观察） | 库级 IMPLEMENTED（`crates/engine/memory/src/forget_coordinator.rs:123` `research_coordinated_forget`、`:134` `research_coordinated_forget_with_permit`、`:330` `research_apply_repair_outcome`）⇒ **生产 0 调用** ⇒ ⚠️ **模块自称「生产接线（opt-in，默认关闭）」但函数名全带 `research_` 前缀且零生产调用** ⇒ ⇒ 口径上**仍是未接线**（不许按自称宣称 PRODUCTION WIRED） | **待接线**。**谁该用**：`universal_forget`（**可达**，`crates/engine/memory/src/universal_forget.rs`）—— 今天的「被遗忘权」是**按主体全库删**，没有「派生面 + 执行态」这两段 ⇒ 最小改法 = 在 `universal_forget` 的删除路径上，删前先跑 `research_coordinated_forget_with_permit`（⚠️ **P2 段依赖 W22** `derived_repair` ⇒ **这两条要同批**）· 设计依据：`docs/01-architecture/forget-three-phase-production-spec.md` | 记忆线 + 安全线 |
+| W25 | `identity` · **IdentityCard 跨载体存储**（`continuity_id` UNIQUE 物理唯一性 + 硬 DELETE 被 trigger 拒 + 软删墓碑 + 迁移史） | 库级 IMPLEMENTED（`crates/engine/memory/src/identity.rs:89` `IdentityCardStore` trait、`:131` impl on `SqliteMemoryStore`；表 `identity_cards`：`crates/engine/memory/src/migrations.rs:499`）⇒ **生产 0 调用** ⇒ ⚠️ **库内**被 `continuity_link.rs:9-11`（`use crate::{… IdentityCardStore …}`）消费，但**那两个入口 `ensure_identity`（`continuity_link.rs:165`）与 `record_carrier_migration`（`continuity_link.rs:306`）全仓零生产调用**（只有 `crates/engine/memory/src/lib.rs:67-68` 的重导出 + 测试）⇒ ⇒ **生产环境 `identity_cards` 表永远是空的** ⇒ ⇒ **`continuity_id` 的物理唯一性约束从未生效** | **待接线**。**谁该用**：主体锚点装配点（`crates/adapters/cli/src/lib.rs:2876` 读 `current_continuity_id()` 处）⇒ 最小改法 = 在该处调 `ensure_identity(&store, &continuity, carrier, now_ms)`（幂等：`continuity_link.rs:165-190`）⇒ ⚠️ **副作用要说清**：这会让「同一 `continuity_id` 重复登记」从**静默成功**变成 `IdentityConflict::AlreadyExists` ⇒ 属**行为变化**，需带一次真机验证 | 记忆线 |
+| W26 | `memory_view` · **记忆纵深体系读侧契约**（`MemoryView` 读契约 + `MemoryAnnotation` 写契约；「算法只能通过它读，不许直接碰库」） | 库级 IMPLEMENTED（`crates/engine/memory/src/memory_view.rs:149` `MemoryView` trait、`:351` `MemoryAnnotation`、`:486` `InMemoryMemoryView`）⇒ **生产 0 调用**（契约**只被 example / 测试调用**）⇒ 进度页同口径：「**B2** 🟡 库级完成，生产未接 … **契约只被 example 调用** ⇒ 要接进生产读路径」（`docs/status/spec-batch-status.md:75`）⇒ 设计稿 §5 三接口契约（`docs/01-architecture/memory-knowledge-depth-system-spec.md:109-131`） | **待接线**。**谁该用**：生产读路径 —— 唯一生产召回入口 `crates/engine/runtime-assembly/src/canonical/memory_module/execution.rs:93`（`c.recall(&query)`）⇒ 最小改法 = 在 `crates/engine/memory/src/retrieval_pipeline.rs:283` `retrieve` 的候选读取处包一层 `MemoryView` 实现（`InMemoryMemoryView` 已有）⇒ ⇒ **「未来算法插得上」的前提就是这一条**（设计稿 §5 的立意） | 记忆线 |
+| W27 | `metadata_filter` · **JSON property-bag 检索过滤**（`properties[key] == value` 深相等；纯匹配器，不做打分） | 库级 IMPLEMENTED（`crates/engine/memory/src/metadata_filter.rs:15` `PropertyPredicate`、`:44` `MetadataFilter`、`:79` `matches`）⇒ **生产 0 调用** ⇒ ⚠️ **库内唯一消费者是 `persistent_vector`**（`crates/engine/memory/src/persistent_vector.rs:24` `use crate::metadata_filter::MetadataFilter;`）⇒ 而 `persistent_vector` 已被台账 §5.2「有意不接（9 条，不是债）」列为**有意不接** ⇒ ⇒ **它跟着 `persistent_vector` 一起走** ⇒ ⇒ 台账**既有明写**里**没有** `metadata_filter` ⇒ ⇒ **按纪律登记为「待接线」**，**不判「有意不接」** | **待接线**（⚠️ **与 W32 同族，须与 `persistent_vector` 同批决策** —— 它是那个族里唯一还没被台账写明的成员 ⇒ **补写**后可改判）· **谁该用**：持久向量索引的检索后过滤（`persistent_vector.rs` 的 KNN 打分后） | 记忆线 |
+| W28 | `migrate_rollback` · **迁移回滚（可演练、机器可证）**（只删副本不碰原记录 + 回滚前快照比对 + 任一步不符就不删任何东西） | 库级 IMPLEMENTED（`crates/engine/memory/src/migrate_rollback.rs:158` `prepare_ledger`、`:204` `verify_migration`、`:221` `rollback_migration`、`:323` `drill_rollback`）⇒ **生产 0 调用**（仅 `crates/engine/memory/tests/migrate_rollback.rs` + example `migrate_rollback_report.rs`）⇒ ⚠️ **与进度页口径冲突（须回改）**：进度页写「**B4** ✅ **完成** … 2026-10-27 补了 **CLI 出口**（`memory export` / `memory handover`）」（`docs/status/spec-batch-status.md:74`），但 **CLI 的 `memory` 子命令只有 `verify` / `migrate-subject` / `export` / `handover`**（`crates/adapters/cli/src/main.rs:1033`、`:1049-1052`、`:1054`）⇒ ⇒ **B4 验收项「回滚可演练」在生产面没有出口** ⇒ ⭐ **本条是真缺口的硬证据，也是那页该回改的地方**（本轮我只改台账 ⇒ **报主代理**） | **待接线**。**谁该用**：`crates/adapters/cli/src/memory_migrate_command.rs:140`（`migrate_subject` 是**生产**已调用的迁移入口）⇒ 最小改法 = 在 `crates/adapters/cli/src/main.rs` 的 `memory` 分支加 `Some("rollback-drill")` 子命令（参照 `:1052` `export` 的分派形态）⇒ 调 `migrate_rollback::drill_rollback` ⇒ **这样「迁移可回滚」才是可演练的，而不是只写在页面上** | 记忆线 + 架构线 |
+| W29 | `offline_embed` · **纯本地 embedder**（字符 n-gram 哈希投影；**无 API key、无网络**） | 库级 IMPLEMENTED（`crates/engine/memory/src/offline_embed.rs:82` `OfflineEmbedder`、`:143` `embed_text`）⇒ **生产 0 调用**（模块自述四级口径「**PRODUCTION WIRED ✘** … 只有 example 与测试在用」，`offline_embed.rs:40-50`）⇒ ⚠️ **今天离线就是没有向量召回**：生产 embedding 走 `OpenAiCompatibleEmbeddingProvider`（需 env URL + key + 联网，`crates/adapters/cli/src/lib.rs:347-353`；进度页 `:59` 同口径）⇒ ⇒ **离线环境召回退化为纯词面** | **待接线**。**谁该用**：`crates/adapters/cli/src/lib.rs:347-353` `embedding_provider_from_env` 的 **`(None, None)` 分支**（现在返 `Ok(None)`）⇒ 最小改法 = 加一个 `OfflineEmbeddingProvider` **适配器**（⚠️ `OfflineEmbedder` 实现的是 `apeireth_orchestration::Embedder`（`offline_embed.rs:126`），**不是** `crate::scope::EmbeddingProvider`（`crates/engine/memory/src/scope.rs:329`，async + `model_id`）⇒ **不能直接当 trait 实现**，需一层适配）⇒ ⚠️ **诚实边界**：它**不是语义模型**（`offline_embed.rs:594-598` 自述）⇒ 接上去是**行为变化**（召回会多一条词面向量通道）⇒ 需 `golden_set` 回归数字 | 记忆线 |
+| W30 | `session_lifecycle` · **后端会话生命周期**（创建 / 重命名 / 归档 / 恢复 / 列表 + `revision` 乐观并发 CAS + `scope`/`project_id`/`metadata` 扩展列） | 库级 IMPLEMENTED（`crates/engine/memory/src/session_lifecycle.rs:259` `SessionLifecycleStore` trait、`:43` `SessionScope`、`:69` `SessionState`、`:98` `SessionLifecycleRecord`）⇒ **生产 0 调用**（全仓只有一句注释提到它：`crates/adapters/gateway/src/panel_errors.rs:30`）⇒ ⚠️ **同名不同物排除**：① 生产会话面是 `crates/engine/runtime-assembly/src/sqlite_session.rs` 的 `SqliteSessionStore` —— 在**另一个库** `.apeireth/sessions.sqlite3`、表是 `sessions(id TEXT, data TEXT)` 通用 blob ⇒ **不是同一物**；② `crates/engine/memory/src/session_note.rs:54` 的 `SessionNoteStore` 是**同一张表**上的**4 列旧契约**（upsert/get/close/list）⇒ ⇒ `session_lifecycle` 是**富契约**且**没接** | **待接线**。**谁该用**：记忆侧会话创建/归档点（`crates/adapters/cli/src/lib.rs:1501` `SessionManager::new` 之后）⇒ 最小改法 = 会话建立时向**记忆库**的 `sessions` 行调 `create_session`（带 title/scope/project_id），会话结束时调 `archive_session`（⚠️ 与 `session_note` 的 4 列写入**共用一行** ⇒ 需先对账两套契约的字段口径，别写两遍） | 记忆线 |
+| W31 | `swap_flow` · **算法切换流程（三道闸 + 可回退）**（影子双跑 ⇒ 裁决 `Approved` 才准切 ⇒ 切换 + 评测报告归档；`Swap cost` 三度量） | 库级 IMPLEMENTED（`crates/engine/memory/src/swap_flow.rs:161` `allows_swap`、`:221` `execute_swap`、`:309` `rollback`、`:386` `list_archives`、`:77` `MIN_SHADOW_RUNS`、`:85` `MIN_SHADOW_CASES`）⇒ **生产 0 调用**（仅 `crates/engine/memory/tests/swap_flow.rs`；上游 `shadow_run` 是评估族、未接）⇒ 进度页同口径：「**B3** 🟡 库级完成，生产未接 … **只有 example 在用**」（`docs/status/spec-batch-status.md:76`）；设计稿 §6.1 L4 `Swap cost` = **IMPLEMENTED（库级）** | **待接线**。**谁该用**：检索算法切换面（`crates/engine/memory/src/retrieval_pipeline.rs` 的权重来源 `retrieval_tuning` 之上）⇒ 最小改法 = 落一个「当前用哪套算法」的指针写面（`AlgoPointer`，`swap_flow.rs:106`）+ 报告归档目录，并把 `execute_swap` 挂到**人工批准**入口（⚠️ 三道闸的顺序不许跳步：`swap_flow.rs:786-792`） | 记忆线 + 架构线 |
+| W32 | `vector_rebuild` · **派生索引重建 + 换代检测**（同模型重建 ⇒ 逐条比对报「一致/不一致 + 差多少」；模型不同 ⇒ 报「**换代**」不假装一致） | 库级 IMPLEMENTED（`crates/engine/memory/src/vector_rebuild.rs:104` `read_snapshot`、`:295` `compare_vectors`、`:82` `RebuildVerdict`、`:53` `ModelStamp`）⇒ **生产 0 调用**（仅 `crates/engine/memory/tests/vector_rebuild.rs`；19 测试见进度页 `:75`）⇒ ⚠️ 库内依赖 `persistent_vector`（台账 §5.2 **有意不接**）+ `scope` ⇒ ⇒ **它要新建消费点**（不是「内部已有用法」那类低成本项） | **待接线**。**谁该用**：向量索引运维面 ⇒ 最小改法 = **先定持久向量索引归谁**（生产向量今天走外部 API ⇒ 无持久索引可重建 ⇒ 要么先落 `persistent_vector`，要么把 `read_snapshot`/`compare_vectors` 改成对 `crate::canonical::vector::VectorIndex` 的快照比对）⚠️ **在 `persistent_vector` 归属定下来之前不要单独接它**（否则是给一条永不存在的索引建重建流程） | 记忆线 + 架构线 |
+
+### W33–W34：**已被谁承担**（重复实现 · **不是债** · 同批分诊 2026-11-06）
+
+> ⚠️ 这两条**不是**「待接线」⇒ ⇒ **不要为它们新建消费点**（会造出第二份真相）。
+> ⚠️ 登记口径同 §5.1「重复实现（不是债）」。
+
+| # | 模块 | 已被谁承担（文件:行号） | ⚠️ 实测确认（**看实现，不看名字**） |
+|---|---|---|---|
+| W33 | `facade` · `MemoryMutationFacade`（`crates/engine/memory/src/facade.rs:16`） | `CanonicalMemoryTypedSink`（`crates/engine/runtime-assembly/src/canonical/memory_typed_sink.rs:21`；**生产装配**于 `crates/adapters/cli/src/lib.rs:2025`） | 三个能力**逐条同源**：① 建承诺 ⇒ `facade.rs:38` `self.commitments.create(candidate)` ≡ `memory_typed_sink.rs:140` `store.create(commitment)`；② 承诺完成（带 CAS）⇒ `facade.rs:50-58` `transition_for_subject(subject, id, expected_revision, Completed, …)` ≡ `memory_typed_sink.rs:160-170` 同调用；③ 人格增量（带 CAS）⇒ `facade.rs:71-73` `apply_delta(persona_id, subject_id, expected_revision, delta, ts)` ≡ `memory_typed_sink.rs:199-202` 同调用 ⇒ ⇒ **同一能力已有主实现**（生产侧还多做了「缺身份就 `Skipped`」的纪律）⇒ ⇒ **不重复接线** |
+| W34 | `streams` · 6 条历史流类型化外壳（`crates/engine/memory/src/streams.rs:47`–`:497`） | `append_only` + `SqliteMemoryStore::append_stream` / `list_stream`（`crates/engine/memory/src/lib.rs:783` / `:798`，实现 `apeireth_plugin::memory_backend::MemoryBackend`，trait 声明于 `crates/foundation/plugin/src/memory_backend.rs:110`） | **同表 + 同 helper + 同语义**：`streams.rs:21-24` 直接 `use crate::append_only::{insert_entry, list_for_session, list_for_subject, list_recent_entries, mark_tombstone, …}`；而 `lib.rs:793` 调的**正是** `append_only::insert_entry(&conn, kind.table_name_ext(), &entry)` ⇒ ⇒ `streams.rs` 只是「每流一个 struct + `pub type` 语义别名」的**类型化外壳**，不新增物理表、不新增语义 ⇒ ⇒ 与台账 §5.5 B 类既有条目 `history_streams`（「由 `append_only` + `SqliteMemoryStore` 承担」）**同族** ⇒ ⇒ **不重复接线** |
+
+### 判据洞候选（4 条 · **不是缺口** —— 生产真在用，闸门看不见 · 2026-11-06 分诊）
+
+> ⚠️ **本节不是三分类的一部分** ⇒ ⇒ **不许混进「待接线」**，也**不许**当「有意不接」。
+> ⇒ ⇒ 这 4 条的真相是：**生产真的在用**，只是 `scripts/check_memory_reachability.py`
+> 的**词法判据**看不见 ⇒ ⇒ ⇒ **这是判据的洞，不是能力缺失** ⇒ ⇒ ⇒
+> **修判据**（不是改台账分类）才是正解 ⇒ ⇒ 修好后缺口**自然减少**，**不是**「缩小台账」。
+
+| 模块 | 生产引用（文件:行号 · 实测） | 闸门为什么看不见（**判据的洞在哪**） |
+|---|---|---|
+| `experience_store_sqlite` | 导入 `crates/adapters/cli/src/lib.rs:1923`；构造 `:1969`（`SQLiteExperienceStore::from_arc`）+ `:1970-1973` `ensure_schema`；作为 trait object 注入 `:2267-2269`（`WikiEntryStore` / `KnowledgeGraphStore` / `AssociationStore`） | ① `crates/engine/memory/src/lib.rs:1056` 是 **`pub mod`**（不是 `pub use <mod>::<Type>`）⇒ 脚本 `read_reexport_map`（`scripts/check_memory_reachability.py:170-198`）**收不到**类型→模块映射；② 生产侧是**分组导入里带模块路径**（`use apeireth_memory::{experience_store_sqlite::SQLiteExperienceStore, …}`）⇒ 脚本的分组导入解析（`:223-238`）只把逗号段当**裸类型名**比 ⇒ `experience_store_sqlite::SQLiteExperienceStore` 这种**带路径的段**两头都匹配不上 |
+| `preference_store_sqlite` | 导入 `crates/adapters/cli/src/lib.rs:1924`；构造 `:1974`；作为 `Arc<dyn PreferenceStore>` 注入 `:2270`；进 `CognitiveBackends.preferences` `:2300` ⇒ 消费侧 `crates/engine/runtime-assembly/src/canonical/production.rs:1462-1463`（`coordinator.with_preferences`）、`:1537-1553`、`crates/engine/runtime-assembly/src/canonical/cognitive.rs:2287-2288` | 同上（`lib.rs:1058` 是 `pub mod`） |
+| `self_assessment_store_sqlite` | 导入 `crates/adapters/cli/src/lib.rs:1925`；构造 `:1979`；注入 `:2271-2272`；进 config `:2301` ⇒ 消费侧 `production.rs:1572-1574`、`crates/engine/runtime-assembly/src/canonical/upgrade_cycle.rs:161,178,285`（`self_assessments.recent_for_task`） | 同上（`lib.rs:1059` 是 `pub mod`） |
+| `reconciler` | 库内消费者 `crates/engine/memory/src/memory_materializer.rs:15-20`（**分组** `use crate::{… MemoryReconciler …}`）、字段 `:228`、构造 `:272`、真调用 `:301` `self.reconciler.reconcile(existing, &candidates)`、`:391` ⇒ 生产写入面 `crates/engine/runtime-assembly/src/canonical/cognitive.rs:1767`（`MemoryMaterializer::new(extractor)`）+ `:1686`、`production.rs:1701`、`crates/adapters/cli/src/lib.rs:2311` | ⚠️ **判据的第二个洞（在「库内边」这一侧）**：脚本算库内依赖边时**只认 `mod_name::` 词法形态**（`scripts/check_memory_reachability.py:157-160`）⇒ ⇒ `use crate::{… MemoryReconciler …}` 这种**按类型名分组导入**（`lib.rs:471` 有 `pub use reconciler::{…}`）**不产生边** ⇒ ⇒ `memory_materializer → reconciler` 这条边**丢了** ⇒ ⇒ 明明是可达模块的可达依赖，却被判成「不可达」 |
+
 ## 二、测试专用但**有意保留**（不是缺陷；四级口径见上）
 
 | 符号 | 为什么留着 |
@@ -1538,3 +1598,107 @@ grep -rn "\.facts_as_of(" crates/ --include=*.rs
 * 改成「同名就都算孤儿」⇒ 大量**测试专用**的同名方法会集体变成孤儿（实测把
   启发式预警打开后 1200+ 条命中，几乎全是 trait 实现方法与测试 helper，**噪声大于信号**）。
 ⇒ 保留判据，把**已知盲区**记在此条，并按上面的复现办法**人工**扫一轮。
+
+## 六、L3 骨架声明（7 条）的接线缺口（2026-11-06 声明审计）
+
+> **口径（四级）**：`NOT IMPLEMENTED < IMPLEMENTED < PRODUCTION WIRED < HARDWARE VALIDATED`
+> （阶梯定义见 [docs/01-architecture/system-capabilities.md](../01-architecture/system-capabilities.md) 头部；
+> `DEFAULT ENABLED` 不是一级，是横切属性 ⇒ **可以 PRODUCTION WIRED 且默认关**）。
+>
+> **本节性质**：2026-11-06 **只读取证 + 出计划**批的结论登记（**只读**）。
+> ⇒ ⇒ **没有**改 `docs/status/claims.yaml`（声明面是主代理的决策面）。
+> ⇒ ⇒ **没有**改任何生产代码。
+> ⇒ ⇒ **没有**跑 cargo（磁盘 85%）⇒ 不产生任何对外测试数字。
+> ⇒ ⇒ 逐条证据、接线清单、建议 `verify_cmd`、升级顺序见
+> [docs/04-internal/01-handoffs/l3-skeleton-claims-2026-11-06.md](../04-internal/01-handoffs/l3-skeleton-claims-2026-11-06.md)。
+
+### 6.0 这 7 条是什么、为什么单独记一节
+
+`docs/status/claims.yaml` 共 51 条声明，其中 13 条未到 `PRODUCTION WIRED`；这 7 条是其中的**骨架族**
+（决定后端能不能被扩展）：
+
+| claim id | 现口径 | `default` | 生产装配开关（实测 grep） | 现口径是否如实 |
+|---|---|---|---|---|
+| `gov.reflection_queue` | `IMPLEMENTED` | `null` | `with_reflection_scheduler`（`crates/foundation/governance/src/chain.rs:566-571`）⇒ **生产零调用点** | ✅ 如实（title 已写「默认未装配、零行为变化」） |
+| `rt.owned_agents` | `IMPLEMENTED` | `null` | `ModuleAgents::spawn_agent`（`crates/foundation/plugin/src/agents.rs:212`）⇒ **生产零调用点**（唯一库内消费者 `crates/engine/runtime-assembly/src/canonical/memory_module/organizer.rs:57-95`，而 `MemoryModule` 自己没进生产） | ✅ 如实 |
+| `mem.registered_namespace` | `IMPLEMENTED` | `null` | `MemoryModule::new`（`crates/engine/runtime-assembly/src/canonical/memory_module.rs:89`）⇒ **生产零调用点** | ✅ 如实 |
+| `rt.module_execution_contract` | `IMPLEMENTED` | `OFF` | `tool_module_with_contract`（`crates/engine/runtime/src/canonical/capability.rs:43-51`）⇒ **生产零调用点** | ✅ 如实 |
+| `rt.system_one_internal` | `IMPLEMENTED` | `OFF` | `with_system_one`（`crates/engine/runtime/src/canonical/runtime.rs:715-721`）⇒ **生产零调用点** | ✅ 如实 |
+| `rt.module_messages` | `IMPLEMENTED` | `OFF` | `AgentHostPolicy.message_policy`（`crates/engine/runtime/src/canonical/instances.rs:55`）⇒ 生产恒 `None`（`instances.rs:74`） | ✅ 如实 |
+| `rt.mesh_local_worker` | `IMPLEMENTED` | `OFF` | `MeshModule::new`（`crates/engine/runtime-assembly/src/mesh.rs:141`）⇒ **生产零调用点** | ✅ 如实 |
+
+⭐ **判定结论**：**这 7 条没有一条是「其实已在生产链路上、只是口径没更新」**
+⇒ ⇒ ⇒ **「只差口径升级」的条数 = 0 条**（`IMPLEMENTED` 全部如实）。
+⚠️ 但 `docs/status/wiring.yaml` 的 `production_refs` **不作为接线证据**
+（它由 `scripts/wiring_report.py:438 is_production_source()` 生成，判据是「路径前缀 + 不在 `/tests/` 下」
+⇒ 会把库文件也算成生产引用）。
+
+### 6.1 唯一一处「捎带别人的红」的 `verify_cmd`（本节已定位）
+
+| claim id | 现 `verify_cmd` | 问题 | 建议窄口径 |
+|---|---|---|---|
+| `gov.reflection_queue` | `cargo test -p apeireth-governance --lib` | ❌ **crate 级宽命令**：跑 governance crate 全 lib 单测（24 文件 / **241** 个测试），而与本声明相关的只有 `chain.rs` 里的 **6** 个（`:1007` `:1235` `:1258` `:1268` `:1289` `:1303`）⇒ ⇒ 其余 235 个任一红，本声明即红 | `cargo test -p apeireth-governance --lib -- reflection && cargo test -p apeireth-governance --lib -- scheduler`（命中恰好那 6 个） |
+| 其余 6 条 | 均为**具名 test target**（`--test <name>`） | ✅ 已窄 | 保持；升级时补**生产面** test target（见 §6.3） |
+
+### 6.2 接线缺口（逐条 · 最小改法）
+
+| claim id | 最小改法（文件:行号） | 硬依赖 |
+|---|---|---|
+| `gov.reflection_queue` | `crates/adapters/cli/src/governance_chain.rs:16-22`（`adapt_gate_with` 注入 `DelayedReflectionScheduler`）+ `:29-34`（`production()` 收延迟毫秒）+ `crates/adapters/cli/src/lib.rs`（env 旋钮，默认关） | 无（独立 crate） |
+| `rt.system_one_internal` | `crates/adapters/cli/src/lib.rs:1603-1770` 组合根装配 `SystemOneGate`（`crates/engine/runtime-assembly/src/system_one.rs:17-30` 的 `FileSystemOneAudit` + `:53-94` 的 `AgentSystemOneSupervisor`）+ env 旋钮（默认关） | 无（**依赖链的根**） |
+| `rt.module_execution_contract` | `crates/engine/runtime-assembly/src/canonical/production.rs:634-647` `collect_tool_module` 改调 `tool_module_with_contract(mode)`（`crates/engine/runtime/src/canonical/capability.rs:43-51`） | ⚠️ **必须先接 `rt.system_one_internal`**（见 6.4 陷阱 1） |
+| `mem.registered_namespace` | `crates/engine/runtime-assembly/src/canonical/production.rs` 加 `MemoryModule` 槽 + `crates/adapters/cli/src/lib.rs` 注入 coordinator/`ProfileMemoryMappings`（`crates/engine/runtime-assembly/src/profile_memory.rs:59`）+ env 旋钮（默认关） | ⚠️ **必须先接 `rt.system_one_internal`**（见 6.4 陷阱 2） |
+| `rt.module_messages` | `crates/engine/runtime-assembly/src/canonical/desktop_host.rs:21-41` 填 `policy.message_policy`（grants 须带非空 `authorization_ref`，见 `crates/engine/runtime/src/canonical/module_messages.rs:73-79`）+ env 旋钮（默认关） | ⚠️ **必须先接 `rt.module_execution_contract`** |
+| `rt.mesh_local_worker` | `crates/adapters/cli/src/lib.rs` 构造 `MeshModule::new(MeshConfig::loopback(...))`（`crates/engine/runtime-assembly/src/mesh.rs:141` / `:45-58` / `:68-80`）并注册 + env 旋钮（默认关） | ⚠️ **依赖 `rt.system_one_internal` + `rt.module_execution_contract` + `rt.module_messages`** |
+| `rt.owned_agents` | 生产里注册一个**会创建子 Agent 的模块**（最现成 = `MemoryModule` 的 organizer）⇒ ⇒ 与 `mem.registered_namespace` **同一笔改动** | ⚠️ 依赖 `mem.registered_namespace`；宿主侧授权面**已在生产**（`crates/engine/runtime-assembly/src/canonical/desktop_host.rs:22-37`，被 `crates/adapters/cli/src/lib.rs:1710` 调）⇒ **不用改** |
+
+### 6.3 建议的 `verify_cmd`（每条一条 · 窄口径）
+
+| claim id | 建议口径 | 现状 |
+|---|---|---|
+| `gov.reflection_queue` | `cargo test -p apeireth-governance --lib -- reflection && cargo test -p apeireth-governance --lib -- scheduler` | ⚠️ **需收窄**（现为 crate 级宽命令） |
+| `rt.owned_agents` | `cargo test -p apeireth-cli --test canonical_cli_bootstrap --locked -j 2 && cargo test -p apeireth-runtime-assembly --test convergence_agents --locked -j 2` | 现为 3 个 test target（已窄，**缺生产面**） |
+| `mem.registered_namespace` | `cargo test -p apeireth-cli --test registered_memory_knob --locked -j 2 && cargo test -p apeireth-runtime-assembly --test profile_memory_authorization --locked -j 2` | 现为 2 个 test target（已窄，**缺生产面**；新 test 待建） |
+| `rt.module_execution_contract` | `cargo test -p apeireth-plugin --test module_contract --locked -j 2 && cargo test -p apeireth-cli --test module_contract_knob --locked -j 2` | 现为 2 个 test target（已窄，**缺生产面**；新 test 待建） |
+| `rt.system_one_internal` | `cargo test -p apeireth-runtime-assembly --test system_one_execution --locked -j 2 && cargo test -p apeireth-cli --test system_one_knob --locked -j 2` | 现为 2 个 test target（已窄，**缺生产面**；新 test 待建） |
+| `rt.module_messages` | `cargo test -p apeireth-runtime-assembly --test module_message_pipeline --locked -j 2 && cargo test -p apeireth-cli --test module_message_knob --locked -j 2` | 现为 1 个 test target（已窄，**缺生产面**；新 test 待建） |
+| `rt.mesh_local_worker` | `cargo test -p apeireth-runtime-assembly --test mesh_execution --locked -j 2 && cargo test -p apeireth-cli --test mesh_knob --locked -j 2` | 现为 2 个 test target（已窄，**缺生产面**；新 test 待建） |
+
+### 6.4 接线时必看的三个语义陷阱（实测出来的）
+
+1. `crates/foundation/plugin/src/tool_module.rs:51-55`：`with_public_contract` 对**非 Agentic** 模式一律给
+   `EffectClass::Protected` ⇒ ⇒ **一旦接上 `rt.module_execution_contract`，工具立刻变成「需要 System One 审查」**
+   ⇒ ⇒ **未先接 `rt.system_one_internal` 时，每一次调用都 `permanent_error`**（`crates/foundation/plugin/src/module_contract.rs:132-138` / `:146-154` / `:161-169`）。
+2. `crates/engine/runtime-assembly/src/canonical/memory_module.rs:59-69`：七个注册式 Memory 工具里 **5 个是 `Protected`**
+   ⇒ ⇒ 同 1 ⇒ ⇒ `mem.registered_namespace` 也必须排在 `rt.system_one_internal` 之后。
+3. `crates/engine/runtime-assembly/src/mesh.rs:344-353`：mesh 工具是 `ToolSurface::Internal` + `EffectClass::Protected`
+   ⇒ ⇒ `rt.mesh_local_worker` 同时依赖 1 与 `rt.module_messages`。
+
+### 6.5 建议升级顺序（最便宜先做）
+
+| 序 | 动作 | 成本 | 解锁 |
+|---|---|---|---|
+| 0 | `gov.reflection_queue` 的 `verify_cmd` 收窄（**零代码改动**） | 1 行 | 立刻消掉「235 个无关单测捎带」风险 |
+| 1 | `rt.owned_agents` **收窄 title**（把「同一 Runtime / 分层核算」让给 `rt.desktop_managed_main`（`PRODUCTION WIRED`））⇒ ⚠️ **属声明面（主代理决策），本次只报告** | 0 代码 | 把宽口径声明变成「一个缺口」 |
+| 2 | `gov.reflection_queue` 真装配（旋钮默认关） | 1 生产文件 + 1 旋钮测试 | 该条自身升 `PRODUCTION WIRED`（⚠️ title 的「默认未装配、零行为变化」须同步改写） |
+| 3 | `rt.system_one_internal` 装配 | 组合根 + 旋钮测试 | **解锁 3 条** |
+| 4 | `rt.module_execution_contract` 装配 | `production.rs:634` + 旋钮测试 | 解锁 2 条 |
+| 5 | `mem.registered_namespace` 装配 | 生产槽 + Profile 映射 + 旋钮测试 | 同时点亮 `rt.owned_agents` 的唯一消费者 |
+| 6 | `rt.module_messages` 装配 | `desktop_host.rs` 策略 + grants + 旋钮测试 | 解锁 `rt.mesh_local_worker` |
+| 7 | `rt.mesh_local_worker` 装配 | 组合根构造 `MeshModule` + 旋钮测试 | 末位（依赖最重） |
+| 8 | `rt.owned_agents` 收口（与序 5 同一笔） | 补生产面断言 | 升 `PRODUCTION WIRED` |
+
+### 6.6 口径边界（如实登记）
+
+- 这 7 条现在的口径**全部仍是 `IMPLEMENTED`**（未升 `PRODUCTION WIRED`），本节**不**改 `docs/status/claims.yaml`；
+- `gov.reflection_queue` 的 title 明写「默认未装配、零行为变化」
+  ⇒ ⇒ 与代码事实一致（生产用默认 `ImmediateReflectionScheduler`，`take_due` 恒空 ⇒ `sweep_due_reflections`（`crates/foundation/governance/src/chain.rs:806-819`）是 no-op）；
+  ⇒ ⇒ 但**真装配后 title 必须同步改写**，否则口径与 title 打架；
+- `rt.system_one_internal` / `rt.mesh_local_worker` 即使装好，最高只到 `PRODUCTION WIRED`
+  （软件证据）⇒ ⇒ **不是** `HARDWARE VALIDATED`（无 live model、无真机、无外网/NAT/发现）；
+- `rt.module_execution_contract` 的「task receipts」目前只有两个库内构造点
+  （`crates/engine/runtime-assembly/src/canonical/memory_module/organizer.rs:100`、`crates/engine/runtime-assembly/src/mesh.rs:192`）
+  ⇒ ⇒ 通用工具面的回执产出面**还没有**；
+- 本批**未跑 cargo** ⇒ 「命令今天还绿吗」**未实测**；只核到「引用的 test target 全部存在、`cargo test --test <name>` 形态自洽」；
+- 本批**未登记 workline**（`AGENTS.md` §0.3 要求新工作线登记 `docs/status/workline-registry.md`）
+  ⇒ ⇒ **请主代理决定是否补登记**。

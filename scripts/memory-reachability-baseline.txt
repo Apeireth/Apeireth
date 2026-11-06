@@ -3,9 +3,9 @@
 #
 # 判据见脚本头部（生产入口 + 词法依赖闭包 + BFS 到不动点）。
 # 方向：宁可漏报未接线，不可虚报已接线。
-reachable_modules = 79
+reachable_modules = 87
 total_modules = 135
-reachable_ratio = 58%
+reachable_ratio = 64%
 
 # ── 可达模块清单 ──
 reachable access_history
@@ -15,6 +15,7 @@ reachable append_only
 reachable associative_recall
 reachable betti_hole_detector
 reachable bitemporal_graph
+reachable calibration
 reachable chunking
 reachable cluster_store
 reachable commitments
@@ -34,6 +35,7 @@ reachable dream_wiring
 reachable dreaming
 reachable episode
 reachable experience
+reachable experience_store_sqlite
 reachable extraction
 reachable forget_access_guard
 reachable gen_cache
@@ -45,7 +47,9 @@ reachable graph_algo
 reachable hallways
 reachable handover
 reachable hybrid_search
+reachable identity
 reachable injection_renderer
+reachable intent_brier
 reachable kuramoto_resonance
 reachable layers
 reachable lesson
@@ -63,6 +67,7 @@ reachable partner
 reachable partner_store_sqlite
 reachable persona_layer
 reachable persona_store_sqlite
+reachable preference_store_sqlite
 reachable principal_sessions
 reachable proactive_recall
 reachable procedural
@@ -70,6 +75,7 @@ reachable provenance
 reachable quality_drift
 reachable query_expand
 reachable query_signals
+reachable reconciler
 reachable reflexion
 reachable research_derived_memory
 reachable residual_pyramid
@@ -78,9 +84,11 @@ reachable retrieval_pipeline
 reachable retrieval_tuning
 reachable river_topology
 reachable scope
+reachable self_assessment_store_sqlite
 reachable semantic_axis
 reachable session_note
 reachable signal_sources
+reachable streams
 reachable temporal_graph_store
 reachable three_tier_vault
 reachable topic_predictor
@@ -92,7 +100,6 @@ reachable wiki_corpus_real
 unreachable admission_gate
 unreachable agent_trace
 unreachable arbitration
-unreachable calibration
 unreachable calibration_critic
 unreachable chronicle_crystallizer
 unreachable cold_archive
@@ -104,7 +111,6 @@ unreachable delivery_metrics
 unreachable derived_repair
 unreachable dream_consolidation
 unreachable ensemble
-unreachable experience_store_sqlite
 unreachable facade
 unreachable five_dimensional
 unreachable forget_coordinator
@@ -115,8 +121,6 @@ unreachable golden_fair
 unreachable golden_injection
 unreachable golden_injection2
 unreachable history_streams
-unreachable identity
-unreachable intent_brier
 unreachable locomo_corpus
 unreachable memory_rank
 unreachable memory_view
@@ -128,18 +132,14 @@ unreachable organ_kani_proofs
 unreachable perltqa_adapter
 unreachable persistent_vector
 unreachable preference_store
-unreachable preference_store_sqlite
 unreachable principles
 unreachable quality_metrics
-unreachable reconciler
 unreachable reflexion_tuning
 unreachable research_non_interference
 unreachable research_roaming_memory
 unreachable robustness_metrics
-unreachable self_assessment_store_sqlite
 unreachable session_lifecycle
 unreachable shadow_run
-unreachable streams
 unreachable swap_flow
 unreachable three_layer
 unreachable vector_distance
