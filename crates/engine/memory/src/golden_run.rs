@@ -27,7 +27,7 @@
 use std::collections::BTreeMap;
 
 use crate::golden_set::{EvalBatch, GoldenCase, GoldenSet, Metrics};
-use crate::retrieval_pipeline::Bm25LexicalCandidateSource;
+use crate::retrieval_pipeline::{Bm25LexicalCandidateSource, MemoryCandidateSource};
 use crate::scope::{MemoryCandidate, MemoryProvenance, MemoryScope};
 
 /// 注入口径（**注入给模型什么**）。
@@ -175,15 +175,49 @@ pub fn run(
     k: usize,
     mode: InjectionMode,
 ) -> Result<RunReport, crate::MemoryError> {
-    use crate::retrieval_pipeline::MemoryCandidateSource;
+    run_with_extra_sources(records, golden, k, mode, &[])
+}
 
+/// ⭐ **多路源对照**（2026-11-05）：跑一次批，但**额外挂几路候选源**。
+///
+/// # 为什么需要它（**B：「不许不涨」的尺子**）
+/// CI 闸门（`scripts/check_golden_baseline.py`）量的是**单路 BM25**
+/// ⇒ ⇒ **通道级改动（加联想通道 / 加 as-of / 换融合配方）在闸门上完全看不见**
+/// ⇒ ⇒ ⇒ 「不许变差」的纪律**对通道级改动是失效的**。
+/// ⇒ ⇒ 这里让同一份考卷**跑两遍**（单路 vs 多路）⇒ ⇒ 差值就是**该通道的收益**。
+///
+/// # 口径
+/// * 与 [`run`] **逐字同口径**（同一份考卷、同一个 k、同样的注入口径）；
+/// * **额外源与 BM25 源并联**（不是把信号拼进查询 ⇒ ⇒ **不稀释** BM25）
+///   ⇒ ⇒ 这正是生产召回链的结构（多路召回 ⇒ ⇒ 候选并集 ⇒ ⇒ 统一打分）；
+/// * ⚠️ **零分结果不算检索结果**（与 [`run`] 同规则）。
+pub fn run_with_extra_sources(
+    records: &[IndexRecord],
+    golden: &GoldenSet,
+    k: usize,
+    mode: InjectionMode,
+    extra_sources: &[&dyn MemoryCandidateSource],
+) -> Result<RunReport, crate::MemoryError> {
     let source = build_source(records);
     let mut batch = EvalBatch::default();
     let mut per_case_hit: Vec<(String, bool)> = Vec::new();
     let mut fully_hit = 0usize;
 
     for case in &golden.cases {
-        let retrieved = source.candidates(&case.query, k)?;
+        let mut retrieved = source.candidates(&case.query, k)?;
+        // ⭐ **额外源并联**（与 BM25 源**并联**，不是拼进查询）
+        // ⇒ ⇒ 同一 id 取**更高分**（与生产 `merge_candidates_by_id` 同语义）。
+        for extra in extra_sources {
+            for candidate in extra.candidates(&case.query, k)? {
+                match retrieved.iter_mut().find(|item| item.id == candidate.id) {
+                    Some(existing) if candidate.score > existing.score => {
+                        *existing = candidate;
+                    }
+                    Some(_) => {}
+                    None => retrieved.push(candidate),
+                }
+            }
+        }
         // ⚠️ **零分结果不算检索结果**：BM25 源会**按 id 顺序填满** limit
         // ⇒ 分数为 0 的文档也会被返回 ⇒ 「目标恰好排在第 1」会**假命中**。
         // ⇒ 只保留**分数 > 0** 的结果（真检索器也会设分数阈值）。
