@@ -28,14 +28,27 @@
 //!   不进化**, 不是"暂时没证据";
 //! - 空召回轮不是机会轮 (检索什么都没命中 = 对已注入条目无证据), 证据保持
 //!   待决, 绝不拿"没有回执"当负信号。
+//!
+//! **失败 → 学习桥** (2026-11-06 接线):
+//! - **正证据侧**: 注入回执 → 证据 → 权重 (本文件 [`RetrievalTuningWire::record_injection_round`]);
+//! - **负证据侧**: 失败 → 归因 (那一轮的注入回执) → 负证据 → 权重**退**
+//!   ([`RetrievalTuningWire::record_failure_with_injection_attribution`] +
+//!   [`RetrievalTuningWire::settle_failures`]);
+//! - ⚠️ **没有归因的失败 = 零证据** (不许瞎归因: 归因缺失就**学不到**, 但**不污染**);
+//! - ⚠️ **结算按会话隔离** (失败结算用 `observe_failures_since_in_session`,
+//!   不用不带会话的旧入口) ⇒ ⇒ A 会话的失败**不会**去调 B 会话的权重。
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock, Weak};
 
 use apeireth_core::stored_doc::{self, DocCompat};
 use apeireth_memory::quality_drift::QualityDriftMonitor;
+use apeireth_memory::reflexion::{
+    FailureAttribution, FailureKind, FailureRecord, ReflexionError, ReflexionStore,
+};
+use apeireth_memory::reflexion_tuning::{observe_failures_since_in_session, ReflexionTuningCursor};
 use apeireth_memory::retrieval_tuning::{
     RetrievalTuningEngine, RetrievalTuningRecord, SelectedAttribution, TuningEvidence,
 };
@@ -97,6 +110,23 @@ struct SessionTuningState {
     /// 该会话的待决注入集 (上个有选中回执的注入集; **不跨会话** ⇒ ⇒
     /// A 会话的注入集不会被 B 会话的回执裁决)。
     pending: Option<PendingRound>,
+    /// ⭐ **那一轮的注入回执** (每轮都更新; 空轮 = 空)。
+    ///
+    /// ⚠️ **为什么不能直接拿 `pending` 当失败归因**: `pending` 是
+    /// 「**待结算**的注入集」, **空轮不更新它** ⇒ ⇒ 空轮之后它仍是
+    /// **上一轮**的回执 ⇒ ⇒ 拿它当失败归因 = **拿过期回执瞎归因**。
+    /// ⇒ ⇒ 这里另记一份「那一轮」的回执 (每轮都写, 空轮写空)。
+    last_round_receipts: Vec<SelectedAttribution>,
+    /// ⭐ 失败结算游标 (会话内增量 ⇒ **幂等**: 同一批失败只结算一次)。
+    failure_cursor: ReflexionTuningCursor,
+    /// ⭐ 本会话**拥有**的失败 seq (真 store **不记会话标签** ⇒ 接线层记账)。
+    ///
+    /// ⚠️ **为什么需要它**: 生产 store (`FileReflexionStore`) 落盘时
+    /// `FailureRecord.session_key` 恒为 `None` ⇒ ⇒ 会话隔离的判据
+    /// (`observe_failures_since_in_session`) 会把**所有**失败都跳过
+    /// ⇒ ⇒ 桥静默失效 (接了线但学不到)。⇒ ⇒ 归谁所有由**接线层**记账,
+    /// 结算时通过会话作用域视图补上标签。
+    owned_failures: BTreeSet<usize>,
     /// 最近更新序号 (诊断面: 谁的待决集是最近的)。
     updated: u64,
 }
@@ -106,6 +136,9 @@ impl SessionTuningState {
         Self {
             engine: new_tuning_engine(),
             pending: None,
+            last_round_receipts: Vec::new(),
+            failure_cursor: ReflexionTuningCursor::default(),
+            owned_failures: BTreeSet::new(),
             updated: 0,
         }
     }
@@ -127,6 +160,22 @@ fn new_tuning_engine() -> RetrievalTuningEngine {
     ))
 }
 
+/// ⭐ **进程级「当前调权接线层」弱引用槽**（失败面找学习面的唯一入口）。
+///
+/// # 为什么需要它（诚实说明）
+/// 失败闭环模块（`cognitive.reflexion`）与检索调权接线层
+/// （[`RetrievalTuningWire`]）是**两个独立模块**，生产装配层
+/// （`canonical/production.rs`）只把接线层注入**记忆召回模块**
+/// ⇒ ⇒ 失败闭环模块**拿不到**同一个接线层 ⇒ ⇒ 失败面与学习面**接不上**
+/// （= 「失败 → 学习桥」断在最后一米）。
+/// ⇒ ⇒ 这里给一个**进程级弱引用槽**：接线层构造时**自报家门**，
+/// 失败面按需取用 ⇒ ⇒ 两侧**共用同一份**按会话分桶的引擎与注入回执
+/// （不新造第二份状态 ⇒ 不串扰）。
+///
+/// ⚠️ **弱引用**：接线层被丢弃 ⇒ 槽自动失效 ⇒ 失败面退回「无归因」
+/// （= 不瞎归因, 不污染）。
+static ACTIVE_WIRE: OnceLock<Mutex<Option<Weak<RetrievalTuningWire>>>> = OnceLock::new();
+
 /// 检索维度自进化接线层: 回执 → 证据 → 引擎调权 → 账落盘 + 生效值落地。
 ///
 /// ⚠️ **会话维度** (多会话串扰修复, 2026-11-04): 调权**学习**按**会话隔离**
@@ -140,6 +189,14 @@ pub struct RetrievalTuningWire {
     /// [`apeireth_memory::retrieval_tuning::effective_bucket_key`] ⇒ ⇒ 读侧
     /// (`effective_ranking_or_for_session`) 与写侧**同一个桶**。
     sessions: Mutex<BTreeMap<String, SessionTuningState>>,
+    /// ⭐ **会话 id → 桶键** 映射 (记忆召回模块登记; 失败面按会话 id 找桶)。
+    ///
+    /// ⚠️ **为什么需要它**: 桶键**不一定**等于会话 id
+    /// （画像分区路径: 桶键 = 分区键, 会话 id = 会话）⇒ ⇒ 两侧各算各的
+    /// ⇒ ⇒ 键对不上 ⇒ ⇒ 失败面查不到「那一轮的注入回执」⇒ ⇒ **学不到**。
+    /// ⇒ ⇒ 让**记忆召回模块**（唯一知道桶键口径的那一侧）登记映射
+    /// ⇒ ⇒ 失败面**按会话 id 问桶** ⇒ ⇒ 桶键口径**只有一处**。
+    session_buckets: Mutex<BTreeMap<String, String>>,
     /// 进程级「最近一次调权真值」 (诊断面; **学习**本身按会话隔离)。
     last_move: Mutex<Option<RetrievalTuningRecord>>,
     /// 进程级「最近一批漂移告警明细」 (诊断面)。
@@ -165,9 +222,13 @@ pub struct RetrievalTuningWire {
 
 impl RetrievalTuningWire {
     /// 构造接线层 (引擎以默认评分权重为基线; 生效值在首次调权时落地)。
+    ///
+    /// ⚠️ **不发布**进程级句柄 (本构造器返回的不是 `Arc`) ⇒ ⇒ 要让失败面
+    /// 找到它, 用 [`Self::from_env`] (生产路径) 或 [`Self::publish_as_active`]。
     pub fn new(log_path: PathBuf) -> Self {
         Self {
             sessions: Mutex::new(BTreeMap::new()),
+            session_buckets: Mutex::new(BTreeMap::new()),
             last_move: Mutex::new(None),
             last_alarms: Mutex::new(Vec::new()),
             ledger_seq: AtomicU64::new(0),
@@ -182,12 +243,31 @@ impl RetrievalTuningWire {
 
     /// 从 env 构造: `APEIRETH_ENABLE_RETRIEVAL_TUNING=1` 才启用 (默认关 → None,
     /// fail-closed)。
+    ///
+    /// ⚠️ 启用时**自报家门**（发布为进程级当前接线层）⇒ ⇒ 失败闭环模块
+    /// 能找到**同一个**接线层 ⇒ ⇒ 「失败 → 学习桥」在生产**接得上**。
     pub fn from_env(log_path: PathBuf) -> Option<Arc<Self>> {
         let raw = std::env::var(RETRIEVAL_TUNING_ENABLE_ENV).ok();
         if !retrieval_tuning_enabled_from_env_value(raw.as_deref()) {
             return None;
         }
-        Some(Arc::new(Self::new(log_path)))
+        let wire = Arc::new(Self::new(log_path));
+        Self::publish_as_active(&wire);
+        Some(wire)
+    }
+
+    /// ⭐ **发布**本接线层为**进程级当前接线层**（弱引用 ⇒ 不 prolong 生命周期）。
+    pub fn publish_as_active(wire: &Arc<Self>) {
+        let slot = ACTIVE_WIRE.get_or_init(|| Mutex::new(None));
+        let mut guard = slot.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        *guard = Some(Arc::downgrade(wire));
+    }
+
+    /// ⭐ **进程级当前接线层**（没有 ⇒ `None` ⇒ 失败面退回「无归因」）。
+    pub fn active() -> Option<Arc<Self>> {
+        let slot = ACTIVE_WIRE.get_or_init(|| Mutex::new(None));
+        let guard = slot.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        guard.as_ref().and_then(Weak::upgrade)
     }
 
     /// 自进化账路径 (自述记忆节与调参面板按同一落位读取)。
@@ -226,6 +306,9 @@ impl RetrievalTuningWire {
                 .entry(session_key.clone())
                 .or_insert_with(SessionTuningState::new);
             state.updated = updated;
+            // ⭐ **那一轮的注入回执** (每轮都更新): 失败归因用它
+            // ⇒ ⇒ 「这一轮注入了什么」有据可查, 不用过期回执瞎归因。
+            state.last_round_receipts = receipts.to_vec();
             let previous = state.pending.replace(PendingRound {
                 receipts: receipts.to_vec(),
             });
@@ -276,8 +359,22 @@ impl RetrievalTuningWire {
 
     /// 空召回轮 (无选中回执): 不是机会轮 —— 对已注入条目**无证据**, 待决证据
     /// 保持待决 (绝不拿"没有回执"当负信号)。
+    ///
+    /// ⚠️ **会话键口径**: 本方法**不裁决证据**, 但**要**把「**这一轮什么都
+    /// 没注入**」记进**当前会话桶** (会话作用域内调用 ⇒ 键 = 作用域的键)
+    /// ⇒ ⇒ 失败归因不会拿到**上一轮**的回执 (不瞎归因)。
     pub fn record_empty_round(&self, _at_epoch_ms: i64) {
         self.rounds.fetch_add(1, Ordering::Relaxed);
+        let session_key = apeireth_memory::retrieval_tuning::effective_bucket_key();
+        let mut sessions = self
+            .sessions
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let state = sessions
+            .entry(session_key)
+            .or_insert_with(SessionTuningState::new);
+        // ⚠️ **只清「那一轮回执」**, **不动 `pending`**: 待决证据的裁决语义不变。
+        state.last_round_receipts.clear();
     }
 
     /// 证据信号面现况 (无回执面 = 显式不进化)。
@@ -360,6 +457,10 @@ impl RetrievalTuningWire {
     /// ⚠️ **会话维度**: 学习按会话隔离 ⇒ ⇒ 待决集也按会话分桶 ⇒ 这里给
     /// **当前会话桶**的待决集; 当前会话没有待决集时 ⇒ 给**最近更新**的那一个
     /// (跨会话诊断视图; 学习裁决本身永远只看本会话的桶)。
+    ///
+    /// ⚠️ **不要拿它当失败归因**: 它是「**待结算**的注入集」, **空轮不更新**
+    /// ⇒ ⇒ 可能过期一轮 ⇒ ⇒ 归因请用 [`Self::record_failure_with_injection_attribution`]
+    /// (它取的是「**那一轮**的注入回执」)。
     pub fn pending_receipts(&self) -> Vec<SelectedAttribution> {
         let session_key = apeireth_memory::retrieval_tuning::effective_bucket_key();
         let sessions = self
@@ -377,6 +478,189 @@ impl RetrievalTuningWire {
             .and_then(|state| state.pending.as_ref())
             .map(|pending| pending.receipts.clone())
             .unwrap_or_default()
+    }
+
+    /// ⭐ **登记**「会话 id ⇒ 桶键」映射 (记忆召回模块每轮登记一次)。
+    ///
+    /// ⚠️ **谁登记**: **记忆召回模块**（唯一知道桶键口径的那一侧:
+    /// 桶键 = 分区键或会话 id, 由召回路径决定）⇒ ⇒ 失败面**按会话 id 问桶**
+    /// ⇒ ⇒ 桶键口径**只有一处**（不各算各的 ⇒ 不对不上 ⇒ 学得到）。
+    pub fn register_session_bucket(&self, session_id: &str, bucket_key: &str) {
+        if session_id.trim().is_empty() || bucket_key.trim().is_empty() {
+            return;
+        }
+        let mut buckets = self
+            .session_buckets
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        buckets.insert(session_id.to_string(), bucket_key.to_string());
+    }
+
+    /// ⭐ **按会话 id 问桶键** (失败面用; 没登记过 ⇒ `None` ⇒ 调用方自决)。
+    pub fn bucket_key_for_session(&self, session_id: &str) -> Option<String> {
+        let buckets = self
+            .session_buckets
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        buckets.get(session_id).cloned()
+    }
+
+    /// ⭐ **失败登记（带归因）**：失败 ⇒ 落进**真 store** + 归因 = **那一轮的注入回执**。
+    ///
+    /// # 为什么归因取「那一轮的注入回执」
+    /// 失败意味着「**当时被判定为相关的那些记忆，没帮上忙**」
+    /// ⇒ ⇒ 归因必须是**这一轮真的注入了的记忆**，而不是任何一轮的记忆。
+    /// 接线层按会话记着「**那一轮**注入了什么」
+    /// ([`SessionTuningState::last_round_receipts`]) ⇒ ⇒ 这里取它。
+    ///
+    /// # 口径
+    /// * **归因 = 回执**（[`SelectedAttribution`] ⇒ [`FailureAttribution`]）
+    ///   ⇒ ⇒ 转换**复用记忆 crate 已有的 `From` 实现**（不自造重复映射）;
+    /// * ⚠️ **没有回执 ⇒ 零归因** ⇒ ⇒ 这条失败**学不到**（**不许瞎归因**）;
+    /// * 归因**真的落进真 store**（生产 store 覆写了
+    ///   `record_failure_with_attribution` ⇒ 归因**落盘**，不是只改返回值）;
+    /// * 本会话**拥有**这条失败（记账 ⇒ 结算时按会话隔离）。
+    pub fn record_failure_with_injection_attribution(
+        &self,
+        store: &dyn ReflexionStore,
+        kind: FailureKind,
+        task_type: &str,
+        summary: &str,
+        at_epoch_ms: i64,
+        session_key: &str,
+    ) -> Result<FailureRecord, ReflexionError> {
+        // ⭐ 归因 = **那一轮**的注入回执（严格本会话; 空轮 = 空 ⇒ 零归因）。
+        let attributions: Vec<FailureAttribution> = self
+            .last_round_receipts_for_session(session_key)
+            .into_iter()
+            // ⭐ **复用已有转换**（`reflexion.rs` 的 `From<SelectedAttribution>`）。
+            .map(FailureAttribution::from)
+            .collect();
+        let record = store.record_failure_with_attribution(
+            kind,
+            task_type,
+            summary,
+            at_epoch_ms,
+            attributions,
+        )?;
+        self.claim_failure(session_key, record.seq);
+        Ok(record)
+    }
+
+    /// ⭐ **失败结算**：本会话累计的失败 ⇒ **负证据** ⇒ 权重**退**。
+    ///
+    /// # 为什么用 `observe_failures_since_in_session`
+    /// 生产调权引擎**按会话分桶** ⇒ ⇒ 不带会话的旧入口会让
+    /// **A 会话的失败去调 B 会话的权重**（跨会话串扰）
+    /// ⇒ ⇒ 这里显式指定会话（[`observe_failures_since_in_session`]）。
+    ///
+    /// # 会话隔离怎么落地（真 store **不记会话标签**）
+    /// 生产 store 落盘时 `FailureRecord.session_key` 恒为 `None`
+    /// ⇒ ⇒ 直接结算会把**所有**失败都跳过（桥静默失效）
+    /// ⇒ ⇒ 结算时用**会话作用域视图**（[`SessionScopedReflexionView`]）
+    /// 给**本会话拥有**的失败补上会话标签 ⇒ ⇒ 只结算**本会话**的失败。
+    ///
+    /// # 口径
+    /// * **幂等**：游标只增 ⇒ ⇒ 同一批失败**只结算一次**（不重复喂 ⇒ 不抖）;
+    /// * **批量**：本会话累计的失败**一批**喂进去 ⇒ ⇒ `observe_batch`
+    ///   每个目标**只动一步**（逐条喂会一步一挪 ⇒ 快速撞走廊地板）;
+    /// * **落账 + 生效**：调权记录进自进化账，生效值装进**本会话**的桶
+    ///   ⇒ ⇒ 下一轮检索吃到**退过的**权重。
+    pub fn settle_failures(
+        &self,
+        store: &dyn ReflexionStore,
+        session_key: &str,
+    ) -> Result<usize, ReflexionError> {
+        let (count, records, effective, alarms) = {
+            let mut sessions = self
+                .sessions
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let state = sessions
+                .entry(session_key.to_string())
+                .or_insert_with(SessionTuningState::new);
+            let before = state.engine.evolution_count() as usize;
+            let view = SessionScopedReflexionView {
+                inner: store,
+                session_key,
+                owned: &state.owned_failures,
+            };
+            // ⚠️⭐ **必须用 `_in_session` 版**（会话隔离 = 安全边界）。
+            let count = observe_failures_since_in_session(
+                &view,
+                &mut state.engine,
+                &mut state.failure_cursor,
+                Some(session_key),
+            )?;
+            // 游标已越过 ⇒ 已结算的失败不必再记账（记账集合只留未结算的）。
+            state
+                .owned_failures
+                .retain(|seq| *seq > state.failure_cursor.last_seq);
+            let records: Vec<RetrievalTuningRecord> = state.engine.history()[before..].to_vec();
+            let effective = state.engine.effective();
+            let alarms = state
+                .engine
+                .quality_drift()
+                .map(|monitor| monitor.alarms().to_vec())
+                .unwrap_or_default();
+            (count, records, effective, alarms)
+        };
+        if !records.is_empty() {
+            // 装进**本会话**的桶（与读侧同一个键 ⇒ 调权真生效）。
+            apeireth_memory::retrieval_tuning::install_effective_for_session(
+                session_key,
+                effective,
+            );
+        }
+        if !alarms.is_empty() {
+            self.quality_alarms
+                .fetch_add(alarms.len() as u64, Ordering::Relaxed);
+        }
+        {
+            let mut last_alarms = self
+                .last_alarms
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            *last_alarms = alarms;
+        }
+        if let Some(last) = records.last() {
+            let mut last_move = self
+                .last_move
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            *last_move = Some(last.clone());
+        }
+        for record in &records {
+            self.persist(record);
+        }
+        Ok(count)
+    }
+
+    /// **那一轮**的注入回执 (严格本会话; 本会话没有 ⇒ **空**)。
+    ///
+    /// ⚠️ **不跨会话回落**（与诊断面 [`Self::pending_receipts`] 不同）
+    /// ⇒ ⇒ 归因绝不串到别的会话的记忆上。
+    fn last_round_receipts_for_session(&self, session_key: &str) -> Vec<SelectedAttribution> {
+        let sessions = self
+            .sessions
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        sessions
+            .get(session_key)
+            .map(|state| state.last_round_receipts.clone())
+            .unwrap_or_default()
+    }
+
+    /// 记账: 这条失败**归本会话**所有（真 store 不记会话标签 ⇒ 接线层记）。
+    fn claim_failure(&self, session_key: &str, seq: usize) {
+        let mut sessions = self
+            .sessions
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let state = sessions
+            .entry(session_key.to_string())
+            .or_insert_with(SessionTuningState::new);
+        state.owned_failures.insert(seq);
     }
 
     /// 账追加 (JSONL 追加, 每行一个逐记录信封; append-only)。
@@ -406,6 +690,92 @@ impl RetrievalTuningWire {
         if appended.is_err() {
             self.log_failures.fetch_add(1, Ordering::Relaxed);
         }
+    }
+}
+
+/// ⭐ **会话作用域的 store 视图**：真 store 的**读穿包装**（不新建 store, 不造数据）。
+///
+/// # 为什么需要它
+/// 生产 store（`FileReflexionStore`）落盘时 `FailureRecord.session_key` **恒为
+/// `None`** ⇒ ⇒ 会话隔离的判据（`observe_failures_since_in_session`）会把
+/// **所有**失败都跳过 ⇒ ⇒ 桥**接了线但学不到**。
+/// ⇒ ⇒ 这里在**读**的时候给**本会话拥有**的失败补上会话标签
+/// ⇒ ⇒ 结算只吃**本会话**的失败 ⇒ ⇒ A 会话的失败不会去调 B 会话的权重。
+///
+/// # 口径
+/// * **读穿**：所有数据来自**真 store**（生产同款文件版），**不造数据**;
+/// * **只补标签**：别的会话的失败**原样**（`session_key` 仍是 `None`）
+///   ⇒ ⇒ 会话模式下被跳过 ⇒ ⇒ **不串扰**;
+/// * **写操作照旧透传**给真 store（视图本身不缓存任何状态）。
+struct SessionScopedReflexionView<'a> {
+    /// 真 store（生产同款）。
+    inner: &'a dyn ReflexionStore,
+    /// 本视图的会话键。
+    session_key: &'a str,
+    /// 本会话**拥有**的失败 seq（接线层记账）。
+    owned: &'a BTreeSet<usize>,
+}
+
+impl ReflexionStore for SessionScopedReflexionView<'_> {
+    fn record_failure(
+        &self,
+        kind: FailureKind,
+        task_type: &str,
+        summary: &str,
+        timestamp_epoch_ms: i64,
+    ) -> Result<FailureRecord, ReflexionError> {
+        self.inner
+            .record_failure(kind, task_type, summary, timestamp_epoch_ms)
+    }
+
+    fn record_failure_with_attribution(
+        &self,
+        kind: FailureKind,
+        task_type: &str,
+        summary: &str,
+        timestamp_epoch_ms: i64,
+        attributions: Vec<FailureAttribution>,
+    ) -> Result<FailureRecord, ReflexionError> {
+        self.inner.record_failure_with_attribution(
+            kind,
+            task_type,
+            summary,
+            timestamp_epoch_ms,
+            attributions,
+        )
+    }
+
+    fn process_unreflected(
+        &self,
+        critic: &dyn apeireth_memory::reflexion::Critic,
+        timestamp_epoch_ms: i64,
+    ) -> Result<usize, ReflexionError> {
+        self.inner.process_unreflected(critic, timestamp_epoch_ms)
+    }
+
+    /// ⭐ **读穿 + 补会话标签**（本会话拥有的失败 ⇒ 标上会话键）。
+    fn list_failures(&self) -> Result<Vec<FailureRecord>, ReflexionError> {
+        let mut records = self.inner.list_failures()?;
+        for record in &mut records {
+            if self.owned.contains(&record.seq) {
+                record.session_key = Some(self.session_key.to_string());
+            }
+        }
+        Ok(records)
+    }
+
+    fn list_reflections(
+        &self,
+    ) -> Result<Vec<apeireth_memory::reflexion::ReflectionText>, ReflexionError> {
+        self.inner.list_reflections()
+    }
+
+    fn retry_injection(
+        &self,
+        task_type: &str,
+        budget_chars: usize,
+    ) -> Result<Option<String>, ReflexionError> {
+        self.inner.retry_injection(task_type, budget_chars)
     }
 }
 

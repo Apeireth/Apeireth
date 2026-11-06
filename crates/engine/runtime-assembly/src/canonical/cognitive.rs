@@ -1325,12 +1325,32 @@ impl MemoryRecallModule {
     /// `install_effective` 落进当前会话的桶）⇒ ⇒ A 会话调权不会改 B 的排序。
     fn feed_retrieval_tuning(
         &self,
+        session_id: &str,
         session_key: &str,
         selected: &apeireth_memory::SelectedMemoryAccess,
     ) {
         if let Some(wire) = &self.retrieval_tuning {
+            wire.register_session_bucket(session_id, session_key);
             let _scope = apeireth_memory::retrieval_tuning::enter_session_scope(session_key);
             wire.record_injection_round(&selected.selected_attribution, self.now_epoch_ms());
+        }
+    }
+
+    /// V4-c 空轮 (无选中回执) 如实报到接线层: **按会话**报 ⇒ ⇒
+    /// 「这一轮什么都没注入」这件事落进**本会话**的账。
+    ///
+    /// ⚠️ **为什么必须带会话作用域**: 接线层靠会话作用域定桶
+    /// ⇒ ⇒ 不进作用域 ⇒ 空轮会记到**默认桶** ⇒ ⇒ 本会话的
+    /// 「那一轮注入回执」不会被清空 ⇒ ⇒ 失败归因会拿到**上一轮**的回执
+    /// （= 瞎归因）。
+    ///
+    /// ⚠️ **桶键口径只有这一处**: 召回侧把「会话 id ⇒ 桶键」登记给接线层
+    /// ⇒ ⇒ 失败面**按会话 id 问桶**（不用各算各的 ⇒ 键对不上就学不到）。
+    fn feed_retrieval_tuning_empty(&self, session_id: &str, session_key: &str) {
+        if let Some(wire) = &self.retrieval_tuning {
+            wire.register_session_bucket(session_id, session_key);
+            let _scope = apeireth_memory::retrieval_tuning::enter_session_scope(session_key);
+            wire.record_empty_round(self.now_epoch_ms());
         }
     }
 
@@ -1513,7 +1533,7 @@ impl BehaviorModule for MemoryRecallModule {
                         // 真接信号: 本轮召回选中了候选 = 命中, 全空 = 未命中。
                         self.feed_retrieval_signal(!selected.selected_candidate_ids.is_empty());
                         // V4-c: 注入回执喂证据账 (选中集为空的轮按空轮报)。
-                        self.feed_retrieval_tuning(&session, &selected);
+                        self.feed_retrieval_tuning(&source_session, &session, &selected);
                         if let Some(recorder) = &self.access_recorder {
                             recorder.record_selected(&source_session, &selected);
                         }
@@ -1548,9 +1568,7 @@ impl BehaviorModule for MemoryRecallModule {
                         // 真接信号: 无候选可召回 = 未命中轮。
                         self.feed_retrieval_signal(false);
                         // V4-c: 空轮如实报给接线层 (非机会轮, 不裁决证据)。
-                        if let Some(wire) = &self.retrieval_tuning {
-                            wire.record_empty_round(self.now_epoch_ms());
-                        }
+                        self.feed_retrieval_tuning_empty(&source_session, &session);
                         if let Some(recorder) = &self.access_recorder {
                             recorder.clear(&source_session);
                         }
@@ -1576,6 +1594,10 @@ impl BehaviorModule for MemoryRecallModule {
                         String::new()
                     }
                 };
+                // ⚠️ **旧召回路径没有注入归因**（近期片段没有维度归因面）
+                // ⇒ ⇒ 如实报「这一轮没有可归因的注入」
+                // ⇒ ⇒ 失败归因**不会**拿到**上一轮**的回执（不瞎归因）。
+                self.feed_retrieval_tuning_empty(&source_session, &session);
                 let topic = topic_from_messages(ctx.messages);
                 if let Some(wiki) = &self.wiki {
                     match wiki.list_wiki(&session, &topic, self.limit as u32) {
@@ -2351,6 +2373,11 @@ pub const REFLEXION_MODULE_ID: &str = "cognitive.reflexion";
 /// **0 装信号边界**: 只认 Judge 的显式判定 —— Judge 未开 = 无信号 = 不记录,
 /// 绝不从文本启发式猜"失败". `ValidationFailed` / `ExperienceFailed` 两类
 /// 失败信号生产暂无诚实来源 (store API 就绪, 留待信号接入).
+///
+/// ⭐ **失败 → 学习桥** (2026-11-06 接线): 失败登记时**带上归因**
+/// (归因 = **那一轮注入回执**, 由检索调权接线层给出), 结算时把失败
+/// 变成**负证据**喂进检索权重 ⇒ ⇒ 权重**往「被选中却失败」的方向退**。
+/// ⚠️ 没有归因 = **零证据** (学不到, 但**不污染**)。
 pub struct ReflexionModule {
     manifest: ModuleManifest,
     store: Arc<dyn apeireth_memory::reflexion::ReflexionStore>,
@@ -2359,6 +2386,11 @@ pub struct ReflexionModule {
     budget_chars: usize,
     clock: Arc<dyn Clock>,
     metrics: ModuleMetrics,
+    /// ⭐ 检索调权接线层 (失败 → 学习桥的**学习侧**)。
+    ///
+    /// ⚠️ **缺 = 失败不带归因** ⇒ ⇒ 学不到 (退回「只登记失败」的旧行为,
+    /// 零行为变化 ⇒ 默认关的调权能力**不会**偷跑)。
+    retrieval_tuning: Option<Arc<crate::canonical::retrieval_tuning_wire::RetrievalTuningWire>>,
 }
 
 impl ReflexionModule {
@@ -2376,7 +2408,67 @@ impl ReflexionModule {
             budget_chars: 600,
             clock,
             metrics: ModuleMetrics::default(),
+            retrieval_tuning: None,
         }
+    }
+
+    /// ⭐ 接上「失败 → 学习桥」的**学习侧** (检索调权接线层)。
+    ///
+    /// ⚠️ **显式注入优先**: 没显式接时, 本模块退到**进程级当前接线层**
+    /// ([`crate::canonical::retrieval_tuning_wire::RetrievalTuningWire::active`])
+    /// ⇒ ⇒ 生产装配层不注入时也能**接得上** (两侧共用**同一个**接线层
+    /// ⇒ ⇒ 同一份按会话分桶的引擎与注入回执 ⇒ 不串扰)。
+    #[must_use]
+    pub fn with_retrieval_tuning(
+        mut self,
+        wire: Arc<crate::canonical::retrieval_tuning_wire::RetrievalTuningWire>,
+    ) -> Self {
+        self.retrieval_tuning = Some(wire);
+        self
+    }
+
+    /// 取本模块用的调权接线层 (显式注入优先; 否则进程级当前接线层)。
+    fn tuning_wire(
+        &self,
+    ) -> Option<Arc<crate::canonical::retrieval_tuning_wire::RetrievalTuningWire>> {
+        self.retrieval_tuning
+            .clone()
+            .or_else(crate::canonical::retrieval_tuning_wire::RetrievalTuningWire::active)
+    }
+
+    /// ⭐ **轮次边界结算**: 本会话累计的失败 ⇒ **负证据** ⇒ 权重**退**。
+    ///
+    /// # 口径（为什么在**轮次边界**结算, 不在失败发生的瞬间）
+    /// * **不在失败发生的瞬间调权**: 失败刚发生时**立刻**调权 = 每条失败
+    ///   单独挪一步 ⇒ ⇒ 权重**抖**（且很快撞走廊地板）;
+    /// * **轮次边界**: 一轮结束时把**这一轮及更早**累计的失败**一批**喂进去
+    ///   ⇒ ⇒ `observe_batch` 每个目标**只动一步**（批量 ⇒ 不抖）;
+    /// * **结算发生在下一次检索之前** ⇒ ⇒ 退下来的权重**下一轮就生效**;
+    /// * **幂等**: 结算走游标 ⇒ ⇒ 同一批失败**只结算一次**。
+    fn settle_failures(&self, session_key: &str) {
+        let Some(wire) = self.tuning_wire() else {
+            return;
+        };
+        if wire
+            .settle_failures(self.store.as_ref(), session_key)
+            .is_err()
+        {
+            self.metrics.warning();
+        }
+    }
+
+    /// ⭐ **本会话的调权桶键** (记忆召回模块登记的那套口径)。
+    ///
+    /// ⚠️ **桶键不一定等于会话 id**（画像分区路径: 桶键 = 分区键）
+    /// ⇒ ⇒ 由**记忆召回模块**登记映射、失败面**按会话 id 问桶**
+    /// ⇒ ⇒ 桶键口径**只有一处**（各算各的 ⇒ 键对不上 ⇒ 学不到）。
+    /// ⚠️ **没登记过** ⇒ 回落会话 id 本身 ⇒ ⇒ 查不到回执 ⇒ **零归因**
+    /// （学不到, 但**不瞎归因**）。
+    fn session_bucket_key(&self, session_id: &SessionId) -> String {
+        let raw = session_text(session_id);
+        self.tuning_wire()
+            .and_then(|wire| wire.bucket_key_for_session(&raw))
+            .unwrap_or(raw)
     }
 
     /// Set the task label used for record/retrieve matching.
@@ -2435,6 +2527,11 @@ impl BehaviorModule for ReflexionModule {
             }
         } else if hook == HookPoint::AfterTurn {
             let now = self.clock.now().timestamp_millis();
+            // ⭐ **桶键口径 = 记忆召回模块登记的那套** (画像分区路径也一致)。
+            let session_key = self.session_bucket_key(ctx.session_id);
+            // ⭐ **轮次边界结算**: **先**结算**上一轮及更早**累计的失败
+            // (本轮刚发生的失败**不进这一批** ⇒ ⇒ 不在失败发生的瞬间调权)。
+            self.settle_failures(&session_key);
             if let Some(observation) = self.observations.get(ctx.session_id) {
                 if observation.verdict != JudgeVerdict::Pass {
                     let summary = if observation.critique.trim().is_empty() {
@@ -2442,16 +2539,27 @@ impl BehaviorModule for ReflexionModule {
                     } else {
                         observation.critique.clone()
                     };
-                    if self
-                        .store
-                        .record_failure(
+                    // ⭐ **失败 → 学习桥（登记侧）**: 归因 = **那一轮的注入回执**。
+                    //
+                    // ⚠️ **没有接线层 = 没有归因** ⇒ ⇒ 退回「只登记失败」的旧口径
+                    // (零行为变化 ⇒ 默认关的调权能力不会偷跑)。
+                    let recorded = match self.tuning_wire() {
+                        Some(wire) => wire.record_failure_with_injection_attribution(
+                            self.store.as_ref(),
                             FailureKind::DecisionRejected,
                             &self.task_type,
                             &summary,
                             now,
-                        )
-                        .is_err()
-                    {
+                            &session_key,
+                        ),
+                        None => self.store.record_failure(
+                            FailureKind::DecisionRejected,
+                            &self.task_type,
+                            &summary,
+                            now,
+                        ),
+                    };
+                    if recorded.is_err() {
                         self.metrics.warning();
                     }
                 }
@@ -4573,6 +4681,196 @@ mod tests {
         assert_eq!(injected.prompt_overlays.len(), 1);
         let text = ContentPart::join_text(&injected.prompt_overlays[0].message().content);
         assert!(text.contains("历史失败反思备忘"), "{text}");
+    }
+
+    /// ⭐ **失败 → 学习桥（生产模块侧）**: 失败登记**带归因** ⇒ ⇒ 轮次边界
+    /// 结算 ⇒ ⇒ 权重**真的退**。
+    ///
+    /// # 为什么在**模块**里验（而不是只验接线层）
+    /// 「接线层能被调」≠「**生产模块真的调它**」⇒ ⇒ 这里驱动**真模块**
+    /// ([`ReflexionModule`]) ⇒ ⇒ 钉住三件事:
+    /// ① 失败**真的带归因**落进 store（归因 = 那一轮的注入回执）;
+    /// ② **不在失败发生的瞬间调权**（结算口径 = 轮次边界 ⇒ 不抖）;
+    /// ③ 下一轮结算 ⇒ 权重**真的退**（不是「函数被调用了」）。
+    #[tokio::test]
+    async fn reflexion_failure_carries_injection_attribution_and_recedes_the_weight() {
+        use apeireth_memory::reflexion::ReflexionStore;
+        use apeireth_memory::retrieval_tuning::{
+            enter_session_scope, RetrievalDimension, SelectedAttribution,
+        };
+
+        let session = SessionId::new();
+        let store = Arc::new(apeireth_memory::reflexion::InMemoryReflexionStore::new());
+        let observations = Arc::new(JudgeObservations::default());
+        let clock: Arc<dyn Clock> = Arc::new(VirtualClock::new(
+            apeireth_core::kernel::Timestamp::from_epoch_millis(1_700_000_000_000)
+                .unwrap()
+                .as_datetime(),
+        ));
+        let _dir = tempfile::tempdir().expect("临时目录");
+        let wire = Arc::new(
+            crate::canonical::retrieval_tuning_wire::RetrievalTuningWire::new(
+                _dir.path().join("retrieval_tuning.jsonl"),
+            ),
+        );
+        let module = ReflexionModule::new(store.clone(), Arc::clone(&observations), clock)
+            .with_retrieval_tuning(Arc::clone(&wire));
+        let invoker: Arc<dyn super::super::module::ModuleInvoker> = Arc::new(FixedInvoker {
+            response: NormalizedResponse::text("x", "fake", "ok"),
+            calls: AtomicU64::new(0),
+        });
+        let messages = vec![NormalizedMessage::user("hi")];
+        let session_key = session_text(&session);
+        let baseline = apeireth_memory::MemoryRankingConfig::default();
+
+        // ① 那一轮的注入回执 (生产同款: 召回选中集 ⇒ 回执面).
+        {
+            let _scope = enter_session_scope(&session_key);
+            wire.record_injection_round(
+                &[SelectedAttribution::new(
+                    "mem-1",
+                    Some(RetrievalDimension::Semantic),
+                )],
+                1_000,
+            );
+        }
+
+        // ② Judge 显式非 Pass 判定 ⇒ 失败登记 (带归因).
+        observations.record(
+            session,
+            JudgeResult {
+                score: 0.3,
+                verdict: JudgeVerdict::Retry,
+                critique: "answer too terse".into(),
+            },
+        );
+        module
+            .on_hook(
+                HookPoint::AfterTurn,
+                &context(&session, &messages, None, &invoker, REFLEXION_MODULE_ID),
+            )
+            .await
+            .unwrap();
+
+        // ⚠️ 断言**真 store 里读回来的**归因 (不是返回值).
+        let failures = store.list_failures().expect("读失败轨迹");
+        assert_eq!(failures.len(), 1, "失败必须真的落进 store");
+        assert_eq!(
+            failures[0].attributions.len(),
+            1,
+            "失败必须**带归因**落盘 (归因 = 那一轮的注入回执)"
+        );
+        assert_eq!(failures[0].attributions[0].memory_id, "mem-1");
+        assert_eq!(
+            failures[0].attributions[0].dimension,
+            Some(RetrievalDimension::Semantic)
+        );
+
+        // ⚠️ **失败刚发生时不调权** (结算口径 = 轮次边界 ⇒ 不抖).
+        //
+        // ⚠️ 读**接线层自己**的会话桶 (不走生效值全局槽的默认桶回落:
+        // 那个槽是**进程级**的 ⇒ 同二进制里别的用例装过默认桶 ⇒ 读它会串)。
+        let right_after = {
+            let _scope = enter_session_scope(&session_key);
+            wire.effective_ranking()
+        };
+        assert!(
+            (right_after.semantic_weight - baseline.semantic_weight).abs() < 1e-12,
+            "**失败发生的瞬间不许调权** (实得 {})",
+            right_after.semantic_weight
+        );
+
+        // ③ 下一轮 (轮次边界) ⇒ 结算 ⇒ 权重**真的退**.
+        module
+            .on_hook(
+                HookPoint::AfterTurn,
+                &context(&session, &messages, None, &invoker, REFLEXION_MODULE_ID),
+            )
+            .await
+            .unwrap();
+        let settled = {
+            let _scope = enter_session_scope(&session_key);
+            wire.effective_ranking()
+        };
+        assert!(
+            settled.semantic_weight < baseline.semantic_weight,
+            "轮次边界结算后, 权重必须**真的退** (基线 {} ⇒ 实得 {})",
+            baseline.semantic_weight,
+            settled.semantic_weight
+        );
+    }
+
+    /// ⭐ **桶键口径只有一处**: 会话 id ≠ 桶键 (画像分区路径) 时,
+    /// 失败面**按会话 id 问桶** ⇒ ⇒ 归因仍接得上（不用各算各的）。
+    #[tokio::test]
+    async fn reflexion_failure_uses_the_registered_bucket_key() {
+        use apeireth_memory::reflexion::ReflexionStore;
+        use apeireth_memory::retrieval_tuning::{
+            enter_session_scope, RetrievalDimension, SelectedAttribution,
+        };
+
+        let session = SessionId::new();
+        let raw_session = session_text(&session);
+        const BUCKET: &str = "profile-partition-bucket";
+        let store = Arc::new(apeireth_memory::reflexion::InMemoryReflexionStore::new());
+        let observations = Arc::new(JudgeObservations::default());
+        let clock: Arc<dyn Clock> = Arc::new(VirtualClock::new(
+            apeireth_core::kernel::Timestamp::from_epoch_millis(1_700_000_000_000)
+                .unwrap()
+                .as_datetime(),
+        ));
+        let _dir = tempfile::tempdir().expect("临时目录");
+        let wire = Arc::new(
+            crate::canonical::retrieval_tuning_wire::RetrievalTuningWire::new(
+                _dir.path().join("retrieval_tuning.jsonl"),
+            ),
+        );
+        let module = ReflexionModule::new(store.clone(), Arc::clone(&observations), clock)
+            .with_retrieval_tuning(Arc::clone(&wire));
+        let invoker: Arc<dyn super::super::module::ModuleInvoker> = Arc::new(FixedInvoker {
+            response: NormalizedResponse::text("x", "fake", "ok"),
+            calls: AtomicU64::new(0),
+        });
+        let messages = vec![NormalizedMessage::user("hi")];
+
+        // ① 记忆召回侧登记映射 (会话 id ⇒ 桶键) + 在**桶**里注入回执。
+        wire.register_session_bucket(&raw_session, BUCKET);
+        {
+            let _scope = enter_session_scope(BUCKET);
+            wire.record_injection_round(
+                &[SelectedAttribution::new(
+                    "mem-partition",
+                    Some(RetrievalDimension::Semantic),
+                )],
+                1_000,
+            );
+        }
+
+        // ② 失败发生 ⇒ 归因必须落到**那个桶**的回执上。
+        observations.record(
+            session,
+            JudgeResult {
+                score: 0.3,
+                verdict: JudgeVerdict::Retry,
+                critique: "answer too terse".into(),
+            },
+        );
+        module
+            .on_hook(
+                HookPoint::AfterTurn,
+                &context(&session, &messages, None, &invoker, REFLEXION_MODULE_ID),
+            )
+            .await
+            .unwrap();
+
+        let failures = store.list_failures().expect("读失败轨迹");
+        assert_eq!(failures.len(), 1);
+        assert_eq!(
+            failures[0].attributions.len(),
+            1,
+            "会话 id ≠ 桶键时, 失败面必须**按登记的桶**找回归因"
+        );
+        assert_eq!(failures[0].attributions[0].memory_id, "mem-partition");
     }
 
     #[tokio::test]
