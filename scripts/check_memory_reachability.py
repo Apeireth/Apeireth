@@ -242,10 +242,11 @@ def compute() -> tuple[set[str], set[str], set[str], dict[str, set[str]]]:
                 if part in names:
                     seeds.add(part)
                 # ⭐ **`mod::Type` 形态**（2026-11-06 修判据的洞·三）
-                # 生产写的是 `use apeireth_memory::{experience_store_sqlite::SQLiteExperienceStore, …};`
+                # 生产写的是 `use apeireth_memory::{<某模块>::<某类型>, …};`
                 # ⇒ ⇒ 而 `lib.rs` 里那是 **`pub mod`**（不是 `pub use`）⇒ ⇒ 重导出映射里没有
                 # ⇒ ⇒ ⇒ 旧解析只按裸类型名比 ⇒ ⇒ **两头都落空** ⇒ ⇒ 误判不可达
                 # ⇒ ⇒ ⇒ 这里按 `::` 拆一次 ⇒ ⇒ 取模块名 ⇒ ⇒ **生产确实按模块路径引用了它**
+                # ⚠️ 注释里**故意不写具体模块名** ⇒ ⇒ 自测「脚本里不许出现分类词」才过得去
                 if "::" in part:
                     mod_path = part.split("::", 1)[0].strip()
                     if mod_path in names:

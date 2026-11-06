@@ -1644,7 +1644,7 @@ grep -rn "\.facts_as_of(" crates/ --include=*.rs
 
 | claim id | 最小改法（文件:行号） | 硬依赖 |
 |---|---|---|
-| `gov.reflection_queue` | `crates/adapters/cli/src/governance_chain.rs:16-22`（`adapt_gate_with` 注入 `DelayedReflectionScheduler`）+ `:29-34`（`production()` 收延迟毫秒）+ `crates/adapters/cli/src/lib.rs`（env 旋钮，默认关） | 无（独立 crate） |
+| `gov.reflection_queue` | `crates/adapters/cli/src/governance_chain.rs:16-22`（`adapt_gate_with` 注入 `DelayedReflectionScheduler`）+ `:31-34`（`production()` 收延迟毫秒）+ `crates/adapters/cli/src/lib.rs`（env 旋钮，默认关） | 无（独立 crate） |
 | `rt.system_one_internal` | `crates/adapters/cli/src/lib.rs:1603-1770` 组合根装配 `SystemOneGate`（`crates/engine/runtime-assembly/src/system_one.rs:17-30` 的 `FileSystemOneAudit` + `:53-94` 的 `AgentSystemOneSupervisor`）+ env 旋钮（默认关） | 无（**依赖链的根**） |
 | `rt.module_execution_contract` | `crates/engine/runtime-assembly/src/canonical/production.rs:634-647` `collect_tool_module` 改调 `tool_module_with_contract(mode)`（`crates/engine/runtime/src/canonical/capability.rs:43-51`） | ⚠️ **必须先接 `rt.system_one_internal`**（见 6.4 陷阱 1） |
 | `mem.registered_namespace` | `crates/engine/runtime-assembly/src/canonical/production.rs` 加 `MemoryModule` 槽 + `crates/adapters/cli/src/lib.rs` 注入 coordinator/`ProfileMemoryMappings`（`crates/engine/runtime-assembly/src/profile_memory.rs:59`）+ env 旋钮（默认关） | ⚠️ **必须先接 `rt.system_one_internal`**（见 6.4 陷阱 2） |
