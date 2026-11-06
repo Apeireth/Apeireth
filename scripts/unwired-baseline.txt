@@ -117,13 +117,11 @@ orphan doc_ops_capability_shared  # G5  ⚠️ 2026-11-04 级联：删 `doc_ops_
 orphan sheet_ops_capability_shared  # G5  ⚠️ 2026-11-04 级联：删 `sheet_ops_capability`（零调用点）后失去唯一调用者 ⇒ ⇒ 待判：**「不带 live 策略槽」这个装配变体还要不要**（生产用 `_shared_with_slot`）
 orphan retrieve_with_reranker_for_session  # G5  **显式会话**的重排入口（`SessionContext::Explicit`）⇒ ⇒ 与 ambient 版**共用**内部实现 `retrieve_with_reranker_in` ⇒ ⇒ **刻意成对**（显式会话 vs 会话作用域兜底）⇒ ⇒ 零引用是「显式会话那条路还没被调用」的结果，**不是没实现**
 
-# --- G6（38 条）：**冗余 API 表面 / 宿主入口**：同一能力有**主路径在用**，这些是并行入口或便利包装；或设计上是给宿主/外部调用的公开 API。已逐条核查（见 `unwired-debt-taxonomy-2026-10-24.md` 与 `unwired-debt-audit-2026-10-24.md`）。
+# --- G6（35 条）：**冗余 API 表面 / 宿主入口**：同一能力有**主路径在用**，这些是并行入口或便利包装；或设计上是给宿主/外部调用的公开 API。已逐条核查（见 `unwired-debt-taxonomy-2026-10-24.md` 与 `unwired-debt-audit-2026-10-24.md`）。
 
-orphan constrain_to_trusted  # G6
 orphan extract_experience_from_episode  # G6
 orphan save_to_cluster  # G6  元思考族（`MetaThinking`）**未接生产**（生产侧引用 0）⇒ ⇒ 零引用是族级结果 ⇒ ⇒ `ClusterStore` 在生产是**间接消费链**（经 `meta_thinking`），但 `meta_thinking` 本身未接 ⇒ ⇒ 这条是其写面
 orphan trait_locks_path  # G6
-orphan validate_schedule  # G6
 orphan recall_with_policy  # G6  主动召回族**已接生产**，但生产用**保留型** `ProactiveRecallService`（`cognitive.rs:1357`）⇒ ⇒ 这条是「一次性便利入口」⇒ ⇒ 零引用是**两种调用形态并存**的结果，不是没实现
 orphan apeireth_sdk_py  # G6
 orphan explicit_allow_list  # G6
@@ -144,7 +142,6 @@ orphan put_default  # G6
 orphan query_with_time_range  # G6  溯源族已接生产；本条是**溯源时间区间**查询（与「事实 as-of」是**两套时间轴**：区间 vs 时点）⇒ ⇒ 零引用是「另一条时间轴的读面」的结果；与 `query_as_of` **不构成同义**
 orphan rebind  # G6
 orphan reconnect_attempts  # G6
-orphan remove_job  # G6
 orphan retrieve_with_reranker  # G6  **ambient 会话**的重排入口 ⇒ ⇒ 与 `_for_session` 版**共用** `retrieve_with_reranker_in` ⇒ ⇒ 成对设计（同上）⇒ ⇒ 零引用是「重排默认不启用（保序即默认）」的结果 ⇒ ⇒ 留着 = 将来可挂模型重排**而不改检索主干**
 orphan sdk_method_names  # G6
 orphan set_quiet_threshold  # G6  睡眠周期族（`SleepCycle`）**未接生产**（唯一提及在 `foundation/core/src/clock.rs` 的**注释**里）⇒ ⇒ 零引用是族级结果
