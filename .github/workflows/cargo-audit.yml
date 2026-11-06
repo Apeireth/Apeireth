@@ -37,28 +37,37 @@ on:
     # ⇒ ⇒ run 的结论变成**真实的审计结论**（绿 ⇒ 无红邮件；红 ⇒ 是真问题）⇒ ⇒
     # ⇒ ⇒ **信息量更高**，而不是「制造一个假的失败」。
     branches: [master, main, feature/cognitive-infrastructure-vnext, feature/memory-v2.2-production-completion, ui-engine, ui-engine-p0-2026-10-24]
-    # ⚠️⚠️⚠️ **2026-11-06 实测更正：`paths` 过滤已删除**（台账 E-190）
+    # ⭐⭐ **只在依赖真的变了才跑**（2026-10-31 owner 报「一直发邮件」时修）：
+    #   依赖没变 ⇒ 不跑（**GitHub 连 run 都不创建** ⇒ 不会有红邮件）；
+    #   依赖变了 ⇒ 照跑。每周 cron 与 workflow_dispatch 仍会跑 ⇒ 新 advisory 仍会被发现。
     #
-    # ## 为什么删（E-150 的「正解」其实不完整）
+    # ⚠️⚠️⚠️ **2026-11-06 真根因更正（台账 E-190 已更正自身）**：
+    #   本文件曾长期**无法被 GitHub 解析** ⇒ ⇒ 每次 push 都产生一个
+    #   **「加载不到 workflow 定义」的空 run**（特征：`run.name` = 文件路径而非
+    #   `name:` 字段、`created_at == updated_at`、**`jobs = 0`**、`conclusion = failure`）
+    #   ⇒ ⇒ **每次 push 一封红邮件**。
     #
-    # E-150 记的机制是：分支不在 `push.branches` ⇒ 不调度 job ⇒ 无 job 的 run ⇒ 判 failure。
-    # ⇒ ⇒ 于是把活跃分支**列进** `branches` 当作「正解」。
-    # ⇒ ⇒⇒ ⚠️ **实测：列进来了，仍然 0 job** —— 2026-11-06 在 `ui-engine` 与
-    #   ⇒ ⇒ `ui-engine-p0-2026-10-24` 上共 9 个 run，**全部 0 job / failure**，
-    #   ⇒ ⇒⇒ 而它们**没有一个**改过 `Cargo.lock`。
-    # ⇒ ⇒⇒ ⇒ **⇒ 第二层挡板是 `paths`**：`paths` 不命中 ⇒ job 不调度 ⇒ 仍是「无 job 的 run」。
+    #   ⇒ ⇒ **真根因**：两个 step **各有重复的 `if: always()` 键**
+    #   ⇒ ⇒ ⇒ ⇒ GitHub 报 `failed to parse workflow: 'if' is already defined`
+    #   ⇒ ⇒ ⇒ ⇒ 而本地 PyYAML **只取最后一个**（不报错）⇒ ⇒ **本地校验全绿、CI 全红**。
+    #   ⇒ ⇒ ⇒ ⇒ ⇒ **教训：YAML 校验通过 ≠ GitHub 能解析**（重复键必须查）。
     #
-    # ## 为什么「删掉」而不是「把门槛搬进 job」
-    #
-    # ⇒ ⇒ 把「依赖变了才跑」搬进 job 也能消掉无 job run，但那要 `fetch-depth: 0`
-    #   ⇒ ⇒⇒ 本仓历史很大（跨线分叉实测 1414 文件）⇒ ⇒ 全量 fetch 比跑审计更贵。
-    # ⇒ ⇒ 而审计本身并不贵（装 cargo-audit + 拉 advisory DB），且**绿的 run 不发邮件**
-    #   ⇒ ⇒⇒ ⇒ 只有**真漏洞**才发红邮件 —— 那**正是我们要的信号**。
-    # ⇒ ⇒⇒ ⇒ ⇒ 「依赖没变就不跑」这个优化，本来是为了**止红邮件**而加的
-    #   ⇒ ⇒⇒ ⇒ ⇒ ⇒ 但它**自己就是红邮件的成因** ⇒ ⇒ 取消它才是真修。
+    #   ⇒ ⇒ ⚠️ **顺带更正 E-150**：它把「无 job 假失败」归因于 `push.branches` 未列分支
+    #   ⇒ ⇒ ⇒ 但**列进来之后仍 0 job**（2026-11-06 实测 9 个 run 全 0 job）
+    #   ⇒ ⇒ ⇒ ⇒ 因为它根本不是过滤问题 ⇒ ⇒ **是文件解析失败**。
+    paths:
+      - '**/Cargo.lock'
+      - '.github/workflows/cargo-audit.yml'
+      # ⭐ 排除独立 workspace（`crates-ui/`，ADR-0015）⇒ 它的依赖审计由自己的门禁负责。
+      # ⚠️ 诚实口径：`crates-ui/` 的 RUSTSEC 覆盖**不在**本 workflow（E-148 已登记）。
+      - '!crates-ui/**'
   pull_request:
     branches: ['**']
-    # ⚠️ 同上：PR 侧的 `paths` 过滤**也已删除**（同一个成因 ⇒ 同一种修法，见台账 E-190）。
+    # ⚠️ 同上：PR 侧也只在依赖变动时跑（RUSTSEC 覆盖由 cargo-deny 的 advisories 检查兜底）。
+    paths:
+      - '**/Cargo.lock'
+      - '.github/workflows/cargo-audit.yml'
+      - '!crates-ui/**'
   schedule:
     # 每周日凌晨 4 点 (跟 eval-live 错开 1h, 避免 GPU 竞争)
     - cron: '0 4 * * 0'
@@ -197,7 +206,6 @@ jobs:
 
       - name: Upload audit report (artifact)
         if: always()
-        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: cargo-audit-report
@@ -206,7 +214,6 @@ jobs:
             audit-report.sarif
 
       - name: Upload SARIF to Code Scanning (R66)
-        if: always()
         if: always()
         # 2026-10-03: v3 已 EOL (GitHub 强制退役旧主版), 升 v4 —— 否则本步必败
         uses: github/codeql-action/upload-sarif@v4
