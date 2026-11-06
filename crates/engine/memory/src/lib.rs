@@ -94,6 +94,7 @@ pub mod golden_injection2; // 注入形态对照第二轮 (消偏置 + 总预算
 pub mod golden_mining;
 pub mod quality_metrics; // 设计稿 §6.1 剩余指标 (时间正确率/矛盾检出率/Token 效率/Citation coverage/影子胜率/回退时间); 状态 NOT IMPLEMENTED (新增未接线).
 
+pub mod golden_fair; // 通道公平考卷 (零人工标注): 同一套题面模板, 只把主体换成「内部卷不会问的次级实体」+ 跨记录桥; 状态 NOT IMPLEMENTED (新增未接线).
 pub mod golden_run;
 pub mod golden_set;
 pub mod graph_algo;

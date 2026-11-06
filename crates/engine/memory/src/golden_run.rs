@@ -218,9 +218,32 @@ pub fn run_with_extra_sources(
                 }
             }
         }
+        // ⚠️⭐ **合并后必须按分数重排**（2026-11-06 修：**尺子量不到通道的根因**）
+        //
+        // **修前**：额外源的候选被**追加**在 BM25 之后，而评测只取前 k
+        // （`golden_set::evaluate` → `top_k`）⇒ ⇒ 额外通道的候选**永远进不了 top-k**
+        // （实测：每题的 BM25 正分候选都占满 10 个名额 ⇒ 一个空位都没有）。
+        // ⇒ ⇒ 「不许不涨」的尺子量的是「**BM25 的排序**」，**不是融合**。
+        //
+        // **修后**：候选并集 ⇒ **按分数重排** ⇒ ⇒ 取 top-k
+        // ⇒ ⇒ 与生产召回链**同结构**（`coordinator.rs` → `HybridRetrievalPipeline`：
+        // **候选并集 ⇒ 统一打分 ⇒ 排序 ⇒ 取 top-k**）。
+        //
+        // ⚠️ **单路时逐字不变**：`extra_sources` 为空 ⇒ 列表本来就按
+        // 「分数降序 + id 升序」排好（BM25 源自己就这么排）⇒ 重排是**恒等变换**
+        // ⇒ ⇒ CI 闸门 `check_golden_baseline.py` 的数字**一个字不动**。
+        retrieved.sort_by(|left, right| {
+            right
+                .score
+                .partial_cmp(&left.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| left.id.cmp(&right.id))
+        });
         // ⚠️ **零分结果不算检索结果**：BM25 源会**按 id 顺序填满** limit
         // ⇒ 分数为 0 的文档也会被返回 ⇒ 「目标恰好排在第 1」会**假命中**。
         // ⇒ 只保留**分数 > 0** 的结果（真检索器也会设分数阈值）。
+        // ⚠️ **⇒⇒ 额外通道的候选必须给正分**（否则会被这道过滤整个丢掉 ——
+        // 那正是修前「通道贡献恒为 0」的第二层根因）。
         let retrieved: Vec<_> = retrieved
             .into_iter()
             .filter(|item| item.score > 0.0)

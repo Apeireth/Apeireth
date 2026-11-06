@@ -136,6 +136,11 @@ def main() -> int:
     if not corpora:
         print("❌ 融合通道闸门：报告里没有语料 ⇒ 不能出结论")
         return 1
+    # ⭐ **公平卷**（2026-11-06 主指挥加）：同题面模板 + 主体换成「联想实体集里次级的
+    # 跨记录桥实体」⇒ ⇒ 测的是通道收益的**上界**（词面卷测的是**下界**）
+    # ⇒ ⇒ ⇒ **两个数都报** ⇒ ⇒ 才既不虚报、也不低估。
+    # ⚠️ **只报不判**（理由见文件头）⇒ ⇒ 不参与「不许不涨」的判定。
+    fair_corpora = payload.get("fair_corpora", []) or []
 
     baseline = load_baseline()
     base_corpora = {c["name"]: c for c in baseline.get("corpora", [])}
@@ -173,6 +178,31 @@ def main() -> int:
                 failed = True
         else:
             print(f"      ⚠️ 基线里没有这份语料 ⇒ **不可比** ⇒ 不判掉")
+
+    # ── ⭐ 公平卷（**只报不判**）────────────────────────────────────
+    # 词面卷的 delta 是通道收益的**下界**（内部卷天然偏词面）；
+    # 公平卷（主体换成「跨记录桥的次级实体」）测的是**上界**
+    # ⇒ ⇒ ⇒ 两个数**都报** ⇒ ⇒ 才既不虚报、也不低估。
+    # ⚠️ **不参与「不许不涨」判定**：公平卷的 delta 现在是 0.0
+    # ⇒ ⇒ ⇒ 红的会是**真问题**（通道有效但当前融合配方不兑现）
+    # ⇒ ⇒ ⇒ ⇒ 先让它**可见**，等融合配方有**依据**了再谈「变硬」。
+    if fair_corpora:
+        print("  · 公平卷（**上界**测量 · 只报不判）：")
+        for entry in fair_corpora:
+            name = entry.get("name", "?")
+            delta = float(entry.get("delta", 0.0))
+            base = float(entry.get("baseline", {}).get("recall_at_k", 0.0))
+            with_ch = float(entry.get("with_channel", {}).get("recall_at_k", 0.0))
+            only = entry.get("channel_only_recall_at_k")
+            only_txt = f" · 联想**单独** recall={float(only):.4f}" if only is not None else ""
+            print(
+                f"      · {name}: recall@{payload.get('k')} {base:.4f} → {with_ch:.4f}"
+                f"（delta {delta:+.4f}）{only_txt}"
+            )
+        print(
+            "      ⚠️ 公平卷的 delta **不参与判定**（它是**上界**测量）"
+            " ⇒ ⇒ 「联想单独强、融合弱」是**真问题**，不是尺子的错"
+        )
 
     if failed:
         return 1

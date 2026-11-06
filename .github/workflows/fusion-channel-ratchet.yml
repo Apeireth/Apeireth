@@ -53,5 +53,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: dtolnay/rust-toolchain@1.97.1
+
+      # ⚠️ **语料必须先到位**（2026-11-06 主指挥补）。
+      # 此前本 workflow **没有下载语料** ⇒ ⇒ 脚本「缺语料时如实跳过并退出 0」
+      # ⇒ ⇒ ⇒ **这个闸门自诞生起就一直「不判」**（形同虚设）
+      # ⇒ ⇒ 且 `paths` 过滤器在长命分支上**无效**（比 PR 的**累积 diff**）
+      # ⇒ ⇒ ⇒ 一直触发、一直跳过 ⇒ ⇒ 磁盘与时间白花。
+      #
+      # ⇒ ⇒ 照 `golden-baseline.yml` 的既有做法（**不自创**）：
+      # 语料是**公共领域小说 + SHA-256 固定**（`scripts/download_novels.sh`）
+      # ⇒ ⇒ 落在 `$APEIRETH_DATA_DIR/novels/`
+      # ⇒ ⇒ 与 `check_fusion_channels.py` 的 `_corpus_root()` **同口径** ✔
+      - name: 下载内部卷语料（公共领域小说 · SHA-256 固定）
+        run: bash scripts/download_novels.sh
+        env:
+          APEIRETH_DATA_DIR: /tmp/apeireth-data
+
       - name: 检查融合通道不许让召回变差
         run: python3 scripts/check_fusion_channels.py
+        env:
+          APEIRETH_DATA_DIR: /tmp/apeireth-data

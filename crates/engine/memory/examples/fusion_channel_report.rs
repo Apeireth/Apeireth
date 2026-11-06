@@ -1,156 +1,73 @@
-//! **融合通道 A/B 报告**（2026-11-05）—— 「**不许不涨**」的尺子（B）。
+//! **融合通道 A/B 报告**（2026-11-05，2026-11-06 扩到两卷）—— 「**不许不涨**」的尺子（B）。
 //!
 //! # 这个例子回答什么
 //!
 //! CI 闸门（`scripts/check_golden_baseline.py`）量的是**单路 BM25**
-//! ⇒ ⇒ **通道级改动（加联想通道 / 加 as-of / 换融合配方）在闸门上完全看不见**
+//! ⇒ ⇒ **通道级改动（加召回通道 / 加 as-of / 换融合配方）在那个闸门上完全看不见**
 //! ⇒ ⇒ ⇒ 「不许变差」的纪律**对通道级改动是失效的**。
 //!
 //! 本例子让**同一份考卷跑两遍**：
 //! - **基线**：单路 BM25；
 //! - **加通道**：BM25 **并联**联想通道；
-//! ⇒ ⇒ 差值 = **该通道在内部卷上的收益**。
+//! ⇒ ⇒ 差值 = **该通道在这份卷子上的收益**。
+//!
+//! # ⭐ **两卷并报**（2026-11-06）
+//!
+//! | 卷 | 主体 | 问什么 |
+//! |---|---|---|
+//! | **词面卷**（`corpora`） | 记录里**最突出**的实体（内部卷口径） | 「词面最强」的那道题 |
+//! | **公平卷**（`fair_corpora`） | 联想实体集里**次级**的实体（[`golden_fair`]） | 「词面弱、但该在场」的那道题 |
+//!
+//! ⇒ ⇒ **两卷同一套题面模板、同一批记录、同一个 runner、同一把尺子、同一个 k**
+//! ⇒ ⇒ **唯一的差别是主体是谁** ⇒ ⇒ **两个 delta 直接可比**。
 //!
 //! # ⚠️ **口径（读数字前必须知道）**
 //!
-//! 1. **内部卷的题是「从记录里挖出来的」**（主体 = 该记录的最高频实体）
-//!    ⇒ ⇒ **天然偏向词面命中** ⇒ ⇒ **对「联想/词面不像但该在场」这类通道不利**
-//!    ⇒ ⇒ ⇒ **本报告的 delta 是**下界**，不是该通道的真实收益**。
+//! 1. **词面卷的 delta 是**下界**：内部卷的主体 = 该记录的最高频实体
+//!    ⇒ ⇒ **词面通道天然占优** ⇒ ⇒ 它测的是「**不许有害**」，不是「**有大用**」。
 //! 2. **联想边怎么造的**：写入侧真实来源是内容里的 `associate:<实体> <实体>` 标记
-//!    ⇒ ⇒ 内部卷**没有**那种标记 ⇒ ⇒ 这里用**最接近的替身**：
-//!    **同一记录内的高频实体两两共现** ⇒ ⇒ ⇒ **替身 ⇒ ⇒ 数字只能当参考**。
-//! 3. **不拼进查询**：额外源与 BM25 **并联**（候选并集、同 id 取高分）
+//!    ⇒ ⇒ 小说语料**没有**那种标记 ⇒ ⇒ 这里用**最接近的替身**：
+//!    **同一记录内的实词共现** ⇒ ⇒ ⇒ **替身 ⇒ ⇒ 数字只能当参考**
+//!    （⇒ ⇒ 公平卷的 delta 是生产收益的**上界**）。
+//! 3. **不拼进查询**：额外源与 BM25 **并联**（候选并集 ⇒ **按分数重排** ⇒ 取 top-k）
 //!    ⇒ ⇒ 与生产召回链同结构 ⇒ ⇒ **不稀释** BM25。
 //!
 //! # 输出
 //!
 //! **一行 JSON**（机器读）：
 //! ```json
-//! {"k":10,"corpora":[{"name":"redchamber",
-//!   "baseline":{"recall_at_k":0.6875,"cases":248},
-//!   "with_channel":{"recall_at_k":0.6875,"cases":248},
-//!   "delta":0.0}]}
+//! {"k":10,
+//!  "corpora":[{"name":"redchamber","exam":"lexical",
+//!    "baseline":{"recall_at_k":0.2983,"cases":476},
+//!    "with_channel":{"recall_at_k":0.2983,"cases":476},
+//!    "delta":0.0}],
+//!  "fair_corpora":[{"name":"redchamber","exam":"fair",
+//!    "baseline":{"recall_at_k":0.21,"cases":118},
+//!    "with_channel":{"recall_at_k":0.26,"cases":118},
+//!    "delta":0.05}]}
 //! ```
 
 use std::error::Error;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+use std::sync::Arc;
 
-use apeireth_memory::backend::in_memory::InMemoryBackend;
+use apeireth_memory::golden_fair::{
+    build_fair_exam, CorpusAssociativeSource, CorpusAssociations, FairExamConfig,
+};
 use apeireth_memory::golden_mining::MiningConfig;
 use apeireth_memory::golden_run::{
-    mined_to_golden, run_with_extra_sources, IndexRecord, InjectionMode,
+    mined_to_golden, run_with_extra_sources, IndexRecord, InjectionMode, RunReport,
 };
+use apeireth_memory::golden_set::{evaluate, EvalBatch, GoldenSet, Retrieved};
 use apeireth_memory::novel_corpus;
 use apeireth_memory::retrieval_pipeline::MemoryCandidateSource;
-use apeireth_memory::scope::{MemoryCandidate, MemoryProvenance, MemoryScope};
-use apeireth_plugin::experience::AssociationStore;
 
 /// 评测的 top-k（**必须与 `scripts/golden-baseline.json` 的 `k` 一致**）。
 const K: usize = 10;
 
 /// 每条记录挖几道题（**与 `golden_baseline_report` 同口径**）。
 const MAX_CASES_PER_RECORD: usize = 6;
-
-/// **每条记录取几个高频实体做联想边**（替身口径 ⇒ ⇒ 见文件头 §2）。
-const ASSOC_ENTITIES_PER_RECORD: usize = 4;
-
-/// **一条记录内的实体共现边**（**替身**：写入侧真实来源是 `associate:` 显式标记）。
-#[derive(Default)]
-struct CorpusAssociations {
-    edges: std::sync::Mutex<Vec<apeireth_plugin::experience::AssociationEdge>>,
-}
-
-impl apeireth_plugin::experience::AssociationStore for CorpusAssociations {
-    fn record_cooccurrence(
-        &self,
-        from: &str,
-        to: &str,
-        episode_id: &str,
-    ) -> apeireth_plugin::CapabilityResult<()> {
-        self.edges.lock().expect("corpus associations mutex").push(
-            apeireth_plugin::experience::AssociationEdge {
-                from_entity: from.to_string(),
-                to_entity: to.to_string(),
-                co_occurrence_count: 1,
-                last_seen_episode_id: episode_id.to_string(),
-                last_seen_at: 0,
-            },
-        );
-        Ok(())
-    }
-
-    fn top_associations(
-        &self,
-        entity: &str,
-        limit: u32,
-    ) -> apeireth_plugin::CapabilityResult<Vec<apeireth_plugin::experience::AssociationEdge>> {
-        let edges = self.edges.lock().expect("corpus associations mutex");
-        Ok(edges
-            .iter()
-            .filter(|e| e.from_entity == entity || e.to_entity == entity)
-            .take(limit as usize)
-            .cloned()
-            .collect())
-    }
-}
-
-/// **联想候选源**（本例的替身实现）：查联想网络 ⇒ ⇒ 拉出关联记录作为候选。
-///
-/// ⚠️ 与生产的 [`apeireth_memory::associative_recall::AssociativeCandidateSource`]
-/// **同结构**（并联通道、候选并集）⇒ ⇒ 但**键的取法更简**（整条记录的实体都当键）。
-struct CorpusAssociativeSource {
-    associations: std::sync::Arc<CorpusAssociations>,
-    records: Vec<IndexRecord>,
-}
-
-impl MemoryCandidateSource for CorpusAssociativeSource {
-    fn candidates(
-        &self,
-        query: &str,
-        limit: usize,
-    ) -> Result<Vec<MemoryCandidate>, apeireth_memory::MemoryError> {
-        let terms = apeireth_memory::query_signals::content_terms_of(query);
-        if terms.is_empty() || limit == 0 {
-            return Ok(Vec::new());
-        }
-        let mut out: Vec<MemoryCandidate> = Vec::new();
-        let mut seen: Vec<String> = Vec::new();
-        for term in terms {
-            let Ok(edges) = self.associations.top_associations(&term, limit as u32) else {
-                continue;
-            };
-            for edge in edges {
-                if seen.contains(&edge.last_seen_episode_id) {
-                    continue;
-                }
-                seen.push(edge.last_seen_episode_id.clone());
-                let Some(record) = self
-                    .records
-                    .iter()
-                    .find(|r| r.id == edge.last_seen_episode_id)
-                else {
-                    continue;
-                };
-                out.push(MemoryCandidate {
-                    id: record.id.clone(),
-                    layer: "golden".to_string(),
-                    scope: MemoryScope::Global,
-                    content: record.text.clone(),
-                    score: 0.0,
-                    score_components: Default::default(),
-                    provenance: MemoryProvenance {
-                        source: "golden_association".to_string(),
-                        source_session: None,
-                        source_trace: None,
-                        source_request: None,
-                    },
-                });
-            }
-        }
-        Ok(out)
-    }
-}
 
 /// 语料根目录（**与 `golden_baseline_report` 同口径**）。
 fn corpus_root() -> PathBuf {
@@ -165,8 +82,75 @@ fn corpus_root() -> PathBuf {
     }
 }
 
-/// 跑一份语料 ⇒ 单路 vs 加联想通道。
-fn report_one(name: &str, path: &Path) -> Result<serde_json::Value, Box<dyn Error>> {
+/// **一路跑批的结果**（基线 / 加通道）。
+struct Abridged {
+    baseline: RunReport,
+    with_channel: RunReport,
+}
+
+/// 跑一份卷子的 A/B（单路 BM25 vs 并联联想通道）。
+fn ab(
+    index: &[IndexRecord],
+    golden: &GoldenSet,
+    channel: &CorpusAssociativeSource,
+) -> Result<Abridged, apeireth_memory::MemoryError> {
+    let baseline = run_with_extra_sources(index, golden, K, InjectionMode::Production, &[])?;
+    let with_channel =
+        run_with_extra_sources(index, golden, K, InjectionMode::Production, &[channel])?;
+    Ok(Abridged {
+        baseline,
+        with_channel,
+    })
+}
+
+/// **只有联想通道一路**时的召回（= 通道的**可达性**）。
+///
+/// ⚠️ **指标口径与融合跑批完全一致**（同一个 [`evaluate`]）⇒ ⇒ 数字可比。
+fn channel_only_recall(
+    golden: &GoldenSet,
+    channel: &CorpusAssociativeSource,
+) -> Result<f64, apeireth_memory::MemoryError> {
+    let mut batch = EvalBatch::default();
+    for case in &golden.cases {
+        let candidates = channel.candidates(&case.query, K)?;
+        let ids: Vec<String> = candidates.into_iter().map(|candidate| candidate.id).collect();
+        batch.cases.push(case.clone());
+        batch.results.push(Retrieved {
+            ids,
+            fragments: Vec::new(),
+        });
+    }
+    let metrics = evaluate(&batch, K)
+        .map_err(|error| apeireth_memory::MemoryError::Other(format!("考卷评测失败：{error}")))?;
+    Ok(metrics.recall_at_k)
+}
+
+/// 把一次 A/B 渲染成 JSON 条目。
+fn entry(name: &str, exam: &str, ab: &Abridged, channel_only: f64) -> serde_json::Value {
+    let delta = ab.with_channel.metrics.recall_at_k - ab.baseline.metrics.recall_at_k;
+    serde_json::json!({
+        "name": name,
+        "exam": exam,
+        "baseline": {
+            "recall_at_k": ab.baseline.metrics.recall_at_k,
+            "ndcg_at_k": ab.baseline.metrics.ndcg_at_k,
+            "cases": ab.baseline.cases,
+        },
+        "with_channel": {
+            "recall_at_k": ab.with_channel.metrics.recall_at_k,
+            "ndcg_at_k": ab.with_channel.metrics.ndcg_at_k,
+            "cases": ab.with_channel.cases,
+        },
+        "channel_only_recall_at_k": channel_only,
+        "delta": delta,
+    })
+}
+
+/// 跑一份语料 ⇒ 两卷各一次 A/B。
+fn report_one(
+    name: &str,
+    path: &Path,
+) -> Result<(serde_json::Value, serde_json::Value), Box<dyn Error>> {
     let chapters = novel_corpus::load_chapters(path)?;
     let records = novel_corpus::to_mine_records(&chapters);
     if records.is_empty() {
@@ -177,9 +161,12 @@ fn report_one(name: &str, path: &Path) -> Result<serde_json::Value, Box<dyn Erro
         ..MiningConfig::default()
     };
     let mined = apeireth_memory::golden_mining::mine(&records, config);
-    let golden = apeireth_memory::golden_set::GoldenSet::new(
-        format!("internal-{name}"),
-        mined_to_golden(mined),
+    let lexical = GoldenSet::new(format!("internal-{name}"), mined_to_golden(mined));
+    // ⭐ **公平卷**（零人工标注）：同一套题面模板，只把主体换成
+    // 「内部卷不会问的次级实体」，且该实体必须是**跨记录桥**。
+    let fair = GoldenSet::new(
+        format!("fair-{name}"),
+        build_fair_exam(&records, FairExamConfig::default()),
     );
     let index: Vec<IndexRecord> = records
         .iter()
@@ -189,66 +176,46 @@ fn report_one(name: &str, path: &Path) -> Result<serde_json::Value, Box<dyn Erro
         })
         .collect();
 
-    // ⭐ **替身联想边**：同一记录内的高频实体两两共现。
-    let associations = std::sync::Arc::new(CorpusAssociations::default());
-    for record in &records {
-        let entities = apeireth_memory::query_signals::content_terms_of(&record.content);
-        let mut unique: Vec<String> = Vec::new();
-        for entity in entities {
-            if !unique.contains(&entity) {
-                unique.push(entity);
-            }
-            if unique.len() >= ASSOC_ENTITIES_PER_RECORD {
-                break;
-            }
-        }
-        for i in 0..unique.len() {
-            for j in (i + 1)..unique.len() {
-                let _ = associations.record_cooccurrence(&unique[i], &unique[j], &record.id);
-            }
-        }
-    }
-
-    // ① **基线**：单路 BM25（**与 CI 闸门同口径**）。
-    let baseline = run_with_extra_sources(&index, &golden, K, InjectionMode::Production, &[])?;
-
-    // ② **加通道**：BM25 **并联**联想通道。
+    // ⭐ **联想边**（替身：同记录内的实词共现；**边权 = 实体对的语料级共现次数**）。
+    let associations = Arc::new(CorpusAssociations::build(&records));
     let channel = CorpusAssociativeSource {
         associations: associations.clone(),
         records: index.clone(),
     };
-    let with_channel =
-        run_with_extra_sources(&index, &golden, K, InjectionMode::Production, &[&channel])?;
 
-    let delta = with_channel.metrics.recall_at_k - baseline.metrics.recall_at_k;
+    let lexical_ab = ab(&index, &lexical, &channel)?;
+    let fair_ab = ab(&index, &fair, &channel)?;
+    let lexical_only = channel_only_recall(&lexical, &channel)?;
+    let fair_only = channel_only_recall(&fair, &channel)?;
+
+    println!("· {name}：语料 {} 条", index.len());
     println!(
-        "· {name}：基线 recall@{K}={:.4} → 加联想通道 recall@{K}={:.4}（delta {:+.4}）· 题 {} → {}",
-        baseline.metrics.recall_at_k,
-        with_channel.metrics.recall_at_k,
-        delta,
-        baseline.cases,
-        with_channel.cases,
+        "    词面卷：题 {} · 基线 recall@{K}={:.4} → 加联想通道={:.4}（delta {:+.4}）· **联想单独** recall@{K}={:.4}",
+        lexical_ab.baseline.cases,
+        lexical_ab.baseline.metrics.recall_at_k,
+        lexical_ab.with_channel.metrics.recall_at_k,
+        lexical_ab.with_channel.metrics.recall_at_k - lexical_ab.baseline.metrics.recall_at_k,
+        lexical_only,
+    );
+    println!(
+        "    公平卷：题 {} · 基线 recall@{K}={:.4} → 加联想通道={:.4}（delta {:+.4}）· **联想单独** recall@{K}={:.4}",
+        fair_ab.baseline.cases,
+        fair_ab.baseline.metrics.recall_at_k,
+        fair_ab.with_channel.metrics.recall_at_k,
+        fair_ab.with_channel.metrics.recall_at_k - fair_ab.baseline.metrics.recall_at_k,
+        fair_only,
     );
 
-    Ok(serde_json::json!({
-        "name": name,
-        "baseline": {
-            "recall_at_k": baseline.metrics.recall_at_k,
-            "ndcg_at_k": baseline.metrics.ndcg_at_k,
-            "cases": baseline.cases,
-        },
-        "with_channel": {
-            "recall_at_k": with_channel.metrics.recall_at_k,
-            "ndcg_at_k": with_channel.metrics.ndcg_at_k,
-            "cases": with_channel.cases,
-        },
-        "delta": delta,
-    }))
+    Ok((
+        entry(name, "lexical", &lexical_ab, lexical_only),
+        entry(name, "fair", &fair_ab, fair_only),
+    ))
 }
 
 fn main() -> ExitCode {
     let dir = corpus_root();
     let mut corpora = Vec::new();
+    let mut fair_corpora = Vec::new();
     let mut loaded = 0usize;
     for (name, file) in [
         ("redchamber", "redchamber.txt"),
@@ -260,9 +227,10 @@ fn main() -> ExitCode {
             continue;
         }
         match report_one(name, &path) {
-            Ok(entry) => {
+            Ok((lexical_entry, fair_entry)) => {
                 loaded += 1;
-                corpora.push(entry);
+                corpora.push(lexical_entry);
+                fair_corpora.push(fair_entry);
             }
             Err(error) => {
                 eprintln!("· {name}：**跑失败**（{}）：{error}", path.display());
@@ -277,7 +245,11 @@ fn main() -> ExitCode {
         );
         return ExitCode::FAILURE;
     }
-    let payload = serde_json::json!({ "k": K, "corpora": corpora });
+    let payload = serde_json::json!({
+        "k": K,
+        "corpora": corpora,
+        "fair_corpora": fair_corpora,
+    });
     println!("{payload}");
     ExitCode::SUCCESS
 }
