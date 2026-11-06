@@ -81,14 +81,14 @@ fn main() {
             match outcome {
                 Ok(Ok(())) => {}
                 Ok(Err(error)) => {
-                    let path = std::env::var("APEIRETH_PROBE_OUTCOME_LOG").unwrap_or_else(|_| {
+                    let path = std::env::var("BENCH_PROBE_OUTCOME_LOG").unwrap_or_else(|_| {
                         "/var/tmp/apeireth-tmp/probe-child-outcome.log".to_string()
                     });
                     let _ = std::fs::write(&path, format!("probe-err: {error:?}\n"));
                     panic!("startup child probe: {error:?}");
                 }
                 Err(payload) => {
-                    let path = std::env::var("APEIRETH_PROBE_OUTCOME_LOG").unwrap_or_else(|_| {
+                    let path = std::env::var("BENCH_PROBE_OUTCOME_LOG").unwrap_or_else(|_| {
                         "/var/tmp/apeireth-tmp/probe-child-outcome.log".to_string()
                     });
                     let _ = std::fs::write(&path, format!("probe-panic: {payload:?}\n"));
