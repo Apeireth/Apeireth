@@ -77,6 +77,11 @@ pub struct FailureRecord {
     ///
     /// ⚠️ **可选**：`None` = **不知道属于哪个会话**，桥**不许**把它算进任何会话
     /// （只喂「不带会话过滤」的全局结算时才会用到）。
+    ///
+    /// ⭐ **谁真的落它**（2026-11-06 根治）：
+    /// [`ReflexionStore::record_failure_with_attribution_and_session`]
+    /// ⇒ ⇒ 内存版 / 文件版**都覆写**了 ⇒ ⇒ **真落盘**（重启后仍能结算）。
+    /// ⚠️ **老数据**（本字段引入前写的）**没有**它 ⇒ ⇒ 靠**接线层进程内记账**兜底。
     #[serde(default)]
     pub session_key: Option<String>,
 }
@@ -260,6 +265,18 @@ pub fn render_retry_injection(
     }
 }
 
+/// ⭐ **会话键规范化**（2026-11-06）：空/纯空白 = **不知道属于哪个会话** ⇒ ⇒ `None`.
+///
+/// ⚠️ **不许把空串当会话键落盘**：空串会话在结算时**匹配不到**任何真实会话
+/// ⇒ ⇒ 落了等于**假归属**（比 `None` 更坏：它看起来有归属，其实没有）。
+/// ⚠️ **不 trim 存进去的值**（只拿 trim 判空）⇒ ⇒ **键口径零漂移**
+/// （接线层算出来的桶键原样落盘 ⇒ ⇒ 结算时按同一个键匹配得上）。
+fn normalize_session_key(session_key: Option<&str>) -> Option<String> {
+    session_key
+        .filter(|key| !key.trim().is_empty())
+        .map(str::to_string)
+}
+
 /// Reflexion 存储与检索 Trait.
 pub trait ReflexionStore: Send + Sync {
     /// 登记一条失败轨迹.
@@ -303,6 +320,46 @@ pub trait ReflexionStore: Send + Sync {
             "默认实现不落归因，返回值也不该带归因"
         );
         Ok(record)
+    }
+
+    /// ⭐ **登记一条失败轨迹，**带归因 + 会话键**（2026-11-06 根治）。
+    ///
+    /// # 为什么是**新方法**（而不是改 [`Self::record_failure_with_attribution`] 的签名）
+    /// 改签名会**打断所有既有实现与调用方**（仓里 30+ 处调用点）
+    /// ⇒ ⇒ 这里**加一个带默认实现的新方法** ⇒ ⇒ **旧方法一字不动** ⇒ ⇒ 旧调用点**零改动**。
+    ///
+    /// # 默认实现 = **行为与旧方法逐字一致**（⚠️ **不许撒谎**）
+    /// 默认实现**不落 `session_key`**（落盘里仍是 `None`）
+    /// ⇒ ⇒ **返回值也不带 `session_key`**（不许假装落了）
+    /// ⇒ ⇒ 需要**真的落盘会话键**的实现**必须覆写本方法**
+    ///   （内存版 / 文件版已覆写）⇒ ⇒ 覆写与否，**返回值与 store 永远一致**。
+    ///
+    /// # 为什么必须真落（**根治点**）
+    /// 失败要喂**按会话分桶**的权重自演化
+    /// （[`crate::reflexion_tuning::observe_failures_since_in_session`]）
+    /// ⇒ ⇒ **会话模式下，`session_key` 不知道属于哪个会话的失败会被跳过**
+    /// ⇒ ⇒ 若 store **恒不落** `session_key` ⇒ ⇒ **桥永远 0 证据 = 静默失效**
+    /// ⇒ ⇒ 老归属只能靠**接线层进程内记账**兜底 ⇒ ⇒ **重启后丢失**
+    /// ⇒ ⇒ 本方法让**新数据真落盘** ⇒ ⇒ **重启后仍能结算**。
+    fn record_failure_with_attribution_and_session(
+        &self,
+        kind: FailureKind,
+        task_type: &str,
+        summary: &str,
+        timestamp_epoch_ms: i64,
+        attributions: Vec<FailureAttribution>,
+        session_key: Option<&str>,
+    ) -> Result<FailureRecord, ReflexionError> {
+        // ⚠️ **默认实现不落 `session_key`**（不许撒谎）：显式丢弃，
+        // 行为与 [`Self::record_failure_with_attribution`] **逐字一致**。
+        let _ = session_key;
+        self.record_failure_with_attribution(
+            kind,
+            task_type,
+            summary,
+            timestamp_epoch_ms,
+            attributions,
+        )
     }
 
     /// 处理尚未反思的失败轨迹并生成反思记忆.
@@ -389,6 +446,37 @@ impl ReflexionStore for InMemoryReflexionStore {
         let record = FailureRecord {
             attributions,
             session_key: None,
+            seq,
+            kind,
+            task_type: task_type.to_string(),
+            summary: summary.to_string(),
+            timestamp_epoch_ms,
+        };
+        failures.push(record.clone());
+        Ok(record)
+    }
+
+    /// ⭐ **带归因 + 会话键**（2026-11-06 覆写）：归因**和会话键**都**真的落进内存**。
+    fn record_failure_with_attribution_and_session(
+        &self,
+        kind: FailureKind,
+        task_type: &str,
+        summary: &str,
+        timestamp_epoch_ms: i64,
+        attributions: Vec<FailureAttribution>,
+        session_key: Option<&str>,
+    ) -> Result<FailureRecord, ReflexionError> {
+        if task_type.trim().is_empty() || summary.trim().is_empty() {
+            return Err(ReflexionError::EmptyContent);
+        }
+        let mut failures = self
+            .failures
+            .lock()
+            .map_err(|_| ReflexionError::LockPoisoned)?;
+        let seq = failures.len() + 1;
+        let record = FailureRecord {
+            attributions,
+            session_key: normalize_session_key(session_key),
             seq,
             kind,
             task_type: task_type.to_string(),
@@ -695,6 +783,37 @@ impl ReflexionStore for FileReflexionStore {
             let record = FailureRecord {
                 attributions,
                 session_key: None,
+                seq: data.reserve_next_seq()?,
+                kind,
+                task_type: task_type.to_string(),
+                summary: summary.to_string(),
+                timestamp_epoch_ms,
+            };
+            data.failures.push(record.clone());
+            Ok(record)
+        })
+    }
+
+    /// ⭐ **带归因 + 会话键**（2026-11-06 覆写）：归因**和会话键**都**真的落盘**。
+    ///
+    /// ⚠️ **向后兼容**：`FailureRecord.session_key` 带 `#[serde(default)]`
+    /// ⇒ ⇒ **老 JSON 文件（没有这个字段）读得开**，`session_key` = `None`（**不报错**）。
+    fn record_failure_with_attribution_and_session(
+        &self,
+        kind: FailureKind,
+        task_type: &str,
+        summary: &str,
+        timestamp_epoch_ms: i64,
+        attributions: Vec<FailureAttribution>,
+        session_key: Option<&str>,
+    ) -> Result<FailureRecord, ReflexionError> {
+        if task_type.trim().is_empty() || summary.trim().is_empty() {
+            return Err(ReflexionError::EmptyContent);
+        }
+        self.mutate(|data| {
+            let record = FailureRecord {
+                attributions,
+                session_key: normalize_session_key(session_key),
                 seq: data.reserve_next_seq()?,
                 kind,
                 task_type: task_type.to_string(),

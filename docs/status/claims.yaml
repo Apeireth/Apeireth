@@ -1053,6 +1053,24 @@ claims:
     owner: memory
     next_review: "2026-12-04"
     notes: "总指挥 2026-11-04 登记（记忆线收口清单 §6 报备的口径缺位）。生产路径：tool.memory.retrieve → MemoryCoordinator::recall（coordinator.rs:685）→ HybridRetrievalPipeline；coverage 以固定权重 0.5 参与打分（retrieval_pipeline.rs:137，COVERAGE_WEIGHT 常量在 :469），与 BM25 词面分、向量源共同构成混合排序。⚠️ 此前该契约在真源里无记录 ⇒ 「coverage 接进生产排序」这条成果查不到。"
+  - id: mem.failure_learning_bridge
+    title: "失败 → 学习桥（失败带归因 ⇒ 负证据 ⇒ 检索权重退；会话键真落盘）"
+    level: PRODUCTION WIRED
+    default: "OFF"
+    switch_env: APEIRETH_ENABLE_RETRIEVAL_TUNING
+    sources:
+      - crates/engine/memory/src/reflexion.rs
+      - crates/engine/memory/src/reflexion_tuning.rs
+      - crates/engine/runtime-assembly/src/canonical/retrieval_tuning_wire.rs
+      - crates/engine/runtime-assembly/src/canonical/cognitive.rs
+    tests:
+      - crates/engine/runtime-assembly/tests/failure_learning_bridge.rs
+      - crates/engine/memory/tests/reflexion_session_persistence.rs
+    verified_at: PENDING_MERGE_COMMIT
+    verify_cmd: "cargo nextest run -p apeireth-runtime-assembly --test failure_learning_bridge --offline && cargo nextest run -p apeireth-memory --test reflexion_session_persistence --offline"
+    owner: memory
+    next_review: "2026-12-04"
+    notes: "失败登记（带归因 + 会话键）⇒ 结算（按会话分桶）⇒ 负证据 ⇒ 检索层权重/条目显著性真的退 ⇒ 下一轮检索吃到退过的权重。生产接线点 = retrieval_tuning_wire.rs:544（会话键取法照现有桶键口径，与 settle_failures 同一把键，不另算一套）。⚠️ default=OFF（接线层 from_env 才建 ⇒ 不建则桥不生效）。⚠️ 老数据靠进程内兜底、新数据真落盘（两者互补，不是重复：视图只补「没有会话键」的，真落盘优先）。⚠️ 诚实边界：trait 默认实现不落 session_key（不许撒谎 ⇒ 返回值与 store 一致）；想要真落盘必须覆写（内存版/文件版已覆写）。⚠️ 向后兼容：老 JSON（无 session_key 字段）读得开、不报错、session_key == None（不编造归属）。⚠️ 未声明 HARDWARE VALIDATED / 无 live 模型证据。"
   - id: mem.injection_contract
     title: "注入契约（召回片段按预算硬上限截断，预算不可超）"
     level: PRODUCTION WIRED

@@ -31,6 +31,8 @@ const SESSION_UNATTRIBUTED: &str = "session-unattributed";
 const SESSION_ISO_A: &str = "session-iso-a";
 const SESSION_ISO_B: &str = "session-iso-b";
 const SESSION_IDEMPOTENT: &str = "session-idempotent";
+const SESSION_PERSISTED: &str = "session-persisted";
+const SESSION_RESTARTED: &str = "session-restarted";
 
 /// 生产同款: 真 store (文件版) + 真接线层 (账落在同一目录)。
 struct Fixture {
@@ -38,13 +40,16 @@ struct Fixture {
     store: FileReflexionStore,
     wire: RetrievalTuningWire,
     log: PathBuf,
+    /// 真 store 的落盘目录（用来断言**原始 JSON** 里真的有字段）。
+    reflexion_root: PathBuf,
 }
 
 fn fixture(label: &str) -> Fixture {
     let dir = tempfile::tempdir().expect("临时目录");
     let root = dir.path().join(label);
     std::fs::create_dir_all(&root).expect("建目录");
-    let store = FileReflexionStore::new(root.join("reflexion"));
+    let reflexion_root = root.join("reflexion");
+    let store = FileReflexionStore::new(reflexion_root.clone());
     let log = root.join("retrieval_tuning.jsonl");
     let wire = RetrievalTuningWire::new(log.clone());
     Fixture {
@@ -52,6 +57,7 @@ fn fixture(label: &str) -> Fixture {
         store,
         wire,
         log,
+        reflexion_root,
     }
 }
 
@@ -374,5 +380,129 @@ fn the_registered_bucket_mapping_resolves_the_session_bucket() {
         (after.semantic_weight - (baseline.semantic_weight - DIMENSION_STEP)).abs() < 1e-9,
         "分区桶的权重必须退（实得 {}）",
         after.semantic_weight
+    );
+}
+
+/// ⑥ ⭐ **会话键真落进真 store**（2026-11-06 根治）。
+///
+/// # 为什么钉这一条
+/// 生产接线点（`record_failure_with_injection_attribution`）现在走
+/// `record_failure_with_attribution_and_session` ⇒ ⇒ **会话键真的落进真 store**
+/// ⇒ ⇒ **重启后**这条失败**仍能**被本会话结算（不再只靠进程内记账）。
+///
+/// ⚠️ 断言的是**真 store 里读回来的**（不是返回值）⇒ 才抓得住「撒谎的返回值」。
+#[test]
+fn production_wiring_persists_the_session_key_into_the_real_store() {
+    let fixture = fixture("persisted-session");
+    fresh_bucket(SESSION_PERSISTED);
+
+    {
+        let _scope = enter_session_scope(SESSION_PERSISTED);
+        fixture.wire.record_injection_round(
+            &[receipt("mem-1", Some(RetrievalDimension::Semantic))],
+            1_000,
+        );
+    }
+    fixture
+        .wire
+        .record_failure_with_injection_attribution(
+            &fixture.store,
+            FailureKind::DecisionRejected,
+            "deploy",
+            "部署失败: 约束冲突",
+            2_000,
+            SESSION_PERSISTED,
+        )
+        .expect("失败登记");
+
+    // ⚠️ 断言**真 store 里读回来的**（不是返回值）。
+    let stored = fixture.store.list_failures().expect("读失败轨迹");
+    assert_eq!(stored.len(), 1, "失败必须**真的落进真 store**");
+    assert_eq!(
+        stored[0].session_key.as_deref(),
+        Some(SESSION_PERSISTED),
+        "⭐ **会话键必须真的落进真 store**（只落在返回值里 = 没根治）"
+    );
+    assert_eq!(stored[0].attributions.len(), 1, "归因也必须落");
+
+    // ⚠️ **落盘文件里真的有**（不是内存里有的）。
+    let raw = std::fs::read_to_string(fixture.reflexion_root.join("reflexions.json"))
+        .expect("读原始 JSON");
+    assert!(
+        raw.contains("session_key"),
+        "落盘 JSON 必须含 `session_key` 字段: {raw}"
+    );
+}
+
+/// ⑦ ⭐⭐ **「重启后仍能结算」**（**验收核心**，生产接线层端到端）。
+///
+/// # 「重启」怎么模拟
+/// **换一个全新的 `RetrievalTuningWire`**（进程内会话状态 / 游标 / 记账**全丢**）
+/// ⇒ ⇒ 结算时能拿到证据 ⇒ ⇒ 证据**只能**来自**真 store 里落盘的 `session_key`**
+/// ⇒ ⇒ 这就是「根治」的端到端证明（不是「接线层进程内记账」蒙对的）。
+///
+/// ⚠️ 若实现退回到「只在返回值里带会话键」或「只靠进程内记账」
+/// ⇒ ⇒ 重启后这条失败**拿不到**证据 ⇒ ⇒ 本用例**必红**。
+#[test]
+fn failures_still_settle_after_a_restart() {
+    let fixture = fixture("restart");
+    let baseline = MemoryRankingConfig::default();
+    fresh_bucket(SESSION_RESTARTED);
+
+    // ── 进程 1: 注入 + 失败登记（会话键真落盘）─────────────────
+    {
+        let _scope = enter_session_scope(SESSION_RESTARTED);
+        fixture.wire.record_injection_round(
+            &[receipt("mem-1", Some(RetrievalDimension::Semantic))],
+            1_000,
+        );
+    }
+    fixture
+        .wire
+        .record_failure_with_injection_attribution(
+            &fixture.store,
+            FailureKind::DecisionRejected,
+            "deploy",
+            "部署失败: 约束冲突",
+            2_000,
+            SESSION_RESTARTED,
+        )
+        .expect("失败登记");
+
+    // ── 「重启」: 全新接线层（进程内状态全丢）; store 是**同一个文件**──
+    let restarted_wire = RetrievalTuningWire::new(fixture.log.clone());
+    fresh_bucket(SESSION_RESTARTED);
+
+    // ── 结算: 拿得到证据 ⇒ ⇒ 权重真的退 ───────────────────────
+    let settled = restarted_wire
+        .settle_failures(&fixture.store, SESSION_RESTARTED)
+        .expect("重启后结算");
+    assert_eq!(
+        settled, 1,
+        "⭐ **重启后仍能结算**（会话键真落盘 ⇒ 会话过滤不再把这条跳过）"
+    );
+
+    let after = effective_ranking_or_for_session(SESSION_RESTARTED, baseline);
+    assert!(
+        (after.semantic_weight - (baseline.semantic_weight - DIMENSION_STEP)).abs() < 1e-9,
+        "⭐ **重启后权重仍然真的退**（基线 {} ⇒ 实得 {}）",
+        baseline.semantic_weight,
+        after.semantic_weight
+    );
+    assert!(
+        (entry_salience_for_session(SESSION_RESTARTED, "mem-1") + ENTRY_STEP).abs() < 1e-12,
+        "重启后条目显著性也必须退一步（实得 {}）",
+        entry_salience_for_session(SESSION_RESTARTED, "mem-1")
+    );
+
+    // ⚠️ **别的会话不许捡走**（重启后隔离仍在）。
+    let other = "session-restarted-other";
+    fresh_bucket(other);
+    let settled_other = restarted_wire
+        .settle_failures(&fixture.store, other)
+        .expect("别的会话结算");
+    assert_eq!(
+        settled_other, 0,
+        "⭐ **别的会话不许结算这条失败**（跨会话串扰）"
     );
 }

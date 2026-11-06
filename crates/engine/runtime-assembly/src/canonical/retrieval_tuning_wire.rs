@@ -119,13 +119,13 @@ struct SessionTuningState {
     last_round_receipts: Vec<SelectedAttribution>,
     /// ⭐ 失败结算游标 (会话内增量 ⇒ **幂等**: 同一批失败只结算一次)。
     failure_cursor: ReflexionTuningCursor,
-    /// ⭐ 本会话**拥有**的失败 seq (真 store **不记会话标签** ⇒ 接线层记账)。
+    /// ⭐ 本会话**拥有**的失败 seq (**老数据兜底**: 接线层记账)。
     ///
-    /// ⚠️ **为什么需要它**: 生产 store (`FileReflexionStore`) 落盘时
-    /// `FailureRecord.session_key` 恒为 `None` ⇒ ⇒ 会话隔离的判据
-    /// (`observe_failures_since_in_session`) 会把**所有**失败都跳过
-    /// ⇒ ⇒ 桥静默失效 (接了线但学不到)。⇒ ⇒ 归谁所有由**接线层**记账,
-    /// 结算时通过会话作用域视图补上标签。
+    /// ⚠️ **为什么还需要它** (2026-11-06 根治后仍保留):
+    /// 新失败**真的落了** `session_key` (登记侧走
+    /// `record_failure_with_attribution_and_session`) ⇒ ⇒ **重启后仍能结算**;
+    /// 但**老数据** (会话键字段引入前写的失败) 落盘里**没有**会话键
+    /// ⇒ ⇒ 归谁所有只能由**接线层记账**, 结算时通过会话作用域视图补上标签。
     owned_failures: BTreeSet<usize>,
     /// 最近更新序号 (诊断面: 谁的待决集是最近的)。
     updated: u64,
@@ -519,7 +519,10 @@ impl RetrievalTuningWire {
     /// * ⚠️ **没有回执 ⇒ 零归因** ⇒ ⇒ 这条失败**学不到**（**不许瞎归因**）;
     /// * 归因**真的落进真 store**（生产 store 覆写了
     ///   `record_failure_with_attribution` ⇒ 归因**落盘**，不是只改返回值）;
-    /// * 本会话**拥有**这条失败（记账 ⇒ 结算时按会话隔离）。
+    /// * ⭐ **会话键也真的落进真 store**（2026-11-06 根治）：
+    ///   走 `record_failure_with_attribution_and_session` ⇒ ⇒ **会话键落盘**
+    ///   ⇒ ⇒ **重启后**这条失败**仍能**被本会话结算（不再只靠进程内记账）;
+    /// * 本会话**拥有**这条失败（记账 ⇒ 结算时按会话隔离）⇒ ⇒ **老数据兜底**。
     pub fn record_failure_with_injection_attribution(
         &self,
         store: &dyn ReflexionStore,
@@ -536,13 +539,17 @@ impl RetrievalTuningWire {
             // ⭐ **复用已有转换**（`reflexion.rs` 的 `From<SelectedAttribution>`）。
             .map(FailureAttribution::from)
             .collect();
-        let record = store.record_failure_with_attribution(
+        // ⭐ **会话键口径 = 传进来的这个桶键**（不另算一套）⇒ ⇒ 与
+        // [`Self::settle_failures`] 用的是**同一个键** ⇒ ⇒ 结算匹配得上。
+        let record = store.record_failure_with_attribution_and_session(
             kind,
             task_type,
             summary,
             at_epoch_ms,
             attributions,
+            Some(session_key),
         )?;
+        // ⚠️ **进程内记账保留**（兜底**老数据**: 老记录没有会话键 ⇒ ⇒ 靠它补标签）。
         self.claim_failure(session_key, record.seq);
         Ok(record)
     }
@@ -554,11 +561,13 @@ impl RetrievalTuningWire {
     /// **A 会话的失败去调 B 会话的权重**（跨会话串扰）
     /// ⇒ ⇒ 这里显式指定会话（[`observe_failures_since_in_session`]）。
     ///
-    /// # 会话隔离怎么落地（真 store **不记会话标签**）
-    /// 生产 store 落盘时 `FailureRecord.session_key` 恒为 `None`
-    /// ⇒ ⇒ 直接结算会把**所有**失败都跳过（桥静默失效）
-    /// ⇒ ⇒ 结算时用**会话作用域视图**（[`SessionScopedReflexionView`]）
-    /// 给**本会话拥有**的失败补上会话标签 ⇒ ⇒ 只结算**本会话**的失败。
+    /// # 会话隔离怎么落地（**真落盘 + 进程内兜底**，2026-11-06 根治）
+    /// * **新数据**：登记侧走 `record_failure_with_attribution_and_session`
+    ///   ⇒ ⇒ **会话键真的落进真 store** ⇒ ⇒ 结算时**直接按落盘的会话键**过滤
+    ///   ⇒ ⇒ **重启后仍能结算**（不再只靠进程内状态）;
+    /// * **老数据**（会话键字段引入前写的）：落盘里**没有**会话键
+    ///   ⇒ ⇒ 靠**会话作用域视图**（[`SessionScopedReflexionView`]）+ **进程内记账**
+    ///   给**本会话拥有**的失败补上会话标签 ⇒ ⇒ **老数据仍能结算**（兜底）。
     ///
     /// # 口径
     /// * **幂等**：游标只增 ⇒ ⇒ 同一批失败**只结算一次**（不重复喂 ⇒ 不抖）;
@@ -695,12 +704,14 @@ impl RetrievalTuningWire {
 
 /// ⭐ **会话作用域的 store 视图**：真 store 的**读穿包装**（不新建 store, 不造数据）。
 ///
-/// # 为什么需要它
-/// 生产 store（`FileReflexionStore`）落盘时 `FailureRecord.session_key` **恒为
-/// `None`** ⇒ ⇒ 会话隔离的判据（`observe_failures_since_in_session`）会把
-/// **所有**失败都跳过 ⇒ ⇒ 桥**接了线但学不到**。
+/// # 为什么需要它（**兜底**，不是唯一手段）
+/// **老数据**（会话键字段引入前写的失败）落盘里**没有** `session_key`
+/// ⇒ ⇒ 会话隔离的判据（`observe_failures_since_in_session`）会把它们**跳过**
 /// ⇒ ⇒ 这里在**读**的时候给**本会话拥有**的失败补上会话标签
-/// ⇒ ⇒ 结算只吃**本会话**的失败 ⇒ ⇒ A 会话的失败不会去调 B 会话的权重。
+/// ⇒ ⇒ **老数据仍能结算**（进程内记账兜底）。
+///
+/// ⚠️ **新数据走真落盘**（2026-11-06 根治）：登记侧写 `session_key`
+/// ⇒ ⇒ 视图**原样读回**（真值为准）⇒ ⇒ **重启后仍能结算**。
 ///
 /// # 口径
 /// * **读穿**：所有数据来自**真 store**（生产同款文件版），**不造数据**;
@@ -745,6 +756,26 @@ impl ReflexionStore for SessionScopedReflexionView<'_> {
         )
     }
 
+    /// ⚠️ **写操作照旧透传**给真 store（视图**不缓存**任何状态 ⇒ 不造数据）。
+    fn record_failure_with_attribution_and_session(
+        &self,
+        kind: FailureKind,
+        task_type: &str,
+        summary: &str,
+        timestamp_epoch_ms: i64,
+        attributions: Vec<FailureAttribution>,
+        session_key: Option<&str>,
+    ) -> Result<FailureRecord, ReflexionError> {
+        self.inner.record_failure_with_attribution_and_session(
+            kind,
+            task_type,
+            summary,
+            timestamp_epoch_ms,
+            attributions,
+            session_key,
+        )
+    }
+
     fn process_unreflected(
         &self,
         critic: &dyn apeireth_memory::reflexion::Critic,
@@ -754,10 +785,15 @@ impl ReflexionStore for SessionScopedReflexionView<'_> {
     }
 
     /// ⭐ **读穿 + 补会话标签**（本会话拥有的失败 ⇒ 标上会话键）。
+    ///
+    /// ⚠️ **只补「没有会话键」的**（2026-11-06 根治）：
+    /// * **新数据**：真 store **已经落了** `session_key` ⇒ ⇒ **原样读回**（真值为准）;
+    /// * **老数据**：本字段引入前写的失败**没有**会话键 ⇒ ⇒ 靠**进程内记账**补
+    ///   ⇒ ⇒ **老数据仍能结算**（兜底，不是重复）。
     fn list_failures(&self) -> Result<Vec<FailureRecord>, ReflexionError> {
         let mut records = self.inner.list_failures()?;
         for record in &mut records {
-            if self.owned.contains(&record.seq) {
+            if record.session_key.is_none() && self.owned.contains(&record.seq) {
                 record.session_key = Some(self.session_key.to_string());
             }
         }
