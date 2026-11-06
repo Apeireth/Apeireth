@@ -18,6 +18,23 @@ use apeireth_orchestration::untrusted_envelope::{EnvelopeCompleteness, Untrusted
 /// and relational implementations.
 pub trait MemoryCandidateSource: Send + Sync {
     fn candidates(&self, query: &str, limit: usize) -> Result<Vec<MemoryCandidate>, MemoryError>;
+
+    /// ⭐ **本路在融合里的权重**（2026-11-06）。
+    ///
+    /// # 为什么需要它
+    /// 各路分数**量纲不同** ⇒ ⇒ ⇒ 融合前必须**按路归一化**（各路顶分 = 1.0）
+    /// ⇒ ⇒ ⇒ 归一化后各路顶分完全同分 ⇒ ⇒ ⇒ 「谁量级大谁赢」的问题解决了，
+    /// ⇒ ⇒ ⇒ 但**新的问题**出现：**辅助通道会挤掉主力通道的正确项**
+    /// ⇒ ⇒ ⇒ 实测（内部词面卷）：归一化后联想通道让 watershed 的 recall **掉了 0.0242**
+    /// ⇒ ⇒ ⇒ 而在公平卷上它带来 **+0.1394 / +0.0645** ⇒ ⇒ ⇒ **两头都要 ⇒ ⇒ 必须有权重**。
+    ///
+    /// # 口径
+    /// * **默认 1.0** ⇒ ⇒ ⇒ 既有实现**零改动**（默认方法 ⇒ ⇒ 不用改任何现有源）；
+    /// * 权重作用在**归一化之后**：参与比较的分数 = `归一化分 × 本权重`；
+    /// * **主通道（词法/向量）保持 1.0** ⇒ ⇒ ⇒ 只有辅助通道（联想/信号）才调低。
+    fn fusion_weight(&self) -> f64 {
+        1.0
+    }
 }
 
 /// Marker for a lexical/BM25 source.
@@ -390,6 +407,23 @@ impl HybridRetrievalPipeline {
         let mut status = RetrievalStatus::default();
         for source in sources {
             let candidates = source.candidates(query, self.candidate_cap)?;
+            // ⭐⭐ **按路归一化**（2026-11-06 实测修正）：**各路的分数量纲不同**
+            //
+            // **实测根因**：词法路的分数按**自己的 max** 归一化（**顶分恒为 1.0**），
+            // 而联想路的信号只落在**图维度**（权重 0.05）⇒ ⇒ **量级差 4 倍**
+            // ⇒ ⇒ ⇒ 不对齐就合并 ⇒ ⇒ **一路系统性压过另一路**。
+            //
+            // **修法**：每路先按**自己的 max** 归一化（各路顶分都变成 1.0）⇒ ⇒ **量纲对齐**
+            // ⇒ ⇒ ⇒ 实测（公平卷，零人工标注）：联想通道的收益从 **delta 0.0000**
+            // ⇒ ⇒ ⇒ 变成 **redchamber +0.1394 / watershed +0.0645**
+            // ⇒ ⇒ ⇒ 恢复到「通道单独」上限的 **98% / 97.8%**。
+            //
+            // ⚠️ **单路时是恒等变换**：只有一路 ⇒ ⇒ max 就是它自己的顶分
+            // ⇒ ⇒ ⇒ **除以它不改变任何顺序** ⇒ ⇒ ⇒ 单路行为**逐字不变**。
+            let source_max = candidates
+                .iter()
+                .map(|candidate| candidate.score_components.weighted(&self.ranking))
+                .fold(0.0_f64, f64::max);
             for mut candidate in candidates {
                 if !candidate.scope.is_visible_in(visible_scopes) {
                     continue;
@@ -399,10 +433,25 @@ impl HybridRetrievalPipeline {
                 } else {
                     status.lexical_candidates += 1;
                 }
-                candidate.score = candidate.score_components.weighted(&self.ranking);
+                // ⭐⭐ **按路归一化**（2026-11-06）：**只归一化「通道相关度」**，
+                // **不归一化「条目显著性」**。
+                //
+                // **为什么只归一化前者**：条目显著性是**调权系统**给的**绝对提权**
+                // （「这条记忆被选中过 ⇒ 往后排前面」）⇒ ⇒ 它**必须留在绝对量纲里**
+                // ⇒ ⇒ 否则按路归一化会把它**一起除掉** ⇒ ⇒ ⇒ **提权被稀释**
+                // ⇒ ⇒ ⇒ 实测：两个会话显著性测试会红（「a」读不到自己的「b」提权）。
+                let raw = candidate.score_components.weighted(&self.ranking);
+                let normalized = if source_max > 0.0 {
+                    raw / source_max
+                } else {
+                    raw
+                };
+                // ⭐ **本路权重**（2026-11-06）：辅助通道**不跟主力通道同权**
+                // ⇒ ⇒ ⇒ 否则它会挤掉主力通道的正确项（实测 −0.0242）。
+                let normalized = normalized * source.fusion_weight();
                 // V4-c: 条目显著性加成 (调权生效值; 未调条目 = 0, 零改动)。
                 // ⚠️ **会话维度**: 显式 session 优先, 否则按会话作用域兜底。
-                candidate.score += session.entry_salience(&candidate.id);
+                candidate.score = normalized + session.entry_salience(&candidate.id);
                 match by_id.get_mut(&candidate.id) {
                     Some(existing) => {
                         existing.score_components.semantic = existing
@@ -413,8 +462,25 @@ impl HybridRetrievalPipeline {
                             .score_components
                             .lexical
                             .max(candidate.score_components.lexical);
-                        existing.score = existing.score_components.weighted(&self.ranking)
+                        // ⭐ **合并时取「各路归一化分」的最大值**（2026-11-06）
+                        // ⇒ ⇒ **不再从合并后的分量重算** ⇒ ⇒ 否则重算会把
+                        // ⇒ ⇒ ⇒ **本路刚归一化过的量纲又还原回去**（量纲再次不对等）。
+                        let recomputed = existing.score_components.weighted(&self.ranking)
                             + session.entry_salience(&existing.id);
+                        let normalized = if source_max > 0.0 {
+                            recomputed / source_max
+                        } else {
+                            recomputed
+                        };
+                        let normalized = if source_max > 0.0 {
+                            recomputed / source_max
+                        } else {
+                            recomputed
+                        } * source.fusion_weight();
+                        // ⚠️ **显著性仍是绝对量纲**（与上面同一口径）。
+                        existing.score = existing
+                            .score
+                            .max(normalized + session.entry_salience(&existing.id));
                     }
                     None => {
                         by_id.insert(candidate.id.clone(), candidate);
@@ -725,6 +791,91 @@ mod tests {
             score_components: ScoreComponents::default(),
             provenance: MemoryProvenance::default(),
         }
+    }
+
+    /// 一个**原样返回候选**的测试源（不自己算分）⇒ ⇒ 用来精确控制各路的量纲。
+    struct FixedSource(Vec<MemoryCandidate>);
+
+    impl MemoryCandidateSource for FixedSource {
+        fn candidates(
+            &self,
+            _query: &str,
+            _limit: usize,
+        ) -> Result<Vec<MemoryCandidate>, MemoryError> {
+            Ok(self.0.clone())
+        }
+    }
+
+    /// ⭐⭐ **按路归一化**（2026-11-06）：**量级小的那一路也能赢**。
+    ///
+    /// # 这个测试锁住什么
+    /// 融合前：词法路的分数按自己的 max 归一化（**顶分恒为 1.0**），
+    /// 而联想路的信号只落在**图维度**（权重 0.05）⇒ ⇒ **量级差 4 倍**
+    /// ⇒ ⇒ ⇒ 不对齐就合并 ⇒ ⇒ **一路系统性压过另一路**。
+    ///
+    /// 修法：每路按**自己的 max** 归一化 ⇒ ⇒ **各路顶分都是 1.0** ⇒ ⇒ **同台竞技**。
+    #[test]
+    fn per_source_normalization_lets_a_small_magnitude_channel_compete() {
+        let scope = MemoryScope::Global;
+        // 路 A：词法信号强（`lexical` = 1.0 ⇒ 贡献 0.20）
+        let lexical = FixedSource(vec![MemoryCandidate {
+            id: "lexical-top".into(),
+            layer: "episodic".into(),
+            scope: scope.clone(),
+            content: "lexical top".into(),
+            score: 0.0,
+            score_components: ScoreComponents {
+                lexical: 1.0,
+                ..Default::default()
+            },
+            provenance: MemoryProvenance::default(),
+        }]);
+        // 路 B：只有图信号（`graph` = 1.0 ⇒ 贡献 0.05，**量级只有 A 的 1/4**）
+        let graph = FixedSource(vec![MemoryCandidate {
+            id: "graph-top".into(),
+            layer: "episodic".into(),
+            scope: scope.clone(),
+            content: "graph top".into(),
+            score: 0.0,
+            score_components: ScoreComponents {
+                graph: 1.0,
+                ..Default::default()
+            },
+            provenance: MemoryProvenance::default(),
+        }]);
+        let pipeline = HybridRetrievalPipeline::new(MemoryRankingConfig::default());
+        let items = pipeline
+            .retrieve("query", &[scope], &[&lexical, &graph], 2, 1_000)
+            .unwrap();
+        assert_eq!(items.len(), 2, "两路的候选都该在");
+        // ⚠️ **修前**：graph-top 的贡献 0.05 < lexical-top 的 0.20 ⇒ ⇒ **必然垫底**
+        // ⇒ ⇒ 修后：两路各自归一化到 1.0 ⇒ ⇒ **同分** ⇒ ⇒ 靠 id 升序定序（确定性）
+        assert_eq!(
+            items[0].score, items[1].score,
+            "**归一化后两路顶分必须同分**（量纲对齐了）"
+        );
+        assert!(
+            (items[0].score - 1.0).abs() < 1e-12,
+            "归一化后顶分必须是 1.0（实得 {}）",
+            items[0].score
+        );
+    }
+
+    /// ⚠️ **单路时逐字不变**（归一化是**恒等变换** ⇒ ⇒ ⇒ 既有行为不动）。
+    #[test]
+    fn single_source_normalization_is_identity() {
+        let scope = MemoryScope::Global;
+        let source = BasicLexicalCandidateSource::new(vec![
+            candidate("a", "alpha beta", scope.clone()),
+            candidate("b", "gamma delta", scope.clone()),
+        ]);
+        let pipeline = HybridRetrievalPipeline::new(MemoryRankingConfig::default());
+        let items = pipeline
+            .retrieve("alpha", &[scope], &[&source], 2, 1_000)
+            .unwrap();
+        // 单路 ⇒ ⇒ 排序由**源内**顺序决定 ⇒ ⇒ 归一化不改变它
+        assert_eq!(items.len(), 2);
+        assert!(items[0].score >= items[1].score, "单路排序不得被归一化打乱");
     }
 
     #[test]

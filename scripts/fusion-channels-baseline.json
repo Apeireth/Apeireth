@@ -6,12 +6,14 @@
         "ndcg_at_k": 0.16146706276775386,
         "recall_at_k": 0.29831932773109243
       },
-      "delta": 0.0,
+      "channel_only_recall_at_k": 0.10189075630252101,
+      "delta": 0.00840336134453784,
+      "exam": "lexical",
       "name": "redchamber",
       "with_channel": {
         "cases": 476,
-        "ndcg_at_k": 0.16146706276775386,
-        "recall_at_k": 0.29831932773109243
+        "ndcg_at_k": 0.16477207699032598,
+        "recall_at_k": 0.3067226890756303
       }
     },
     {
@@ -20,12 +22,48 @@
         "ndcg_at_k": 0.4817377629786214,
         "recall_at_k": 0.6875
       },
+      "channel_only_recall_at_k": 0.0967741935483871,
       "delta": 0.0,
+      "exam": "lexical",
       "name": "watershed",
       "with_channel": {
         "cases": 248,
         "ndcg_at_k": 0.4817377629786214,
         "recall_at_k": 0.6875
+      }
+    }
+  ],
+  "fair_corpora": [
+    {
+      "baseline": {
+        "cases": 208,
+        "ndcg_at_k": 0.16120305292943596,
+        "recall_at_k": 0.3269230769230769
+      },
+      "channel_only_recall_at_k": 0.47596153846153844,
+      "delta": 0.009615384615384637,
+      "exam": "fair",
+      "name": "redchamber",
+      "with_channel": {
+        "cases": 208,
+        "ndcg_at_k": 0.16505415867782053,
+        "recall_at_k": 0.33653846153846156
+      }
+    },
+    {
+      "baseline": {
+        "cases": 124,
+        "ndcg_at_k": 0.1320237649902848,
+        "recall_at_k": 0.2903225806451613
+      },
+      "channel_only_recall_at_k": 0.3629032258064516,
+      "delta": 0.0,
+      "exam": "fair",
+      "name": "watershed",
+      "with_channel": {
+        "cases": 124,
+        "ndcg_at_k": 0.1320237649902848,
+        "recall_at_k": 0.2903225806451613
       }
     }
   ],

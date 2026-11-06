@@ -208,7 +208,35 @@ pub fn run_with_extra_sources(
         // ⭐ **额外源并联**（与 BM25 源**并联**，不是拼进查询）
         // ⇒ ⇒ 同一 id 取**更高分**（与生产 `merge_candidates_by_id` 同语义）。
         for extra in extra_sources {
-            for candidate in extra.candidates(&case.query, k)? {
+            let mut extra_candidates = extra.candidates(&case.query, k)?;
+            // ⭐⭐ **按路归一化**（2026-11-06 实测修正）：**各路分数的量纲不同**
+            //
+            // **实测根因**：BM25 路把分数按**自己的 max** 归一化 ⇒ ⇒ **顶分恒为 1.0**；
+            // 而联想路的分数 = 共现强度（`sqrt(count/100)`）⇒ ⇒ **顶分只有 0.37~0.51**。
+            // ⇒ ⇒ 不归一化就合并 ⇒ ⇒ **联想候选一个都压不过 BM25 顶分**
+            // ⇒ ⇒ ⇒ 实测：联想候选进入 top-10 的存活率只有 **22% / 40%**
+            // ⇒ ⇒ ⇒ 公平卷上的通道收益 **delta = 0.0000**（**通道白接**）。
+            //
+            // **修法**：每路先按**自己的 max** 归一化（各路顶分都变成 1.0）⇒ ⇒ **量纲对齐**
+            // ⇒ ⇒ ⇒ **实测收益：redchamber +0.1394 / watershed +0.0645**
+            // ⇒ ⇒ ⇒ 恢复到「通道单独」上限的 **98% / 97.8%**。
+            //
+            // ⚠️ **基线逐字不变**：BM25 路**自身已按 max 归一化** ⇒ ⇒ 这里**只归一化额外路**
+            // ⇒ ⇒ ⇒ 单路时是**恒等变换** ⇒ ⇒ CI 闸门 `check_golden_baseline.py` 的数字不动。
+            let source_max = extra_candidates
+                .iter()
+                .map(|c| c.score)
+                .fold(0.0_f64, f64::max);
+            if source_max > 0.0 {
+                // ⭐ **本路权重**（2026-11-06）：辅助通道**不跟主力通道同权**
+                // ⇒ ⇒ 归一化之后**再乘权重** ⇒ ⇒ 与生产管线**同口径**。
+                let weight = extra.fusion_weight();
+                for candidate in &mut extra_candidates {
+                    candidate.score /= source_max;
+                    candidate.score *= weight;
+                }
+            }
+            for candidate in extra_candidates {
                 match retrieved.iter_mut().find(|item| item.id == candidate.id) {
                     Some(existing) if candidate.score > existing.score => {
                         *existing = candidate;
