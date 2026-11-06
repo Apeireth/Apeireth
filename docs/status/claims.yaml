@@ -897,7 +897,7 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/convergence_memory.rs
       - crates/engine/runtime-assembly/tests/profile_memory_authorization.rs
-    verified_at: 42d3addfa0b8ec1e3e4664c38d3f505ae79551da
+    verified_at: 1a233629ec7918337f6d3639b7de650d769b515e
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test profile_memory_authorization --locked -j 2 && cargo test -p apeireth-runtime-assembly --test convergence_memory --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
@@ -1031,7 +1031,7 @@ claims:
     tests:
       - crates/engine/memory/src/retrieval_pipeline.rs
       - crates/engine/memory/src/coordinator.rs
-    verified_at: 65fd1caedc4b79ad2e48dfbff0eb38ad2d525709
+    verified_at: 1a233629ec7918337f6d3639b7de650d769b515e
     verify_cmd: "cargo test -p apeireth-memory --lib"
     owner: memory
     next_review: "2026-12-04"
@@ -1046,7 +1046,7 @@ claims:
       - crates/engine/memory/tests/golden_injection2.rs
     tests:
       - crates/engine/memory/tests/golden_injection2.rs
-    verified_at: 65fd1caedc4b79ad2e48dfbff0eb38ad2d525709
+    verified_at: 1a233629ec7918337f6d3639b7de650d769b515e
     verify_cmd: "cargo test -p apeireth-memory --test golden_injection2"
     owner: memory
     next_review: "2026-12-04"

@@ -154,6 +154,80 @@ pub fn failures_to_calibration_observations(
 /// 权重自演化与「反思教训」是**两件不同的事**：反思是给**人/模型**看的教训，
 /// 权重自演化是给**检索器**看的信号 ⇒ ⇒ ⇒ **反思过了的失败照样有教学价值**
 /// ⇒ ⇒ ⇒ 这里读**全部**（调用方可用 `list_failures` 自己过滤）。
+/// ⭐ **校准指标**（2026-11-06）：把校准观测**变成可监控的数字**。
+///
+/// # 为什么要有它（B11：「半座桥」的另一半）
+/// [`failures_to_calibration_observations`] 只产出观测 ⇒ ⇒ **没有消费端**
+/// ⇒ ⇒ ⇒ 那些观测是**死数据**（没人算、没人看、没人告警）。
+/// ⇒ ⇒ 这里把它们**算成三个指标** ⇒ ⇒ 再喂 [`crate::quality_drift::QualityDriftMonitor`]
+/// ⇒ ⇒ ⇒ 于是「**置信度不可信**」会变成一条**告警**，而不只是一个没人看的数。
+///
+/// # 三个指标（**都能被现有监控面消费**）
+/// | 指标 | 含义 | 越小越好？ |
+/// |---|---|---|
+/// | `brier` | 平均 Brier 平方误差（[`crate::calibration::mean_brier_score`]） | 越小越好 |
+/// | `ece` | 期望校准误差（[`crate::calibration::ece_default`]） | 越小越好 |
+/// | `reliability_gap` | 可靠性缺口（[`crate::calibration::decompose_default`]） | 越小越好 |
+///
+/// # ⚠️ **样本下限**
+/// **不足 [`MIN_QUALITY_SAMPLE_EVIDENCE`] 条观测 ⇒ ⇒ 返回 `None`**
+/// ⇒ ⇒ ⇒ 因为一条观测的命中率只能是 0 或 1 ⇒ ⇒ **噪声极大** ⇒ ⇒ **不许拿它判漂移**。
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CalibrationMetrics {
+    /// 平均 Brier 平方误差。
+    pub brier: f64,
+    /// 期望校准误差。
+    pub ece: f64,
+    /// 可靠性缺口。
+    pub reliability_gap: f64,
+    /// 参与计算的观测条数。
+    pub observations: usize,
+}
+
+/// ⭐ **算校准指标**（样本不足 ⇒ ⇒ `None` ⇒ ⇒ **不许拿噪声判漂移**）。
+pub fn calibration_metrics(observations: &[Observation]) -> Option<CalibrationMetrics> {
+    if observations.len() < crate::retrieval_tuning::MIN_QUALITY_SAMPLE_EVIDENCE {
+        return None;
+    }
+    let decomposition = crate::calibration::decompose_default(observations);
+    Some(CalibrationMetrics {
+        brier: crate::calibration::mean_brier_score(observations),
+        ece: crate::calibration::ece_default(observations),
+        reliability_gap: decomposition.reliability,
+        observations: observations.len(),
+    })
+}
+
+/// ⭐ **把校准指标喂给漂移监控**（2026-11-06）：**这是 A4 的消费端**。
+///
+/// # 为什么这样接
+/// 「置信度不可信」是**渐变**的（今天 0.62、明天 0.70）⇒ ⇒ **一次性数字没人看**
+/// ⇒ ⇒ ⇒ 必须进**漂移监控面** ⇒ ⇒ ⇒ 于是它会**在偏离基线时告警**
+/// ⇒ ⇒ ⇒ 监控面**已经存在**（`QualityDriftMonitor`）⇒ ⇒ ⇒ **不新建监控面**。
+///
+/// # 返回
+/// * `Ok(Some(metrics))` ⇒ ⇒ 算出了并**喂进监控**；
+/// * `Ok(None)` ⇒ ⇒ **样本不足** ⇒ ⇒ **没喂**（**不是错误**，但**也不许当成「没问题」**）。
+/// * `Err(alarms)` ⇒ ⇒ 喂进去了，**且监控面报了警**（**调用方要处理**）。
+pub fn record_calibration_metrics(
+    observations: &[Observation],
+    monitor: &mut crate::quality_drift::QualityDriftMonitor,
+    at_sec: i64,
+) -> Result<Option<CalibrationMetrics>, Vec<crate::online_calibration::DriftAlarm>> {
+    let Some(metrics) = calibration_metrics(observations) else {
+        return Ok(None);
+    };
+    let alarms = monitor.record(
+        at_sec,
+        &[metrics.brier, metrics.ece, metrics.reliability_gap],
+    );
+    if alarms.is_empty() {
+        Ok(Some(metrics))
+    } else {
+        Err(alarms.to_vec())
+    }
+}
+
 /// ⭐ **结算游标**（2026-11-06）：**已结算到哪一条失败**。
 ///
 /// # 为什么必须有它（**实测出来的严重缺陷**）
@@ -593,6 +667,45 @@ mod tests {
             observations.is_empty(),
             "**没有置信度 ⇒ ⇒ 不产生观测**（不许编造分数）"
         );
+    }
+
+    /// ⭐ **A4 消费端**：校准观测 ⇒ ⇒ **指标** ⇒ ⇒ **喂漂移监控**
+    ///
+    /// # 为什么要有这个测试
+    /// `failures_to_calibration_observations` 原先只产出观测 ⇒ ⇒ **没有消费端**
+    /// ⇒ ⇒ ⇒ **死数据**（B11）⇒ ⇒ 这里证明：**观测能变成可监控的数字**。
+    #[test]
+    fn calibration_observations_become_monitored_metrics() {
+        use crate::quality_drift::QualityDriftMonitor;
+
+        // ① **样本不足 ⇒ ⇒ 不许判漂移**（一条观测的命中率只能是 0 或 1 ⇒ ⇒ 噪声极大）
+        let few = vec![Observation::new(0.9, 0.0)];
+        assert!(
+            calibration_metrics(&few).is_none(),
+            "**样本不足 ⇒ ⇒ 不许出指标**（不许拿噪声判漂移）"
+        );
+
+        // ② **样本够了 ⇒ ⇒ 出三个指标**
+        let many: Vec<Observation> = (0..5).map(|_| Observation::new(0.9, 0.0)).collect();
+        let metrics = calibration_metrics(&many).expect("样本够了 ⇒ ⇒ 有指标");
+        assert_eq!(metrics.observations, 5);
+        assert!(
+            metrics.brier > 0.0,
+            "**自信 0.9 却全部落空** ⇒ ⇒ Brier 必须 > 0（实得 {}）",
+            metrics.brier
+        );
+        assert!(
+            metrics.ece > 0.0,
+            "**自信 0.9 却全部落空** ⇒ ⇒ ECE 必须 > 0（实得 {}）",
+            metrics.ece
+        );
+
+        // ③ **喂进漂移监控 ⇒ ⇒ 不报错**（消费端真的存在）
+        let mut monitor =
+            QualityDriftMonitor::new(&["brier", "ece", "reliability_gap"], 0.2, 2.0, 3);
+        let recorded = record_calibration_metrics(&many, &mut monitor, 1_700_000_000);
+        assert!(recorded.is_ok(), "喂进监控面必须成功（首条样本不该告警）");
+        assert!(recorded.unwrap().is_some(), "样本够 ⇒ ⇒ 有指标");
     }
 
     /// ⚠️ **会话隔离**：A 会话的失败不许进 B 会话（2026-11-06 实测修正 B7）
