@@ -96,6 +96,33 @@ jobs:
         working-directory: frontend/companion-desktop/src-tauri
         run: cargo build --workspace --tests --locked
 
+      # ── 前端侧声明的真跑环境（2026-11-06 补）────────────────────────────
+      # `sec.terminal_permission_surfaces` 的 verify_cmd 是
+      #   `cd frontend/companion-desktop && pnpm test`
+      # ⇒ ⇒ 本 job 原先**既没装 pnpm、也没装 Node、也没装前端依赖**
+      #    ⇒ ⇒ 该声明在 CI 上是**假红**（不是声明内容问题）：
+      #      ① runner 默认 Node < 22.6 ⇒ `--experimental-strip-types` 不可用
+      #         （runner 对 66/83 个套件用该 flag 直跑 .mjs 引 .ts）
+      #         ⇒ `ERR_NO_TYPESCRIPT` ⇒ 66 个套件灭 ⇒ pnpm `ELIFECYCLE` exit 1；
+      #      ② 没跑 `pnpm install` ⇒ 被测模块 import 的第三方包
+      #         （dompurify / highlight.js / katex / marked）不存在。
+      # 口径与 `companion-desktop-ci.yml` 的 svelte-ui job 同源（那边 node-version: 22）。
+      - name: 安装 pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 9
+
+      - name: Setup Node (22 —— 须 >= 22.6 才有 --experimental-strip-types)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+          cache-dependency-path: 'frontend/companion-desktop/pnpm-lock.yaml'
+
+      - name: pnpm install (前端工作区)
+        working-directory: frontend/companion-desktop
+        run: pnpm install --frozen-lockfile
+
       # **H5 真值闸**：口径为 PRODUCTION WIRED / DEFAULT ENABLED / HARDWARE VALIDATED
       # 的声明**不许**靠「豁免 / 延后」成立 ⇒ 否则「已接线」只是个词。
       - name: 高口径声明必须真验（H5）

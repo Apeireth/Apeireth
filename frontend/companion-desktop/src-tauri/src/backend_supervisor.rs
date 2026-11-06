@@ -2159,19 +2159,41 @@ impl BackendSupervisor {
         ))
     }
 
-    /// Select a free localhost port
+    /// Select a free localhost port.
+    ///
+    /// The OS only *reserves* an ephemeral port while the listener lives, and the
+    /// child process binds it later — so the reservation has to be released
+    /// before the port can be handed over. That release opens a window in which
+    /// another selection (a second sidecar, or a sibling test binding an
+    /// ephemeral port) can be handed the very same port: the loser then hands
+    /// the child a port that is already taken and the spawn dies with
+    /// `Address already in use`.
+    ///
+    /// The port is therefore re-bound before it is returned — a port a
+    /// concurrent selection already took is detected, and another one is picked.
     async fn select_free_port(&self) -> Result<u16, String> {
-        // Try to bind to port 0 to let OS assign a free port
-        let listener = std::net::TcpListener::bind("127.0.0.1:0")
-            .map_err(|e| format!("Failed to bind ephemeral port: {}", e))?;
+        const ATTEMPTS: usize = 8;
+        for _ in 0..ATTEMPTS {
+            // Try to bind to port 0 to let OS assign a free port
+            let listener = std::net::TcpListener::bind("127.0.0.1:0")
+                .map_err(|e| format!("Failed to bind ephemeral port: {}", e))?;
 
-        let port = listener
-            .local_addr()
-            .map_err(|e| format!("Failed to get local addr: {}", e))?
-            .port();
+            let port = listener
+                .local_addr()
+                .map_err(|e| format!("Failed to get local addr: {}", e))?
+                .port();
 
-        drop(listener); // Release the port
-        Ok(port)
+            drop(listener); // Release the port for the child that will bind it.
+
+            // Re-bind to confirm the port is still free; if a concurrent
+            // selection took it in the meantime, pick another one.
+            if std::net::TcpListener::bind(("127.0.0.1", port)).is_ok() {
+                return Ok(port);
+            }
+        }
+        Err(format!(
+            "Failed to find a free localhost port after {ATTEMPTS} attempts"
+        ))
     }
 
     /// Canonical spawn arguments, verified against the CLI's own help text:

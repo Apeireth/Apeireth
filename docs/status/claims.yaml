@@ -430,7 +430,15 @@ claims:
       - frontend/companion-desktop/src-tauri/src/pg_client.rs
       - frontend/companion-desktop/src-tauri/src/mysql_client.rs
     verified_at: c9251271
-    verify_cmd: "cd frontend/companion-desktop/src-tauri && cargo test --locked"
+    # ⚠️ **2026-11-06 收窄**（主指挥拍板 B1）：原命令跑的是**整个 src-tauri workspace**
+    # ⇒ ⇒ 含 `tests/supervisor_lifecycle.rs` ⇒ ⇒ 而那条断言的是 **2026-11-04 之前**的
+    # 「桌面自铸服务令牌可开管理面」契约 ⇒ ⇒ 已被 **P0-1「管理面 fail-closed」**
+    # （`da43dcf7`）作废 ⇒ ⇒ ⇒ **那条红不是本声明的内容问题**
+    # ⇒ ⇒ 收窄到**本声明 sources 的那三个文件**（16 条真断言 ⇒ ⇒ **不是空跑**）
+    # ⇒ ⇒ 与两个兄弟声明同形（`provider_proxy` / `workspace_list` 各只跑自己的测试）。
+    # ⚠️ 另立**跨线缺口**：桌面热应用需**带 user 绑定的令牌**（**不放宽 P0-1**）
+    # ⇒ ⇒ 属桌面线（`/home/bai/Projects/Apeireth-rust`）⇒ ⇒ 已在台账立项。
+    verify_cmd: "cd frontend/companion-desktop/src-tauri && cargo test --locked --lib sqlite_workbench && cargo test --locked --lib pg_client && cargo test --locked --lib mysql_client"
     owner: companion-desktop
     next_review: "2026-11-20"
     notes: "词法级写类拒绝（DML / CTE 内嵌 DML / EXPLAIN ANALYZE / SELECT INTO / FOR UPDATE 全拒，fail-closed）+ PG `BEGIN READ ONLY` / MySQL `START TRANSACTION READ ONLY` 纵深。桌面 CI 执行面（2026-10-22 复核）：companion-desktop-ci.yml 的 `cargo test --workspace --all-targets`（src-tauri 独立 workspace）执行本断言；PR #36 起该 gate 3/3 success。 残余：无跨平台 live E2E（如实）。"
