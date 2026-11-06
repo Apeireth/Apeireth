@@ -120,6 +120,24 @@ jobs:
           path: target/nextest/ci/junit.xml
           retention-days: 14
 
+      # ── ⭐ 回收测试二进制（治 runner 磁盘爆 / ENOSPC）────────────────
+      # 2026-11-05 实测过的失败形态：CI 报 **exit 101** + `failed to build archive`
+      # + `could not compile rustls` + `##[warning]You are running out of disk space.
+      # Free space left: 76 MB` ⇒ ⇒ **长得像编译错误，其实是 ENOSPC**
+      # ⇒ ⇒ 本地全绿、CI 却红 ⇒ ⇒ 极易误判成「代码问题」。
+      #
+      # ⇒ ⇒ 本仓 cargo 的磁盘占用 **90% 来自测试二进制**（每个测试 = 一个可执行文件）
+      # ⇒ ⇒ ⇒ 跑完整套 nextest 后不回收 ⇒ ⇒ runner 很快见底。
+      #
+      # ⚠️ 位置 = **所有 cargo 步骤之后**（JUnit 上传之后）：
+      #   · nextest 之后还有两个 `cargo test` ⇒ ⇒ 提前删 ⇒ ⇒ 它们要**重编**；
+      #   · JUnit 在 `target/nextest/` ⇒ ⇒ **不在** `debug/deps` ⇒ ⇒ 清理**不伤 artifact**。
+      # ⚠️ `if: always()` ⇒ ⇒ 否则**测试失败时不清理** ⇒ ⇒ 而失败时磁盘压力最大
+      # ⇒ ⇒ ⇒ （ENOSPC 恰好发生在「快跑完、还要写 artifact」的时候）。
+      - name: 回收测试二进制（腾磁盘）
+        if: always()
+        run: python3 scripts/clean_test_binaries.py --target target
+
   # === 硬墙守门 (per CONTRIBUTING.md §0 触碰实查) ===
   # ⚠️ job 名里的「8 硬墙」是**历史叫法**，实际跑 **6 条**守门（见下方各 step）。
   #    ⇒ **有意不改 job 名**：job 名 = GitHub check 名 ⇒ 改名会影响分支保护的

@@ -522,6 +522,7 @@
       "flags": [
         "--check",
         "--help",
+        "--self-test",
         "--update",
         "-h"
       ]
@@ -709,6 +710,28 @@
       ]
     },
     {
+      "id": "clean-test-binaries",
+      "path": "scripts/clean_test_binaries.py",
+      "kind": "generator",
+      "is_guard": false,
+      "blocking": true,
+      "invocation": [
+        "python3 scripts/clean_test_binaries.py --target target"
+      ],
+      "ci_workflows": [
+        ".github/workflows/rust.yml"
+      ],
+      "has_baseline": false,
+      "notes": "清 cargo 测试二进制（可再生产物）⇒ ⇒ 治「磁盘满 ⇒ 文件被静默截断」那个坑",
+      "flags": [
+        "--dry-run",
+        "--ensure-free",
+        "--help",
+        "--target",
+        "-h"
+      ]
+    },
+    {
       "id": "cosign-sign-all",
       "path": "scripts/release/cosign-sign-all.sh",
       "kind": "generator",
@@ -835,6 +858,7 @@
         "bash scripts/download_novels.sh"
       ],
       "ci_workflows": [
+        ".github/workflows/fusion-channel-ratchet.yml",
         ".github/workflows/golden-baseline.yml"
       ],
       "has_baseline": false,

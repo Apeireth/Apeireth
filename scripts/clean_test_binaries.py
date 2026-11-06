@@ -62,9 +62,25 @@ def running_executables() -> set[str]:
     return out
 
 
-def candidate_targets() -> list[pathlib.Path]:
-    """所有**存在的** `target` 目录（深度有限 ⇒ ⇒ 别扫穿整个盘）。"""
+def candidate_targets(extra: list[str] | None = None) -> list[pathlib.Path]:
+    """所有**存在的** `target` 目录（深度有限 ⇒ ⇒ 别扫穿整个盘）。
+
+    ⭐ `extra` = **显式指定**的路径（⭐ CI 上必需 ⇒ ⇒ CI runner 上
+    `/home/bai` / `/var/tmp` / `/tmp` 这些本机路径**不存在** ⇒ ⇒ 只扫它们等于什么都没做）。
+    """
     found: list[pathlib.Path] = []
+    for raw in extra or []:
+        p = pathlib.Path(raw).expanduser()
+        # 允许给 `target` 或它的**父目录** ⇒ ⇒ 两种写法都能work
+        for cand in (p, p / "target"):
+            if cand.is_dir() and (cand / "debug" / "deps").is_dir():
+                found.append(cand)
+                break
+        else:
+            # 路径存在但还没有 `debug/deps`（CI 上可能刚 checkout 完）⇒ ⇒ 记下来，
+            # 稍后 `deps` 出现也能扫到 ⇒ ⇒ **不静默丢弃**
+            if p.is_dir():
+                found.append(p)
     for root in CANDIDATE_ROOTS:
         if not root.is_dir():
             continue
@@ -83,8 +99,60 @@ def candidate_targets() -> list[pathlib.Path]:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true", help="只报告，不删")
+    ap.add_argument(
+        "--target",
+        action="append",
+        default=[],
+        metavar="PATH",
+        help="**显式**指定 target 目录（可重复）⇒ ⇒ CI 上必需"
+        "（CI runner 上没有本机的 /home/bai / /var/tmp ⇒ ⇒ 只扫它们等于什么都没清）",
+    )
+    ap.add_argument(
+        "--ensure-free",
+        type=int,
+        default=0,
+        metavar="MB",
+        help="确保可用空间 ≥ MB ⇒ ⇒ 不足则先清理 ⇒ ⇒ 仍不足则**退出码 1**"
+        "（给「写文件前自检」用 ⇒ ⇒ 治「磁盘满 ⇒ 文件被静默截断」）",
+    )
     args = ap.parse_args()
 
+    if args.ensure_free:
+        return ensure_free(args.ensure_free, extra=args.target)
+
+    return clean(dry_run=args.dry_run, extra=args.target)
+
+
+def _free_mb() -> int:
+    """根分区可用空间（MB）。"""
+    st = os.statvfs("/")
+    return (st.f_bavail * st.f_frsize) // (1024 * 1024)
+
+
+def ensure_free(mb: int, extra: list[str] | None = None) -> int:
+    """确保可用空间 ≥ mb ⇒ ⇒ 不足则清理 ⇒ ⇒ 仍不足 ⇒ ⇒ **退出码 1**。
+
+    ⭐ 这是**对症**的根治点：事故的根因不是「忘了清」⇒ ⇒ 而是
+    **「写文件的时候盘满了」**⇒ ⇒ ⇒ 所以**写之前**就要保证空间。
+    """
+    free = _free_mb()
+    if free >= mb:
+        return 0
+    print(f"  [空间] 可用 {free} MB < 需要 {mb} MB ⇒ ⇒ 先清理测试二进制")
+    clean(dry_run=False, extra=extra)
+    free = _free_mb()
+    if free < mb:
+        print(
+            f"  [空间] ⚠️ 清理后仍只有 {free} MB（需要 {mb} MB）⇒ ⇒ **中止**"
+            f"（宁可**不写**，也不要写出半截文件 ⇒ ⇒ 半截 JSON 会伪装成「脚本坏了」）",
+            file=sys.stderr,
+        )
+        return 1
+    print(f"  [空间] 已回到 {free} MB")
+    return 0
+
+
+def clean(dry_run: bool = False, extra: list[str] | None = None) -> int:
     busy = running_executables()
     busy_resolved: set[str] = set()
     for p in busy:
@@ -97,7 +165,7 @@ def main() -> int:
     grand_bytes = 0
     per: dict[str, tuple[int, int]] = defaultdict(lambda: (0, 0))
 
-    for target in candidate_targets():
+    for target in candidate_targets(extra):
         deps = target / "debug" / "deps"
         files = 0
         size = 0
@@ -120,7 +188,7 @@ def main() -> int:
                     continue  # ⭐ 正在运行 ⇒ 不删
                 files += 1
                 size += st.st_size
-                if not args.dry_run:
+                if not dry_run:
                     f.unlink(missing_ok=True)
             except OSError:
                 continue
@@ -129,12 +197,12 @@ def main() -> int:
             grand_files += files
             grand_bytes += size
 
-    verb = "可清" if args.dry_run else "已清"
+    verb = "可清" if dry_run else "已清"
     for t, (n, s) in sorted(per.items(), key=lambda kv: -kv[1][1]):
         print(f"  · {t}: {verb} {n} 个测试二进制（{s / 1024 ** 3:.1f} G）")
     print(
         f"  ⇒ ⇒ {verb} **{grand_files}** 个测试二进制（**{grand_bytes / 1024 ** 3:.1f} G**）"
-        + ("（dry-run ⇒ 未真删）" if args.dry_run else "")
+        + ("（dry-run ⇒ 未真删）" if dry_run else "")
         + f" · 正在运行的（{len(busy_resolved)} 个可执行）**已排除**"
     )
     return 0
