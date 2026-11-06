@@ -280,7 +280,7 @@ env APEIRETH_VOICE_INTERRUPT
 env APEIRETH_VOICE_QUIET_HOURS
 env APEIRETH_VOICE_SPEAK_SCOPE
 
-# --- size (80) ---
+# --- size (81) ---
 size crates/adapters/cli/src/care_heartbeat.rs 1621
 size crates/adapters/cli/src/gateway_panels.rs 1526
 size crates/adapters/cli/src/lib.rs 3775
@@ -299,7 +299,7 @@ size crates/capabilities/tools/src/doc_ops.rs 6255
 size crates/capabilities/tools/src/external.rs 2672
 size crates/capabilities/tools/src/git_write.rs 1256
 size crates/capabilities/tools/src/image_ops.rs 2233
-size crates/capabilities/tools/src/process/mod.rs 1233
+size crates/capabilities/tools/src/process/mod.rs 1228
 size crates/capabilities/tools/src/process/windows.rs 1463
 size crates/capabilities/tools/src/proposal.rs 1232
 size crates/capabilities/tools/src/recon/dotnet.rs 1233
@@ -331,7 +331,8 @@ size crates/engine/memory/src/coordinator.rs 2346
 size crates/engine/memory/src/golden_mining.rs 1352
 size crates/engine/memory/src/persona_layer.rs 1680
 size crates/engine/memory/src/research_derived_memory.rs 1211
-size crates/engine/memory/src/retrieval_tuning.rs 1239
+size crates/engine/memory/src/retrieval_pipeline.rs 1318
+size crates/engine/memory/src/retrieval_tuning.rs 1270
 size crates/engine/organ/src/causal_world_model.rs 1864
 size crates/engine/organ/src/emergence.rs 1224
 size crates/engine/organ/src/goal.rs 1619

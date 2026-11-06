@@ -279,7 +279,19 @@ target = "R2（ADR-0008 Accepted）: 公共面 2026-10-20 收敛；plugin 内部
 #           `rg` 全 crates 含 tests 为 158 distinct —— 守卫只按 src 计, 两口径不混用。
 # 逐条登记字段迁移见 R3。
 policy = "所有 APEIRETH_* 开关必须登记; 新增必须默认关 + 关时零变化测试"
-max_distinct_names = 160            # 棘轮: 只减不增（按 src 口径）
+max_distinct_names = 161            # 棘轮: 只减不增（按 src 口径）
+# ⚠️ **160 ⇒ ⇒ 161**（2026-11-06）：新增 `APEIRETH_ENABLE_SYSTEM_ONE`
+#   （`rt.system_one_internal` 声明的**生产装配开关**，默认关 ⇒ ⇒ 关时零行为变化）。
+#   ⇒ ⇒ **为什么提**（预算的正当用途，不是「随手加」）：
+#   ① 该能力**必须**有**用户可见的开关** ⇒ ⇒ 若走「有凭据就装配」⇒ ⇒ 则**无法在有凭据时关闭**
+#     ⇒ ⇒ ⇒ 「默认关 + 不可开」= 等于没做 ⇒ ⇒ ⇒ **不可接受**；
+#   ② 该开关**不进** env 面 ⇒ ⇒ 就没有「用户可见的旋钮」⇒ ⇒ ⇒ 同上；
+#   ③ ⇒ ⇒ 故**必须**新增一个 env 名 ⇒ ⇒ ⇒ env 预算的**正当用途**就是「给新能力开一个受控的口子」
+#     ⇒ ⇒ ⇒ 且本仓既定方向（能力开关**优先**用配置项）在此**不适用**
+#     （该装配根是**代码构造**的 ⇒ ⇒ 没有配置面可挂 ⇒ ⇒ ⇒ 只能走 env）；
+#   ④ ⇒ ⇒ **同时**必须登记 `docs/architecture/env-registry.toml`（R3a 登记表）
+#     ⇒ ⇒ （arch_guard 是「基线 OR 登记表」**双通道** ⇒ ⇒ 登记名**无需**进 `arch-baseline.txt`）
+#     ⇒ ⇒ ⇒ **默认关 + 关时零变化测试**是该 policy 的硬要求 ⇒ ⇒ 已在实现里钉住。
 baseline_file = "scripts/arch-baseline.txt"
 registry_file = "docs/architecture/env-registry.toml"   # R3a 登记表（ADR-0004）; 登记名无需进基线
 # level 枚举与占位口径（ADR-0004 §7）：UNCLASSIFIED = 登记先行占位，不属四级口径、不得对外宣称

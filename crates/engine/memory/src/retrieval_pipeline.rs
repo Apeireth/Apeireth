@@ -24,9 +24,9 @@ pub trait MemoryCandidateSource: Send + Sync {
     /// # 为什么需要它
     /// 各路分数**量纲不同** ⇒ ⇒ ⇒ 融合前必须**按路归一化**（各路顶分 = 1.0）
     /// ⇒ ⇒ ⇒ 归一化后各路顶分完全同分 ⇒ ⇒ ⇒ 「谁量级大谁赢」的问题解决了，
-    /// ⇒ ⇒ ⇒ 但**新的问题**出现：**辅助通道会挤掉主力通道的正确项**
-    /// ⇒ ⇒ ⇒ 实测（内部词面卷）：归一化后联想通道让 watershed 的 recall **掉了 0.0242**
-    /// ⇒ ⇒ ⇒ 而在公平卷上它带来 **+0.1394 / +0.0645** ⇒ ⇒ ⇒ **两头都要 ⇒ ⇒ 必须有权重**。
+    /// 但**新的问题**出现：**辅助通道会挤掉主力通道的正确项**
+    /// 实测（内部词面卷）：归一化后联想通道让 watershed 的 recall **掉了 0.0242**
+    /// 而在公平卷上它带来 **+0.1394 / +0.0645**，**两头都要，所以必须有权重**。
     ///
     /// # 口径
     /// * **默认 1.0** ⇒ ⇒ ⇒ 既有实现**零改动**（默认方法 ⇒ ⇒ 不用改任何现有源）；
@@ -463,15 +463,10 @@ impl HybridRetrievalPipeline {
                             .lexical
                             .max(candidate.score_components.lexical);
                         // ⭐ **合并时取「各路归一化分」的最大值**（2026-11-06）
-                        // ⇒ ⇒ **不再从合并后的分量重算** ⇒ ⇒ 否则重算会把
-                        // ⇒ ⇒ ⇒ **本路刚归一化过的量纲又还原回去**（量纲再次不对等）。
+                        // **不再从合并后的分量重算**，否则重算会把
+                        // **本路刚归一化过的量纲又还原回去**（量纲再次不对等）。
                         let recomputed = existing.score_components.weighted(&self.ranking)
                             + session.entry_salience(&existing.id);
-                        let normalized = if source_max > 0.0 {
-                            recomputed / source_max
-                        } else {
-                            recomputed
-                        };
                         let normalized = if source_max > 0.0 {
                             recomputed / source_max
                         } else {
