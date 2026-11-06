@@ -126,6 +126,7 @@ pub mod procedural;
 pub mod query_expand;
 pub mod query_signals; // 题面「信号增强」的量化 (查询判别力体检): 状态 NOT IMPLEMENTED (新增未接线).
 pub mod reflexion;
+pub mod reflexion_tuning;
 pub mod residual_pyramid;
 pub mod river_topology;
 pub mod semantic_axis;

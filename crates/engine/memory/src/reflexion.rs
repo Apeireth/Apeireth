@@ -57,6 +57,29 @@ pub struct FailureRecord {
     pub summary: String,
     /// 记录时间戳 (毫秒)
     pub timestamp_epoch_ms: i64,
+    /// ⭐ **归因**：失败时**在场的记忆**（2026-11-05 接线）。
+    ///
+    /// **为什么必须有它**：失败轨迹要喂**权重自演化**
+    /// （[`crate::retrieval_tuning::RetrievalTuningEngine::observe_batch`]）
+    /// ⇒ ⇒ 那条 API 要的是 **`memory_id`** ⇒ ⇒ ⇒ **没有归因 ⇒ ⇒ 失败归不到任何记忆**
+    /// ⇒ ⇒ ⇒ ⇒ **失败学不到任何东西** ⇒ ⇒ ⇒ **反思闭环缺最后一环**。
+    ///
+    /// ⚠️ **向后兼容**：老数据没有这个字段 ⇒ ⇒ `serde(default)` ⇒ ⇒ 读旧文件不炸
+    /// ⇒ ⇒ ⇒ 且**老记录的归因是空** ⇒ ⇒ ⇒ **不编造归因**（该空就空）。
+    #[serde(default)]
+    pub attributions: Vec<FailureAttribution>,
+}
+
+/// ⭐ **失败归因**（2026-11-05）：失败时**在场的记忆** + 它当时的**显著维度**。
+///
+/// 形状与 [`crate::retrieval_tuning::SelectedAttribution`] **同语义**
+/// ⇒ ⇒ ⇒ **可直接喂** `observe_batch`（不用转译）。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FailureAttribution {
+    /// 被注入的记忆 id。
+    pub memory_id: String,
+    /// 该记忆当时的**显著维度**（归因）; `None` = 无评分分量数据 ⇒ ⇒ **不编造归因**。
+    pub dimension: Option<crate::retrieval_tuning::RetrievalDimension>,
 }
 
 /// 一条反思记忆.
@@ -223,6 +246,28 @@ pub trait ReflexionStore: Send + Sync {
         timestamp_epoch_ms: i64,
     ) -> Result<FailureRecord, ReflexionError>;
 
+    /// ⭐ **登记一条失败轨迹，**带归因**（2026-11-05）。
+    ///
+    /// # 为什么单独一个入口（而不是改 [`Self::record_failure`] 的签名）
+    /// 改签名会**打断所有既有实现与调用方** ⇒ ⇒ ⇒ 所以这里**加一个带默认实现的新方法**：
+    /// 默认实现 = 调 [`Self::record_failure`] 并**丢弃归因** ⇒ ⇒ **既有实现零改动**。
+    /// ⇒ ⇒ 需要**真的落盘归因**的实现**覆写本方法**（内存版 / 文件版已覆写）。
+    ///
+    /// # 为什么要归因
+    /// 失败要喂**权重自演化**（`observe_batch` 要 `memory_id`）⇒ ⇒ ⇒ **没有归因 = 学不到**。
+    fn record_failure_with_attribution(
+        &self,
+        kind: FailureKind,
+        task_type: &str,
+        summary: &str,
+        timestamp_epoch_ms: i64,
+        attributions: Vec<FailureAttribution>,
+    ) -> Result<FailureRecord, ReflexionError> {
+        let mut record = self.record_failure(kind, task_type, summary, timestamp_epoch_ms)?;
+        record.attributions = attributions;
+        Ok(record)
+    }
+
     /// 处理尚未反思的失败轨迹并生成反思记忆.
     fn process_unreflected(
         &self,
@@ -275,6 +320,36 @@ impl ReflexionStore for InMemoryReflexionStore {
             .map_err(|_| ReflexionError::LockPoisoned)?;
         let seq = failures.len() + 1;
         let record = FailureRecord {
+            attributions: Vec::new(),
+            seq,
+            kind,
+            task_type: task_type.to_string(),
+            summary: summary.to_string(),
+            timestamp_epoch_ms,
+        };
+        failures.push(record.clone());
+        Ok(record)
+    }
+
+    /// ⭐ **带归因**（2026-11-05 覆写）：归因**真的落进内存**。
+    fn record_failure_with_attribution(
+        &self,
+        kind: FailureKind,
+        task_type: &str,
+        summary: &str,
+        timestamp_epoch_ms: i64,
+        attributions: Vec<FailureAttribution>,
+    ) -> Result<FailureRecord, ReflexionError> {
+        if task_type.trim().is_empty() || summary.trim().is_empty() {
+            return Err(ReflexionError::EmptyContent);
+        }
+        let mut failures = self
+            .failures
+            .lock()
+            .map_err(|_| ReflexionError::LockPoisoned)?;
+        let seq = failures.len() + 1;
+        let record = FailureRecord {
+            attributions,
             seq,
             kind,
             task_type: task_type.to_string(),
@@ -552,6 +627,33 @@ impl ReflexionStore for FileReflexionStore {
         }
         self.mutate(|data| {
             let record = FailureRecord {
+                attributions: Vec::new(),
+                seq: data.reserve_next_seq()?,
+                kind,
+                task_type: task_type.to_string(),
+                summary: summary.to_string(),
+                timestamp_epoch_ms,
+            };
+            data.failures.push(record.clone());
+            Ok(record)
+        })
+    }
+
+    /// ⭐ **带归因**（2026-11-05 覆写）：归因**真的落盘**（JSON 文件 ⇒ 向后兼容）。
+    fn record_failure_with_attribution(
+        &self,
+        kind: FailureKind,
+        task_type: &str,
+        summary: &str,
+        timestamp_epoch_ms: i64,
+        attributions: Vec<FailureAttribution>,
+    ) -> Result<FailureRecord, ReflexionError> {
+        if task_type.trim().is_empty() || summary.trim().is_empty() {
+            return Err(ReflexionError::EmptyContent);
+        }
+        self.mutate(|data| {
+            let record = FailureRecord {
+                attributions,
                 seq: data.reserve_next_seq()?,
                 kind,
                 task_type: task_type.to_string(),
