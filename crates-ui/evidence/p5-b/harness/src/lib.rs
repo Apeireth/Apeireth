@@ -1125,55 +1125,9 @@ pub fn l1_probe() -> Result<JsValue, JsValue> {
     Ok(result.into())
 }
 
-/// ⭐ **纹理上传适配器**（证据装置内）：
-/// 把 `apeireth_ui_dom::resource::TextureUploader` 接到 `apeireth_ui_gpu::upload::TextureStore`。
-///
-/// ## 为什么适配器放在这里，而不是 ui-gpu 里
-///
-/// 让 **ui-gpu 依赖 ui-dom** 会把分层方向倒过来（GPU 更底层）
-/// ⇒ ⇒ 适配器放在**同时依赖两边**的装置/上层 crate 里（本 harness、将来的 ui-demo/ui-kit）
-/// ⇒ ⇒ 产品分层的依赖方向保持单向。
-pub struct DomTextureUploader<'a> {
-    store: &'a mut apeireth_ui_gpu::upload::TextureStore,
-    device: &'a apeireth_ui_gpu::wgpu::Device,
-    queue: &'a apeireth_ui_gpu::wgpu::Queue,
-}
-
-impl<'a> DomTextureUploader<'a> {
-    /// 建适配器（借用纹理仓库 + 设备的只读引用）。
-    pub fn new(
-        store: &'a mut apeireth_ui_gpu::upload::TextureStore,
-        device: &'a apeireth_ui_gpu::wgpu::Device,
-        queue: &'a apeireth_ui_gpu::wgpu::Queue,
-    ) -> Self {
-        Self {
-            store,
-            device,
-            queue,
-        }
-    }
-}
-
-impl apeireth_ui_dom::resource::TextureUploader for DomTextureUploader<'_> {
-    fn upload(
-        &mut self,
-        id: apeireth_ui_dom::resource::ResourceId,
-        image: &apeireth_ui_dom::resource::ImageData,
-    ) -> Result<(), String> {
-        self.store.upload(
-            self.device,
-            self.queue,
-            id.raw(),
-            image.width,
-            image.height,
-            &image.rgba,
-        )
-    }
-}
-
 /// ⭐⭐⭐ **纹理上传端到端探针**（L1-G7 浏览器证据）。
 ///
-/// 链路：真实引擎（`Engine::create`）→ `DomTextureUploader`（适配器）
+/// 链路：真实引擎（`Engine::create`）→ `GpuTextureUploader`（**引擎内**实现，无需适配器）
 /// → `TextureStore::upload`（**256 行对齐**）→ `upload_decoded` 状态收敛
 /// ⇒ ⇒ 端到端证明「上传 → 纹理可用 → 资源 Ready」，而不只是纯逻辑测试。
 ///
@@ -1184,7 +1138,8 @@ pub async fn l1_upload_probe(
     canvas: web_sys::HtmlCanvasElement,
     backend: &str,
 ) -> Result<JsValue, JsValue> {
-    use apeireth_ui_dom::resource::{upload_decoded, ResourceRegistry, ResourceState};
+    use apeireth_ui_gpu::resource::{upload_decoded, ResourceRegistry, ResourceState};
+    use apeireth_ui_gpu::upload::GpuTextureUploader;
 
     let mut failures: Vec<String> = Vec::new();
     let preference = match backend {
@@ -1211,8 +1166,8 @@ pub async fn l1_upload_probe(
     let mut registry = ResourceRegistry::new();
     let id = registry.register();
     // 3×2 RGBA：每行 12 字节 ⇒ 必须补到 256
-    let image = apeireth_ui_dom::resource::ImageData::new(3, 2, vec![200u8; 3 * 2 * 4]);
-    let mut adapter = DomTextureUploader::new(&mut store, engine.device(), engine.queue());
+    let image = apeireth_ui_gpu::resource::ImageData::new(3, 2, vec![200u8; 3 * 2 * 4]);
+    let mut adapter = GpuTextureUploader::new(&mut store, engine.device(), engine.queue());
     let upload_ok = upload_decoded(&mut registry, &mut adapter, id, image).is_ok();
     let uploaded = store
         .get(id.raw())
@@ -1226,8 +1181,8 @@ pub async fn l1_upload_probe(
 
     // ⭐ 反向：坏数据必须被拒且**不得**标 Ready（不能把坏数据传进 GPU）
     let bad_id = registry.register();
-    let bad = apeireth_ui_dom::resource::ImageData::new(2, 2, vec![0u8; 3]);
-    let mut adapter = DomTextureUploader::new(&mut store, engine.device(), engine.queue());
+    let bad = apeireth_ui_gpu::resource::ImageData::new(2, 2, vec![0u8; 3]);
+    let mut adapter = GpuTextureUploader::new(&mut store, engine.device(), engine.queue());
     let bad_rejected = upload_decoded(&mut registry, &mut adapter, bad_id, bad).is_err();
     let bad_not_ready = !matches!(registry.state(bad_id), Some(ResourceState::Ready));
     if !(bad_rejected && bad_not_ready) {

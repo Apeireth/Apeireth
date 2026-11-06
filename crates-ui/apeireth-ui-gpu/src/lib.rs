@@ -150,9 +150,14 @@ pub mod bindings;
 pub mod context;
 pub mod engine;
 pub mod glsl;
+/// ⭐ 资源句柄 / 加载状态 / 纹理上传**契约**（L1-G7）。
+///
+/// ⚠️ 2026-11-06 由 `apeireth-ui-dom::resource` **搬到本 crate**：
+/// 它属**像素投影**，且 `ui-dom` 内部 0 消费 => 搬来后上传实现与本契约**同 crate**。
+pub mod resource;
 pub mod scene;
 pub mod shaders;
-/// ⭐ 纹理上传（L1-G7 最后一段：行对齐 + 上传）。
+/// ⭐ 纹理上传（L1-G7 最后一段：行对齐 + 上传 + `TextureUploader` 实现）。
 pub mod upload;
 
 /// ⭐ 重导出 `wgpu`：消费方（适配器、探针）应经此引用，

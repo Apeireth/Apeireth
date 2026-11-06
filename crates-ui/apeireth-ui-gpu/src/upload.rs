@@ -205,6 +205,65 @@ impl TextureStore {
     }
 }
 
+/// ⭐⭐⭐⭐⭐ **`TextureUploader` 的 GPU 实现**（L1-G7 的**最后一段接线**）。
+///
+/// ## 为什么这里不需要「适配器」（2026-11-06）
+///
+/// 此前 `TextureUploader` 契约在 `apeireth-ui-dom::resource` ⇒ ⇒ 而上传实现在
+/// `ui-gpu` ⇒ ⇒ 两者**分属平级 crate**（ADR-0015 §3.3）⇒ ⇒ 谁都不能依赖谁
+/// ⇒ ⇒ 于是「实现」只能放在**同时依赖两边**的地方 ⇒ ⇒ 实际上**没有任何生产
+/// crate 同时依赖两边** ⇒ ⇒ 唯一一份实现躺在 `evidence/p5-b/harness` 里
+/// ⇒ ⇒ **能力只有测试装置在用**（这正是 G7 的缺口）。
+///
+/// ⇒ ⇒ 2026-11-06 把契约搬到**本 crate**（`crate::resource`）
+/// ⇒ ⇒ 实现与契约**同 crate** ⇒ ⇒ **一个适配器都不需要**，直接就是引擎 API。
+///
+/// ## 不变量（由 [`crate::resource::upload_decoded`] 保证，这里只负责「真上传」）
+///
+/// 失败**必须**返回 `Err`（带原因）⇒ ⇒ 绝不允许「假装成功」
+/// ⇒ ⇒ 否则上层会把资源标成 `Ready`，渲染层拿空纹理去画（黑块/花屏）却**看不出
+/// 是加载失败**。
+pub struct GpuTextureUploader<'a> {
+    store: &'a mut TextureStore,
+    device: &'a wgpu::Device,
+    queue: &'a wgpu::Queue,
+}
+
+impl<'a> GpuTextureUploader<'a> {
+    /// 绑定一次上传所需的三个句柄（纹理仓库 + 设备 + 队列）。
+    ///
+    /// ⇒ ⇒ 用**借用**而不是持有 `Arc`：上传是**一帧内的短动作**，
+    /// 不引入引用计数与生命周期管理。
+    pub fn new(
+        store: &'a mut TextureStore,
+        device: &'a wgpu::Device,
+        queue: &'a wgpu::Queue,
+    ) -> Self {
+        Self {
+            store,
+            device,
+            queue,
+        }
+    }
+}
+
+impl crate::resource::TextureUploader for GpuTextureUploader<'_> {
+    fn upload(
+        &mut self,
+        id: crate::resource::ResourceId,
+        image: &crate::resource::ImageData,
+    ) -> Result<(), String> {
+        self.store.upload(
+            self.device,
+            self.queue,
+            id.raw(),
+            image.width,
+            image.height,
+            &image.rgba,
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
