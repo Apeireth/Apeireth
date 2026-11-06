@@ -66,12 +66,8 @@ struct Probe {
     assoc_top: f64,
     /// 联想的平均分。
     assoc_mean: f64,
-    /// 联想候选里**分数大于 BM25 顶分**的有几个（⇒ ⇒ 能压过 BM25 的）。
+    /// 联想候选里**分数大于 BM25 顶分**的有几个（**能压过 BM25 的**）。
     assoc_above_bm25_top: usize,
-    /// 融合取 top-k 之后，**联想候选还剩几个**。
-    assoc_survived_topk: usize,
-    /// 融合取 top-k 之后，**目标是否命中**。
-    hit: bool,
 }
 
 fn mean(values: &[f64]) -> f64 {
@@ -227,8 +223,6 @@ fn probe_one(name: &str) -> Result<serde_json::Value, Box<dyn Error>> {
             assoc_top: assoc_scores.first().copied().unwrap_or(0.0),
             assoc_mean: mean(&assoc_scores),
             assoc_above_bm25_top: assoc_scores.iter().filter(|s| **s > bm25_top).count(),
-            assoc_survived_topk: survived,
-            hit,
         });
         assoc_total += assoc_hits.len();
         assoc_survived_total += survived;
