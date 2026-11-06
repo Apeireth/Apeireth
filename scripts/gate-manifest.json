@@ -642,6 +642,54 @@
       "env": "ci",
       "timeout": 900,
       "note": "CI 专属：8 项不修改承诺审计"
+    },
+    {
+      "id": "memory-reachability",
+      "cmd": [
+        "python3",
+        "scripts/check_memory_reachability.py",
+        "--check"
+      ],
+      "scope": [
+        "rust",
+        "docs"
+      ],
+      "blocking": true,
+      "required": true,
+      "env": "python",
+      "timeout": 300,
+      "note": "记忆 crate 生产可达率（全局视图）+ 未解释缺口（行动目标）"
+    },
+    {
+      "id": "memory-reachability-self-test",
+      "cmd": [
+        "python3",
+        "scripts/test_memory_reachability.py"
+      ],
+      "scope": [
+        "rust"
+      ],
+      "blocking": true,
+      "required": true,
+      "env": "python",
+      "timeout": 120,
+      "note": "可达率门禁的自测（门禁也要被验证）"
+    },
+    {
+      "id": "fusion-channels",
+      "cmd": [
+        "python3",
+        "scripts/check_fusion_channels.py"
+      ],
+      "scope": [
+        "rust",
+        "docs"
+      ],
+      "blocking": true,
+      "required": true,
+      "env": "python",
+      "timeout": 600,
+      "note": "融合通道 delta 不许为负（不许不涨的尺子）；⚠️ delta 是下界（内部卷偏词面）⇒ 修 harness + 加公平考卷 = 让尺子变准的前提"
     }
   ]
 }
