@@ -9,7 +9,12 @@ pub(super) fn execute(
     if ctx.cancellation.is_cancelled() || Instant::now() >= ctx.deadline {
         return fail(call, "cancelled", "call no longer active");
     }
-    let mapping = match &state.mappings {
+    let mappings = state
+        .mappings
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
+    let mapping = match &mappings {
         Some(mappings) => match mappings.lease(ctx) {
             Some(lease) => Some(lease),
             None => {

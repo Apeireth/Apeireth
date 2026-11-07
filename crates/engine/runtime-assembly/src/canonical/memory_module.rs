@@ -36,7 +36,7 @@ struct State {
     instance: Mutex<Option<apeireth_core::kernel::ModuleInstanceId>>,
     organizer_handles: Mutex<BTreeMap<TaskId, apeireth_core::kernel::AgentId>>,
     coordinator: Arc<MemoryCoordinator>,
-    mappings: Option<Arc<crate::profile_memory::ProfileMemoryMappings>>,
+    mappings: Mutex<Option<Arc<crate::profile_memory::ProfileMemoryMappings>>>,
     clock: Arc<dyn Clock>,
     writes: Mutex<()>,
     agents: Mutex<Option<Arc<dyn ModuleAgents>>>,
@@ -105,7 +105,7 @@ impl MemoryModule {
                 instance: Mutex::new(None),
                 organizer_handles: Mutex::new(BTreeMap::new()),
                 coordinator,
-                mappings: None,
+                mappings: Mutex::new(None),
                 clock,
                 writes: Mutex::new(()),
                 agents: Mutex::new(None),
@@ -145,13 +145,23 @@ impl MemoryModule {
         self
     }
     pub fn with_profile_mappings(
-        mut self,
+        self,
         mappings: Arc<crate::profile_memory::ProfileMemoryMappings>,
     ) -> Self {
-        Arc::get_mut(&mut self.state)
-            .expect("unshared constructor")
-            .mappings = Some(mappings);
+        self.attach_profile_mappings(mappings);
         self
+    }
+    /// **迟绑定**（装配期）: 生产槽位在 build 期先建模块, Host 映射表在注册期才到位
+    /// ⇒ ⇒ 同一个模块实例接受后到的映射表（Host 只绑一次; 重绑只用于测试）。
+    pub fn attach_profile_mappings(
+        &self,
+        mappings: Arc<crate::profile_memory::ProfileMemoryMappings>,
+    ) {
+        *self
+            .state
+            .mappings
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = Some(mappings);
     }
     pub fn with_automatic_retrieval(mut self, enabled: bool) -> Self {
         self.automatic_retrieval = enabled;
@@ -358,7 +368,13 @@ impl ToolCapability for MemoryTool {
         if ctx.principal.is_none() {
             return fail(call, "namespace_denied", "Host principal is required");
         }
-        let mapping = self.state.mappings.as_ref().map(|m| m.lease(ctx));
+        let mappings = self
+            .state
+            .mappings
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        let mapping = mappings.as_ref().map(|m| m.lease(ctx));
         if matches!(mapping, Some(None)) {
             return fail(
                 call,

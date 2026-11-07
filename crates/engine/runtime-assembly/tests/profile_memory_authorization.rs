@@ -191,12 +191,11 @@ async fn only_granted_profile_reads_legacy_scopes_with_one_projection_and_privat
     )
     .unwrap();
     let provider = Provider::new(vec![]);
+    // 2026-11-07: 生产装配已自带 MemoryModule 工具面（`canonical/memory_assembly.rs`）
+    // ⇒ ⇒ 本测试不再手动 `with_plugin`（否则同一 `module.memory` 会被注册两次）。
+    // Host 映射表由 `register_with_profile_mappings` 迟绑定到同一个模块实例。
     let runtime = production
         .register_with_profile_mappings(builder(provider.clone()), mappings.clone())
-        .with_plugin(Arc::new(
-            MemoryModule::new(c.clone(), Arc::new(SystemClock))
-                .with_profile_mappings(mappings.clone()),
-        ))
         .build_agent_runtime(AgentHostPolicy::default())
         .await
         .unwrap();

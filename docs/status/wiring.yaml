@@ -3,7 +3,7 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: c99b79328e1547068a65809a8216ef7c109c043f2810cbc677010e331140d0ed
+claims_sha256: 284defc8be3b47c08716e39997a261a9d50da9a7e1d551be0d59c4909aeaf977
 claims_total: 52
 items:
   - id: "rt.provider_router"
@@ -756,9 +756,10 @@ items:
       tests:
         - "crates/engine/runtime-assembly/tests/bio_cognitive_wiring.rs"
         - "crates/engine/runtime-assembly/tests/bio_observation_cells.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_production_wiring/tests.rs"
       claims_id: "bio.social_repair"
     gaps:
-      - "未达 PRODUCTION WIRED：① 接在：装配根 install_bio_modules 注册 BioAssemblyModule（canonical/cognitive.rs），APEIRETH_ENABLE_BIO_REPAIR_GUIDANCE 只认 \"1\"；生产装配**不注入** RepairPlan（install_bi…"
+      []
   - id: "bio.quorum"
     capability: "群体感应→审议门（SG-24，生产装配，默认关）"
     implemented:
@@ -1061,12 +1062,13 @@ items:
         - "crates/engine/runtime/tests/canonical_subloop.rs"
         - "crates/engine/runtime-assembly/tests/convergence_agents.rs"
         - "crates/engine/runtime-assembly/tests/profile_memory_authorization.rs"
+        - "crates/engine/runtime-assembly/tests/memory_namespace_production.rs"
         - "crates/engine/runtime-assembly/tests/managed_main.rs"
         - "crates/adapters/cli/tests/canonical_cli_bootstrap.rs"
         - "crates/adapters/cli/tests/care_heartbeat_host.rs"
       claims_id: "rt.owned_agents"
     gaps:
-      - "未达 PRODUCTION WIRED：可由 Host API 组合；12 项真实实例测试覆盖并发、私有历史、预算、取消、模块自主创建及原生资源排水。不是桌面后台任务全面迁移，也不替代旧 SubLoop。；2026-10-28 生产收敛：请求使用共享服务的只读执行目录视图，模型等待期间不持控制读锁；热注册获得受限 ModuleAgents…"
+      []
   - id: "mem.registered_namespace"
     capability: "注册式 Memory 工具、固定 Hook 与通用 Profile 隔离"
     implemented:
@@ -1106,9 +1108,10 @@ items:
       tests:
         - "crates/engine/runtime-assembly/tests/convergence_memory.rs"
         - "crates/engine/runtime-assembly/tests/profile_memory_authorization.rs"
+        - "crates/engine/runtime-assembly/tests/memory_namespace_production.rs"
       claims_id: "mem.registered_namespace"
     gaps:
-      - "未达 PRODUCTION WIRED：新 Host 组合中的 9 项真实 Runtime 测试通过；七工具、合法 V1 检索、后台 Agent、审批 CAS、持久化与 fork Scope 隔离。默认 ProductionCognitiveModules 的旧 Memory/Persona/Organ 尚未替换，旧数据不自动归属新 Na…"
+      []
   - id: "rt.desktop_managed_main"
     capability: "默认桌面 main：同一受管 Host 的 CLI、gateway、审批、流式与心跳"
     implemented:

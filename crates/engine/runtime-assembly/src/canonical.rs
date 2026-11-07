@@ -345,6 +345,12 @@ pub use voice_quiet::voice_quiet_hours_from_care_rules;
 #[path = "canonical/memory_module.rs"]
 pub mod memory_module;
 
+/// 注册式 Memory 工具面的**生产槽位**（`mem.registered_namespace` / `rt.owned_agents`）:
+/// 把 build 期构造的 coordinator 变成 `MemoryModule` 工具面（7 工具 + 固定检索 Hook +
+/// 模块自有 Agent 面），并支持注册期迟绑定 Host 映射表。为何需要见文件头注释。
+#[path = "canonical/memory_assembly.rs"]
+mod memory_assembly;
+
 #[path = "canonical/cognitive_registry.rs"]
 mod cognitive_registry;
 

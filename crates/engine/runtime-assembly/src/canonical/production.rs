@@ -42,6 +42,7 @@ use super::cognitive::{
     SelfAssessmentModule,
 };
 use super::error::{RuntimeError, RuntimeResult};
+use super::memory_assembly;
 use super::memory_typed_sink::CanonicalMemoryTypedSink;
 use super::module::Module;
 use super::nervous_bridge::NervousBridgeModule;
@@ -656,6 +657,7 @@ pub struct ProductionModules {
     mcp_module: Option<Arc<McpModule>>,
     /// 器官模块句柄 (`config.organs` 开才 `Some`), 供组合根迟绑定 guard 免疫记忆.
     organ_module: Option<Arc<OrganModule>>,
+    memory_slot: Option<Arc<super::memory_module::MemoryModule>>, // 记忆工具面槽位（注册期迟绑定 Host 映射）
     /// 生物机制族 W3.3: 调质状态句柄 (开关开才 `Some`, 与注册模块共享同一 `Arc`)。
     bio_tone_state: Option<Arc<ToneState>>,
     /// 生物机制族 W3.5 (SG-18): 生命周期状态句柄 (开关开才 `Some`, 与注册模块同一 `Arc`)。
@@ -1418,7 +1420,7 @@ impl ProductionModules {
         bio_probe_slots.fill_ecosystem_profiles(&capabilities);
 
         // Unified Memory 2.0 coordinator wiring
-        let mut shared_coordinator: Option<Arc<MemoryCoordinator>> = None;
+        let (mut shared_coordinator, mut memory_slot) = (None::<Arc<MemoryCoordinator>>, None);
         if config.memory_recall || config.memory_writeback {
             instrument.constructed(ModuleFamily::MemoryCoordinator);
             let memory = required(backends.memory.clone(), "memory", "memory")?;
@@ -1447,13 +1449,8 @@ impl ProductionModules {
             let watermark_path = default_data_root()
                 .join("memory")
                 .join("consolidation-watermark.json");
-            if std::fs::create_dir_all(
-                watermark_path
-                    .parent()
-                    .unwrap_or_else(|| std::path::Path::new(".")),
-            )
-            .is_ok()
-            {
+            let watermark_dir = watermark_path.parent().unwrap_or(std::path::Path::new("."));
+            if std::fs::create_dir_all(watermark_dir).is_ok() {
                 coordinator = coordinator.with_consolidation_trigger(ConsolidationTrigger::new(
                     ConsolidationPolicy::new(0).with_min_episodes(1),
                     Arc::new(FileConsolidationWatermark::new(watermark_path)),
@@ -1463,8 +1460,7 @@ impl ProductionModules {
                 coordinator = coordinator.with_preferences(Arc::clone(pref));
             }
             if let (Some(graph), Some(associations)) = (&backends.graph, &backends.associations) {
-                coordinator =
-                    coordinator.with_experience(Arc::clone(graph), Arc::clone(associations));
+                coordinator = coordinator.with_experience(graph.clone(), associations.clone());
             }
             if let Some(history) = &backends.access_history {
                 coordinator = coordinator.with_activation_source(Arc::new(
@@ -1478,14 +1474,15 @@ impl ProductionModules {
             }
             // 用户知识库接线 (只读): 语料根 = <data>/wiki。
             // 目录不存在 ⇒ 检索路径整段跳过 ⇒ 逐字节零行为变化。
-            coordinator =
-                coordinator.with_wiki_root(crate::paths::default_data_root().join("wiki"));
+            coordinator = coordinator.with_wiki_root(default_data_root().join("wiki"));
             if let (Some(source), Some(identity)) =
                 (&backends.typed_recall, &backends.typed_recall_identity)
             {
                 coordinator = coordinator.with_typed_recall(Arc::clone(source), identity.clone());
             }
-            shared_coordinator = Some(Arc::new(coordinator));
+            let sinks = (&mut tool_modules, &mut capabilities);
+            let (slot, shared) = memory_assembly::wire(sinks.0, sinks.1, coordinator, &clock);
+            (memory_slot, shared_coordinator) = (Some(slot), Some(shared));
         }
 
         // Register cognitive modules
@@ -1767,6 +1764,7 @@ impl ProductionModules {
         }
         Ok(Self {
             modules,
+            memory_slot,
             tool_modules,
             capabilities,
             telemetry,
@@ -1845,6 +1843,7 @@ impl ProductionModules {
         mappings: Arc<crate::profile_memory::ProfileMemoryMappings>,
     ) -> RuntimeBuilder {
         let mut builder = mappings.register_into(builder, &self.modules);
+        memory_assembly::bind_profile_mappings(&self.memory_slot, &mappings);
         for module in self.tool_modules {
             builder = builder.with_plugin(module);
         }
