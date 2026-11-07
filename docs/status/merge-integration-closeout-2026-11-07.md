@@ -44,8 +44,8 @@
 | workspace | 实测 | 覆盖它的门禁 |
 |---|---|---|
 | `crates-ui/` | **432 passed / 0 failed / 4 ignored**（2026-11-07 合并后实测；⚠️ 取自**他线在途改动落地前** ⇒ 数字随其施工变动；⚠️ **doc-test 未跑** ⇒ 见 §5-3） | `ui-engine-ci.yml`（**2026-11-07 已归并**：原 `ui-core-ci.yml` 删除 —— 它的 4 关重复关已在前者覆盖，独有的 doc-test 关**刻意未引入**（那一关红）） |
-| `frontend/companion-desktop/src-tauri/` | **171 passed / 0 failed / 2 ignored** | `claims-verify.yml` |
-| `frontend/companion-desktop/`（JS 侧） | ✅ **83 of 83 suites passed**（2026-11-07 实测，exit 0）—— 本机 Node 无内置 TS 支持 ⇒ 走**类型擦除降级路径**（`tests/ts-strip-hooks.mjs`，用仓内**既有** `typescript` devDependency）⇒ 修前本机 **66 of 83 suites failed**（`ERR_NO_TYPESCRIPT`，**模块加载阶段**就死）⇒ **已从「未实测」转为「全绿」** | `pnpm test`（83 套件） |
+| `frontend/companion-desktop/src-tauri/` | **171 passed / 0 failed / 2 ignored**（Tauri Rust 侧）| `companion-desktop-ci.yml`（装 Tauri 系统依赖 + sidecar 占位 ⇒ **cargo check / cargo test**）⇒ **独立的 CI 已守** ⇒ ⇒ **不纳入根门禁**（纳入 = 与既有 CI 重复编译） |
+| `frontend/companion-desktop/`（JS 侧） | ✅ **83 of 83 suites passed**（2026-11-07 实测，exit 0）—— 本机 Node 无内置 TS 支持 ⇒ 走**类型擦除降级路径**（`tests/ts-strip-hooks.mjs`，用仓内**既有** `typescript` devDependency）⇒ 修前本机 **66 of 83 suites failed**（`ERR_NO_TYPESCRIPT`，**模块加载阶段**就死）⇒ **已从「未实测」转为「全绿」** | `companion-desktop-ci.yml` 的 `pnpm test` 步骤（Node >=22 走原生擦除；**2026-11-07 起**无 TS 支持的 Node 也能跑完）⇒ **独立的 CI 已守** |
 
 ### 3.3 合并后逐项处置（**每条都有归因**，不是「重跑一次就绿了」）
 
@@ -85,12 +85,13 @@
 | 1 | ~~**frontend JS 侧未实测**~~ ⇒ ✅ **已消**（2026-11-07，`a1048c90`）：**83 of 83 suites passed**（exit 0）⇒ 缺口已由「换一台 Node」改为「**加一条降级路径**」填掉 |（原缺口来源：本机 Node 无内置 TS 支持；处置：类型擦除加载钩子，**0 新外部依赖**、**不改**任何套件断言） |**已闭环** |
 | 2 | ~~**两个 UI CI 门禁并存**~~ ⇒ ✅ **已消**（2026-11-07）：**删** `ui-core-ci.yml`（它的 check/clippy/fmt/test 四关在 `ui-engine-ci.yml` 里**已有** ⇒ **零覆盖损失**、CI 少跑一轮重复编译）⇒ ⚠️ 它独有的 **doc-test 关刻意未引入**（那一关在 7-crate crates-ui 上**红** ⇒ 引入即让 CI 变红）⇒ 该缺口另列为 §5-3 | （已处置；doc-test 缺口见 §5-3） | **已闭环** |
 | 3 | ~~**crates-ui 的 `cargo check/clippy --all-targets` 红**~~ ⇒ ✅ **已消**（2026-11-07）：**触发源是 crates-ui 侧的在途施工**（新建的 kit 模块）⇒ 其收工后实测 **check --all-targets 0 错误**、`cargo test --workspace --doc --locked` ⇒ **3 passed / 0 failed / 4 ignored**（连跑 3 轮同值）⇒ ⇒ **doc-test 关已纳入** `ui-engine-ci.yml`（补回合并收窄的那处覆盖：普通 `cargo test` **不跑** doctest）⇒ ⚠️ **根因仍在**：`apeireth-ui-macro` 的私有函数 `compile_error`（`src/lib.rs:122`）**产出 Ident 而非 `compile_error!`** ⇒ 当前**未触发**，但**同类错误路径仍可能复发** ⇒ 建议后续把该私有函数改名（不属本批写域） | **已闭环**（覆盖已补回；根因改名留待另批） |
-| 4 | **另 2 条红**（`migrations::concurrent_first_openers…`、`task_queue_store::concurrent_enqueues…`） | 用**裸 `rusqlite::Connection`**、**不走池** ⇒ 池收口**修不到**；且属**既有**缺陷、当前**不可复现**（700+ 次全绿） | 候选修法：输方在 `SQLITE_BUSY` 上做**有界退避**而非 `unwrap` 直接 panic |
-| 5 | **ADR 同号撞车**（0016–0021 各两份） | **裁决为不重编号**（ADR-0024 §2）⇒ 已用**并存索引 + 撞车说明**处置 ⇒ **不是未做**，是**已定案的遗留** | 新写 ADR 用下一个可用编号（0025+）；引用一律用**文件名** |
-| 6 | **HARDWARE VALIDATED 不成立** | 真第三方 MCP 服务器端到端未跑（探针是**仓内自建**的） | 用真实第三方 MCP server 跑一次端到端 |
-| 7 | **运行时即时封禁/授权面**未就位 | 需要常驻守护通道 + 鉴权设计 ⇒ 独立批次 | 配置改动**不重启即生效** |
-| 8 | **其它工具族**结果面未接凭据绊线 | 会改所有工具族的行为 ⇒ 独立批次 | 任一工具族的结果面也走凭据绊线 |
-| 9 | **Windows 全量复跑** | owner 裁决「往后放」 | 在 Windows 机器上跑 `gate_full.ps1` 并登记新口径 |
+| 4 | ~~**把 3 个独立 workspace 纳入 `gate_full.ps1`**~~ ⇒ ✅ **已消（2026-11-07 查实后判定为「不该做」）**：**三个独立 workspace 全都有独立门禁**（`crates-ui/` ⇒ `ui-engine-ci.yml`；`frontend/companion-desktop/src-tauri/` + JS 侧 ⇒ `companion-desktop-ci.yml`）⇒ ⇒ 纳入根门禁 = **与既有 CI 重复编译**（且 `src-tauri` 还需**先编 CLI 二进制做 sidecar**）⇒ ⇒ **不做** ⇒ ⇒ 改为在 **§3.2 逐行写明「由哪道门禁守」**（含具体 workflow 与 job）⇒ ⇒ 「根门禁绿 ≠ 全仓绿」这条限定**依然成立**，但它**有明确的责任人** | （已查实并落表）| **已闭环** |
+| 5 | **另 2 条红**（`migrations::concurrent_first_openers…`、`task_queue_store::concurrent_enqueues…`） | 用**裸 `rusqlite::Connection`**、**不走池** ⇒ 池收口**修不到**；且属**既有**缺陷、当前**不可复现**（700+ 次全绿） | 候选修法：输方在 `SQLITE_BUSY` 上做**有界退避**而非 `unwrap` 直接 panic |
+| 6 | **ADR 同号撞车**（0016–0021 各两份） | **裁决为不重编号**（ADR-0024 §2）⇒ 已用**并存索引 + 撞车说明**处置 ⇒ **不是未做**，是**已定案的遗留** | 新写 ADR 用下一个可用编号（0025+）；引用一律用**文件名** |
+| 7 | **HARDWARE VALIDATED 不成立** | 真第三方 MCP 服务器端到端未跑（探针是**仓内自建**的） | 用真实第三方 MCP server 跑一次端到端 |
+| 8 | **运行时即时封禁/授权面**未就位 | 需要常驻守护通道 + 鉴权设计 ⇒ 独立批次 | 配置改动**不重启即生效** |
+| 9 | **其它工具族**结果面未接凭据绊线 | 会改所有工具族的行为 ⇒ 独立批次 | 任一工具族的结果面也走凭据绊线 |
+| 10 | **Windows 全量复跑** | owner 裁决「往后放」 | 在 Windows 机器上跑 `gate_full.ps1` 并登记新口径 |
 
 ## 6. 遗留（**已定案但明确不做**，防止后人重复讨论）
 

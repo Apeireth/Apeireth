@@ -96,9 +96,14 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          # Node 20 不能跑 tests/run-all.mjs: runner 对 66/82 个套件用
+          # Node 20 不能跑 tests/run-all.mjs: runner 对 66 个套件用
           # `node --experimental-strip-types` 直跑 .mjs 引 .ts, 该 flag 自
           # v22.6.0 才有。故 pnpm test 步骤要求 >=22 (本仓实测 v22.23.3)。
+          # ⚠️ 2026-11-07 起 runner **自带降级路径**：Node 若无内置 TS 支持
+          # (`process.features.typescript === false`，发行版构建常见)，
+          # 自动改用 `tests/ts-strip-hooks.mjs`（借**本仓既有** typescript
+          # devDependency 擦类型 ⇒ 0 新外部依赖）⇒ ⇒ 本步骤在 Node 20 上
+          # 也能跑完；**Node >=22 仍走原生路径，行为逐字不变**。
           node-version: 22
           cache: 'pnpm'
           cache-dependency-path: 'frontend/companion-desktop/pnpm-lock.yaml'
@@ -122,7 +127,7 @@ jobs:
       # (含 B1 只读 SQL 闸 / B2 provider transport 等前端源码镜像断言；
       #  B3 的 workspace_list 断言在 cargo test 步骤)。runner 已把需要
       # live 后端/Playwright 的用例显式排除。
-      - name: pnpm test (82 suites)
+      - name: pnpm test (83 suites)
         working-directory: frontend/companion-desktop
         run: pnpm test
 
