@@ -9,21 +9,26 @@
 > 判据（四级口径）：**IMPLEMENTED = 库内可跑且测试通过；PRODUCTION WIRED = 生产装配有
 > 构造/调用点且实测跑过**。两者混淆是本表存在的原因。
 
-### W12：`reflexion_tuning`（**待接线** · deputy 2026-11-06 引入）
+### W12：`reflexion_tuning`（✅ **已接线**（**四级口径：PRODUCTION WIRED**）· deputy 2026-11-06 引入 · 2026-11-06 晚接线）
 
 - **模块**：`crates/engine/memory/src/reflexion_tuning.rs`
 - **能力**：「失败 → 学习桥」—— reflexion 的失败轨迹喂权重自演化 + 校准
   （`observe_failures_since` / `observe_failures_since_in_session`）。
-- ⭐ **现状**：**设计已就绪、测试已写，但生产装配为零**
-  （实测：两个公开 API 的**外部调用均为 0 处** ⇒ ⇒ 整个模块在生产链路外）。
-- ⇒ ⇒ **分类 = 待接线**（**不是**「有意不接」：能力未被任何模块承担，也未宣布不做）
-  ⇒ ⇒ 与 §一 W1–W11 **同口径**。
+- ⭐ **现状**：✅ **已生产接线**（2026-11-06 晚，commit `07baa9f9737c`）
+  ⇒ ⇒ **实测确认**：`runtime-assembly/src/canonical/retrieval_tuning_wire.rs:598`
+  **真的调用** `observe_failures_since_in_session(...)`
+  ⇒ ⇒ ⇒ **会话隔离也做了**（显式传会话键 ⇒ ⇒ A 会话的失败不会去调 B 会话的权重）
+  ⇒ ⇒ ⇒ ⇒ 可达率因此从 87 涨到 **88**（`check_memory_reachability --check` 实测）。
+- ⇒ ⇒ **分类 = 已接线**（**四级口径：PRODUCTION WIRED** —— 生产装配已存在且被真实调用）
+  （⇒ ⇒ 已从 `scripts/memory-reachability-explained.txt` 的
+  「已解释不可达」里**移除**，⇒ ⇒ 因为**它已可达 ⇒ ⇒ 解释就该过期**）。
+- ⇒ ⇒ ⚠️ **我该记住的教训**（2026-11-07）：**「接上」≠「生效」**
+  ⇒ ⇒ 所以「接上了」这句话**必须带实测证据**（调用点 + 行号）⇒ ⇒ 不许只凭 commit message。
 - ⚠️ **旧 API `observe_failures` 已被新 API 取代**（且零调用）⇒ ⇒ 成了新孤儿
   ⇒ ⇒ 已登记进 `scripts/unwired-baseline.txt`（带理由）
   ⇒ ⇒ ⚠️ **删不删由引入者决定**（他可能还要留兼容面）⇒ ⇒ 本轮**不删**。
-- ⇒ ⇒ **下一步**（接线时要做的事，⭐ 与 deputy 自己那条教训同源）：
-  ⭐ **「接上」≠「触发」** ⇒ ⇒ 接线时必须核对**调用键/会话桶**
-  ⇒ ⇒ ⇒ 生产装配**按会话分桶**（否则 A 会话的失败会去调 B 会话的权重 ⇒ ⇒ 跨会话串扰）。
+- ⇒ ⇒ ✅ **那条「接上≠触发」的风险已被规避**：实测调用点是
+  `observe_failures_since_in_session(...)`（**带会话键**）⇒ ⇒ **按会话分桶已落实**。
 
 ### W13：`record_quality_metrics`（**待接线** · deputy 2026-11-06 引入）
 
