@@ -29,7 +29,7 @@ claims:
     tests:
       - crates/engine/runtime/src/canonical/provider/compat_tests.rs
       - crates/engine/runtime/tests/canonical_multi_provider.rs
-    verified_at: f45f4d6fbc6bd33d7431095e8cbafe8eb1af98d7
+    verified_at: 52009d5f
     verify_cmd: "cargo test -p apeireth-runtime --test canonical_multi_provider"
     owner: runtime
     next_review: "2026-11-20"
@@ -45,7 +45,7 @@ claims:
       - crates/adapters/cli/src/lib.rs
     tests:
       - crates/foundation/core/src/cost_router.rs
-    verified_at: 31297a40c217ed05525c198fe0690f39074ace93
+    verified_at: 52009d5f
     verify_cmd: "cargo test -p apeireth-core cost_router"
     owner: core
     next_review: "2026-11-20"
@@ -63,7 +63,7 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/task_board_tool.rs
       - crates/adapters/cli/tests/task_board_knob.rs
-    verified_at: 31297a40c217ed05525c198fe0690f39074ace93
+    verified_at: 52009d5f
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test task_board_tool"
     owner: runtime-assembly
     next_review: "2026-11-20"
@@ -90,7 +90,7 @@ claims:
       - crates/capabilities/tools/src/mcp_bridge/catalog.rs
       - crates/engine/runtime-assembly/tests/production_mcp_factory.rs
       - crates/engine/runtime-assembly/tests/convergence_mcp.rs
-    verified_at: 42d3addfa0b8ec1e3e4664c38d3f505ae79551da
+    verified_at: 52009d5f
     verify_cmd: "cargo test -p apeireth-tools-canonical mcp_bridge"
     owner: tools
     next_review: "2026-11-20"
@@ -108,7 +108,7 @@ claims:
       - crates/adapters/cli/src/lib.rs
     tests:
       - crates/capabilities/tools/tests/voice_speak.rs
-    verified_at: 31297a40c217ed05525c198fe0690f39074ace93
+    verified_at: 52009d5f
     verify_cmd: "cargo test -p apeireth-tools-canonical --test voice_speak"
     owner: tools
     next_review: "2026-11-20"
@@ -128,7 +128,7 @@ claims:
     tests:
       - crates/capabilities/tools/src/egress.rs
       - crates/capabilities/tools/src/fetch.rs
-    verified_at: da43dcf7ccadbc7b8bd56ba35cead4a5e7f79504
+    verified_at: 52009d5f
     verify_cmd: "cargo test -p apeireth-tools-canonical --lib egress"
     owner: capabilities
     next_review: "2026-12-01"
@@ -200,7 +200,7 @@ claims:
       - crates/capabilities/tools/src/accountability_view.rs
       - crates/foundation/governance/src/authorization.rs
       - crates/adapters/cli/src/egress_command.rs
-    verified_at: 31297a40c217ed05525c198fe0690f39074ace93
+    verified_at: 52009d5f
     verify_cmd: "cargo test -p apeireth-runtime --lib egress && cargo test -p apeireth-runtime-assembly --lib egress_gate"
     owner: runtime
     next_review: "2026-12-01"
@@ -290,7 +290,7 @@ claims:
       - crates/adapters/cli/src/lib.rs
     tests:
       - crates/adapters/gateway/tests/tls_serve.rs
-    verified_at: 31297a40c217ed05525c198fe0690f39074ace93
+    verified_at: 52009d5f
     verify_cmd: "cargo test -p apeireth-gateway --test tls_serve"
     owner: gateway
     next_review: "2026-11-20"
@@ -329,7 +329,7 @@ claims:
     tests:
       - crates/foundation/governance/src/chain.rs
       - crates/adapters/cli/tests/governance_chain_equivalence.rs
-    verified_at: 31297a40c217ed05525c198fe0690f39074ace93
+    verified_at: 52009d5f
     # ⚠️ **2026-11-07 收窄**（声明核验批，与兄弟声明同形）：原命令跑的是
     # **governance crate 全部 lib 单测**（241 条）⇒ ⇒ 而本条真正相关的只有
     # `chain.rs` 的 25 条 + CLI 装配根四态等价性 4 条
@@ -358,7 +358,7 @@ claims:
     tests:
       - crates/foundation/governance/src/chain.rs
       - crates/adapters/cli/tests/governance_chain_equivalence.rs
-    verified_at: 31297a40c217ed05525c198fe0690f39074ace93
+    verified_at: 52009d5f
     # ⚠️ **2026-11-07 收窄**（声明核验批，与兄弟声明同形）：原命令跑的是
     # **governance crate 全部 lib 单测**（241 条）⇒ ⇒ 而本条真正相关的只有
     # `chain.rs` 的 25 条 + CLI 装配根四态等价性 4 条
@@ -595,7 +595,7 @@ claims:
     tests:
       - crates/engine/runtime/tests/bio_pain_wiring.rs
       - crates/engine/organ/src/nociception.rs
-    verified_at: 31297a40c217ed05525c198fe0690f39074ace93
+    verified_at: 52009d5f
     # ⚠️ **2026-11-07 收窄**（声明核验批）：原命令只跑 **organ 侧的 nociception 内核**（24 条）
     # ⇒ ⇒ 而本条标题是「痛觉→**失败链**」⇒ ⇒ 核心证据是本条自己列的
     # `crates/engine/runtime/tests/bio_pain_wiring.rs`（4 条接线用例）⇒ ⇒ **原命令没跑**
@@ -642,7 +642,7 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/bio_observation_cells.rs
       - crates/engine/runtime-assembly/tests/bio_cognitive_wiring.rs
-    verified_at: 31297a40c217ed05525c198fe0690f39074ace93
+    verified_at: 52009d5f
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_observation_cells"
     owner: organ
     next_review: "2026-11-20"
@@ -664,7 +664,7 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/bio_quorum_immune_wiring.rs
       - crates/engine/guard/src/immune_memory.rs
-    verified_at: 31297a40c217ed05525c198fe0690f39074ace93
+    verified_at: 52009d5f
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_quorum_immune_wiring"
     owner: guard
     next_review: "2026-11-20"
@@ -686,7 +686,7 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/bio_care_wiring.rs
       - crates/engine/runtime-assembly/tests/bio_mechanisms_self_status.rs
-    verified_at: 31297a40c217ed05525c198fe0690f39074ace93
+    verified_at: 52009d5f
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_care_wiring"
     owner: organ
     next_review: "2026-11-20"
@@ -708,7 +708,7 @@ claims:
       - crates/engine/runtime-assembly/tests/bio_cognitive_wiring.rs
       - crates/engine/runtime-assembly/tests/bio_observation_cells.rs
       - crates/engine/runtime-assembly/src/canonical/bio_production_wiring/tests.rs
-    verified_at: 31297a40c217ed05525c198fe0690f39074ace93
+    verified_at: 52009d5f
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_cognitive_wiring && cargo test -p apeireth-runtime-assembly --lib -- bio_production_wiring"
     owner: organ
     next_review: "2026-11-20"
@@ -730,7 +730,7 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/bio_quorum_wiring.rs
       - crates/engine/runtime-assembly/tests/bio_quorum_immune_wiring.rs
-    verified_at: 31297a40c217ed05525c198fe0690f39074ace93
+    verified_at: 52009d5f
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_quorum_wiring"
     owner: orchestration
     next_review: "2026-11-20"
@@ -751,7 +751,7 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/bio_lifecycle_wiring.rs
       - crates/engine/runtime-assembly/tests/bio_lifecycle_production.rs
-    verified_at: 31297a40c217ed05525c198fe0690f39074ace93
+    verified_at: 52009d5f
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_lifecycle_wiring"
     owner: orchestration
     next_review: "2026-11-20"
@@ -772,7 +772,7 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/bio_play_wiring.rs
       - crates/engine/runtime-assembly/tests/bio_mechanisms_self_status.rs
-    verified_at: 31297a40c217ed05525c198fe0690f39074ace93
+    verified_at: 52009d5f
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_play_wiring"
     owner: organ
     next_review: "2026-11-20"
@@ -794,7 +794,7 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/bio_ritual_tools.rs
       - crates/engine/runtime-assembly/tests/bio_observation_cells.rs
-    verified_at: 31297a40c217ed05525c198fe0690f39074ace93
+    verified_at: 52009d5f
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_ritual_tools"
     owner: organ
     next_review: "2026-11-20"
@@ -814,7 +814,7 @@ claims:
       - crates/capabilities/tools/src/self_status.rs
     tests:
       - crates/engine/runtime-assembly/tests/bio_tool_ecosystem.rs
-    verified_at: 31297a40c217ed05525c198fe0690f39074ace93
+    verified_at: 52009d5f
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_tool_ecosystem"
     owner: tools
     next_review: "2026-11-20"
@@ -833,7 +833,7 @@ claims:
       - crates/capabilities/tools/src/self_status.rs
     tests:
       - crates/engine/runtime-assembly/tests/bio_mechanisms_self_status.rs
-    verified_at: 31297a40c217ed05525c198fe0690f39074ace93
+    verified_at: 52009d5f
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_mechanisms_self_status"
     owner: orchestration
     next_review: "2026-11-20"
@@ -882,7 +882,7 @@ claims:
       - crates/adapters/cli/tests/gateway_panels.rs
       - crates/engine/runtime-assembly/tests/production_cognitive_v1.rs
       - crates/engine/runtime-assembly/tests/profile_memory_authorization.rs
-    verified_at: 31297a40c217ed05525c198fe0690f39074ace93
+    verified_at: 52009d5f
     verify_cmd: "cargo test -p apeireth-runtime --test registry_runtime_v1 --locked && cargo test -p apeireth-runtime-assembly --test capability_modules_v1 --locked"
     owner: runtime
     next_review: "2026-11-28"
@@ -926,7 +926,7 @@ claims:
       - crates/engine/runtime-assembly/tests/managed_main.rs
       - crates/adapters/cli/tests/canonical_cli_bootstrap.rs
       - crates/adapters/cli/tests/care_heartbeat_host.rs
-    verified_at: 31297a40c217ed05525c198fe0690f39074ace93
+    verified_at: 52009d5f
     verify_cmd: "cargo test -p apeireth-runtime --test cognitive_module_abi --locked -j 2 && cargo test -p apeireth-runtime --test canonical_subloop --locked -j 2 && cargo test -p apeireth-runtime-assembly --test convergence_agents --locked -j 2 && cargo test -p apeireth-runtime-assembly --test memory_namespace_production --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
@@ -956,7 +956,7 @@ claims:
       - crates/engine/runtime-assembly/tests/convergence_memory.rs
       - crates/engine/runtime-assembly/tests/profile_memory_authorization.rs
       - crates/engine/runtime-assembly/tests/memory_namespace_production.rs
-    verified_at: 31297a40c217ed05525c198fe0690f39074ace93
+    verified_at: 52009d5f
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test profile_memory_authorization --locked -j 2 && cargo test -p apeireth-runtime-assembly --test convergence_memory --locked -j 2 && cargo test -p apeireth-runtime-assembly --test memory_namespace_production --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
@@ -982,7 +982,7 @@ claims:
       - crates/engine/runtime-assembly/tests/managed_main.rs
       - crates/engine/runtime-assembly/tests/production_cognitive_v1.rs
       - crates/engine/runtime-assembly/tests/portable_host.rs
-    verified_at: 31297a40c217ed05525c198fe0690f39074ace93
+    verified_at: 52009d5f
     verify_cmd: "cargo test -p apeireth-cli --test canonical_cli_bootstrap --test care_heartbeat_host --locked -j 2 && cargo test -p apeireth-runtime-assembly --test managed_main --test production_cognitive_v1 --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
@@ -1009,7 +1009,7 @@ claims:
       - crates/engine/runtime-assembly/tests/modular_ale.rs
       - crates/engine/runtime-assembly/tests/module_contract_wiring.rs
       - crates/adapters/cli/tests/module_contract_production.rs
-    verified_at: 5c74f955e62cebcb1979fb3606e804d9fb10d73c
+    verified_at: 52009d5f
     verify_cmd: "cargo test -p apeireth-plugin --test module_contract --locked -j 2 && cargo test -p apeireth-runtime-assembly --test modular_ale --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
@@ -1037,7 +1037,7 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/system_one_execution.rs
       - crates/engine/runtime-assembly/tests/modular_ale.rs
-    verified_at: 31297a40c217ed05525c198fe0690f39074ace93
+    verified_at: 52009d5f
     # ⚠️ **2026-11-07 收窄 + 修缺陷**（声明核验批）：
     # ① 原命令只跑 **CLI 旋钮**那一个测试目标（5 条）⇒ ⇒ 而本条自己列的
     #    `crates/engine/runtime-assembly/tests/system_one_execution.rs`（11 条）**没跑**
@@ -1071,7 +1071,7 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/module_message_pipeline.rs
       - crates/engine/runtime-assembly/tests/desktop_message_policy.rs
-    verified_at: 5392e56c3218c147f055edca9288c0fc169a2f5c
+    verified_at: 52009d5f
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test module_message_pipeline --locked -j 2 && cargo test -p apeireth-runtime-assembly --test desktop_message_policy --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
@@ -1092,7 +1092,7 @@ claims:
       - crates/engine/runtime-assembly/tests/mesh_execution.rs
       - crates/engine/runtime-assembly/tests/module_message_pipeline.rs
       - crates/engine/runtime-assembly/tests/mesh_production_host.rs
-    verified_at: 5c74f955e62cebcb1979fb3606e804d9fb10d73c
+    verified_at: 52009d5f
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test mesh_execution --test module_message_pipeline --locked -j 2 && cargo test -p apeireth-runtime-assembly --test mesh_production_host --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
@@ -1110,7 +1110,7 @@ claims:
     tests:
       - crates/engine/memory/src/retrieval_pipeline.rs
       - crates/engine/memory/src/coordinator.rs
-    verified_at: 31297a40c217ed05525c198fe0690f39074ace93
+    verified_at: 52009d5f
     # ⚠️ **2026-11-07 收窄**（声明核验批，与兄弟声明同形）：原命令跑的是
     # **apeireth-memory 整个 lib 单测**（944 条 + 1 ignored）⇒ ⇒ 而本条真正相关的
     # 只有 `retrieval_pipeline.rs` 的 33 条 + `coordinator.rs` 的 17 条
@@ -1135,7 +1135,7 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/failure_learning_bridge.rs
       - crates/engine/memory/tests/reflexion_session_persistence.rs
-    verified_at: 9e5797530163236465316b67aac3b697bef68c5b
+    verified_at: 52009d5f
     verify_cmd: "cargo nextest run -p apeireth-runtime-assembly --test failure_learning_bridge --offline && cargo nextest run -p apeireth-memory --test reflexion_session_persistence --offline"
     owner: memory
     next_review: "2026-12-04"
@@ -1166,7 +1166,7 @@ claims:
       - crates/capabilities/tools/src/fetch.rs
     tests:
       - crates/engine/runtime-assembly/tests/prompt_injection_turn_warning.rs
-    verified_at: 42d3addfa0b8ec1e3e4664c38d3f505ae79551da
+    verified_at: 52009d5f
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test prompt_injection_turn_warning"
     owner: runtime-assembly
     next_review: "2026-12-05"
