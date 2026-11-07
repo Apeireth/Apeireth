@@ -39,12 +39,21 @@ async fn discovers_rea_tools() {
         names.len()
     );
 
-    // 操作员白名单必须转成显式 grant：列出的工具自动放行，未列出的仍需审批。
+    // 操作员白名单转成**族授权**，但**族授权不等于豁免逐次人批** —— 现行 MCP 安全不变量
+    // 规定：族授权只授予「族内可用」，每个具体调用仍停在**逐次人批**（`RequireApproval`）。
+    //
+    // ⚠️ 断言订正（2026-11-07）：本断言原先期望 `Decision::Allow`，那是**族授权可豁免人批**
+    // 的**旧语义**；现行 `_for_approval` 链路的裁决停在 `RequireApproval`
+    // ⇒ 旧断言与现行语义不符（手动 `--ignored` 跑 ⇒ FAILED）⇒ 此处订正到现行裁决。
     let policy = bridge.policy().lock().expect("policy lock");
-    assert_eq!(
-        policy.decision_for_capability("tool.mcp.rea.inspect_artifact"),
-        apeireth_governance::Decision::Allow
+    assert!(
+        matches!(
+            policy.decision_for_capability("tool.mcp.rea.inspect_artifact"),
+            apeireth_governance::Decision::RequireApproval { .. }
+        ),
+        "族授权只授予族内可用，逐次人批不得被豁免"
     );
+    // 未列出的工具同样**不得**被放行（族授权只覆盖族内已授权的那批能力）。
     assert_ne!(
         policy.decision_for_capability("tool.mcp.rea.comment"),
         apeireth_governance::Decision::Allow
