@@ -331,7 +331,7 @@ size crates/engine/memory/src/coordinator.rs 2346
 size crates/engine/memory/src/golden_mining.rs 1352
 size crates/engine/memory/src/persona_layer.rs 1680
 size crates/engine/memory/src/research_derived_memory.rs 1211
-size crates/engine/memory/src/retrieval_pipeline.rs 1318
+size crates/engine/memory/src/retrieval_pipeline.rs 1279
 size crates/engine/memory/src/retrieval_tuning.rs 1270
 size crates/engine/organ/src/causal_world_model.rs 1864
 size crates/engine/organ/src/emergence.rs 1224
