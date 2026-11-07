@@ -45,6 +45,7 @@ pub mod doc_ops;
 pub mod ecosystem_health;
 pub mod education;
 pub mod egress;
+pub(crate) mod evidence_faces;
 // 工具执行五段流水线: pre-execute 瀑布 → 单调 Guard → around(超时/重试) →
 // post-execute 纠错通道 → 输出归一合同; 阶段显式、顺序固定、默认零变化。
 pub mod exec_pipeline;

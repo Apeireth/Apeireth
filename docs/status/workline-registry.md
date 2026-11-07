@@ -23,7 +23,7 @@ Author: lead
 | **记忆质量路线**（已证/已否的路） | [memory-quality-route-map-2026-10-27.md](memory-quality-route-map-2026-10-27.md) | 同文件（§〇 2026-10-28 更新块） | `python3 scripts/check_golden_baseline.py`（准确度不许降 + 送达率观察项） |
 | **状态声明（29 条能力口径）** | [claims.yaml](claims.yaml) | `claims.yaml` 的 `verified_at` / `docs_truth --verify` 输出 | `python3 scripts/docs_truth.py --verify --block-stale` |
 | **跨线合并收口**（2026-10-24 分叉的两条线合一） | [0024-merge-integration-contract-and-adr-numbering.md](../adr/0024-merge-integration-contract-and-adr-numbering.md)（合并后三项结构性裁决）+ [test-baseline.md](../03-reference/test-baseline.md)（合并后实测基线） | [merge-integration-closeout-2026-11-07.md](merge-integration-closeout-2026-11-07.md) | `python3 scripts/arch_guard.py --strict`（棘轮）/ `python3 scripts/docs_truth.py --verify --check`（声明真源）/ `pwsh scripts/gate_full.ps1 -FailIfBusy`（全量门禁，**不覆盖** 3 个独立 workspace） |
-## 二、登记规则（四条）
+| **结果面凭据绊线**（26 族盘点 → 批次 1/2/2c/2d 已落地 9 族）| [credential-tripwire-coverage-2026-11-07.md](credential-tripwire-coverage-2026-11-07.md)（盘点 + 7 条裁决 + 批次方案 + 覆盖实况）| [credential-tripwire-coverage-2026-11-07.md](credential-tripwire-coverage-2026-11-07.md)（**同页 §2.6 = 做到哪了**）| `cargo test -p apeireth-tools-canonical --locked --test result_face_credential_tripwire`（**接线守卫：枚举 9 族**）/ `cargo test -p apeireth-tools-canonical --locked --test result_face_batch2_tripwire` / `cargo test -p apeireth-tools-canonical --locked --test recon_result_face_tripwire` / `cargo test -p apeireth-tools-canonical --locked --test external_result_face_tripwire` / `cargo test -p apeireth-tools-canonical --locked --test external_stderr_echo_tripwire` |## 二、登记规则（四条）
 
 1. **进度页必填**：只写设计稿不写进度页 ⇒ **不算登记**（接手者查不到"做到哪"）；
 2. **进度页必须写「还差什么」**：只有"已完成/未完成"两态不够 ⇒ 要写**差的那一项**；

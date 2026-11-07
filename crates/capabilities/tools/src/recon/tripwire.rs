@@ -9,21 +9,20 @@
 //!
 //! # 覆盖面（一次接线覆盖本族 9 个工具）
 //!
-//! | 面 | 内容 | 用的助手 |
-//! |---|---|---|
-//! | `details` | **递归逐字符串叶子**（键名 / 数字 / 布尔 / null / 结构一律不动）| `guardrail::scan_json_string_leaves` |
-//! | 顶层字段 | `claim` / `tool` / `tool_version` / `target` / `scope` / `observed_at` | `guardrail::scan_result_face` |
-//! | `evidence[]` | `kind` / `source` / `digest` / `note` | 同上 |
-//! | `limitations[]` | 每条局限说明 | 同上 |
+//! 四面（`details` 的递归字符串叶子 / 顶层六个字符串字段 / `evidence[]` /
+//! `limitations[]`）的**编排**在共享层 `crate::evidence_faces` ⇒ ⇒ 本族只**接线**、
+//! 不再自己组织四面。
 //!
-//! # 层序
+//! # 职责切分（扫描 vs 挂侧车）
 //!
-//! **形状层 (M1) → 字段值层 (M4)**（批次 1 裁决，沿用不改序）：形状层先在**明文**
-//! 上判定 ⇒ 命中是真的（不是对已遮内容的误命中）；字段层后接管**字段值** ⇒ 可见
-//! 标签与接线前一致。
+//! * **共享层**：四面遮形（扫描）—— 知道信封的形状、面序与层序；
+//! * **族层（本文件）**：挂 `credential_tripwire` 侧车 + 族特有面（本族无额外面）。
 //!
-//! `details` 的 JSON 叶子走共享助手的**形状层**口径（孤立叶子没有键上下文 ⇒ 字段
-//! 层对它是空操作；见 `guardrail::scan_json_string_leaves` 的文档）。
+//! # 与 `ext.*` 族的关系
+//!
+//! 两族**同构**（同一套证据信封 + 同一组面）⇒ ⇒ 四面遮形**共用一份**实现 ⇒ ⇒
+//! 两族不再各写一份逐段对应的编排；**口径仍然同源**（两族绑的是同一批内核助手，
+//! 层序由共享层统一编排 ⇒ 不会各自漂移）。
 //!
 //! # 纪律
 //!
@@ -34,79 +33,27 @@
 
 use serde_json::Value;
 
+use crate::evidence_faces::EvidenceFaceScanner;
 use crate::guardrail::{
     attach_credential_tripwire, scan_json_string_leaves, scan_result_face, LeakedCredentialKind,
 };
 
 use super::evidence::Evidence;
 
-/// 文本面清扫：形状层 (M1) → 字段值层 (M4)。
+/// 本族的四面扫描器：把本族的两条扫描入口（形状层文本面 + JSON 叶子面）绑到
+/// **共享的四面编排**上。
 ///
-/// 零命中 ⇒ 文本**逐字节**原样返回（[`scan_result_face`] 的契约）。
-fn scan_text_face(text: &str) -> (String, Vec<LeakedCredentialKind>) {
-    let scan = scan_result_face(text).with_field_layer();
-    (scan.text, scan.leaked_kinds)
-}
-
-/// 扫一个字符串面并就地写回；**命中才写回**（零命中 ⇒ 字节不变）。
-fn scan_face(text: &mut String, kinds: &mut Vec<LeakedCredentialKind>) {
-    let (masked, hit) = scan_text_face(text.as_str());
-    if !hit.is_empty() {
-        *text = masked;
-        kinds.extend(hit);
-    }
-}
-
-/// 命中族清单去重（保持首次出现顺序）：侧车只报**族**，不报命中次数。
-fn dedupe_kinds(kinds: Vec<LeakedCredentialKind>) -> Vec<LeakedCredentialKind> {
-    let mut out: Vec<LeakedCredentialKind> = Vec::new();
-    for kind in kinds {
-        if !out.contains(&kind) {
-            out.push(kind);
-        }
-    }
-    out
-}
+/// ⚠ 入口在**族层**绑（不藏进共享模块）⇒ ⇒ 接线口径**按族登记**仍成立（接线守卫
+/// 按文件所在族枚举接线方 ⇒ 本族仍被枚举）⇒ ⇒ 共享层只留「四面编排」这一份。
+const SCANNER: EvidenceFaceScanner =
+    EvidenceFaceScanner::new(scan_result_face, scan_json_string_leaves);
 
 /// 把本族结果面上的凭据形状遮掉（**不改结构**）。
 ///
 /// 返回 (遮形后的信封, 命中族清单)。**零命中** ⇒ 信封与入参**逐字节等价**
 /// （且不挂任何侧车）。
 pub fn redact_credential_faces(evidence: &Evidence) -> (Evidence, Vec<LeakedCredentialKind>) {
-    let mut masked = evidence.clone();
-    let mut kinds: Vec<LeakedCredentialKind> = Vec::new();
-
-    // 顶层字符串字段。
-    scan_face(&mut masked.claim, &mut kinds);
-    scan_face(&mut masked.tool, &mut kinds);
-    scan_face(&mut masked.tool_version, &mut kinds);
-    scan_face(&mut masked.target, &mut kinds);
-    scan_face(&mut masked.scope, &mut kinds);
-    scan_face(&mut masked.observed_at, &mut kinds);
-
-    // `details`：共享助手递归扫**字符串叶子**（键名 / 数字 / 布尔 / null / 结构不动）。
-    let (scanned, hit) = scan_json_string_leaves(&masked.details);
-    masked.details = scanned;
-    kinds.extend(hit);
-
-    // `evidence[]` 的字符串项。
-    for item in &mut masked.evidence {
-        scan_face(&mut item.kind, &mut kinds);
-        scan_face(&mut item.source, &mut kinds);
-        if let Some(digest) = item.digest.as_mut() {
-            scan_face(digest, &mut kinds);
-        }
-        if let Some(note) = item.note.as_mut() {
-            scan_face(note, &mut kinds);
-        }
-    }
-
-    // `limitations[]`。
-    for limitation in &mut masked.limitations {
-        scan_face(limitation, &mut kinds);
-    }
-
-    (masked, dedupe_kinds(kinds))
+    SCANNER.redact_evidence_faces(evidence)
 }
 
 /// 本族结果面的**最终 JSON 值**：遮形后的信封 +（**仅命中时**）`credential_tripwire`
