@@ -1,15 +1,15 @@
 {
-  "version": "internal-2026-10-26b+delivery+cn-stopwords",
+  "version": "internal-2026-10-26b+delivery+cn-stopwords+interrogatives",
   "k": 10,
   "corpora": [
     {
       "name": "redchamber",
-      "recall_at_k": 0.45483193277310924,
-      "ndcg_at_k": 0.28205219268188547,
+      "recall_at_k": 0.4894957983193277,
+      "ndcg_at_k": 0.303655929173048,
       "cases": 476,
-      "groundedness": 0.17857142857142858,
-      "evidence_precision": 0.018697478991596614,
-      "delivery_rate": 0.39260969976905313,
+      "groundedness": 0.19327731092436976,
+      "evidence_precision": 0.0208333333333333,
+      "delivery_rate": 0.39484978540772536,
       "case_fingerprint": "1d969ee2afe65edf5a27360223809ae9dfd866110453dc41bf7271eb5fbb1e7e"
     },
     {
