@@ -386,3 +386,19 @@
 - **Wave 3（设计/拍板批）**：storage B6-2/B6-3（owner 拍板 P0 字段/KDF/锚定/迁移后）· R8-B3 反思队列默认关接线 · §7.7 验证面口径裁决（gov.chain_drill_ci / sec.governance_chain_drill）· release wiring 前缀 schema 裁决。
 
 > 本文件只是**方案**：所有代码/状态变更须由归属线在各自提交内完成，并在收口时重跑 `python scripts/docs_truth.py --verify` 与 `python scripts/wiring_report.py`（生成物禁手改）。
+
+## 附录 C：收口（2026-11-07）—— 本方案里还挂着的项都怎么样了
+
+> 收口记录全文见 [`backend-l4-convergence-2026-11-07.md`](../../01-handoffs/backend-l4-convergence-2026-11-07.md)。
+> 本附录只回答「这份 2026-10-21 方案里的待办，今天结掉没有」。
+
+| 方案里的项 | 今日状态 | 依据 |
+|---|---|---|
+| **R8-B2 收口**（治理链 hook 接生产装配根） | ✅ 收口 | `claims.yaml` `gov.chain_hook_adapter` = PRODUCTION WIRED，生产调用点 `cli/src/governance_chain.rs:production()` |
+| **R8-B3 反思队列默认关接线** | ✅ 收口 | `gov.reflection_queue` = PRODUCTION WIRED：`production()` 按 `APEIRETH_ENABLE_REFLECTION_QUEUE`（只认 `1`）注入调度器，默认关零行为变化；3 例接线测试 + 反证 |
+| **release 发布流水线校验接线** | ✅ 收口 | `publish-release.yml` 逐件校验 fail-closed；验证面改为可自动运行的 10 例自测（[release-asset-verification §6](../../../packaging/release-asset-verification.md)） |
+| **§7.7 验证面口径裁决（`gov.chain_drill_ci` / `sec.governance_chain_drill`）** | ✅ **已裁决** | ① 先修根因：演练步骤**前置到 nextest 之前** ⇒ 早停 skip 消失；② CI 首跑取证：run `42344558968` 里 ubuntu/macOS 的 step #9 已 success（nextest 尚未开始）、windows 已起跑；③ **口径**：验证面资产按「**CI 门禁真跑 = 该能力的生产执行面**」抬到 PRODUCTION WIRED，并在 claims notes 写明「若要求严格到 crate 生产调用点，应退回 IMPLEMENTED」（[drill doc §7](../../governance-chain-drill-2026-10-20.md)） |
+| **A 类缺口接线（16 条清单）** | ✅ 大部分收口 | 52 条声明现为 **51 PRODUCTION WIRED / 1 NOT IMPLEMENTED（归档）**；残留口径都以 claims `notes` 的边界为准，不是静默未做 |
+| storage B6-2/B6-3（owner 拍板项） | ⏸ 仍是**待 owner 决策** | 本方案 §7 列的 P0 字段/KDF/锚定要求，本轮未动（不属「AI 可自决」面） |
+| `linux_containment` Linux CI 证据 | ⏸ 部分 | 已登记 PRODUCTION WIRED 并保留 `partial` 标注（进程组/setrlimit/PDEATHSIG/NPROCESS 等已实跑；cgroup/seccomp/namespace/网络隔离**不承诺**） |
+| ↑ 其余账本项 | 见 `docs/status/claims.yaml` 与 `docs/status/wiring.yaml`（两者均为机检真源，本附录只做导航） | — |

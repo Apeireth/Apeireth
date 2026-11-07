@@ -91,3 +91,25 @@ Linux / macOS 用 `sha256sum -c SHA256SUMS`（或 `shasum -a 256`）比对同一
 - 安装生命周期：[windows-packaging-lifecycle.md](windows-packaging-lifecycle.md)
 - 依赖供应链（依赖准入 / 漏洞公告 / 许可证）是另一条线：`deny.toml` / `audit.toml`（本批只读对账、口径不动）
 - 1.0 时代产物签名脚本存于 `scripts/release/`（历史产物，非当前入口，见该目录 README）
+
+## 6. 2026-11-07 追加：行为契约自测（验证面从「装饰品」变「可自动运行」）
+
+- **原问题**：本页 §4 的 claim 验证命令写成
+  `pwsh -NoProfile -File scripts/verify-release-assets.ps1 -ExpectedSha256 <hex> -Path <asset>`
+  ⇒ ① 含 `<hex>` / `<asset>` **占位符跑不了**；② **参数名写错**（脚本要 `-ArtifactPath`，不是 `-Path`）
+  ⇒ 该「验证面」实际是装饰品（守卫只能给它挂豁免）。
+- **修法**：新增 [scripts/test_verify_release_assets.py](../../scripts/test_verify_release_assets.py)
+  （**10 例**，真调 `pwsh` 跑**真实脚本**，不是 mock）；claim 的 `verify_cmd` 改为
+  `python3 scripts/test_verify_release_assets.py`，并**删掉** `verify_skip_reason`（H5 真值闸要求高口径声明不许靠豁免成立）。
+- **覆盖**：清单匹配 / 哈希不一致如实 FAIL / 清单缺项 / `.sha256` sidecar 自动查找 / `-ExpectedSha256` 直给 /
+  `-RequireSignature` 门槛语义 / 非法短哈希 / 资产不存在 fail-closed / `-ExpectedSha256` 与 `-ManifestPath` 互斥 /
+  夹具哈希常量非过期（用 hashlib 复算防常量变谎言）。
+- **反向验伪（两条，都已跑红）**：① 把夹具期望 SHA-256 改全零 ⇒ `FAILED (failures=5)`，exit 1；
+  ② 可复现开关 `APEIRETH_VERIFY_TEST_FAULT=wrong-expected-hash python3 scripts/test_verify_release_assets.py`
+  ⇒ `FAILED (failures=3)`，exit 1。⇒ 不是恒绿断言。
+- **生产接线**：`.github/workflows/publish-release.yml` 的 Windows job 构建后
+  `generate-release-manifest.ps1` 产 `SHA256SUMS` → 逐件 `verify-release-assets.ps1 -ArtifactPath … -ManifestPath …`
+  → `if ($LASTEXITCODE -ne 0) { exit 1 }`（**失败即阻断上传/发布，fail-closed**）。
+- ⚠️ **诚实边界（不因抬级抹掉）**：「签名状态如实报」**≠「签名有效」**（本机 Linux = 本平台无 Authenticode 校验面）；
+  发布物**代码签名**与**可复现构建证明**仍属**排期待办**；本自测证明的是**校验器的判定语义 + 流水线接线**，
+  **不是**「某次真实发布的产物已被验证过」。

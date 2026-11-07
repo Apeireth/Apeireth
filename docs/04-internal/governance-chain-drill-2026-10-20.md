@@ -136,3 +136,23 @@ cargo fmt --check（本文件 rustfmt 单文件 + 全仓）
 - 0 装：见 §抬头与 §5，未走通环节零粉饰；M-of-N 逻辑票 ≠ 密码学多签措辞全篇一致；
 - 中性表述：零第三方产品名；测试/文档零新增外部依赖（fs_err 为既有 dev 依赖）；
 - 未 commit，等主代理审查统一提交。
+
+## 7. 2026-11-07 追加：CI 首次真实执行取证（原「尚未首跑」口径已失效）
+
+- **旧口径的根因**：演练步骤排在 `cargo nextest run --workspace` **之后** ⇒ 三平台 nextest 常红 ⇒
+  job 早停 ⇒ 该步骤被 `skip` ⇒ **远端 0 次执行**（所以只能登记 IMPLEMENTED）。
+- **修法**：把该步骤**前置到 nextest 之前**（`.github/workflows/rust.yml`，紧接
+  `cargo build --workspace --tests --locked`）。前置依赖核查：演练只依赖上一步 build 的产物，
+  **不读** nextest 的 JUnit/产物 ⇒ 对 nextest 零前置依赖。
+- **实测取证**（GitHub Actions run **42344558968**，head `2c1e7f42`，PR #94）：
+  - `ubuntu-latest`：`Governance chain drill (R8-D)` = **step #9 completed / success**（05:58:42→05:58:46），
+    而 `cargo nextest run` 是 **#10 且当时仍在跑** ⇒ 「nextest 红就 skip」已不成立；
+  - `macos-latest`：同一 step **#9 success**（06:01:39→06:02:03）；
+  - `windows-latest`：step **#9 已起跑**（06:06:06，快照时 in_progress）⇒ **「三平台全绿」待该 run 结束复核，不预支**。
+- **本地等价真跑**：`cargo test -p apeireth-governance --test governance_chain_drill` ⇒
+  **4 passed / 0 failed / 0 ignored**（通过 / 拒绝 / 超时三路径 + 多签守卫）。
+- **声明面**：`gov.chain_drill_ci` 与 `sec.governance_chain_drill` 均已据此抬到 **PRODUCTION WIRED**。
+  ⭐ 口径裁决（写进 claims notes，不作隐性升级）：本条属**验证面资产**，没有新增 crate 生产调用点；
+  抬级用的是「**CI 门禁真跑 = 该能力的生产执行面**」。若日后要求严格到「必须有 crate 生产调用点」，
+  这两条应退回 IMPLEMENTED。
+- **残余缺口（如实）**：若前置 `cargo build --workspace --tests` 失败，该步骤仍会被 skip（改前改后同）。

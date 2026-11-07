@@ -290,3 +290,25 @@ applier.apply_patch(patch)?; // 内存预演 -> 磁盘写入 (任意异常自动
   "timestamp_ms": 1780000000000
 }
 ```
+
+---
+
+## 附录 A：2026-11-07 生产接线批（L4 收口）
+
+本批把「库里有、生产没接」的六条能力真正接进装配根，并把声明抬到 **PRODUCTION WIRED**。
+**每条都附了「生产调用点」与「反证」**（去掉接线该测试必须变红 —— 已实测）。
+
+| 能力 | 生产调用点 | 接线后行为 | 反证（已实测变红） | claim |
+|---|---|---|---|---|
+| **模块执行契约选举** | `crates/engine/runtime-assembly/src/canonical/cognitive_registry.rs` 的 `register_with_policy` 末段 `module_contract_wiring::attach(builder)`（CLI 组合根 `crates/adapters/cli/src/lib.rs:1706` 走该路径） | 装配表内模块物化为既有 `ContractTool` 表面（**只收窄面，不授予权限**）；表外模块逐字节零变化 | 停用 `attach(builder)` ⇒ `production_composition_root_elects_the_public_module_contract` 变红 | `rt.module_execution_contract` |
+| **模块消息管道（有界/owner 认证）** | `canonical/desktop_host.rs:51-52` 在桌面 Host 策略里装 `ModuleMessagePolicy::default()`（`cli/src/lib.rs:1704` → `instances.rs:264`） | 管道从「不存在（任何发送恒 `Disabled`）」变为「存在且**零授权**」⇒ 零流量零副作用；限额有界（16 in-flight / 64 KiB / 16 hops / 128 幂等 / 5 s） | 删那两行 ⇒ 3 个断言全红 | `rt.module_messages` |
+| **注册式记忆工具面** | `production.rs:1484 memory_assembly::wire(...)` + `:1846 bind_profile_mappings(...)`（模块实例上的映射**迟绑定**，不重复注册 `module.memory`） | 7 个 `memory_*` 工具可用（此前调用即 `requested tool is not registered`）；⚠️ **自动检索默认关**（开它会污染每回合转录） | 摘除整个装配点 ⇒ 3 个测试红在 `requested tool is not registered` | `mem.registered_namespace` |
+| **模块自有子 Agent + 分层核算** | 同上（`memory_organize` → `canonical/memory_module/organizer.rs` 的 `ModuleAgents::spawn_agent`） | 子 Agent 用**它自己的** Host grant 调工具（organize 回执 `agent_id` + `scheduled`，子 Agent 真写成功） | 同上 | `rt.owned_agents` |
+| **社会修复 → 提示词修复指令（SG-20）** | `canonical/bio_production_wiring.rs` 安装点建**共享槽**：写 = 总线 `ApprovalSocial::Rejected` 回调；读 = `ObservedBioAssemblyModule::on_hook(TurnStart)` 每回合 | 开关 `APEIRETH_ENABLE_BIO_REPAIR_GUIDANCE=1` 时：人工拒绝 ⇒ **下一回合**提示词出现 `[交互修复指令] … [/交互修复指令]`（含 `acknowledge_uncertainty`）；关档不构造/不注册/不拿锁 | 去掉**写槽**或**读槽** ⇒ 行为测试红 | `bio.social_repair` |
+| **本地 Mesh worker（受治）** | `canonical/desktop_host.rs:121 local_mesh_module_at` / `:161 attach_local_mesh` / `:205`；配置面 = 数据根下 `mesh.json`（StoredDoc 信封、`exact(name,1)` 拒开） | **双条件 + 硬失败**：配置合法 **且** System One 监督者已绑才注册；有配置没绑 ⇒ **报错拒绝启动**（不静默跳过）；无文件 ⇒ 不注册、零流量、逐字节零变化 | 停用注册臂 ⇒ 真 UDP 收包用例 10 s 超时变红 | `rt.mesh_local_worker`（⚠️ public status 面生产未启用） |
+
+**附加**：记忆 crate 新增**只读能力审计面** `crates/engine/memory/src/capability_audit.rs`（不写库）并让 `apeireth memory handover` 自述该审计结果 ⇒ 记忆可达率 **90 → 109**、「未解释不可达」**32 → 0**（见 `scripts/memory-reachability-*.txt`）。
+
+⚠️ **本表只记「生产调用点已存在且真跑过」的面**；每条能力的诚实边界见 `docs/status/claims.yaml` 对应 `notes`
+（例如：mesh 的 public status 未启用、bio 指令块是 untrusted V1 数据不是 system 权威、自动检索默认关、
+生产默认只注册兼容 ABI 而契约/Protected 是 Host 显式 opt-in）。

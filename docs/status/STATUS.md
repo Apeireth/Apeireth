@@ -24,8 +24,8 @@
 | `gov.chain_hook_adapter` | PRODUCTION WIRED | ON | - | `52009d5f` | 2026-11-20 |
 | `gov.reflection_queue` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_REFLECTION_QUEUE` | `a3c0c2f4` | 2026-11-20 |
 | `gov.chain_drill_ci` | PRODUCTION WIRED | - | - | `a3c0c2f4` | 2026-11-20 |
-| `sec.governance_chain_drill` | PRODUCTION WIRED | - | - | `a3c0c2f4` | 2026-11-20 |
-| `rel.release_asset_verify` | PRODUCTION WIRED | - | - | `a3c0c2f4` | 2026-11-20 |
+| `sec.governance_chain_drill` | PRODUCTION WIRED | - | - | `ced07982` | 2026-11-20 |
+| `rel.release_asset_verify` | PRODUCTION WIRED | - | - | `ced07982` | 2026-11-20 |
 | `sec.sql_readonly_gate` | PRODUCTION WIRED | ON | - | `c9251271` | 2026-11-20 |
 | `sec.credential_endpoint_binding` | PRODUCTION WIRED | ON | - | `a9d689ed8f09` | 2026-12-01 |
 | `sec.provider_proxy_ssrf` | PRODUCTION WIRED | ON | - | `c9251271` | 2026-11-20 |
