@@ -291,4 +291,3 @@ async fn production_memory_module_owns_a_child_agent_that_writes_with_its_own_gr
     let main_session: SessionId = main.snapshot().session;
     assert!(!child_write.is_empty() && main_session.to_string().len() >= 32);
 }
-
