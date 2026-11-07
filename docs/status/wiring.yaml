@@ -1200,6 +1200,7 @@ items:
       production_refs:
         - "crates/adapters/cli/src/lib.rs"
         - "crates/adapters/cli/src/llm_factory_env.rs"
+        - "crates/engine/runtime-assembly/src/canonical/desktop_host.rs"
         - "crates/engine/runtime-assembly/src/canonical/memory_module.rs"
         - "crates/engine/runtime-assembly/src/system_one.rs"
         - "crates/engine/runtime/src/canonical/dispatcher.rs"
