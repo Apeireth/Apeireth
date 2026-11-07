@@ -135,6 +135,27 @@
       ]
     },
     {
+      "id": "build-real-query-exam",
+      "path": "scripts/build_real_query_exam.py",
+      "kind": "generator",
+      "is_guard": false,
+      "blocking": true,
+      "invocation": [
+        "python3 scripts/build_real_query_exam.py --miracl-dir /tmp/miracl-cache --out \"$APEIRETH_MIRACL_EXAM\""
+      ],
+      "ci_workflows": [
+        ".github/workflows/real-query-ratchet.yml"
+      ],
+      "has_baseline": false,
+      "notes": "构建真实查询考卷（MIRACL 中文）—— 从原始数据到可跑批的考卷",
+      "flags": [
+        "--help",
+        "--miracl-dir",
+        "--out",
+        "-h"
+      ]
+    },
+    {
       "id": "check-batch-status",
       "path": "scripts/check_batch_status.py",
       "kind": "ratchet",
@@ -612,9 +633,11 @@
       "is_guard": true,
       "blocking": true,
       "invocation": [
-        "python3 scripts/check_real_query_baseline.py"
+        "python3 scripts/check_real_query_baseline.py --check"
       ],
-      "ci_workflows": [],
+      "ci_workflows": [
+        ".github/workflows/real-query-ratchet.yml"
+      ],
       "has_baseline": true,
       "notes": "真实查询闸门（MIRACL 中文）：方向不许错",
       "flags": [
@@ -1029,6 +1052,22 @@
       ],
       "has_baseline": false,
       "notes": "用 cargo-cyclonedx 生成 CycloneDX 1.5 SBOM, 落地 cyclonedx-sbom.json",
+      "flags": []
+    },
+    {
+      "id": "test-real-query-baseline",
+      "path": "scripts/test_real_query_baseline.py",
+      "kind": "generator",
+      "is_guard": false,
+      "blocking": false,
+      "invocation": [
+        "python3 scripts/test_real_query_baseline.py"
+      ],
+      "ci_workflows": [
+        ".github/workflows/real-query-ratchet.yml"
+      ],
+      "has_baseline": false,
+      "notes": "check_real_query_baseline 的自测（防闸门本身被改坏）",
       "flags": []
     },
     {

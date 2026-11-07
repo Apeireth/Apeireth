@@ -1,0 +1,135 @@
+name: Real query ratchet (真实查询方向闸门)
+
+# 2026-11-07 新增：守住「**真实用户查询的方向不许错**」这条线。
+#
+# 为什么要有：模板卷（`golden-baseline`）量的是**模板题**，而模板题与真实
+# 用户查询**形态不同**（实测：模板题 = 5 种固定措辞；真人查询 = 393 条各自
+# 不同的问句）⇒ ⇒ ⇒ **同一个特性在两套卷上结论相反**（实测例：`first_pos`
+# 在真人查询 **+0.1227**、在模板词面卷 **−0.0252**）。
+# ⇒ ⇒ ⇒ 于是两个闸门**职责不同**：
+#   * `golden-baseline` ⇒ 守「**不许退步**」（模板卷，防回归）
+#   * 本 workflow      ⇒ 守「**不许自欺**」（真人卷，防用一套有偏的卷子论证收益）
+#
+# ⚠️ **不新增 workflow 就会少一道尺子** ⇒ ⇒ 所以单独一个（不与模板卷耦合：
+# 耦合会让失败原因难辨 ⇒ ⇒ 难辨的闸门会被绕过）。
+#
+# ⚠️ **语料在仓外**（MIRACL 中文 dev，约 **700MB**）⇒ ⇒ CI 上**必须先下载**
+# ⇒ ⇒ 下载失败 ⇒ 门禁**如实失败**（不许静默跳过：那等于「没检查」）。
+# ⇒ ⇒ **成本对照**：小说语料 ~4MB，本语料 ~700MB（**175 倍**）
+# ⇒ ⇒ ⇒ 因此**必须带缓存**（`actions/cache`）⇒ ⇒ 第二次起近乎免费。
+#
+# ⚠️ **数据不入库**（与小说语料同一惯例）：MIRACL 语料与标注来自维基百科
+# （**CC BY-SA**）⇒ ⇒ 仅作**研究用途** ⇒ ⇒ 不打包进仓库。
+#
+# ⚠️ **口径**：本闸门用的是**采样池**（被标注段落 + 确定性采样的未标注段落）
+# ⇒ ⇒ **召回偏乐观** ⇒ ⇒ **绝对值不可与 MIRACL 官方榜对比**
+# ⇒ ⇒ ⇒ 本闸门只看**相对基线的变化**（基线文件里写明了这条警告）。
+
+on:
+  push:
+    branches: [master, main]
+    paths:
+      - 'crates/engine/memory/**'
+      - 'crates/engine/storage/**'
+      - 'crates/engine/runtime-assembly/**'
+      - 'scripts/check_real_query_baseline.py'
+      - 'scripts/test_real_query_baseline.py'
+      - 'scripts/build_real_query_exam.py'
+      - 'scripts/real-query-baseline.json'
+  pull_request:
+    paths:
+      - 'crates/engine/memory/**'
+      - 'crates/engine/storage/**'
+      - 'crates/engine/runtime-assembly/**'
+      - 'scripts/check_real_query_baseline.py'
+      - 'scripts/test_real_query_baseline.py'
+      - 'scripts/build_real_query_exam.py'
+      - 'scripts/real-query-baseline.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# ⚠️ **CI 磁盘瘦身**（照 `golden-baseline.yml` 的实测做法）：
+# 默认 `cargo build --workspace --tests` 的 target 体积 101 GB / runner 只有 14 GB
+# ⇒ ⇒ 但本闸门**只构建一个 example** ⇒ ⇒ 体积很小 ⇒ ⇒ 这里仍设上（防手滑）。
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_PROFILE_DEV_DEBUG: 0
+  CARGO_PROFILE_TEST_DEBUG: 0
+  CARGO_PROFILE_DEV_STRIP: symbols
+  CARGO_PROFILE_TEST_STRIP: symbols
+
+jobs:
+  real-query:
+    name: real user query direction gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      # 语料落仓外（与生产同口径：数据不入库）。
+      APEIRETH_DATA_DIR: /tmp/apeireth-data
+      # ⭐ **考卷输出目录**（构建产物；原始分片构建后可删）。
+      APEIRETH_MIRACL_EXAM: /tmp/apeireth-data/miracl-exam
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@1.97.1
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      # ⭐⭐ **语料缓存**（**成本关键**：700MB ⇒ 每次下会拖垮 CI）
+      # ⇒ ⇒ 缓存键固定在**语言 + split**上 ⇒ ⇒ 数据更新时才会失效。
+      - name: Cache MIRACL Chinese corpus
+        id: corpus-cache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/miracl-cache
+          key: miracl-zh-dev-v1-corpus
+
+      - name: Download MIRACL Chinese corpus (query + qrels + corpus shards)
+        if: steps.corpus-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/miracl-cache
+          cd /tmp/miracl-cache
+          BASE="https://hf-mirror.com/datasets/miracl/miracl/resolve/main/miracl-v1.0-zh"
+          CORPUS="https://hf-mirror.com/datasets/miracl/miracl-corpus/resolve/main/miracl-corpus-v1.0-zh"
+          curl -sSL --retry 3 --retry-delay 5 -o topics.tsv \
+            "$BASE/topics/topics.miracl-v1.0-zh-dev.tsv"
+          curl -sSL --retry 3 --retry-delay 5 -o qrels.tsv \
+            "$BASE/qrels/qrels.miracl-v1.0-zh-dev.tsv"
+          for i in 0 1 2 3 4 5 6 7 8 9; do
+            curl -sSL --retry 3 --retry-delay 5 -C - -o "docs-$i.jsonl.gz" \
+              "$CORPUS/docs-$i.jsonl.gz"
+          done
+          ls -la
+
+      - name: Verify corpus shards are intact (gzip check)
+        run: |
+          set -euo pipefail
+          cd /tmp/miracl-cache
+          for i in 0 1 2 3 4 5 6 7 8 9; do
+            gzip -t "docs-$i.jsonl.gz" || { echo "分片 docs-$i.jsonl.gz 损坏"; exit 1; }
+          done
+          echo "✅ 10 个分片 gzip 校验通过"
+
+      - name: Build the real-query exam (deterministic)
+        run: |
+          python3 scripts/build_real_query_exam.py \
+            --miracl-dir /tmp/miracl-cache \
+            --out "$APEIRETH_MIRACL_EXAM"
+
+      # ⚠️ **只构建闸门真正需要的那一个 example**
+      # （照 `golden-baseline.yml` 的实测做法：构建整个 workspace 会到 101 GB ⇒ runner 装不下）
+      - name: Build the real-query exam example (闸门唯一需要的产物)
+        run: cargo build --locked -p apeireth-memory --example miracl_exam_ab
+
+      - name: Real query direction gate (accuracy must not drop)
+        run: python3 scripts/check_real_query_baseline.py --check
+
+      # ⚠️ **闸门也要被验证**（防「门禁本身被改坏」）
+      - name: Real query gate self-test
+        run: python3 scripts/test_real_query_baseline.py
