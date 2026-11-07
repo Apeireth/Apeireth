@@ -1048,7 +1048,7 @@ claims:
     tests:
       - crates/engine/memory/src/retrieval_pipeline.rs
       - crates/engine/memory/src/coordinator.rs
-    verified_at: e1127c32d57ba8444264d1f207e9213c612ac8f7
+    verified_at: 31dd65f9df19a34049df56ad6bcfadf658667c37
     verify_cmd: "cargo test -p apeireth-memory --lib"
     owner: memory
     next_review: "2026-12-04"
