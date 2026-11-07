@@ -2,7 +2,7 @@
 
 > **用途**：AGENTS.md §0 要求的「做到哪了」的唯一权威页。本页只写**事实与证据**，
 > 数字均带命令与日期；**还差什么**逐条列出（§5）。
-> **状态**：🟡 主体完成 · 有明确遗留（§5 / §6）｜**2026-11-07 更新**：§5-1「frontend JS 侧未实测」**已消**（`a1048c90`）；§5-2「两个 UI 门禁并存」**已消**（门禁归并批）
+> **状态**：🟢 **收口完成**（2026-11-07 17:44 全量门禁 **GATE FULL PASSED**）· 主体完成 · 有明确遗留（§5 / §6）｜**2026-11-07 更新**：§5-1「frontend JS 侧未实测」**已消**（`a1048c90`）；§5-2「两个 UI 门禁并存」**已消**（门禁归并批）
 > **Owner**：主代理（总工程师线）｜**执行记录**：`docs/adr/0024-merge-integration-contract-and-adr-numbering.md`
 
 ## 1. 这条工作线是什么
@@ -43,8 +43,8 @@
 
 | workspace | 实测 | 覆盖它的门禁 |
 |---|---|---|
-| `crates-ui/` | **432 passed / 0 failed / 4 ignored**（2026-11-07 合并后实测；⚠️ 取自**他线在途改动落地前** ⇒ 数字随其施工变动；⚠️ **doc-test 未跑** ⇒ 见 §5-3） | `ui-engine-ci.yml`（**2026-11-07 已归并**：原 `ui-core-ci.yml` 删除 —— 它的 4 关重复关已在前者覆盖，独有的 doc-test 关**刻意未引入**（那一关红）） |
-| `frontend/companion-desktop/src-tauri/` | **171 passed / 0 failed / 2 ignored**（Tauri Rust 侧）| `companion-desktop-ci.yml`（装 Tauri 系统依赖 + sidecar 占位 ⇒ **cargo check / cargo test**）⇒ **独立的 CI 已守** ⇒ ⇒ **不纳入根门禁**（纳入 = 与既有 CI 重复编译） |
+| `crates-ui/` | **676 passed / 0 failed / 4 ignored**（2026-11-07 17:44 同日实测；含他线在途模块 ⇒ 数字随其施工变动）| `ui-engine-ci.yml`（**8 job**：check / clippy / fmt / test / **doc-test**（2026-11-07 补回）/ wasm32 构建 / cargo deny / 试点对照 / 生产对照）⇒ **独立的 CI 已守** ⇒ ⇒ **不纳入根门禁**（纳入 = 与既有 CI 重复编译） |
+| `frontend/companion-desktop/src-tauri/` | **171 passed / 0 failed / 2 ignored**（2026-11-07 同日实测；**需 sidecar 占位**，与 CI 同口径）| `companion-desktop-ci.yml`（装 Tauri 系统依赖 + sidecar 占位 ⇒ **cargo check / cargo test**）⇒ **独立的 CI 已守** ⇒ ⇒ **不纳入根门禁** |
 | `frontend/companion-desktop/`（JS 侧） | ✅ **83 of 83 suites passed**（2026-11-07 实测，exit 0）—— 本机 Node 无内置 TS 支持 ⇒ 走**类型擦除降级路径**（`tests/ts-strip-hooks.mjs`，用仓内**既有** `typescript` devDependency）⇒ 修前本机 **66 of 83 suites failed**（`ERR_NO_TYPESCRIPT`，**模块加载阶段**就死）⇒ **已从「未实测」转为「全绿」** | `companion-desktop-ci.yml` 的 `pnpm test` 步骤（Node >=22 走原生擦除；**2026-11-07 起**无 TS 支持的 Node 也能跑完）⇒ **独立的 CI 已守** |
 
 ### 3.3 合并后逐项处置（**每条都有归因**，不是「重跑一次就绿了」）
@@ -120,7 +120,7 @@ python3 scripts/arch_guard.py --strict           # 期望 VIOLATIONS 0
 # 声明真源
 python3 scripts/docs_truth.py --verify --check    # 期望 claims=51 fail=0 stale=0
 # 三个独立 workspace（根门禁覆盖不到 ⇒ 必须单独跑）
-cd crates-ui && cargo test --workspace --locked                              # 432 passed
+cd crates-ui && cargo test --workspace --locked                              # 676 passed
 cd frontend/companion-desktop/src-tauri && cargo test --locked                # 171 passed
 cd frontend/companion-desktop && pnpm test                                     # 83 of 83 suites passed
 ```
