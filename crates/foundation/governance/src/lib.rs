@@ -58,6 +58,10 @@ pub mod audit;
 pub mod authorization;
 pub mod chain;
 pub mod colang;
+// 凭据**形状**清扫 (形状层): 只扫形状 (裸密钥串 / PEM 私钥块 / 明文口令赋值 …),
+// 不看字段名与值的关系; 命中即就地遮形 (单向标签), 不改判、不拒执行.
+// 公共面只有「扫一个文本面 ⇒ (终稿文本, 命中族清单)」+ 开关读取 (默认关).
+pub mod credential_sweep;
 pub mod eval;
 pub mod evidence;
 pub mod input_security;
@@ -91,6 +95,10 @@ pub use chain::{
     GovernancePhase, ImmediateReflectionScheduler, InMemoryAuditSink, MultiSignVerification,
     MultiSignVerifier, PlaceholderMultiSignVerifier, ReflectionDue, ReflectionSchedule,
     ReflectionScheduler, SystemChainClock, GOVERNANCE_CHAIN_VERSION,
+};
+pub use credential_sweep::{
+    credential_sweep_enabled, credential_sweep_env_name, sweep_credential_shapes, CredentialFamily,
+    CredentialSweep,
 };
 pub use input_security::{
     redact_secret_surfaces, session_fingerprint, CredentialDisclosureHook, FeelingHint,

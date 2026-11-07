@@ -18,6 +18,7 @@ use std::time::Duration;
 use apeireth_core::kernel::{
     ApprovalId, CapabilityId, Clock, RequestId, SessionId, Timestamp, TraceId,
 };
+use apeireth_governance::credential_sweep::{credential_sweep_enabled, sweep_credential_shapes};
 use apeireth_orchestration::compaction_checkpoint::{
     CompactionLogEntry, CompactionMessage, CompactionRole,
 };
@@ -190,19 +191,35 @@ impl Session {
     /// The transcript and the event log advance together: the log gains the
     /// append record that is the authority for this message, so the log is
     /// complete for every message the session has ever held.
+    ///
+    /// **凭据形状清扫 (默认关)**: 开关打开时, **真正入 transcript / 入日志的那
+    /// 一份**消息先过一遍形状层 (只动文本面) ⇒ 转录面与日志面**都不含明文**;
+    /// 开关关闭时逐字节零变化 (原值直接入面).
     pub fn append(&mut self, message: NormalizedMessage, clock: &dyn Clock) {
         let seq = self.messages.len();
-        self.messages.push(message.clone());
+        // 遮形作用在**入面的那一份**上: 原 `message` 不被改 (调用方可能还要用它),
+        // 改的是**入面用的副本**; 开关关 ⇒ 副本就是原值 (逐字节零变化).
+        let stored = match sweep_message_text_faces(&message) {
+            Some(swept) => swept,
+            None => message,
+        };
+        self.messages.push(stored.clone());
         self.log.push(LogEntry {
             at: Timestamp::from_clock(clock),
             request: None,
             trace: None,
-            event: SessionEventKind::MessageAppended { seq, message },
+            event: SessionEventKind::MessageAppended {
+                seq,
+                message: stored,
+            },
         });
         self.touch(clock);
     }
 
     /// Append several messages, touching the modification time once.
+    ///
+    /// **凭据形状清扫 (默认关)**: 与 [`Session::append`] 同一口径 —— 开关打开时
+    /// 每条消息的**文本面**入面前先遮形; 开关关闭时逐字节零变化.
     pub fn extend(
         &mut self,
         messages: impl IntoIterator<Item = NormalizedMessage>,
@@ -211,12 +228,19 @@ impl Session {
         let at = Timestamp::from_clock(clock);
         for message in messages {
             let seq = self.messages.len();
-            self.messages.push(message.clone());
+            let stored = match sweep_message_text_faces(&message) {
+                Some(swept) => swept,
+                None => message,
+            };
+            self.messages.push(stored.clone());
             self.log.push(LogEntry {
                 at,
                 request: None,
                 trace: None,
-                event: SessionEventKind::MessageAppended { seq, message },
+                event: SessionEventKind::MessageAppended {
+                    seq,
+                    message: stored,
+                },
             });
         }
         self.touch(clock);
@@ -495,6 +519,38 @@ impl Session {
         self.revision = self.revision.saturating_add(1);
         self.updated_at = Timestamp::from_clock(clock);
     }
+}
+
+/// 凭据形状清扫 (默认关): 只动消息的**文本面** (`ContentPart::Text`).
+///
+/// 返回 `None` = 无需改 (开关关, 或零命中) ⇒ 调用方拿原消息即可 (逐字节不变).
+///
+/// # 口径
+///
+/// * **只扫文本面**: 图像面 (URL / base64) 不是文本面 ⇒ 不动; 工具调用 / 工具
+///   调用 id / 名字 / 角色 / 顺序 一律**原样** ⇒ 遮形**不改消息的其它语义**;
+/// * **零命中 ⇒ 逐字节不变**: 形状层零命中时终稿与输入逐字节相同 ⇒ 这里连替换
+///   都不做 (返回 `None`), 干净消息的形状与字节都不变;
+/// * **不改原消息**: 遮形作用在**入面的那份副本**上 (调用方可能还要用它).
+///
+/// ⚠️ **已知边界 (如实登记)**: 工具调用的**参数**面不在本函数覆盖范围内 ——
+///    它不是文本面, 且改它会改掉「模型实际发出的那次调用」⇒ ⇒ 本批只兜文本面.
+fn sweep_message_text_faces(message: &NormalizedMessage) -> Option<NormalizedMessage> {
+    if !credential_sweep_enabled() {
+        return None;
+    }
+    let mut swept = message.clone();
+    let mut changed = false;
+    for part in &mut swept.content {
+        if let ContentPart::Text { text } = part {
+            let scan = sweep_credential_shapes(text);
+            if !scan.is_clean() {
+                *text = scan.text;
+                changed = true;
+            }
+        }
+    }
+    changed.then_some(swept)
 }
 
 /// One persisted execution fact for a session.

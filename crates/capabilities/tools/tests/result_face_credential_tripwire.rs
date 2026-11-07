@@ -463,7 +463,9 @@ fn tripwire_is_wired_for_exactly_the_expected_families() {
     }
 
     // 批次 1 = {shell, filesystem, search, repo}；批次 2 = {fetch, git_write, worktree_apply, recon}；
-    // 批次 2c = {external}（10 个外部工具适配器，原样回显最凶的一族）。
+    // 批次 2c = {external}（10 个外部工具适配器，原样回显最凶的一族）；
+    // 批次 3b = {content_feed}（**记忆摄取面**：摄取内容入库前清扫 —— 那是
+    //   「凭据进存储」的面，比 transcript 更深 ⇒ ⇒ 接线落在摄取内容构造处）。
     let expected: BTreeSet<String> = [
         "shell",
         "filesystem",
@@ -474,21 +476,22 @@ fn tripwire_is_wired_for_exactly_the_expected_families() {
         "worktree_apply",
         "recon",
         "external",
+        "content_feed",
     ]
     .iter()
     .map(|name| (*name).to_string())
     .collect();
     assert_eq!(
         wired, expected,
-        "绊线的生产接线方必须恰为九族 (批次 1 四族 + 批次 2 四族 + 批次 2c 一族)"
+        "绊线的生产接线方必须恰为十族 (批次 1 四族 + 批次 2 四族 + 批次 2c 一族 + 批次 3b 一族)"
     );
 
     // ⚠️ **跨族共享模块对枚举「不可见」是一条隐式契约** —— 现在把它**变成显式断言**。
     //
     // 背景: 证据信封的四面遮形编排已上收到**共享模块** `src/evidence_faces.rs`
     // （`recon` / `external` 两族各注入一次扫描入口，见 §2.6.3）。
-    // ⇒ 若共享模块**自己**写了那三个字面量, 守卫的族枚举会多出第 10 族 `evidence_faces`
-    // ⇒ ⇒ 守卫红, 而报错信息（"expected 9 families"）**看不出真因** ⇒ ⇒ 极易被误判为
+    // ⇒ 若共享模块**自己**写了那三个字面量, 守卫的族枚举会多出一族 `evidence_faces`
+    // ⇒ ⇒ 守卫红, 而报错信息（"expected 10 families"）**看不出真因** ⇒ ⇒ 极易被误判为
     // 「守卫坏了」而放宽它。
     // ⇒ ⇒ 本断言把「共享模块不得直接绑定内核扫描助手」**显式钉住**:
     // 共享模块只负责「按信封形状编排四面」, 扫描入口**必须由族文件注入**

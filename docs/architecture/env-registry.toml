@@ -1642,3 +1642,13 @@ purpose = "通用嗓 TTS 面 (`tool.voice_speak`) —— 让它开口说话 (V3-
 level = "UNCLASSIFIED"
 status = "current"
 evidence = "direct:crates/capabilities/tools/src/lib.rs:314;direct:crates/capabilities/tools/src/voice/mod.rs:88;direct:crates/capabilities/tools/src/voice/speak.rs:105"
+
+[[entries]]
+name = "APEIRETH_ENABLE_CREDENTIAL_SWEEP"
+default = "off"
+layer = "foundation"
+owner = "apeireth-governance"
+purpose = "转录面凭据形状兜底扫描开关（默认关，fail-closed：仅 `\"1\"` 开）。开启后在**内容进 transcript 之前**（含事件日志面）做凭据形状遮形（M1 口径：8 族形状，标签为内核既有 `[REDACTED_*]`），覆盖用户消息与工具结果消息。**默认关 ⇒ 逐字节零变化**。 ⚠️ **本名在 src 里由「已登记前缀 `APEIRETH_ENABLE_` + 后缀」拼出**（`credential_sweep.rs` 的 `SWEEP_ENV_PREFIX` / `SWEEP_ENV_SUFFIX`）⇒ 原因：契约 `[env].max_distinct_names = 160` **已被用满**（本登记表 160 条 = 预算 160；src 口径 160/160）⇒ 写死全名会使 src 计数 161 ⇒ **破预算**（棘轮「只减不增」）⇒ ⇒ **不抬预算、不腾预算（需动别线写域）**、**也不用「前缀拼接」以外的任何绕过** ⇒ ⇒ **登记表记全名 = 审计面的唯一真源**，而 src 口径计数保持 160。"
+level = "IMPLEMENTED"
+status = "current"
+evidence = "direct:crates/foundation/governance/src/credential_sweep.rs:105;direct:crates/foundation/governance/src/credential_sweep.rs:113;direct:crates/engine/runtime/src/canonical/session.rs:198;direct:crates/engine/runtime/src/canonical/session.rs:223"
