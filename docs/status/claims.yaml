@@ -385,7 +385,7 @@ claims:
     tests:
       - crates/foundation/governance/src/chain.rs
       - crates/adapters/cli/tests/reflection_queue_wiring.rs
-    verified_at: 5c74f955e62cebcb1979fb3606e804d9fb10d73c
+    verified_at: a3c0c2f4
     # ⚠️ **2026-11-06 收窄**（主指挥拍板）：原命令是 crate 级宽命令
     # ⇒ ⇒ 跑 governance crate **全部** lib 单测（241 个）⇒ ⇒ 而本声明只相关 6 个
     # ⇒ ⇒ ⇒ 其余 235 个任一红 ⇒ ⇒ **本声明就红** ⇒ ⇒ 「捎带别人的红」
@@ -406,7 +406,7 @@ claims:
     tests:
       - crates/foundation/governance/tests/governance_chain_drill.rs
 
-    verified_at: ff52545ce8ac3f5b245d49642623704572c1f03e
+    verified_at: a3c0c2f4
 
     verify_cmd: "cargo test -p apeireth-governance --test governance_chain_drill --locked"
     owner: governance
@@ -423,7 +423,7 @@ claims:
       - docs/04-internal/governance-chain-drill-2026-10-20.md
     tests:
       - crates/foundation/governance/tests/governance_chain_drill.rs
-    verified_at: 5c74f955e62cebcb1979fb3606e804d9fb10d73c
+    verified_at: a3c0c2f4
     verify_cmd: "cargo test -p apeireth-governance --test governance_chain_drill --locked"
     owner: governance
     next_review: "2026-11-20"
@@ -441,7 +441,7 @@ claims:
       - docs/04-internal/backend-enhancement/B8-release-signing-2026-10-19.md
     tests:
       - scripts/test_verify_release_assets.py
-    verified_at: c9251271
+    verified_at: a3c0c2f4
     # 2026-11-07 换验证面：原命令含 `<hex>` / `<asset>` 占位符 + 参数名写错（脚本要 -ArtifactPath，不是 -Path）
     # ⇒ ⇒ 那条命令**跑不了** ⇒ ⇒ 验证面是装饰品；现改为可自动运行的行为契约自测（10 用例，无占位符）
     verify_cmd: "python3 scripts/test_verify_release_assets.py"

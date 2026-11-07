@@ -279,7 +279,20 @@ target = "R2（ADR-0008 Accepted）: 公共面 2026-10-20 收敛；plugin 内部
 #           `rg` 全 crates 含 tests 为 158 distinct —— 守卫只按 src 计, 两口径不混用。
 # 逐条登记字段迁移见 R3。
 policy = "所有 APEIRETH_* 开关必须登记; 新增必须默认关 + 关时零变化测试"
-max_distinct_names = 161            # 棘轮: 只减不增（按 src 口径）
+max_distinct_names = 162            # 棘轮: 只减不增（按 src 口径）
+# ⚠️ **161 => 162**（2026-11-07，主指挥拍板）：新增 `APEIRETH_ENABLE_REFLECTION_QUEUE`
+#   （`gov.reflection_queue` 的**生产装配开关**：治理链延迟反思队列，默认关）。
+#   **为什么必须提**（与 2026-11-06 那条 160=>161 同构的正当用途）：
+#   ① 该能力已在生产装配根 `governance_chain::production()` 接线，但**关掉后必须与接线前
+#      逐字节同行为** ⇒ 默认装配 = 行为变化 ⇒ 不可接受 ⇒ 必须有开关；
+#   ② 该装配根是**代码构造**的（`cli/src/lib.rs:1640` 一行调用，该文件头部只剩 1 行余量
+#      ⇒ 不可增长）⇒ 没有配置面可挂 ⇒ 只能走 env；
+#   ③ 已同步登记 `docs/architecture/env-registry.toml`（R3a 登记表）；
+#   ④ **默认关 + 关时零变化**：关档下不注入调度器 ⇒ 零反射审计；开档只认字符 1。
+#   ⇒ ⇒ **本条是预算的一次真实增加，不是缩表**：本轮已核对「无可让位的死开关」
+#   （唯一 status=deprecated 的 `APEIRETH_MASTER_TOKEN` 本就不进 src 计数）。
+#   ⇒ ⇒ ⇒ **161/161 已用尽 ⇒ 162/162 用尽**：下一轮任何新增 env 名，必须**先删一个**
+#   或改为配置项（本仓既定方向：能力开关优先用配置项）。
 # ⚠️ **160 ⇒ ⇒ 161**（2026-11-06）：新增 `APEIRETH_ENABLE_SYSTEM_ONE`
 #   （`rt.system_one_internal` 声明的**生产装配开关**，默认关 ⇒ ⇒ 关时零行为变化）。
 #   ⇒ ⇒ **为什么提**（预算的正当用途，不是「随手加」）：
