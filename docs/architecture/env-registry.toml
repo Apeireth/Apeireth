@@ -13,6 +13,13 @@
 #            `APEIRETH_DISABLE_*` 逃生门登记 "off" = 逃生门本身默认不拉下（能力仍默认开）。
 # 纪律: 新增开关必须先登记（默认关 + 关时零变化测试），否则 arch_guard W3 违规；
 #       deprecated 的开关不得再出现在 src（R3c 守卫收紧）。
+# 预算口径（2026-11-07 修正，主指挥落地）：本表共 162 条，其中 **12 条**是
+#       测试/基准夹具、密钥标记或已裁决「无 direct 读取点」名
+#       （`APEIRETH_IMAGE_UNSHARP_*` 族 / `APEIRETH_REG_*` 族 / `APEIRETH_UNIQ_SECRET_MARKER_*` /
+#        `APEIRETH_IMAGE_REGEN_PROFILES` / `APEIRETH_MASTER_TOKEN`）⇒ ⇒ **不计入 env 预算**；
+#       预算只数**能力开关**（当前 150 / 上限 154，见 `docs/architecture/contract.toml` [env]）。
+#       排除表唯一真源 = `scripts/env_budget_caliber.py`（`arch_guard` 与 `wiring_report` 共用）。
+#       ⚠️ **条目本身一条都不删**：不进预算 ≠ 免登记。
 # 生成/播种: 效率线维护（R3a）；格式由架构线定（ADR-0004），变更需 ADR。
 # ============================================================================
 

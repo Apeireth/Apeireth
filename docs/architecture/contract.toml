@@ -275,11 +275,32 @@ target = "R2（ADR-0008 Accepted）: 公共面 2026-10-20 收敛；plugin 内部
 
 [env]
 # 开关登记: 新增 APEIRETH_* 开关必须登记 (owner/默认/层级/用途) 否则守卫红。
-# 扫描口径: workspace 包 src/**/*.rs (guard 实测 154 distinct, 2026-10-20);
-#           `rg` 全 crates 含 tests 为 158 distinct —— 守卫只按 src 计, 两口径不混用。
+# 扫描口径: workspace 包 src/**/*.rs（2026-11-07 实测：原始 findall **162** distinct；
+#           剔除测试夹具 / 密钥标记 / 已裁决名后 = **能力开关 150** —— 预算只数后者。
+#           排除表唯一真源 = `scripts/env_budget_caliber.py`（两道守卫共用，不许各抄一份）；
+#           `rg` 全 crates 含 tests 的口径不混用。）
 # 逐条登记字段迁移见 R3。
 policy = "所有 APEIRETH_* 开关必须登记; 新增必须默认关 + 关时零变化测试"
-max_distinct_names = 162            # 棘轮: 只减不增（按 src 口径）
+max_distinct_names = 154            # 棘轮: 只减不增（按 src 口径 · **只数能力开关**）
+# ⚠️ **162 => 154**（2026-11-07，owner 口头授权「env 可以扩增一点」+ 主指挥落地）：**口径修正 + 名额裁决**。
+#   **旧判据错在哪**：env 预算原先按 `src/**/*.rs` **全文 findall** 的 `APEIRETH_*` 名字数计
+#   ⇒ ⇒ 把**测试 / 基准夹具与密钥标记**（`APEIRETH_IMAGE_UNSHARP_*` 族、`APEIRETH_REG_*` 族、
+#   `APEIRETH_UNIQ_SECRET_MARKER_*`、`APEIRETH_IMAGE_REGEN_PROFILES`）以及**已裁决
+#   「真实 env 但本仓无 direct 读取点」**的 `APEIRETH_MASTER_TOKEN` 都当成能力开关
+#   ⇒ ⇒ ⇒ 预算**虚高 12**（162，而真实能力开关只有 150）⇒ ⇒ 会逼着后续按「假名额」删东西。
+#   **修法**：排除表收敛为**唯一真源** `scripts/env_budget_caliber.py`
+#   （`arch_guard.py` 与 `wiring_report.py` 都 import 它；**不许**任何一方再抄一份正则）。
+#   **新口径**：预算只数**能力开关** = **150**（原始 findall 仍是 162）；
+#   ⚠️ **登记面不变**：所有 `APEIRETH_*`（含被排除的 12 个）**仍必须登记**进
+#   `docs/architecture/env-registry.toml`，未登记照样 W3 红 —— 不进预算 ≠ 免登记。
+#   **本次给 4 个新名额（150 ⇒ 154）的用途承诺**（owner 已授权扩增，但**限定用途**）：
+#   只用于「检索质量吸收」工作里**必须有用户可见开关**的新能力；每新增一个，必须同时满足：
+#     ① 登记 `docs/architecture/env-registry.toml`（R3a 登记表，owner/level/证据齐全）；
+#     ② **默认关** + **关时零变化测试**（口径与既有开关一致）；
+#     ③ 在契约注释/ADR 里写清「**为什么不能走配置项**」；
+#     ④ ⇒ ⇒ **不许「顺手加」**：缺任一项一律按「未登记 / 超预算」红。
+#   ⇒ ⇒ ⇒ **154/154 用尽后：下一轮任何新增 env 名必须先删一个**（或改配置项）；
+#   本条从 162 降到 154 **本身是收紧**（-8），不是放水。
 # ⚠️ **161 => 162**（2026-11-07，主指挥拍板）：新增 `APEIRETH_ENABLE_REFLECTION_QUEUE`
 #   （`gov.reflection_queue` 的**生产装配开关**：治理链延迟反思队列，默认关）。
 #   **为什么必须提**（与 2026-11-06 那条 160=>161 同构的正当用途）：
@@ -316,7 +337,7 @@ allowed_read_locations = []         # 空 = v0.1 只按名字卡, 不按位置�
 [budgets]
 max_file_loc = 6300                 # 现状最大 src 6255 (doc_ops.rs, 2026-11-04 实测); 只减不增
 max_workspace_crates = 30           # 目标: 图像家族移出后 20; 只减不增
-max_production_edges = 111          # 上限（棘轮，只减不增；新增需 ADR）；现行实测 111（2026-11-05 收紧 118 → 111：与 max_workspace_crates=30 / max_distinct_names=160 同为「上限 == 实测」口径 ⇒ ⇒ 任何新增生产边都会被拦下 ⇒ ⇒ 真要加边先问总指挥）
+max_production_edges = 111          # 上限（棘轮，只减不增；新增需 ADR）；现行实测 111（2026-11-05 收紧 118 → 111：与 max_workspace_crates=30 同为「上限 == 实测」口径（env 名额另有 4 个受控口子，见 [env] 段） ⇒ ⇒ 任何新增生产边都会被拦下 ⇒ ⇒ 真要加边先问总指挥）
 
 [exceptions]
 # 例外预算 — 已裁决 (ADR-0001, owner 授权代裁 2026-10-20)

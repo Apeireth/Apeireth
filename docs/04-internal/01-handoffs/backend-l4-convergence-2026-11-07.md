@@ -95,7 +95,7 @@ runuser -u bai -- env HOME=/home/bai LC_ALL=C.UTF-8 CARGO_INCREMENTAL=0 RUSTC_WR
 | 孤儿 API | **89 → 87** | 生产抓取补 UA+限流（2 条）、`elect_provider_module` 被生产引用（1 条） |
 | 记忆可达 / 未解释缺口 | **88→109 / 33→32→0** | 两处棘轮同批收紧 |
 | crates / production edges | **30/30 · 111/111** | 未动（增长面已封死） |
-| **env 名（`max_distinct_names`）** | ⚠️ **161 → 162** | **本轮唯一一次预算增加**，由主指挥拍板并写进 `docs/architecture/contract.toml`：`APEIRETH_ENABLE_REFLECTION_QUEUE` 是「默认关能力」的**唯一可见开关**，装配根是代码构造（`cli/src/lib.rs` 头部零余量）⇒ 无配置面可挂；已核对**无可让位的死开关**。⇒ **162/162 用尽**，下一轮任何新增 env 名**必须先删一个或改配置项** |
+| **env 名（`max_distinct_names`）** | ⚠️ **161 → 162 → 154** | 收口当天先按「新能力必须有用户可见开关」把 161 提到 162（`APEIRETH_ENABLE_REFLECTION_QUEUE`，装配根是代码构造 ⇒ 无配置面可挂）；随后**口径修正**：旧判据把测试夹具 / 密钥标记 / 已裁决名也当能力开关 ⇒ 预算虚高 12（原始 findall 162，真实能力开关 **150**）⇒ 排除表收敛到唯一真源 `scripts/env_budget_caliber.py`，预算改为**只数能力开关**并定在 **154**（150 + 4 个受控名额，用途承诺写在 `contract.toml` [env] 段）。⇒ ⇒ **154/154 用尽后：任何新增 env 名必须先删一个或改配置项** |
 
 ---
 
@@ -130,7 +130,7 @@ runuser -u bai -- env HOME=/home/bai LC_ALL=C.UTF-8 CARGO_INCREMENTAL=0 RUSTC_WR
 - 待 **`bio.social_repair`** 的其它事件源（用户说错 / 矛盾检出）接入 —— 现在是单事件源。
 - 待 **`mem.registered_namespace`** 的自动检索是否要开（product 决策；开之前必须先解决转录污染口径）。
 - 待 **记忆 crate 剩余 28 条「已解释不可达」** 逐条转正或确认长期保留（现在都有台账依据 + 触发条件）。
-- ❌ **增长面封死**：crates 30/30、edges 111/111、env 162/162 ⇒ 下一轮任何新增必须先删一个。
+- ❌ **增长面封死**：crates 30/30、edges 111/111、env **154/154**（能力开关口径；原始 findall 162 含 12 个不计预算的夹具/已裁决名）⇒ 下一轮任何新增必须先删一个。
 
 ---
 

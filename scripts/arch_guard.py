@@ -11,7 +11,12 @@
   python scripts/arch_guard.py --update-baseline  # 评审后初始化/缩表（谨慎）
   python scripts/arch_guard.py --wave 2           # 指定架构波次
   python scripts/arch_guard.py --json             # 机器可读输出
-  python scripts/arch_guard.py --self-test        # 守卫的守卫: 违规 fixture 必须被拦
+  python scripts/arch_guard.py --self-test        # 守卫的守卫: kernel 边界 + env 预算排除表
+
+env 预算口径（2026-11-07 修正）:
+  只数**能力开关**；测试夹具 / 密钥标记 / 已裁决「无 direct 读取点」名不计入预算
+  （排除表唯一真源 = `scripts/env_budget_caliber.py`，与 `wiring_report.py` 共用）。
+  ⚠️ 登记面不变：所有 `APEIRETH_*`（含被排除的）仍须登记进 `env-registry.toml`。
 
 退出码: 0 = 通过/仅报告; 1 = strict 下有违规; 2 = fatal（契约/metadata 不可解析）
 
@@ -32,6 +37,16 @@ try:
     import tomllib
 except ModuleNotFoundError:  # pragma: no cover
     sys.exit("arch_guard: Python >= 3.11 required (tomllib)")
+
+# env 预算口径与登记表守恒：**唯一真源**在 `scripts/env_budget_caliber.py`
+# （arch_guard 与 wiring_report 共用；不许各自再抄一份排除表）。
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from env_budget_caliber import (  # noqa: E402 - 需先插 sys.path
+    ENV_RE,
+    PENDING_EVIDENCE_RULING,
+    TEST_ONLY_RE,
+    capability_env_names,
+)
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_CONTRACT = ROOT / "docs" / "architecture" / "contract.toml"
@@ -150,7 +165,7 @@ def workspace_metadata() -> tuple[dict[str, Path], dict[str, set[str]], dict[str
 
 # ------------------------------------------------------------------ scanners
 
-ENV_RE = re.compile(r"APEIRETH_[A-Z0-9_]+")
+# `ENV_RE` 从 `scripts/env_budget_caliber.py` import（唯一真源，见文件头 §env 口径）。
 DEF_RE = re.compile(r"^\s*pub(?:\([^)]*\))?\s+(?:struct|trait|enum|type)\s+([A-Za-z_][A-Za-z0-9_]*)\b",
                     re.MULTILINE)
 
@@ -373,6 +388,36 @@ def run_kernel_self_test() -> int:
     return 0 if failures == 0 else 1
 
 
+def run_env_caliber_self_test() -> int:
+    """证明 **env 预算排除表真的在生效**（不是死代码 / 不是空转）。
+
+    ⚠️ 这条自测是 2026-11-07 口径修正的**牙齿**：排除规则一旦被悄悄放宽
+    （例如有人删掉 `APEIRETH_UNIQ_SECRET_MARKER_` 这一段），本测会立刻红。
+
+    判据：同一个名字集合里，只有**真实能力开关**留在预算里；测试夹具 / 密钥标记 /
+    已裁决名全部被排除。
+    """
+    fixtures = {
+        "APEIRETH_REAL_SWITCH",  # 能力开关 ⇒ 必须留在预算里
+        "APEIRETH_IMAGE_UNSHARP_WIDTH",  # 图像基准夹具 ⇒ 排除
+        "APEIRETH_IMAGE_REGEN_PROFILES",  # 图像基准档位 ⇒ 排除
+        "APEIRETH_REG_APEIRETH_CORE_A",  # 登记夹具 ⇒ 排除
+        "APEIRETH_UNIQ_SECRET_MARKER_12345",  # 机密标记夹具 ⇒ 排除
+        "APEIRETH_MASTER_TOKEN",  # 已裁决：真实 env 但无 direct 读取点 ⇒ 排除
+    }
+    kept = capability_env_names(fixtures)
+    expect = {"APEIRETH_REAL_SWITCH"}
+    ok = kept == expect
+    print(
+        f"[self-test] {'PASS' if ok else 'FAIL'} env 预算排除表: "
+        f"kept={sorted(kept)} expect={sorted(expect)}"
+    )
+    # 附加：排除必须**有理由**（两条规则都非空），否则「全排除」也能骗过上面那条。
+    rules_present = TEST_ONLY_RE.pattern.count("APEIRETH_") >= 2 and bool(PENDING_EVIDENCE_RULING)
+    print(f"[self-test] {'PASS' if rules_present else 'FAIL'} env 排除规则非空")
+    return 0 if ok and rules_present else 1
+
+
 # --------------------------------------------------------------------- cycles
 
 def sccs(nodes: list[str], edges: dict[str, set[str]]) -> list[list[str]]:
@@ -580,7 +625,15 @@ def check(contract: Contract, baseline: set[str], wave: int, dry_metrics: bool =
 
     # 4. env 开关（基线 + 登记表双通道；登记表由 R3a 建立，见 ADR-0004）
     env_names, defs = scan_env_and_defs(roots, workspace_crates)
-    rep.metrics["env_names"] = len(env_names)
+    # ⚠️ **2026-11-07 口径修正（旧判据错在哪）**：原先直接拿
+    # `src/**/*.rs` **全文 findall** 到的名字数当预算 ⇒ 把**测试夹具 / 密钥标记**
+    # （`APEIRETH_IMAGE_UNSHARP_*`、`APEIRETH_REG_*`、`APEIRETH_UNIQ_SECRET_MARKER_*`、
+    # `APEIRETH_IMAGE_REGEN_PROFILES`）与**已裁决「真实 env 但无 direct 读取点」**的
+    # `APEIRETH_MASTER_TOKEN` 也当能力开关 ⇒ ⇒ **预算虚高 12**（162，真实 150）。
+    # 现统一到 `scripts/env_budget_caliber.py`（与 `wiring_report.py` 共用同一排除表）。
+    budget_env_names = capability_env_names(env_names)
+    rep.metrics["env_names"] = len(budget_env_names)      # 预算口径（能力开关）
+    rep.metrics["env_names_raw"] = len(env_names)         # 原始 findall 口径（含夹具/已裁决名）
     registered: set[str] = set()
     reg_rel = str(contract.env.get("registry_file", "")).strip()
     if reg_rel:
@@ -601,9 +654,10 @@ def check(contract: Contract, baseline: set[str], wave: int, dry_metrics: bool =
         if entry.startswith("env ") and entry[4:] not in env_names:
             rep.add_stale(entry)
     max_env = int(contract.env.get("max_distinct_names", 10**9))
-    if len(env_names) > max_env:
-        rep.violation(1, "size", f"env-count {len(env_names)}",
-                      f"开关名 {len(env_names)} > budget {max_env}")
+    if len(budget_env_names) > max_env:
+        rep.violation(1, "size", f"env-count {len(budget_env_names)}",
+                      f"能力开关名 {len(budget_env_names)} > budget {max_env}"
+                      f"（原始 findall {len(env_names)} 含测试夹具/已裁决名，不计入）")
 
     # 5. 文件尺寸
     sizes = scan_sizes(roots, workspace_crates)
@@ -758,7 +812,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.self_test:
-        return run_kernel_self_test()
+        kernel_rc = run_kernel_self_test()
+        env_rc = run_env_caliber_self_test()
+        return 0 if kernel_rc == 0 and env_rc == 0 else 1
 
     contract = load_contract(Path(args.contract))
     if args.print_vendored:

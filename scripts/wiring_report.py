@@ -40,14 +40,17 @@ REGISTRY = ROOT / "docs" / "architecture" / "env-registry.toml"
 WIRING = ROOT / "docs" / "status" / "wiring.yaml"
 CLAIMS = ROOT / "docs" / "status" / "claims.yaml"
 MATRIX = ROOT / "docs" / "03-reference" / "capabilities-matrix.md"
-ENV_RE = re.compile(r"APEIRETH_[A-Z0-9_]+")
+# ⚠️ env 口径**唯一真源** = `scripts/env_budget_caliber.py`（2026-11-07 收敛）：
+# 原先本文件与 `arch_guard.py` 各存一份正则/排除表 ⇒ ⇒ 预算账与登记账口径不一致
+# （arch_guard 把测试夹具/密钥标记也当能力开关 ⇒ 预算虚高 12）。
+# 现两边都 import 同一份，**不许**再在本地抄第二份。
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from env_budget_caliber import (  # noqa: E402 - 需先插 sys.path
+    ENV_RE,
+    PENDING_EVIDENCE_RULING,
+    TEST_ONLY_RE,
+)
 FRAGMENT_RE = re.compile(r"<!--|-->|!\s*!\s*#|^\s*[!#]|^\s*[.·]{3,}")
-# ADR-0004 §7.7/§7.8：kind 枚举 product（缺省）/ test-only / derived
-TEST_ONLY_RE = re.compile(
-    r"^APEIRETH_IMAGE_UNSHARP_|^APEIRETH_UNIQ_SECRET_MARKER_"
-    r"|^APEIRETH_REG_|^APEIRETH_IMAGE_REGEN_PROFILES$")
-# 待架构线裁决：真实 env 但本仓无 direct 读取点（不在产品 direct 校验里静默通过）
-PENDING_EVIDENCE_RULING = {"APEIRETH_MASTER_TOKEN"}
 SWITCH_HINT = re.compile(r"(ENABLE|DISABLE|FEATURE|ALLOW|STRICT|FORCE|SWITCH|TOGGLE|REQUIRE)")
 #: 「生产源」前缀。2026-11-07 增 `.github/workflows/`：对「CI 门禁类」能力
 #: （如 `gov.chain_drill_ci` / `rel.release_asset_verify`），**workflow 步骤就是
