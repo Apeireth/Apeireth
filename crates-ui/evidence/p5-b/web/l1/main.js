@@ -94,6 +94,33 @@ requestAnimationFrame(() => {
         } catch (error) {
           results.app.frame_stopped = { ok: false, failures: [`帧停止探针抛错：${String(error)}`] };
         }
+        // ── G8：**真 panic 兜底证据**（⚠️ 必须是**最后一个** wasm 调用）──────
+        //
+        // 为什么放这里：上面所有探针都是**顶层同步**执行的（rAF 之前就跑完了）
+        // ⇒ ⇒ 这个 rAF 回调用到的 `reboot` / `frame_stopped` 是**最后一批** wasm 调用
+        // ⇒ ⇒ ⇒ 真 panic 会把 wasm 实例 trap 掉 ⇒ 之后任何 wasm 调用都会抛
+        //   `RuntimeError` ⇒ ⇒ 所以必须等它们全跑完再崩。
+        //
+        // ⭐ 页面 JS **不会**跟着死（死的是 wasm 实例，不是页面上下文）
+        //   ⇒ ⇒ 所以「崩之后」仍可用**纯 JS** 读兜底证据。
+        results.panicFallbackBefore =
+          typeof window.__PANIC_FALLBACK__ !== 'undefined' ? window.__PANIC_FALLBACK__ : null;
+        results.panicDomBefore = document.getElementById('panic-fallback')?.textContent ?? null;
+        results.panicTriggered = false;
+        results.panicTrap = null;
+        try {
+          p5b.l1_panic_trigger();
+          // 返回来了 ⇒ 说明 abort 没发生（panic=unwind 情形）⇒ 照实记
+          results.panicTriggered = true;
+          results.panicReturned = true;
+        } catch (error) {
+          results.panicTriggered = window.__PANIC_TRIGGERED__ === true;
+          results.panicTrap = String(error);
+        }
+        // ④ 兜底证据（纯 JS，不受 wasm 死亡影响）
+        results.panicFallbackAfter =
+          typeof window.__PANIC_FALLBACK__ !== 'undefined' ? window.__PANIC_FALLBACK__ : null;
+        results.panicDomAfter = document.getElementById('panic-fallback')?.textContent ?? null;
         window.__L1_DONE__ = true;
       });
     });

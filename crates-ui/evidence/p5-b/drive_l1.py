@@ -149,6 +149,29 @@ def main() -> int:
     # ⭐⭐⭐⭐ CLS（布局位移）观测：L1-G7 的**最后一段浏览器证据**。
     #   ⇒ ⇒ 三条对照必须同时成立：真位移 > 0 / 亚像素 = 0 / 视口外 = 0
     #   ⇒ ⇒ 否则「CLS 观测」就是一个**永远返回 0 的摆设**。
+    # ⭐⭐⭐⭐ G8：**真 panic 兜底证据**（「一崩全白」→「一崩可见」）
+    #   ⇒ ⇒ 三条对照缺一不可：
+    #     ① **崩之前**不该有兜底节点（否则「可见」可能是页面本来就有的东西）；
+    #     ② **崩之后**兜底文本必须含注入消息（说明 hook 在 abort 前真的跑到）；
+    #     ③ **必须真的发生 trap**（否则「崩后可见」是空断言 —— panic 可能根本没触发）。
+    panic = {
+        "before": report.get("panicFallbackBefore"),
+        "domBefore": report.get("panicDomBefore"),
+        "triggered": report.get("panicTriggered"),
+        "trap": report.get("panicTrap"),
+        "after": report.get("panicFallbackAfter"),
+        "domAfter": report.get("panicDomAfter"),
+    }
+    panic_ok = bool(
+        not panic["before"]
+        and not panic["domBefore"]
+        and panic["after"]
+        and "G8 测试注入" in str(panic["after"])
+        and panic["domAfter"]
+        and "G8 测试注入" in str(panic["domAfter"])
+        and panic["triggered"]
+        and panic["trap"]
+    )
     layout_shift = report.get("layoutShift") or {}
     # ⭐⭐⭐ 异步数据线（E-182）：真定时器造乱序 ⇒ ⇒ 过期结果**必须被驳回**
     #   ⇒ ⇒ 判据三条一起看：DOM 只显示**新**结果 + 两条都回来 + 有一条被驳
@@ -223,6 +246,12 @@ def main() -> int:
             f"naiveLastWins={async_line.get('naiveLastWins')!r}）",
             file=sys.stderr,
         )
+    if not panic_ok:
+        print(
+            f"❌ G8 panic 兜底证据不成立：{panic} "
+            f"（①崩前应无兜底 ②崩后应含『G8 测试注入』③必须真 trap）",
+            file=sys.stderr,
+        )
     if not perf_ok:
         print(f"❌ 规模基线探针失败项：{perf.get('failures')}", file=sys.stderr)
     if not real_load_ok:
@@ -239,6 +268,7 @@ def main() -> int:
         and focus_modal_ok
         and async_line_ok
         and layout_shift_ok
+        and panic_ok
     ):
         return 1
     print(

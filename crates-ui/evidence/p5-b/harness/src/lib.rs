@@ -1063,12 +1063,53 @@ pub fn l1_probe() -> Result<JsValue, JsValue> {
         ));
     }
 
-    // ── G8：panic hook 安装（⚠️ **不**触发真实 panic：wasm 目标可能 `panic=abort`
-    //    ⇒ ⇒ 真 panic 会 trap 掉整个实例，测不到；这里只验「hook 能装上」）────────
+    // ── G8：panic hook **装上 + 上报器真写 DOM**（「一崩全白」→「一崩可见」）──
+    //
+    // ⚠️⚠️ 旧版这里只验「hook 能装上」（上报器是 **no-op**）⇒ ⇒ 那**证明不了兜底可见**
+    //   ⇒ ⇒ 本轮改成：上报器**同步**把消息写进 DOM + `window.__PANIC_FALLBACK__`
+    //   ⇒ ⇒ ⇒ 然后由 `l1_panic_trigger()` 触发**真 panic** 做端到端验证。
+    //
+    // ⭐ 为什么「写 DOM」在这里**来得及**：wasm 的 `panic=abort` 也会**先跑 hook**
+    //   再 abort ⇒ ⇒ hook 里同步写 DOM 是**唯一**能在 abort 前留下可见痕迹的时机
+    //   ⇒ ⇒ ⇒ 这正是 `panic_guard` 模块文档说的「把它写进 DOM（同步！）」。
     let panic_state = if apeireth_ui_dom::panic_guard::is_installed() {
         String::from("already_installed")
     } else {
-        match apeireth_ui_dom::panic_guard::install(Box::new(|_message| {})) {
+        match apeireth_ui_dom::panic_guard::install(Box::new(|message| {
+            let Some(window) = web_sys::window() else {
+                return;
+            };
+            // ① 全局变量（页面 JS 在 wasm trap 之后仍可读）
+            let _ = js_sys::Reflect::set(
+                &window,
+                &JsValue::from_str("__PANIC_FALLBACK__"),
+                &JsValue::from_str(message),
+            );
+            // ② 真写进 DOM（用户**看得见**，不只是控制台有）
+            let Some(document) = window.document() else {
+                return;
+            };
+            let Some(body) = document.body() else {
+                return;
+            };
+            let node = match document.get_element_by_id("panic-fallback") {
+                Some(existing) => existing,
+                None => {
+                    let Ok(created) = document.create_element("div") else {
+                        return;
+                    };
+                    let _ = created.set_attribute("id", "panic-fallback");
+                    let _ = created.set_attribute(
+                        "style",
+                        "position:fixed;left:0;top:0;z-index:99999;background:#b00020;color:#fff;\
+                         padding:8px 12px;font:12px/1.6 monospace;max-width:100vw;",
+                    );
+                    let _ = body.append_child(&created);
+                    created
+                }
+            };
+            node.set_text_content(Some(message));
+        })) {
             Ok(()) => String::from("installed"),
             Err(reason) => format!("failed: {reason}"),
         }
@@ -2040,6 +2081,37 @@ pub fn l1_patch_children_probe() -> Result<JsValue, JsValue> {
         &JsValue::from_f64(after_refill),
     );
     Ok(result.into())
+}
+
+/// ⭐⭐⭐⭐ **G8 真 panic 触发器**（浏览器证据的**最后一步**）。
+///
+/// ## 为什么单独一个函数、且必须**最后调用**
+///
+/// wasm 的 `panic=abort` ⇒ ⇒ 触发后**实例被 trap 掉**（`unreachable`）⇒ ⇒
+/// 之后**任何** wasm 调用都会抛 `RuntimeError` ⇒ ⇒ 所以：
+/// - 调用它**之前**必须把该采的证据采完（`panic_guard` 已装好上报器）；
+/// - 调用它**之后**只能跑**纯 JS**（读 `window.__PANIC_FALLBACK__` / DOM）⇒ ⇒
+///   页面 JS **不会**跟着死（死的是 wasm 实例，不是页面上下文）。
+///
+/// ## 它验什么
+///
+/// 「**一崩全白**」→「**一崩可见**」：
+/// ① panic hook 在 abort **之前**跑到 ⇒ ⇒ 上报器把消息写进 DOM 与全局变量；
+/// ② 页面 JS 在 trap 之后仍读得到 ⇒ ⇒ 兜底**真的可见**，不只是控制台有。
+///
+/// ⚠️ 反向证据（同一批一起看）：`l1_probe` 里**不**触发 panic 时
+/// `#panic-fallback` 必须**不存在** ⇒ ⇒ 否则「可见」可能是页面本来就有的东西。
+#[wasm_bindgen]
+pub fn l1_panic_trigger() {
+    // 故意在 panic 前留一条标记：若 hook 没跑，这条标记仍在而兜底缺 ⇒ 能区分「没崩」与「崩了没上报」。
+    if let Some(window) = web_sys::window() {
+        let _ = js_sys::Reflect::set(
+            &window,
+            &JsValue::from_str("__PANIC_TRIGGERED__"),
+            &JsValue::from_bool(true),
+        );
+    }
+    panic!("G8 测试注入：引擎崩了（真 panic，用于验证兜底可见）");
 }
 
 /// ⭐⭐⭐⭐⭐ **滚动信号探针**（E-164）：引擎**到底有没有收到 `scroll` 事件**？
