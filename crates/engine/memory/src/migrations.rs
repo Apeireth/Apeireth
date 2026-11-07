@@ -5,6 +5,8 @@
 //!
 //! 命名规范: `V<version>__<short_description>`.
 
+use std::time::{Duration, Instant};
+
 use rusqlite::{params, Connection, Transaction, TransactionBehavior};
 
 use apeireth_storage::{SqliteConnectionPool, StorageError};
@@ -600,6 +602,179 @@ const APPEND_ONLY_TRIGGERS: &[(&str, &str)] = &[
 // ADD COLUMN. Historical SQL remains authoritative for every existing database.
 const FRESH_TABLES_SQL: &str = include_str!("migrations/fresh_tables.sql");
 
+// ============================================================================
+// SQLITE_BUSY 有界退避重试 (只包住「能不能开始事务」这一层)
+// ============================================================================
+//
+// 形态照抄仓内既有先例 (`crates/engine/storage/src/pool.rs` 的
+// `BusyRetryManager` / `connect_with_busy_retry` / `is_busy`, `:279`-`:354`):
+// 指数退避 + 有界预算 + 只认 SQLITE_BUSY / SQLITE_LOCKED。
+//
+// 为什么**必须**在生产侧 (而不是让调用方重试整个 `run_migrations`):
+// - 根因是「并发首开时输方拿不到写锁」: 赢方在**同一个** IMMEDIATE 事务里装订
+//   整套 schema (`:645`-`:675`) ⇒ 写锁一直持有到 `tx.commit()` (`:677`);
+//   输方全部预算 = 连接既有的 `busy_timeout` (5s, `src/lib.rs:601`)
+//   ⇒ 赢方耗时 > 预算时输方拿到 SQLITE_BUSY ⇒ 生产路径**直接失败**。
+// - 重试放在 `BEGIN` 处 ⇒ **事务体一次都不重复执行** (无重复写、无重复插版本簿记)
+//   ⇒ 且拿到锁后仍在**锁内重检空 schema** (`:639`-`:646`) ⇒ 「首开必须重检」的
+//   语义一条没松。
+//
+// 为什么在 BEGIN 处重试是**安全**的:
+// - `BEGIN IMMEDIATE` 失败 ⇒ SQLite **没有**开启事务 ⇒ 连接回到 autocommit 态
+//   ⇒ 重试只是「再要一次写锁」, 事务体 (装订 schema / 记版本) 一次都没跑过。
+// - 事务体一旦开始 (拿到锁) ⇒ 后面无论成功还是回滚, 都只执行一次。
+//
+// 预算取值 (生产侧比测试侧保守 —— 生产是**启动路径**, 不能为一把锁等 20s):
+// - 第一次尝试**完全沿用**连接既有的 `busy_timeout` (5s) ⇒ 常见路径 (对方 < 5s
+//   就提交) 的行为**一字未改**。
+// - 第一次失败后**额外**再给 ≤ `BUSY_RETRY_EXTRA_BUDGET` (3s) 的退避重试预算
+//   ⇒ 总等待 ≲ 5s + 3s = 8s。
+// - 额外轮次把 busy 窗口**收窄**到 `BUSY_RETRY_WINDOW` (250ms) ⇒ 每轮等待有界
+//   ⇒ 总等待有界 (不会「预算还剩 10ms 却再等 5s」)。
+const BUSY_RETRY_INITIAL_DELAY: Duration = Duration::from_millis(5);
+/// SQLITE_BUSY 退避重试: 单次等待上限 (指数退避封顶).
+const BUSY_RETRY_MAX_DELAY: Duration = Duration::from_millis(250);
+/// 退避重试的**额外**总预算 (叠加在连接既有的 `busy_timeout` 之上).
+const BUSY_RETRY_EXTRA_BUDGET: Duration = Duration::from_secs(3);
+/// 退避重试**轮次**的 busy 窗口 (收窄 ⇒ 每轮等待有界 ⇒ 总等待有界).
+const BUSY_RETRY_WINDOW: Duration = Duration::from_millis(250);
+
+/// 判定一个 sqlite 错误是不是 SQLITE_BUSY / SQLITE_LOCKED。
+///
+/// 结构化判定 (读 `rusqlite::ErrorCode`), **不**做文案匹配 ⇒ 端口层
+/// `TaskQueueError::Store { reason }` 那种「按文案猜」的弱判定不再需要。
+fn is_busy_error(error: &rusqlite::Error) -> bool {
+    match error {
+        rusqlite::Error::SqliteFailure(inner, _) => matches!(
+            inner.code,
+            rusqlite::ErrorCode::DatabaseBusy | rusqlite::ErrorCode::DatabaseLocked
+        ),
+        _ => false,
+    }
+}
+
+/// 读连接当前的 `busy_timeout` (毫秒)。
+fn read_busy_timeout_ms(conn: &Connection) -> rusqlite::Result<i64> {
+    conn.query_row("PRAGMA busy_timeout", [], |row| row.get(0))
+}
+
+/// 把 `PRAGMA busy_timeout` 的毫秒值还原成 [`Duration`] (负值按 0 处理).
+fn busy_timeout_duration(millis: i64) -> Duration {
+    Duration::from_millis(u64::try_from(millis).unwrap_or(0))
+}
+
+/// 预算耗尽仍是 busy ⇒ **保留原错误码** (结构化判定不变: 仍是
+/// `DatabaseBusy` / `DatabaseLocked`), 只在**消息尾部**追加「等过、仍被锁」的说明
+/// (原消息前缀保留) ⇒ 既不吞错、也不把 busy 改写成别的错。
+fn busy_error_after_wait(
+    error: rusqlite::Error,
+    attempts: u32,
+    elapsed: Duration,
+) -> rusqlite::Error {
+    match error {
+        rusqlite::Error::SqliteFailure(inner, message) => {
+            let base = message.unwrap_or_else(|| inner.to_string());
+            rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error {
+                    code: inner.code,
+                    extended_code: inner.extended_code,
+                },
+                Some(format!(
+                    "{base}; write lock still held after waiting: {attempts} extra attempt(s), \
+                     {} ms total (extra budget {} ms)",
+                    elapsed.as_millis(),
+                    BUSY_RETRY_EXTRA_BUDGET.as_millis(),
+                )),
+            )
+        }
+        other => other,
+    }
+}
+
+/// 起一个 `BEGIN IMMEDIATE` 事务: 撞上 SQLITE_BUSY / SQLITE_LOCKED 时
+/// **有界**退避重试。
+///
+/// - ① 只对 busy 类错误重试; 其它错误**原样上抛**。
+/// - ② 预算有界: 第一次尝试沿用连接既有的 `busy_timeout`, 失败后**额外**再给
+///   `BUSY_RETRY_EXTRA_BUDGET` (3s) 的指数退避重试 ⇒ 总等待 ≲ 8s。
+/// - ③ 重试发生在 `BEGIN` 处 ⇒ **事务体一次都不重复执行**。
+/// - ④ 预算耗尽仍是 busy ⇒ 返回原错误 (错误码不变) + 「等过、仍被锁」的说明。
+///
+/// ⚠️ **为什么用 [`Transaction::new_unchecked`] 而不是
+/// [`Connection::transaction_with_behavior`]**: 后者要求 `&mut Connection`,
+/// 而「拿到写锁」这个借用必须**活到函数返回** (返回的 `Transaction` 挂在它上面)
+/// ⇒ 函数体内无法再碰连接 (收窄 / 恢复 `busy_timeout` 都要碰) ⇒ 借用检查直接拒绝。
+/// `Transaction::new` 在 rusqlite 里**就是** `Transaction::new_unchecked`
+/// (只有 `&mut` / `&` 的**编译期**嵌套防护不同, 运行时发出的 SQL 完全一样:
+/// `BEGIN IMMEDIATE`) ⇒ 换过去**运行时语义一字未改**。
+///
+/// **嵌套防护仍在**: 调用方传进来的是 `&mut Connection` (这里按共享引用重借用)
+/// ⇒ 事务存活期间调用方拿不回那个 `&mut` ⇒ 同一个连接上开嵌套事务仍然编译期被禁。
+fn begin_immediate_with_busy_retry<'conn>(
+    conn: &'conn Connection,
+) -> Result<Transaction<'conn>, rusqlite::Error> {
+    // 连接既有的 busy_timeout (毫秒): 收窄 / 恢复都要用 ⇒ 读不出来就**不收窄**
+    // (退化成「每次尝试都吃满既有 busy_timeout」, 仍然有界, 只是上界更松)。
+    let original_busy_timeout: Option<i64> = read_busy_timeout_ms(conn).ok();
+    let started = Instant::now();
+    let mut delay = BUSY_RETRY_INITIAL_DELAY;
+    let mut extra_attempts: u32 = 0;
+    // 额外预算的截止时刻: **第一次失败之后**才起算 (第一次尝试花掉的是连接既有
+    // 的 busy_timeout, 那部分不计入「额外预算」)。
+    let mut deadline: Option<Instant> = None;
+    let mut narrowed = false;
+
+    loop {
+        match Transaction::new_unchecked(conn, TransactionBehavior::Immediate) {
+            Ok(tx) => {
+                if narrowed {
+                    if let Some(original) = original_busy_timeout {
+                        // 恢复连接既有的 busy_timeout (净效果: 连接配置不变)。
+                        tx.busy_timeout(busy_timeout_duration(original))?;
+                    }
+                }
+                return Ok(tx);
+            }
+            Err(error) => {
+                // ① 其它错误一律原样上抛 (不重试、不改写)。
+                if !is_busy_error(&error) {
+                    if narrowed {
+                        if let Some(original) = original_busy_timeout {
+                            conn.busy_timeout(busy_timeout_duration(original))?;
+                        }
+                    }
+                    return Err(error);
+                }
+                // ② 第一次失败 ⇒ 起算额外预算, 并收窄 busy 窗口 (保证总等待有界)。
+                let deadline =
+                    *deadline.get_or_insert_with(|| Instant::now() + BUSY_RETRY_EXTRA_BUDGET);
+                if !narrowed {
+                    narrowed = true;
+                    // 读不出原值就不收窄 (收窄了却恢复不了 = 连接配置被改坏)。
+                    if original_busy_timeout.is_some() {
+                        conn.busy_timeout(BUSY_RETRY_WINDOW)?;
+                    }
+                }
+                let now = Instant::now();
+                if now >= deadline {
+                    if let Some(original) = original_busy_timeout {
+                        conn.busy_timeout(busy_timeout_duration(original))?;
+                    }
+                    // ④ 预算耗尽: 保留原错误码, 追加「等过、仍被锁」的说明。
+                    return Err(busy_error_after_wait(
+                        error,
+                        extra_attempts,
+                        started.elapsed(),
+                    ));
+                }
+                std::thread::sleep(delay.min(deadline - now));
+                delay = delay.saturating_mul(2).min(BUSY_RETRY_MAX_DELAY);
+                extra_attempts += 1;
+            }
+        }
+    }
+}
+
 /// 应用全部未执行的 migrations.
 ///
 /// 事务保护: 基表 + 触发器 + 未执行 migration + 版本簿记在**一个** IMMEDIATE
@@ -631,7 +806,12 @@ pub fn run_migrations(conn: &mut Connection) -> MemoryResult<()> {
     // (读-判-写同一把写锁), 与 `storage/migrations.rs:109` 同模式 —— 两个
     // 进程同时启动时按写锁串行而非 BUSY_SNAPSHOT. SQL 全部幂等
     // (IF NOT EXISTS), 并发下最坏是 busy_timeout 内等待.
-    let tx: Transaction<'_> = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    //
+    // B-P2 (SQLITE_BUSY 下沉到生产侧): `BEGIN IMMEDIATE` 撞上对方未提交的写
+    // 事务时走**有界退避重试** (见 `begin_immediate_with_busy_retry`) —— 重试
+    // 只发生在「能不能开始事务」这一层 ⇒ 事务体一次都不重复执行; 拿到锁后仍在
+    // 锁内重检空 schema (下面 `fresh` 判定) ⇒ 「首开必须重检」的语义不变。
+    let tx: Transaction<'_> = begin_immediate_with_busy_retry(conn)?;
 
     // Check under the writer lock: another opener may have initialized the file
     // since the optimistic version check. Any existing object keeps the original
