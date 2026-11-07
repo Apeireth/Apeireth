@@ -101,6 +101,27 @@ impl FetchConfig {
         )))
     }
 
+    /// **生产预设**：公网出口 + 事实性 User-Agent + 每主机速率限制。
+    ///
+    /// # 为什么需要它（2026-11-07 孤儿 API 审计查出的真缺口）
+    ///
+    /// `with_user_agent` / `with_rate_limiting` 两个构建器**写好了却没人用**：
+    /// 生产唯一构造点是 `crates/adapters/cli/src/lib.rs` 的
+    /// `FetchConfig::public_internet_only()` ⇒ ⇒ 生产抓取**无 UA、无速率限制**
+    /// ⇒ ⇒ ① 对目标站点是**匿名流量**（被 403/封禁时无从解释「我是谁」）；
+    /// ② 同一主机高频抓取**没有任何自我刹车**。
+    ///
+    /// ⚠️ UA 是**固定**的（模型不可覆盖）⇒ 这也是本构建器存在的意义之一：
+    /// UA 不能由模型选择，否则等于把「对外身份」交给模型。
+    pub fn production() -> Self {
+        Self::public_internet_only()
+            .with_rate_limiting()
+            .with_user_agent(format!(
+                "apeireth/{} (+https://github.com/Apeireth/Apeireth)",
+                env!("CARGO_PKG_VERSION")
+            ))
+    }
+
     /// Deny-all fetch. Every request will fail closed at the transport.
     pub fn deny_all() -> Self {
         Self::new(Arc::new(ControlledEgress::new(EgressPolicy::DenyAll)))
@@ -880,6 +901,35 @@ mod tests {
         assert!(display.contains("max_response_bytes"));
         assert!(display.contains("https://example.com/?q=hello"));
         assert!(!display.contains("#frag"));
+    }
+
+    /// ⭐ **生产预设**必须自带「对外身份 + 自我刹车」两件东西。
+    ///
+    /// 反证口径：把 `FetchConfig::production()` 里的 `.with_rate_limiting()` 或
+    /// `.with_user_agent(..)` 任去掉 ⇒ 本测试必须红。
+    #[test]
+    fn production_preset_pins_factual_user_agent_and_rate_limit() {
+        let config = FetchConfig::production();
+        let user_agent = config
+            .user_agent()
+            .expect("生产预设必须固定 User-Agent（模型不可覆盖）");
+        assert!(
+            user_agent.starts_with("apeireth/"),
+            "UA 必须是事实性客户端标识，实际 = {user_agent}"
+        );
+        assert!(
+            user_agent.contains("github.com/Apeireth/Apeireth"),
+            "UA 必须带上可追溯的出处，实际 = {user_agent}"
+        );
+        assert!(
+            config.rate_limiter().is_some(),
+            "生产预设必须开每主机速率限制（否则同一主机高频抓取没有自我刹车）"
+        );
+        // 出口策略不能被本预设放宽：仍是公网限域。
+        assert!(matches!(
+            config.egress().policy(),
+            EgressPolicy::PublicInternetOnly
+        ));
     }
 
     // Helper to call async invoke from sync tests.

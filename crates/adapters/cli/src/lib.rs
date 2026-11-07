@@ -2158,7 +2158,7 @@ async fn build_cognitive_modules_at(
             TrustedShellConfig::new(workspace_root.clone())
                 .with_sandbox(shell_sandbox_enabled_from_env())
         }),
-        fetch: fetch_enabled.then(FetchConfig::public_internet_only),
+        fetch: fetch_enabled.then(FetchConfig::production),
         // 内容流接入 (J1): 注册工具 (治理档在治理链: 拉取与入库都经审批档)。
         content_feed: content_feed_config,
         // 双引擎主动关怀 (V3-a): 注册关怀规则面工具 (治理档在治理链: 改规则 =

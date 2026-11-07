@@ -19,6 +19,16 @@
 # 已知盲区（都导致假阳性，方向安全）：宏展开、按名字字符串动态查找、
 # 跨 crate 的 `pub use` 重导出链。
 #
+# **2026-11-07 补记的三个盲区（孤儿分诊实测发现；如实登记，不改判据）**：
+#   ① 扫描面 `crates/*/*/src` **只匹配深度 2 的 crate** ⇒ 11 个 `crates/engine/image/*`
+#      与本仓 `crates-ui/` **不在视野** ⇒ ⇒ 上面「覆盖全仓 30 个 crate」的说法不成立
+#      （漏报方向：可能仍有未发现的孤儿）。本轮 89 条已逐符号 grep 复核，不受影响。
+#   ② 无花括号的 `#[cfg(test)] use ...;` 会把**下一个 item** 一起当测试码吞掉
+#      （已复现 `runtime-assembly/src/canonical/orchestrator.rs:107-150`）⇒ 可能造成假阳性；
+#      本轮 89 条无符号落在被吞区间。
+#   ③ PyO3 `#[pymodule]` 入口（`apeireth_sdk_py`）由 **Python import 机制**调用
+#      ⇒ ⇒ Rust 侧零引用是正常态，判据结构性看不见 ⇒ 按「已知盲区」登记，不当债。
+#
 # **判据 v4（2026-10-24 第四轮）**：`use` 剔除从「逐行」改成「**整块**」——
 # 多行 `pub use foo::{ A, B, C };` 以前只剔掉第一行，花括号里的每个类型名
 # 都被漏成「被引用」⇒ **掩盖真孤儿**（实测：`JobBoard` 这类整块未接线的模块
@@ -59,104 +69,103 @@
 
 # --- G3（21 条）：生物 / 认知 / 编排的**观测与查询 API**。生物族默认关 ⇒ 打开前不会走到。
 
-orphan bio_lifecycle_module_from_env_value  # G3  生物族默认关（`APEIRETH_ENABLE_BIO_LIFECYCLE=1` 才开 ⇒ fail-closed）⇒ 零引用是设计如此
-orphan deviation  # G3  organ 族未接生产（实测 `apeireth_organ::` 仅现于 tests/）⇒ 零引用是「族未接线」的结果，不是「没实现」
-orphan disarm  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线
-orphan graph_snapshot  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线
-orphan load_graph  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线
-orphan mcts_search  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线
-orphan mine_and_load  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线
-orphan no_bio_care_inputs  # G3  生物族默认关 ⇒ 零引用是设计如此
-orphan recall_by_mood  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线
-orphan record_tool_result  # G3  生物族默认关 ⇒ 零引用是设计如此
-orphan set_last_hold  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线
-orphan stop_all  # G3  生物/器官编排面默认关 ⇒ 零引用是设计如此
-orphan to_prompt  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线
-orphan with_attrs  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线
-orphan with_deadline  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线
-orphan with_llm_proposer  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线
-orphan with_material_source  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线
-orphan with_miner  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线
-orphan with_quorum_gate_probe  # G3  生物族默认关 ⇒ 零引用是设计如此
-orphan with_system_markers  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线
-orphan with_task_type  # G3  认知编排面默认关 ⇒ 零引用是设计如此
+orphan bio_lifecycle_module_from_env_value  # G3  生物族默认关（`APEIRETH_ENABLE_BIO_LIFECYCLE=1` 才开 ⇒ fail-closed）⇒ 零引用是设计如此 ⇒ 触发: 宿主自带状态/写 env 档位测试需要时
+orphan deviation  # G3  organ 族未接生产（实测 `apeireth_organ::` 仅现于 tests/）⇒ 零引用是「族未接线」的结果，不是「没实现」 ⇒ 触发: 稳态族进生产装配时
+orphan disarm  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线 ⇒ 触发: 台账 §5.2 撤销该模块归属时
+orphan graph_snapshot  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线 ⇒ 触发: 因果世界模型族进生产装配时
+orphan load_graph  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线 ⇒ 触发: 因果世界模型族进生产装配时
+orphan mcts_search  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线 ⇒ 触发: 因果世界模型族进生产装配时
+orphan mine_and_load  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线 ⇒ 触发: 因果世界模型族进生产装配时
+orphan no_bio_care_inputs  # G3  生物族默认关 ⇒ 零引用是设计如此 ⇒ 触发: W3.3 真实供给（presence/memory replay）接入时
+orphan recall_by_mood  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线 ⇒ 触发: 情绪记忆族进生产装配时
+orphan record_tool_result  # G3  生物族默认关 ⇒ 零引用是设计如此 ⇒ 触发: BIO_LIFECYCLE 打开并接生产时
+orphan set_last_hold  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线 ⇒ 触发: 涌现族进生产装配时
+orphan stop_all  # G3  生物/器官编排面默认关 ⇒ 零引用是设计如此 ⇒ 触发: 与 allow_all 对称性要求出现时（或确认无并行线要用 ⇒ 删）
+orphan to_prompt  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线 ⇒ 触发: 宿主实现 CareModelPort 并切模型判定档时（勿另写 prompt）
+orphan with_attrs  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线 ⇒ 触发: 因果世界模型族进生产装配时
+orphan with_deadline  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线 ⇒ 触发: 因果世界模型族进生产装配时
+orphan with_llm_proposer  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线 ⇒ 触发: 因果世界模型族进生产装配时
+orphan with_material_source  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线 ⇒ 触发: 关怀判定需要真实记忆素材时
+orphan with_miner  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线 ⇒ 触发: 因果世界模型族进生产装配时
+orphan with_quorum_gate_probe  # G3  生物族默认关 ⇒ 零引用是设计如此 ⇒ 触发: 法定人数闸进生产并开探针档时
+orphan with_system_markers  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线 ⇒ 触发: 提示词装配族进生产时
+orphan with_task_type  # G3  认知编排面默认关 ⇒ 零引用是设计如此 ⇒ 触发: 认知编排族进生产时
 
-# --- G4（23 条）：**注入点 / 探测口**（`with_*`）。生产装配走 `install_*`。
+# --- G4（21 条）：**注入点 / 探测口**（`with_*`）。生产装配走 `install_*`。
 
-orphan with_age  # G4
-orphan with_backend  # G4
-orphan with_bio_self_status_from_env  # G4
-orphan with_busy_timeout  # G4
-orphan with_clear_env  # G4
-orphan with_data  # G4
-orphan with_date  # G4  日记族（`DailyNote`）**未接生产**（生产侧引用 0）⇒ ⇒ 零引用是族级结果 ⇒ ⇒ 见 `dailynote-mcp-tool-spec-2026-11-04.md`（暴露面待产品决策）
-orphan with_deep_risk_floor  # G4
-orphan with_envelope_budget  # G4
-orphan with_foreign_keys  # G4
-orphan with_importance_weight  # G4  ⭐ **会被调优引擎覆盖**：调优层已按维度设 `importance_weight`（`retrieval_tuning.rs:527`）⇒ ⇒ 本旋钮只在「调优尚无该维度权重」时生效（兜底路径）⇒ ⇒ 零引用是**覆盖关系**的结果，不是没实现
-orphan with_journal_mode  # G4
-orphan with_min_candidate_score  # G4  主动召回族已接生产；这条是**候选分数门槛**旋钮 ⇒ ⇒ 生产用 `ProactiveRecallPolicy` 的默认门槛 ⇒ ⇒ 零引用是「默认策略未显式调它」的结果（旋钮存在但未拧）
-orphan with_port  # G4
-orphan with_preview_chars  # G4
-orphan with_ranking_config  # G4  ⭐ **实测修正**：不是「该接线未接」⇒ ⇒ 它设的 `self.ranking` 会被 `effective_ranking_or(self.ranking, …)`（`coordinator.rs:889`）**盖掉** ⇒ ⇒ 只在「调优引擎尚无会话桶」时生效（兜底路径）⇒ ⇒ 零引用是**覆盖关系**的结果，**不是没实现**
-orphan with_rate_limiting  # G4
-orphan with_reader  # G4  元思考族（`MetaThinking`）**未接生产**（生产侧引用 0）⇒ ⇒ 零引用是族级结果；读面注入（与 `save_to_cluster` 配对）
-orphan with_session_label  # G4
-orphan with_shell_executable  # G4
-orphan with_synchronous  # G4
-orphan with_user_agent  # G4
-orphan with_voices_error  # G4
+orphan with_age  # G4 ⇒ 触发: 研究族进生产时
+orphan with_backend  # G4 ⇒ 触发: 语音感知族进生产装配时
+orphan with_bio_self_status_from_env  # G4 ⇒ 触发: 生物自述进生产时
+orphan with_busy_timeout  # G4 ⇒ 触发: 部署需要非默认 busy_timeout（慢盘/网络 FS）时
+orphan with_clear_env  # G4 ⇒ 触发: 进程工具需最小环境隔离（安全加固）时
+orphan with_data  # G4 ⇒ 触发: 宿主侧 JSON-RPC 扩展字段需求出现时
+orphan with_date  # G4  日记族（`DailyNote`）**未接生产**（生产侧引用 0）⇒ ⇒ 零引用是族级结果 ⇒ ⇒ 见 `dailynote-mcp-tool-spec-2026-11-04.md`（暴露面待产品决策） ⇒ 触发: 4 个日记 MCP 工具注册进工具面时
+orphan with_deep_risk_floor  # G4 ⇒ 触发: 体检需要分级告警阈值时
+orphan with_envelope_budget  # G4 ⇒ 触发: 内容流需要显式字符预算时
+orphan with_foreign_keys  # G4 ⇒ 触发: 出现必须关 FK 的迁移/导入场景时
+orphan with_importance_weight  # G4  ⭐ **会被调优引擎覆盖**：调优层已按维度设 `importance_weight`（`retrieval_tuning.rs:527`）⇒ ⇒ 本旋钮只在「调优尚无该维度权重」时生效（兜底路径）⇒ ⇒ 零引用是**覆盖关系**的结果，不是没实现 ⇒ 触发: 调优引擎尚无该维度权重时的兜底路径被显式需要时
+orphan with_journal_mode  # G4 ⇒ 触发: 部署需要 DELETE/网络 FS 兼容档时
+orphan with_min_candidate_score  # G4  主动召回族已接生产；这条是**候选分数门槛**旋钮 ⇒ ⇒ 生产用 `ProactiveRecallPolicy` 的默认门槛 ⇒ ⇒ 零引用是「默认策略未显式调它」的结果（旋钮存在但未拧） ⇒ 触发: 主动召回出现「门槛需按场景调」的实测需求时
+orphan with_port  # G4 ⇒ 触发: 真实天气数据源成为产品需求时
+orphan with_preview_chars  # G4 ⇒ 触发: 告警预览长度出现可读性问题时
+orphan with_ranking_config  # G4  ⭐ **实测修正**：不是「该接线未接」⇒ ⇒ 它设的 `self.ranking` 会被 `effective_ranking_or(self.ranking, …)`（`coordinator.rs:889`）**盖掉** ⇒ ⇒ 只在「调优引擎尚无会话桶」时生效（兜底路径）⇒ ⇒ 零引用是**覆盖关系**的结果，**不是没实现** ⇒ 触发: 调优引擎尚无会话桶时的兜底被显式需要时
+orphan with_reader  # G4  元思考族（`MetaThinking`）**未接生产**（生产侧引用 0）⇒ ⇒ 零引用是族级结果；读面注入（与 `save_to_cluster` 配对） ⇒ 触发: 元思考族进生产装配时
+orphan with_session_label  # G4 ⇒ 触发: 需要按会话区分内容流时
+orphan with_shell_executable  # G4 ⇒ 触发: 需要非 bash shell（pwsh/fish）的部署时
+orphan with_synchronous  # G4 ⇒ 触发: 需要 FULL（耐久性优先）档时
+orphan with_voices_error  # G4 ⇒ 触发: 写语音后端失败路径测试时
 
-# --- G5（7 条）：**待判**：其余。逐条要人回答「真没人调，还是判据看不见」。**还债从这里开始。**
+# --- G5（8 条）：**待判**：其余。逐条要人回答「真没人调，还是判据看不见」。**还债从这里开始。**
 
-orphan record_quality_metrics  # G5  待接线：docs/status/unwired-ledger.md §一 W13（引擎外部指标注入口 · deputy 2026-11-06 引入 · 已实现但零调用）
-orphan observe_failures  # G5  已被 `observe_failures_since` 取代（零调用）⇒ ⇒ 待接线：docs/status/unwired-ledger.md §一 W12（reflexion_tuning 整模块待接线）
-orphan forget_principal_with_permit  # G5  「被遗忘权」的**类型级防绕过面**（permit 由调用方自带 ⇒ 外部无法伪造）⇒ ⇒ **即使零调用也必须留着**；能力已由主入口 `forget_principal` 覆盖（permit 缺省时内核自解析访问史）⇒ ⇒ 零引用 = 「备用的严格输入路径」，不是「没实现」
-orphan research_coordinated_forget_with_permit  # G5  「被遗忘权」的**类型级防绕过面**（permit 由调用方自带）⇒ ⇒ **即使零调用也必须留着**；能力已由主入口 `research_coordinated_forget` 覆盖（共用 `coordinated_forget_core`，permit 缺省时内核自解析）⇒ ⇒ 零引用 = 「备用的严格输入路径」，不是「没实现」
-orphan doc_ops_capability_shared  # G5  ⚠️ 2026-11-04 级联：删 `doc_ops_capability`（零调用点）后失去唯一调用者 ⇒ ⇒ 待判：**「不带 live 策略槽」这个装配变体还要不要**（生产用 `_shared_with_slot`）
-orphan sheet_ops_capability_shared  # G5  ⚠️ 2026-11-04 级联：删 `sheet_ops_capability`（零调用点）后失去唯一调用者 ⇒ ⇒ 待判：**「不带 live 策略槽」这个装配变体还要不要**（生产用 `_shared_with_slot`）
-orphan retrieve_with_reranker_for_session  # G5  **显式会话**的重排入口（`SessionContext::Explicit`）⇒ ⇒ 与 ambient 版**共用**内部实现 `retrieve_with_reranker_in` ⇒ ⇒ **刻意成对**（显式会话 vs 会话作用域兜底）⇒ ⇒ 零引用是「显式会话那条路还没被调用」的结果，**不是没实现**
+orphan record_quality_metrics  # G5  待接线：docs/status/unwired-ledger.md §一 W13（引擎外部指标注入口 · deputy 2026-11-06 引入 · 已实现但零调用） ⇒ 触发: 漂移监控面接入外部指标时（须先定注入点边界防指标洪泛）
+orphan observe_failures  # G5  已被 `observe_failures_since` 取代（零调用）⇒ ⇒ 待接线：docs/status/unwired-ledger.md §一 W12（reflexion_tuning 整模块待接线） ⇒ 触发: 引入者(deputy)确认后删除该 deprecated 旧入口时
+orphan forget_principal_with_permit  # G5  「被遗忘权」的**类型级防绕过面**（permit 由调用方自带 ⇒ 外部无法伪造）⇒ ⇒ **即使零调用也必须留着**；能力已由主入口 `forget_principal` 覆盖（permit 缺省时内核自解析访问史）⇒ ⇒ 零引用 = 「备用的严格输入路径」，不是「没实现」 ⇒ 触发: 外部调用方需要自带 permit 的严格删除进路时（不得删=能力缺失）
+orphan research_coordinated_forget_with_permit  # G5  「被遗忘权」的**类型级防绕过面**（permit 由调用方自带）⇒ ⇒ **即使零调用也必须留着**；能力已由主入口 `research_coordinated_forget` 覆盖（共用 `coordinated_forget_core`，permit 缺省时内核自解析）⇒ ⇒ 零引用 = 「备用的严格输入路径」，不是「没实现」 ⇒ 触发: W22 derived_repair 与 W24 同批接线时
+orphan doc_ops_capability_shared  # G5  ⚠️ 2026-11-04 级联：删 `doc_ops_capability`（零调用点）后失去唯一调用者 ⇒ ⇒ 待判：**「不带 live 策略槽」这个装配变体还要不要**（生产用 `_shared_with_slot`） ⇒ 触发: 宿主需共享计数器但无 live 策略槽时（否则改判删除）
+orphan sheet_ops_capability_shared  # G5  ⚠️ 2026-11-04 级联：删 `sheet_ops_capability`（零调用点）后失去唯一调用者 ⇒ ⇒ 待判：**「不带 live 策略槽」这个装配变体还要不要**（生产用 `_shared_with_slot`） ⇒ 触发: 宿主需共享计数器但无 live 策略槽时（否则改判删除）
+orphan retrieve_with_reranker_for_session  # G5  **显式会话**的重排入口（`SessionContext::Explicit`）⇒ ⇒ 与 ambient 版**共用**内部实现 `retrieve_with_reranker_in` ⇒ ⇒ **刻意成对**（显式会话 vs 会话作用域兜底）⇒ ⇒ 零引用是「显式会话那条路还没被调用」的结果，**不是没实现** ⇒ 触发: 需要显式会话（SessionContext::Explicit）的重排时
+orphan elect_provider_module  # G5 ⇒ 触发: 模块选择面进生产装配时
 
 # --- G6（35 条）：**冗余 API 表面 / 宿主入口**：同一能力有**主路径在用**，这些是并行入口或便利包装；或设计上是给宿主/外部调用的公开 API。已逐条核查（见 `unwired-debt-taxonomy-2026-10-24.md` 与 `unwired-debt-audit-2026-10-24.md`）。
 
-orphan extract_experience_from_episode  # G6
-orphan save_to_cluster  # G6  元思考族（`MetaThinking`）**未接生产**（生产侧引用 0）⇒ ⇒ 零引用是族级结果 ⇒ ⇒ `ClusterStore` 在生产是**间接消费链**（经 `meta_thinking`），但 `meta_thinking` 本身未接 ⇒ ⇒ 这条是其写面
-orphan trait_locks_path  # G6
-orphan recall_with_policy  # G6  主动召回族**已接生产**，但生产用**保留型** `ProactiveRecallService`（`cognitive.rs:1357`）⇒ ⇒ 这条是「一次性便利入口」⇒ ⇒ 零引用是**两种调用形态并存**的结果，不是没实现
-orphan apeireth_sdk_py  # G6
-orphan explicit_allow_list  # G6
-orphan get_for_subject  # G6  承诺族已接生产；生产读单条走 `store.get(&id)`（`memory_typed_sink.rs:135`）⇒ ⇒ 这条是**带主体校验**的读面 ⇒ ⇒ 零引用是「生产选了无主体版」的结果 ⇒ ⇒ ⚠️ 与上一条同属「主体隔离一致性」待查项
-orphan get_page  # G6  wiki 知识库族（`WikiFs`）**未接生产**（生产侧引用 0）⇒ ⇒ 零引用是族级结果；与已接的 `compile_page` 配对（分页读面）
-orphan get_persona  # G6  人格族（`FiveDimensional`）**未接生产**（生产侧引用 0）⇒ ⇒ 零引用是族级结果（人格库未接）
-orphan held_for  # G6
-orphan is_compatible  # G6
-orphan is_episode_forgotten  # G6  遗忘治理族（`UniversalForgetFacade`）**未接生产**（实测生产侧引用 0）⇒ ⇒ 零引用是**族级**结果，不是「没实现」；该面是治理只读查询（配 `forget_episode`）
-orphan last_watch  # G6
-orphan library_root  # G6
-orphan links_for_diary  # G6  跨日记族（`CrossDiary`）**未接生产**（生产侧引用 0）⇒ ⇒ 零引用是族级结果；与 `links_for_fact` 同族
-orphan list_active  # G6  承诺族**已接生产**，但生产**只用** `list_active_for_subject`（`memory_typed_sink.rs:145` / `typed_recall.rs:110`）⇒ ⇒ 这条是**无主体版**（`subject_id=None` ⇒ 跨主体读面）⇒ ⇒ **刻意不接**（主体隔离面）⇒ ⇒ ⚠️ 见看板「主体隔离一致性」一条
-orphan materialize_to_sink  # G6  物化器族**已接生产**，但生产走的是**逐条** `materialize_episode`（`cognitive.rs`）⇒ ⇒ 这条是「批量 + 投递」的**另一条路** ⇒ ⇒ 零引用是「两条路并存」的结果；能力是活的（`MemoryMaterializationSink` 有生产实现）
-orphan minimax_default  # G6
-orphan outbound_budget  # G6
-orphan put_default  # G6
-orphan query_with_time_range  # G6  溯源族已接生产；本条是**溯源时间区间**查询（与「事实 as-of」是**两套时间轴**：区间 vs 时点）⇒ ⇒ 零引用是「另一条时间轴的读面」的结果；与 `query_as_of` **不构成同义**
-orphan rebind  # G6
-orphan reconnect_attempts  # G6
-orphan retrieve_with_reranker  # G6  **ambient 会话**的重排入口 ⇒ ⇒ 与 `_for_session` 版**共用** `retrieve_with_reranker_in` ⇒ ⇒ 成对设计（同上）⇒ ⇒ 零引用是「重排默认不启用（保序即默认）」的结果 ⇒ ⇒ 留着 = 将来可挂模型重排**而不改检索主干**
-orphan sdk_method_names  # G6
-orphan set_quiet_threshold  # G6  睡眠周期族（`SleepCycle`）**未接生产**（唯一提及在 `foundation/core/src/clock.rs` 的**注释**里）⇒ ⇒ 零引用是族级结果
-orphan shard_count  # G6
-orphan snapshot_from_env  # G6
-orphan strategy_kind  # G6
-orphan stream_len  # G6
-orphan tool_paths  # G6
-orphan total_subscriptions  # G6
-orphan upsert_hallway  # G6  走廊族（`Hallway`）**未接生产**（生产侧引用 0）⇒ ⇒ 零引用是族级结果；走廊写面（与 `label`/`update` 配对）
-orphan device_control_capability  # G6
-orphan skill_distill_capability  # G6
+orphan extract_experience_from_episode  # G6 ⇒ 触发: 调用方需要「三元组直出」形态时
+orphan save_to_cluster  # G6  元思考族（`MetaThinking`）**未接生产**（生产侧引用 0）⇒ ⇒ 零引用是族级结果 ⇒ ⇒ `ClusterStore` 在生产是**间接消费链**（经 `meta_thinking`），但 `meta_thinking` 本身未接 ⇒ ⇒ 这条是其写面 ⇒ 触发: 元思考族进生产装配时
+orphan trait_locks_path  # G6 ⇒ 触发: 调用方只有默认日志路径时（否则用 _for）
+orphan recall_with_policy  # G6  主动召回族**已接生产**，但生产用**保留型** `ProactiveRecallService`（`cognitive.rs:1357`）⇒ ⇒ 这条是「一次性便利入口」⇒ ⇒ 零引用是**两种调用形态并存**的结果，不是没实现 ⇒ 触发: 出现「一次性召回 + 指定策略」调用形态时
+orphan apeireth_sdk_py  # G6 ⇒ 触发: 无需触发：PyO3 #[pymodule] 由 Python import 机制调用（判据结构性看不见）
+orphan explicit_allow_list  # G6 ⇒ 触发: 部署需要放行私有网段/精确白名单时
+orphan get_for_subject  # G6  承诺族已接生产；生产读单条走 `store.get(&id)`（`memory_typed_sink.rs:135`）⇒ ⇒ 这条是**带主体校验**的读面 ⇒ ⇒ 零引用是「生产选了无主体版」的结果 ⇒ ⇒ ⚠️ 与上一条同属「主体隔离一致性」待查项 ⇒ 触发: 出现跨主体 id 复用风险时重评
+orphan get_page  # G6  wiki 知识库族（`WikiFs`）**未接生产**（生产侧引用 0）⇒ ⇒ 零引用是族级结果；与已接的 `compile_page` 配对（分页读面） ⇒ 触发: WikiFs 后端被选用时
+orphan get_persona  # G6  人格族（`FiveDimensional`）**未接生产**（生产侧引用 0）⇒ ⇒ 零引用是族级结果（人格库未接） ⇒ 触发: 人格库进生产装配时
+orphan held_for  # G6 ⇒ 触发: 自述面需要展示限流等待时
+orphan is_compatible  # G6 ⇒ 触发: SDK 握手/兼容校验进生产时
+orphan is_episode_forgotten  # G6  遗忘治理族（`UniversalForgetFacade`）**未接生产**（实测生产侧引用 0）⇒ ⇒ 零引用是**族级**结果，不是「没实现」；该面是治理只读查询（配 `forget_episode`） ⇒ 触发: 出现「按 id 单条判是否已遗忘」的读需求时
+orphan last_watch  # G6 ⇒ 触发: 设备守护族开启并需自述时
+orphan library_root  # G6 ⇒ 触发: 自述/体检需要展示技能库根时
+orphan links_for_diary  # G6  跨日记族（`CrossDiary`）**未接生产**（生产侧引用 0）⇒ ⇒ 零引用是族级结果；与 `links_for_fact` 同族 ⇒ 触发: 日记侧需要反查跨链接时
+orphan list_active  # G6  承诺族**已接生产**，但生产**只用** `list_active_for_subject`（`memory_typed_sink.rs:145` / `typed_recall.rs:110`）⇒ ⇒ 这条是**无主体版**（`subject_id=None` ⇒ 跨主体读面）⇒ ⇒ **刻意不接**（主体隔离面）⇒ ⇒ ⚠️ 见看板「主体隔离一致性」一条 ⇒ 触发: 出现合法的跨主体汇总需求时（需安全线同意）
+orphan materialize_to_sink  # G6  物化器族**已接生产**，但生产走的是**逐条** `materialize_episode`（`cognitive.rs`）⇒ ⇒ 这条是「批量 + 投递」的**另一条路** ⇒ ⇒ 零引用是「两条路并存」的结果；能力是活的（`MemoryMaterializationSink` 有生产实现） ⇒ 触发: 出现批量物化需求时
+orphan minimax_default  # G6 ⇒ 触发: Minimax 感知后端启用时
+orphan outbound_budget  # G6 ⇒ 触发: SDK v0 发布面定版并允许 breaking change 时删
+orphan put_default  # G6 ⇒ 触发: 调用方不需要自定义 TTL 时
+orphan query_with_time_range  # G6  溯源族已接生产；本条是**溯源时间区间**查询（与「事实 as-of」是**两套时间轴**：区间 vs 时点）⇒ ⇒ 零引用是「另一条时间轴的读面」的结果；与 `query_as_of` **不构成同义** ⇒ 触发: 溯源面板需要按区间查时
+orphan rebind  # G6 ⇒ 触发: 宿主需要热替换别名绑定源时
+orphan reconnect_attempts  # G6 ⇒ 触发: 自述面需要展示重连次数时
+orphan retrieve_with_reranker  # G6  **ambient 会话**的重排入口 ⇒ ⇒ 与 `_for_session` 版**共用** `retrieve_with_reranker_in` ⇒ ⇒ 成对设计（同上）⇒ ⇒ 零引用是「重排默认不启用（保序即默认）」的结果 ⇒ ⇒ 留着 = 将来可挂模型重排**而不改检索主干** ⇒ 触发: 重排默认开启（保序不再默认）时
+orphan sdk_method_names  # G6 ⇒ 触发: SDK v0 发布面定版并允许 breaking change 时删
+orphan set_quiet_threshold  # G6  睡眠周期族（`SleepCycle`）**未接生产**（唯一提及在 `foundation/core/src/clock.rs` 的**注释**里）⇒ ⇒ 零引用是族级结果 ⇒ 触发: layered_memo 族获得生产入口时
+orphan shard_count  # G6 ⇒ 触发: 自述面需要展示分片数时
+orphan snapshot_from_env  # G6 ⇒ 触发: 自述面需要 env 驱动的快照时
+orphan strategy_kind  # G6 ⇒ 触发: 自述面需要展示限流策略时
+orphan stream_len  # G6 ⇒ 触发: 出现「只看长度」的轻量读需求时
+orphan tool_paths  # G6 ⇒ 触发: SDK v0 发布面定版并允许 breaking change 时删
+orphan total_subscriptions  # G6 ⇒ 触发: 自述面需要展示订阅规模时
+orphan upsert_hallway  # G6  走廊族（`Hallway`）**未接生产**（生产侧引用 0）⇒ ⇒ 零引用是族级结果；走廊写面（与 `label`/`update` 配对） ⇒ 触发: 调用方持有 store 而非 conn 时（优先用本函数）
+orphan device_control_capability  # G6 ⇒ 触发: 宿主无 live 策略槽时
+orphan skill_distill_capability  # G6 ⇒ 触发: 宿主无 live 策略槽时
 
 # --- G7（3 条）：**owner 裁定不接**（有意保留，不是遗漏）：W1 IM 通道（2026-10-23 裁定暂缓）、W5 哲学拦截层（2026-10-24 裁定不接）。保留代码是有意的 —— 解冻条件写在 `docs/status/unwired-ledger.md`。
 
-orphan im_router  # G7  owner 裁定不接（W1 IM 通道，2026-10-23 裁定暂缓）⇒ 有意保留，不是遗漏
-orphan closure_of  # G7  owner 裁定不接（W5 哲学向）⇒ 有意保留，不是遗漏
-orphan verdict_keys_for_principle  # G7  owner 裁定不接（W5 哲学向）⇒ 有意保留，不是遗漏
+orphan im_router  # G7  owner 裁定不接（W1 IM 通道，2026-10-23 裁定暂缓）⇒ 有意保留，不是遗漏 ⇒ 触发: 「Apeireth 在社交软件里自由聊天」产品面专项启动时（台账 §一 W1）
+orphan closure_of  # G7  owner 裁定不接（W5 哲学向）⇒ 有意保留，不是遗漏 ⇒ 触发: 台账 W5 两条解冻条件同时成立时
+orphan verdict_keys_for_principle  # G7  owner 裁定不接（W5 哲学向）⇒ 有意保留，不是遗漏 ⇒ 触发: 台账 W5 两条解冻条件同时成立时
