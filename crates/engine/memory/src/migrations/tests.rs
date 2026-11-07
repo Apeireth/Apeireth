@@ -159,6 +159,76 @@ fn fresh_schema_failure_rolls_back_all_objects_and_versions() {
     assert_same_schema(&conn, &historical_database(MIGRATIONS.len()));
 }
 
+/// SQLITE_BUSY 退避重试: 首次等待时长。
+const BUSY_RETRY_INITIAL_DELAY: std::time::Duration = std::time::Duration::from_millis(5);
+/// SQLITE_BUSY 退避重试: 单次等待上限 (指数退避封顶)。
+const BUSY_RETRY_MAX_DELAY: std::time::Duration = std::time::Duration::from_millis(250);
+/// 输方等赢方事务提交的总预算 (含每次尝试里 SQLite busy handler 在锁上的等待)。
+const BUSY_WAIT_BUDGET: std::time::Duration = std::time::Duration::from_secs(20);
+
+/// 判定一个迁移错误是不是「对方还占着写锁」(`SQLITE_BUSY` / `SQLITE_LOCKED`)。
+///
+/// 只有这一类错才值得「等对方跑完」; 别的错 (schema 不对 / DDL 失败 / 约束冲突)
+/// 一律**不重试**, 原样上抛。
+fn is_busy_error(error: &MemoryError) -> bool {
+    match error {
+        MemoryError::Sqlite(rusqlite::Error::SqliteFailure(inner, _)) => matches!(
+            inner.code,
+            rusqlite::ErrorCode::DatabaseBusy | rusqlite::ErrorCode::DatabaseLocked
+        ),
+        _ => false,
+    }
+}
+
+/// 并发首开时, 输方在 `SQLITE_BUSY` 上做**有界退避重试**。
+///
+/// 机制 (读码取证, 行号指 `migrations.rs`):
+/// - `run_migrations` 用 `BEGIN IMMEDIATE` 从一开始就抢写锁 (`:634`);
+///   两条并发首开线程 = 两个写者, 只能有一条拿到锁。
+/// - 赢方在**同一个事务**里装订整套 schema (`FRESH_TABLES_SQL` + `INIT_SQL`
+///   + V2..V19 的 DDL + 触发器, `:645`-`:675`; V3..V5 的列效已含在
+///   `FRESH_TABLES_SQL` 里, V1 = `INIT_SQL`) ⇒ 写锁一直持有到
+///   `tx.commit()` (`:677`)。
+/// - 输方拿不到锁时只有 `busy_timeout` 那点预算 (本用例 5s, `tests.rs` 里
+///   自己设的那 5s) ⇒ 赢方装订耗时 > 预算时, 输方拿到 `SQLITE_BUSY`
+///   (`database is locked`) ⇒ 旧写法 `unwrap` 直接 panic。
+/// - 受控复现 (施工期的临时脚本, 未入库): 外部写者持写锁 6s ⇒ 旧写法
+///   **5006ms 后** 报 `sqlite error: database is locked`; 本退避重试版
+///   **6143ms 后** 跑通 (等对方提交完再继续)。
+///
+/// 为什么这是「等对方跑完」而不是「把失败藏起来」:
+/// - `SQLITE_BUSY` 在这里**只**表示「对方那个写事务还没提交」—— 不是逻辑错,
+///   也不是数据错; 输方该做的不是放弃, 而是**等**。
+/// - 拿到锁之后, 输方仍然在**锁内重读**空 schema 判定 (`:639`-`:646`)
+///   ⇒ 走升级路径而不是重建 ⇒ 本用例要钉的语义 (并发首开不重复装订 /
+///   版本簿账不重复插行) 一条没松, 断言与断言口径原样保留。
+/// - 预算**有界** (总预算 + 退避封顶) ⇒ 真死锁不会变成无限挂起;
+///   预算耗尽仍是 `SQLITE_BUSY` ⇒ 照旧 panic (错误不吞、不改写)。
+///
+/// 附注 (诚实标注): 重试时若赢方已把版本簿记写满, `run_migrations` 会在簿记
+/// 短路处提前返回 (`:621`) —— 结果同样正确 (schema 已完整), 只是那条路径
+/// 不再走锁内重检。正常负载下 (赢方耗时 < `busy_timeout`) 走的仍是锁内重检。
+fn run_migrations_waiting_for_writer(conn: &mut Connection) -> MemoryResult<()> {
+    let deadline = std::time::Instant::now() + BUSY_WAIT_BUDGET;
+    let mut delay = BUSY_RETRY_INITIAL_DELAY;
+    loop {
+        match run_migrations(conn) {
+            Ok(()) => return Ok(()),
+            Err(error) => {
+                if !is_busy_error(&error) {
+                    return Err(error);
+                }
+                let now = std::time::Instant::now();
+                if now >= deadline {
+                    return Err(error);
+                }
+                std::thread::sleep(delay.min(deadline - now));
+                delay = delay.saturating_mul(2).min(BUSY_RETRY_MAX_DELAY);
+            }
+        }
+    }
+}
+
 #[test]
 fn concurrent_first_openers_recheck_empty_schema_under_writer_lock() {
     use std::sync::{Arc, Barrier};
@@ -177,7 +247,11 @@ fn concurrent_first_openers_recheck_empty_schema_under_writer_lock() {
                 conn.busy_timeout(std::time::Duration::from_secs(5))
                     .unwrap();
                 barrier.wait();
-                run_migrations(&mut conn).unwrap();
+                // 输方处置 = **有界退避重试** (不是一次即失败, 也不是吞错):
+                // 等赢方把写事务提交掉, 再在锁内重检空 schema。
+                run_migrations_waiting_for_writer(&mut conn).unwrap_or_else(|error| {
+                    panic!("并发首开失败: 对方写事务在 {BUSY_WAIT_BUDGET:?} 预算内未提交 ({error})")
+                });
             })
         })
         .collect();
