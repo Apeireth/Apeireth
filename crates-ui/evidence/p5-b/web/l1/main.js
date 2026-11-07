@@ -27,8 +27,42 @@ try {
   // ⚠️ **两段同步导出**（不是 async 导出）：WebKitGTK 里 async 导出实测会挂住
   //   （2026-11-05）⇒ ⇒ 两段式让「挂在哪一段」可观测。
   p5b.l1_async_line_arm();
-  await new Promise((resolve) => setTimeout(resolve, 900));
+  // ⚠️⚠️ **不要赌固定 900ms**（E-192：3 跑 1 败的根因是**单次采样竞态**）
+  //
+  // `arm` 只是**排了定时器**；定时器触发后，`AsyncLine` 发布的是**快照**
+  // ⇒ ⇒ 还要等**宿主 tick（rAF）**把快照写进 DOM
+  // ⇒ ⇒ ⇒ 固定等 900ms 只是「大概率够」，一旦定时器在 ~899ms 才回来
+  //   ⇒ ⇒⇒ 采集时 DOM 还是占位文本 ⇒ ⇒ 假红「过期结果覆盖了新结果」。
+  //
+  // ⇒ ⇒ 正确做法：**条件等待** —— 轮询到占位文本消失，再等两帧稳定，才采集。
+  // ⚠️⚠️ 这里我**写错过两版**，都如实记（两版都是「等错了东西」）：
+  //   ① 固定等 900ms ⇒ ⇒ 慢请求正好卡在边界 ⇒ ⇒ **3 跑 1 败**（E-192 原症状）；
+  //   ② 等「占位文本消失」⇒ ⇒ 第一条回来占位就消失 ⇒ ⇒ 采得太早 ⇒ ⇒ **实测 0/10 全败**
+  //      （失败项从「DOM 没写上」变成「resolved=1」）；
+  //   ③ 等「文本稳定 300ms」⇒ ⇒ 慢请求还没回来文本就已稳定 ⇒ ⇒ 仍然太早（实测 resolved=1）。
+  //
+  // ⇒ ⇒⇒ 三版的共同错因：**用「表象」推「状态」**。
+  // ⇒ ⇒ 正解：**按真实状态等待** —— 轮询引擎的 `resolved` 计数（`l1_async_line_peek`
+  //   是**只读**、不销毁宿主），等到 `resolved >= 2` 再等两帧才采集。
+  const deadline = Date.now() + 8000;
+  let waited = 0;
+  let lastStats = null;
+  while (Date.now() < deadline) {
+    try {
+      lastStats = p5b.l1_async_line_peek();
+    } catch (error) {
+      lastStats = { error: String(error) };
+      break;
+    }
+    if ((lastStats.resolved || 0) >= 2) break;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    waited += 25;
+  }
+  // 再等**两帧**：`resolved=2` 说明回调都到了，但 DOM 是**宿主 tick** 写的 ⇒ 等它落盘
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   results.asyncLine = p5b.l1_async_line_collect();
+  results.asyncLine.waitedMillis = waited;
+  results.asyncLine.peekedAtCollect = lastStats;
 } catch (error) {
   results.asyncLine = {
     ok: false,

@@ -3971,6 +3971,24 @@ pub fn l1_async_line_arm() -> Result<JsValue, JsValue> {
     Ok(result.into())
 }
 
+/// ⭐⭐⭐ **只读窥视异步数据线的计数**（**不销毁宿主**、无副作用）。
+///
+/// ## 为什么需要它（E-192 的修法）
+///
+/// `l1_async_line_collect()` 会 **dispose 宿主**（只能调一次），而采集前必须确认
+/// 「**两条结果都回来了**」⇒ ⇒ 靠**猜时间**必然不稳：
+/// - 固定等 900ms ⇒ ⇒ 慢请求正好卡在边界 ⇒ ⇒ 3 跑 1 败（E-192 原症状）；
+/// - 等「占位文本消失」⇒ ⇒ 第一条回来占位就消失 ⇒ ⇒ 采得太早（实测 **0/10 全败**）；
+/// - 等「文本稳定 300ms」⇒ ⇒ 慢请求还没回来文本就已经稳定 ⇒ ⇒ 仍然太早。
+///
+/// ⇒ ⇒ 正解：**按真实状态等待** —— 本函数把计数暴露给页面 JS，
+/// 页面轮询到 `resolved == 2` 再等两帧才 `collect`。
+#[wasm_bindgen]
+pub fn l1_async_line_peek() -> Result<JsValue, JsValue> {
+    apeireth_ui_app::wasm_host::async_line_stats()
+        .map_err(|error| JsValue::from_str(&format!("async_line_peek 失败：{error:?}")))
+}
+
 /// ⭐⭐⭐ **异步数据线探针（第二段：collect）**（E-182）—— 「旧回调不能覆盖新工作」的证据。
 ///
 /// ## 它断言什么
