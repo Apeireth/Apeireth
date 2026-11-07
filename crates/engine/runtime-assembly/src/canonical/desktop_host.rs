@@ -35,6 +35,21 @@ impl super::ProductionModules {
                 },
             );
         }
+        // `rt.module_messages`: 桌面 Host **显式武装**受限模块消息管道（2026-11-07 接线）。
+        //
+        // 缺口（补前）：本组合根从不设置 `message_policy` ⇒ 模块间消息端口恒为
+        // `Disabled` ⇒ ⇒ 「owner 认证 + 有界」的那条管道在桌面产品里**根本不存在**
+        // （只有测试在装它）。**没动** `production.rs` / CLI 组合根 ⇒ 装配面零尺寸增长。
+        //
+        // ⭐ 零行为变化（这是本条能默认开的前提）：`ModuleMessagePolicy::default()`
+        // 只有**有界限额**（in_flight 16 / payload 64 KiB / hops 16 / 幂等 128 / 5s），
+        // **零授权**（`grants` 空）⇒ ⇒ 没有任何模块被授权发/收 ⇒ **零流量、零副作用**。
+        // 授权仍须 Host 显式加 `ModuleMessageGrant`（投递不授予权限）。
+        //
+        // ⭐ 认证语义仍是「owner 认证」：`AgentHostPolicy.modules` 的 grant 与本管道
+        // grant 是**两张表**；管道只按 `message_policy.grants` 放行。
+        policy.message_policy =
+            Some(apeireth_runtime::canonical::module_messages::ModuleMessagePolicy::default());
         // Desktop already has explicit per-session quota settings. Preserve its
         // lifetime semantics rather than imposing a small portable task budget.
         policy.max_budget = desktop_main_budget();

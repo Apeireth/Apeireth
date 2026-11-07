@@ -3,7 +3,7 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: 7cefa9a63d5658e8242663a019d5baac3fa254d966f0a5d2d326a49b4d480893
+claims_sha256: c99b79328e1547068a65809a8216ef7c109c043f2810cbc677010e331140d0ed
 claims_total: 52
 items:
   - id: "rt.provider_router"
@@ -1215,7 +1215,7 @@ items:
     gaps:
       - "能力矩阵未出现开关 APEIRETH_ENABLE_SYSTEM_ONE（待补）"
   - id: "rt.module_messages"
-    capability: "Bounded owner-authenticated module message pipeline"
+    capability: "Bounded owner-authenticated module message pipeline（桌面 Host 已武装）"
     implemented:
       sources:
         - "crates/foundation/plugin/src/module_messages.rs"
@@ -1226,8 +1226,10 @@ items:
         - "crates/engine/runtime/src/canonical/module_host.rs"
         - "crates/engine/runtime/src/canonical/instances/audit.rs"
         - "crates/foundation/protocol/src/canonical/tool_event.rs"
+        - "crates/engine/runtime-assembly/src/canonical/desktop_host.rs"
     wired:
       production_refs:
+        - "crates/engine/runtime-assembly/src/canonical/desktop_host.rs"
         - "crates/engine/runtime/src/canonical/instances/audit.rs"
         - "crates/engine/runtime/src/canonical/instances/messages.rs"
         - "crates/engine/runtime/src/canonical/message_execution.rs"
@@ -1240,9 +1242,10 @@ items:
     validated:
       tests:
         - "crates/engine/runtime-assembly/tests/module_message_pipeline.rs"
+        - "crates/engine/runtime-assembly/tests/desktop_message_policy.rs"
       claims_id: "rt.module_messages"
     gaps:
-      - "未达 PRODUCTION WIRED：Optional Host policy only. Real Runtime Command/Query/Event/Reply, actual file effect, owner generations/trace, private facts, explicit grant/caller i…"
+      []
   - id: "rt.mesh_local_worker"
     capability: "Governed module-owned local Mesh worker and public status"
     implemented:

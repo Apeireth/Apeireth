@@ -51,7 +51,7 @@
 | `rt.desktop_managed_main` | PRODUCTION WIRED | ON | - | `31297a40c217` | 2026-11-20 |
 | `rt.module_execution_contract` | PRODUCTION WIRED | OFF | - | `5c74f955e62c` | 2026-11-20 |
 | `rt.system_one_internal` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_SYSTEM_ONE` | `31297a40c217` | 2026-11-20 |
-| `rt.module_messages` | IMPLEMENTED | OFF | - | `5392e56c3218` | 2026-11-20 |
+| `rt.module_messages` | PRODUCTION WIRED | OFF | - | `5392e56c3218` | 2026-11-20 |
 | `rt.mesh_local_worker` | IMPLEMENTED | OFF | - | `5c74f955e62c` | 2026-11-20 |
 | `mem.retrieval_ranking` | PRODUCTION WIRED | ON | - | `31297a40c217` | 2026-12-04 |
 | `mem.failure_learning_bridge` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_RETRIEVAL_TUNING` | `9e5797530163` | 2026-12-04 |
