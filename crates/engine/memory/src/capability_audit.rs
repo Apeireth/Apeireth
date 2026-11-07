@@ -32,7 +32,7 @@ use std::path::Path;
 
 use rusqlite::Connection;
 use serde::Serialize;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 use crate::agent_trace::TraceSpanStatus;
 use crate::arbitration::{ArbitrationEngine, EventSource};
@@ -47,7 +47,7 @@ use crate::forget_coordinator::CoordinatedForget;
 use crate::memory_view::{InMemoryMemoryView, ProvenanceChain, Record, RecordId, Scope};
 use crate::metadata_filter::{MetadataFilter, PropertyPredicate};
 use crate::offline_embed;
-use crate::offline_embedding_provider::{OFFLINE_EMBEDDING_MODEL_ID, OfflineEmbeddingProvider};
+use crate::offline_embedding_provider::{OfflineEmbeddingProvider, OFFLINE_EMBEDDING_MODEL_ID};
 use crate::research_derived_memory::DerivedRef;
 use crate::session_lifecycle::SessionState;
 use crate::swap_flow;
@@ -255,10 +255,15 @@ pub fn audit(conn: &Connection, now_ms: i64) -> CapabilityAudit {
             let engine = ArbitrationEngine::new();
             let mut appended = 0usize;
             for row in rows.iter().take(5) {
-                let payload = json!({ "episode": row.id, "chars": row.content.chars().count() })
-                    .to_string();
+                let payload =
+                    json!({ "episode": row.id, "chars": row.content.chars().count() }).to_string();
                 if engine
-                    .append_event(EventSource::System, &row.session_id, "episode.observed", &payload)
+                    .append_event(
+                        EventSource::System,
+                        &row.session_id,
+                        "episode.observed",
+                        &payload,
+                    )
                     .is_ok()
                 {
                     appended += 1;
@@ -418,7 +423,9 @@ pub fn audit(conn: &Connection, now_ms: i64) -> CapabilityAudit {
     // ── forget_coordinator：持久遗忘集（只读；不执行协调遗忘） ──────────
     let forgotten: Result<Vec<DerivedRef>, String> = (|| {
         let mut statement = conn
-            .prepare("SELECT kind, id FROM research_forgotten_artifacts ORDER BY kind, id LIMIT 500")
+            .prepare(
+                "SELECT kind, id FROM research_forgotten_artifacts ORDER BY kind, id LIMIT 500",
+            )
             .map_err(|error| format!("遗忘集查询失败：{error}"))?;
         let iter = statement
             .query_map([], |row| {
@@ -504,7 +511,15 @@ pub fn audit(conn: &Connection, now_ms: i64) -> CapabilityAudit {
         let members = vec![
             EnsembleMember::new("commitment_completion", completion_rate, 0.5),
             EnsembleMember::new("confidence_posterior", posterior.mean(), 0.5),
-            EnsembleMember::new("episode_present", if episodes.as_ref().map(|e| !e.is_empty()).unwrap_or(false) { 1.0 } else { 0.0 }, 0.3),
+            EnsembleMember::new(
+                "episode_present",
+                if episodes.as_ref().map(|e| !e.is_empty()).unwrap_or(false) {
+                    1.0
+                } else {
+                    0.0
+                },
+                0.3,
+            ),
         ];
         let forecast = EnsembleForecast::aggregate(members, EnsembleConfig::default());
         probes.push(CapabilityProbe {
@@ -571,9 +586,11 @@ pub fn audit(conn: &Connection, now_ms: i64) -> CapabilityAudit {
             Some(row) => {
                 let properties: Value = json!({ "role": row.role, "session_id": row.session_id });
                 let hit = PropertyPredicate::string("role", row.role.clone()).matches(&properties);
-                let miss = PropertyPredicate::string("role", "definitely-not-a-role")
-                    .matches(&properties);
-                let kind = MetadataFilter::new().kind_eq("episode").matches(Some(&properties));
+                let miss =
+                    PropertyPredicate::string("role", "definitely-not-a-role").matches(&properties);
+                let kind = MetadataFilter::new()
+                    .kind_eq("episode")
+                    .matches(Some(&properties));
                 CapabilityProbe {
                     module: "metadata_filter",
                     state: ProbeState::Armed,

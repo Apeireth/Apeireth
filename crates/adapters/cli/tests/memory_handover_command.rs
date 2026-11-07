@@ -254,11 +254,16 @@ fn the_report_carries_the_capability_audit_and_never_hides_an_unmeasurable_probe
         "报告里必须有能力审计段：\n{text}"
     );
     for needle in ["ARMED", "IDLE", "UNAVAILABLE"] {
-        assert!(text.contains(needle), "审计段应含计数标签 {needle}：\n{text}");
+        assert!(
+            text.contains(needle),
+            "审计段应含计数标签 {needle}：\n{text}"
+        );
     }
+    // 手工建的最小 schema 缺 `agent_traces` / `sessions` / `research_forgotten_artifacts`
+    // 等表 ⇒ 对应探针必须**如实报 UNAVAILABLE + 真因**（不许静默当 0 条）。
     assert!(
-        text.contains("没有可重开的本库文件路径"),
-        "内存库上依赖 store 的探针必须**如实报真因**（不许当 0 条）：\n{text}"
+        text.contains("no such table"),
+        "缺表时探针必须带出**真因**（no such table），不许当 0 条：\n{text}"
     );
 }
 
@@ -267,8 +272,6 @@ fn the_report_carries_the_capability_audit_and_never_hides_an_unmeasurable_probe
 fn a_file_backed_database_arms_the_real_capabilities() {
     let dir = tempdir().expect("临时目录");
     let db_path = dir.path().join("cognitive.sqlite3");
-    let store = apeireth_memory::SqliteMemoryStore::open(&db_path).expect("建库");
-    let conn = store.conn().expect("连接");
     let episode = apeireth_core::kernel::memory::Episode {
         id: "ep-cli-audit".to_string(),
         timestamp: 1_760_000_000_000,
@@ -276,18 +279,19 @@ fn a_file_backed_database_arms_the_real_capabilities() {
         content: "cli 侧审计用的一段真实正文".to_string(),
         session_id: "sess-cli-audit".to_string(),
     };
-    store
-        .put_episode_for_subject(&episode, "cid-cli-audit")
-        .expect("写记录");
+    {
+        // ⚠️ **先写完再取连接**：写路径（`put_episode_for_subject`）会拿写锁
+        // ⇒ ⇒ 若此时本进程还握着同库的另一个连接，SQLite 互等 ⇒ ⇒ **测试挂死**
+        // ⇒ ⇒ 顺序纪律：`open → 写 → drop(store) → 另开连接读`。
+        let store = apeireth_memory::SqliteMemoryStore::open(&db_path).expect("建库");
+        store
+            .put_episode_for_subject(&episode, "cid-cli-audit")
+            .expect("写记录");
+    }
+    let conn = rusqlite::Connection::open(&db_path).expect("连接");
     let out = dir.path().join("package.json");
-    let report = handover_package_from_conn(
-        &conn,
-        &out,
-        &db_path,
-        Vec::new(),
-        Vec::new(),
-    )
-    .expect("打包应成功");
+    let report = handover_package_from_conn(&conn, &out, &db_path, Vec::new(), Vec::new())
+        .expect("打包应成功");
     let text = render(&report);
     assert!(
         text.contains("ARMED"),

@@ -11,9 +11,9 @@
 //! 4. **只读 + 确定性**：跑两次逐字相等，且库内行数不变。
 
 use apeireth_core::kernel::memory::Episode;
-use apeireth_memory::SqliteMemoryStore;
-use apeireth_memory::capability_audit::{ProbeState, audit};
+use apeireth_memory::capability_audit::{audit, ProbeState};
 use apeireth_memory::handover::render_capability_audit;
+use apeireth_memory::SqliteMemoryStore;
 use std::path::PathBuf;
 
 /// 审计必须覆盖的能力（与 `capability_audit::audit` 的探针一一对应）。
@@ -99,14 +99,24 @@ fn an_empty_store_is_never_reported_as_armed() {
         "**空库上不许出现 ARMED**（0 条不许说成已接线）：{:#?}",
         report.probes
     );
-    assert_eq!(unavailable, 0, "有文件路径的库上探针不许失败：{:#?}", report.probes);
+    assert_eq!(
+        unavailable, 0,
+        "有文件路径的库上探针不许失败：{:#?}",
+        report.probes
+    );
     assert_eq!(idle, report.probes.len(), "空库只能是 IDLE");
 }
 
 #[test]
 fn a_written_episode_actually_arms_the_read_side_capabilities() {
     let (_dir, path) = fresh_db();
-    put(&path, "ep-audit-1", "cid-audit", EPISODE_TS, "审计用的一段真实正文");
+    put(
+        &path,
+        "ep-audit-1",
+        "cid-audit",
+        EPISODE_TS,
+        "审计用的一段真实正文",
+    );
     let store = SqliteMemoryStore::open(&path).expect("库");
     let conn = store.conn().expect("连接");
     let report = audit(&conn, EPISODE_TS);
@@ -135,7 +145,11 @@ fn a_written_episode_actually_arms_the_read_side_capabilities() {
     }
     // **如实**：没有承诺表数据 ⇒ 这两个必须还是 IDLE（不许因为「想好看」而 ARMED）。
     for module in ["calibration_critic", "confidence"] {
-        assert_eq!(state(module), ProbeState::Idle, "{module} 没有输入，不许 ARMED");
+        assert_eq!(
+            state(module),
+            ProbeState::Idle,
+            "{module} 没有输入，不许 ARMED"
+        );
     }
 }
 
