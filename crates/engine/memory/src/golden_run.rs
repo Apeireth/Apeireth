@@ -140,7 +140,26 @@ fn best_snippet(text: &str, query: &str, max_chars: usize) -> String {
 ///
 /// 用**生产用的 BM25 源**（[`Bm25LexicalCandidateSource`]，仓里的确定性 Okapi BM25 引擎）
 /// 而不是 legacy 的 token 重叠源 ⇒ 跑出来的分数**与生产检索同口径**。
+/// ⭐ **生产默认的源**（2026-11-07）：等价于 [`build_source_with`] 的 `None` 口径。
+#[allow(dead_code)]
 fn build_source(records: &[IndexRecord]) -> Bm25LexicalCandidateSource {
+    build_source_with(records, None)
+}
+
+/// ⭐ **带 BM25 配置的源构造**（2026-11-07 实测修正）。
+///
+/// # 为什么需要
+/// 2026-11-06 实测发现：**中文底座（索引侧去停用字）**让 recall@10 **+52.5%**，
+/// 而**同一个召回通道**的收益**因此归零**（+0.1394 → +0.0000）。
+/// ⇒ ⇒ ⇒ 要把「**底座补漏**」与「**净增益**」分开算（D3 纪律）
+/// ⇒ ⇒ ⇒ 就必须能**在弱底座上再跑一遍**做对照。
+///
+/// # 口径
+/// `config = None` ⇒ ⇒ **用生产默认**（含停用字规范化）⇒ ⇒ 逐字等价于旧行为。
+fn build_source_with(
+    records: &[IndexRecord],
+    config: Option<crate::hybrid_search::Bm25Config>,
+) -> Bm25LexicalCandidateSource {
     let documents = records
         .iter()
         .map(|record| MemoryCandidate {
@@ -158,7 +177,10 @@ fn build_source(records: &[IndexRecord]) -> Bm25LexicalCandidateSource {
             },
         })
         .collect();
-    Bm25LexicalCandidateSource::new(documents)
+    match config {
+        Some(config) => Bm25LexicalCandidateSource::with_config(documents, config),
+        None => Bm25LexicalCandidateSource::new(documents),
+    }
 }
 
 /// 跑一次批：给定语料 + 考卷 ⇒ 检索 ⇒ 评测。
@@ -198,7 +220,29 @@ pub fn run_with_extra_sources(
     mode: InjectionMode,
     extra_sources: &[&dyn MemoryCandidateSource],
 ) -> Result<RunReport, crate::MemoryError> {
-    let source = build_source(records);
+    run_with_extra_sources_and_config(records, golden, k, mode, extra_sources, None)
+}
+
+/// ⭐ **带 BM25 配置的跑批**（2026-11-07）。
+///
+/// # 为什么需要（D3 纪律：「底座补漏」与「通道净增益」要分开算）
+/// 2026-11-06 实测：中文底座（索引侧去停用字）让 recall@10 **+52.5%**，
+/// 而**同一个通道**的收益**因此归零**（+0.1394 → +0.0000）。
+/// ⇒ ⇒ ⇒ **只看合并的 delta ⇒ ⇒ 会把「补漏」当成「增益」** ⇒ ⇒ ⇒ **误导优先级**。
+/// ⇒ ⇒ ⇒ 这里让调用方**能指定底座** ⇒ ⇒ ⇒ 于是可以跑「弱底座 vs 强底座」两组对照
+/// ⇒ ⇒ ⇒ **差值 = 补漏部分**，**强底座上的 delta = 净增益部分**。
+///
+/// # 口径
+/// `config = None` ⇒ ⇒ **用生产默认** ⇒ ⇒ 与 [`run_with_extra_sources`] **逐字等价**。
+pub fn run_with_extra_sources_and_config(
+    records: &[IndexRecord],
+    golden: &GoldenSet,
+    k: usize,
+    mode: InjectionMode,
+    extra_sources: &[&dyn MemoryCandidateSource],
+    config: Option<crate::hybrid_search::Bm25Config>,
+) -> Result<RunReport, crate::MemoryError> {
+    let source = build_source_with(records, config);
     let mut batch = EvalBatch::default();
     let mut per_case_hit: Vec<(String, bool)> = Vec::new();
     let mut fully_hit = 0usize;
