@@ -17,7 +17,7 @@
 | `mem.lesson_object` | PRODUCTION WIRED | ON | - | `5c74f955e62c` | 2026-12-01 |
 | `gap.memory_update` | PRODUCTION WIRED | ON | - | `c3bc88ee47c2` | 2026-11-20 |
 | `gap.prompt_stabilizer_unwired` | NOT IMPLEMENTED | - | - | `c9251271` | 2026-11-20 |
-| `sec.linux_containment` | IMPLEMENTED | - | - | `31297a40c217` | 2026-11-20 |
+| `sec.linux_containment` | PRODUCTION WIRED | - | - | `1c1632559260` | 2026-11-20 |
 | `sec.gateway_tls` | PRODUCTION WIRED | OFF | `APEIRETH_TLS_CERT` | `31297a40c217` | 2026-11-20 |
 | `sec.storage_envelope_crypto` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_SESSION_SEAL` | `5c74f955e62c` | 2026-11-20 |
 | `gov.chain_skeleton` | PRODUCTION WIRED | ON | - | `31297a40c217` | 2026-11-20 |
@@ -30,7 +30,7 @@
 | `sec.credential_endpoint_binding` | PRODUCTION WIRED | ON | - | `a9d689ed8f09` | 2026-12-01 |
 | `sec.provider_proxy_ssrf` | PRODUCTION WIRED | ON | - | `c9251271` | 2026-11-20 |
 | `sec.desktop_file_roots` | PRODUCTION WIRED | ON | - | `c9251271` | 2026-11-20 |
-| `sec.terminal_permission_surfaces` | IMPLEMENTED | - | - | `c9251271` | 2026-11-20 |
+| `sec.terminal_permission_surfaces` | PRODUCTION WIRED | - | - | `1c1632559260` | 2026-11-20 |
 | `bio.tone` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_TONE` | `c9251271` | 2026-11-20 |
 | `bio.circadian` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_CIRCADIAN` | `31297a40c217` | 2026-11-20 |
 | `bio.nociception_pain` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_PAIN` | `31297a40c217` | 2026-11-20 |

@@ -272,7 +272,7 @@ claims:
       - crates/capabilities/tools/src/process/mod.rs
     tests:
       - crates/capabilities/tools/tests/process_executor.rs
-    verified_at: 31297a40c217ed05525c198fe0690f39074ace93
+    verified_at: 1c16325592600e84c12d03832a26664790768dec
     verify_cmd: "cargo test -p apeireth-tools-canonical --test process_executor"
     owner: tools
     next_review: "2026-11-20"
@@ -530,7 +530,7 @@ claims:
       - docs/02-guides/permission-surfaces.md
     tests:
       - frontend/companion-desktop/tests/starport-face-apps.mjs
-    verified_at: c9251271
+    verified_at: 1c16325592600e84c12d03832a26664790768dec
     # ⚠️ **2026-11-07 收窄**（声明核验批 · 与兄弟声明同形）：
     # 原命令 `cd frontend/companion-desktop && pnpm test` = **83 个套件全跑**
     # ⇒ ⇒ 而本条真正相关的是**它自己那 4 条文案测试钉子**（`tests/starport-face-apps.mjs`）
