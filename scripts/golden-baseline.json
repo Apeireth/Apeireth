@@ -1,25 +1,25 @@
 {
-  "version": "internal-2026-10-26b+delivery",
+  "version": "internal-2026-10-26b+delivery+cn-stopwords",
   "k": 10,
   "corpora": [
     {
       "name": "redchamber",
-      "recall_at_k": 0.2983,
-      "ndcg_at_k": 0.1615,
+      "recall_at_k": 0.45483193277310924,
+      "ndcg_at_k": 0.28205219268188547,
       "cases": 476,
-      "groundedness": 0.09243697478991597,
-      "evidence_precision": 0.009243697478991597,
-      "delivery_rate": 0.3098591549295775,
+      "groundedness": 0.17857142857142858,
+      "evidence_precision": 0.018697478991596614,
+      "delivery_rate": 0.39260969976905313,
       "case_fingerprint": "1d969ee2afe65edf5a27360223809ae9dfd866110453dc41bf7271eb5fbb1e7e"
     },
     {
       "name": "watershed",
-      "recall_at_k": 0.6875,
-      "ndcg_at_k": 0.4817,
+      "recall_at_k": 0.7157258064516129,
+      "ndcg_at_k": 0.5232480121749885,
       "cases": 248,
-      "groundedness": 0.47580645161290325,
-      "evidence_precision": 0.05685483870967732,
-      "delivery_rate": 0.6920821114369502,
+      "groundedness": 0.5282258064516129,
+      "evidence_precision": 0.06502016129032247,
+      "delivery_rate": 0.7380281690140845,
       "case_fingerprint": "3f7ee87e9c88bb8b22c40c36d60a5d27c7502b24172ffc3783759ddc3c7b14c4"
     }
   ]

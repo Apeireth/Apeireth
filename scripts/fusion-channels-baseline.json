@@ -3,24 +3,24 @@
     {
       "baseline": {
         "cases": 476,
-        "ndcg_at_k": 0.16146706276775386,
-        "recall_at_k": 0.29831932773109243
+        "ndcg_at_k": 0.28205219268188547,
+        "recall_at_k": 0.45483193277310924
       },
       "channel_only_recall_at_k": 0.10189075630252101,
-      "delta": 0.00840336134453784,
+      "delta": 0.0010504201680672232,
       "exam": "lexical",
       "name": "redchamber",
       "with_channel": {
         "cases": 476,
-        "ndcg_at_k": 0.16477207699032598,
-        "recall_at_k": 0.3067226890756303
+        "ndcg_at_k": 0.2822836876432812,
+        "recall_at_k": 0.45588235294117646
       }
     },
     {
       "baseline": {
         "cases": 248,
-        "ndcg_at_k": 0.4817377629786214,
-        "recall_at_k": 0.6875
+        "ndcg_at_k": 0.5232480121749885,
+        "recall_at_k": 0.7157258064516129
       },
       "channel_only_recall_at_k": 0.0967741935483871,
       "delta": 0.0,
@@ -28,8 +28,8 @@
       "name": "watershed",
       "with_channel": {
         "cases": 248,
-        "ndcg_at_k": 0.4817377629786214,
-        "recall_at_k": 0.6875
+        "ndcg_at_k": 0.5232480121749885,
+        "recall_at_k": 0.7157258064516129
       }
     }
   ],
@@ -37,24 +37,24 @@
     {
       "baseline": {
         "cases": 208,
-        "ndcg_at_k": 0.16120305292943596,
-        "recall_at_k": 0.3269230769230769
+        "ndcg_at_k": 0.16191769780377635,
+        "recall_at_k": 0.35096153846153844
       },
       "channel_only_recall_at_k": 0.47596153846153844,
-      "delta": 0.009615384615384637,
+      "delta": 0.0,
       "exam": "fair",
       "name": "redchamber",
       "with_channel": {
         "cases": 208,
-        "ndcg_at_k": 0.16505415867782053,
-        "recall_at_k": 0.33653846153846156
+        "ndcg_at_k": 0.16191769780377635,
+        "recall_at_k": 0.35096153846153844
       }
     },
     {
       "baseline": {
         "cases": 124,
-        "ndcg_at_k": 0.1320237649902848,
-        "recall_at_k": 0.2903225806451613
+        "ndcg_at_k": 0.13010913731635737,
+        "recall_at_k": 0.28225806451612906
       },
       "channel_only_recall_at_k": 0.3629032258064516,
       "delta": 0.0,
@@ -62,8 +62,8 @@
       "name": "watershed",
       "with_channel": {
         "cases": 124,
-        "ndcg_at_k": 0.1320237649902848,
-        "recall_at_k": 0.2903225806451613
+        "ndcg_at_k": 0.13010913731635737,
+        "recall_at_k": 0.28225806451612906
       }
     }
   ],
