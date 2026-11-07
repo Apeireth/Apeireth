@@ -146,7 +146,19 @@ jobs:
       - name: cargo test (crates-ui)
         run: cargo test --workspace --locked
 
-      # ⚠️ **doc-test 这一关本 workflow 不跑**（2026-11-07 门禁归并批实测结论）：
+      # **doc-test 单独一趟**（2026-11-07 门禁归并批 · 补齐批）：
+      # 合并前 crates-ui 的 7 个 crate 里，**只有这一关覆盖 `ui-kit` / `ui-macro` 的 doctest**
+      # （普通 `cargo test` **不跑** doctest）⇒ ⇒ 合并收窄的那处覆盖在此补回。
+      # ⚠️ **纳入前的实测**：合并刚完成时这一关**红**（`apeireth-ui-macro` 的私有函数
+      # `compile_error` 产出 Ident 而非 `compile_error!` ⇒ 展开后成 `compile_error("…")`，
+      # 而在别的 crate 里 `compile_error` 是**宏**（要带 `!`）⇒ 19 处 E0423）⇒ 那时**刻意未引入**
+      # （引入 = 让 CI 变红）⇒ ⇒ 现 crates-ui 侧已收工、该缺陷已不复现 ⇒ **本关纳入**。
+      # 实测（2026-11-07，crates-ui 独立 workspace）：**3 passed / 0 failed / 4 ignored**（连跑 3 轮同值；
+      # 4 个 ignored = `apeireth-ui-macro` 自带的 ```ignore doc-test，合并前已存在）。
+      - name: cargo test --doc (crates-ui)
+        run: cargo test --workspace --doc --locked
+
+      # ⚠️ **doc-test 这一关的纳入背景**（2026-11-07 门禁归并批实测结论）：
       # `cargo test --workspace --doc --locked` 在 7-crate crates-ui 上**红** ——
       # 根因在 `apeireth-ui-macro` 的私有函数 `compile_error`（`src/lib.rs:122`）**产出的是
       # Ident `compile_error` 而非 `compile_error!`** ⇒ 展开后成 `compile_error("…")`，
