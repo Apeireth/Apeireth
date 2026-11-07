@@ -264,7 +264,7 @@ claims:
 
   - id: sec.linux_containment
     title: "Linux 进程遏制边界（partial，如实）"
-    level: IMPLEMENTED
+    level: PRODUCTION WIRED
     default: null
     switch_env: null
     sources:
@@ -276,7 +276,7 @@ claims:
     verify_cmd: "cargo test -p apeireth-tools-canonical --test process_executor"
     owner: tools
     next_review: "2026-11-20"
-    notes: "进程组 + setrlimit(AS/CPU/FSIZE/NPROC) + PR_SET_PDEATHSIG + PR_SET_NO_NEW_PRIVS；不承诺 cgroup/seccomp/namespace/网络隔离；memory/process-count 为 partial。；2026-10-28 Phase 3 复核：原进程组/rlimit/降权语义保留，增加期限/取消与退出后清理后代；实进程 PID 回归通过。不保证回收主动脱离进程组的后代，维持 PARTIAL，不升级为强隔离或硬件验证。"
+    notes: "进程组 + setrlimit(AS/CPU/FSIZE/NPROC) + PR_SET_PDEATHSIG + PR_SET_NO_NEW_PRIVS；不承诺 cgroup/seccomp/namespace/网络隔离；memory/process-count 为 partial。；2026-10-28 Phase 3 复核：原进程组/rlimit/降权语义保留，增加期限/取消与退出后清理后代；实进程 PID 回归通过。不保证回收主动脱离进程组的后代，维持 PARTIAL，不升级为强隔离或硬件验证。 ⭐ **2026-11-07 主指挥核验后升 PRODUCTION WIRED**：① 真跑 `cargo nextest run -p apeireth-tools-canonical --test process_executor --offline` ⇒ ⇒ **21 passed / 0 failed**（实测，2026-11-07）；② 生产调用点确凿：`crates/capabilities/tools/src/process/mod.rs:748` `linux::spawn_and_supervise(...)`、`:776` `linux::capabilities()`、`:688` `ProcessExecutor` ⇒ ⇒ ⇒ **真在生产链路上**；⇒ ⇒ ⇒ ⚠️ **能力本身仍是 partial**（memory/process-count 有限 · 不保证回收主动脱离进程组的后代）⇒ ⇒ ⇒ ⇒ **PRODUCTION WIRED ≠ 完整 ≠ HARDWARE VALIDATED** ⇒ ⇒ ⇒ ⇒ ⇒ **partial 标注原样保留**；⇒ ⇒ ⇒ ⇒ ⇒ 声明标题里的「(partial，如实)」**不改** ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ **不许**借升级把 partial 抹掉。"
 
   - id: sec.gateway_tls
     title: "Gateway TLS 真接线（PEM 真加载 fail-closed + TLS listener + 三态状态面）"
@@ -522,7 +522,7 @@ claims:
 
   - id: sec.terminal_permission_surfaces
     title: "终端权限边界明示 + 三层权限面文档（B4）"
-    level: IMPLEMENTED
+    level: PRODUCTION WIRED
     default: null
     switch_env: null
     sources:
@@ -531,10 +531,17 @@ claims:
     tests:
       - frontend/companion-desktop/tests/starport-face-apps.mjs
     verified_at: c9251271
-    verify_cmd: "cd frontend/companion-desktop && pnpm test"
+    # ⚠️ **2026-11-07 收窄**（声明核验批 · 与兄弟声明同形）：
+    # 原命令 `cd frontend/companion-desktop && pnpm test` = **83 个套件全跑**
+    # ⇒ ⇒ 而本条真正相关的是**它自己那 4 条文案测试钉子**（`tests/starport-face-apps.mjs`）
+    # ⇒ ⇒ ⇒ 其余 79 个套件任一红 ⇒ ⇒ **本条就红** ⇒ ⇒ 「捎带别人的红」
+    # ⇒ ⇒ ⇒ ⇒ ⚠️ **且本地 Node 24 与 CI Node 22 行为不同**（Node 24 的 TS 剥离器
+    # ⇒ ⇒ ⇒ ⇒ 报 `ERR_NO_TYPESCRIPT` ⇒ ⇒ 83 套件里有 66 个在 Node 24 上必红）
+    # ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ **⇒ ⇒ 收窄到只跑它自己 ⇒ ⇒ 既窄 ⇒ ⇒ 又可在本地复现** ✔
+    verify_cmd: "node frontend/companion-desktop/tests/starport-face-apps.mjs"
     owner: companion-desktop
     next_review: "2026-11-20"
-    notes: "4 条文案测试钉子（pnpm 82/82 套件，交付记录）；本文档描述 UI 权限边界，不改变底层审批语义。"
+    notes: "4 条文案测试钉子（pnpm 82/82 套件，交付记录）；本文档描述 UI 权限边界，不改变底层审批语义。 ⭐ **2026-11-07 主指挥核验后升 PRODUCTION WIRED**：① 真跑 `node frontend/companion-desktop/tests/starport-face-apps.mjs` ⇒ ⇒ **6 项全 OK ⇒ 「Starport Face Apps Source Mirror PASSED」**（实测，2026-11-07）⇒ ⇒ ⇒ 即本条自己那 4 条文案测试钉子**逐条通过**；② ⇒ ⇒ ⇒ ⇒ **verify_cmd 已收窄**到只跑它自己 ⇒ ⇒ ⇒ 原 `pnpm test`（83 套件）在**本地 Node 24** 上有 66 个因 `ERR_NO_TYPESCRIPT` 必红 ⇒ ⇒ ⇒ **不可复现 ⇒ ⇒ 不可作证据**⇒ ⇒ ⇒ ⇒ （CI 用 Node 22 ⇒ ⇒ 那边能全绿 ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ **⇒ ⇒ 收窄后本地即可复现** ✔）；③ ⇒ ⇒ ⇒ ⇒ ⚠️ **本条是 UI 权限边界的文档/文案面** ⇒ ⇒ ⇒ ⇒ **不改变底层审批语义** ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ **PRODUCTION WIRED 指「这 4 条文案钉子 + 对应接线在生产里」** ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ **不是**「审批引擎已完备」。"
 
   - id: bio.tone
     title: "神经调质→语气（W3.4 生产装配，默认关）"
