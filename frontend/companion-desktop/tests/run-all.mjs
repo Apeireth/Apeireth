@@ -109,8 +109,21 @@ const SUITES = [
   {file: 'proposal-card.mjs', name: 'proposal card (proposal ledger IM-card rows / honest no-face / auth seam / read-only, real modules)', strip: true},
 ];
 
+// 类型擦除的两条路径（2026-11-07 实测补）：
+//   ① Node **有**内置 TS 支持（`process.features.typescript === true`）⇒ 用原生
+//      `--experimental-strip-types`（**历史行为，CI 走的正是这条**）；
+//   ② Node **没有**内置支持（发行版构建；实测本机 `/usr/bin/node` v24.21.0 即是）
+//      ⇒ 用 `tests/ts-strip-hooks.mjs`（借项目自带的 `typescript` devDependency 擦类型）。
+// 自动探测 ⇒ ⇒ **不改变「有内置支持」的环境的行为**。
+const NATIVE_TYPE_STRIPPING = Boolean(process.features.typescript);
+const STRIP_FALLBACK = ['--import', join(testsDir, 'ts-strip-register.mjs')];
+
+function stripArgs() {
+  return NATIVE_TYPE_STRIPPING ? ['--experimental-strip-types'] : STRIP_FALLBACK;
+}
+
 function run({file, strip}) {
-  const args = strip ? ['--experimental-strip-types', join(testsDir, file)] : [join(testsDir, file)];
+  const args = [...(strip ? stripArgs() : []), join(testsDir, file)];
   return new Promise((resolve) => {
     const child = spawn(process.execPath, args, {stdio: ['ignore', 'pipe', 'pipe']});
     let output = '';
