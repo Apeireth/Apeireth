@@ -19,7 +19,7 @@
 //! * **真库**：本例子把 120 回正文**逐字**写进一个 SQLite 库（跑过真实迁移）
 //!   ⇒ 导出物与生产同构（**不是**生产库 ⇒ 如实标注）；
 //! * **不写生产路径**：库文件落在**临时目录**，跑完就删；
-//! * **已知问题照抄**：引用的是仓内**实测**数字（`golden_diag` 的 `recall@10 = 0.2983`），
+//! * **已知问题照抄**：引用的是仓内**实测**数字（`recall_gap_report` 的 `recall@10 = 0.4548`），
 //!   不编、不美化。
 //!
 //! # 状态：NOT IMPLEMENTED（新增未接线，2026-10-27）
@@ -199,11 +199,12 @@ fn main() -> ExitCode {
 /// # 口径
 ///
 /// * 数字全部来自**仓内实测**（`golden_diag` / `golden_set`）⇒ **不编**；
-/// * 另两条是**本批的事实**（本模块只到库级；B4 的「迁移回滚」还没做）⇒ 同样如实写。
+/// * 另两条是**本批的事实**（本模块只到库级；B4 的「迁移回滚」已实现但仍是库级）⇒ 同样如实写。
 fn known_issues(mined_cases: usize) -> Vec<String> {
     vec![
-        "内部卷（《紅樓夢》120 回 / 476 题）实测 recall@10 = 0.2983 ⇒ 73% 的题目标记录没进检索结果；\
-         天花板 coverage 0.2712 ⇒ **瓶颈在召回，不在注入**（golden_diag 实测，2026-10-26）"
+        "内部卷（《紅樓夢》120 回 / 476 题）实测 recall@10 = 0.4548 ⇒ 57.4% 命中；\
+         **没进候选池 0 题（0.0%）** ⇒ ⇒ **瓶颈在「排序」，不在「召回」**\
+         （2026-11-07 实测：中文底座修好后 coverage 缺口已消失）"
             .to_string(),
         format!(
             "本次挖题得到 {mined_cases} 道候选题（未精标）⇒ 题集本身**尚未定稿**，recall 数字只作参考"
@@ -211,7 +212,8 @@ fn known_issues(mined_cases: usize) -> Vec<String> {
         "handover 本体仍是**库级实现**（NOT IMPLEMENTED）：无 CLI、无定时任务、生产 0 调用点 \
          ⇒ 接手者目前只能靠本例子手工造包"
             .to_string(),
-        "B4 的**「迁移回滚」**那一块**尚无实现** ⇒ 本包只覆盖 B4 的第一块砖（脱机归档）\
+        "B4 的**「迁移回滚」**那一块**已实现**（`migrate_rollback_report` 实测：回滚后哈希
+         与迁移前**逐字相等**）⇒ **但仍是库级**（非生产链路）⇒ 本包覆盖 B4 的第一块砖（脱机归档）\
          与第三块砖（handover 演练）"
             .to_string(),
     ]
@@ -221,13 +223,15 @@ fn known_issues(mined_cases: usize) -> Vec<String> {
 fn next_steps(mined_cases: usize) -> Vec<NextStep> {
     vec![
         NextStep {
-            what: "把召回缺口拆到检索层：先查候选池覆盖率（coverage），再谈排序".to_string(),
-            why: "recall@10 = 0.2983 的天花板是 coverage 0.2712 ⇒ 目标记录压根没进候选池时，\
-                  注入层与排序层再优化也没用"
+            what: "把缺口拆到**排序层**（候选池覆盖率已达标，不是召回问题了）".to_string(),
+            why: "recall@10 = 0.4548，**没进候选池 0 题** ⇒ 目标记录**全都在池子里**；\
+                  但 **42.6% 排在 k=10 之外**（名次 p50=7 / p75=26 / p95=78）\
+                  ⇒ ⇒ **这是排序问题，不是候选集问题**"
                 .to_string(),
             acceptance:
                 "cargo run -p apeireth-memory --example recall_gap_report ⇒ 输出 GapClass 分布；\
-                         候选池覆盖率 ≥ 0.45（基线 0.2712），且 NotInPool 占比逐题可归因"
+                         **NotInPool 必须仍是 0**（不许退），且 **RankedOut 占比逐题下降**\
+                         （基线 42.6% / 名次 p75=26）"
                     .to_string(),
             cost: 2,
         },
