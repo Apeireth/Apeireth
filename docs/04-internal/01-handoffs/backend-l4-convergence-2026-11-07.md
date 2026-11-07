@@ -50,6 +50,13 @@ Author: lead
 7. **记忆能力审计面**（只读，不写库）：`capability_audit.rs` + `apeireth memory handover` 自述 ⇒
    记忆可达率上台阶、未解释缺口归零。
 
+   ⚠️ **可达 +19 的口径要说清（别读成「十九条功能接线」）**：新增的只读审计面**导入了约二十个记忆模块**
+   （`agent_trace` / `arbitration` / `swap_flow` / `forget_coordinator` / `vector_rebuild` / `cold_archive` /
+   `calibration_critic` / `ensemble` / `reflexion_tuning` / `daily_summary` 等）⇒ 这些模块从「整块不可达」
+   变成「**经生产入口（handover CLI）可触达**」。按本仓判据这算**可达**，但它们提供的是**自述/审计读数**，
+   **不是**新的功能性生产调用点。⇒ D4 候选池台账因此把这 10 个模块标成 `left-pool`
+   （`scripts/d4-ledger.json` 已 `--gen` 同步，`left_pool_count` 3 → 13），这是**口径后果**，不是功能新增。
+
 同时清掉三处 **arch 尺寸违规**（都用**真实拆分**，不是删注释装样）：
 `retrieval_pipeline.rs` 1324→**1273**（融合三规则搬进 `retrieval_pipeline/fusion.rs`，两语料 **Δ +0.0000** 证明行为等价）、
 `production.rs` 1897→**1896**、`bio_production_wiring.rs` 1238→**812**（668 行既有测试原样搬出）。

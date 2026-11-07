@@ -7,7 +7,7 @@
   "candidate_count": 22,
   "measured_count": 3,
   "not_measurable_count": 1,
-  "left_pool_count": 3,
+  "left_pool_count": 13,
   "by_layer": {
     "D4": 9,
     "D3": 3,
@@ -73,7 +73,7 @@
       "delta_recall": null,
       "delta_grounded": null,
       "measure_note": null,
-      "status": "pending"
+      "status": "left-pool"
     },
     {
       "module": "reflexion_tuning",
@@ -84,7 +84,7 @@
       "produces": "Weight",
       "measurable_by": "not-applicable",
       "note": "⚠️ 产出**权重 / 校准量**（失败 → 学习桥）⇒ ⇒ **不是检索排序信号** ⇒ ⇒ 不上卷子 ⇒ ⇒ 且**生产装配为零**（台账 §一 W12「待接线」）",
-      "status": "out-of-scope",
+      "status": "left-pool",
       "delta_recall": null,
       "delta_grounded": null,
       "measure_note": null
@@ -157,7 +157,7 @@
       "delta_recall": null,
       "delta_grounded": null,
       "measure_note": null,
-      "status": "out-of-scope"
+      "status": "left-pool"
     },
     {
       "module": "swap_flow",
@@ -171,7 +171,7 @@
       "delta_recall": null,
       "delta_grounded": null,
       "measure_note": null,
-      "status": "out-of-scope"
+      "status": "left-pool"
     },
     {
       "module": "forget_coordinator",
@@ -185,7 +185,7 @@
       "delta_recall": null,
       "delta_grounded": null,
       "measure_note": null,
-      "status": "out-of-scope"
+      "status": "left-pool"
     },
     {
       "module": "streams",
@@ -258,6 +258,20 @@
       "status": "left-pool"
     },
     {
+      "module": "golden_fair",
+      "loc": 466,
+      "layer": "D4",
+      "kind": "exam",
+      "consumes": "Text",
+      "produces": "Annotation",
+      "measurable_by": "not-applicable",
+      "note": "⚠️ **评测设施**（通道公平考卷）⇒ ⇒ **不是排序信号** ⇒ ⇒ **不上检索卷子**",
+      "status": "out-of-scope",
+      "delta_recall": null,
+      "delta_grounded": null,
+      "measure_note": null
+    },
+    {
       "module": "vector_rebuild",
       "loc": 460,
       "layer": "D2",
@@ -269,7 +283,7 @@
       "delta_recall": null,
       "delta_grounded": null,
       "measure_note": null,
-      "status": "out-of-scope"
+      "status": "left-pool"
     },
     {
       "module": "wiki_corpus_real",
@@ -298,20 +312,6 @@
       "delta_grounded": null,
       "measure_note": null,
       "status": "out-of-scope"
-    },
-    {
-      "module": "golden_fair",
-      "loc": 439,
-      "layer": "D4",
-      "kind": "exam",
-      "consumes": "Text",
-      "produces": "Annotation",
-      "measurable_by": "not-applicable",
-      "note": "⚠️ **评测设施**（通道公平考卷）⇒ ⇒ **不是排序信号** ⇒ ⇒ **不上检索卷子**",
-      "status": "out-of-scope",
-      "delta_recall": null,
-      "delta_grounded": null,
-      "measure_note": null
     },
     {
       "module": "robustness_metrics",
@@ -367,7 +367,7 @@
       "delta_recall": null,
       "delta_grounded": null,
       "measure_note": null,
-      "status": "out-of-scope"
+      "status": "left-pool"
     },
     {
       "module": "arbitration",
@@ -381,7 +381,7 @@
       "delta_recall": null,
       "delta_grounded": null,
       "measure_note": null,
-      "status": "out-of-scope"
+      "status": "left-pool"
     },
     {
       "module": "calibration_critic",
@@ -395,7 +395,7 @@
       "delta_recall": null,
       "delta_grounded": null,
       "measure_note": null,
-      "status": "pending"
+      "status": "left-pool"
     },
     {
       "module": "golden_baseline",
@@ -647,7 +647,7 @@
       "delta_recall": null,
       "delta_grounded": null,
       "measure_note": null,
-      "status": "pending"
+      "status": "left-pool"
     },
     {
       "module": "dual_track",
