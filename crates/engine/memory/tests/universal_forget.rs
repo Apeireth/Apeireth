@@ -117,3 +117,130 @@ fn principal_forget_rejects_empty_principal() {
         .expect_err("空主体必须拒绝");
     assert!(error.contains("empty"), "理由应可读: {error}");
 }
+
+// ============================================================================
+// 2026-10-30 · 静态安全审计复核：`universal_forget` 的「虚假保证」修复
+// ============================================================================
+//
+// 审计（`/root/security-audit-skill/apeireth/`）指出：主体级遗忘的返回体
+// `episode/commitment/temporal/persona` 是**写死的常量** ⇒ 与真实效果脱钩。
+//
+// 本组测试钉住**修复后的口径**：
+//   ① **归属不可判定**（生产默认：无 `memory_principal_sessions` 映射）
+//      ⇒ `episode == false`（**不谎称已擦除**）+ `attribution.unattributable() == true`
+//      ⇒ 且**实测行数为 0**（确实什么都没擦）。
+//   ② **有归属映射** ⇒ `episode == true` + `counts.episodes == 1` + 真落 forgotten 行。
+//   ③ **幂等重跑** ⇒ 仍 `episode == true`（后置状态口径），但 `counts.episodes == 0`
+//      （本次没有新增 tombstone）。
+//   ④ `commitment` / `temporal` / `persona` 三账按 `subject_id` 归属
+//      ⇒ **与归属映射无关** ⇒ 生产环境**真的**会撤回。
+
+/// 生产默认形态：**没有归属映射** ⇒ 不得谎称「episode 已擦除」。
+#[test]
+fn principal_forget_without_ownership_mapping_does_not_claim_success() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("universal-forget-unmapped.sqlite");
+    let store = apeireth_memory::SqliteMemoryStore::open(&path).expect("open store");
+
+    // 只写 episode，**不写** `memory_principal_sessions` ⇒ 生产真实形态。
+    {
+        let conn = store.conn().expect("conn");
+        conn.execute(
+            "INSERT INTO episodes (id,continuity_id,session_id,timestamp,role,content) VALUES ('ep-x','user-x','session-x',1,'user','private')",
+            [],
+        )
+        .expect("episode");
+    }
+
+    let outcome = UniversalForgetFacade::forget_principal(&store, "user-x", 100, Some("用户要求"))
+        .expect("不应报错");
+    assert!(
+        !outcome.episode,
+        "归属不可判定 ⇒ 不得报告 episode 已擦除（旧实现会写死 true）: {outcome:?}"
+    );
+    assert_eq!(outcome.counts.episodes, 0, "确实一个 episode 都没擦");
+    assert!(
+        outcome.attribution.unattributable(),
+        "必须把「归属不可判定」显式带出来: {:?}",
+        outcome.attribution
+    );
+    assert_eq!(outcome.attribution.sessions_mapped, 0);
+    assert_eq!(outcome.attribution.episodes_attributable, 0);
+}
+
+/// 有归属映射 ⇒ `episode == true` 且**实测行数为 1**（不是常量）。
+#[test]
+fn principal_forget_with_ownership_mapping_reports_measured_counts() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("universal-forget-mapped.sqlite");
+    let store = apeireth_memory::SqliteMemoryStore::open(&path).expect("open store");
+
+    {
+        let conn = store.conn().expect("conn");
+        conn.execute(
+            "INSERT INTO memory_principal_sessions (principal_id, session_id, created_at_ms) VALUES ('user-y','session-y',1)",
+            [],
+        )
+        .expect("principal session");
+        conn.execute(
+            "INSERT INTO episodes (id,continuity_id,session_id,timestamp,role,content) VALUES ('ep-y','user-y','session-y',1,'user','private')",
+            [],
+        )
+        .expect("episode");
+        conn.execute(
+            "INSERT INTO commitments (id,subject_id,statement,source_episode_id,created_at_ms,updated_at_ms) VALUES ('c-y','user-y','todo','ep-y',1,1)",
+            [],
+        )
+        .expect("commitment");
+    }
+
+    let outcome = UniversalForgetFacade::forget_principal(&store, "user-y", 100, Some("用户要求"))
+        .expect("不应报错");
+    assert!(outcome.episode, "有归属且已清空 ⇒ 应为真: {outcome:?}");
+    assert_eq!(outcome.counts.episodes, 1, "实测：tombstone 1 条");
+    assert_eq!(outcome.counts.commitments, 1, "实测：撤回 1 条 commitment");
+    assert_eq!(outcome.attribution.sessions_mapped, 1);
+    assert_eq!(outcome.attribution.episodes_attributable, 1);
+    assert_eq!(outcome.attribution.episodes_outstanding, 0);
+    assert!(!outcome.attribution.unattributable());
+    assert!(
+        outcome.commitment,
+        "commitment 按 subject_id 归属 ⇒ 确实撤回"
+    );
+}
+
+/// 幂等重跑：后置状态口径 ⇒ 仍为 `true`，但本次新增 tombstone 为 0。
+#[test]
+fn principal_forget_is_idempotent_and_reports_zero_delta_on_second_run() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("universal-forget-idempotent.sqlite");
+    let store = apeireth_memory::SqliteMemoryStore::open(&path).expect("open store");
+
+    {
+        let conn = store.conn().expect("conn");
+        conn.execute(
+            "INSERT INTO memory_principal_sessions (principal_id, session_id, created_at_ms) VALUES ('user-z','session-z',1)",
+            [],
+        )
+        .expect("principal session");
+        conn.execute(
+            "INSERT INTO episodes (id,continuity_id,session_id,timestamp,role,content) VALUES ('ep-z','user-z','session-z',1,'user','private')",
+            [],
+        )
+        .expect("episode");
+    }
+
+    let first =
+        UniversalForgetFacade::forget_principal(&store, "user-z", 100, Some("第一次")).expect("ok");
+    assert!(first.episode);
+    assert_eq!(first.counts.episodes, 1);
+
+    let second =
+        UniversalForgetFacade::forget_principal(&store, "user-z", 200, Some("第二次")).expect("ok");
+    assert!(
+        second.episode,
+        "后置状态口径 ⇒ 幂等重跑仍为 true: {second:?}"
+    );
+    assert_eq!(second.counts.episodes, 0, "本次没有新增 tombstone ⇒ 应为 0");
+    assert_eq!(second.attribution.episodes_outstanding, 0, "无残留");
+}

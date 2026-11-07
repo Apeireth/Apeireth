@@ -1,32 +1,27 @@
 //! The five-stage tool execution pipeline.
 //!
-//! Policy and execution used to be entangled: whatever a call site happened to
-//! check, in whatever order it happened to check it, decided what ran and what
-//! the model was told. This pipeline makes the chain explicit. One call walks
-//! five stages, always in this order:
+//! Policy and execution used to be entangled: whatever a call site checked,
+//! in whatever order, decided what ran and what the model was told. This
+//! pipeline makes the chain explicit: one call walks five stages:
 //!
 //! 1. [`ExecutionStage::PreExecute`] — the pre-execute waterfall: policy hooks
-//!    answer `allow` / `deny` / `cancel` / `ask`, first non-allow wins
-//!    (see [`pre`]);
+//!    answer `allow` / `deny` / `cancel` / `ask`, first non-allow wins;
 //! 2. [`ExecutionStage::Guard`] — the monotonic guard set: guards may only
-//!    refuse, never allow, and a refusal cannot be flipped back
-//!    (see [`apeireth_governance::tool_guard`]);
-//! 3. [`ExecutionStage::Around`] — timeout (through the deadline timer
-//!    library) and retry wrap the execution (see [`around`]);
+//!    refuse, never allow, and a refusal cannot be flipped back;
+//! 3. [`ExecutionStage::Around`] — timeout (deadline timer library) and retry
+//!    wrap the execution (see [`around`]);
 //! 4. [`ExecutionStage::PostExecute`] — the correction channel: `accept` /
-//!    `replace` / `block`, with superseded results archived (see [`post`]);
+//!    `replace` / `block`, superseded results archived (see [`post`]);
 //! 5. [`ExecutionStage::Normalize`] — the output contract: the result is
-//!    frozen into [`ToolOutcome { ok, output_text, meta }`] and checked
-//!    against the declared schema (see [`contract`]).
+//!    frozen into [`ToolOutcome`] and checked against the declared schema.
 //!
 //! The stage order is a property of the pipeline, not of its callers: the
 //! record built along the way lists the stages actually visited, in order.
 //!
 //! # Default behaviour is unchanged behaviour
 //!
-//! A pipeline with no hooks, no guards, no deadline, no retry, and no schema
-//! runs the tool once and emits its result untouched — byte-for-byte what the
-//! call produced before this chain existed. Every stage is opt-in.
+//! A pipeline with no hooks, guards, deadline, retry, or schema runs the tool
+//! once and emits its result untouched. Every stage is opt-in.
 
 pub mod around;
 pub mod contract;
@@ -44,9 +39,8 @@ pub use pre::{
     PreVerdict, RiskLevelGateHook,
 };
 
-// The guard interface consulted by stage 2 is owned by governance; it is
-// re-exported here so the whole five-stage vocabulary is reachable from one
-// place without a second definition.
+// The guard interface consulted by stage 2 is owned by governance; re-exported
+// here so the whole five-stage vocabulary is reachable from one place.
 pub use apeireth_governance::{GuardRefusal, MonotonicGuards, ToolGuard, ToolGuardRequest};
 
 use std::sync::Arc;
@@ -93,15 +87,10 @@ impl ExecutionStage {
         }
     }
 
-    /// Position in the canonical order, zero first.
+    /// Position in the canonical order, zero first: the variants are declared
+    /// in that order, so the discriminant *is* the position.
     pub const fn order(self) -> usize {
-        match self {
-            Self::PreExecute => 0,
-            Self::Guard => 1,
-            Self::Around => 2,
-            Self::PostExecute => 3,
-            Self::Normalize => 4,
-        }
+        self as usize
     }
 }
 
@@ -114,8 +103,7 @@ pub struct StageEntry {
     pub detail: String,
 }
 
-/// The record of one pipeline run: stages visited, in order, and every result
-/// a stage superseded (kept, never dropped).
+/// The record of one pipeline run: stages visited, and superseded results.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct ExecutionRecord {
     stages: Vec<StageEntry>,
@@ -157,11 +145,9 @@ impl ExecutionRecord {
 
 /// The closed failure vocabulary of the pipeline.
 ///
-/// Refusals, cancellations, human-approval requirements, guard refusals,
-/// timeouts, exhausted retries, correction blocks, and contract violations all
-/// land here — there is no half state and no unnamed failure. Every variant
-/// carries a stable [`PipelineFailure::code`] and closes into a model-facing
-/// result via [`PipelineFailure::emit`].
+/// Refusals, cancellations, approvals, guard refusals, timeouts, exhausted
+/// retries, correction blocks, and contract violations all land here. Every
+/// variant carries a stable code and closes into a result via `emit`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PipelineFailure {
     /// A pre-execute hook answered `deny`.
@@ -192,11 +178,16 @@ pub enum PipelineFailure {
         /// The refusal reason as stated.
         reason: String,
     },
-    /// The around stage failed in the timeout family; `code` is one of the
-    /// deadline library's stable timeout codes.
+    /// The around stage failed in the timeout family; `code` is a stable code.
     Timeout {
         /// Stable timeout-family code.
         code: &'static str,
+        /// Whether the timed-out run had already **entered** the tool call.
+        ///
+        /// 原先没有这个判别位: 超时一律报「可重试」, 而在途调用可能已把副作用投递
+        /// 出去 (git_write 的 spawn_blocking、MCP 的 tools/call) ⇒ 重试 ⇒ 副作用重复。
+        /// 现在: `false` ⇒ 工具从未被进入 ⇒ 可重试; `true` ⇒ 已进入 ⇒ 永久错误。
+        started: bool,
     },
     /// Retry was configured and every attempt failed.
     RetriesExhausted {
@@ -227,7 +218,7 @@ impl PipelineFailure {
             Self::PreCancelled { .. } => "pipeline.pre_cancel",
             Self::NeedsApproval { .. } => "pipeline.pre_ask",
             Self::GuardDenied { .. } => "pipeline.guard_deny",
-            Self::Timeout { code } => code,
+            Self::Timeout { code, .. } => code,
             Self::RetriesExhausted { .. } => "pipeline.retries_exhausted",
             Self::PostBlocked { .. } => "pipeline.post_block",
             Self::ContractViolation(error) => error.code(),
@@ -249,7 +240,9 @@ impl PipelineFailure {
             Self::GuardDenied { guard, reason } => {
                 format!("guard {guard} refused: {reason}")
             }
-            Self::Timeout { code } => format!("timeout failure ({code})"),
+            // 超时且**未开始** ⇒ 工具从未被进入, 确实什么都没发生 ⇒ 重试安全。
+            // 超时且**已开始** ⇒ 副作用可能已经落地 ⇒ 重试会重复 ⇒ 永久错误。
+            Self::Timeout { started, .. } => format!("timeout failure started={started}"),
             Self::RetriesExhausted {
                 attempts,
                 last_error,
@@ -265,10 +258,13 @@ impl PipelineFailure {
     ///
     /// The result always carries the stable code and stays correlated to the
     /// call id; a failure is a frame, not a hole.
+    ///
+    /// 超时帧按「是否已开始」分流 (口径同 `canonical/execute.rs`): **未开始** ⇒
+    /// 什么都没发生 ⇒ 可重试; **已开始** ⇒ 副作用可能已落地 ⇒ 永久错误。
     pub fn emit(&self, call_id: &str, name: Option<&str>) -> ToolResult {
         let message = format!("{}: {}", self.code(), self.message());
         let result = match self {
-            Self::Timeout { .. } | Self::RetriesExhausted { .. } => {
+            Self::Timeout { started: false, .. } | Self::RetriesExhausted { .. } => {
                 ToolResult::retryable_error(call_id, message)
             }
             _ => ToolResult::permanent_error(call_id, message),
@@ -302,8 +298,7 @@ impl ExecutedCall {
 
 /// The five-stage tool execution pipeline.
 ///
-/// Built per capability or shared across them; every stage is opt-in, and the
-/// default pipeline runs tools exactly as they ran before.
+/// Built per capability or shared across them; every stage is opt-in.
 #[derive(Default)]
 pub struct ToolExecutionPipeline {
     pre: pre::PreExecuteWaterfall,
@@ -314,8 +309,7 @@ pub struct ToolExecutionPipeline {
 }
 
 impl ToolExecutionPipeline {
-    /// A pipeline with no hooks, no guards, no deadline, no retry, and no
-    /// schema: execution behaviour is unchanged.
+    /// A pipeline with no hooks, guards, deadline, retry, or schema: unchanged.
     pub fn new() -> Self {
         Self::default()
     }
@@ -334,8 +328,7 @@ impl ToolExecutionPipeline {
         self
     }
 
-    /// Install a whole monotonic guard set (appended to any guards already
-    /// listening, keeping their order).
+    /// Install a whole monotonic guard set (appended, keeping their order).
     #[must_use]
     pub fn with_guards(mut self, guards: MonotonicGuards) -> Self {
         self.guards = self.guards.merge(guards);
@@ -393,8 +386,7 @@ impl ToolExecutionPipeline {
         self.run_frozen(tool, call, None).await
     }
 
-    /// Run one call through the five stages, executing a previously frozen
-    /// invocation instead of the original call arguments.
+    /// Run one call, executing a previously frozen invocation.
     pub async fn run_frozen(
         &self,
         tool: &dyn ToolCapability,
@@ -404,10 +396,7 @@ impl ToolExecutionPipeline {
         self.run_in_session(tool, call, frozen, None).await
     }
 
-    /// Run one call through the five stages with the dispatching turn's
-    /// session in scope (see [`ToolCapability::invoke_in_session`]). Host-side
-    /// invocations without a session scope use [`ToolExecutionPipeline::run`]
-    /// or [`ToolExecutionPipeline::run_frozen`] and pass no scope.
+    /// Run one call with the turn's session in scope; host-side calls pass none.
     pub async fn run_in_session(
         &self,
         tool: &dyn ToolCapability,
@@ -557,9 +546,7 @@ impl ToolExecutionPipeline {
 
 /// Wraps a capability so every call walks the five explicit stages.
 ///
-/// Identity, declarations, and frozen invocations are forwarded unchanged;
-/// only execution goes through the pipeline. With a default pipeline the
-/// emitted result is exactly the wrapped capability's own.
+/// Identity, declarations, and frozen invocations are forwarded unchanged.
 pub struct PipelinedCapability {
     inner: Arc<dyn ToolCapability>,
     pipeline: Arc<ToolExecutionPipeline>,

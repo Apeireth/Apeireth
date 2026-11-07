@@ -1,3 +1,11 @@
+#![allow(dead_code)]
+// 2026-10-31 合并批：本文件是**共享测试支撑**（`tests/support/`），会被**每个**
+// 集成测试二进制各编译一次 ⇒ 任一 helper 只要在**某个**二进制里没被调用，
+// 该二进制就报 `dead_code`；而 `-D warnings` 会把它变成门禁红。
+// 这些 helper **在别的测试里都有调用**（本批实测：11 个 helper 全部有调用点），
+// ⇒ 不能删、也不该逐个加 `#[allow]`（会让站点爆炸）⇒ 用**模块级允许**，
+// 理由登记在 `scripts/dead-code-reasons.txt`（与 `benches/src/support.rs` 同口径）。
+
 use apeireth_plugin::system_one::*;
 use apeireth_runtime::canonical::system_one::{SystemOneGate, SystemOneLimits};
 use async_trait::async_trait;

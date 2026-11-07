@@ -9,10 +9,42 @@ on:
   push:
     branches: [master, main, rebase/d7d8-into-integration, feature/cognitive-infrastructure-vnext, feature/memory-v2.2-production-completion]
   pull_request:
+    # ⭐ **paths 过滤**（2026-11-04 加）：CI 积压的根因是**PR 侧无过滤**
+    # ⇒ ⇒ 每个 push 都触发全部 34 个 workflow（含 Kani / Miri / Coverage / OS matrix）
+    # ⇒ ⇒ GitHub runner 排队 ⇒ ⇒ 积压 32 个。
+    # ⇒ ⇒ 纯文档/台账改动**不触发**本 workflow（它守的是代码）
+    # ⇒ ⇒ 代码 / 依赖 / 工具链 / 本 workflow 自身的改动**照跑**。
+    paths:
+      - 'crates/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'rust-toolchain.toml'
+      - '.cargo/**'
+      - 'fuzz/**'
+      - 'frontend/**/src-tauri/**'
+      - 'frontend/**/package.json'
+      - 'frontend/**/pnpm-lock.yaml'
+      - '.github/workflows/rust-lint.yml'
     branches: ['**']
 
+  workflow_dispatch:
 env:
   CARGO_TERM_COLOR: always
+
+# ⚠️ **CI 磁盘瘦身**（2026-11-01 实测，见 commit body 的 0 装真账）
+# 同一命令 `cargo build --workspace --tests --locked` 的 target 体积：
+#   默认          ⇒ 101 GB / 10m14s
+#   debug=0+inc=0 ⇒  14 GB /  3m21s
+#   **+ strip=symbols ⇒  7.5 GB / 3m20s**（runner 磁盘 14 GB ⇒ 只有这个装得下）
+# 原因：每个测试二进制的 `STRTAB`（panic 消息/类型名）**73.6 MiB** + `SYMTAB` 9.5 MiB
+#   ⇒ `strip=debuginfo` **不去符号表** ⇒ 必须 `strip=symbols`。
+# ⇒ **不删任何测试、不改任何口径**，只改构建环境。
+# ⚠️ **coverage.yml 故意不改**（tarpaulin 需要调试信息）。
+  CARGO_INCREMENTAL: 0
+  CARGO_PROFILE_DEV_DEBUG: 0
+  CARGO_PROFILE_TEST_DEBUG: 0
+  CARGO_PROFILE_DEV_STRIP: symbols
+  CARGO_PROFILE_TEST_STRIP: symbols
   RUSTFLAGS: "-D warnings"
 
 permissions:
@@ -27,7 +59,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Rust stable + clippy + rustfmt
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.97.1
         with:
           components: rustfmt, clippy
 
@@ -63,7 +95,7 @@ jobs:
       - uses: actions/checkout@v4
       # CI fix 2026-08: nightly rustfmt 每日漂移 (原 8 项 rustfmt.toml 配置在 stable
       # 全是 unstable, nightly 跑则全仓数百文件 diff, 门禁从未绿过) → 改 stable + 默认风格
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.97.1
         with:
           components: rustfmt
       - name: cargo fmt --all -- --check

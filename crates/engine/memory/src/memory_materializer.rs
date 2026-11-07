@@ -273,13 +273,6 @@ where
             max_episodes: DEFAULT_MAX_EPISODES,
         }
     }
-
-    #[must_use]
-    pub fn with_max_episodes(mut self, max_episodes: usize) -> Self {
-        self.max_episodes = max_episodes;
-        self
-    }
-
     pub async fn extract(
         &self,
         input: BoundedMemoryInput,

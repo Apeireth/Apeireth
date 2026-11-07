@@ -368,6 +368,7 @@ pub fn export_all_streams(conn: &Connection) -> MemoryResult<Vec<HistoryEntry>> 
 }
 
 /// 给 streams 模块的 FromStr helper.
+#[allow(dead_code)]
 pub fn kind_from_str(s: &str) -> MemoryResult<StreamKind> {
     crate::from_str_core(s)
 }

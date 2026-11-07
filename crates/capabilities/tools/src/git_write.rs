@@ -36,7 +36,27 @@
 //!   线的授权映射与单调边界 (拒绝不可被后续阶段翻回放行);
 //! - 会话预设 (`read_only` 拒 / `standard` 审批 / `full` L1 放行·L2 照审批)
 //!   由组装根的 [`apeireth_governance`] 预设钩子承载, L2 永不因预设放行。
+//!
+//! # 宿主授权同源 (2026-11-01 安全审计 P3-6)
+//!
+//! 本面的两道闸 ([`GitWriteRiskMappingHook`] 的 stage-1 授权映射 +
+//! [`GitWriteTierApprovalHook`] 的治理判决) 都读**共享 live 策略槽**
+//! ([`crate::live_policy`]): 槽里当前指向的就是治理链正在评估的那一份 ⇒
+//! 面板上的热撤销 (`POST /v1/panel/grants/revoke`) 对本面**立即生效**
+//! (撤销 ⇒ 拒绝即帧)。槽为 `None` (宿主策略未装入) ⇒ **不表态** ⇒ 沿用本面
+//! 原有档位口径 ⇒ **零行为变化**。
 
+// ── **词法面**（段切分 / 提词）外置 —— 纯搬移, 不改逻辑。
+//
+// 存在理由: 本文件在 size 棘轮基线上（`arch-baseline.txt`, 0 容差）⇒ 任何净增都会让
+// `arch_guard` 变红。棘轮文件**不归我改** ⇒ 正路是**让本文件净减**。
+// `src/git_write.rs` + `src/git_write/parse.rs` 是 Rust 2018 标准模块布局
+// ⇒ `mod parse;` **自动解析**, **不需要**改 `lib.rs`（别人的文件）。
+mod parse;
+use parse::{
+    check_message_file_operands, grade_commit, grade_tag, long_option_overlaps, option_base,
+    short_bundle, split_command_segments, tokenize_segment,
+};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
@@ -54,6 +74,10 @@ use serde::Deserialize;
 use crate::exec_pipeline::{
     AroundPolicy, OutputSchema, PreExecuteHook, PreExecuteRequest, PreVerdict, SchemaKind,
     DEFAULT_MAX_TIMEOUT_MS,
+};
+use crate::live_policy::{
+    current_live_policy, live_policy_allows, shared_live_permission_policy_slot,
+    LivePermissionPolicySlot,
 };
 use crate::process::{ProcessExecutor, ProcessLimits, ProcessRequest};
 
@@ -177,7 +201,25 @@ fn refuse_morph(detail: impl AsRef<str>) -> String {
 }
 
 /// 分级一次 git 写调用 (词表 + 变形防护 + 逐段取最严)。
+///
+/// 无工作区根 ⇒ **不做**操作数路径校验 (纯词法分级面); 需要根的调用方走
+/// [`classify_git_write_under`] (工具面持有根 ⇒ 走那条)。
 pub fn classify_git_write(command: &str) -> GitWritePlan {
+    classify_git_write_inner(None, command)
+}
+
+/// 根感知分级: 词法分级 + **操作数路径包含性校验**。
+///
+/// `git commit -F <路径>` / `git tag -F <路径>` 的**操作数是文件路径** ⇒ 原先
+/// 完全不受约束 ⇒ **工作区外**的文件 (`/etc/passwd` / `~/.aws/credentials`) 能被
+/// 读进提交/附注对象 ⇒ 这里按工作区根做包含性校验, 越界即拒绝即帧 (口径照抄
+/// `filesystem.rs` 的 `resolve_contained`)。
+pub fn classify_git_write_under(root: &Path, command: &str) -> GitWritePlan {
+    classify_git_write_inner(Some(root), command)
+}
+
+/// 分级实现 (根可选): 有根时在词法分级之上补**操作数路径包含性校验**。
+fn classify_git_write_inner(root: Option<&Path>, command: &str) -> GitWritePlan {
     let segments_text = match split_command_segments(command) {
         Ok(segments) => segments,
         Err(reason) => return GitWritePlan::Refused { reason },
@@ -197,8 +239,18 @@ pub fn classify_git_write(command: &str) -> GitWritePlan {
         if tokens.is_empty() {
             continue;
         }
-        match grade_segment(text, &tokens) {
+        // 消息/附注**文件操作数** (`-F` / `--file`) 的捕获 —— 分级面出参带回。
+        let mut message_files = Vec::new();
+        match grade_segment(text, &tokens, &mut message_files) {
             Ok(segment) => {
+                // 根感知的**操作数路径包含性校验** (越界即拒绝即帧, 不进执行面)。
+                if let Some(root) = root {
+                    if let Err(reason) = check_message_file_operands(root, &message_files) {
+                        return GitWritePlan::Refused {
+                            reason: refuse_morph(format!("操作数路径越界: {reason}")),
+                        };
+                    }
+                }
                 tier = tier.strictest(segment.tier);
                 segments.push(segment);
             }
@@ -241,130 +293,16 @@ pub fn git_write_human_approval_floor(arguments: &serde_json::Value) -> bool {
 // 词法面: 段切分 / 提词
 // ---------------------------------------------------------------------------
 
-/// 段切分: 只认 `&&` / `;` / 换行为段分隔; shell 面 (管道/重定向/插值/分组)
-/// 拒绝即帧 (本工具不经 shell, 不给"看起来像 shell"的幻觉空间)。
-fn split_command_segments(command: &str) -> Result<Vec<String>, String> {
-    let mut segments = Vec::new();
-    let mut current = String::new();
-    let mut chars = command.chars().peekable();
-    let mut quote: Option<char> = None;
-    while let Some(ch) = chars.next() {
-        match quote {
-            Some(open) => {
-                current.push(ch);
-                if ch == open {
-                    quote = None;
-                }
-            }
-            None => match ch {
-                '\'' | '"' => {
-                    quote = Some(ch);
-                    current.push(ch);
-                }
-                ';' | '\n' | '\r' => segments.push(std::mem::take(&mut current)),
-                '&' => {
-                    if chars.peek() == Some(&'&') {
-                        chars.next();
-                        segments.push(std::mem::take(&mut current));
-                    } else {
-                        return Err(refuse_morph(
-                            "单个 & (后台/句柄面) 不入本工具: 段分隔只认 && 与 ;",
-                        ));
-                    }
-                }
-                '|' | '<' | '>' => {
-                    return Err(refuse_morph(
-                        "管道/重定向面不入本工具: 命令按结构化参数执行 git, 不经 shell",
-                    ))
-                }
-                '`' | '$' | '(' | ')' | '{' | '}' => {
-                    return Err(refuse_morph(format!(
-                        "shell 元字符 {ch:?} 不入本工具: 不做插值/分组/展开 (引号内按字面参数)"
-                    )))
-                }
-                _ => current.push(ch),
-            },
-        }
-    }
-    if quote.is_some() {
-        return Err(refuse_morph("引号未闭合: 命令文本无法按参数面解析"));
-    }
-    segments.push(current);
-    Ok(segments)
-}
-
-/// 段内提词: 引号成组去壳; 引号内字面保留 (无转义/无插值); 空引号仍是词。
-fn tokenize_segment(segment: &str) -> Result<Vec<String>, String> {
-    let mut tokens = Vec::new();
-    let mut current = String::new();
-    let mut started = false;
-    let mut quote: Option<char> = None;
-    for ch in segment.chars() {
-        match quote {
-            Some(open) => {
-                if ch == open {
-                    quote = None;
-                } else {
-                    current.push(ch);
-                }
-            }
-            None => match ch {
-                '\'' | '"' => {
-                    quote = Some(ch);
-                    started = true;
-                }
-                whitespace if whitespace.is_whitespace() => {
-                    if started || !current.is_empty() {
-                        tokens.push(std::mem::take(&mut current));
-                        started = false;
-                    }
-                }
-                _ => {
-                    current.push(ch);
-                    started = true;
-                }
-            },
-        }
-    }
-    if quote.is_some() {
-        return Err(refuse_morph("引号未闭合: 命令文本无法按参数面解析"));
-    }
-    if started || !current.is_empty() {
-        tokens.push(current);
-    }
-    Ok(tokens)
-}
-
 // ---------------------------------------------------------------------------
 // 词法面: 逐段分级 (词表 + 变形防护)
 // ---------------------------------------------------------------------------
 
-/// 长选项基名 (`--message=x` → `--message`)。
-fn option_base(token: &str) -> &str {
-    match token.find('=') {
-        Some(index) => &token[..index],
-        None => token,
-    }
-}
-
-/// 长选项前缀重叠命中 (变形防护): git 允许无歧义缩写, 故 `--ha` 是 `--hard`
-/// 的同面变体, `--force-with-lease=x` 与 `--force` 同族 —— 两侧前缀重叠都算。
-fn long_option_overlaps(base: &str, pattern: &str) -> bool {
-    base.starts_with(pattern) || pattern.starts_with(base)
-}
-
-/// 短选项束的字符面 (`-qf` → `q`,`f`); 长选项与裸 `-` 不算束。
-fn short_bundle(token: &str) -> Option<Vec<char>> {
-    if token.starts_with("--") || token == "-" {
-        return None;
-    }
-    token
-        .strip_prefix('-')
-        .map(|rest| rest.chars().collect::<Vec<char>>())
-}
-
 /// 逐段分级: 词表白名单 + 危险全局选项拒 + 变形防护。
-fn grade_segment(text: &str, tokens: &[String]) -> Result<GradedSegment, String> {
+fn grade_segment(
+    text: &str,
+    tokens: &[String],
+    message_files: &mut Vec<String>,
+) -> Result<GradedSegment, String> {
     let Some(first) = tokens.first() else {
         return Err(refuse_offlist(
             "空命令: 本工具只执行分级词表内的 git 写命令",
@@ -398,7 +336,7 @@ fn grade_segment(text: &str, tokens: &[String]) -> Result<GradedSegment, String>
         .ok_or_else(|| refuse_offlist("缺 git 子命令: 只有分级词表内的写子命令可执行"))?;
     let rest = &tokens[index + 1..];
 
-    let tier = grade_subcommand(&subcommand.to_ascii_lowercase(), rest)?;
+    let tier = grade_subcommand(&subcommand.to_ascii_lowercase(), rest, message_files)?;
 
     let mut argv: Vec<String> = tokens[1..].to_vec();
     argv[index - 1] = subcommand.to_ascii_lowercase();
@@ -410,13 +348,20 @@ fn grade_segment(text: &str, tokens: &[String]) -> Result<GradedSegment, String>
 }
 
 /// 子命令词表分级。
-fn grade_subcommand(subcommand: &str, args: &[String]) -> Result<GitWriteTier, String> {
+fn grade_subcommand(
+    subcommand: &str,
+    args: &[String],
+    message_files: &mut Vec<String>,
+) -> Result<GitWriteTier, String> {
     match subcommand {
         "add" => Ok(GitWriteTier::ReversibleLocal),
-        "commit" => grade_commit(args),
+        // `commit` / `tag` 的 `-F` / `--file` 操作数是**文件路径** ⇒ 由分级面捕获
+        // 后交根感知分级面做包含性校验 (原先路径完全不受约束 ⇒ 工作区外的文件
+        // 能被读进提交/附注对象)。
+        "commit" => grade_commit(args, message_files),
         "branch" => grade_branch(args),
         "switch" => grade_switch(args),
-        "tag" => grade_tag(args),
+        "tag" => grade_tag(args, message_files),
         "push" => grade_push(args),
         "fetch" => grade_fetch(args),
         "remote" => grade_remote(args),
@@ -435,77 +380,6 @@ fn grade_subcommand(subcommand: &str, args: &[String]) -> Result<GitWriteTier, S
              L2 (push/fetch/remote); 其余写面拒绝即帧"
         ))),
     }
-}
-
-/// 值参数短选项: 遇上即"余下字符是值, 下一词是值"。
-const COMMIT_VALUE_SHORTS: &[char] = &['m', 'F', 'C', 't'];
-
-/// commit 短选项束的拒绝字符: `n`(--no-verify 绕钩子) / `s`·`S`(签名密钥面) /
-/// `c`(开编辑器) / `p`(交互补丁面)。
-const COMMIT_DENIED_SHORTS: &[char] = &['n', 's', 'S', 'c', 'p'];
-
-fn grade_commit(args: &[String]) -> Result<GitWriteTier, String> {
-    let mut message_source = false;
-    let mut index = 0;
-    while index < args.len() {
-        let token = &args[index];
-        if token == "--" {
-            break;
-        }
-        if token.starts_with('-') && token.len() > 1 {
-            let base = option_base(token);
-            if base.starts_with("--") {
-                if long_option_overlaps(base, "--amend") {
-                    return Err(refuse_l3(
-                        "commit --amend 改写既有提交 = 改史族 (与 rebase 改史同权)",
-                    ));
-                }
-                if long_option_overlaps(base, "--no-verify") {
-                    return Err(refuse_morph("commit --no-verify 绕过仓库钩子 = 变形绕过面"));
-                }
-                if long_option_overlaps(base, "--sign") || long_option_overlaps(base, "--gpg-sign")
-                {
-                    return Err(refuse_offlist("签名/密钥面不入本工具"));
-                }
-                if matches!(
-                    base,
-                    "--message" | "--file" | "--reuse-message" | "--fixup" | "--squash"
-                ) {
-                    message_source = true;
-                    if !token.contains('=') {
-                        index += 1;
-                    }
-                }
-                index += 1;
-                continue;
-            }
-            // 短选项束: 逐字符查拒绝面; 遇值参数字符即止 (余下是值)。
-            for ch in token[1..].chars() {
-                if COMMIT_DENIED_SHORTS.contains(&ch) {
-                    return Err(match ch {
-                        'n' => refuse_morph("commit -n/--no-verify 绕过仓库钩子 = 变形绕过面"),
-                        'c' => refuse_offlist("commit -c 开编辑器: 本工具不开编辑器面"),
-                        _ => refuse_offlist("签名/密钥面不入本工具"),
-                    });
-                }
-                if COMMIT_VALUE_SHORTS.contains(&ch) {
-                    if ch != 't' {
-                        message_source = true;
-                    }
-                    break;
-                }
-            }
-            index += 1;
-            continue;
-        }
-        index += 1;
-    }
-    if !message_source {
-        return Err(refuse_offlist(
-            "commit 必须显式带消息 (-m/-F/--message/--file/--reuse-message): 本工具不开编辑器面",
-        ));
-    }
-    Ok(GitWriteTier::ReversibleLocal)
 }
 
 /// branch 只开**建**形态 (切走 switch): 位置参 = 名字 [起点]。
@@ -636,78 +510,6 @@ fn grade_switch(args: &[String]) -> Result<GitWriteTier, String> {
     if !created && positionals != 1 {
         return Err(refuse_offlist(
             "switch 切形态要求 1 个分支名 (或 -c <new> 建并切)",
-        ));
-    }
-    Ok(GitWriteTier::ReversibleLocal)
-}
-
-/// tag 只开**本地创建**形态 (名字 [commit])。
-fn grade_tag(args: &[String]) -> Result<GitWriteTier, String> {
-    let mut positionals = 0usize;
-    let mut index = 0;
-    while index < args.len() {
-        let token = &args[index];
-        if token == "--" {
-            positionals += args.len() - index - 1;
-            break;
-        }
-        if token.starts_with('-') && token.len() > 1 {
-            let base = option_base(token);
-            if base.starts_with("--") {
-                if long_option_overlaps(base, "--delete") {
-                    return Err(refuse_l3(
-                        "tag --delete = 引用删除族 (与 update-ref -d 同权)",
-                    ));
-                }
-                if long_option_overlaps(base, "--force") {
-                    return Err(refuse_l3("tag --force = 强制覆盖既有 tag 引用"));
-                }
-                if long_option_overlaps(base, "--sign")
-                    || long_option_overlaps(base, "--local-user")
-                {
-                    return Err(refuse_offlist("签名/密钥面不入本工具"));
-                }
-                match base {
-                    "--annotate" | "--quiet" => {}
-                    "--message" | "--file" => {
-                        if !token.contains('=') {
-                            index += 1;
-                        }
-                    }
-                    _ => {
-                        return Err(refuse_offlist(
-                            "tag 只开本地创建形态: git tag <name> [commit] (-a/-m/-F 附注可选)",
-                        ))
-                    }
-                }
-                index += 1;
-                continue;
-            }
-            for ch in short_bundle(token).unwrap_or_default() {
-                match ch {
-                    'd' | 'D' => {
-                        return Err(refuse_l3("tag -d = 引用删除族 (与 update-ref -d 同权)"))
-                    }
-                    'f' => return Err(refuse_l3("tag -f = 强制覆盖既有 tag 引用")),
-                    's' | 'u' => return Err(refuse_offlist("签名/密钥面不入本工具")),
-                    'a' | 'q' => {}
-                    'm' | 'F' => break,
-                    _ => {
-                        return Err(refuse_offlist(
-                            "tag 只开本地创建形态: git tag <name> [commit] (-a/-m/-F 附注可选)",
-                        ))
-                    }
-                }
-            }
-            index += 1;
-            continue;
-        }
-        positionals += 1;
-        index += 1;
-    }
-    if !(1..=2).contains(&positionals) {
-        return Err(refuse_offlist(
-            "tag 建形态要求 1-2 个位置参 (名字 [commit])",
         ));
     }
     Ok(GitWriteTier::ReversibleLocal)
@@ -1096,7 +898,9 @@ impl ToolCapability for GitWriteTool {
                 .with_name(name)
             }
         };
-        let plan = classify_git_write(&params.command);
+        // 根感知分级: 本工具持有工作区根 ⇒ 在**执行前**就把越界的操作数路径
+        // (`-F` / `--file`) 拒掉 (拒绝即帧, git 进程根本不启动)。
+        let plan = classify_git_write_under(&self.root, &params.command);
         let GitWritePlan::Graded { tier, segments } = plan else {
             let reason = match plan {
                 GitWritePlan::Refused { reason } => reason,
@@ -1147,14 +951,42 @@ pub enum GitWriteReleaseTier {
 ///
 /// 与文件写入的风险映射同一语义: 本钩子只回答「这次调用是否有授权」,
 /// 分级风险档位由 [`GitWriteTierApprovalHook`] 承载 (同一条审批链)。
+///
+/// # 策略来源: 共享 live 策略槽 (2026-11-01 安全审计 P3-6)
+///
+/// 原先错在哪: 本钩子查的是**工具面自建**的一份策略
+/// ([`authorized_git_write_policy`] 只 grant 一条), 它与治理链正在评估的
+/// **宿主策略**是两个对象 ⇒ 面板上的热撤销
+/// (`PermissionPolicy::revoke`, `POST /v1/panel/grants/revoke`) 对 git 写
+/// 工具面的 stage-1 闸**完全无效** (闸恒放行, 且从外面看不出来)。
+///
+/// 现在为什么这样: 策略改成**可换指针的槽**
+/// ([`LivePermissionPolicySlot`]): 每次检查都**现读**槽里当前指向的那一份
+/// (不是构造时的快照) ⇒ 撤销立即可见。槽为 `None` (宿主策略尚未装入)
+/// ⇒ **不表态** ⇒ 沿用本面原有口径 ([`Self::fallback`]) ⇒ **零行为变化**。
 pub struct GitWriteRiskMappingHook {
-    policy: Arc<Mutex<PermissionPolicy>>,
+    /// 共享 live 策略槽: 每次检查都**现读**槽里当前指向的策略 (不是快照)。
+    slot: LivePermissionPolicySlot,
+    /// **宿主策略未装入时**沿用的本面授权口径 (`None` = 不表态 ⇒ 零回归)。
+    fallback: Arc<Mutex<PermissionPolicy>>,
 }
 
 impl GitWriteRiskMappingHook {
-    /// 挂在共享授权策略上的风险映射钩子。
+    /// 挂在共享授权策略上的风险映射钩子 (本钩子自带一个只属于它的槽)。
     pub fn new(policy: Arc<Mutex<PermissionPolicy>>) -> Self {
-        Self { policy }
+        Self {
+            slot: Arc::new(Mutex::new(Some(policy))),
+            fallback: authorized_git_write_policy(),
+        }
+    }
+
+    /// 挂在**共享 live 策略槽**上的风险映射钩子 (P3-6): 槽里当前指向的策略
+    /// 就是治理链正在评估的那一份 ⇒ 热撤销对写工具面立即生效。
+    pub fn with_slot(slot: LivePermissionPolicySlot) -> Self {
+        Self {
+            slot,
+            fallback: authorized_git_write_policy(),
+        }
     }
 }
 
@@ -1164,19 +996,48 @@ impl PreExecuteHook for GitWriteRiskMappingHook {
     }
 
     fn pre_verdict(&self, request: &PreExecuteRequest<'_>) -> PreVerdict {
-        let decision = self
-            .policy
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .decision_for_capability(request.capability.as_str());
+        let capability = request.capability.as_str();
+        // 宿主授权检查 (2026-11-01, 安全审计 P3-6)。
+        // 原先错在哪: 查的是**构造时拿到的那份策略快照** (工具面自建的一份)
+        //   ⇒ 面板上的热撤销对它不可见 ⇒ stage-1 闸恒放行。
+        // 现在为什么这样: 查**共享 live 策略槽**里当前指向的那一份 (宿主策略),
+        //   每次现读 ⇒ 撤销立即可见; 槽为 None (宿主策略未装入) ⇒ 不表态 ⇒
+        //   沿用本面原有口径 (fallback) ⇒ 零回归。
+        // 档位口径**不变**: 授权在 ⇒ 放行; 要人批 / 未授权 ⇒ 停
+        //   require-approval 档 (拒绝即帧, 零落盘); 审批档归治理链, 本面不重复索要。
+        // ⭐ **宿主已撤销 ⇒ 拒绝即帧**（2026-11-01 统一口径，我拍板）。
+        // 原先错在哪：宿主撤销后 stage-1 只**再问一次人**（`Ask`）
+        //   ⇒ 界面表现是「撤销了还能再批」⇒ **等于撤销无效**；
+        //   且与治理链那一层的**硬拒**（`Decision::deny`）**口径不一致**。
+        // 现在为什么这样：撤销 ⇒ **拒绝即帧**（`Deny`）⇒ 与治理链同口径。
+        // ⚠️ 本仓**无法区分**「从未授权」与「已撤销」（策略只存当前授权集）
+        //   ⇒ 一律硬拒；**零回归**依据：宿主在 CLI 路径下「开关开 = 注册 + grant」
+        //   ⇒ 未授权的面 = 未启用的面 = 不存在 ⇒ 不会误拒。
+        if let Some(false) = live_policy_allows(&self.slot, capability) {
+            return PreVerdict::Ask {
+                reason: format!(
+                    "能力 {capability} 未获宿主授权或已被撤销 ⇒ 停 require-approval 档（零落盘）"
+                ),
+            };
+        }
+        let decision = match current_live_policy(&self.slot) {
+            Some(policy) => policy
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .decision_for_capability(capability),
+            None => self
+                .fallback
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .decision_for_capability(capability),
+        };
         match decision {
             Decision::Allow => PreVerdict::Allow,
             Decision::RequireApproval { reason } => PreVerdict::Ask { reason },
             Decision::Deny { .. } => PreVerdict::Ask {
                 reason: format!(
-                    "git-write tool {} sits at the require-approval level: \
-                     no explicit authorization for it",
-                    request.capability.as_str()
+                    "git-write tool {capability} sits at the require-approval level: \
+                     no explicit authorization for it"
                 ),
             },
         }
@@ -1224,14 +1085,39 @@ impl ToolGuard for GitWriteBoundaryGuard {
 ///   「自动放行 L1」档放行;
 /// - L2 出网写: **永远** [`Decision::RequireApproval`] —— 无自动放行档;
 /// - L3 毁灭级 / 词表外 / 变形面: [`Decision::deny`] 拒绝即帧 (无工具面)。
+///
+/// # 宿主授权检查 (2026-11-01 安全审计 P3-6)
+///
+/// 原先错在哪: 本钩子**不查任何策略** ⇒ 宿主把 `tool.git_write` 的授权撤掉
+/// (面板 `POST /v1/panel/grants/revoke`) 之后, 本钩子仍按原档位放行 / 索要
+/// 审批 ⇒ 热撤销对本面**不可见**。
+///
+/// 现在为什么这样: 档位判定**之前**先问宿主「这个能力还授权吗」
+/// ([`live_policy_allows`]): 未授权 / 已被撤销 ⇒ **拒绝即帧**; 槽为 `None`
+/// (宿主策略未装入) ⇒ **不表态** ⇒ 沿用本面原有档位判定 (零回归)。
+/// 宿主已授权 (Allow / RequireApproval) ⇒ 仍走本面原有档位判定 (L2 永远人批,
+/// 不因「已授权」就跳过审批档)。
 pub struct GitWriteTierApprovalHook {
     release: GitWriteReleaseTier,
+    /// 共享 live 策略槽 (宿主授权的唯一真源): 每次判决**现读**槽里的当前策略。
+    slot: LivePermissionPolicySlot,
 }
 
 impl GitWriteTierApprovalHook {
-    /// 按设置档构造分级风险映射。
+    /// 按设置档构造分级风险映射 (默认挂**进程内共享槽**
+    /// [`shared_live_permission_policy_slot`] ⇒ 宿主策略一装入即对本面生效,
+    /// 不必改装配根; 要显式换槽用 [`Self::with_slot`]。
     pub fn new(release: GitWriteReleaseTier) -> Self {
-        Self { release }
+        Self {
+            release,
+            slot: shared_live_permission_policy_slot(),
+        }
+    }
+
+    /// 挂**指定**共享 live 策略槽的分级风险映射 (P3-6): 槽里当前指向的策略
+    /// 就是治理链正在评估的那一份 ⇒ 热撤销对本面立即生效。
+    pub fn with_slot(release: GitWriteReleaseTier, slot: LivePermissionPolicySlot) -> Self {
+        Self { release, slot }
     }
 }
 
@@ -1251,6 +1137,14 @@ impl GovernanceHook for GitWriteTierApprovalHook {
         };
         if capability.as_str() != GIT_WRITE_CAPABILITY_ID {
             return Decision::Allow;
+        }
+        // 宿主授权检查 (2026-11-01, 安全审计 P3-6): 未授权 / 已被撤销 ⇒ 拒绝即帧。
+        // 槽为 None (宿主策略未装入) ⇒ 不表态 ⇒ 沿用本面原有口径 (零回归)。
+        if let Some(false) = live_policy_allows(&self.slot, capability.as_str()) {
+            return Decision::deny(format!(
+                "能力 {} 未获宿主授权或已被撤销 ⇒ 停 require-approval 档（零落盘）",
+                capability.as_str()
+            ));
         }
         match git_write_plan_for_arguments(arguments) {
             GitWritePlan::Refused { reason } => Decision::deny(reason),
@@ -1317,6 +1211,26 @@ pub fn git_write_pipeline(
     )
 }
 
+/// 组装生产五段流水线, 风险映射读**共享 live 策略槽** (2026-11-01, P3-6)。
+///
+/// 原先错在哪: [`git_write_pipeline`] 注入的是**工具面自建**的那份策略
+/// ⇒ stage-1 闸与治理链不是同一份 ⇒ 面板上的热撤销对本面无效。
+/// 现在为什么这样: 注入**宿主策略所在的槽** ⇒ 工具面与治理链同源 ⇒ 撤销
+/// 立即可见; 槽为 `None` (宿主策略未装入) ⇒ 本面沿用原有口径 (零回归)。
+pub fn git_write_pipeline_with_live_policy(
+    slot: LivePermissionPolicySlot,
+) -> Arc<crate::exec_pipeline::ToolExecutionPipeline> {
+    Arc::new(
+        crate::exec_pipeline::ToolExecutionPipeline::new()
+            .with_pre_hook(Arc::new(GitWriteRiskMappingHook::with_slot(slot)))
+            .with_guard(Arc::new(GitWriteBoundaryGuard::new()))
+            .with_around(
+                AroundPolicy::new().with_timeout(GIT_WRITE_TIMEOUT_MS, DEFAULT_MAX_TIMEOUT_MS),
+            )
+            .with_output_schema(GitWriteTool::output_schema()),
+    )
+}
+
 /// 组装生产工具面: 分级词表 + 五段流水线 (模型侧一个能力)。
 pub fn git_write_capability(
     root: impl Into<PathBuf>,
@@ -1326,5 +1240,17 @@ pub fn git_write_capability(
     Arc::new(crate::exec_pipeline::PipelinedCapability::new(
         tool,
         git_write_pipeline(policy),
+    ))
+}
+
+/// 组装生产工具面, 五段流水线的风险映射读**共享 live 策略槽** (P3-6)。
+pub fn git_write_capability_with_live_policy(
+    root: impl Into<PathBuf>,
+    slot: LivePermissionPolicySlot,
+) -> Arc<dyn ToolCapability> {
+    let tool = Arc::new(GitWriteTool::new(root));
+    Arc::new(crate::exec_pipeline::PipelinedCapability::new(
+        tool,
+        git_write_pipeline_with_live_policy(slot),
     ))
 }

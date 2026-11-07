@@ -158,6 +158,7 @@ fn test_closed_world_memory_contract() {
         importance: 0.8,
         source_ref: Some("working:session-1".into()),
         score_components: None,
+        diary_snippets: Vec::new(),
     }];
     let recalled = MemoryRecallResult {
         items,
@@ -165,6 +166,7 @@ fn test_closed_world_memory_contract() {
         governance_filtered: 0,
         total_chars: 100,
         retrieval_status: None,
+        wiki_sections: Vec::new(),
     };
     let compiled = compiler
         .compile(&recalled, "session-1", 4000)

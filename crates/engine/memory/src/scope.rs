@@ -161,8 +161,8 @@ impl ScoreComponents {
 
 /// Centralized ranking weights. No retrieval stage should own magic weights.
 ///
-/// `diversity_lambda` is the control for a later MMR selection stage: zero
-/// means relevance-only selection and one means diversity-only selection.
+/// `diversity_lambda` controls the MMR selection stage: zero = relevance-only selection, one = diversity-only.
+/// ⭐ Default 0.0 (2026-11-07, measured): a positive lambda lowered recall/nDCG on internal corpora (see `examples/retrieval_diversity_ab.rs`).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct MemoryRankingConfig {
@@ -190,7 +190,7 @@ impl Default for MemoryRankingConfig {
             confidence_weight: 0.05,
             graph_weight: 0.05,
             novelty_weight: 0.05,
-            diversity_lambda: 0.20,
+            diversity_lambda: 0.0,
         }
     }
 }
@@ -273,13 +273,6 @@ impl RecallPolicy {
         self.max_chars = max_chars.max(128);
         self
     }
-
-    #[must_use]
-    pub fn with_proactive_budget(mut self, proactive_budget: usize) -> Self {
-        self.proactive_budget = proactive_budget;
-        self
-    }
-
     #[must_use]
     pub fn with_min_score(mut self, min_score: f64) -> Self {
         self.min_score = min_score;
@@ -291,22 +284,9 @@ impl RecallPolicy {
         self.as_of_ms = Some(as_of_ms);
         self
     }
-
-    #[must_use]
-    pub fn without_as_of(mut self) -> Self {
-        self.as_of_ms = None;
-        self
-    }
-
     #[must_use]
     pub fn with_token_budget(mut self, token_budget: usize) -> Self {
         self.token_budget = token_budget.max(1);
-        self
-    }
-
-    #[must_use]
-    pub fn with_as_of(mut self, as_of_ms: Option<i64>) -> Self {
-        self.as_of_ms = as_of_ms;
         self
     }
 }
@@ -550,6 +530,24 @@ impl PersonaProfileStore for InMemoryPersonaProfileStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// ⭐⭐ **`diversity_lambda` 的默认值必须保持 0.0**（2026-11-07 实测钉死）。
+    ///
+    /// # 为什么钉
+    /// MMR 折中按设计就是「用相关度换新颖度」。内部两卷的 λ 扫描是**单调下降**：
+    /// redchamber recall@10 `λ=0: 0.4010` → `λ=0.2: 0.3802`（相对 **−5.19%**）；
+    /// watershed `0.7240` → `0.7031`（**−2.89%**）；`λ=1` 灾难性（−59.7% / −72.7%）。
+    /// 本仓产品口径以**相关/送达**为主指标 ⇒ 默认不能自损。
+    /// 需要「去冗余展示」的调用方**显式**给 `λ > 0`（这是产品选择，不是默认）。
+    /// ⇒ ⇒ 复制口径：`examples/retrieval_diversity_ab.rs`（λ 扫描入口）。
+    #[test]
+    fn diversity_lambda_defaults_to_zero() {
+        assert_eq!(
+            MemoryRankingConfig::default().diversity_lambda,
+            0.0,
+            "MMR 折中默认必须关：内部两卷 λ=0.2 相对 recall 掉 5.19% / 2.89%（见 examples/retrieval_diversity_ab.rs）"
+        );
+    }
 
     #[test]
     fn weighted_includes_graph_and_novelty_components() {

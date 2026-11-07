@@ -602,6 +602,36 @@ impl UserAccess {
         resolve_user_identity(client, tokens, users)
     }
 
+    /// ⭐ 同一解析链，但**只认已认证身份**（F-2 · 2026-11-05）。
+    ///
+    /// # 为什么规则住在这里（而不是在调用点过滤）
+    /// 本条规则的本质 = 「**未证明身份不得参与问责链解析**」
+    /// ⇒ ⇒ 它是**身份解析的语义**，不是某个调用点的特判
+    /// ⇒ ⇒ ⇒ 它的家就是**解析入口**（[`Self::identity`]）⇒ ⇒ 搬进来后
+    /// ⇒ ⇒ **每个**调用点自动受约束（不留「某个调用点忘了过滤」的隐患）。
+    ///
+    /// # 被堵掉的洞（F-2 · 真进程实测）
+    /// 未认证 / 逃生阀路径插入 [`ClientIdentity::anonymous()`]
+    /// ⇒ ⇒ 用户表**可以**写 `anonymous` 这个客户端名
+    /// ⇒ ⇒ [`resolve_user_identity`] 的第二步回落 `users.identity_for_client("anonymous")`
+    /// 命中 ⇒ ⇒ **未证明身份被当成 owner**。
+    /// 实测：`user add --role owner --clients anonymous` ⇒ ⇒ **零凭据**
+    /// `POST /v1/admin/config` ⇒ **200** ⇒ `base_url` 被改成攻击者主机
+    /// ⇒ ⇒ 下一次模型调用把**真实 API key** 发过去 ⇒ ⇒ P0-1 的原始威胁。
+    ///
+    /// ⚠️ **不受影响**：env 单令牌面（`client = "env"`）与客户端令牌表条目
+    /// ⇒ ⇒ 两者都是**已认证**身份（[`ClientIdentity::authenticated`]）⇒ ⇒ 照旧。
+    pub fn identity_for(
+        &self,
+        identity: &ClientIdentity,
+        tokens: &ClientTokenTable,
+    ) -> Option<UserIdentity> {
+        if !identity.authenticated {
+            return None;
+        }
+        self.identity(&identity.client, tokens)
+    }
+
     /// 会话→用户绑定 (首个具名写者赢): 返回**生效**的绑定用户 id。
     pub fn bind_session_user(
         &self,

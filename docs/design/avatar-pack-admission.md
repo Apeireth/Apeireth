@@ -35,7 +35,7 @@
   - ① 用户自带形象装载口 ✅——`user-avatar.ts`（格式合法性校验 + 免责确认 +
     IndexedDB 本机持久化 + 内嵌许可元数据透传）、`PetWindowView` 右键菜单接入；
   - ② CI 素材许可门禁 ✅——`asset-licenses.json` 台账（11 素材全 first-party）
-    + `scripts/check-asset-licenses.mjs`（无行即红、白名单外拒、陈旧行红）
+    + `frontend/companion-desktop/scripts/check-asset-licenses.mjs`（无行即红、白名单外拒、陈旧行红；**路径核对 2026-10-25**：原文漏了 `frontend/companion-desktop/` 前缀）
     + `pnpm check:assets` + workflow `companion-desktop-ci.yml` 接入（最小改动）；
   - ③ 用户指引 ✅——`docs/02-guides/avatar-byo-guide.md`（指路不背书）；
   - ④ 官方形象委托需求书 ✅——`docs/design/avatar-commission-brief.md`（待主人签发）。

@@ -3,10 +3,26 @@
 > **版本**: 2.0.0-rc.4 / runtime-assembly refactor (2026-09-04 起，2026-10-16 文本可信度批对账)
 > **适用范围**: 开发者集成、API 调用方、前端控制台与多 Agent 协同网络
 > **测试基线**: 见本文件 §0.1（审计修 A-03 / C-01）；**默认能力**: 见本文件 §0.2（审计修 A-10）
+>
+> ⚠️ **本表与 `claims.yaml` 的分工（2026-11-03 补，防两边口径混淆）**：
+> * **本表 = 接线状态清单**（有什么能力 / 接没接 / 什么口径 / 怎么用）；
+> * [`docs/status/claims.yaml`](../status/claims.yaml) = **对外承诺台账**
+>   （**承诺**什么 / 四级口径 / 证据文件 / 复核记录）⇒
+>   ⇒ **要判「对外承诺到哪一级」，只认 claims**（`docs/status/STATUS.md` 是它的生成物）；
+> * ⇒ ⇒ 「本表某行标了『已生产接线』，但 claims 里**没有**对应声明」= **正常**
+>   —— claims 的规则是「**可核验的状态声明**」（**精选**，非穷举），
+>   两者是**分工**，**不是矛盾**（实测：本表 30 行「已接线」里 11 行能在 claims 对上）；
+> * ⇒ ⇒ 但若 claims 里的声明**与本表打架** ⇒ ⇒ **以 claims 为准**（并回来改本表）
+>   —— 这与本表「**指到不存在的模块 = 对外说谎**」的门禁
+>   （`scripts/check_matrix_module_paths.py`）是同一条纪律。
+> * ⇒ ⇒ **2026-11-04 复测（文档真源批）**：上一条里的「30 / 11」是 2026-11-03 的历史口径，
+>   **保留不改**；按可复算口径复测 = §1.1 表内标「已实证 / PRODUCTION WIRED」共 **37 行**
+>   （全文同口径 43 行），其中行内显式点到 claims id 的 **15 行**
+>   （本次新增 TLS 行 `sec.gateway_tls` = 新增 1 行）。
 
 ---
 
-## 0. 当前生产投影（唯一事实源）
+## 0. 当前生产投影（接线状态清单）
 
 生产 Desktop 不把本表当作运行时状态。实际的 `supported`、`available`、
 `reason` 来自 `/v1/apeireth/capabilities`；工具来自 `CapabilityRegistry`，
@@ -18,30 +34,40 @@
 | `models.list`, `providers.list`, `chat.completions` | true | 取决于已注册 Provider | ProviderRouter / Settings、Conversations |
 | `sessions.read` | 取决于 SessionQuery port | 同 supported | SessionQuery / Conversations |
 | `memory.read`, `memory.write`, `memory.forget`, `memory.protect`, `memory.unprotect`, `memory.graph.read` | 取决于 governed memory ports | 同 supported | GovernedMemoryService / Memory |
-| `memory.update` | false | false (`reason=not_implemented`) | Declared in the universe, not wired |
+| `memory.update` | 取决于 governed memory ports | 同 supported | GovernedMemoryService / Memory（纠正内容；乐观并发 `expected_rev`，过期提交 = 409 `revision_conflict`） |
 | `tools.list` | 取决于 CapabilityQuery port | 同 supported | CapabilityRegistry / Tools |
 | `permissions.approval.read`, `permissions.approval.resolve` | true | true | Runtime approval protocol / Tools (`approvals.read` / `approvals.resolve` are explicit `alias_of` compatibility ids) |
 | `permissions.grants.read`, `permissions.revoke` | 取决于 grant ports | 同 supported | Grant ports / Tools |
 | `trace.read`, `audit.read`, `activity.sse` | 取决于 observability ports；SSE 由 Event Spine 提供 | 同 supported | RuntimeEventSink / Activity |
 | `organs.list`, `modules.list` | 取决于 BehaviorRegistry projection | 同 supported | BehaviorRegistry / RuntimeModal |
 
+> **对账注记（2026-10-25）**：`memory.update` 此前记为
+> `false (reason=not_implemented)` / 「Declared, not wired」—— **已过期**。
+> 真机查 `/v1/apeireth/capabilities` 现返回
+> `{"id":"memory.update","operations":["update"],"supported":true,"available":true,"write":true}`；
+> 实测 `PUT /v1/apeireth/memory/episodes/<id>/content` 可用（200，过期 `expected_rev` = 409）。
+
 `supported=true, available=false` 表示实现存在但当前 Provider/凭据/装配不可用；
 客户端必须显示后端 `reason`。未知能力与缺失 manifest 不得推测为已支持。
 
 ### 0.1 测试基线（审计修 A-03 / C-01）
 
-徽章（Tests）链接本文件，其数字以此处为据；**单一真源**见
-[test-baseline.md](test-baseline.md)（口径定义与历史口径也在那里）。
+徽章（Tests）链接本文件；**测试数字的单一真源**是
+[test-baseline.md](test-baseline.md) §1（口径定义与历史口径也在那里），
+本表只转述该处现行值、**不另立真源**；**对外承诺口径**（落在哪一级 / 默认开否）
+以 [claims.yaml](../status/claims.yaml) 为准（见本文件头部「与 `claims.yaml` 的分工」）。
 
 | 项 | 值 |
 |---|---|
 | 命令 | `cargo test --workspace --all-targets --locked --no-fail-fast` |
-| 结果 | **336 套件 / 9075 passed / 0 product-failed（1 环境敏感 D27，复跑绿）/ 52 ignored**（2026-10-20 生物机制族 W3.4 总装批全量实测，历史口径；现行单一真源 §1 = **341 套件 / 8570 passed / 0 failed / 51 ignored**（2026-10-21），见 [test-baseline.md](test-baseline.md) §1） |
-| 日期 | 2026-10-20 |
+| 结果 | **341 套件 / 8570 passed / 0 failed / 51 ignored**（main 264 套件 / 6263 passed / 19 ignored + image 家族 77 套件 / 2307 passed / 32 ignored） |
+| 日期 | 2026-10-21 |
 | 工具链 | rustc 1.97.1 (8bab26f4f 2026-07-14) / cargo 1.97.1 / rustup 1.29.1；MSVC 14.44.35207 + Windows SDK 10.0.26100.0 |
 
-> 22 ignored 全部为需真 API key / 真硬件的 live E2E，CI 默认不跑；数字逐批增长，以
-> test-baseline.md 最近一次全量实测为准。
+> 51 ignored 全部为需真 API key / 真硬件的 live E2E，CI 默认不跑；数字逐批增长，以
+> test-baseline.md §1 最近一次全量实测为准。
+> 历史口径（2026-10-20 的 336 套件 / 9075 passed / 1 failed / 52 ignored 等）见
+> [test-baseline.md](test-baseline.md) §3，本表不抄写。
 
 ### 0.2 默认能力表（审计修 A-10）
 
@@ -54,7 +80,7 @@
 | **默认 ON** | 记忆召回 `memory_recall` / 记忆写回 `memory_writeback` / 偏好召回 `preference_recall` / 自评 `self_assessment` / 自省通道 `self_status` / 性格周报 `trait_report`（`tool.trait_report`，只读零审批） | 生产默认装配（`trait_report` 注册即闸 = 成长账落位注入，生产装配默认注入） |
 | **默认 ON** | 只读工具面：`filesystem` / `search` / `repo` | `APEIRETH_DISABLE_LOCAL_READ_TOOLS=1` 可关 |
 | **默认 ON**（CLI env 覆盖层未设即开） | 偏好学习 `preference_learning` / 主动召回 `proactive_recall` / 记忆注入格式 `memory_injection` / typed 召回 | `=0` 或对应 `APEIRETH_DISABLE_*=1` 关（DISABLE 优先） |
-| **默认 OFF（需 env 显式开启）** | shell（`APEIRETH_ENABLE_SHELL=1`，注册即审批级）/ fetch（`APEIRETH_ENABLE_FETCH=1`）/ content_feed / MCP（`mcp`） | 危险项维持默认关 |
+| **默认 OFF（需 env 显式开启）** | shell（`APEIRETH_ENABLE_SHELL=1`，注册即审批级）/ fetch（`APEIRETH_ENABLE_FETCH=1`）/ content_feed / MCP（`mcp`，`APEIRETH_ENABLE_MCP=1`） | 危险项维持默认关 |
 | **默认 OFF（需 env 显式开启）** | 双引擎关怀规则面 `care_schedule`（`APEIRETH_ENABLE_CARE=1`）/ 任务簿 `task_board`（`APEIRETH_ENABLE_TASK_BOARD=1`，写面审批级）/ 通用嗓发声 `voice_speak`（`APEIRETH_ENABLE_VOICE_SPEAK=1`）/ 备份导出 `backup_export`（`APEIRETH_ENABLE_BACKUP_EXPORT=1`） | 四开关都注册即闸（旋钮开才注入配置/队列/数据源）；自述名册 `care_schedule`/`task_board`/`voice_speak`/`backup_export` 行按实际注册条件取值 |
 | **默认 OFF（需 env 显式开启）** | Judge（`APEIRETH_COGNITIVE_JUDGE=1`）/ Council（`APEIRETH_COGNITIVE_COUNCIL=1`）/ 9 器官（`APEIRETH_ENABLE_ORGANS=1`）/ consolidation（`APEIRETH_ENABLE_CONSOLIDATION=1`）/ reflexion（`APEIRETH_ENABLE_REFLEXION=1`） | LLM 重的项默认关，逐项显式授权 |
 | **默认 OFF（需 env 显式开启，随整编跑）** | 人格提取步 `persona_consolidation`（`APEIRETH_ENABLE_PERSONA_CONSOLIDATION=1`）/ 整编散列门 `consolidation_hash_gate`（`APEIRETH_ENABLE_CONSOLIDATION_HASH_GATE=1`） | 两项注册即闸、**随整编跑**：挂记忆写入模块的整编触发点，`APEIRETH_ENABLE_CONSOLIDATION=1` 同开才真跑（整编关 = 显式不跑）；名册 `persona_consolidation`/`consolidation_hash_gate` 行按实际注册条件取值 |
@@ -69,11 +95,14 @@
 | **默认 OFF（需 env 显式开启，K 轴 L1 在场感知族）** | 设备感知 `device_sense`（`APEIRETH_ENABLE_DEVICE_SENSE=1`，工具面 `tool.device_sense`）/ 天气感知 `weather`（同族同闸，工具面 `tool.weather`） | 注册即闸（旋钮开才注入设备表/信号账落位），默认关 fail-closed；风险档=只读（读面 + append 敏感读审计账 `device-sense-audit.jsonl` + 天气信号账 `weather-signals.jsonl`，grant 即用零审批）；**白名单制默认零设备**（`devices.json` StoredDoc 拒开，显式登记 + 启用才可感知，表外/停用拒绝即帧）；适配器插槽 = mock 已接（固定 fixture 如实标注 `mock-fixture`）+ 真实协议族（`local_bridge`/`cloud_bridge`/`direct`）**留插槽不接**；摄像头类 = 敏感读面（显式授权 `sensitive_read_authorized` + `authorized_by` + 逐次审计，审计缺位不放行）；天气 mock 档如实标注数据源，live 档走受控出口通道/fetch 族**留插槽不接**；提醒信号**只交信号**（勿扰/频率等提醒纪律归提醒侧 care 同源接缝消费，消费端已接线〔四级口径：PRODUCTION WIRED；默认 OFF〕：信号→关怀候选→标准回合走同源打扰纪律）；名册 `device_sense`/`weather` 行按实际注册条件取值；自述在场节（设备数/白名单数/最近感知，进程内计数口径如实注明）与工具面同表同源 |
 | **默认 OFF（需 env 显式开启，K 轴 L3/L4 设备审批链）** | 设备受控执行 `device_control`（`APEIRETH_ENABLE_DEVICE_CONTROL=1` **且**依赖闸 `APEIRETH_ENABLE_DEVICE_SENSE=1` 双闸齐开，工具面 `tool.device_control`） | 注册即闸 = 双闸齐开才注入执行配置（`DeviceControlConfig::from_env`，只认显式 `"1"`，未设/`"0"`/其它取值 = 关，fail-closed），默认关；三拍执行（`plan`/`preview` 零副作用、`execute` 真执行 + 状态账 `device-actions.jsonl` append-only，逐行 StoredDoc 信封、坏行读作不存在；三拍同计划绑定 = preview/execute 必带 plan 拍的 `plan_id`，未预览的计划拒绝执行、载荷被改拒绝即帧、预览票一次性；`plan_id` = 设备/动作/分级/参数规范串的 FNV-1a 64 hex 摘要，进程内绑定非密码学）；动作三档闭合分级（`reversible` 8 词 = 审批档每次人批、可配 `APEIRETH_ENABLE_DEVICE_AUTO_PASS_REVERSIBLE` 自动档（只此档可配，放行如实记 `auto-pass-reversible`）/ `irreversible` 3 词（开火/开门/物理删除）**永远逐次人批** / `money` 2 词（购物/下单）**永远逐次人批 + IM 审批卡**；词表外动作拒绝即帧）；审批族 = 分级审批档由 `DeviceControlApprovalHook` 唯一承载并生产接线（execute 停人批，经运行时审批链到本地面板/客户端；**money 档必须 IM 卡** = 送达回执 `im_card_id`，缺卡拒绝即帧）；设备动作计划卡 → IM 推送链（subject `tool.device_control.plan`，与工具审批卡 subject 分家、同一卡信封同一出站链；批准 = 批准即执行、拒绝 = 不执行 + 关账；`im_card_id` 取本卡送达回执）**IMPLEMENTED 但未接线**：`ImBridge::with_device_approval_face` / `push_device_approval_cards` / `retry_device_approval_pushes` 全仓仅测试调用、生产装配无注入点，桥内 face 缺位照实回「未接线」——故 money 档的 IM 卡出卡来源在生产装配下未闭合；两本账（推送账 `device-approval-pushes.jsonl`：幂等键 = 动作 `plan_id`，同计划不重复推送，失败留 `failed` 行（带真因 + 卡载荷）待重试、重试凭账本载荷重建出站；决定账 `device-approval-decisions.jsonl`：一计划一决定、`decided_by` = IM 用户名 + 渠道标注）库级已实现、随推送链未接线；真参数预览（预览帧 `params` 与 plan 同值，审批卡载荷自足不藏参数）；设备白名单 = 只读消费 L1 同一本 `devices.json`（StoredDoc 拒开/坏表拒绝即帧，不静默回退空表；默认零设备，未登记/未启用/该设备词表外动作拒绝即帧；动作参数键集闭合校验）；执行面 = mock 适配器（灯/空调/微波炉 fixture），真实协议族（本地桥/云桥/直连）**留插槽不接**；只读预设 pin = `tool.device_control` 入写/执行面名单（`is_write_or_execute_capability`），只读会话整体拒绝；名册 `device_control` 行按实际注册条件取值；自述设备受控执行节（白名单设备数/控制计数/最近动作，只回计数与动作标签不回参数正文）与工具面同一执行核心同一状态账（第二十一节冻结合同）；四级口径 = 工具面/三拍/分级审批钩子/白名单/状态账/自述节 = **IMPLEMENTED + PRODUCTION WIRED**（双闸开即注册；配置注入、审批钩子入治理链、自述节探针均生产接线）；计划卡 → IM 推送链与两本账 = **IMPLEMENTED 未接线**（生产无注入点/无调用点，见上）；整体 **默认 OFF（DEFAULT ENABLED 不成立）**；真实设备 **HARDWARE VALIDATED 不成立**（只有 mock 执行面） |
 | **默认 OFF（需 env 显式开启，K 轴 L5 看家守护族）** | 守护看家 `guard_watch`（`APEIRETH_ENABLE_GUARD_WATCH=1` **且** `APEIRETH_ENABLE_DEVICE_SENSE=1` 依赖即闸，工具面 `tool.guard_watch`） | 注册即闸（双闸齐开才注入守护规则表/告警账落位），默认关 fail-closed；风险档=只读（白名单设备感知 + append 告警账 `guard-alerts.jsonl`，grant 即用零审批）；守护规则 `guard-rules.json` StoredDoc 同族拒开（规则 = 设备状态阈值（温度/门磁/异常离线）+ 时序条件）；命中告警 = 关怀候选高优先（打扰纪律**守护例外档**：默认可破勿扰 + 「守护告警」标注 + 频率独立上限，`care_rules.json` discipline 可配收起）；**只看不动**：告警零设备动作，动手仍走 `tool.device_control` 三拍人批；名册 `guard_watch` 行按实际注册条件取值 |
+| **默认 OFF（需 env 显式开启，生物机制族接线族 W3.2/W3.3）** | `APEIRETH_ENABLE_IMMUNE_MEMORY`（cli 挂免疫记忆到 `BehaviorChainGuardHook`，只观察 Deny/RequireApproval）｜`APEIRETH_ENABLE_QUORUM_GATE`（审议门；W3.3 增 guard 免疫升级 → Conflict 外部源，`(record_key,occurrences)` 节流）｜`APEIRETH_ENABLE_BIO_REPAIR_GUIDANCE` + `APEIRETH_ENABLE_BIO_CONTEXT_POLICY`（`BioAssemblyModule`，Wave 4 起装配根注入真实 context budget）｜`APEIRETH_ENABLE_BIO_SELF_STATUS`（`capabilities.bio_mechanisms` 子对象，21 节合同不变）｜`APEIRETH_ENABLE_BIO_CARE_CANDIDATES`（care 生物候选；W3.3 真实数据供给 = presence Turn 帧 + SessionStore 线索；W3.5 仪式状态存储已接；W3.7 完成事件源 = `tool.ritual_done`/`tool.ritual_skip` 模型面工具）｜`APEIRETH_ENABLE_BIO_PLAY`（`tool.play_propose/start/finish/abort`，opt-in 显式门 + 沙箱路径纪律）｜`APEIRETH_ENABLE_BIO_PAIN`（痛觉失败链，只观测记账、不改错误/重试决策）｜`APEIRETH_ENABLE_BIO_TONE`（调质→tone 模块已注册；W3.5 事件源 = AfterToolResult/OnError 结果映射，其余 7 档反馈仅显式注入）｜`APEIRETH_ENABLE_BIO_CIRCADIAN`（节律门 + 心跳闸已实现；时区/睡眠压力生产配置源待 W3.4） | 全部只认显式 `"1"`（未设 / `"0"` / 其它取值 = 关，fail-closed），默认关且关时逐字节零变化（golden / zero-change 测试钉死）。**PRODUCTION WIRED（默认关）**：免疫记忆（cli 挂载）、审议门（`OrganModule → OrganOrchestrator`，含免疫外部源）、`bio_mechanisms` 观测面（production 自述源 + 承载力 probe 同队同账）、`BioAssemblyModule`（production 注册）、play 四工具面（production 懒注册）、痛觉（cli `RuntimeBuilder::with_bio_pain`）、tone 模块（production 懒注册）、care 生物候选（W3.2 管道 + W3.3 真实数据供给）。**半程/未接如实标注**：①仪式→care 管道 + 状态存储 + 完成事件源（W3.7 工具面，默认关）已接；纯 CLI chat 无心跳宿主 ⇒ 写入暂无候选消费；②`BioAssemblyModule` 开时只装配显式注入的 `RepairPlan`/上下文块/预算，会话事件源待 W3.4；③节律门生产装配已接（W3.4 cli 心跳 + 显式 UTC 缺省 tz offset；睡眠压力源未接）；④tone 事件源 5/9 已接（W3.5 AfterToolResult/OnError 结局映射；W3.7 工具名首见 Novelty + CLI 人批/人拒社会结论，仅 resolve 成功后注入），其余 4 档显式注入；⑤痛觉 + recovery 状态机已接（W3.4 失败分类近似、ScarLedger 未接）；⑥`bio_mechanisms` **实测 wired = 12/14**（2026-10-25 对账，原文写 9/14 已过期；装配级 E2E 断言见 `runtime-assembly/tests/bio_observation_cells.rs` 的 `wired, 12`）；未接 2 格与真因：承载力（未配任务板 ⇒ probe 不注册）、练习账（`APEIRETH_ENABLE_BIO_PLAY` 未开）。四级口径：以上全部 **IMPLEMENTED + PRODUCTION WIRED**；**DEFAULT ENABLED 均不成立（默认关）**；无 HARDWARE VALIDATED。 |
 | **默认 OFF（需 env 显式开启，生物机制族接线族 W3.2/W3.3）** | `APEIRETH_ENABLE_IMMUNE_MEMORY`（cli 挂免疫记忆到 `BehaviorChainGuardHook`，只观察 Deny/RequireApproval）｜`APEIRETH_ENABLE_QUORUM_GATE`（审议门；W3.3 增 guard 免疫升级 → Conflict 外部源，`(record_key,occurrences)` 节流）｜`APEIRETH_ENABLE_BIO_REPAIR_GUIDANCE` + `APEIRETH_ENABLE_BIO_CONTEXT_POLICY`（`BioAssemblyModule`，Wave 4 起装配根注入真实 context budget）｜`APEIRETH_ENABLE_BIO_SELF_STATUS`（`capabilities.bio_mechanisms` 子对象，21 节合同不变）｜`APEIRETH_ENABLE_BIO_CARE_CANDIDATES`（care 生物候选；W3.3 真实数据供给 = presence Turn 帧 + SessionStore 线索；W3.5 仪式状态存储已接；W3.7 完成事件源 = `tool.ritual_done`/`tool.ritual_skip` 模型面工具）｜`APEIRETH_ENABLE_BIO_PLAY`（`tool.play_propose/start/finish/abort`，opt-in 显式门 + 沙箱路径纪律）｜`APEIRETH_ENABLE_BIO_PAIN`（痛觉失败链，只观测记账、不改错误/重试决策）｜`APEIRETH_ENABLE_BIO_TONE`（调质→tone 模块已注册；W3.5 事件源 = AfterToolResult/OnError 结果映射，其余 7 档反馈仅显式注入）｜`APEIRETH_ENABLE_BIO_CIRCADIAN`（节律门 + 心跳闸已实现；时区/睡眠压力生产配置源待 W3.4） | 全部只认显式 `"1"`（未设 / `"0"` / 其它取值 = 关，fail-closed），默认关且关时逐字节零变化（golden / zero-change 测试钉死）。**PRODUCTION WIRED（默认关）**：免疫记忆（cli 挂载）、审议门（`OrganModule → OrganOrchestrator`，含免疫外部源）、`bio_mechanisms` 观测面（production 自述源 + 承载力 probe 同队同账）、`BioAssemblyModule`（production 注册）、play 四工具面（production 懒注册）、痛觉（cli 构造 `apeireth_organ::nociception::NociceptionObserver` 并经通用 `ToolCompletionObserver` 端口装入 runtime）、tone 模块（production 懒注册）、care 生物候选（W3.2 管道 + W3.3 真实数据供给）。**半程/未接如实标注**：①仪式→care 管道 + 状态存储 + 完成事件源（W3.7 工具面，默认关）已接；纯 CLI chat 无心跳宿主 ⇒ 写入暂无候选消费；②`BioAssemblyModule` 开时只装配显式注入的 `RepairPlan`/上下文块/预算，会话事件源待 W3.4；③节律门生产装配已接（W3.4 cli 心跳 + 显式 UTC 缺省 tz offset；睡眠压力源未接）；④tone 事件源 5/9 已接（W3.5 AfterToolResult/OnError 结局映射；W3.7 工具名首见 Novelty + CLI 人批/人拒社会结论，仅 resolve 成功后注入），其余 4 档显式注入；⑤痛觉 + recovery 状态机已接（W3.4 失败分类近似、ScarLedger 未接）；⑥`bio_mechanisms` 已接 9/14 格（W3.6 迟绑定 5 格 + W3.7 工具生态 1 格 + R1b-2b 生命周期 1 格），其余 `wired:false` + 真因。四级口径：以上全部 **IMPLEMENTED + PRODUCTION WIRED**；**DEFAULT ENABLED 均不成立（默认关）**；无 HARDWARE VALIDATED。 |
 | **默认 OFF（需 env 显式开启，W3.5 生物收尾族）** | `APEIRETH_ENABLE_BIO_LIFECYCLE`（工具资产 5 态账本，装配根注册） | 只认显式 `1`，默认关 fail-closed；关 = 不构造/不注册/不读时钟（零变化测试 `bio_lifecycle_production` 4 例）；开 = 真实工具名播种 `Newborn` + `AfterToolResult` 记账；观测 probe 已接（迟绑定槽，R1b-2b）；持久化目录 = 关怀数据目录（缺省=纯内存）。自述聚合面 `capabilities.nervous_system`（ADR-0003 R1a 只读聚合：version/summary/14 条 level+enabled_env+signal_sources+gaps，`last_observation` 恒 null）随 `APEIRETH_ENABLE_BIO_SELF_STATUS` 出现，**顶层 21 节冻结合同不变**。 |
 | **默认 OFF（装配默认 false）** | `partner_bond` / `morphology_recall` / `community_triage` / `education` / `absorption_insight` | 库级在场，装配默认不接 |
 | **默认 OFF（需 env 显式开启，H-P2 成本分级路由）** | 成本分级路由 `cost_routing`（`APEIRETH_COST_ROUTING=1`；档位映射 `APEIRETH_COST_ROUTING_PREFERRED`） | 默认关 fail-closed（只认精确 `"1"`）。任务按成本/能力四档（`frugal`/`standard`/`capable`/`premium`）选模：画像表为唯一价格事实（**缺价不编价**，无价行不参与价格比较）；决策可解释（`selection_reason`/`fallback_reason`/候选逐行 `price_display`）；消费面 = CLI chat 任务选型（显式 `--model` > 路由选定 > 默认模型）+ 自述 `cost_routing` 节真值。**未接线（如实）**：网关路径任务源路由、显式档 CLI 旗标。H-P2 交付记录见 [H-model-plane.md](../04-internal/backend-enhancement/02-axes/H-model-plane.md) §H-P2 |
-| **未接线（不是默认开关问题）** | 第三洋葱 DSL 层（`DslOnionLayer`，无生产接线）；双洋葱执行钩子需 `APEIRETH_ENABLE_ONION_LAYER=1`；`memory.update`（`reason=not_implemented`）；WebSocket 服务端（见 §1 `gw.duplex_ws` 行） | 如实标注，勿当系统现状 |
+| **默认 OFF（需 env 显式开启，R8-C 治理链延迟反思队列）** | 进程内延迟反思队列 `reflection_queue`（`APEIRETH_ENABLE_REFLECTION_QUEUE=1`，装配点 = CLI 治理链装配根 `crates/adapters/cli/src/governance_chain.rs` 的 `production()`） | 只认显式 `"1"`（未设 / `"0"` / `"true"` / `"yes"` / `"on"` / 空串 = 关，fail-closed），默认关；关 = 不注入调度器 ⇒ 与接线前同行为；开 = `DelayedReflectionScheduler(SystemChainClock, 0ms)` 注入 `GovernanceChain`，到期条目在**下一次**治理评估时 sweep 出 `governance.reflection_due` 审计（`run` 先 sweep 后 schedule ⇒ delay=0 = 本轮排、下轮到 ⇒ 不依赖墙钟 ⇒ 不 flaky）。四级口径：**PRODUCTION WIRED（默认关）**；⚠️ 只证明队列可接且真产审计，**不**证明存在 runner 消费队列 ⇒ auto-pilot 仍 NOT IMPLEMENTED；无 HARDWARE VALIDATED。claim `gov.reflection_queue`，真跑 = `crates/adapters/cli/tests/reflection_queue_wiring.rs`（3 例，含反向验伪）。 |
+| **默认 OFF（Host 配置文件，不是 env）** | 本地 Mesh worker `mesh_local_worker`（数据根下 `mesh.json`；StoredDoc 信封 `exact(name,1)` 拒开） | **双条件 + 硬失败**：`mesh.json` 合法 **且** System One 监督者已绑（`APEIRETH_ENABLE_SYSTEM_ONE=1`）才注册 worker；有配置但没绑监督者 ⇒ **报错拒绝启动**（不静默跳过，错误文案给修法）；**无该文件 = 不注册、零流量、逐字节零变化**（已实测缺省态）。固定回环 `127.0.0.1:port` 单 peer；明文、非密码学认证；未启用 public status 发布面（生产无 PublicStatus sink）。四级口径：**PRODUCTION WIRED（默认 OFF）**；无 LAN/NAT/发现协议、无 durable recovery、无 HARDWARE VALIDATED。claim `rt.mesh_local_worker`。 |
+| **未接线（不是默认开关问题）** | 第三洋葱 DSL 层（`DslOnionLayer`，无生产接线）；双洋葱执行钩子需 `APEIRETH_ENABLE_ONION_LAYER=1`；WebSocket 服务端（见 §1 `gw.duplex_ws` 行） | 如实标注，勿当系统现状 |
 
 ---
 
@@ -88,7 +117,7 @@
 | **编排 (Orchestration)** | `orch.worktree_sandbox` | `apeireth-orchestration::worktree_sandbox` | `TddStateMachine::record_test_result()` | Git Worktree 物理隔离 + TDD 原子回滚 |
 | **编排 (Orchestration)** | `orch.async_context` | `apeireth-orchestration::async_context` | `AsyncContextPipeline::assemble_prompt_context()` | 四层异步数组隔离 (Ephemeral/Durable/Summary/HUD) |
 | **编排 (Orchestration)** | `orch.speech_arbiter` | `apeireth-orchestration::speech_arbiter` | `SpeechOutputArbiter::arbitrate()` | FIFO 排队 / TTL 淘汰 / 抢占打断 |
-| **编排 (Orchestration)** | `orch.prompt_cache` | `apeireth-orchestration::prompt_stabilizer`| `assemble_messages()` | 字节级前缀固定 + 单点环境注入 |
+| **编排 (Orchestration)** | ~~`orch.prompt_cache`~~ | **⚠️ 已归档（不在生产）** | ~~`apeireth-orchestration::prompt_stabilizer`~~（现于 `legacy/archived/prompt-stabilizer/`） | ~~`assemble_messages()`~~ | **不作为能力宣称**：owner 2026-10-20 裁定归档（ADR-0007 / R7-4a，理由：**无生产消费点**，5 个公开项全 export-only）⇒ 生产**不存在**该能力；现行上下文/前缀稳定的单管线在 `apeireth-orchestration::context_budget` |
 | **编排 (Orchestration)** | `orch.care_potential` | `apeireth-orchestration::care_potential_field`| `CarePotentialField::step()` | 连续关怀势能微分方程 + 深夜/挫败量子跃迁 + 三阶克制共情动作 |
 | **编排 (Orchestration)** | `orch.cognitive_scheduler`| `apeireth-orchestration::cognitive_quota_scheduler`| `CognitiveQuotaScheduler::schedule_next()` | 多维认知配额 Q + PIP 优先级继承 + 抢占快照压栈 |
 | **编排 (Orchestration)** | `orch.lineage_spawning` | `apeireth-orchestration::lineage_spawning` | `LineageSpawningOrchestrator::spawn_progeny()` | 跨代教养协议 + Ed25519 表观遗传同构 + 三阶段晋级 |
@@ -108,7 +137,7 @@
 | **运行时 (Runtime)** | `rt.heartbeat` | `apeireth-runtime::canonical::heartbeat`| `schedule_task()`, `acquire_flow_lock()` | 5 触发源 + 二叉最大堆 + FlowLock 心流锁 |
 | **运行时 Assembly** | `rt.causal_world_model` | `apeireth-runtime-assembly::canonical::causal_world_model`| `CausalWorldModel::fork_branch()`, `commit_branch()` | CoW 假说分支推演 + SAGA 逆向补偿 LIFO 回滚 |
 | **运行时 Assembly** | `rt.harness_patch` | `apeireth-runtime-assembly::canonical::harness_patch`| `record_failure()`, `synthesize_patches()`| 失败轨迹自动演绎策略补丁 |
-| **工具 (Capabilities)** | `tool.repo_map` | `apeireth-tools-canonical::repo_map` + runtime-assembly registration | `RepoMapGenerator::generate_map()` | 跨语言 AST 符号提取 + PageRank 代码地图 |
+| **工具 (Capabilities)** | `tool.repo_map` | `apeireth-tools-canonical::repo_map` + `repo_map_tool` + `RepoMapModule`（production 注册，与 `tool.repo` 同源工作区根） | `SymbolParser::parse_file()` → `RepoDependencyGraph::build()` → `compute_personalized_pagerank()` → `RepoMapGenerator::generate_map()` | 跨语言**符号签名**提取（正则行扫描，**非** Tree-sitter AST）+ Personalized PageRank 排序 + token 预算内紧凑大纲；只读、工作区限域、三重预算封顶。**PRODUCTION WIRED（只读、默认可用）** |
 | **工具 (Capabilities)** | `tool.apply_patch` | `apeireth-tools-canonical::apply_patch` | `apply_patch(patch_str)` | 两阶段提交 + 100% 自动原子回滚 |
 | **工具 (Capabilities)** | `tool.git_write` | `apeireth-tools-canonical::git_write` | `git_write(command_str)` | 写意图三级词表（L1 可逆默认人批 / L2 出网永远人批 / L3 毁灭无工具面）+ 命令白名单词法分级（变形防护/组合取最严）+ 受控通道执行 |
 | **工具 (Capabilities)** | `tool.guardrail` | `apeireth-tools-canonical::guardrail` | `pre_call_guard()`, `post_call_guard()` | 路径/命令拦截 + API Key/私钥出站绊线 |
@@ -119,7 +148,7 @@
 | **网关 (Gateway)** | `gw.duplex_ws` | `apeireth-gateway::duplex_gateway` | `DuplexFrame`, `SentenceDivider` | **协议契约已定义（类型 + 测试），HTTP 服务端未接线**：gateway 无 ws 依赖、无 `/v1/ws` 路由，能力面板自报 `voice.duplex available=false, reason=not_assembled`（审计修 A-04） |
 | **网关 (Gateway)** | `gw.ember_hud` | `apeireth-gateway::ember_hud_driver` | `EmberHudDriver::synthesize_uniforms()` | 4.0s 生理呼吸三次正弦波 + 暗角微光 + WGSL 着色器 |
 | **协议 (Protocol)** | `proto.p2p_mesh` | `apeireth-protocol::p2p_mesh` | `P2pMeshController`, `MeshPacket` | **明文 mesh**：报文编解码 + 对端注册表；无 Noise 握手、无洋葱多层封装（`payload_hex` 为十六进制明文，`payload_len_hex` 仅为长度非校验和，`packet_id` 不保证唯一/不防重放）；真加密在 v2.1 roadmap（审计修 A-05） |
-| **感知 (Perception)** | `perc.minimax_tts` | `apeireth-perception::voice::minimax_tts`| `synthesize_stream()` | 128kbps 32kHz 音频流 + 3D PAD 情感调制 |
+| **感知 (Perception)** | ~~`perc.minimax_tts`~~ | **⚠️ 已归档（不在生产）** ~~`apeireth-perception::voice::minimax_tts`~~（crate 已于 2026-10-20 整包归档到 `legacy/archived/perception/`） | ~~`synthesize_stream()`~~ | **不作为能力宣称**：ADR-0005 §3 R4b（owner 授权）归档，理由 = **零依赖者 ⇒ 不可达代码**（全仓无 crate 依赖 `apeireth-perception`）⇒ 该 crate **不参与 workspace 构建**；发声面另在 `apeireth-voice` / `tool.voice_speak` |
 
 > **状态标注**：本节保留库级能力契约与历史实现索引；是否 PRODUCTION WIRED、DEFAULT ENABLED 或当前可用，必须以运行时 `/v1/apeireth/capabilities` 为准。当前 runtime kernel 只保留机制与抽象端口；具体认知、工具、Organ、SQLite 装配位于 `apeireth-runtime-assembly`。canonical 网关的 chat SSE 当前为缓冲成帧（完整 canonical 完成路径结束后返回帧与 `[DONE]`），非逐 token 增量流式；Activity SSE 的生命周期事件则来自 Runtime Event Spine。没有真实 production backend 的能力保持 `supported=false`。
 
@@ -149,11 +178,45 @@
 | **工具 (Capabilities)** | `tool.sheet_ops`（创作工具面 K3 · 表格操作） | `apeireth-tools-canonical::sheet_ops` + `runtime-assembly::canonical::{tool_modules::SheetOpsModule, self_status_source::sheet_ops_status_probe}` | 受控读写族（读：CSV + xlsx；写：仅 CSV）：读面 `read`（表头 + 行预览，超预览上限显式 `truncated` 不冒充全量）/ `summary`（行列数/列名/逐列类型猜测 `int/float/text/mixed/empty`）/ `filter`（闭合谓词 `eq/ne/lt/lte/gt/gte/contains`，eq/ne 双侧数值走数值相等否则文本相等）/ `sort`（稳定排序 `asc/desc`，空值恒排最后）/ `aggregate`（`sum/avg/count/min/max` 按列）/ `formula`（四则 + 括号计算列，新列追加原文不改）+ 写面 `export_csv`（规范 CSV 再序列化，方言归一）；变换动作（filter/sort/formula）带 `output` 即写面落新文件、不带即内存预览；受控面 = 工作区限域（词法+现实双检，缺席目标也做包含判定）+ 敏感面拒（凭据帧同读工具）+ 字节/数据行/列数三层上限（防炸弹表，宁拒不截）+ 创建类原子写（`storage_atomic` 原子替换，只创建不覆盖，目标已存在拒绝即帧）+ 参数矩阵拒绝即帧；数值精度口径 = f64 如实（`0.1+0.2` 回真值 `0.30000000000000004`，不静默取整）、**NaN/inf 零产出**（除零/溢出拒绝即帧）、`NaN`/`inf`/溢出词面按文本；语义钉死 = 空值恒不匹配/恒排最后、类型混拒绝即帧（不静默跳行）、空聚合 sum=0 如实带 `count:0` 而 avg/min/max 拒绝、参差行/重名列/坏词面拒绝即帧；写面**双重约束** = `file_write` 唯一写总闸（关 = 拒写不拒读）+ 每次写人批（无自动放行档）；**xlsx 读入已接**（创作面补齐批 2026-10-18：`.xlsx` 后缀词面判定，容器读端复用 `doc_ops` 已报备 ZIP 读端，sharedString/inlineStr/数值格三形态 + 字符串结果格 `t="str"`；公式格口径钉死 = 一律取缓存值不重算、共享公式不展开、`formula_cells` 计数如实标注、无缓存值公式格拒绝即帧；稀疏格网缺格补空、越宽拒绝即帧）；**写面出 CSV 与 xlsx**（`export_xlsx` = 最小单 sheet：inlineStr/数值格、无公式/多工作表/样式、XML 1.0 非法字符与不支持面显式拒绝，不冒充）；0 新外部依赖 | 已实证（K3 批测试钉死：工具面单元 7 例 + 集成 23 例 + 自述创作节 1 例 + 装配级 4 例 = 35 例，真 fixture CSV 六件，详见 `crates/capabilities/tools/src/sheet_ops.rs` / `crates/capabilities/tools/tests/sheet_ops.rs` / `crates/engine/runtime-assembly/tests/sheet_ops_face.rs`；创作面补齐批 2026-10-18 新增 xlsx 读面行为钉 = 三形态读 / 公式口径 / 坏容器坏格拒 / 解压预算与行列上限 / 导出规范 CSV，实测数字以 `docs/03-reference/test-baseline.md` 为准，本批不代改真源） | 工具 + 设置旋钮 + 自审（创作节） |
 | **记忆 (Memory)** | 随手记（Quick Capture，C 轴入口面） | `frontend/companion-desktop/src/features/quick/quick-capture.ts` → `POST /v1/memory/append` 同源缝 | 一键记条→未整理原料入记忆流：`[随手记 #N] <原文>（来源 capture）`，条目一等字段 `{seq, text, at, source:'capture', protected:false}`；纯采集零 token、零模型调用 | 已实证（[quick-capture-delivery.md](../04-internal/backend-enhancement/quick-capture-delivery.md)） | 快捷窗（随手记面板） |
 | **运行时 (Runtime)** | 配额三维（`tokens` / `tool_steps` / `cost_micros`） | `apeireth-runtime::canonical::quota` + `orchestration::CognitiveQuota` 账本 | env `APEIRETH_QUOTA_MAX_{TOKENS,TOOL_STEPS,COST_MICROS}`（None=不设限）→ 会话账本记账 → 四检查点 `check` 超限即帧 `BudgetExhausted{dimension,limit,consumed}`；单价来源=H-P1 画像表（缺价不编价） | 已实证（[A-quota-real-interface.md](../04-internal/backend-enhancement/02-axes/A-quota-real-interface.md) P1/P2 实施记录；深度维**暂无接口**如实） | 设置旋钮 + 仪表 + 自审 |
-| **网关 (Gateway)** | 全 API 面令牌门（三态） | `apeireth-gateway::canonical_entry`（`GatewayTokenGate`）+ `client_tokens` + `remote_access` | env `APEIRETH_GATEWAY_TOKEN(S)` + `client-tokens.json` 任一在场=强制 Bearer 恒定时间校验全端点（仅 `/health` 豁免）；两面皆空=放行+警告+审计；`none`=明示不设防留痕；非回环绑定无令牌拒启动（fail-closed） | 已实证（W1-③ + W2-② 交付记录，[E-threat-model.md](../04-internal/backend-enhancement/E-threat-model.md) G10/G4 处置注） | 设置旋钮 |
-| **网关 (Gateway)** | 远程 TLS 传输面 | `apeireth-gateway::remote_access` | `APEIRETH_TLS_CERT`/`APEIRETH_TLS_KEY` 只触发「仍是明文」警告+审计，**不硬造 TLS** | **接口桩**（显式未接线） | —（接线前无面） |
+| **网关 (Gateway)** | 全 API 面令牌门（三态） | `apeireth-gateway::canonical_entry`（`GatewayTokenGate`）+ `client_tokens` + `remote_access` | env `APEIRETH_GATEWAY_TOKEN(S)` + `client-tokens.json` 任一在场=强制 Bearer 恒定时间校验全端点（仅 `/health` 豁免）；两面皆空=放行+警告+审计（**但管理面另有一闸**：要求 `AdminControl` 档的端点见治理·角色门行，角色面未激活时 **fail-closed 403**）；`none`=明示不设防留痕；非回环绑定无令牌拒启动（fail-closed） | 已实证（W1-③ + W2-② 交付记录，[E-threat-model.md](../04-internal/backend-enhancement/E-threat-model.md) G10/G4 处置注） | 设置旋钮 |
+| **网关 (Gateway)** | 远程 TLS 传输面 | `apeireth-gateway::remote_access` + `apeireth-gateway::canonical_entry` | `APEIRETH_TLS_CERT`/`APEIRETH_TLS_KEY` 指向 PEM ⇒ **真加载**证书链 + 私钥（含配对校验）并构造 `rustls::ServerConfig`；服务面走 TLS listener（`tokio_rustls::TlsAcceptor`）。**fail-closed**：文件缺失 / PEM 损坏 / 证书私钥不配对 / 半套配置 ⇒ 拒绝启动并如实报错，**绝不静默降级明文**；不设这两枚旋钮 = 明文回环缺省不变（旧「只警告、流量照旧明文」的接口桩语义已随接线退役） | **PRODUCTION WIRED**（默认 OFF：两枚 env 旋钮在场才启用；状态三态 + 审计事件 `gateway.tls_enabled`；claim `sec.gateway_tls`） | 设置旋钮 |
 | **编排 (Orchestration)** | daemon 化 / 多客户端会话复用 | `deploy/` 服务·计划任务脚本 + `apeireth-gateway` 会话路由（W2-①/W2-③） | 常驻占位+优雅停机收尾；并发会话路由（`/v1/apeireth/events?session=` 每客户端独立订阅、同会话扇出）+ 同会话写排队+审计（账本零交叠）+ 会话归属审计 + 面板读快照 | 已实证（[W2-3-multi-client-session-reuse.md](../04-internal/backend-enhancement/04-delivery/home-W-axis-delivery.md)；daemon 见 [F-server-form.md](../04-internal/backend-enhancement/02-axes/F-server-form.md) 现状） | 待上屏（运维面无 UI） |
-| **治理 (Governance)** | 用户域数据门 / 角色门（多用户） | `apeireth-core::user_domain` + `runtime-assembly::domain_plane` + `governance::user_access` + `gateway::{domain_context,client_tokens}` | `users/<id>/` 每户一域+三面分库（会话/记忆/配额账本）+跨域拒绝即帧；`owner/member/guest` 冻结角色词表+24 格权限矩阵+令牌→用户→角色链+管理面 `apeireth user`（owner 门） | 已实证（[W3-1-multi-user-data-isolation.md](../04-internal/backend-enhancement/04-delivery/home-W-axis-delivery.md) / [W3-2-user-identity-roles.md](../04-internal/backend-enhancement/04-delivery/home-W-axis-delivery.md)） | 自审（域节）+ 待上屏（域/用户管理仅 CLI） |
+| **治理 (Governance)** | 用户域数据门 / 角色门（多用户） | `apeireth-core::user_domain` + `runtime-assembly::domain_plane` + `governance::user_access` + `gateway::{domain_context,client_tokens}` | `users/<id>/` 每户一域+三面分库（会话/记忆/配额账本）+跨域拒绝即帧；`owner/member/guest` 冻结角色词表+24 格权限矩阵+令牌→用户→角色链+管理面 `apeireth user`（owner 门）；**HTTP 管理面**（`/v1/admin/*` + 面板族管理面 `/v1/panel/{users,domains,grants/revoke}`）走 `AdminControl` 档（owner 专属），**角色面未激活**（未注入 `users.json`）⇒ 该族端点一律 **fail-closed 403** `permission_denied` + 一行 `gateway.user_action` 审计（`reason=user_role_surface_inactive`）；读面/写面逐字不变（零回归兼容路径不动）—— 管理面能热改 provider `base_url` ⇒ 能外泄真实 API key ⇒ 不适用「零回归」兼容口径 | 已实证（[W3-1-multi-user-data-isolation.md](../04-internal/backend-enhancement/04-delivery/home-W-axis-delivery.md) / [W3-2-user-identity-roles.md](../04-internal/backend-enhancement/04-delivery/home-W-axis-delivery.md)；管理面 fail-closed 批 2026-11-04 钉在 `crates/adapters/gateway/tests/admin_plane_fail_closed.rs`） | 自审（域节）+ 待上屏（域/用户管理仅 CLI） |
 | **观测 (Observability)** | `metrics.read`（`GET /v1/panel/metrics`） | `apeireth-runtime::canonical::metrics` + `apeireth-gateway::panel_metrics` | 回合一收束一拍 `TurnMetrics` → 会话/全局两层窗口聚合（`{count,mean,p50,p95,sum}` 最近秩分位）；`schema_version:1`、`retention:"in_process_rolling"`（进程内环形不落盘）；空态显式 `"—"`（null 不冒充 0）；过 W2-② 令牌门 | 已实证（[G-observability.md](../04-internal/backend-enhancement/G-observability.md) P1 交付记录，21 项测试） | 待上屏（仪表/驾驶舱 CACHE·BUDGET 面板与遥测条待前端消费批） |
+| **安全 (Security)** | 模型出网闸（`sec.egress_gate`） | `apeireth-runtime::canonical::egress_gate` + `provider` + `runtime-assembly::{egress_gate,egress_ledger,accountability,notification_duty,consequence}` | 上下文→provider 边界的**出网闸**：出境**脱敏** + **fail-closed 拒绝**；授权策略可由 env 直接给 JSON；与问责面共用同一开关 | **PRODUCTION WIRED**（默认关 `APEIRETH_ENABLE_EGRESS_GATE=1` 才装配；账本面 `apeireth egress` 只读可查） | env 开关；出网账本（CLI 可查） |
+| **安全 (Security)** | 会话/记忆静态信封加密（`sec.storage_envelope_crypto`） | `apeireth-storage::crypto` + `runtime-assembly::canonical::session_seal` + `sqlite_session` + `cli::crypto_keys` | B6 库级：分区 DEK / **AES-256-GCM 密封字段** / KEK 双槽包裹 / 恢复件 / 密钥丢失边界；盲索引与 `SqliteFieldSink` 接缝有库内测试；B6-2a：`sessions.data` 试点封缄（`SealedField` 与 `SqliteFieldSink` 同格式，读路径双兼容：密文解封 / 明文旧行照读 / 篡改硬错误） | **PRODUCTION WIRED**（默认关 `APEIRETH_ENABLE_SESSION_SEAL=1` + `APEIRETH_SESSION_SEAL_KEY_FILE`（0600）；开关开而**密钥缺失 = 启动失败**；密钥出口 `apeireth crypto unlock --out` 已交付）。**未接线**：`memory_items` / `episodes` 等其余 P0 列、桌面 keychain 锚定、批量迁移 CLI（惰性迁移已生效） | env 开关；`apeireth crypto` 密钥面（CLI） |
+> **真源对账注记（2026-10-28 复核批 · 2026-11-01 D24 补全）**：本表「生物机制」段用**机制名**
+> （`bio.<机制>`，与 `BioMechanismKind::ALL` 的 **14** 格 1:1 对齐，即自述面
+> `BioMechanismsStatus.mechanisms` 的键）；而四级口径真源
+> [`claims.yaml`](../status/claims.yaml) 用的是**能力名**。两套命名的对应关系
+> （**人工对账依据，机器不校**）：
+>
+> | 本表（机制名） | `claims.yaml`（能力名） | 交叉核对锚（`switch_env`） |
+> |---|---|---|
+> | `bio.neuromodulation` | `bio.tone` | `APEIRETH_ENABLE_BIO_TONE` |
+> | `bio.circadian` | `bio.circadian` | `APEIRETH_ENABLE_BIO_CIRCADIAN` |
+> | `bio.nociception` | `bio.nociception_pain` | `APEIRETH_ENABLE_BIO_PAIN` |
+> | `bio.recovery` | `bio.recovery_protocol` | `APEIRETH_ENABLE_BIO_PAIN` |
+> | `bio.homeostasis` | `bio.homeostasis` | `APEIRETH_ENABLE_BIO_CONTEXT_POLICY` |
+> | `bio.immune_memory` | `bio.immune_memory` | `APEIRETH_ENABLE_IMMUNE_MEMORY` |
+> | `bio.attachment` | `bio.attachment` | `APEIRETH_ENABLE_BIO_CARE_CANDIDATES` |
+> | `bio.social_repair` | `bio.social_repair` | `APEIRETH_ENABLE_BIO_REPAIR_GUIDANCE` |
+> | `bio.quorum` | `bio.quorum` | `APEIRETH_ENABLE_QUORUM_GATE` |
+> | `bio.lifecycle` | `bio.lifecycle` | `APEIRETH_ENABLE_BIO_LIFECYCLE` |
+> | `bio.play` | `bio.play` | `APEIRETH_ENABLE_BIO_PLAY` |
+> | `bio.ritual` | `bio.ritual` | `APEIRETH_ENABLE_BIO_CARE_CANDIDATES` |
+> | `bio.ecosystem_health` | `bio.ecosystem_health` | `APEIRETH_ENABLE_BIO_SELF_STATUS`（**无专属开关**，随观测面总闸开合） |
+> | `bio.capacity` | `bio.capacity` | `APEIRETH_ENABLE_BIO_SELF_STATUS`（**无专属开关**，随观测面总闸开合） |
+>
+> ⇒ **2026-11-01 D24 落地**：**14 条全部已进 `claims.yaml`**
+> （每条 `PRODUCTION WIRED` + **默认关** ⇒ 「有机制读数」与「已作为对外能力承诺」**已对齐**；
+> 每条 notes 里**逐条写清边界/半程**（如 `bio.ritual` 半程、`bio.social_repair` 生产不注入
+> `RepairPlan`、`bio.capacity` 未配任务板则该格 `wired:false`））。
+> ⇒ ⚠️ **`level` 与 `default` 是两件事**：`PRODUCTION WIRED` + `default: OFF`
+> = 「**已进生产装配，但默认不开**」（与本表各行「默认关 X」一致）⇒ **不是**「已承诺默认开」。
+> ⚠️ `scripts/docs_truth.py --verify` **不校这层映射**（它只校 claims 自身的
+> `sources`/`tests`/`verified_at`）⇒ ⇒ 本节是**人工对账**，不是门禁。
+
 | **生物机制 (Bio)** | `bio.neuromodulation`（SG-13 神经调质→语气） | `apeireth-organ::{neuromodulation,tone}` + `runtime-assembly::canonical::bio_tone` | `NeuromodulatorState::apply` → `behavior_params()` → `tone_hint_with_params`；TurnStart 尾部独立 overlay | **PRODUCTION WIRED（默认关 `APEIRETH_ENABLE_BIO_TONE`）；事件源 5/9 = 工具结局（TaskSuccess/TaskFailure）+ 工具名首见 Novelty（AfterToolResult）+ CLI 人批/人拒（SocialPositive/SocialNegative，仅 resolve 成功后）；R1b-2a 起工具结局/错误事件面经 `nervous.bridge`→`NervousBus` 订阅注入（模块不再旁路扫钩子，默认关零订阅）；其余 4 档仅显式注入；R1b-2c 起审批社交经 `NervousBus` 的 `ApprovalSocial` 信号发布（直写助手删除，发布=唯一真源；取消不编事件）** | env 开关；自述格已接（`BioMechanismKind::Neuromodulation`，真实调质向量/基线/行为参数/语气档；开关关单格 null + 原因） |
 | **生物机制 (Bio)** | `bio.homeostasis`（SG-14 内稳态→上下文策略） | `apeireth-organ::{homeostasis,context_assembly}` + `runtime-assembly::canonical::cognitive::BioAssemblyModule` | `VitalSignSet → regulate → AssemblyPolicy::from_plan → ContextAssembler::with_policy` | **PRODUCTION WIRED（默认关 `APEIRETH_ENABLE_BIO_CONTEXT_POLICY`）；仅 ContextPressure 实测、其余中性基线** | env 开关；自述格已接（Wave 4：装配面装饰器每回合记录已用/预算/压力/策略/调节；只读，不剪枝、不改行为） |
 | **生物机制 (Bio)** | `bio.circadian`（SG-23 节律→主动消息闸） | `apeireth-organ::circadian` + `runtime-assembly::canonical::{bio_circadian,care_heartbeat}` | `proactive_gate(phase,window,urgency) → CareHeartbeatPoll 最前 decide() → Suppressed=Quiet` | **PRODUCTION WIRED（默认关 `APEIRETH_ENABLE_BIO_CIRCADIAN`，cli 心跳装配 + 显式 UTC 缺省 tz offset）**；睡眠压力源未接（门内压力恒 0） | env 开关；自述格已接（`BioMechanismKind::Circadian`：时区偏移 + 注入时钟纯算相位/振幅/局部时刻/主动门；睡眠压力 `not_wired` 子字段）；`circadian_decision()` 观测口 |
@@ -227,3 +290,25 @@ applier.apply_patch(patch)?; // 内存预演 -> 磁盘写入 (任意异常自动
   "timestamp_ms": 1780000000000
 }
 ```
+
+---
+
+## 附录 A：2026-11-07 生产接线批（L4 收口）
+
+本批把「库里有、生产没接」的六条能力真正接进装配根，并把声明抬到 **PRODUCTION WIRED**。
+**每条都附了「生产调用点」与「反证」**（去掉接线该测试必须变红 —— 已实测）。
+
+| 能力 | 生产调用点 | 接线后行为 | 反证（已实测变红） | claim |
+|---|---|---|---|---|
+| **模块执行契约选举** | `crates/engine/runtime-assembly/src/canonical/cognitive_registry.rs` 的 `register_with_policy` 末段 `module_contract_wiring::attach(builder)`（CLI 组合根 `crates/adapters/cli/src/lib.rs:1706` 走该路径） | 装配表内模块物化为既有 `ContractTool` 表面（**只收窄面，不授予权限**）；表外模块逐字节零变化 | 停用 `attach(builder)` ⇒ `production_composition_root_elects_the_public_module_contract` 变红 | `rt.module_execution_contract` |
+| **模块消息管道（有界/owner 认证）** | `canonical/desktop_host.rs:51-52` 在桌面 Host 策略里装 `ModuleMessagePolicy::default()`（`cli/src/lib.rs:1704` → `instances.rs:264`） | 管道从「不存在（任何发送恒 `Disabled`）」变为「存在且**零授权**」⇒ 零流量零副作用；限额有界（16 in-flight / 64 KiB / 16 hops / 128 幂等 / 5 s） | 删那两行 ⇒ 3 个断言全红 | `rt.module_messages` |
+| **注册式记忆工具面** | `production.rs:1484 memory_assembly::wire(...)` + `:1846 bind_profile_mappings(...)`（模块实例上的映射**迟绑定**，不重复注册 `module.memory`） | 7 个 `memory_*` 工具可用（此前调用即 `requested tool is not registered`）；⚠️ **自动检索默认关**（开它会污染每回合转录） | 摘除整个装配点 ⇒ 3 个测试红在 `requested tool is not registered` | `mem.registered_namespace` |
+| **模块自有子 Agent + 分层核算** | 同上（`memory_organize` → `canonical/memory_module/organizer.rs` 的 `ModuleAgents::spawn_agent`） | 子 Agent 用**它自己的** Host grant 调工具（organize 回执 `agent_id` + `scheduled`，子 Agent 真写成功） | 同上 | `rt.owned_agents` |
+| **社会修复 → 提示词修复指令（SG-20）** | `canonical/bio_production_wiring.rs` 安装点建**共享槽**：写 = 总线 `ApprovalSocial::Rejected` 回调；读 = `ObservedBioAssemblyModule::on_hook(TurnStart)` 每回合 | 开关 `APEIRETH_ENABLE_BIO_REPAIR_GUIDANCE=1` 时：人工拒绝 ⇒ **下一回合**提示词出现 `[交互修复指令] … [/交互修复指令]`（含 `acknowledge_uncertainty`）；关档不构造/不注册/不拿锁 | 去掉**写槽**或**读槽** ⇒ 行为测试红 | `bio.social_repair` |
+| **本地 Mesh worker（受治）** | `canonical/desktop_host.rs:121 local_mesh_module_at` / `:161 attach_local_mesh` / `:205`；配置面 = 数据根下 `mesh.json`（StoredDoc 信封、`exact(name,1)` 拒开） | **双条件 + 硬失败**：配置合法 **且** System One 监督者已绑才注册；有配置没绑 ⇒ **报错拒绝启动**（不静默跳过）；无文件 ⇒ 不注册、零流量、逐字节零变化 | 停用注册臂 ⇒ 真 UDP 收包用例 10 s 超时变红 | `rt.mesh_local_worker`（⚠️ public status 面生产未启用） |
+
+**附加**：记忆 crate 新增**只读能力审计面** `crates/engine/memory/src/capability_audit.rs`（不写库）并让 `apeireth memory handover` 自述该审计结果 ⇒ 记忆可达率 **90 → 109**、「未解释不可达」**32 → 0**（见 `scripts/memory-reachability-*.txt`）。
+
+⚠️ **本表只记「生产调用点已存在且真跑过」的面**；每条能力的诚实边界见 `docs/status/claims.yaml` 对应 `notes`
+（例如：mesh 的 public status 未启用、bio 指令块是 untrusted V1 数据不是 system 权威、自动检索默认关、
+生产默认只注册兼容 ABI 而契约/Protected 是 Host 显式 opt-in）。

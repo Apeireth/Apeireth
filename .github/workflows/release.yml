@@ -70,7 +70,7 @@ jobs:
           fetch-depth: 0
 
       - name: Install Rust stable + target
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.97.1
         with:
           targets: ${{ matrix.target }}
 
@@ -116,7 +116,7 @@ jobs:
           fetch-depth: 0
 
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.97.1
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
@@ -161,7 +161,7 @@ jobs:
           fetch-depth: 0
 
       - name: Install Rust stable + musl target
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.97.1
         with:
           targets: ${{ matrix.target }}
 
@@ -207,7 +207,7 @@ jobs:
           fetch-depth: 0
 
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.97.1
         with:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
 
@@ -257,7 +257,7 @@ jobs:
           fetch-depth: 0
 
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.97.1
         with:
           targets: x86_64-pc-windows-msvc
 
@@ -332,7 +332,7 @@ jobs:
           fetch-depth: 0
 
       - name: Install Rust stable + jq
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.97.1
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2

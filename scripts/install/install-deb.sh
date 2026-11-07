@@ -21,7 +21,7 @@
 #   - 0 改 workspace version 1.0.0
 #   - 0 引 NewAPI (用系统 apt / systemctl / curl)
 #   - 不假装: 缺 cargo-deb 工具链时, 引导去 packaging/deb/build.sh 跑, 不假装编过
-#   - 编译期 hardcode: VERSION=1.0.0, 默认 /etc/apeireth/config.toml
+#   - 版本从 workspace Cargo.toml 派生, 默认 /etc/apeireth/config.toml
 #   - 6 哲学锚穿透: 不假装已装 / 不假装健康 / 不假装签名 (cosign 后续 R20 阶段 6 续)
 #   - 不重复造轮子: 用 packaging/deb/apeireth.service 现成 unit, 不重写
 #   - 诚实标缺: 跨平台测试不跑 (CI 跑), 标需要 CI 守门
@@ -43,7 +43,9 @@ fi
 
 # === 1. 找 .deb ===
 cd "$(dirname "$0")/../.."
-VERSION="${APEIRETH_VERSION:-2.0.0~rc1}"
+# 版本唯一真源: workspace Cargo.toml（APEIRETH_VERSION 可覆盖；不再硬编码，避免各脚本版本漂移）
+VERSION="${APEIRETH_VERSION:-$(sed -n '/^\[workspace\.package\]/,/^\[/p' Cargo.toml | grep -E '^version[[:space:]]*=' | head -1 | sed 's/.*"\(.*\)".*/\1/')}"
+[[ -n "${VERSION}" ]] || { echo "❌ 无法从 Cargo.toml 读取 workspace.version（可显式设 APEIRETH_VERSION）" >&2; exit 1; }
 
 if [[ -n "${1:-}" ]]; then
     DEB_PATH="$1"

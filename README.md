@@ -18,7 +18,8 @@
 [![Honest gaps](https://img.shields.io/badge/honest%20gaps-4-orange.svg?logo=shield)](#boundaries)
 
 > Taxonomy note: **workspace = 30 members (29 product crates + 1 bench-only harness `benches`)** — `apeireth-perception` and the SDK four-island modules are archived under `legacy/archived/` (2026-10-20, ADR-0005 R4b); historical 31-member figure kept in CHANGELOG
-> (foundation 6 / engine 8 / capabilities 1 / adapters 4 = cli, gateway, sdk, tui).
+> (foundation 6 / engine 7 / capabilities 1 / adapters 4 = cli, gateway, sdk, tui) + image family 11 (`apeireth-image-*` vendored 家族 + 接口层 `apeireth-image-core`) = 29 product crates.
+> **Independent workspace**: `crates-ui/` is a *separate* Cargo workspace — **not** one of the 30 members and with no dependency edge to or from the root workspace — holding **1 crate**, `apeireth-ui-core` (a pure reactive core: signals / derived / effects / scheduling). Scope = IMPLEMENTED, with **no production frontend consumer** yet (ADR-0021, owner 2026-10-29; its own CI: `ui-core-ci.yml`).
 > Tests badge = the single source of truth [test-baseline.md](docs/03-reference/test-baseline.md) §1 (2026-10-21); the evidence side lives in [capabilities-matrix §0.1](docs/03-reference/capabilities-matrix.md).
 > `honest gaps` badge = a static snapshot — hand-maintained, never auto-counted (change the number by hand when the residuals change). It counts the wiring residuals named under [Honest boundaries](#boundaries) "Defined, not wired": no `/v1/ws` server route · no Noise handshake · no onion routing · SDK WS transport stub = 4.
 
@@ -172,7 +173,7 @@ Full table → [capabilities-matrix §0.2](docs/03-reference/capabilities-matrix
 |---|---|
 | **ON by default** | memory recall/writeback, preference recall, self-assessment, self-status, read-only tools (filesystem / search / repo); preference learning, proactive recall, memory injection (default-on family — `APEIRETH_DISABLE_*=1` to turn off) |
 | **OFF by default (explicit env)** | shell (`APEIRETH_ENABLE_SHELL=1`), fetch (`APEIRETH_ENABLE_FETCH=1`), content feed, MCP; Judge (`APEIRETH_COGNITIVE_JUDGE=1`), Council (`APEIRETH_COGNITIVE_COUNCIL=1`), 9 organs (`APEIRETH_ENABLE_ORGANS=1`), consolidation, reflexion; the write family `file_write` / `git_write` / `worktree_*` / `skill_*` (gated by the sole write master gate 写总闸, `APEIRETH_ENABLE_FILE_WRITE=1`) |
-| **Not wired (not a switch)** | third DSL onion layer, `memory.update`, the WebSocket server, duplex voice |
+| **Not wired (not a switch)** | third DSL onion layer, the WebSocket server, duplex voice — memory *update* **is** wired (governed `memory.update` + `PUT /v1/apeireth/memory/episodes/:id/content`, claim `gap.memory_update`) |
 
 ---
 
@@ -190,7 +191,7 @@ Full table → [capabilities-matrix §0.2](docs/03-reference/capabilities-matrix
 
 ## 5. Under the hood
 
-"Being remembered" sounds soft. Building it takes very hard engineering. A thirty-one-member workspace (30 product crates + 1 bench harness) of cognitive microkernel, pure Safe Rust, zero unsafe — not showing off; because **what is trusted for a lifetime cannot contain undefined behavior**.
+"Being remembered" sounds soft. Building it takes very hard engineering. A thirty-member workspace (29 product crates + 1 bench harness) of cognitive microkernel, pure Safe Rust, zero unsafe — not showing off; because **what is trusted for a lifetime cannot contain undefined behavior**.
 
 ### 星群 — the cluster
 

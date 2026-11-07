@@ -3,8 +3,8 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: a326d2ed94353d8201d26b7475027075a05b7e83e06744d5184f8098a72190a8
-claims_total: 37
+claims_sha256: 9ef16bee472159a3791e5e0e891300cd5c3583aa2369b872d7b1532f53f8ed3a
+claims_total: 52
 items:
   - id: "rt.provider_router"
     capability: "跨 provider fallback + 健康态（运行时路由）"
@@ -98,7 +98,7 @@ items:
         - "crates/engine/runtime-assembly/tests/convergence_mcp.rs"
       claims_id: "tool.mcp_bridge"
     gaps:
-      - "能力矩阵未出现开关 APEIRETH_ENABLE_MCP（待补）"
+      []
   - id: "tool.voice_speak"
     capability: "发声工具面（系统 TTS 合成即播 + 播放纪律 + 账本）"
     implemented:
@@ -130,7 +130,7 @@ items:
       production_refs:
         - "crates/capabilities/tools/src/egress.rs"
         - "crates/capabilities/tools/src/fetch.rs"
-    default_enabled: true
+    default_enabled: false
     validated:
       tests:
         - "crates/capabilities/tools/src/egress.rs"
@@ -160,7 +160,7 @@ items:
     gaps:
       []
   - id: "sec.exposure_audit"
-    capability: "暴露面体检（五个暴露面只读扫描 + 同一内核两出口）"
+    capability: "暴露面体检（六个暴露面只读扫描 + 同一内核两出口）"
     implemented:
       sources:
         - "crates/capabilities/tools/src/exposure_audit/mod.rs"
@@ -228,12 +228,13 @@ items:
         - "crates/adapters/cli/src/egress_command.rs"
       claims_id: "sec.egress_gate"
     gaps:
-      - "能力矩阵未出现开关 APEIRETH_ENABLE_EGRESS_GATE（待补）"
+      []
   - id: "mem.lesson_object"
     capability: "教训对象（四拍状态机：经历→候选→新场景验证→撤回留痕）"
     implemented:
       sources:
         - "crates/engine/memory/src/lesson.rs"
+        - "crates/engine/memory/src/migrations/list.rs"
         - "crates/engine/memory/src/migrations.rs"
         - "crates/engine/memory/src/migrations/fresh_tables.sql"
         - "crates/adapters/cli/src/lessons_command.rs"
@@ -243,6 +244,7 @@ items:
         - "crates/engine/memory/src/lesson.rs"
         - "crates/engine/memory/src/migrations.rs"
         - "crates/engine/memory/src/migrations/fresh_tables.sql"
+        - "crates/engine/memory/src/migrations/list.rs"
     default_enabled: true
     validated:
       tests:
@@ -294,20 +296,18 @@ items:
     implemented:
       sources:
         - "crates/capabilities/tools/src/process/linux.rs"
-        - "crates/capabilities/tools/src/process/platform.rs"
         - "crates/capabilities/tools/src/process/mod.rs"
     wired:
       production_refs:
         - "crates/capabilities/tools/src/process/linux.rs"
         - "crates/capabilities/tools/src/process/mod.rs"
-        - "crates/capabilities/tools/src/process/platform.rs"
     default_enabled: "n/a"
     validated:
       tests:
         - "crates/capabilities/tools/tests/process_executor.rs"
       claims_id: "sec.linux_containment"
     gaps:
-      - "未达 PRODUCTION WIRED：进程组 + setrlimit(AS/CPU/FSIZE/NPROC) + PR_SET_PDEATHSIG + PR_SET_NO_NEW_PRIVS；不承诺 cgroup/seccomp/namespace/网络隔离；memory/process-count 为 partial。；2026-10…"
+      []
   - id: "sec.gateway_tls"
     capability: "Gateway TLS 真接线（PEM 真加载 fail-closed + TLS listener + 三态状态面）"
     implemented:
@@ -352,7 +352,7 @@ items:
         - "crates/engine/runtime-assembly/src/sqlite_session.rs"
       claims_id: "sec.storage_envelope_crypto"
     gaps:
-      - "能力矩阵未出现开关 APEIRETH_ENABLE_SESSION_SEAL（待补）"
+      []
   - id: "gov.chain_skeleton"
     capability: "R8-A 治理链六段骨架 + R8-B2 生产单入口（每次治理评估过 chain.run）"
     implemented:
@@ -394,37 +394,40 @@ items:
     gaps:
       []
   - id: "gov.reflection_queue"
-    capability: "R8-C 进程内延迟反思队列——默认未装配、零行为变化"
+    capability: "R8-C 进程内延迟反思队列——生产可选装配（默认 OFF）"
     implemented:
       sources:
         - "crates/foundation/governance/src/chain.rs"
+        - "crates/adapters/cli/src/governance_chain.rs"
     wired:
       production_refs:
+        - "crates/adapters/cli/src/governance_chain.rs"
         - "crates/foundation/governance/src/chain.rs"
-    default_enabled: "n/a"
+    default_enabled: false
     validated:
       tests:
         - "crates/foundation/governance/src/chain.rs"
+        - "crates/adapters/cli/tests/reflection_queue_wiring.rs"
       claims_id: "gov.reflection_queue"
     gaps:
-      - "未达 PRODUCTION WIRED：R8-C da7e224f：Immediate/Delayed ReflectionScheduler + 到期审计；仅库内注入面。R8-B2 装配未启用反射调度器（production 只注入 gate + 审计 sink），生产仍零反射、零行为变化 —— 保持 IMPLEMENTED，不冒称接线…"
+      []
   - id: "gov.chain_drill_ci"
-    capability: "R8-D 治理链六段演练入 CI（rust-tests 显式步骤，尚未首跑）"
+    capability: "R8-D 治理链六段演练入 CI（rust-tests 显式步骤，已前置 nextest 之前，CI 已首跑）"
     implemented:
       sources:
         - ".github/workflows/rust.yml"
     wired:
       production_refs:
-        []
+        - ".github/workflows/rust.yml"
     default_enabled: "n/a"
     validated:
       tests:
         - "crates/foundation/governance/tests/governance_chain_drill.rs"
       claims_id: "gov.chain_drill_ci"
     gaps:
-      - "未达 PRODUCTION WIRED：R8-D 60627d8e：rust-tests job 增治理链演练显式步骤；本地等价命令 cargo test -p apeireth-governance --test governance_chain_drill 3 passed。远端仍 0 次执行：该步骤排在 cargo nextest …"
+      []
   - id: "sec.governance_chain_drill"
-    capability: "M-of-N 逻辑票链三路径端到端合练（B7 验证证据）"
+    capability: "M-of-N 逻辑票链三路径端到端合练（B7 验证证据，已入 CI 门禁并首跑）"
     implemented:
       sources:
         - "crates/foundation/governance/tests/governance_chain_drill.rs"
@@ -438,24 +441,25 @@ items:
         - "crates/foundation/governance/tests/governance_chain_drill.rs"
       claims_id: "sec.governance_chain_drill"
     gaps:
-      - "未达 PRODUCTION WIRED：通过/拒绝/超时三路径演练证据；验证面资产，不是新能力。M-of-N ≠ 密码学多签（口径见演练记录）。"
+      - "未找到生产引用（待核）"
   - id: "rel.release_asset_verify"
     capability: "发布资产校验脚本（SHA-256 + 签名状态如实报，B8）"
     implemented:
       sources:
         - "scripts/verify-release-assets.ps1"
+        - ".github/workflows/publish-release.yml"
         - "docs/packaging/release-asset-verification.md"
         - "docs/04-internal/backend-enhancement/B8-release-signing-2026-10-19.md"
     wired:
       production_refs:
-        []
+        - ".github/workflows/publish-release.yml"
     default_enabled: "n/a"
     validated:
       tests:
-        []
+        - "scripts/test_verify_release_assets.py"
       claims_id: "rel.release_asset_verify"
     gaps:
-      - "未达 PRODUCTION WIRED：7/7 手工用例见 B8 登记（无自动测试，如实登记 tests 为空）；签名/可复现构建属排期待办。；2026-10-22 批次复核：generate-release-manifest exit 0 / verify-release-assets PASS exit 0（rc.4 exe 本地 s…"
+      []
   - id: "sec.sql_readonly_gate"
     capability: "桌面三数据库客户端只读闸加固（B1：词法级写类拒绝 + 远程只读事务纵深）"
     implemented:
@@ -475,6 +479,31 @@ items:
         - "frontend/companion-desktop/src-tauri/src/pg_client.rs"
         - "frontend/companion-desktop/src-tauri/src/mysql_client.rs"
       claims_id: "sec.sql_readonly_gate"
+    gaps:
+      []
+  - id: "sec.credential_endpoint_binding"
+    capability: "凭据 ↔ 端点绑定（凭据只发往 audience ∪ 显式绑定内的端点；运行时换端点默认拒绝）"
+    implemented:
+      sources:
+        - "crates/engine/provider/src/endpoint_binding.rs"
+        - "crates/engine/provider/src/canonical_anthropic.rs"
+        - "crates/engine/provider/src/canonical_minimax.rs"
+        - "crates/engine/provider/src/canonical_openai_compatible.rs"
+        - "crates/foundation/plugin/src/credentials.rs"
+        - "crates/foundation/credentials/src/hot_store.rs"
+    wired:
+      production_refs:
+        - "crates/engine/provider/src/canonical_anthropic.rs"
+        - "crates/engine/provider/src/canonical_minimax.rs"
+        - "crates/engine/provider/src/canonical_openai_compatible.rs"
+        - "crates/engine/provider/src/endpoint_binding.rs"
+        - "crates/foundation/credentials/src/hot_store.rs"
+        - "crates/foundation/plugin/src/credentials.rs"
+    default_enabled: true
+    validated:
+      tests:
+        - "crates/engine/provider/tests/endpoint_binding.rs"
+      claims_id: "sec.credential_endpoint_binding"
     gaps:
       []
   - id: "sec.provider_proxy_ssrf"
@@ -522,7 +551,7 @@ items:
         - "frontend/companion-desktop/tests/starport-face-apps.mjs"
       claims_id: "sec.terminal_permission_surfaces"
     gaps:
-      - "未达 PRODUCTION WIRED：4 条文案测试钉子（pnpm 82/82 套件，交付记录）；本文档描述 UI 权限边界，不改变底层审批语义。"
+      - "未找到生产引用（待核）"
   - id: "bio.tone"
     capability: "神经调质→语气（W3.4 生产装配，默认关）"
     implemented:
@@ -609,6 +638,299 @@ items:
         - "crates/engine/runtime/tests/bio_pain_wiring.rs"
         - "crates/engine/organ/src/nociception.rs"
       claims_id: "bio.recovery_protocol"
+    gaps:
+      []
+  - id: "bio.homeostasis"
+    capability: "异稳态体征→上下文策略（SG-14，生产装配，默认关）"
+    implemented:
+      sources:
+        - "crates/engine/organ/src/homeostasis.rs"
+        - "crates/engine/organ/src/context_assembly.rs"
+        - "crates/engine/runtime-assembly/src/canonical/cognitive.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_extra_probes.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs"
+        - "crates/capabilities/tools/src/self_status.rs"
+    wired:
+      production_refs:
+        - "crates/adapters/cli/src/bio_switches.rs"
+        - "crates/capabilities/tools/src/self_status.rs"
+        - "crates/engine/organ/src/context_assembly.rs"
+        - "crates/engine/organ/src/homeostasis.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_extra_probes.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs"
+        - "crates/engine/runtime-assembly/src/canonical/cognitive.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_switchboard.rs"
+    default_enabled: false
+    validated:
+      tests:
+        - "crates/engine/runtime-assembly/tests/bio_observation_cells.rs"
+        - "crates/engine/runtime-assembly/tests/bio_cognitive_wiring.rs"
+      claims_id: "bio.homeostasis"
+    gaps:
+      []
+  - id: "bio.immune_memory"
+    capability: "免疫记忆→守卫证据（SG-15，生产装配，默认关）"
+    implemented:
+      sources:
+        - "crates/engine/guard/src/immune_memory.rs"
+        - "crates/engine/guard/src/hook.rs"
+        - "crates/adapters/cli/src/lib.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_mechanism_probes.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs"
+        - "crates/capabilities/tools/src/self_status.rs"
+    wired:
+      production_refs:
+        - "crates/adapters/cli/src/bio_switches.rs"
+        - "crates/adapters/cli/src/lib.rs"
+        - "crates/capabilities/tools/src/self_status.rs"
+        - "crates/engine/guard/src/hook.rs"
+        - "crates/engine/guard/src/immune_memory.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_mechanism_probes.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs"
+    default_enabled: false
+    validated:
+      tests:
+        - "crates/engine/runtime-assembly/tests/bio_quorum_immune_wiring.rs"
+        - "crates/engine/guard/src/immune_memory.rs"
+      claims_id: "bio.immune_memory"
+    gaps:
+      []
+  - id: "bio.attachment"
+    capability: "依恋/分离-重聚→关怀候选（SG-19，生产装配，默认关）"
+    implemented:
+      sources:
+        - "crates/engine/organ/src/attachment.rs"
+        - "crates/engine/runtime-assembly/src/canonical/care_heartbeat.rs"
+        - "crates/adapters/cli/src/care_heartbeat.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_mechanism_probes.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs"
+        - "crates/capabilities/tools/src/self_status.rs"
+    wired:
+      production_refs:
+        - "crates/adapters/cli/src/bio_switches.rs"
+        - "crates/adapters/cli/src/care_heartbeat.rs"
+        - "crates/capabilities/tools/src/self_status.rs"
+        - "crates/engine/organ/src/attachment.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_mechanism_probes.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs"
+        - "crates/engine/runtime-assembly/src/canonical/care_heartbeat.rs"
+        - "crates/engine/runtime-assembly/src/canonical/care_reminder.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_switchboard.rs"
+        - "crates/engine/runtime-assembly/src/canonical/ritual_tools.rs"
+    default_enabled: false
+    validated:
+      tests:
+        - "crates/engine/runtime-assembly/tests/bio_care_wiring.rs"
+        - "crates/engine/runtime-assembly/tests/bio_mechanisms_self_status.rs"
+      claims_id: "bio.attachment"
+    gaps:
+      []
+  - id: "bio.social_repair"
+    capability: "社会修复→提示词修复指令（SG-20，生产装配，默认关）"
+    implemented:
+      sources:
+        - "crates/engine/organ/src/social_repair.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_social_repair.rs"
+        - "crates/engine/runtime-assembly/src/canonical/cognitive.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs"
+        - "crates/capabilities/tools/src/self_status.rs"
+    wired:
+      production_refs:
+        - "crates/adapters/cli/src/bio_switches.rs"
+        - "crates/capabilities/tools/src/self_status.rs"
+        - "crates/engine/organ/src/social_repair.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_production_wiring/tests.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_social_repair.rs"
+        - "crates/engine/runtime-assembly/src/canonical/cognitive.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_switchboard.rs"
+    default_enabled: false
+    validated:
+      tests:
+        - "crates/engine/runtime-assembly/tests/bio_cognitive_wiring.rs"
+        - "crates/engine/runtime-assembly/tests/bio_observation_cells.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_production_wiring/tests.rs"
+      claims_id: "bio.social_repair"
+    gaps:
+      []
+  - id: "bio.quorum"
+    capability: "群体感应→审议门（SG-24，生产装配，默认关）"
+    implemented:
+      sources:
+        - "crates/foundation/orchestration/src/quorum.rs"
+        - "crates/foundation/orchestration/src/council/mod.rs"
+        - "crates/engine/runtime-assembly/src/canonical/orchestrator.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_mechanism_probes.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs"
+        - "crates/capabilities/tools/src/self_status.rs"
+    wired:
+      production_refs:
+        - "crates/adapters/cli/src/bio_switches.rs"
+        - "crates/capabilities/tools/src/self_status.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_mechanism_probes.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs"
+        - "crates/engine/runtime-assembly/src/canonical/orchestrator.rs"
+        - "crates/foundation/orchestration/src/council/mod.rs"
+        - "crates/foundation/orchestration/src/quorum.rs"
+    default_enabled: false
+    validated:
+      tests:
+        - "crates/engine/runtime-assembly/tests/bio_quorum_wiring.rs"
+        - "crates/engine/runtime-assembly/tests/bio_quorum_immune_wiring.rs"
+      claims_id: "bio.quorum"
+    gaps:
+      []
+  - id: "bio.lifecycle"
+    capability: "资产生命周期→五态账本（SG-18，生产装配，默认关）"
+    implemented:
+      sources:
+        - "crates/foundation/orchestration/src/lifecycle.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_lifecycle.rs"
+        - "crates/engine/runtime-assembly/src/canonical/lifecycle_state_store.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs"
+        - "crates/capabilities/tools/src/self_status.rs"
+    wired:
+      production_refs:
+        - "crates/adapters/cli/src/bio_switches.rs"
+        - "crates/capabilities/tools/src/self_status.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_lifecycle.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs"
+        - "crates/engine/runtime-assembly/src/canonical/lifecycle_state_store.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_switchboard.rs"
+        - "crates/foundation/orchestration/src/lifecycle.rs"
+    default_enabled: false
+    validated:
+      tests:
+        - "crates/engine/runtime-assembly/tests/bio_lifecycle_wiring.rs"
+        - "crates/engine/runtime-assembly/tests/bio_lifecycle_production.rs"
+      claims_id: "bio.lifecycle"
+    gaps:
+      []
+  - id: "bio.play"
+    capability: "游戏练习场四工具面（SG-21，生产装配，默认关）"
+    implemented:
+      sources:
+        - "crates/engine/organ/src/play.rs"
+        - "crates/engine/runtime-assembly/src/canonical/play_tools.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_mechanism_probes.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs"
+        - "crates/capabilities/tools/src/self_status.rs"
+    wired:
+      production_refs:
+        - "crates/adapters/cli/src/bio_switches.rs"
+        - "crates/capabilities/tools/src/self_status.rs"
+        - "crates/engine/organ/src/play.rs"
+        - "crates/engine/runtime-assembly/src/canonical.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_mechanism_probes.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_switchboard.rs"
+        - "crates/engine/runtime-assembly/src/canonical/play_tools.rs"
+    default_enabled: false
+    validated:
+      tests:
+        - "crates/engine/runtime-assembly/tests/bio_play_wiring.rs"
+        - "crates/engine/runtime-assembly/tests/bio_mechanisms_self_status.rs"
+      claims_id: "bio.play"
+    gaps:
+      []
+  - id: "bio.ritual"
+    capability: "仪式→关怀完成面（SG-22，生产装配，默认关）"
+    implemented:
+      sources:
+        - "crates/engine/organ/src/ritual.rs"
+        - "crates/engine/runtime-assembly/src/canonical/ritual_state_store.rs"
+        - "crates/engine/runtime-assembly/src/canonical/ritual_tools.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_extra_probes.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs"
+        - "crates/capabilities/tools/src/self_status.rs"
+    wired:
+      production_refs:
+        - "crates/adapters/cli/src/bio_switches.rs"
+        - "crates/adapters/cli/src/care_heartbeat.rs"
+        - "crates/capabilities/tools/src/self_status.rs"
+        - "crates/engine/organ/src/ritual.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_extra_probes.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs"
+        - "crates/engine/runtime-assembly/src/canonical/care_heartbeat.rs"
+        - "crates/engine/runtime-assembly/src/canonical/care_reminder.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_switchboard.rs"
+        - "crates/engine/runtime-assembly/src/canonical/ritual_state_store.rs"
+        - "crates/engine/runtime-assembly/src/canonical/ritual_tools.rs"
+    default_enabled: false
+    validated:
+      tests:
+        - "crates/engine/runtime-assembly/tests/bio_ritual_tools.rs"
+        - "crates/engine/runtime-assembly/tests/bio_observation_cells.rs"
+      claims_id: "bio.ritual"
+    gaps:
+      []
+  - id: "bio.ecosystem_health"
+    capability: "工具生态健康度观测（SG-25，生产装配，默认关）"
+    implemented:
+      sources:
+        - "crates/capabilities/tools/src/ecosystem_health.rs"
+        - "crates/engine/runtime-assembly/src/canonical/tool_ecosystem_probe.rs"
+        - "crates/engine/runtime-assembly/src/canonical/tool_taxonomy.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs"
+        - "crates/capabilities/tools/src/self_status.rs"
+    wired:
+      production_refs:
+        - "crates/capabilities/tools/src/ecosystem_health.rs"
+        - "crates/capabilities/tools/src/self_status.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_mechanism_probes.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_switchboard.rs"
+        - "crates/engine/runtime-assembly/src/canonical/self_status_source.rs"
+        - "crates/engine/runtime-assembly/src/canonical/tool_ecosystem_probe.rs"
+        - "crates/engine/runtime-assembly/src/canonical/tool_taxonomy.rs"
+    default_enabled: false
+    validated:
+      tests:
+        - "crates/engine/runtime-assembly/tests/bio_tool_ecosystem.rs"
+      claims_id: "bio.ecosystem_health"
+    gaps:
+      []
+  - id: "bio.capacity"
+    capability: "承载力/演替/关键种→自述格（SG-26，生产装配，默认关）"
+    implemented:
+      sources:
+        - "crates/foundation/orchestration/src/capacity.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_mechanism_probes.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs"
+        - "crates/capabilities/tools/src/self_status.rs"
+    wired:
+      production_refs:
+        - "crates/capabilities/tools/src/self_status.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_mechanism_probes.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_switchboard.rs"
+        - "crates/engine/runtime-assembly/src/canonical/self_status_source.rs"
+        - "crates/foundation/orchestration/src/capacity.rs"
+    default_enabled: false
+    validated:
+      tests:
+        - "crates/engine/runtime-assembly/tests/bio_mechanisms_self_status.rs"
+      claims_id: "bio.capacity"
     gaps:
       []
   - id: "rt.registered_module_v1"
@@ -741,12 +1063,13 @@ items:
         - "crates/engine/runtime/tests/canonical_subloop.rs"
         - "crates/engine/runtime-assembly/tests/convergence_agents.rs"
         - "crates/engine/runtime-assembly/tests/profile_memory_authorization.rs"
+        - "crates/engine/runtime-assembly/tests/memory_namespace_production.rs"
         - "crates/engine/runtime-assembly/tests/managed_main.rs"
         - "crates/adapters/cli/tests/canonical_cli_bootstrap.rs"
         - "crates/adapters/cli/tests/care_heartbeat_host.rs"
       claims_id: "rt.owned_agents"
     gaps:
-      - "未达 PRODUCTION WIRED：可由 Host API 组合；12 项真实实例测试覆盖并发、私有历史、预算、取消、模块自主创建及原生资源排水。不是桌面后台任务全面迁移，也不替代旧 SubLoop。；2026-10-28 生产收敛：请求使用共享服务的只读执行目录视图，模型等待期间不持控制读锁；热注册获得受限 ModuleAgents…"
+      []
   - id: "mem.registered_namespace"
     capability: "注册式 Memory 工具、固定 Hook 与通用 Profile 隔离"
     implemented:
@@ -786,9 +1109,10 @@ items:
       tests:
         - "crates/engine/runtime-assembly/tests/convergence_memory.rs"
         - "crates/engine/runtime-assembly/tests/profile_memory_authorization.rs"
+        - "crates/engine/runtime-assembly/tests/memory_namespace_production.rs"
       claims_id: "mem.registered_namespace"
     gaps:
-      - "未达 PRODUCTION WIRED：新 Host 组合中的 9 项真实 Runtime 测试通过；七工具、合法 V1 检索、后台 Agent、审批 CAS、持久化与 fork Scope 隔离。默认 ProductionCognitiveModules 的旧 Memory/Persona/Organ 尚未替换，旧数据不自动归属新 Na…"
+      []
   - id: "rt.desktop_managed_main"
     capability: "默认桌面 main：同一受管 Host 的 CLI、gateway、审批、流式与心跳"
     implemented:
@@ -823,7 +1147,7 @@ items:
     gaps:
       []
   - id: "rt.module_execution_contract"
-    capability: "Module public/private contract and task receipts"
+    capability: "Module public/private contract and task receipts（生产选举已接线）"
     implemented:
       sources:
         - "crates/foundation/plugin/src/module_contract.rs"
@@ -834,10 +1158,12 @@ items:
         - "crates/engine/runtime/src/canonical/module_host.rs"
         - "crates/engine/runtime-assembly/src/canonical/memory_module.rs"
         - "crates/engine/runtime-assembly/src/canonical/memory_module/organizer.rs"
+        - "crates/engine/runtime-assembly/src/canonical/module_contract_wiring.rs"
     wired:
       production_refs:
         - "crates/engine/runtime-assembly/src/canonical/memory_module.rs"
         - "crates/engine/runtime-assembly/src/canonical/memory_module/organizer.rs"
+        - "crates/engine/runtime-assembly/src/canonical/module_contract_wiring.rs"
         - "crates/engine/runtime/src/canonical/capability.rs"
         - "crates/engine/runtime/src/canonical/module_host.rs"
         - "crates/foundation/plugin/src/capability.rs"
@@ -849,13 +1175,17 @@ items:
       tests:
         - "crates/foundation/plugin/tests/module_contract.rs"
         - "crates/engine/runtime-assembly/tests/modular_ale.rs"
+        - "crates/engine/runtime-assembly/tests/module_contract_wiring.rs"
+        - "crates/adapters/cli/tests/module_contract_production.rs"
       claims_id: "rt.module_execution_contract"
     gaps:
-      - "未达 PRODUCTION WIRED：Explicit Host composition only. Existing shell wire name/frozen payload, private organizer Session, accepted task receipt, authorized status and inter…"
+      []
   - id: "rt.system_one_internal"
     capability: "Mandatory System One internal execution review"
     implemented:
       sources:
+        - "crates/adapters/cli/src/lib.rs"
+        - "crates/adapters/cli/src/llm_factory_env.rs"
         - "crates/foundation/plugin/src/system_one.rs"
         - "crates/foundation/plugin/src/module_contract.rs"
         - "crates/foundation/plugin/src/tool_execution.rs"
@@ -868,6 +1198,9 @@ items:
         - "crates/engine/runtime-assembly/src/canonical/memory_module.rs"
     wired:
       production_refs:
+        - "crates/adapters/cli/src/lib.rs"
+        - "crates/adapters/cli/src/llm_factory_env.rs"
+        - "crates/engine/runtime-assembly/src/canonical/desktop_host.rs"
         - "crates/engine/runtime-assembly/src/canonical/memory_module.rs"
         - "crates/engine/runtime-assembly/src/system_one.rs"
         - "crates/engine/runtime/src/canonical/dispatcher.rs"
@@ -885,9 +1218,9 @@ items:
         - "crates/engine/runtime-assembly/tests/modular_ale.rs"
       claims_id: "rt.system_one_internal"
     gaps:
-      - "未达 PRODUCTION WIRED：Explicit Host contract and exact supervisor provider/model only. Existing Dispatcher enforces scope/approval/epoch/cancel/lifecycle/native policy befo…"
+      []
   - id: "rt.module_messages"
-    capability: "Bounded owner-authenticated module message pipeline"
+    capability: "Bounded owner-authenticated module message pipeline（桌面 Host 已武装）"
     implemented:
       sources:
         - "crates/foundation/plugin/src/module_messages.rs"
@@ -898,8 +1231,10 @@ items:
         - "crates/engine/runtime/src/canonical/module_host.rs"
         - "crates/engine/runtime/src/canonical/instances/audit.rs"
         - "crates/foundation/protocol/src/canonical/tool_event.rs"
+        - "crates/engine/runtime-assembly/src/canonical/desktop_host.rs"
     wired:
       production_refs:
+        - "crates/engine/runtime-assembly/src/canonical/desktop_host.rs"
         - "crates/engine/runtime/src/canonical/instances/audit.rs"
         - "crates/engine/runtime/src/canonical/instances/messages.rs"
         - "crates/engine/runtime/src/canonical/message_execution.rs"
@@ -912,24 +1247,109 @@ items:
     validated:
       tests:
         - "crates/engine/runtime-assembly/tests/module_message_pipeline.rs"
+        - "crates/engine/runtime-assembly/tests/desktop_message_policy.rs"
       claims_id: "rt.module_messages"
     gaps:
-      - "未达 PRODUCTION WIRED：Optional Host policy only. Real Runtime Command/Query/Event/Reply, actual file effect, owner generations/trace, private facts, explicit grant/caller i…"
+      []
   - id: "rt.mesh_local_worker"
-    capability: "Governed module-owned local Mesh worker and public status"
+    capability: "Governed module-owned local Mesh worker and public status（⚠️ worker 生产已接；public status 面生产未启用）"
     implemented:
       sources:
         - "crates/engine/runtime-assembly/src/mesh.rs"
         - "crates/engine/runtime-assembly/src/lib.rs"
+        - "crates/engine/runtime-assembly/src/canonical/desktop_host.rs"
+        - "crates/engine/runtime/src/canonical/runtime.rs"
     wired:
       production_refs:
+        - "crates/engine/runtime-assembly/src/canonical/desktop_host.rs"
         - "crates/engine/runtime-assembly/src/lib.rs"
         - "crates/engine/runtime-assembly/src/mesh.rs"
+        - "crates/engine/runtime/src/canonical/runtime.rs"
     default_enabled: false
     validated:
       tests:
         - "crates/engine/runtime-assembly/tests/mesh_execution.rs"
         - "crates/engine/runtime-assembly/tests/module_message_pipeline.rs"
+        - "crates/engine/runtime-assembly/tests/mesh_production_host.rs"
       claims_id: "rt.mesh_local_worker"
     gaps:
-      - "未达 PRODUCTION WIRED：Optional portable Host composition, fixed configured loopback UDP peer only. Lifecycle-owned worker calls its registered Internal exchange through the…"
+      []
+  - id: "mem.retrieval_ranking"
+    capability: "检索排序契约（混合打分：BM25 词面 + 向量 + coverage 权重 0.5）"
+    implemented:
+      sources:
+        - "crates/engine/memory/src/hybrid_search.rs"
+        - "crates/engine/memory/src/retrieval_pipeline.rs"
+        - "crates/engine/memory/src/coordinator.rs"
+    wired:
+      production_refs:
+        - "crates/engine/memory/src/coordinator.rs"
+        - "crates/engine/memory/src/hybrid_search.rs"
+        - "crates/engine/memory/src/retrieval_pipeline.rs"
+    default_enabled: true
+    validated:
+      tests:
+        - "crates/engine/memory/src/retrieval_pipeline.rs"
+        - "crates/engine/memory/src/coordinator.rs"
+      claims_id: "mem.retrieval_ranking"
+    gaps:
+      []
+  - id: "mem.failure_learning_bridge"
+    capability: "失败 → 学习桥（失败带归因 ⇒ 负证据 ⇒ 检索权重退；会话键真落盘）"
+    implemented:
+      sources:
+        - "crates/engine/memory/src/reflexion.rs"
+        - "crates/engine/memory/src/reflexion_tuning.rs"
+        - "crates/engine/runtime-assembly/src/canonical/retrieval_tuning_wire.rs"
+        - "crates/engine/runtime-assembly/src/canonical/cognitive.rs"
+    wired:
+      production_refs:
+        - "crates/engine/memory/src/reflexion.rs"
+        - "crates/engine/memory/src/reflexion_tuning.rs"
+        - "crates/engine/runtime-assembly/src/canonical.rs"
+        - "crates/engine/runtime-assembly/src/canonical/cognitive.rs"
+        - "crates/engine/runtime-assembly/src/canonical/retrieval_tuning_wire.rs"
+        - "crates/engine/runtime-assembly/src/desktop.rs"
+    default_enabled: false
+    validated:
+      tests:
+        - "crates/engine/runtime-assembly/tests/failure_learning_bridge.rs"
+        - "crates/engine/memory/tests/reflexion_session_persistence.rs"
+      claims_id: "mem.failure_learning_bridge"
+    gaps:
+      []
+  - id: "mem.injection_contract"
+    capability: "注入契约（召回片段按预算硬上限截断，预算不可超）"
+    implemented:
+      sources:
+        - "crates/engine/memory/src/coordinator.rs"
+        - "crates/engine/memory/tests/golden_injection2.rs"
+    wired:
+      production_refs:
+        - "crates/engine/memory/src/coordinator.rs"
+    default_enabled: true
+    validated:
+      tests:
+        - "crates/engine/memory/tests/golden_injection2.rs"
+      claims_id: "mem.injection_contract"
+    gaps:
+      []
+  - id: "sec.output_injection_guard"
+    capability: "回合层消费工具**输出侧**的提示注入标记 ⇒ 可见告警（固定措辞，恒不阻断）"
+    implemented:
+      sources:
+        - "crates/engine/runtime-assembly/src/canonical/prompt_injection_guard.rs"
+        - "crates/engine/runtime-assembly/src/canonical/production.rs"
+        - "crates/capabilities/tools/src/fetch.rs"
+    wired:
+      production_refs:
+        - "crates/capabilities/tools/src/fetch.rs"
+        - "crates/engine/runtime-assembly/src/canonical/production.rs"
+        - "crates/engine/runtime-assembly/src/canonical/prompt_injection_guard.rs"
+    default_enabled: true
+    validated:
+      tests:
+        - "crates/engine/runtime-assembly/tests/prompt_injection_turn_warning.rs"
+      claims_id: "sec.output_injection_guard"
+    gaps:
+      []

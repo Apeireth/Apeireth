@@ -169,6 +169,43 @@ fn find_bearer_span(text: &str) -> Option<(usize, usize)> {
     None
 }
 
+/// 找 PEM **私钥块**的块首（标签行含 `PRIVATE KEY-----` 的那个 `-----BEGIN`）。
+///
+/// 返回 `(块首起点, 块首行末)`；找不到则 `None`。
+///
+/// **为什么必须按块配对**（2026-10-25 fuzz 发现）：PEM 是「`-----BEGIN` 开块、
+/// 其后**第一个** `-----END` 闭块」的结构。若拿「全文第一个 `-----BEGIN`」当块首，
+/// 前置块（如 CERTIFICATE）会让**私钥块的 BEGIN 行**误落进被替换的区间
+/// ⇒ **base64 私钥体留在输出里 ⇒ 明文出境**。
+///
+/// ⇒ 这里按块结构推进：非私钥块 ⇒ 跳到**它自己**的 END 行之后继续找。
+fn find_pem_private_key_header(text: &str) -> Option<(usize, usize)> {
+    let mut cursor = 0usize;
+    while let Some(begin_at) = text[cursor..].find("-----BEGIN") {
+        let begin_at = cursor + begin_at;
+        let header_end = text[begin_at..]
+            .find('\n')
+            .map(|at| begin_at + at)
+            .unwrap_or(text.len());
+        let header = &text[begin_at..header_end];
+        if header.contains("PRIVATE KEY-----") {
+            return Some((begin_at, header_end));
+        }
+        // 不是私钥块 ⇒ 跳到**该块自己的** END 行之后, 继续往后找。
+        let end_at = text[header_end..]
+            .find("-----END")
+            .map(|at| header_end + at);
+        cursor = match end_at {
+            Some(at) => text[at..]
+                .find('\n')
+                .map(|offset| at + offset + 1)
+                .unwrap_or(text.len()),
+            None => text.len(),
+        };
+    }
+    None
+}
+
 impl ToolGuardrail {
     pub fn new() -> Self {
         Self
@@ -410,7 +447,16 @@ impl ToolGuardrail {
             if Self::redact_all(
                 &mut sanitized,
                 "ghp_",
-                |c| !c.is_ascii_alphanumeric(),
+                // ⚠️ 分隔符判据**不得把前缀自身的字符**当分隔符
+                // (2026-10-25 fuzz 发现, 真缺陷 ⑰):
+                //   本族前缀 `ghp_` 的 `_` 落在「非字母数字」里 ⇒ `redact_all` 取 token 时
+                //   **在 `_` 处就截断** ⇒ token 恒为 `"ghp"`（3 字符）⇒ `len >= 36` 恒假
+                //   ⇒ **整个族形同虚设**: 真实形态 (`ghp_` + 36 = 40 字符) **明文出境**,
+                //   且**连泄露族都不报**（`leaked_kinds` 为空 ⇒ 绊线也不响）。
+                //   对照: 同面其余三族 (sk- / xoxb- / AKIA) 的分隔符判据要么只认空白与引号,
+                //   要么前缀是纯字母数字 ⇒ **同一面内口径不一致**, 本族是唯一自相矛盾的那个。
+                // 修法: 本族把 `_` 从分隔符里排除 (真实 PAT 主体是 base62, 不含 `_`)。
+                |c| !c.is_ascii_alphanumeric() && c != '_',
                 |token| token.len() >= 36,
                 "[REDACTED_GITHUB_PAT]",
             ) {
@@ -423,28 +469,39 @@ impl ToolGuardrail {
             // **脱敏全部块**: 一份输出里可能有多块私钥, 只换第一块会让其余明文出境
             // (2026-10-24 fuzz 发现: 两块 PEM 只脱敏了第一块)。
             let mut pem_hit = false;
-            while sanitized.contains("-----BEGIN") && sanitized.contains("PRIVATE KEY-----") {
+            while let Some((header_start, header_end)) = find_pem_private_key_header(&sanitized) {
                 pem_hit = true;
-                if let Some(start) = sanitized.find("-----BEGIN") {
-                    let end_marker = sanitized[start..]
-                        .find("-----END")
-                        .map(|offset| start + offset);
-                    let block_end = end_marker.and_then(|end_marker| {
-                        sanitized[end_marker..]
-                            .find("KEY-----")
-                            .map(|offset| end_marker + offset + "KEY-----".len())
-                    });
-                    let fallback_end = sanitized[start..]
+                // 块尾 = **该私钥块首之后**第一个 `-----END` 所在行的 `KEY-----` 末。
+                //
+                // ⚠️ **块首与块尾必须锚在同一个块上** (2026-10-25 fuzz 发现):
+                //   修复前取「全文第一个 `-----BEGIN`」+「其后第一个 `-----END`」+
+                //   「再往后第一个 `KEY-----`」⇒ 前置块 (如 CERTIFICATE) 的 END 行之后,
+                //   第一个 `KEY-----` 其实落在**私钥块的 BEGIN 行**里 ⇒ 被替换的区间
+                //   只到**私钥块首行末** ⇒ **base64 私钥体与 END 行原样留在输出里**。
+                //   实测修复前:
+                //     "-----BEGIN CERTIFICATE-----\nX\n-----END CERTIFICATE-----\n
+                //      -----BEGIN RSA PRIVATE KEY-----\nSECRET\n-----END RSA PRIVATE KEY-----"
+                //     ⇒ 输出 "[REDACTED_PEM_PRIVATE_KEY]\nSECRET\n-----END RSA REDACTED_PEM_MARKER]"
+                //     (SECRET = 私钥体, **明文出境**)。
+                let block_end = sanitized[header_end..].find("-----END").and_then(|offset| {
+                    let end_at = header_end + offset;
+                    sanitized[end_at..]
                         .find("KEY-----")
-                        .map(|offset| start + offset + "KEY-----".len());
-                    if let Some(full_end) = block_end.or(fallback_end) {
-                        let block = &sanitized[start..full_end];
+                        .map(|offset| end_at + offset + "KEY-----".len())
+                });
+                match block_end {
+                    Some(full_end) => {
+                        let block = &sanitized[header_start..full_end];
                         sanitized = sanitized.replace(block, "[REDACTED_PEM_PRIVATE_KEY]");
-                        continue;
+                    }
+                    None => {
+                        // 无 END 行 ⇒ 截断块 ⇒ 退化为**块首行**替换
+                        // (0 装: 不声称截断块全扫) ⇒ 再循环也无进展 ⇒ 退出。
+                        let header = &sanitized[header_start..header_end];
+                        sanitized = sanitized.replace(header, "[REDACTED_PEM_PRIVATE_KEY]");
+                        break;
                     }
                 }
-                // 走到这里说明本块不可定位 (畸形), 再循环也无进展 —— 退出避免死循环。
-                break;
             }
             // 残留的**裸标记**: 输出里出现 `PRIVATE KEY-----` 却没有可整块红掉的块
             // (缺 END 行 / BEGIN 在标记之后 —— fuzz 实测的形态)。
@@ -591,6 +648,80 @@ impl ToolGuardrail {
 
 #[cfg(test)]
 mod tests {
+
+    /// GitHub PAT 族（`ghp_`）此前**整族失能** ⇒ 真实形态明文出境。
+    ///
+    /// 根因：分隔符判据用「非字母数字」，而本族**前缀 `ghp_` 的 `_` 本身**落在里面
+    /// ⇒ 取 token 时**在 `_` 处截断** ⇒ token 恒为 `"ghp"` ⇒ `len >= 36` 恒假
+    /// ⇒ 既不脱敏、**也不报泄露族**（绊线不响）。
+    #[test]
+    fn github_pat_family_is_actually_effective() {
+        // 真实形态：ghp_ + 36 = 40 字符
+        let real = format!("ghp_{}", "A".repeat(36));
+        let res = ToolGuardrail::scan_and_sanitize_output(&real);
+        assert!(
+            !res.sanitized_output.contains(&real),
+            "真实形态的 GitHub PAT 必须被脱敏: {}",
+            res.sanitized_output
+        );
+        assert!(
+            res.leaked_kinds.contains(&LeakedCredentialKind::GitHubPat),
+            "必须报出 GitHub PAT 泄露: {:?}",
+            res.leaked_kinds
+        );
+        // 前缀与主体之间不该被截断（这正是那个洞）。
+        let embedded = format!("前段 {real} 中段 {real} 尾段");
+        let res2 = ToolGuardrail::scan_and_sanitize_output(&embedded);
+        assert!(
+            !res2.sanitized_output.contains(&real),
+            "两枚凭证都必须脱敏: {}",
+            res2.sanitized_output
+        );
+        // 太短的**不得**被当成凭证（不误伤）：主体 20 位 ⇒ 总长 24 < 36
+        let short = format!("ghp_{}", "A".repeat(20));
+        let res3 = ToolGuardrail::scan_and_sanitize_output(&short);
+        assert_eq!(res3.sanitized_output, short, "太短的不得被误伤");
+    }
+
+    /// PEM 私钥块的**块首与块尾必须锚在同一个块上**。
+    ///
+    /// 回归：前置块（CERTIFICATE / PUBLIC KEY）会让**私钥块的 BEGIN 行**误落进
+    /// 被替换的区间 ⇒ **base64 私钥体原样留在输出里 ⇒ 明文出境**。
+    #[test]
+    fn pem_body_is_redacted_even_when_another_block_precedes_it() {
+        for prefix in [
+            "-----BEGIN CERTIFICATE-----\nMIIEB\n-----END CERTIFICATE-----\n",
+            "-----BEGIN PUBLIC KEY-----\nMIIB\n-----END PUBLIC KEY-----\n",
+        ] {
+            let raw = format!(
+                "{prefix}-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA0\n-----END RSA PRIVATE KEY-----"
+            );
+            let res = ToolGuardrail::scan_and_sanitize_output(&raw);
+            assert!(
+                !res.sanitized_output.contains("MIIEowIBAAKCAQEA0"),
+                "私钥体留在输出里: {}",
+                res.sanitized_output
+            );
+            assert!(
+                res.leaked_kinds
+                    .contains(&LeakedCredentialKind::PemPrivateKey),
+                "必须报出私钥泄露: {:?}",
+                res.leaked_kinds
+            );
+            assert!(
+                !res.sanitized_output.contains("PRIVATE KEY-----"),
+                "脱敏后的输出不得再含 `PRIVATE KEY-----`: {}",
+                res.sanitized_output
+            );
+            // 前置块**不该被误伤**（它不是私钥 ⇒ 保留原文）。
+            assert!(
+                res.sanitized_output.contains("-----BEGIN CERTIFICATE-----")
+                    || res.sanitized_output.contains("-----BEGIN PUBLIC KEY-----"),
+                "前置非私钥块不应被替换: {}",
+                res.sanitized_output
+            );
+        }
+    }
     use super::*;
     use std::path::PathBuf;
 

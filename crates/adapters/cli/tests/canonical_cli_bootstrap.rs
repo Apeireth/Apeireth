@@ -55,19 +55,62 @@ async fn mock_vendor(body: &'static str) -> String {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     tokio::spawn(async move {
-        let Ok((mut socket, _)) = listener.accept().await else {
-            return;
-        };
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
-        let mut buf = [0u8; 4096];
-        let _ = socket.read(&mut buf).await;
-        let resp = format!(
-            "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
-            body.len(),
-            body
-        );
-        let _ = socket.write_all(resp.as_bytes()).await;
-        let _ = socket.flush().await;
+        // **循环 accept**（不是只接一次）⇒ 客户端若因任何原因重连，
+        // 也不会撞上「连接被拒」（旧实现接完一次就结束 ⇒ listener 被丢 ⇒
+        // 后续连接直接 refused）。
+        loop {
+            let Ok((mut socket, _)) = listener.accept().await else {
+                return;
+            };
+            // **读完整请求**（头 + body）再回 —— 旧实现只 `read` 一次就回，
+            // 若那次只拿到**请求头**（body 还没到），客户端仍在写 body 时
+            // 服务端已关闭 ⇒ Windows 上收到 RST ⇒ 客户端把请求判成
+            // 「error sending request」（该测试在 windows-latest 上就是这么红的）。
+            let mut buf = Vec::new();
+            let mut chunk = [0u8; 4096];
+            let mut header_end = None;
+            let mut content_length = 0usize;
+            loop {
+                let Ok(read) = socket.read(&mut chunk).await else {
+                    break;
+                };
+                if read == 0 {
+                    break;
+                }
+                buf.extend_from_slice(&chunk[..read]);
+                if header_end.is_none() {
+                    if let Some(position) = buf.windows(4).position(|window| window == b"\r\n\r\n")
+                    {
+                        header_end = Some(position + 4);
+                        let head = String::from_utf8_lossy(&buf[..position]).to_lowercase();
+                        content_length = head
+                            .lines()
+                            .find_map(|line| {
+                                let (name, value) = line.split_once(':')?;
+                                if name.trim() == "content-length" {
+                                    value.trim().parse::<usize>().ok()
+                                } else {
+                                    None
+                                }
+                            })
+                            .unwrap_or(0);
+                    }
+                }
+                if let Some(end) = header_end {
+                    if buf.len() >= end + content_length {
+                        break;
+                    }
+                }
+            }
+            let resp = format!(
+                "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            let _ = socket.write_all(resp.as_bytes()).await;
+            let _ = socket.flush().await;
+        }
     });
     format!("http://{addr}")
 }

@@ -115,11 +115,37 @@ fn resolve_access_token(explicit: Option<String>, service_face: Option<String>) 
         .filter(|value| !value.trim().is_empty())
 }
 
+/// 是否应因「非 TTY」拒绝启动（纯函数，便于机检；真机行为见 [`main`]）。
+///
+/// 驾驶舱是交互式全屏界面：stdin **或** stdout 任一不是终端都不该继续 ——
+/// 否则 `enable_raw_mode()` 只会回裸 OS 错误（`os error 6`），用户看不出原因。
+fn should_refuse_non_tty(stdin_is_tty: bool, stdout_is_tty: bool) -> bool {
+    !stdin_is_tty || !stdout_is_tty
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.iter().any(|arg| arg == "--help" || arg == "-h") {
         println!("{USAGE}");
         return;
+    }
+    // **前置 TTY 检查**：驾驶舱是交互式全屏界面，stdin/stdout 不是终端时
+    // `enable_raw_mode()` 只会回一个裸 OS 错误（`No such device or address (os error 6)`），
+    // 用户看不出原因、也不知道该改用什么（真机实测 2026-10-25）。这里先如实说清。
+    {
+        use std::io::IsTerminal as _;
+        if should_refuse_non_tty(
+            std::io::stdin().is_terminal(),
+            std::io::stdout().is_terminal(),
+        ) {
+            eprintln!(
+                "apeireth-tui 需要真实终端（stdin/stdout 必须是 TTY）。\n\
+                 当前 stdin/stdout 不是终端 —— 脚本、管道、CI 里请改用：\n\
+                  · apeireth gateway serve        （起服务，走 HTTP API / 桌面端）\n\
+                  · apeireth chat \"你的问题\"    （单轮对话，无需全屏界面）"
+            );
+            std::process::exit(2);
+        }
     }
     let options = match parse_args() {
         Ok(options) => options,
@@ -346,5 +372,22 @@ mod tests {
         .expect("parse");
         assert_eq!(options.endpoint, "http://127.0.0.1:7000");
         assert!(matches!(options.motion, MotionMode::Full));
+    }
+}
+
+#[cfg(test)]
+mod tty_guard_tests {
+    use super::should_refuse_non_tty;
+
+    /// 任一方向不是 TTY ⇒ 拒绝启动（并给出可行动提示，见 `main`）。
+    #[test]
+    fn refuses_when_either_stream_is_not_a_tty() {
+        assert!(should_refuse_non_tty(false, false));
+        assert!(should_refuse_non_tty(false, true));
+        assert!(should_refuse_non_tty(true, false));
+        assert!(
+            !should_refuse_non_tty(true, true),
+            "两个都是 TTY 时应正常启动"
+        );
     }
 }

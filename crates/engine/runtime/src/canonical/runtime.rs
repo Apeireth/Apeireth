@@ -459,12 +459,6 @@ impl Runtime {
     pub(crate) fn emit_event(&self, event: RuntimeEvent) {
         read_lock_or_recover(&self.event_sink).emit(event);
     }
-
-    /// The repeated-identical-call advisory policy in force.
-    pub fn repetition_policy(&self) -> &RepetitionPolicy {
-        &self.config.repetition_advisory
-    }
-
     /// A user message entered this session: any repetition streak is cleared.
     pub(crate) fn note_user_message(&self, session: SessionId) {
         let mut map = self.lock_repetition_detectors();
@@ -558,6 +552,17 @@ impl Runtime {
     /// The configured context projector.
     pub fn context_projector(&self) -> &Arc<dyn ContextProjector> {
         &self.context_projector
+    }
+
+    /// 已安装的并发调度器（`None` = 未安装 ⇒ 并行工具派发不会发生）。
+    ///
+    /// 暴露给装配级测试与自述面：并行窗口的可用性取决于**是否装上了**
+    /// [`apeireth_orchestration::call_scheduler::CallScheduler`]，
+    /// 「装上了」这件事应当可被外部验证，而不是只能读装配代码。
+    pub fn call_scheduler(
+        &self,
+    ) -> Option<&Arc<apeireth_orchestration::call_scheduler::CallScheduler>> {
+        self.call_scheduler.as_ref()
     }
 
     /// The router over every provider that can currently serve a completion.
@@ -715,6 +720,17 @@ impl RuntimeBuilder {
         self
     }
 
+    /// Whether a mandatory supervisor is currently bound.
+    ///
+    /// Read-only probe for composition roots that must decide **before** building
+    /// whether a feature which needs enrolled internal execution can be armed at
+    /// all (the dispatcher refuses `Internal`/`Protected` tools with
+    /// `SystemOneUnavailable` when no supervisor is bound). It never binds one.
+    #[must_use]
+    pub fn system_one_configured(&self) -> bool {
+        self.system_one.is_some()
+    }
+
     #[must_use]
     pub fn with_principal_authorizations(
         mut self,
@@ -777,6 +793,38 @@ impl RuntimeBuilder {
     pub fn with_plugin(mut self, plugin: Arc<dyn Plugin>) -> Self {
         self.plugins.push(plugin);
         self
+    }
+
+    /// Elect the typed public/private contract of already-selected tool modules.
+    ///
+    /// `election` is the assembly's auditable table (module id → contract): an id
+    /// absent from it keeps the compatibility contract verbatim, and a module that
+    /// already carries a non-default contract is left untouched, so an explicit
+    /// election always wins and repeated application is idempotent. Election only
+    /// restricts a surface (`module_visible` / `model_visible` / effect class); it
+    /// never grants authority and never changes a wire name or a frozen payload.
+    pub fn with_module_contracts(
+        mut self,
+        election: &[(&str, apeireth_plugin::module_contract::ModuleToolContract)],
+    ) -> RuntimeResult<Self> {
+        use apeireth_plugin::module_contract::ModuleToolContract;
+        for slot in &mut self.plugins {
+            let id = slot.manifest().id.as_str();
+            let Some((_, contract)) = election.iter().find(|(elected, _)| *elected == id) else {
+                continue;
+            };
+            if slot
+                .tools()
+                .iter()
+                .any(|tool| tool.module_contract() != ModuleToolContract::default())
+            {
+                continue;
+            }
+            let inner = Arc::clone(slot);
+            *slot = apeireth_plugin::tool_module::elect_module_contract(inner, contract)
+                .map_err(RuntimeError::misconfigured)?;
+        }
+        Ok(self)
     }
 
     /// Register a cognitive module through authenticated fixed Hooks and V1 tools.
@@ -968,18 +1016,6 @@ impl RuntimeBuilder {
         self.config.cost_rates = Some(rates);
         self
     }
-
-    /// Set the metrics rolling window (G-P1, 拍/层).
-    ///
-    /// Each layer (per session + global) keeps the last N turn-closure beats in
-    /// process memory. The value is clamped to `1..=`[`super::metrics::MAX_METRICS_WINDOW_TURNS`],
-    /// so the effective window always equals `config.metrics_window_turns`.
-    #[must_use]
-    pub fn with_metrics_window(mut self, turns: usize) -> Self {
-        self.config.metrics_window_turns = turns.clamp(1, super::metrics::MAX_METRICS_WINDOW_TURNS);
-        self
-    }
-
     /// Install the runtime-invariant consumption point.
     ///
     /// Without it, no invariant checking happens at the dispatch boundary.

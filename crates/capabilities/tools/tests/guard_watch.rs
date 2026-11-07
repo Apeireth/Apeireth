@@ -248,6 +248,9 @@ async fn watching_is_read_only_and_never_touches_a_device() {
 /// ③ 开关 fail-closed: 双闸齐开且显式 `"1"` 才有守护面 (单开本闸不起)。
 #[test]
 fn the_switch_is_fail_closed_and_depends_on_device_sense() {
+    let _guard = ENV_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     // 串行护住 env 读写 (进程级全局量)。
     std::env::remove_var(GUARD_WATCH_ENABLE_ENV);
     assert!(!guard_watch_enabled_from_env());

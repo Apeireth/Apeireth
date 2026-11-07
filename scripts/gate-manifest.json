@@ -1,0 +1,727 @@
+{
+  "schema": "apeireth.gate-manifest.v1",
+  "generated_from": "docs/architecture/contract.toml [ci_gates]",
+  "workspace_version": "2.0.0-rc.4",
+  "workspace_members": 30,
+  "locked_sources": [
+    "crates/foundation/core/src/eight_anchors.rs",
+    "crates/foundation/core/src/onion.rs",
+    "crates/foundation/core/src/philosophy.rs"
+  ],
+  "repo_facts": {
+    "philosophy_anchors": 9,
+    "workflows": 49,
+    "crates": 29
+  },
+  "gates": [
+    {
+      "id": "docs-truth",
+      "cmd": [
+        "python3",
+        "scripts/docs_truth.py",
+        "--verify",
+        "--block-stale"
+      ],
+      "scope": [
+        "docs",
+        "claims",
+        "rust",
+        "ci"
+      ],
+      "blocking": true,
+      "required": true,
+      "env": "python",
+      "timeout": 300,
+      "note": "文档声明的证据真源 + 陈旧检测（claims 29 条 fail/stale/review_due）"
+    },
+    {
+      "id": "doc-class",
+      "cmd": [
+        "python3",
+        "scripts/check_doc_class.py",
+        "--check"
+      ],
+      "scope": [
+        "docs"
+      ],
+      "blocking": true,
+      "required": true,
+      "env": "python",
+      "timeout": 300,
+      "note": "9 类文档强制结构 + 存量棘轮"
+    },
+    {
+      "id": "yaml-duplicate-keys",
+      "cmd": [
+        "python3",
+        "scripts/check_yaml_duplicate_keys.py"
+      ],
+      "scope": [
+        "ci"
+      ],
+      "blocking": true,
+      "required": true,
+      "env": "python",
+      "timeout": 120,
+      "note": "严格 YAML 重复键守卫（GitHub 遇重复键会拒解析整个 workflow ⇒ 0 job 秒红；PyYAML/Ruby 静默取最后一个键 ⇒ 常规自检查不出）"
+    },
+    {
+      "id": "matrix-module-paths",
+      "cmd": [
+        "python3",
+        "scripts/check_matrix_module_paths.py"
+      ],
+      "scope": [
+        "docs"
+      ],
+      "blocking": true,
+      "required": true,
+      "env": "python",
+      "timeout": 120,
+      "note": "能力矩阵的模块路径必须**真实存在**（矩阵是对外的能力宣称 ⇒ 指到不存在的模块 = 说谎）"
+    },
+    {
+      "id": "doc-caliber",
+      "cmd": [
+        "python3",
+        "scripts/check_doc_caliber.py"
+      ],
+      "scope": [
+        "docs"
+      ],
+      "blocking": true,
+      "required": true,
+      "env": "python",
+      "timeout": 300,
+      "note": "四级口径标记须与「已实现」同段"
+    },
+    {
+      "id": "doc-numbers",
+      "cmd": [
+        "python3",
+        "scripts/check_doc_numbers.py"
+      ],
+      "scope": [
+        "docs"
+      ],
+      "blocking": true,
+      "required": true,
+      "env": "python",
+      "timeout": 300,
+      "note": "文档里的数字须与真源一致"
+    },
+    {
+      "id": "doc-paths",
+      "cmd": [
+        "python3",
+        "scripts/check_doc_paths.py"
+      ],
+      "scope": [
+        "docs"
+      ],
+      "blocking": true,
+      "required": true,
+      "env": "python",
+      "timeout": 300,
+      "note": "文档引用路径须存在"
+    },
+    {
+      "id": "docs-links",
+      "cmd": [
+        "python3",
+        "scripts/docs_links.py",
+        "--check"
+      ],
+      "scope": [
+        "docs"
+      ],
+      "blocking": true,
+      "required": true,
+      "env": "python",
+      "timeout": 300,
+      "note": "断链 = 0"
+    },
+    {
+      "id": "batch-status",
+      "cmd": [
+        "python3",
+        "scripts/check_batch_status.py",
+        "--check"
+      ],
+      "scope": [
+        "docs"
+      ],
+      "blocking": true,
+      "required": true,
+      "env": "python",
+      "timeout": 300,
+      "note": "进度页事实块与代码一致"
+    },
+    {
+      "id": "claims-verify",
+      "cmd": [
+        "python3",
+        "scripts/check_claims_verify.py",
+        "--wired-gate"
+      ],
+      "scope": [
+        "docs",
+        "claims",
+        "rust"
+      ],
+      "blocking": true,
+      "required": true,
+      "env": "python",
+      "timeout": 900,
+      "note": "每条 claim 的 verify_cmd 真跑；高口径不许 skip/defer"
+    },
+    {
+      "id": "arch-strict",
+      "cmd": [
+        "python3",
+        "scripts/arch_guard.py",
+        "--strict"
+      ],
+      "scope": [
+        "rust",
+        "contract"
+      ],
+      "blocking": true,
+      "required": true,
+      "env": "python",
+      "timeout": 600,
+      "note": "架构契约（层/边/尺寸/权重）"
+    },
+    {
+      "id": "arch-doc",
+      "cmd": [
+        "python3",
+        "scripts/arch_doc.py",
+        "--check"
+      ],
+      "scope": [
+        "rust",
+        "contract",
+        "docs"
+      ],
+      "blocking": true,
+      "required": true,
+      "env": "python",
+      "timeout": 600,
+      "note": "架构文档与契约一致"
+    },
+    {
+      "id": "crate-budget",
+      "cmd": [
+        "python3",
+        "scripts/check_crate_budget.py",
+        "--check"
+      ],
+      "scope": [
+        "rust"
+      ],
+      "blocking": true,
+      "required": true,
+      "env": "python",
+      "timeout": 600,
+      "note": "crate 体量棘轮（防「搬家式漂移」）"
+    },
+    {
+      "id": "dead-code",
+      "cmd": [
+        "python3",
+        "scripts/check_dead_code.py"
+      ],
+      "scope": [
+        "rust"
+      ],
+      "blocking": true,
+      "required": true,
+      "env": "python",
+      "timeout": 900,
+      "note": "死代码棘轮"
+    },
+    {
+      "id": "unwired",
+      "cmd": [
+        "python3",
+        "scripts/audit_unwired.py",
+        "--check"
+      ],
+      "scope": [
+        "rust"
+      ],
+      "blocking": true,
+      "required": true,
+      "env": "python",
+      "timeout": 900,
+      "note": "未接线模块基线（142）"
+    },
+    {
+      "id": "unwired-groups",
+      "cmd": [
+        "python3",
+        "scripts/group_unwired_baseline.py",
+        "--check"
+      ],
+      "scope": [
+        "rust"
+      ],
+      "blocking": true,
+      "required": true,
+      "env": "python",
+      "timeout": 900,
+      "note": "未接线分组基线"
+    },
+    {
+      "id": "stale-binaries",
+      "cmd": [
+        "python3",
+        "scripts/check_stale_binaries.py"
+      ],
+      "scope": [
+        "rust"
+      ],
+      "blocking": true,
+      "required": true,
+      "env": "python",
+      "timeout": 600,
+      "note": "编译期 CARGO_MANIFEST_DIR 产物防陈旧"
+    },
+    {
+      "id": "mod-targets",
+      "cmd": [
+        "python3",
+        "scripts/check_mod_targets.py"
+      ],
+      "scope": [
+        "rust"
+      ],
+      "blocking": true,
+      "required": true,
+      "env": "python",
+      "timeout": 600,
+      "note": "mod.rs 目标声明"
+    },
+    {
+      "id": "guard-wiring",
+      "cmd": [
+        "python3",
+        "scripts/check_guard_wiring.py"
+      ],
+      "scope": [
+        "rust"
+      ],
+      "blocking": true,
+      "required": true,
+      "env": "python",
+      "timeout": 600,
+      "note": "护栏能力接线台账"
+    },
+    {
+      "id": "quality-metrics",
+      "cmd": [
+        "python3",
+        "scripts/check_quality_metrics.py"
+      ],
+      "scope": [
+        "rust"
+      ],
+      "blocking": true,
+      "required": true,
+      "env": "python",
+      "timeout": 900,
+      "note": "质量指标台账"
+    },
+    {
+      "id": "golden-baseline",
+      "cmd": [
+        "python3",
+        "scripts/check_golden_baseline.py"
+      ],
+      "scope": [
+        "rust",
+        "docs"
+      ],
+      "blocking": true,
+      "required": true,
+      "env": "python",
+      "timeout": 900,
+      "note": "检索基线不许劣化（内部卷 + 小说语料）"
+    },
+    {
+      "id": "real-query-baseline",
+      "cmd": [
+        "python3",
+        "scripts/check_real_query_baseline.py",
+        "--check"
+      ],
+      "scope": [
+        "rust",
+        "docs"
+      ],
+      "blocking": true,
+      "required": true,
+      "env": "python",
+      "timeout": 1800,
+      "note": "真实用户查询方向不许错（MIRACL 中文 393 条真人问句）⇒ 模板卷守「不许退步」，本闸门守「不许自欺」；⚠️ 采样池 ⇒ 召回偏乐观 ⇒ 只看相对变化；⚠️ 缺考卷 ⇒ 跳过并声明「不是通过」"
+    },
+    {
+      "id": "real-query-baseline-self-test",
+      "cmd": [
+        "python3",
+        "scripts/test_real_query_baseline.py"
+      ],
+      "scope": [
+        "rust"
+      ],
+      "blocking": true,
+      "required": true,
+      "env": "python",
+      "timeout": 120,
+      "note": "真实查询闸门的自测（门禁也要被验证）"
+    },
+    {
+      "id": "golden-no-leak",
+      "cmd": [
+        "python3",
+        "scripts/check_golden_no_leak.py"
+      ],
+      "scope": [
+        "rust"
+      ],
+      "blocking": true,
+      "required": true,
+      "env": "python",
+      "timeout": 600,
+      "note": "黄金集不得泄漏答案"
+    },
+    {
+      "id": "internal-golden",
+      "cmd": [
+        "python3",
+        "scripts/internal_golden.py",
+        "--check"
+      ],
+      "scope": [
+        "rust",
+        "docs"
+      ],
+      "blocking": true,
+      "required": true,
+      "env": "python",
+      "timeout": 600,
+      "note": "内部卷 301 题片段须是记录正文逐字子串"
+    },
+    {
+      "id": "d4-ledger",
+      "cmd": [
+        "python3",
+        "scripts/d4_ledger.py",
+        "--check"
+      ],
+      "scope": [
+        "rust",
+        "docs"
+      ],
+      "blocking": true,
+      "required": true,
+      "env": "python",
+      "timeout": 600,
+      "note": "B0-c 候选池台账与代码一致"
+    },
+    {
+      "id": "wiring-report",
+      "cmd": [
+        "python3",
+        "scripts/wiring_report.py",
+        "--verify"
+      ],
+      "scope": [
+        "rust",
+        "docs"
+      ],
+      "blocking": true,
+      "required": true,
+      "env": "python",
+      "timeout": 600,
+      "note": "接线报告与实际调用点一致"
+    },
+    {
+      "id": "verify-ledger",
+      "cmd": [
+        "python3",
+        "scripts/verify_ledger.py"
+      ],
+      "scope": [
+        "docs",
+        "claims"
+      ],
+      "blocking": true,
+      "required": true,
+      "env": "python",
+      "timeout": 600,
+      "note": "四层验收台账"
+    },
+    {
+      "id": "failure-knowledge",
+      "cmd": [
+        "python3",
+        "scripts/check_failure_knowledge.py"
+      ],
+      "scope": [
+        "docs",
+        "ci",
+        "contract"
+      ],
+      "blocking": true,
+      "required": true,
+      "env": "python",
+      "timeout": 300,
+      "note": "**失败知识库不许陈旧**：条目里指向的守卫必须真实存在（改名/删除 ⇒ 知识失效）"
+    },
+    {
+      "id": "guard-inventory",
+      "cmd": [
+        "python3",
+        "scripts/check_guard_inventory.py"
+      ],
+      "scope": [
+        "ci",
+        "contract",
+        "rust"
+      ],
+      "blocking": true,
+      "required": true,
+      "env": "python",
+      "timeout": 300,
+      "note": "**守卫清单同步**：全仓守卫的机读清单须与实际一致（漏登记 ⇒ 裁决层会漏门禁）"
+    },
+    {
+      "id": "toolchain-pin",
+      "cmd": [
+        "python3",
+        "scripts/check_toolchain_pin.py"
+      ],
+      "scope": [
+        "ci",
+        "contract",
+        "rust"
+      ],
+      "blocking": true,
+      "required": true,
+      "env": "python",
+      "timeout": 300,
+      "note": "CI 工具链必须与 `rust-toolchain.toml` 的 channel 一致（禁浮动 `@stable`）"
+    },
+    {
+      "id": "gate-manifest",
+      "cmd": [
+        "python3",
+        "scripts/gen_gate_manifest.py",
+        "--check"
+      ],
+      "scope": [
+        "docs",
+        "ci",
+        "contract"
+      ],
+      "blocking": true,
+      "required": true,
+      "env": "python",
+      "timeout": 300,
+      "note": "**门禁清单的漂移守卫**：PR 模板等人读副本必须与本契约一致"
+    },
+    {
+      "id": "self-status-vocab",
+      "cmd": [
+        "python3",
+        "scripts/check_self_status_vocab.py"
+      ],
+      "scope": [
+        "docs"
+      ],
+      "blocking": true,
+      "required": false,
+      "env": "python",
+      "timeout": 300,
+      "note": "自述口径词表一致"
+    },
+    {
+      "id": "ci-rust",
+      "cmd": [
+        "cargo",
+        "build",
+        "--workspace",
+        "--tests",
+        "--locked"
+      ],
+      "scope": [
+        "rust"
+      ],
+      "blocking": true,
+      "required": true,
+      "env": "cargo",
+      "timeout": 3600,
+      "note": "CI 专属：全工作区编译"
+    },
+    {
+      "id": "ci-nextest",
+      "cmd": [
+        "cargo",
+        "nextest",
+        "run",
+        "--workspace",
+        "--profile",
+        "ci",
+        "--locked"
+      ],
+      "scope": [
+        "rust"
+      ],
+      "blocking": true,
+      "required": true,
+      "env": "cargo",
+      "timeout": 3600,
+      "note": "CI 专属：全工作区测试"
+    },
+    {
+      "id": "ci-clippy",
+      "cmd": [
+        "cargo",
+        "clippy",
+        "--workspace",
+        "--all-targets",
+        "--locked",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "scope": [
+        "rust"
+      ],
+      "blocking": true,
+      "required": true,
+      "env": "cargo",
+      "timeout": 3600,
+      "note": "CI 专属：clippy 零警告"
+    },
+    {
+      "id": "ci-fmt",
+      "cmd": [
+        "cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "scope": [
+        "rust"
+      ],
+      "blocking": true,
+      "required": true,
+      "env": "cargo",
+      "timeout": 900,
+      "note": "CI 专属：格式"
+    },
+    {
+      "id": "ci-doc-test",
+      "cmd": [
+        "cargo",
+        "test",
+        "--workspace",
+        "--doc",
+        "--locked"
+      ],
+      "scope": [
+        "rust",
+        "docs"
+      ],
+      "blocking": true,
+      "required": true,
+      "env": "cargo",
+      "timeout": 3600,
+      "note": "CI 专属：文档测试"
+    },
+    {
+      "id": "ci-cargo-deny",
+      "cmd": [
+        "bash",
+        "scripts/audit/run-cargo-audit-deny.sh"
+      ],
+      "scope": [
+        "rust",
+        "lock"
+      ],
+      "blocking": true,
+      "required": true,
+      "env": "ci",
+      "timeout": 1800,
+      "note": "CI 专属：依赖策略（cargo deny）"
+    },
+    {
+      "id": "ci-promise-audit",
+      "cmd": [
+        "bash",
+        "scripts/audit/8-promise-audit.sh"
+      ],
+      "scope": [
+        "rust",
+        "contract"
+      ],
+      "blocking": true,
+      "required": false,
+      "env": "ci",
+      "timeout": 900,
+      "note": "CI 专属：8 项不修改承诺审计"
+    },
+    {
+      "id": "memory-reachability",
+      "cmd": [
+        "python3",
+        "scripts/check_memory_reachability.py",
+        "--check"
+      ],
+      "scope": [
+        "rust",
+        "docs"
+      ],
+      "blocking": true,
+      "required": true,
+      "env": "python",
+      "timeout": 300,
+      "note": "记忆 crate 生产可达率（全局视图）+ 未解释缺口（行动目标）"
+    },
+    {
+      "id": "memory-reachability-self-test",
+      "cmd": [
+        "python3",
+        "scripts/test_memory_reachability.py"
+      ],
+      "scope": [
+        "rust"
+      ],
+      "blocking": true,
+      "required": true,
+      "env": "python",
+      "timeout": 120,
+      "note": "可达率门禁的自测（门禁也要被验证）"
+    },
+    {
+      "id": "fusion-channels",
+      "cmd": [
+        "python3",
+        "scripts/check_fusion_channels.py"
+      ],
+      "scope": [
+        "rust",
+        "docs"
+      ],
+      "blocking": true,
+      "required": true,
+      "env": "python",
+      "timeout": 600,
+      "note": "融合通道 delta 不许为负（不许不涨的尺子）；⚠️ delta 是下界（内部卷偏词面）⇒ 修 harness + 加公平考卷 = 让尺子变准的前提"
+    }
+  ]
+}

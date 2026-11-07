@@ -271,7 +271,7 @@ unused_macro_rules = 'warn'
 #  之前错放导致 cargo check 报 E0602 unknown lint warning, 5 P0 + 9 skeleton 全员触发)
 missing_docs = 'allow'
 unused_imports = 'allow'
-dead_code = 'allow'
+dead_code = 'warn'
 unused_must_use = 'allow'
 unused_mut = 'allow'
 # Windows MSVC 链接器 stdout 噪音 ("正在创建库 ... .lib 和对象 ... .exp") —

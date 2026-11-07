@@ -220,9 +220,11 @@ dependencies = [
  "chrono",
  "serde",
  "serde_json",
+ "sha2",
  "thiserror 1.0.69",
  "tokio",
  "uuid",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]

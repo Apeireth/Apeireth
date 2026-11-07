@@ -254,11 +254,6 @@ impl IsolationRequirement {
             .map(|(_, level)| *level)
     }
 
-    /// True when every requirement is met by `capabilities`.
-    pub fn is_satisfied_by(&self, capabilities: &IsolationCapabilities) -> bool {
-        self.missing_requirements(capabilities).is_empty()
-    }
-
     /// The subset of requirements that `capabilities` does not meet.
     ///
     /// Each entry is `(capability, required_level)`.
@@ -726,7 +721,7 @@ impl ProcessExecutor {
             return Err(ProcessError::Cancelled);
         }
 
-        let capabilities = current_platform_capabilities();
+        let (platform, capabilities) = platform_backend();
         validate_limits_against_capabilities(request, &capabilities)?;
 
         let missing = request.isolation().missing_requirements(&capabilities);
@@ -740,7 +735,7 @@ impl ProcessExecutor {
 
         let enforcement_capabilities = capabilities_for_execution(request, &capabilities);
         let enforcement = PlatformEnforcement {
-            platform: capabilities_platform_kind(),
+            platform,
             capabilities: enforcement_capabilities,
         };
 
@@ -748,17 +743,14 @@ impl ProcessExecutor {
         {
             return windows::spawn_and_supervise(request, enforcement);
         }
-
         #[cfg(target_os = "linux")]
         {
             return linux::spawn_and_supervise(request, enforcement);
         }
-
         #[cfg(target_os = "macos")]
         {
             return macos::spawn_and_supervise(request, enforcement);
         }
-
         #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
         {
             return platform::spawn_and_supervise(request, enforcement);
@@ -768,50 +760,53 @@ impl ProcessExecutor {
 
 /// Report the current platform's isolation capabilities.
 ///
-/// The returned values come from actual OS/runtime detection in the platform
-/// backend, never from `cfg!(...)` alone.
+/// Values come from actual OS/runtime detection in the backend, never `cfg!`.
 pub fn current_platform_capabilities() -> IsolationCapabilities {
+    platform_backend().1
+}
+
+/// 平台后端分派点: 一次给出「平台种类 + 该平台能力」(合并成一处 cfg 块)。
+fn platform_backend() -> (PlatformKind, IsolationCapabilities) {
     #[cfg(windows)]
     {
-        return windows::capabilities();
+        return (PlatformKind::Windows, windows::capabilities());
     }
-
     #[cfg(target_os = "linux")]
     {
-        return linux::capabilities();
+        return (PlatformKind::Linux, linux::capabilities());
     }
-
     #[cfg(target_os = "macos")]
     {
-        return macos::capabilities();
+        return (PlatformKind::MacOs, macos::capabilities());
     }
-
     #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
     {
-        return platform::capabilities();
+        return (PlatformKind::Other, platform::capabilities());
     }
 }
 
-fn capabilities_platform_kind() -> PlatformKind {
-    #[cfg(windows)]
-    {
-        return PlatformKind::Windows;
-    }
-
-    #[cfg(target_os = "linux")]
-    {
-        return PlatformKind::Linux;
-    }
-
-    #[cfg(target_os = "macos")]
-    {
-        return PlatformKind::MacOs;
-    }
-
-    #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
-    {
-        return PlatformKind::Other;
-    }
+/// AppContainer profile 名的**平台无关**拼装规则 (Windows 后端调用; Linux 侧可测)。
+///
+/// 原先错在: profile 名是固定常量 ⇒ SID 由名字**确定性**派生 ⇒ ① 全机全账号同一
+/// SID (共享盘上的跨账号授权会互相命中); ② 任何进程都能**同名抢占** (抢先注册同名
+/// profile ⇒ 我们 acquire 时拿到 `ALREADY_EXISTS` ⇒ 沙箱用的是对方注册的 profile)。
+/// 现在完整名字 = 前缀 + **用户标签** (跨账号区分) + **随机后缀** (跨进程区分, 防
+/// 抢占) ⇒ SID 不再确定; 字符集收敛到 `[A-Za-z0-9._-]`, 每段封顶 24 字符。
+pub fn appcontainer_profile_name(prefix: &str, user_tag: &str, random_tag: &str) -> String {
+    const SEGMENT_MAX: usize = 24;
+    let clean = |segment: &str| -> String {
+        segment
+            .chars()
+            .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
+            .take(SEGMENT_MAX)
+            .collect()
+    };
+    format!(
+        "{}.{}.{}",
+        clean(prefix),
+        clean(user_tag),
+        clean(random_tag)
+    )
 }
 
 fn validate_request(request: &ProcessRequest) -> Result<(), ProcessError> {
@@ -928,9 +923,22 @@ fn capabilities_for_execution(
         actual.privilege_reduction = EnforcementLevel::Unsupported;
     }
 
+    // P3-9/P3-10 审计 (2026-10-31): 记录须报「本次运行**实际生效**」的隔离属性 ——
+    // ① 环境隔离只在「从空环境起步」时成立: `Inherit` (默认) 不做 env_clear ⇒ 子进程
+    //    继承父环境 (含 provider 密钥), 不得宣称 Enforced; ② 结构化生成只在没有逐字
+    //    命令列尾时成立: Windows 的 raw_arg (cmd /D /S /C) 是命令串 ⇒ 只有 Partial。
+    if matches!(request.environment(), EnvironmentSpec::Inherit) {
+        actual.environment_isolation = EnforcementLevel::Unsupported;
+    }
+    #[cfg(windows)]
+    if request.raw_arg().is_some() {
+        actual.structured_spawn = EnforcementLevel::Partial;
+    }
+
     actual
 }
 
+#[allow(dead_code)]
 pub(crate) fn apply_request_to_command(
     command: &mut std::process::Command,
     request: &ProcessRequest,
@@ -965,7 +973,8 @@ pub(crate) struct ChildStatus {
 
 pub(crate) trait ManagedChild {
     fn try_wait(&mut self) -> Result<Option<ChildStatus>, ProcessError>;
-    fn wait(&mut self) -> Result<ChildStatus, ProcessError>;
+    #[allow(dead_code)]
+    fn wait(&mut self) -> Result<ChildStatus, ProcessError>; // D-1（owner 裁定 2026-10-25）：进程 trait 方法：实现方在本仓之外（宿主 crate 提供）
     fn terminate(&mut self) -> Result<(), ProcessError>;
     /// Clean up descendants after the direct child exits. Unsupported generic
     /// backends retain their advertised containment limitations.
@@ -1186,7 +1195,7 @@ pub async fn run_native<T: Send + 'static>(
         })
         .transpose()
         .map_err(|_| NativeTaskError::Cancelled)?;
-    tokio::task::spawn_blocking(move || {
+    let run = move || {
         let _lease = lease;
         if context
             .as_ref()
@@ -1197,6 +1206,23 @@ pub async fn run_native<T: Send + 'static>(
         Ok(apeireth_plugin::tool_execution::with_native_execution(
             context, work,
         ))
-    })
-    .await?
+    };
+
+    // ⚠️ **无 tokio reactor 时同步执行**（2026-11-04 CI 实测修）。
+    //
+    // 现象：`fuzz/fuzz_targets/external.rs` 用**自写的极简 `block_on`**（无 reactor）
+    // 调 `tool.invoke(...)` ⇒ ⇒ 走到这里 ⇒ ⇒ `tokio::task::spawn_blocking` 报
+    // 「there is no reactor running, must be called from the context of a Tokio 1.x runtime」
+    // ⇒ ⇒ libFuzzer abort ⇒ **CI 的 Fuzz 门禁红**。
+    //
+    // 为什么在**产品侧**修（而不是给 fuzz crate 加 tokio 依赖）：
+    // 根因是本函数**假定**调用方一定在 tokio runtime 内 ⇒ ⇒ 任何**同步**调用方
+    // （fuzz harness / 脚本 / 同步测试）都会 panic ⇒ ⇒ 这是**真实的健壮性缺口**。
+    //
+    // 语义：无 reactor 时在**当前线程**执行（那里本来也没有 runtime 可用）；
+    // 租约与取消检查**照旧**（lease 仍在）。
+    match tokio::runtime::Handle::try_current() {
+        Ok(handle) => handle.spawn_blocking(run).await?,
+        Err(_) => run(),
+    }
 }

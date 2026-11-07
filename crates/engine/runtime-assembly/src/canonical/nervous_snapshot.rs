@@ -258,18 +258,6 @@ fn summarize(mechanisms: &[NervousMechanism], observed: usize) -> NervousSummary
     }
 }
 
-/// 从一份已渲染的自述帧派生 `capabilities.nervous_system` 子对象。
-///
-/// 口径（0 装诚实）：
-/// - `capabilities.bio_mechanisms` 不在场（观测面未挂）→ `None`（旧帧形状）；
-/// - `bio_mechanisms.enabled = false`（开关关）→ `None`，**不读 env**；
-/// - 开关开 → `observed` = `mechanisms` 里 `wired: true` 的格数（注册事实），
-///   其余字段由 [`snapshot_from_env`] 按既有解析函数现采。
-#[must_use]
-pub fn nervous_system_from_frame(frame: &Value) -> Option<Value> {
-    nervous_system_from_frame_with(frame, |name| std::env::var(name).ok(), None)
-}
-
 /// 把总线快照折成 `nervous_system.bus` 子对象（纯函数，不采进程 env）。
 #[must_use]
 fn bus_status(snapshot: &NervousBusSnapshot) -> NervousBusStatus {

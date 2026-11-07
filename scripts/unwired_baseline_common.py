@@ -41,9 +41,25 @@ BASELINE = ROOT / "scripts" / "unwired-baseline.txt"
 # `cargo run --example` 拉起（如 `scripts/guard_ml/train_shadow.py` 跑
 # `stamp_guard_artifact`）。不扫的话，这些「被 example 调用的公开 API」
 # 会被误报成孤儿 —— 2026-10-24 实测：`stamp_artifact_file` 因此假阳性。
+# ⭐ **消费者面必须扫全**（2026-11-06 修判据的洞）
+# 此前只扫 `crates/*/*/{src,tests,examples}` ⇒ ⇒ **漏了 `fuzz/`**
+# ⇒ ⇒ ⇒ 实测：`allow_capability` 被 `fuzz/fuzz_targets/mcp_governance.rs:531/558/562`
+#          **真调用** ⇒ ⇒ 但审计报它「零调用」⇒ ⇒ ⇒ **假阳性**
+# ⇒ ⇒ ⇒ `fuzz/` 是**独立 cargo workspace**、CI `.github/workflows/fuzz.yml` **真跑**
+# ⇒ ⇒ ⇒ ⇒ 它是**真消费者面**，不是「历史文档」
+# ⇒ ⇒ ⇒ 同族还漏了：顶层 `benches/` · 顶层 `examples/`
+# ⇒ ⇒ ⇒ ⚠️ **不扫** `legacy/`（归档捐赠代码 ⇒ ⇒ 不是本仓活跃面 ⇒ ⇒ 扫它会淹出上千条历史符号）
+# ⇒ ⇒ ⇒ ⚠️ 方向纪律：多扫面 ⇒ ⇒ 只可能**多报**（更保守）⇒ ⇒ 不会漏报 ⇒ ⇒ 方向安全。
 SCAN_ROOTS = sorted(
     str(path.relative_to(ROOT))
-    for pattern in ("crates/*/*/src", "crates/*/*/tests", "crates/*/*/examples")
+    for pattern in (
+        "crates/*/*/src",
+        "crates/*/*/tests",
+        "crates/*/*/examples",
+        "fuzz/fuzz_targets",
+        "benches",
+        "examples",
+    )
     for path in ROOT.glob(pattern)
     if path.is_dir()
 )
@@ -135,13 +151,17 @@ HEADER = """# 孤儿 API 基线（scripts/audit_unwired.py --update 生成；**�
 #     或设计上是供宿主/外部调用的公开 API。
 VERIFIED_REDUNDANT_OR_HOST = {
     # --- engine/memory：主路径见 unwired-memory-audit-2026-10-24.md ---
+    # --- capabilities/tools：2026-11-01 P3-6 推广（宿主 live 策略槽）---
+    # 主路径 = `*_with_slot` / `*_with_live_policy` 变体（装配根在用）；
+    # 这两个是**既有 public API**（对外的便捷包装，仓内无调用点）⇒
+    # 删了会破坏外部调用者的向后兼容 ⇒ 归 G6（并行入口/宿主面）。
+    "device_control_capability",  # 主路径 device_control_capability_with_slot
+    "skill_distill_capability",  # 主路径 skill_distill_capability_with_slot
     "consolidate_governed",  # 主路径 consolidate
     "default_min_count",  # 公开 API 的默认值常量，宿主面
     "ensure_governance",  # 主路径 ensure_governance_on_conn
-    "events_with_ids",  # 主路径 events
     "fetch_governed",  # 主路径 fetch_governed_on_conn
     "get_for_subject",  # 承诺查询的其他入口
-    "get_history",  # 主路径 history
     "get_page",  # 主路径 compile_page
     "get_persona",  # persona 的 sweep/compress/consolidate
     "governance_cas_failure",  # 主路径 cas_failure_on_conn
@@ -149,20 +169,16 @@ VERIFIED_REDUNDANT_OR_HOST = {
     "is_verbatim_zone",  # 逐字区由 PersonaMemory 字段分离保证
     "links_for_diary",  # 主路径 links_for_fact
     "recall_with_policy",  # 主路径 ProactiveRecallService::recall（coordinator.rs:854）
-    "retract_relation",  # 主路径 retract
-    "select_candidates",  # 主路径 recall（select_candidates 是别名）
     "list_active",  # 承诺查询的其他入口
     "materialize_to_sink",  # 主路径 materialize_to_typed_sink
     "put_episode_full",  # 主路径 EpisodeStore::put_episode
     "query_as_of",  # 主路径 typed_recall.rs 的 store.query
-    "query_facts",  # 主路径 search_facts/query
     "query_recent",  # 主路径 recall_recent
     "query_with_time_range",  # 主路径 EpisodeQuery::in_range + query
     "retrieve_with_reranker",  # 主路径 retrieve_with_status
     "scalar",  # 主路径 AdaptiveBaseline::new
     "set_quiet_threshold",  # 宿主/daemon 配置入口（doc 自述）
     "streaks",  # observe 已返回 DriftAlarm.streak
-    "traverse_from",  # 主路径 traverse
     "upsert_hallway",  # 主路径 upsert_hallway_raw
     "without_as_of",  # 主路径 with_as_of(None)
     # --- foundation/orchestration ---
@@ -288,7 +304,16 @@ def classify(symbol: str, file_path: str) -> str:
         return "G7"
     if any(key in file_path for key in BIO_FILES):
         return "G3"
-    if symbol.startswith("with_") or "probe" in symbol:
+    if symbol.startswith("with_"):
+        # `with_*` 这一族要再分一次（2026-10-25 复核）：
+        # * **接入面**（builder 设置 `mut self`，或注入的是依赖 `Arc<dyn …>`/`Box<dyn …>`）
+        #   ⇒ G4（注入点 / 探测口）；
+        # * **独立便利构造器**（既不吃 `mut self`，也不注入依赖，只是「造一个默认实例」）
+        #   ⇒ G6（与主路径并行的便利包装/别名，不是「没人接的接入面」）。
+        #   之前用**无差别前缀匹配** ⇒ `with_len`（`DriftDetector` 的默认构造器）
+        #   被误分到 G4，方向错了（它不是待接线的接入面）。
+        return "G4" if _is_extension_seam(symbol) else "G6"
+    if "probe" in symbol:
         return "G4"
     if symbol.startswith(ASSEMBLY_PREFIXES) or symbol.endswith("_from_env"):
         return "G6"
@@ -390,3 +415,34 @@ def usage_counts(texts) -> dict[str, int]:
         for word in IDENT.findall(strip_noise(raw)):
             counts[word] = counts.get(word, 0) + 1
     return counts
+
+
+def _is_extension_seam(symbol: str) -> bool:
+    """`with_*` 是不是**接入面**（builder 设置 / 依赖注入）。
+
+    判据取自**源码签名**（不是名字）：
+    * 吃 `mut self` ⇒ builder 设置面（配置/注入同族）⇒ 接入面；
+    * 形参含依赖类型（`Arc<` / `Box<dyn` / `&dyn` / `Arc<dyn`）⇒ 注入点 ⇒ 接入面；
+    * 其余（纯标量/配置结构体，且不返回 self 链）⇒ **独立便利构造器** ⇒ 不是接入面。
+
+    找不到符号（源码已改名/删除）时**保守判为接入面**（留在 G4）——
+    「不确定就留在待判组」比「误判成便利包装」安全。
+    """
+    pattern = re.compile(
+        rf"pub(?:\([^)]*\))?\s+(?:async\s+)?fn\s+{re.escape(symbol)}\s*\(([^)]*)\)", re.S
+    )
+    for path in sorted(ROOT.glob("crates/*/*/src/**/*.rs")):
+        try:
+            text = path.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+        match = pattern.search(text)
+        if not match:
+            continue
+        params = " ".join(match.group(1).split())
+        if "mut self" in params:
+            return True
+        if any(token in params for token in ("Arc<", "Box<dyn", "&dyn", "Arc<dyn")):
+            return True
+        return False
+    return True

@@ -160,7 +160,19 @@ fn scan_segments_for_write_commands(command: &str) -> Option<WriteIntentHit> {
         }
         // 原地改写特判：`sed -i …` / `tar -x…` 落盘改写文件，词组命中即拒
         // （词法面只看词组同段共现，误拒口径同上注释）。
-        let lower: Vec<String> = words.iter().map(|w| w.to_ascii_lowercase()).collect();
+        //
+        // **可执行后缀变体同族同权**（2026-10-25 修）：本面文档承诺
+        // 「变体匹配（…**可执行后缀**）全部引自治理层单一来源」，
+        // 而本特判原是手写 `w == "sed"` ⇒ `sed.exe -i` / `tar.exe -x` **漏放**，
+        // 与同面族词路（`rm.exe` 能抓）**不一致**。
+        // 修法：复用治理层同一入口 `strip_executable_suffix`（只多抓不少抓，fail-closed）。
+        let lower: Vec<String> = words
+            .iter()
+            .map(|w| {
+                apeireth_governance::approval_family::strip_executable_suffix(w)
+                    .to_ascii_lowercase()
+            })
+            .collect();
         if lower.iter().any(|w| w == "sed") && lower.iter().any(|w| w.starts_with("-i")) {
             return Some(WriteIntentHit {
                 surface: "原地改写命令 \"sed -i\"".to_string(),
@@ -177,6 +189,32 @@ fn scan_segments_for_write_commands(command: &str) -> Option<WriteIntentHit> {
 
 #[cfg(test)]
 mod tests {
+
+    /// **回归**：原地改写特判必须同享「可执行后缀」变体防护（2026-10-25 fuzz 发现）。
+    ///
+    /// 原特判手写 `w == "sed"` / `w == "tar"` ⇒ `sed.exe -i` / `tar.exe -x` **漏放**，
+    /// 而同面的族词路（`rm.exe`）能抓 ⇒ **面内不一致**，
+    /// 且违反本面文档「变体匹配（…可执行后缀）全部引自治理层单一来源」的承诺。
+    /// 修法方向：只多抓不少抓（fail-closed）。
+    #[test]
+    fn in_place_rewrite_special_case_covers_executable_suffix_variants() {
+        // 原本就命中的（不许回归）。
+        assert!(scan_shell_write_intent("sed -i s/a/b/ f").is_some());
+        assert!(scan_shell_write_intent("tar -xzf b.tgz").is_some());
+        // 漏放形态：可执行后缀变体必须同权命中。
+        for cmd in [
+            "sed.exe -i s/a/b/ f",
+            "sed.cmd -i s/a/b/ f",
+            "sed.ps1 -i s/a/b/ f",
+            "tar.exe -xzf b.tgz",
+            "tar.cmd -xzf b.tgz",
+        ] {
+            assert!(
+                scan_shell_write_intent(cmd).is_some(),
+                "可执行后缀变体必须命中写意图: {cmd:?}"
+            );
+        }
+    }
     use super::*;
     use apeireth_governance::approval_family::{
         member_family, touched_families, word_families, MEMBER_PREFIX_FAMILIES,

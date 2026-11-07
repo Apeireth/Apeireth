@@ -268,16 +268,6 @@ pub fn bio_care_config_from_env_value(raw: Option<&str>) -> CareConfig {
     }
 }
 
-/// 从 env 现值解析生物候选开关 → care 接线配置 (默认关 fail-closed)。
-#[must_use]
-pub fn bio_care_config_from_env() -> CareConfig {
-    bio_care_config_from_env_value(
-        std::env::var(BIO_CARE_CANDIDATES_ENABLE_ENV)
-            .ok()
-            .as_deref(),
-    )
-}
-
 /// 仪式候选输入: 状态 + 排程配置 (空 `states` 或空排程 = 无从产候选)。
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct RitualInputs {

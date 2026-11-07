@@ -59,6 +59,8 @@ pwsh -NoProfile -File packaging/service/apeireth-service.ps1 stop     # 优雅�
 
 1. **优雅停机**: 带服务令牌 `POST /v1/admin/shutdown` (令牌门下) → 网关收尾
    (写 `gateway.shutdown` 审计 + 观测攒批全量落盘 + 释放 PID 文件) → 退出;
+   ⚠️ **逃生阀口径下本级不可达** (无令牌 ⇒ 过门身份恒为未认证 ⇒ 角色门拒管理面)
+   ⇒ ⇒ 直接走第 2 级;
 2. 优雅停机不成就 `Stop-ScheduledTask` 停任务;
 3. 仍不退则终止网关进程树 (兜底强杀, 收尾不保证 —— 会留下"未优雅"的空窗)。
 
@@ -99,12 +101,30 @@ pwsh -NoProfile -File packaging/service/apeireth-service.ps1 uninstall
    (`APEIRETH_GATEWAY_TOKEN`) 或客户端令牌表条目 (`APEIRETH_GATEWAY_TOKENS` /
    `client-tokens.json`, name→token, 过门审计带客户端名)。令牌族两面皆空时三态门口径
    照旧 (放行 + 警告帧 + 审计) —— 但常驻暴露面请勿裸奔。
+   ⚠️ **但角色门是另一层**: **用户表存在**时, 未认证调用方的**写面**一律 403
+   (既有 fail-closed 语义: 未绑定 = 拒) ⇒ ⇒ 「令牌族皆空」只保证**令牌门**放行,
+   不保证**写面**可写;
 2. **防火墙**: 默认绑定 `127.0.0.1` (仅本机)。确需 LAN/远程访问时: 非回环绑定
    (`-Bind 0.0.0.0` 或 env `APEIRETH_LISTEN`) + 主机防火墙只放行可信网段;
    **非回环绑定强制令牌**: 令牌族两面皆空时网关拒绝启动 (fail-closed), 显式
    `APEIRETH_GATEWAY_TOKEN=none` 为逃生阀 (明示不设防, 留审计)。
-   TLS 尚未接线 (`APEIRETH_TLS_CERT`/`APEIRETH_TLS_KEY` 为接口桩, 流量明文),
+   TLS **已接线**（**四级口径：PRODUCTION WIRED** —— 真 rustls `ServerConfig` +
+   `TlsAcceptor`; `APEIRETH_TLS_CERT` / `APEIRETH_TLS_KEY` 提供证书 ⇒ 启用;
+   材料不全 ⇒ **拒绝启动**, fail-closed）,
    每客户端**权限**分级属 W3/E 轴范围, 当前版本不提供。
+   ⭐ **逃生阀下的停机口径** (2026-11-05 · F-2 修复后重写): 角色门**只认已认证
+   身份** ⇒ ⇒ 未认证 / 逃生阀口径下的过门身份是 `anonymous` (**未认证**) ⇒ ⇒
+   它**不是**任何用户 ⇒ ⇒ 用户表 `client_names` 里写 `anonymous` **不会**让调用方
+   变成 owner ⇒ ⇒ **没有**「绑 `anonymous` 就能停机」这回事 ⇒ ⇒ 管理面 (含
+   `/v1/admin/shutdown`) 对未认证调用方一律 **403** (fail-closed, **不静默降级**:
+   绑定错配 / 空表 / 未认证 ⇒ 一律拒, 不猜)。
+   ⇒ ⇒ **逃生阀下要停机 ⇒ ⇒ 用 SIGTERM** (CLI 的 `graceful_shutdown_signal`
+   已支持, 同走收尾账: 收尾审计 + 观测落盘) ⇒ ⇒ **不要**为了停机而临时开
+   令牌面 ⇒ ⇒ 也**不要**把 `anonymous` 绑给 owner (绑了也不生效, 只会误导读
+   配置的人)。
+   ⇒ ⇒ **已认证路径不受影响**: env 单令牌面 (署名名 `env`) 与客户端令牌表条目
+   照旧可用 ⇒ ⇒ 管理面对**已认证**的 owner 照旧 200 (四级口径: PRODUCTION WIRED
+   —— 角色门在网关的角色门中间件里, 已接进生产路由)。
 3. **令牌轮换**: `install -RotateToken`; 轮换后重连端 (桌面/TUI) 自动取新值
    (同源读取), 常驻服务需 `stop` + `start` 让新令牌进服务 env。
 4. **令牌不外流**: 令牌只存系统凭据库与服务 env —— 不落明文文件、不进任务定义、

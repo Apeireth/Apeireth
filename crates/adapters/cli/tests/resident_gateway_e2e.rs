@@ -9,6 +9,10 @@
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
+mod common;
+
+use common::{activate_role_surface, ANONYMOUS_CLIENT, ENV_CLIENT};
+
 const TOKEN: &str = "loopback-token-0123456789abcdef";
 
 fn bin_path() -> std::path::PathBuf {
@@ -36,11 +40,40 @@ fn scratch_dir(label: &str) -> std::path::PathBuf {
 }
 
 /// A free loopback port (bind, read, release).
-async fn free_port() -> u16 {
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let port = listener.local_addr().unwrap().port();
+
+/// ⭐ **端口分配：治「夹具的 TOCTOU」**（不是治产品）
+///
+/// **原写法（TOCTOU 竞态）**：`bind :0` ⇒ ⇒ 取端口 ⇒ ⇒ **立刻释放** ⇒ ⇒ 稍后再 bind
+/// ⇒ ⇒ **并行测试之间会抢同一个端口** ⇒ ⇒ 自己的网关 bind 失败（子进程立刻退出）
+/// ⇒ ⇒ 而 `wait_ready` 会连上**抢占者**的网关 ⇒ ⇒ **断言打在别人的服务上**
+/// ⇒ ⇒ 表现为「安全断言偶发失败（期望 403 实得 200）」⇒ ⇒ **看起来像安全回归，其实是夹具竞态**。
+///
+/// **新写法**：按 **pid 分段 + 进程内原子计数器** 取候选端口 ⇒ ⇒ **向前探测**到 bind 成功
+/// ⇒ ⇒ 同进程内**并发测试不会撞**（计数器各不相同）· 跨进程也**基本不会撞**（pid 分段不同）
+/// ⇒ ⇒ 探测本身仍是「取后释放」，但候选端口**互不重叠** ⇒ ⇒ 撞的概率 ≈ 0。
+fn next_free_port() -> u16 {
+    use std::sync::atomic::{AtomicU16, Ordering};
+    static COUNTER: AtomicU16 = AtomicU16::new(0);
+    let pid = std::process::id();
+    // 段基址：pid 分段 ⇒ ⇒ 不同进程不重叠；段内 64 个槽：进程内并发测试不重叠。
+    let base = 21_000u16 + ((pid % 400) as u16) * 64;
+    for step in 0..64u16 {
+        let candidate = base + ((COUNTER.fetch_add(1, Ordering::SeqCst) + step) % 64);
+        if let Ok(listener) = std::net::TcpListener::bind(("127.0.0.1", candidate)) {
+            let port = listener.local_addr().map(|a| a.port()).unwrap_or(candidate);
+            drop(listener);
+            return port;
+        }
+    }
+    // 段内全占 ⇒ ⇒ 回落到内核选端口（极罕见 ⇒ ⇒ 仍比原写法好）
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind fallback port");
+    let port = listener.local_addr().expect("addr").port();
     drop(listener);
     port
+}
+
+async fn free_port() -> u16 {
+    next_free_port()
 }
 
 fn slot_text(pid: u32, port: u16) -> String {
@@ -155,6 +188,13 @@ fn second_start_refuses_with_an_explicit_already_running_error() {
 /// 优雅停机收尾 (真进程): 令牌门下的 `/v1/admin/shutdown` 触发后, 网关必须
 /// 写下收尾审计 (`gateway.shutdown`) 并落盘到审计档案、释放 PID 文件, 然后
 /// 以成功码退出。这也是服务脚本 stop 路径的执行契约。
+///
+/// # 前置条件 (P0-1 · 2026-11-04 管理面 fail-closed)
+///
+/// 停机端点属**管理面** (要求 `UserCapability::AdminControl`) ⇒ 角色面未激活
+/// (数据目录无 `users.json`) 时一律 403 ⇒ 本用例要测的是**优雅停机的收尾
+/// 契约**, 角色门的前置条件由这里显式装上: owner 绑本用例的过门署名名
+/// (env 单令牌面 = `env`; 未设防口径 = `anonymous`)。
 #[test]
 fn graceful_shutdown_endpoint_stops_the_process_and_frees_the_slot() {
     let bin = bin_path();
@@ -172,6 +212,8 @@ fn graceful_shutdown_endpoint_stops_the_process_and_frees_the_slot() {
         let slot = dir.join("gateway.pid");
         let data_dir = dir.join("data");
         fs_err::create_dir_all(&data_dir).unwrap();
+        // 角色面激活 (管理面前置条件): owner 在册, 绑两个过门署名名。
+        activate_role_surface(&data_dir, "owner-1", &[ENV_CLIENT, ANONYMOUS_CLIENT]);
         let port = free_port().await;
         let endpoint = format!("http://127.0.0.1:{port}");
 
@@ -192,7 +234,8 @@ fn graceful_shutdown_endpoint_stops_the_process_and_frees_the_slot() {
                 .env("APEIRETH_DATA_DIR", &data_dir)
                 .env("APEIRETH_SESSION_DB", data_dir.join("sessions.sqlite3"))
                 .env("APEIRETH_COGNITIVE_DB", data_dir.join("cognitive.sqlite3"))
-                .env("APEIRETH_GATEWAY_TOKEN", TOKEN),
+                .env("APEIRETH_GATEWAY_TOKEN", TOKEN)
+                .env_remove("APEIRETH_GATEWAY_TOKENS"),
         );
 
         // 就绪探针。

@@ -126,10 +126,20 @@ impl AgentChainFeatureV1 {
                 );
                 sensitive_source_count += u32::from(sensitive);
                 private_memory_read_count += u32::from(data.source == SourceClass::PrivateMemory);
-                external_sink_count += u32::from(matches!(
-                    data.sink,
-                    Some(SinkClass::ExternalNetwork | SinkClass::ShellExecution)
-                ));
+                // ⚠️ 用 sink **全集**计数（旧实现只看 `data.sink`＝**首个** ⇒
+                // 多 sink 节点（如 `[WorkspaceFile, ExternalNetwork]`）**少计**
+                // ⇒ 该特征喂给分类/学习时也**少算** ⇒ 同族漏报）。
+                //
+                // 语义：`external_sink_count` = **外部 sink 的数量** ⇒ 节点上出现
+                // 几个外部 sink（`ExternalNetwork` / `ShellExecution`）就计几个
+                // ⇒ 全集里一个都不丢（旧口径每个节点最多计 1，且只看首个）。
+                external_sink_count += data
+                    .sink_classes()
+                    .iter()
+                    .filter(|sink| {
+                        matches!(sink, SinkClass::ExternalNetwork | SinkClass::ShellExecution)
+                    })
+                    .count() as u32;
             }
         }
         let retry_after_denial = chain.has_retry_escalation();
@@ -217,6 +227,46 @@ impl From<&BehaviorChain> for AgentChainFeatureV1 {
 mod tests {
     use super::*;
 
+    use crate::chain::{BehaviorNode, DataNode};
+    use crate::observation::{DataSensitivity, ResourceClass, SafetyObservation};
+    use apeireth_governance::OperationClass;
+
+    fn observation(
+        source_classes: Vec<SourceClass>,
+        sink_classes: Vec<SinkClass>,
+    ) -> SafetyObservation {
+        SafetyObservation {
+            trace_id: "trace-feature-sink".to_string(),
+            request_id: "req-1".to_string(),
+            session_id: "session-1".to_string(),
+            stage: "pre_dispatch".to_string(),
+            capability_id: "fs.read".to_string(),
+            tool_name: "read_file".to_string(),
+            resource_classes: vec![ResourceClass::FilesystemWorkspace],
+            source_classes,
+            sink_classes,
+            permission_scope: "workspace".to_string(),
+            approval_state: "not_required".to_string(),
+            argument_shape: "path=<redacted>".to_string(),
+            redacted_argument_features: serde_json::json!({}),
+            result_class: None,
+            result_size_bucket: None,
+            retry_count: 0,
+            denied_before: false,
+            prior_actions: Vec::new(),
+            external_effect: false,
+            operation_class: OperationClass::Read,
+            operation_classes: vec![OperationClass::Read],
+            descriptor_source: crate::semantics::DescriptorSource::Canonical,
+            data_sensitivity: DataSensitivity::WorkspacePrivate,
+            persistent_effect: false,
+            destructive_effect: false,
+            requires_network: false,
+            may_access_credentials: false,
+            effect_fingerprint: String::new(),
+        }
+    }
+
     #[test]
     fn feature_schema_is_stable_and_does_not_include_raw_content() {
         let chain = BehaviorChain::new("session", "trace");
@@ -224,5 +274,82 @@ mod tests {
         assert_eq!(features.schema_version, AGENT_CHAIN_FEATURE_V1);
         let json = serde_json::to_string(&features).unwrap();
         assert!(!json.contains("prompt"));
+    }
+
+    /// **多 sink 节点的特征统计按全集**：出网 sink **不是首个** ⇒ 必须被计入
+    /// （旧口径只看 `data.sink`＝首个 ⇒ 计 0 ⇒ 少计）。
+    #[test]
+    fn external_sink_count_counts_the_whole_sink_set() {
+        let mut chain = BehaviorChain::new("session-1", "trace-multi-sink-feature");
+        chain.add_action(
+            &observation(
+                vec![SourceClass::PrivateFile],
+                vec![SinkClass::WorkspaceFile, SinkClass::ExternalNetwork],
+            ),
+            0,
+        );
+
+        let features = AgentChainFeatureV1::from_chain(&chain);
+        assert_eq!(
+            features.external_sink_count, 1,
+            "出网 sink 在全集里 ⇒ external_sink_count 必须按全集计（首个口径 = 0 ⇒ 少计）"
+        );
+    }
+
+    /// 全集里有几个外部 sink 就计几个（不按节点封顶 1）。
+    #[test]
+    fn external_sink_count_counts_every_external_sink_class() {
+        let mut chain = BehaviorChain::new("session-1", "trace-two-external-sinks");
+        chain.add_action(
+            &observation(
+                vec![SourceClass::PrivateFile],
+                vec![SinkClass::ExternalNetwork, SinkClass::ShellExecution],
+            ),
+            0,
+        );
+
+        let features = AgentChainFeatureV1::from_chain(&chain);
+        assert_eq!(
+            features.external_sink_count, 2,
+            "两个外部 sink ⇒ 必须都计入（首个口径 = 1 ⇒ 少计）"
+        );
+    }
+
+    /// 非外部 sink **不得**被误计（回归钉住：写工作区文件不算出网）。
+    #[test]
+    fn external_sink_count_ignores_non_external_sinks() {
+        let mut chain = BehaviorChain::new("session-1", "trace-workspace-sink");
+        chain.add_action(
+            &observation(
+                vec![SourceClass::PrivateFile],
+                vec![SinkClass::WorkspaceFile, SinkClass::MemoryWrite],
+            ),
+            0,
+        );
+
+        let features = AgentChainFeatureV1::from_chain(&chain);
+        assert_eq!(
+            features.external_sink_count, 0,
+            "写工作区/内存不是外部 sink ⇒ 不得计入"
+        );
+    }
+
+    /// 兼容：旧数据只有 `sink` 字段（`sinks` 为空）⇒ 仍按旧字段计入。
+    #[test]
+    fn external_sink_count_falls_back_to_the_legacy_sink_field() {
+        let mut chain = BehaviorChain::new("session-1", "trace-legacy-sink");
+        chain.nodes.push(BehaviorNode::Data(DataNode {
+            id: "data_legacy".to_string(),
+            source: SourceClass::PrivateFile,
+            sink: Some(SinkClass::ExternalNetwork),
+            sinks: Vec::new(),
+            label: "PrivateFile->ExternalNetwork".to_string(),
+        }));
+
+        let features = AgentChainFeatureV1::from_chain(&chain);
+        assert_eq!(
+            features.external_sink_count, 1,
+            "旧数据（只有 `sink`）⇒ 必须仍被计入（否则旧轨迹的特征会突然掉 0）"
+        );
     }
 }

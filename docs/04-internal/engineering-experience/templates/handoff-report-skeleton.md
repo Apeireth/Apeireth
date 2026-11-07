@@ -27,7 +27,7 @@ Author:          <交接方>
 
 ## 二、各战线终局（四级口径表）
 
-| 战线 | IMPLEMENTED | PRODUCTION WIRED | DEFAULT ENABLED | 开关/命令 | 备注 |
+| 战线 | IMPLEMENTED | PRODUCTION WIRED | 默认开否（横切属性，非级） | 开关/命令 | 备注 |
 |---|---|---|---|---|---|
 
 ## 三、结论复核矩阵（接续方逐条亲验，不要信文字）

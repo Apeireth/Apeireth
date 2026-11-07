@@ -1,0 +1,46 @@
+name: Quality metrics gate (度量体系覆盖率)
+
+# 2026-10-27 新增：守住「**设计稿说的指标要真能算**」这条纪律。
+#
+# 为什么要有：
+# 设计稿 §6.1 定了 18 项质量指标 ⇒ 它们是「好用」的裁判。
+# ⚠️ **实测发现**：这 18 项里，**11 项只存在于文档、代码里没有**
+# ⇒ 「指标体系」很容易**悄悄烂掉**（文档看着很全 ⇒ 实际一半算不出来 ⇒ 没人发现）。
+#
+# 本 workflow 让「**台账与代码不一致**」在提交时就红：
+# * 台账说「已实现」但代码锚点没命中 ⇒ **台账撒谎了** ⇒ 失败；
+# * 台账说「未实现」但代码里已实现 ⇒ **台账过期了** ⇒ 失败。
+#
+# ⚠️ 注意：本检查**不要求 18/18**（缺口如实列在台账里即可）
+# ⇒ 它防的是「**台账与现实脱节**」，不是「不许有缺口」。
+
+on:
+  push:
+    branches: [master, main]
+    paths:
+      - 'crates/engine/memory/**'
+      - 'scripts/check_quality_metrics.py'
+      - 'scripts/quality-metrics-ledger.json'
+  pull_request:
+    paths:
+      - 'crates/engine/memory/**'
+      - 'scripts/check_quality_metrics.py'
+      - 'scripts/quality-metrics-ledger.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quality-metrics:
+    name: quality metrics ledger consistency
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the metric ledger matches the code
+        run: python3 scripts/check_quality_metrics.py
+
+      - name: Print the coverage report
+        run: python3 scripts/check_quality_metrics.py --report

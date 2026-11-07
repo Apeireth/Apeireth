@@ -2,7 +2,10 @@
 //!
 //! 这里钉四件事:
 //! 1. **角色面未激活 = 兼容路径** —— 未注入用户表时 W2-② 行为逐字不变
-//!    (零回归口径, 不新增拒绝面);
+//!    (零回归口径, 不新增拒绝面); **但管理面例外** (P0-1 · 2026-11-04):
+//!    管理面要求 `AdminControl` 档, 无人可担 ⇒ **fail-closed 403** + 审计
+//!    留痕 (管理面能热改 provider `base_url` ⇒ 能外泄真实 API key ⇒ 风险
+//!    等级与普通端点不同 ⇒ 「零回归」不适用于**能外泄凭据的面**);
 //! 2. **role 权限矩阵在网关面逐档生效** —— owner/member/guest × 写面/管理面/
 //!    审批面 (guest 零写面, member 无管理面, owner 全权);
 //! 3. **对抗面 (敌人⑤ 多户越权)** —— 成员冒名 owner 拒 / guest 越权写拒 /
@@ -211,10 +214,11 @@ async fn assert_denied(response: axum::http::Response<Body>, label: &str) -> Str
 // 1. 角色面未激活 = 兼容路径 (零回归口径)
 // ---------------------------------------------------------------------------
 
-/// 未注入用户表: 角色门整体休眠 —— 写面照旧进 handler (不是 403), 且
-/// 不产生任何 `gateway.user_action` 审计行 (W2-② 行为逐字不变)。
+/// 未注入用户表: 角色门整体休眠 —— 写面照旧进 handler (不是 403); 但
+/// **管理面 fail-closed** (P0-1 · 2026-11-04): 无人可担 `AdminControl` ⇒
+/// 403 + 一行审计留痕。
 #[tokio::test]
-async fn without_a_user_table_the_role_face_stays_inactive() {
+async fn without_a_user_table_the_role_face_stays_inactive_but_the_admin_plane_is_fail_closed() {
     let clients = ClientTokenTable::from_config(ClientTokenConfig::new(vec![spec(
         MEMBER_CLIENT,
         MEMBER_TOKEN,
@@ -245,9 +249,12 @@ async fn without_a_user_table_the_role_face_stays_inactive() {
     assert_ne!(status, StatusCode::FORBIDDEN, "角色面未激活不得新增拒绝面");
     assert_ne!(status, StatusCode::UNAUTHORIZED, "令牌门照旧生效");
 
-    // 管理面同样休眠 (兼容路径: 谁过令牌门谁可达, 与 W2-② 逐字一致)。
-    let (status, _) = status_and_body(
+    // 管理面: 角色面未激活 ⇒ **fail-closed 403** (不是「谁过门谁可达」)。
+    // 理由: 管理面能热改 provider `base_url` ⇒ 能外泄真实 API key ⇒ 风险等级
+    // 与普通端点不同 ⇒ 「零回归」口径不适用于**能外泄凭据的面**。
+    let (status, text) = status_and_body(
         router
+            .clone()
             .oneshot(request(
                 "GET",
                 "/v1/admin/config",
@@ -258,13 +265,26 @@ async fn without_a_user_table_the_role_face_stays_inactive() {
             .unwrap(),
     )
     .await;
-    assert_eq!(status, StatusCode::OK, "兼容路径下管理面读照旧可达");
-
-    harness.state.observations.flush().await;
+    assert_eq!(
+        status,
+        StatusCode::FORBIDDEN,
+        "管理面必须 fail-closed: {text}"
+    );
+    assert!(text.contains("permission_denied"), "{text}");
     assert!(
-        harness.audit.details_of(USER_ACTION_AUDIT_EVENT).is_empty(),
-        "角色面未激活不得伪造 user_action 审计行: {:?}",
-        harness.audit.details_of(USER_ACTION_AUDIT_EVENT)
+        text.contains("role surface is not active"),
+        "拒绝帧必须说清「角色面未激活」这条真因: {text}"
+    );
+
+    // 审计留痕: 一行 `gateway.user_action` (端点 + 真因)。
+    harness.state.observations.flush().await;
+    let details = harness.audit.details_of(USER_ACTION_AUDIT_EVENT);
+    assert!(
+        details
+            .iter()
+            .any(|d| d.contains("endpoint=/v1/admin/config")
+                && d.contains("reason=user_role_surface_inactive")),
+        "管理面拒绝必须留审计痕: {details:?}"
     );
 }
 

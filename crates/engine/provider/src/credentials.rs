@@ -72,6 +72,11 @@ pub const OPENAI_COMPATIBLE_API_KEY_ENV: &str = "OPENAI_API_KEY";
 #[derive(Debug, Clone, Default)]
 pub struct EnvCredentialResolver {
     mappings: BTreeMap<String, String>,
+    /// **端点绑定声明**：逻辑名 → 该凭据被授权发送到的端点列表。
+    ///
+    /// 空表 ⇒ 该 resolver **不参与**绑定（[`CredentialResolver::bound_endpoints`]
+    /// 返回 `None`）⇒ 调用方按「未声明绑定」处理。
+    bindings: BTreeMap<String, Vec<String>>,
 }
 
 impl EnvCredentialResolver {
@@ -95,7 +100,10 @@ impl EnvCredentialResolver {
             OPENAI_COMPATIBLE_API_KEY.to_string(),
             OPENAI_COMPATIBLE_API_KEY_ENV.to_string(),
         );
-        Self { mappings }
+        Self {
+            mappings,
+            bindings: BTreeMap::new(),
+        }
     }
 
     /// Override or add a semantic-name → env-var mapping.
@@ -114,6 +122,33 @@ impl EnvCredentialResolver {
     pub fn env_var_for(&self, semantic: &str) -> Option<&str> {
         self.mappings.get(semantic).map(String::as_str)
     }
+
+    /// **声明**该凭据被授权发送到的端点（origin 形态）。
+    ///
+    /// 声明了 ⇒ 调用方（provider 侧 `endpoint_binding`）**强制**校验：
+    /// 未在表内的端点 ⇒ **拒绝**发凭据。
+    /// 没声明 ⇒ 该 resolver 不参与绑定（保持既有行为）。
+    ///
+    /// ⚠️ 这是**部署方的显式声明**，不是密码学证明：它防的是「**只改端点**就泄漏」，
+    /// 不防「能同时改端点与声明」的对手（那种对手本来就能改凭据）。
+    #[must_use]
+    pub fn with_endpoint_binding(
+        mut self,
+        semantic: impl Into<String>,
+        origin: impl Into<String>,
+    ) -> Self {
+        let semantic = semantic.into();
+        self.bindings
+            .entry(semantic)
+            .or_default()
+            .push(origin.into());
+        self
+    }
+
+    /// 该凭据已声明的端点（未声明 ⇒ `None`，即「不参与绑定」）。
+    pub fn declared_endpoints(&self, semantic: &str) -> Option<&[String]> {
+        self.bindings.get(semantic).map(Vec::as_slice)
+    }
 }
 
 impl CredentialResolver for EnvCredentialResolver {
@@ -124,6 +159,15 @@ impl CredentialResolver for EnvCredentialResolver {
         // of "" cannot masquerade as a configured key.
         let value = std::env::var(env_var).ok().filter(|v| !v.is_empty())?;
         Some(Secret::new(value))
+    }
+
+    /// 已声明绑定 ⇒ `Some(表)`；未声明 ⇒ `None`（**不参与**绑定）。
+    ///
+    /// ⚠️ `None` 与 `Some(vec![])` 含义不同（见 trait 文档）：
+    /// 这里只有**显式声明过**才返回 `Some` ⇒ 未声明的凭据保持既有行为
+    /// （协议族 provider 的自定义端点仍可用，厂商 provider 仍由默认端点兜底）。
+    fn bound_endpoints(&self, name: &str) -> Option<Vec<String>> {
+        self.bindings.get(name).cloned()
     }
 }
 

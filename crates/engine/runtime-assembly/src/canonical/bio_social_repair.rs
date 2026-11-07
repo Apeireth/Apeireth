@@ -8,15 +8,14 @@
 //!
 //! # 本模块接的**真实事件源**（不是模拟、不是编造）
 //!
-//! SG-20 的行为面仍未接线（不进 prompt 组装），本波只接**观测面**：
-//!
 //! - 事件源 = 人工审批被拒：`NervousSignalKind::ApprovalSocial` 且
 //!   `ApprovalSocialOutcome::Rejected`（由 `bio_approval_social` 在人工介入后发布）。
 //!   语义 = 「用户明确否定我方提案」——属内核规则表里的
 //!   [`UncertaintySignal::UserCorrection`]（rank 1），因此修复计划可确定性算出；
 //! - 订阅者把每次拒绝折算成一份 [`RepairPlan`]（至多 2 个动作、至多 1 个问句），
-//!   只做**只读观测**：不投递、不写 prompt、不改审批结论、不落盘；
-//! - 关闭（修复指引族开关未开）= 不构造订阅者 = 零订阅、零计数、零计划。
+//!   写进**共享槽** [`RepairPlanSlot`]：观测面（自述 probe）与**行为面**
+//!   （`BioAssemblyModule` 的 TurnStart 装饰器）读的是**同一个**值；
+//! - 关闭（修复指引族开关未开）= 不构造订阅者 = 零订阅、零计数、零计划、零读取。
 //!
 //! # 工程边界（明确不做什么）
 //!
@@ -27,10 +26,13 @@
 //!
 //! # 能力级别（四级口径）
 //!
-//! **PRODUCTION WIRED（仅观测面，默认关）**：装配根在修复指引族开关开时构造本源并
-//! 注册总线订阅者；自述 `capabilities.bio_mechanisms` 的 `social_repair` 格读取本源。
-//! 行为面（把 `moves` 写成 prompt 修复指令 / 据此决定是否提问）**仍未接线**，
-//! 不得写成已生效。
+//! **PRODUCTION WIRED（默认关）**：装配根在修复指引族开关开时构造本源并注册
+//! 总线订阅者；自述 `capabilities.bio_mechanisms` 的 `social_repair` 格读取本源；
+//! **行为面已接线**（2026-11-08）：订阅者写共享槽 ⇒ `BioAssemblyModule` 的
+//! TurnStart 装饰器每回合读槽 ⇒ 开关开时把计划交给既有 `with_repair_plan` 渲染成
+//! 独立 system 块（`[交互修复指令] … [/交互修复指令]`）。
+//! ⚠️ 仍**不**主张：不生成对话文本、不推断动机、不改审批结论、不落盘；
+//! 无 live 模型/硬件的 E2E 证据。
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -58,6 +60,26 @@ pub struct SocialRepairObservation {
     pub last_plan: RepairPlan,
 }
 
+/// 修复计划**共享槽**：总线订阅者写（每次人工拒绝），装配面模块**每回合读**。
+///
+/// # 为什么需要一条槽（SG-20 行为面接线，2026-11-08）
+///
+/// `BioAssemblyModule` 是**装配期构造一次**的长寿模块，而 `RepairPlan` 是
+/// **回合间事件**（人工拒绝）的产物 ⇒ ⇒ plan 若做成模块字段，只会是装配那一刻的
+/// 快照（恒 `None`）⇒ ⇒ 修复指令块在生产上永远产出 0。
+/// 槽是「事件侧写」与「装配侧读」之间**最小的一条线**：
+///
+/// * 关档（修复指引开关未开）= 装配根不构造本源、不订阅、模块不读槽 ⇒ 零变化；
+/// * 开档 = 订阅者把**最新** plan 写进槽，模块在**下一回合 TurnStart** 读出来用一次
+///   （读后不清空：同一计划在下一次拒绝前保持有效，符合「错了一次，接下来先修」）。
+pub type RepairPlanSlot = Arc<Mutex<Option<RepairPlan>>>;
+
+/// 造一个空槽（装配根在决定接线的位置调用；空槽 = 没有待生效的修复计划）。
+#[must_use]
+pub fn repair_plan_slot() -> RepairPlanSlot {
+    Arc::new(Mutex::new(None))
+}
+
 /// SG-20 观测源：保存计数与最近计划，供自述 probe 只读读取。
 ///
 /// 唯一写入口是 [`Self::handle_signal`]（总线订阅回调），锁毒化时保守忽略
@@ -66,17 +88,47 @@ pub struct SocialRepairObservationSource {
     switches: BioAssemblySwitches,
     rejections: AtomicU64,
     last: Mutex<Option<SocialRepairObservation>>,
+    /// 行为面共享槽：与装配面模块**同一个** `Arc`（不是拷贝）。
+    slot: RepairPlanSlot,
 }
 
 impl SocialRepairObservationSource {
     /// 构造观测源（`switches` 由装配根一次性解析后传入，本模块不读 env）。
     #[must_use]
     pub fn new(switches: BioAssemblySwitches) -> Self {
+        Self::with_slot(switches, repair_plan_slot())
+    }
+
+    /// 构造观测源并**共用**调用方给的修复计划槽（装配根接线用）。
+    ///
+    /// 装配根把同一个槽同时交给本源（事件侧写）与 `BioAssemblyModule` 的装饰器
+    /// （回合侧读）⇒ ⇒ 两侧看到的是**同一份**最新计划。
+    #[must_use]
+    pub fn with_slot(switches: BioAssemblySwitches, slot: RepairPlanSlot) -> Self {
         Self {
             switches,
             rejections: AtomicU64::new(0),
             last: Mutex::new(None),
+            slot,
         }
+    }
+
+    /// 行为面共享槽（装配根/模块取**同一份**句柄；关档下没人读写它）。
+    #[must_use]
+    pub fn plan_slot(&self) -> RepairPlanSlot {
+        Arc::clone(&self.slot)
+    }
+
+    /// 当前待生效的修复计划（无拒绝事件 = `None`）。
+    ///
+    /// 观测面与行为面读的是**同一个值**：自述里的 `last_plan` 与回合里注入的计划
+    /// 不会互相漂移（写入口只有 [`Self::record_rejection`] 一处）。
+    #[must_use]
+    pub fn latest_plan(&self) -> Option<RepairPlan> {
+        self.slot
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone()
     }
 
     /// 装配面开关快照（观测格据此区分「未接线」与「已接线但零事件」）。
@@ -111,6 +163,13 @@ impl SocialRepairObservationSource {
         }];
         let plan = plan_repair(&signals, None);
         let rejections = self.rejections.fetch_add(1, Ordering::Relaxed) + 1;
+        // ⭐ 行为面：把**最新**计划写进共享槽 ⇒ 装配面模块下一回合读到它。
+        // 与 `last`（观测面）分开存不是重复：`last` 带累计计数、槽只放计划本体，
+        // 但两者写在同一处 ⇒ 不会漂移。
+        *self
+            .slot
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(plan.clone());
         let mut last = self
             .last
             .lock()
@@ -267,6 +326,27 @@ mod tests {
         assert_eq!(value["rejections_seen"], json!(0));
         assert_eq!(value["last_plan"], serde_json::Value::Null);
         assert_eq!(value["event_basis"], json!(SOCIAL_REPAIR_EVENT_BASIS));
+    }
+
+    #[test]
+    fn rejection_writes_the_shared_slot_and_the_reader_sees_the_same_plan() {
+        let slot = repair_plan_slot();
+        let source = Arc::new(SocialRepairObservationSource::with_slot(
+            on_switches(),
+            Arc::clone(&slot),
+        ));
+        assert!(source.latest_plan().is_none(), "零事件 = 槽空");
+        let plan = source.record_rejection();
+        assert_eq!(
+            source.latest_plan(),
+            Some(plan.clone()),
+            "读侧（装配面）与写侧（事件面）必须是同一份计划"
+        );
+        let from_slot = slot
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone();
+        assert_eq!(from_slot, Some(plan), "槽里就是刚算出的计划");
     }
 
     #[test]

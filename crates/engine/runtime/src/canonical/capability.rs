@@ -628,10 +628,20 @@ mod tests {
         assert_eq!(registry.control_len(), 1);
     }
 
-    /// Compile-time proof that the test clock type satisfies the context port.
-    #[allow(dead_code)]
-    fn _control_context_accepts_a_clock(session: &mut Session, clock: &dyn Clock) {
-        let _ = ControlContext::new(session, RequestId::new(), TraceId::new(), clock);
-        let _ = SessionId::new();
+    /// 运行时真跑的用例（取代原来的 `#[allow(dead_code)]` 编译期证明）：
+    /// `ControlContext` 必须接受运行时时钟端口 `&dyn Clock`。
+    ///
+    /// 2026-10-31：`check_dead_code` 的棘轮**只减不增** ⇒ 新增豁免不被允许；
+    /// 但这条「端口签名不能漂移」的约束确实有价值 ⇒ 改成**真跑的测试**：
+    /// 同一约束被覆盖到，且它不再是死代码。
+    #[test]
+    fn control_context_accepts_the_runtime_clock_port() {
+        let clock = apeireth_core::clock::SystemClock;
+        let id = SessionId::new();
+        let rendered = id.to_string();
+        let mut session = Session::new(id, &clock);
+        let context = ControlContext::new(&mut session, RequestId::new(), TraceId::new(), &clock);
+        assert_eq!(context.session.id.to_string(), rendered);
+        assert!(!context.trace.to_string().is_empty());
     }
 }

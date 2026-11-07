@@ -829,14 +829,7 @@ pub(crate) fn admin_error(
         .into_response()
 }
 
-/// 面板族运行期错误帧 (`500 runtime_error`); 技能库等旁路面板模块同用。
-pub(crate) fn panel_error(message: String) -> Response {
-    (
-        StatusCode::INTERNAL_SERVER_ERROR,
-        Json(serde_json::json!({ "error": { "code": "runtime_error", "message": message, "solution": "重启 Companion 后重试, 若复现请提交日志" } })),
-    )
-        .into_response()
-}
+pub(crate) use crate::panel_errors::panel_error;
 
 // ---------------------------------------------------------------------------
 // V2-c 面板按域过滤 (非默认域 = 按域过滤返回; 默认域/域面未接线 = 零回归)
@@ -1250,6 +1243,21 @@ async fn append_episode(
         )
             .into_response();
     }
+    // **会话 id 校验**：`SessionId` 只接受 UUID。此前这里把原样字符串直接透传给
+    // 命令端口，非法 id 会以 500 `runtime_error` + 「重启 Companion 后重试」返回 ——
+    // 而重启治不了格式错误，那是**误导性建议**（实测：`session: "s1"`）。
+    // 与 `session_settings.rs::invalid_request` 同口径：客户端输入问题 = 400。
+    if request.session.parse::<SessionId>().is_err() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "error": {
+                "code": "invalid_session_id",
+                "message": format!("session 必须是 UUID 形式，收到 {:?}", request.session),
+                "solution": "用 GET /v1/panel/sessions 查看现有会话 id；新建会话后再追加"
+            } })),
+        )
+            .into_response();
+    }
     let memory = state
         .services
         .memory_commands
@@ -1440,7 +1448,7 @@ async fn list_modules(State(state): State<GatewayState>) -> Response {
 }
 
 // ---------------------------------------------------------------------------
-// Capability manifest
+// Capability manifest（口径：只描述**网关/面板面**；`not_assembled` = 该 HTTP 面未装配，不等于能力不存在——`subagents.orchestration` 网关无端点但 CLI `apeireth subagent` 可用）
 // ---------------------------------------------------------------------------
 
 fn cap(

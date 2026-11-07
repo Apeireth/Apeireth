@@ -133,11 +133,6 @@ impl AdaptiveBaseline {
         }
     }
 
-    /// Convenience: a single unnamed series (`"value"`).
-    pub fn scalar(alpha: f64) -> Self {
-        Self::new(["value"], alpha)
-    }
-
     /// Number of series.
     pub fn len(&self) -> usize {
         self.names.len()
@@ -347,11 +342,6 @@ impl DriftDetector {
             window_threshold: window_threshold.max(1),
             streak: vec![0; n],
         }
-    }
-
-    /// Default 2σ / 3-streak detector for `n` series.
-    pub fn with_len(n: usize) -> Self {
-        Self::new(n, 2.0, 3)
     }
 
     /// Observe one vector against `baseline`. Returns every series whose

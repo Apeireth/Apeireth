@@ -11,7 +11,13 @@ impl MemoryTool {
         if self.state.contracts && instance.is_none() {
             return fail(call, "not_ready", "module instance is not bound");
         }
-        let mapping = match &self.state.mappings {
+        let mappings = self
+            .state
+            .mappings
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        let mapping = match &mappings {
             Some(mappings) => match mappings.lease(ctx) {
                 Some(mapping) if mapping.memory.as_ref().is_some_and(|a| a.writable_private) => {
                     Some(mapping)

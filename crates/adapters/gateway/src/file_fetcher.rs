@@ -173,6 +173,15 @@ impl TransparentFileFetcher {
         self.cache_write_failures
     }
 
+    /// 磁盘缓存目录（自述面 / 测试用）。
+    pub fn cache_dir(&self) -> &Path {
+        &self.cache_dir
+    }
+
+    /// 落地解析校验：白名单根目录约束按**真实路径**再核对一次（防符号链接越狱）。
+    ///
+    /// `validate_path_safety` 只查词面（`..` / NUL）；符号链接能把词面合法的
+    /// 路径指向根目录之外 ⇒ 取用前按当前文件系统解析一次（origin/main 侧引入）。
     fn validate_local_resolution(&self, path: &Path) -> Result<(), FileFetchError> {
         if self.allowed_roots.is_empty() {
             return Ok(());
@@ -215,6 +224,8 @@ impl TransparentFileFetcher {
         cache_key: &str,
     ) -> Result<Option<FetchedFile>, FileFetchError> {
         let meta_path = self.meta_path(cache_key);
+        // 元数据必须是**普通文件**（`symlink_metadata`，不跟随符号链接）：
+        // 指向别处的链接不当作命中（origin/main 侧引入）。
         if !is_regular_file(&meta_path) {
             return Ok(None);
         }
@@ -225,6 +236,8 @@ impl TransparentFileFetcher {
             let _ = std::fs::remove_file(&meta_path);
             return Ok(None);
         };
+        // 元数据必须**绑定本 URL**且哈希字段形状合法：别的 URL 的元数据
+        // 不能顶替本 URL 的缓存内容（origin/main 侧引入）。
         if meta.original_url != file_url
             || meta.sha256_hash.len() != 64
             || !meta.sha256_hash.bytes().all(|c| c.is_ascii_hexdigit())
@@ -263,6 +276,8 @@ impl TransparentFileFetcher {
     fn write_disk_cache(&self, file: &FetchedFile) -> Result<(), FileFetchError> {
         std::fs::create_dir_all(&self.cache_dir)?;
         let blob_path = self.blob_path(&file.sha256_hash);
+        // 已有 blob 也可能是**坏的**（被截断/篡改）—— 逐字节重算哈希核对，
+        // 坏的就重写：不能因「文件已存在」就跳过写（origin/main 侧引入）。
         let valid_blob = is_regular_file(&blob_path)
             && std::fs::read(&blob_path).is_ok_and(|data| sha256_hex(&data) == file.sha256_hash);
         if !valid_blob {
@@ -356,16 +371,28 @@ struct CacheMeta {
 ///
 /// 缓存文件必须「要么是旧版本、要么是完整新版本」——
 /// 直接覆写会留下写一半的条目，下次命中即坏数据。
+///
+/// 实现改走仓内唯一原子写实现 `apeireth_core::storage_atomic`（origin/main 侧）：
+/// 独占创建临时文件（`create_new`，不写穿预置的同名链接/文件）+ 替换，
+/// 权限收敛到 `0o600`；父目录也由该实现兜底创建。
 fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), FileFetchError> {
     // The shared primitive uses exclusive temporary creation and replacement.
     // Cache data is owner-only on Unix; normal restart persistence is sufficient.
     apeireth_core::storage_atomic::write_atomic(path, bytes, 0o600).map_err(FileFetchError::Io)
 }
 
+/// 是否为**普通文件**（`symlink_metadata`，不跟随符号链接）。
+///
+/// 缓存条目必须是普通文件：符号链接（哪怕指向普通文件）一律不认，
+/// 避免被链接指向缓存目录之外。
 fn is_regular_file(path: &Path) -> bool {
     std::fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_file())
 }
 
+/// 解析路径：已存在的部分做 `canonicalize`，缺失部分按原样拼回。
+///
+/// 用于白名单根目录核对 —— 目标文件本身可能还不存在（远端回退场景），
+/// 故取「最长已存在前缀」的真实路径再比。
 fn resolve_existing_prefix(path: &Path) -> std::io::Result<PathBuf> {
     let mut prefix = path.to_path_buf();
     let mut tail = Vec::new();
@@ -493,7 +520,9 @@ mod kani_base64_proofs {
 mod tests {
     use super::*;
 
-    // ===== 磁盘缓存（IMPLEMENTED；生产消费点仍未接线）=====
+    // ===== 磁盘缓存（2026-10-25 接电：此前 `cache_dir` 是死字段）=====
+    // origin/main 侧另补安全面：符号链接不认、元数据与 URL 绑定、坏 blob 重写、
+    // 白名单根目录按真实路径核对（用例一并保留）。
 
     /// 进程内唯一的临时目录（本 crate 无 `tempfile` 依赖，不为此新增依赖）。
     ///
