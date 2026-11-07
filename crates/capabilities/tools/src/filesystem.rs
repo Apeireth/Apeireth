@@ -29,10 +29,11 @@ use apeireth_protocol::canonical::{NormalizedTool, ToolCall, ToolResult};
 use async_trait::async_trait;
 use serde::Deserialize;
 
-use crate::observed_gate::{FileVersion, ObservedGate};
-use crate::sensitive_path::{
-    credential_surface_refusal, is_sensitive_path, redact_secret_field_values,
+use crate::guardrail::{
+    append_credential_tripwire, attach_credential_tripwire, scan_result_face, LeakedCredentialKind,
 };
+use crate::observed_gate::{FileVersion, ObservedGate};
+use crate::sensitive_path::{credential_surface_refusal, is_sensitive_path};
 
 /// Default maximum file size for `read` (1 MiB).
 pub const DEFAULT_MAX_FILE_SIZE: u64 = 1024 * 1024;
@@ -271,9 +272,15 @@ impl FilesystemTool {
                     self.observed_gate.observe_present(&canonical, version);
                     self.observed_gate.observe_present(&request_path, version);
                 }
-                // 敏感面治理: 配置可读, 但密钥字段的**字段值**脱敏为
-                // `[redacted]` (与启动日志脱敏同一语义); 非敏感字段逐字节照读。
-                let content = redact_secret_field_values(&content);
+                // 敏感面治理 + 凭据形状绊线 (批次 1): 两层按 **形状层 → 字段层**
+                // 的层序过这一面 (统一助手 `crate::guardrail::scan_result_face`:
+                // 形状层 = `ToolGuardrail::scan_and_sanitize_output`, 字段层 =
+                // 字段值脱敏) ⇒ ① 形状层先在**明文**上判定 (命中是真的); ② 字段层
+                // 后接管字段值 ⇒ 含口令赋值的内容, 终稿渲染与接线前**逐字节相同**
+                // (可见标签仍是 `[redacted]`, 零可见变化); 非敏感字段逐字节照读。
+                // 零命中 ⇒ 内容逐字节原样返回 (不挂任何标记)。
+                let scan = scan_result_face(&content).with_field_layer();
+                let content = append_credential_tripwire(&scan.text, &scan.leaked_kinds);
                 ToolResult::ok(&call.id, serde_json::Value::String(content))
             }
             Err(_) => self.tool_result_for_error(
@@ -332,12 +339,25 @@ impl FilesystemTool {
         let truncated = total > MAX_LIST_ENTRIES;
         entries.truncate(MAX_LIST_ENTRIES);
 
-        let value = serde_json::json!({
-            "path": self.relative_display(&canonical, &root),
-            "count": entries.len(),
+        // M1 凭据形状绊线 (批次 1): 条目名与相对路径也是**结果面** —— 文件名
+        // 本身可以带凭据形状 (凭据形状不是「内容」的专利)。这一面没有字段值层
+        // (接线前也没有) ⇒ 只过形状层。零命中 ⇒ 逐字节不变。
+        let path_scan = scan_result_face(&self.relative_display(&canonical, &root));
+        let mut leaked_kinds: Vec<LeakedCredentialKind> = path_scan.leaked_kinds.clone();
+        let mut scanned_entries = Vec::with_capacity(entries.len());
+        for (_, kind, name) in entries {
+            let name_scan = scan_result_face(&name);
+            leaked_kinds.extend(name_scan.leaked_kinds.iter().copied());
+            scanned_entries.push(serde_json::json!({ "name": name_scan.text, "kind": kind }));
+        }
+
+        let mut value = serde_json::json!({
+            "path": path_scan.text,
+            "count": scanned_entries.len(),
             "truncated": truncated,
-            "entries": entries.into_iter().map(|(_, kind, name)| serde_json::json!({ "name": name, "kind": kind })).collect::<Vec<_>>(),
+            "entries": scanned_entries,
         });
+        attach_credential_tripwire(&mut value, &leaked_kinds);
 
         ToolResult::ok(&call.id, value)
     }
@@ -364,12 +384,18 @@ impl FilesystemTool {
             "other"
         };
 
-        let value = serde_json::json!({
-            "path": self.relative_display(&canonical, &root),
+        // M1 凭据形状绊线 (批次 1): 相对路径是结果面的一部分 ⇒ 同一道绊线。
+        // 这一面没有字段值层 (接线前也没有) ⇒ 只过形状层。
+        let path_scan = scan_result_face(&self.relative_display(&canonical, &root));
+        let display_path = path_scan.text;
+
+        let mut value = serde_json::json!({
+            "path": display_path,
             "kind": kind,
             "size": metadata.len(),
             "readonly": metadata.permissions().readonly(),
         });
+        attach_credential_tripwire(&mut value, &path_scan.leaked_kinds);
 
         ToolResult::ok(&call.id, value)
     }

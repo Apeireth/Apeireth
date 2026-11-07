@@ -15,9 +15,10 @@ use apeireth_protocol::canonical::{NormalizedTool, ToolCall, ToolResult};
 use async_trait::async_trait;
 use serde::Deserialize;
 
-use crate::sensitive_path::{
-    credential_surface_refusal, is_sensitive_path, redact_secret_field_values,
+use crate::guardrail::{
+    append_credential_tripwire, attach_credential_tripwire, scan_result_face, LeakedCredentialKind,
 };
+use crate::sensitive_path::{credential_surface_refusal, is_sensitive_path};
 
 const DEFAULT_MAX_RESULTS: usize = 20;
 const MAX_RESULTS_CAP: usize = 100;
@@ -452,21 +453,44 @@ impl ToolCapability for SearchTool {
                 .then_with(|| a.text.cmp(&b.text))
         });
 
-        let value = serde_json::json!({
-            "query": params.query,
-            "path": Self::relative_display(&canonical, &root),
-            "count": results.len(),
-            "truncated": truncated,
-            "matches": results.into_iter().map(|m| serde_json::json!({
-                "path": m.path,
+        // M1 凭据形状绊线 (批次 1): 命中行是**工作区内容** —— 凭据形状外泄到
+        // 模型的主要面就在这里。命中行按 **形状层 → 字段层** 的层序过 (统一助手
+        // `crate::guardrail::scan_result_face`: 形状层 =
+        // `ToolGuardrail::scan_and_sanitize_output`, 字段层 = 字段值脱敏) ⇒
+        // ① 形状层先在**明文**上判定 (命中是真的); ② 字段层后接管字段值 ⇒ 命中行
+        // 的可见标签与接线前**逐字节相同** (零可见变化)。
+        // ⚠️ 检索匹配仍按原文进行, 只是不回显字段值 (敏感面治理的既有口径)。
+        // 查询回显与相对路径同样过绊线 (回显里也可能带着调用方自己搜的形状);
+        // 这两面没有字段值层 (接线前也没有) ⇒ 只过形状层。
+        // 零命中 ⇒ 逐字节不变 (不挂任何标记)。
+        let query_scan = scan_result_face(&params.query);
+        let path_scan = scan_result_face(&Self::relative_display(&canonical, &root));
+        let mut leaked_kinds: Vec<LeakedCredentialKind> = Vec::new();
+        leaked_kinds.extend(query_scan.leaked_kinds.iter().copied());
+        leaked_kinds.extend(path_scan.leaked_kinds.iter().copied());
+        let mut scanned_matches = Vec::with_capacity(results.len());
+        for m in results {
+            let match_path_scan = scan_result_face(&m.path);
+            let text_scan = scan_result_face(&m.text).with_field_layer();
+            leaked_kinds.extend(match_path_scan.leaked_kinds.iter().copied());
+            leaked_kinds.extend(text_scan.leaked_kinds.iter().copied());
+            scanned_matches.push(serde_json::json!({
+                "path": match_path_scan.text,
                 "line": m.line,
-                // 输出侧敏感面治理: 命中行里的密钥字段值脱敏为 `[redacted]`
-                // (检索匹配仍按原文进行, 只是不回显字段值)。
-                "text": redact_secret_field_values(&m.text),
+                "text": text_scan.text,
                 "column": m.column,
                 "occurrences": m.occurrences,
-            })).collect::<Vec<_>>(),
+            }));
+        }
+
+        let mut value = serde_json::json!({
+            "query": query_scan.text,
+            "path": path_scan.text,
+            "count": scanned_matches.len(),
+            "truncated": truncated,
+            "matches": scanned_matches,
         });
+        attach_credential_tripwire(&mut value, &leaked_kinds);
 
         ToolResult::ok(&call.id, value)
     }

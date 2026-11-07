@@ -735,6 +735,171 @@ impl EgressSweeper {
     }
 }
 
+// ── 结果面凭据绊线 (共享助手) ───────────────────────────────────────────────
+//
+// 默认开的三个只读族 (`filesystem` / `search` / `repo`) 的**结果面**共用这一道.
+// 两层覆盖面不同, 缺一不可:
+//   · **形状层 (M1)**: [`ToolGuardrail::scan_and_sanitize_output`] —— 凭据的
+//     **形状** (裸密钥串 / PEM 私钥块 / 明文口令赋值 …). 形状不是「值」的专利:
+//     裸串与 PEM 块都不带字段名, 字段值层认不出它们.
+//   · **字段值层 (M4)**: `crate::sensitive_path::redact_secret_field_values` ——
+//     key / token / secret / password 等**字段名 + 值**形态; 字段值一律换成
+//     `[redacted]`, 字段名与非敏感字段逐字节保留.
+//
+// **层序固定: 形状层 → 字段层** (批次 1 裁决):
+//   ① 形状层先在**明文**上判定 ⇒ 命中是真的 (明文口令在明文上命中, 不是在
+//      「已遮过的字段值」上误命中);
+//   ② 字段层后接管**字段值** ⇒ 含口令赋值的内容, 终稿渲染与接线前**逐字节
+//      相同** (可见标签仍是 `[redacted]`, 零可见变化).
+//
+// ⚠️ **桥接 (两层之间的标签交接)**: 字段层的实现把 `[` 开头的值当**容器值**
+//    跳过 ⇒ 形状层的遮形标签 (`[REDACTED_PASSWORD]` 等) 落在字段值位时, 字段层
+//    **不接管** ⇒ 可见标签会从 `[redacted]` 漂成形状层标签 (可见变化). 为保住
+//    「零可见变化」, 两层之间加一道桥接: 形状层的标签先换成字段层认得的
+//    **普通词占位** → 字段层照常接管该字段值 → 字段层**没接管**的占位再还原成
+//    形状层标签 ⇒ 字段值归字段层, 裸形状归形状层.
+//
+// 纪律 (与内核与 shell 结果面同一套):
+//   · **零命中** ⇒ 内容逐字节原样返回, **不挂任何侧车** ⇒ 干净答案的形状与
+//     字节都不变 (「未被扫动的答案保持原样」);
+//   · **命中** ⇒ 内容换成脱敏文本, 并挂上可观测的 `credential_tripwire` 标记
+//     (与 shell 同名字段口径) ⇒ 命中不静默.
+
+/// 形状层 (M1) 的遮形标签全集 (内核既有字符串) —— 桥接用.
+///
+/// 与 [`ToolGuardrail::scan_and_sanitize_output`] 写死的替换标签一一对应;
+/// 少列一个 ⇒ 该族落在字段值位时字段层不接管 (可见标签漂移).
+const SHAPE_LAYER_LABELS: &[&str] = &[
+    "[REDACTED_OPENAI_KEY]",
+    "[REDACTED_AWS_KEY]",
+    "[REDACTED_GITHUB_PAT]",
+    "[REDACTED_PEM_PRIVATE_KEY]",
+    "[REDACTED_SLACK_TOKEN]",
+    "[REDACTED_JWT]",
+    "[REDACTED_BEARER]",
+    "[REDACTED_PASSWORD]",
+];
+
+/// 桥接占位 (字段层认得的**普通词**形态).
+///
+/// 约束: 不含 `:` `=` (字段层的分隔符) 与 `,` `}` `]` `#` (字段层的切分标记),
+/// 否则字段层对这一行的裁决会被占位本身带偏.
+fn bridge_placeholder(index: usize) -> String {
+    format!("__APEIRETH_TRIPWIRE_MASK_{index}__")
+}
+
+/// 形状层的遮形标签 → 桥接占位 (让字段层能看见这个值).
+fn bridge_shape_labels(text: &str) -> String {
+    let mut out = text.to_string();
+    for (index, label) in SHAPE_LAYER_LABELS.iter().enumerate() {
+        if out.contains(label) {
+            out = out.replace(label, &bridge_placeholder(index));
+        }
+    }
+    out
+}
+
+/// 桥接占位 → 形状层的遮形标签 (字段层**没接管**的那些还原).
+fn restore_shape_labels(text: &str) -> String {
+    let mut out = text.to_string();
+    for (index, label) in SHAPE_LAYER_LABELS.iter().enumerate() {
+        let placeholder = bridge_placeholder(index);
+        if out.contains(&placeholder) {
+            out = out.replace(&placeholder, label);
+        }
+    }
+    out
+}
+
+/// 结果面扫描产物: 终稿文本 + 命中族清单.
+#[derive(Debug, Clone)]
+pub(crate) struct ResultFaceScan {
+    /// 终稿文本 (零命中 ⇒ 与输入逐字节相同).
+    pub(crate) text: String,
+    /// 命中族清单 (零命中 ⇒ 空).
+    pub(crate) leaked_kinds: Vec<LeakedCredentialKind>,
+}
+
+/// 扫一个**文本结果面**: 形状层 (M1) 过一遍.
+///
+/// 零命中 ⇒ 文本**逐字节**原样返回且不带任何族 (干净答案的形状与字节都不变).
+pub(crate) fn scan_result_face(text: &str) -> ResultFaceScan {
+    let scan = ToolGuardrail::scan_and_sanitize_output(text);
+    if scan.is_clean {
+        // 干净: 原样回传 (逐字节不变), 不带任何族清单。
+        ResultFaceScan {
+            text: text.to_string(),
+            leaked_kinds: Vec::new(),
+        }
+    } else {
+        ResultFaceScan {
+            text: scan.sanitized_output,
+            leaked_kinds: scan.leaked_kinds,
+        }
+    }
+}
+
+impl ResultFaceScan {
+    /// 字段值层 (M4) 后过 —— 层序: 形状层 (M1) → 字段值层 (M4).
+    ///
+    /// 含字段名 + 值形态的内容, 终稿文本的可见标签与**接线前逐字节相同**
+    /// (`[redacted]`), 而命中族仍按**明文**判定 (真命中, 不是对已遮内容的
+    /// 误命中)。
+    pub(crate) fn with_field_layer(self) -> Self {
+        let bridged = bridge_shape_labels(&self.text);
+        let redacted = crate::sensitive_path::redact_secret_field_values(&bridged);
+        Self {
+            text: restore_shape_labels(&redacted),
+            leaked_kinds: self.leaked_kinds,
+        }
+    }
+}
+
+/// 命中侧车载荷: 与 shell 结果面同名字段口径 (`triggered` + `leaked_kinds`).
+///
+/// 内部细节: 只有下面两个「挂侧车」的入口用它 ⇒ 不单独开 crate 内的公共面。
+fn credential_tripwire_sidecar(kinds: &[LeakedCredentialKind]) -> serde_json::Value {
+    serde_json::json!({
+        "triggered": true,
+        "leaked_kinds": kinds,
+    })
+}
+
+/// 把命中侧车挂到**对象**结果面上 (零命中不挂 ⇒ 干净答案形状不变)。
+pub(crate) fn attach_credential_tripwire(
+    value: &mut serde_json::Value,
+    kinds: &[LeakedCredentialKind],
+) {
+    if kinds.is_empty() {
+        return;
+    }
+    value["credential_tripwire"] = credential_tripwire_sidecar(kinds);
+}
+
+/// 把命中侧车挂到**字符串**结果面上: 该形状挂不住结构化侧车 (协议定的裸
+/// 文本) ⇒ 侧车以一行 JSON 注解附在文本末尾 (同 MCP 结果面扫的纪律: 固定
+/// 形状的面没有结构化侧车位, 命中只能靠改写后的标记显形; 这里再多给一行
+/// 可机读的 `credential_tripwire` 载荷 ⇒ 命中不静默)。
+///
+/// 零命中 ⇒ 文本**逐字节**原样返回 (不挂任何标记)。
+pub(crate) fn append_credential_tripwire(text: &str, kinds: &[LeakedCredentialKind]) -> String {
+    if kinds.is_empty() {
+        return text.to_string();
+    }
+    let marker = serde_json::json!({
+        "credential_tripwire": credential_tripwire_sidecar(kinds),
+    })
+    .to_string();
+    let mut out = String::with_capacity(text.len() + marker.len() + 2);
+    out.push_str(text);
+    if !out.is_empty() && !out.ends_with('\n') {
+        out.push('\n');
+    }
+    out.push_str(&marker);
+    out.push('\n');
+    out
+}
+
 #[cfg(test)]
 mod tests {
 
@@ -1139,5 +1304,87 @@ mod tests {
             "{res:?}"
         );
         assert!(!res.sanitized_output.contains("[REDACTED_BEARER]"));
+    }
+
+    // ── 结果面两层 (形状层 → 字段层) 的层序 ─────────────────────────────────
+
+    /// 层序 (形状层 → 字段层): 含口令赋值的文本, 终稿标签与**接线前逐字节相同**
+    /// (`[redacted]`), 而命中族按**明文**判定 (真命中, 不是对已遮内容的误命中).
+    #[test]
+    fn field_layer_runs_after_the_shape_layer_and_keeps_the_pre_wiring_label() {
+        let scan =
+            super::scan_result_face("password = hunter2-not-a-real-secret\n").with_field_layer();
+        assert_eq!(
+            scan.text, "password = [redacted]\n",
+            "字段层须接管口令字段值 (可见标签与接线前一致)"
+        );
+        assert!(
+            scan.leaked_kinds
+                .contains(&LeakedCredentialKind::PlaintextPassword),
+            "口令族须在明文上真命中: {:?}",
+            scan.leaked_kinds
+        );
+    }
+
+    /// 裸形状 (不在字段值位) 归形状层: 标签保持形状层的, 字段层不插手.
+    #[test]
+    fn bare_shapes_keep_the_shape_layer_label() {
+        let scan = super::scan_result_face("plain line\nsk-0123456789abcdefghijklmnop\n");
+        assert!(
+            scan.text.contains("[REDACTED_OPENAI_KEY]"),
+            "裸形状归形状层: {:?}",
+            scan.text
+        );
+        assert!(scan.leaked_kinds.contains(&LeakedCredentialKind::OpenAiKey));
+    }
+
+    /// 字段值位里的形状: 字段层接管 (可见标签与接线前一致), 命中族仍按明文判定
+    /// ⇒ 两层都出力, 谁都不漏.
+    #[test]
+    fn a_shape_inside_a_field_value_is_owned_by_the_field_layer() {
+        let scan = super::scan_result_face("api_key = \"sk-0123456789abcdefghijklmnop\"\n")
+            .with_field_layer();
+        assert_eq!(
+            scan.text, "api_key = \"[redacted]\"\n",
+            "字段值位归字段层 (可见标签与接线前一致)"
+        );
+        assert!(scan.leaked_kinds.contains(&LeakedCredentialKind::OpenAiKey));
+    }
+
+    /// 零命中 ⇒ 逐字节不变, 且不带任何族 (干净答案的形状与字节都不变).
+    #[test]
+    fn a_clean_face_is_byte_identical() {
+        let scan = super::scan_result_face("plain content line\n").with_field_layer();
+        assert_eq!(scan.text, "plain content line\n");
+        assert!(scan.leaked_kinds.is_empty());
+    }
+
+    /// 侧车口径: 零命中不挂; 命中才挂, 且载荷与 shell 结果面同名字段口径.
+    #[test]
+    fn the_sidecar_only_shows_up_on_a_hit() {
+        let clean = super::scan_result_face("plain content line\n");
+        let mut value = serde_json::json!({ "path": "." });
+        super::attach_credential_tripwire(&mut value, &clean.leaked_kinds);
+        assert!(
+            value.get("credential_tripwire").is_none(),
+            "零命中不得挂侧车: {value}"
+        );
+        assert_eq!(
+            super::append_credential_tripwire(&clean.text, &clean.leaked_kinds),
+            "plain content line\n"
+        );
+
+        let hit = super::scan_result_face("password = hunter2-not-a-real-secret\n");
+        let mut value = serde_json::json!({ "path": "." });
+        super::attach_credential_tripwire(&mut value, &hit.leaked_kinds);
+        let sidecar = value.get("credential_tripwire").expect("命中必须挂侧车");
+        assert_eq!(sidecar["triggered"], serde_json::json!(true));
+        assert!(sidecar["leaked_kinds"]
+            .as_array()
+            .is_some_and(|kinds| kinds.contains(&serde_json::json!("PlaintextPassword"))));
+        assert!(
+            super::append_credential_tripwire(&hit.text, &hit.leaked_kinds)
+                .contains("credential_tripwire")
+        );
     }
 }

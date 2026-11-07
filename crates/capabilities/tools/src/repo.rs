@@ -16,6 +16,7 @@ use apeireth_protocol::canonical::{NormalizedTool, ToolCall, ToolResult};
 use async_trait::async_trait;
 use serde::Deserialize;
 
+use crate::guardrail::{append_credential_tripwire, attach_credential_tripwire, scan_result_face};
 use crate::process::{ProcessExecutor, ProcessLimits, ProcessRequest};
 
 /// Maximum bytes of git output returned to the model before truncation.
@@ -185,11 +186,18 @@ impl ToolCapability for RepoTool {
             } else {
                 String::from_utf8_lossy(&stdout).to_string()
             };
-            let value = serde_json::json!({
+            // M1 凭据形状绊线 (批次 1): git 输出是**工作区内容面** —— 提交信息 /
+            // 分支名里的裸密钥形状必须遮形后才回到模型 (统一助手
+            // `crate::guardrail::scan_result_face`: 形状层 =
+            // `ToolGuardrail::scan_and_sanitize_output`)。这一面没有字段值层
+            // (接线前也没有) ⇒ 只过形状层。零命中 ⇒ 逐字节不变。
+            let scan = scan_result_face(&text);
+            let mut value = serde_json::json!({
                 "operation": operation,
-                "output": text,
+                "output": scan.text,
                 "truncated": truncated,
             });
+            attach_credential_tripwire(&mut value, &scan.leaked_kinds);
             ToolResult::ok(&call.id, value)
         } else {
             let code = result
@@ -205,6 +213,12 @@ impl ToolCapability for RepoTool {
             } else {
                 String::from_utf8_lossy(&stderr).to_string()
             };
+            // M1 凭据形状绊线 (批次 1): 错误面同样可能带凭据形状 (git 报错会回显
+            // 远端地址 / 凭据片段)。错误面的形状是协议定的裸文本 ⇒ 侧车以一行
+            // JSON 注解附在末尾 (同 filesystem 读面的做法)。这一面没有字段值层
+            // (接线前也没有) ⇒ 只过形状层。
+            let scan = scan_result_face(&message);
+            let message = append_credential_tripwire(&scan.text, &scan.leaked_kinds);
             ToolResult::permanent_error(&call.id, message)
         }
     }
