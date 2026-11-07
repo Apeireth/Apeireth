@@ -10,9 +10,14 @@
 
 ## 1. 结论（最终判定，2026-10-28）
 
-**L1 已达成「无已知缺陷」的可交付状态**：14 项能力全部 IMPLEMENTED，
-其中 **10 项**有浏览器或真实 GPU 证据；本地等价 CI **8/8**（E-116 快照）；
-`cargo test --workspace` **1240 passed / 0 failed**（2026-11-07 实测；此处原写 1136/2026-11-01，已按纪律更正）。
+**L1 已达成「无已知缺陷」的可交付状态**：**15 项**能力全部 IMPLEMENTED，
+其中 **13 项**有浏览器或真实 GPU 证据；本地等价 CI **8/8**（E-116 快照）；
+`cargo test --workspace` **1243 passed / 0 failed**（2026-11-07 实测；历史口径 1240 → 1136/2026-11-01，**不追溯改写**）。
+
+> ⚠️ **2026-11-07 阶段收尾说明**：九项 L1 缺口的逐项状态以
+> [ui-engine-l1-capability-handoff.md](ui-engine-l1-capability-handoff.md) 为**唯一权威**（本表是「能力视角」汇总）。
+> 本表 15 项**全部已闭合**；缺口表仍余 **G2 ②（命中测试消费方）** 与 **G3（真实中文输入法）** 两处**受阻**
+> ⇒ ⇒ 那两项属「能力已 IMPLEMENTED、缺的是**外部条件**」⇒ ⇒ 不改变本表的 IMPLEMENTED 判定。
 
 ⭐⭐ **§7 的三条放行条件已全部闭合**（2026-11-01）：
 ①CI 一次真绿（run `40704477776`）；②真实 **Windows WebView2 引擎**跑通
@@ -82,9 +87,10 @@ flex / grid / 文本排版 / 层叠 / 动效时间线 ⇒ ⇒ r10 原型的 CSS 
 | 9 | **G7 资源句柄 / 加载状态 / 度量未定门控 / 纹理上传 / CLS 观测** | IMPLEMENTED + **PRODUCTION WIRED** + **HARDWARE VALIDATED（浏览器侧）** | E-107 ⇒ ⇒ 2026-11-06 补齐：`GpuTextureUploader` 在引擎内（零适配器）+ `ui-gpu::resource` 搬家；`drive_l1.py` 的 `upload` 段与 `l1_layout_shift_probe` 三条对照（真位移 > 0 / 亚像素 = 0 / 视口外 = 0）**EXIT 0** |
 | 10 | **G7 CLS 观测**（亚像素与视口外不计分） | IMPLEMENTED + WIRED | E-111 |
 | 11 | **G8 错误边界**（渲染失败挂兜底 + 原始错误可读） | IMPLEMENTED + WIRED + **浏览器已验证** | E-104 / E-106 |
-| 12 | **G8 panic 钩子**（消息记录 + 宿主上报器，防递归） | IMPLEMENTED + 部分 WIRED + 浏览器仅验「可安装」 | E-105 / E-106 |
-| 13 | 渲染/像素等价（五面 + intro） | **真实 GPU 已验证**（逐像素 0 差异，3 次稳定） | E-68/69 / E-56 / E-71 |
-| 14 | 双后端一致（WebGL vs WebGPU） | **已验证**（互差 0） | E-71 |
+| 12 | **G8 panic 钩子**（消息记录 + 宿主上报器，防递归 + **崩溃可见兜底**）| IMPLEMENTED + **PRODUCTION WIRED** + **HARDWARE VALIDATED（浏览器侧）** | E-105 / E-106 ⇒ ⇒ **2026-11-07 补真 panic 证据**：上报器改为**同步写 DOM**，`l1_panic_trigger()` 触发真 panic ⇒ ⇒ 三条对照同时成立：**崩前** `panicFallbackBefore = null` / **崩后** DOM 含注入文本 / `panicTrap = RuntimeError: unreachable`（**真 trap**）⇒ ⇒ 「一崩全白」→「一崩可见」|
+| 13 | **G9 测量目标的稳定寻址**（`IdentitySegment` / `identity_segments_at` / `path_for_identity` / `bounding_box_for_identity` / `scroll_metrics_for_identity`）| IMPLEMENTED + **PRODUCTION WIRED**（产品仓已采用，删掉 30 行重复树遍历）| 2026-11-07：判据「**重排后仍测到同一逻辑元素**」实测通过，且**断言与下标结果不同**（防假绿）|
+| 14 | 渲染/像素等价（五面 + intro） | **真实 GPU 已验证**（逐像素 0 差异，3 次稳定） | E-68/69 / E-56 / E-71 |
+| 15 | 双后端一致（WebGL vs WebGPU） | **已验证**（互差 0） | E-71 |
 
 **未达 L1 标准（缺证据或未实现）**：
 

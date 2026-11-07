@@ -16,6 +16,12 @@ Author: 前端引擎线（AI 施工）
 
 ---
 
+> ⚠️ **口径范围（先看这一条）**：本报告所有引擎数字都取自 **`ui-engine` 分支**
+> （worktree `/home/bai/Projects/apeireth-ui-wt2`，分支 `ui-engine`，10 个 crate）。
+> ⚠️ 主仓 `docs/03-reference/test-baseline.md` 里 `crates-ui/` 写的是 **432 passed**
+> ⇒ ⇒ 那是 **`main` 分支的旧副本**（7 crate 时期）⇒ ⇒ **与本报告不是同一状态，不可互相覆盖**。
+> ⇒ ⇒ 两份数字各自成立，只是**分支不同**。
+
 ## 0. 一句话结论
 
 **L1 九项里 6 项完全闭合、1 项引擎侧闭合（产品消费转 G10）、2 项受阻（需外部条件）。**
@@ -246,6 +252,26 @@ bash shell/build.sh && python3 evidence/drive_first_screen.py                   
 4. **E-192 的同类扫描**：其它探针是否也存在**单次采样竞态** ⇒ ⇒ 建议统一改成「轮询真实状态 + 等两帧」。
 
 ---
+
+## 7.5 已知的**既有**红门禁（不是本阶段引入，如实登记）
+
+### `scripts/docs_truth.py --verify --check` 当前 **EXIT 1**（`claims=29 fail=0 stale=13`）
+
+**不是本阶段引入**，证据：
+
+```
+$ grep -c "crates-ui" docs/status/claims.yaml     ⇒ 0          # claims 不覆盖 crates-ui
+$ docs_truth.py --verify | grep STALE -A2 | grep 'changed:'
+⇒ crates/adapters/cli/*、crates/adapters/gateway/*、
+  crates/engine/runtime-assembly/*、crates/capabilities/tools/*
+⇒ 无一处 crates-ui/                                           # 13 条全在主 workspace
+```
+
+⇒ ⇒ 那 13 条 STALE 是**主 workspace 其它线**改过源码而 `verified_at` 未 bump
+⇒ ⇒ ⇒ **本阶段一行都没碰它们** ⇒ ⇒ **不代 bump**（那是伪造核验）。
+
+**留待主 workspace 各自的线复核**；本报告的引擎线不受影响
+（`fail=0`，且 `docs_index` / `docs_links` 两门都是 **0**）。
 
 ## 8. 诚实边界（不夸大）
 

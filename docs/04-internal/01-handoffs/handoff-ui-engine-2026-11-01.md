@@ -15,7 +15,7 @@
 | 工作树 | **干净**（`git status` 无改动） |
 | 主 worktree | `/home/bai/Projects/Apeireth-rust`（**另一条线在用**，有 68 个未提交改动 ⇒ **不要动**） |
 | 本线 worktree | `/home/bai/Projects/apeireth-ui-wt2`（分支 `ui-engine`，与远端分支**同内容**） |
-| 台账 | `docs/04-internal/ui-engine-defect-ledger.md`（E-30…**E-153**） |
+| 台账 | `docs/04-internal/ui-engine-defect-ledger.md`（E-30…**E-192**） |
 
 ### 本批已闭的口子
 
@@ -142,7 +142,7 @@ export CARGO_TARGET_DIR=/home/bai/Projects/apeireth-ui-target
 export RUSTC_WRAPPER=            # sccache 坏了，必须清空
 
 cd /home/bai/Projects/apeireth-ui-wt2/crates-ui
-cargo test --workspace --locked --offline                    # 期望 1136 passed / 0 failed
+cargo test --workspace --locked --offline                    # 期望 1243 passed / 0 failed（2026-11-07 实测）
 cargo clippy --workspace --all-targets --locked --offline -- -D warnings   # 期望 0
 cargo clippy --workspace --all-targets --target wasm32-unknown-unknown \
   --locked --offline -- -D warnings                          # 期望 0（CI 门禁）
