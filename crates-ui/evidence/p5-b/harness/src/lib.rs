@@ -3485,6 +3485,40 @@ pub fn l1_binding_probe() -> Result<JsValue, JsValue> {
         failures.push(format!("③ input 事件未把 DOM 值写回信号：{}", signal.get()));
     }
 
+    // ── ④ ⭐⭐⭐⭐ **全链闭环**（G4 的「输入 ⇒ 状态 ⇒ DOM」，三跳一次跑完）───
+    //
+    // ①②③ 各自只验**一段**：
+    //   ① 信号 → 首渲染 DOM；② 信号变 → DOM 变；③ 真实 `input` → 信号变。
+    // ⇒ ⇒ 但**没有一条**验「真实输入**经状态加工后**回到 DOM」
+    //   ⇒ ⇒ 而那正是「受控输入」的全部价值所在 —— 三跳里任何一跳断掉，
+    //   用户都会看到「我打的字没变成我该看到的东西」。
+    //
+    // ⇒ ⇒ 这里模拟应用的**真实加工**（状态加个后缀）⇒ ⇒ 再重渲染
+    //   ⇒ ⇒ 断言 DOM 显示的是**加工后**的值 ⇒ ⇒ 且**不需要**手工再写一次 DOM。
+    let before_loop = value_of("#l1-bind-input");
+    // 第一跳已完成（③ 把 DOM 的 "uplink" 写进了信号）。这里做第二、三跳：
+    // ②' 状态**被应用加工**（真实应用会做 trim / 大小写 / 拼接等）
+    signal.update(|value| format!("{value}-applied"));
+    renderer
+        .patch(
+            VNode::element("input")
+                .attr("id", "l1-bind-input")
+                .bind(Binding::text(signal.clone()))
+                .build(),
+        )
+        .map_err(|error| JsValue::from_str(&format!("打补丁失败：{error}")))?;
+    // ③' DOM 必须跟着变成**加工后**的值
+    let after_loop = value_of("#l1-bind-input");
+    if after_loop.as_deref() != Some("uplink-applied") {
+        failures.push(format!(
+            "④ 全链闭环未闭合：输入⇒状态⇒DOM 之后 DOM = {after_loop:?}（期望 uplink-applied，             加工前 {before_loop:?}）⇒ ⇒ 「我打的字没变成我该看到的东西」"
+        ));
+    }
+    // ⭐ 反向：信号本身也必须真的是加工后的值（防「DOM 对了但状态没对」）
+    if signal.get() != "uplink-applied" {
+        failures.push(format!("④ 状态未记录加工结果：{}", signal.get()));
+    }
+
     let result = js_sys::Object::new();
     let failures_array = js_sys::Array::new();
     for item in &failures {
@@ -3496,6 +3530,16 @@ pub fn l1_binding_probe() -> Result<JsValue, JsValue> {
         &JsValue::from_bool(failures.is_empty()),
     );
     let _ = js_sys::Reflect::set(&result, &JsValue::from_str("failures"), &failures_array);
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("loop_before"),
+        &JsValue::from_str(before_loop.as_deref().unwrap_or("<无>")),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("loop_after"),
+        &JsValue::from_str(after_loop.as_deref().unwrap_or("<无>")),
+    );
     let _ = js_sys::Reflect::set(
         &result,
         &JsValue::from_str("signal_value"),

@@ -12,7 +12,7 @@
 
 **L1 已达成「无已知缺陷」的可交付状态**：14 项能力全部 IMPLEMENTED，
 其中 **10 项**有浏览器或真实 GPU 证据；本地等价 CI **8/8**（E-116 快照）；
-`cargo test --workspace` **1136 passed / 0 failed**（2026-11-01 实测）。
+`cargo test --workspace` **1240 passed / 0 failed**（2026-11-07 实测；此处原写 1136/2026-11-01，已按纪律更正）。
 
 ⭐⭐ **§7 的三条放行条件已全部闭合**（2026-11-01）：
 ①CI 一次真绿（run `40704477776`）；②真实 **Windows WebView2 引擎**跑通
@@ -72,7 +72,7 @@ flex / grid / 文本排版 / 层叠 / 动效时间线 ⇒ ⇒ r10 原型的 CSS 
 | # | 能力 | 四级口径 | 证据 |
 |---|------|----------|------|
 | 1 | 响应式调度 / DOM 绑定与差值写回 | IMPLEMENTED + WIRED + VALIDATED（五面逐像素） | E-34 / E-71 / 五面对照 |
-| 2 | 受控输入闭环（`value`/`checked` 差值写回 + 回读） | IMPLEMENTED + WIRED | E-90 块；`renderer.rs` 的 `patch_props` |
+| 2 | 受控输入闭环（`value`/`checked` 差值写回 + 回读） | IMPLEMENTED + **PRODUCTION WIRED** + **HARDWARE VALIDATED（浏览器侧）** | E-90 块；`renderer.rs` 的 `patch_props` ⇒ ⇒ **2026-11-07 补全链证据**：`l1_binding_probe` ④ 一次跑完「真实 `input` ⇒ 信号 ⇒ 应用加工 ⇒ 重渲染 ⇒ DOM」（实测 `uplink` → `uplink-applied`）；IME 静默期由 `l1_integration_probe` ② 实证 |
 | 3 | **G1 布局测量**（`bounding_box`/`scroll_metrics`/`set_scroll_top`） | IMPLEMENTED + **PRODUCTION WIRED** + **HARDWARE VALIDATED（浏览器侧）** | E-91 / E-98（引擎盒 ≡ JS `getBoundingClientRect`） ⇒ ⇒ **生产侧消费**（2026-11-06，产品仓）：三个 API 各承担一个真判定，完成「新建后把被滚出可视区的列表滚回顶部」⇒ ⇒ 实测 `corrections = 1` / `scrollTopAfter = 0` / `first_item_top: -959 → 0` |
 | 4 | **G2 事件面（19 类）与载荷**（`checked`/坐标/`button`/`pointer_id`/`alt`/组合数据） | IMPLEMENTED + WIRED（浏览器侧载荷已验证） | E-92 / E-98 |
 | 5 | **G3 焦点栈 + 焦点陷阱** | IMPLEMENTED + WIRED + 浏览器已验证（`activeElement`） | E-93 / E-96 / E-98 |
