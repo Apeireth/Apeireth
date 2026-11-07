@@ -375,26 +375,29 @@ claims:
     notes: "R8-B1 b6d902ce 适配器（ChainOutcome → GovernanceVerdict 四态映射）；R8-B2 已接生产装配根：builder.with_governance(governance_chain::production(...))，回滚 = 换回 Arc<GovernancePipeline> 一行；既有 CLI 治理/审批测试期望不变。2026-10-22 抬级：原「零生产接线」口径失效。；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）；2026-10-28 生产收敛复核：源码变更及回归证据见 kernel-convergence-final-acceptance-2026-10-28.md；不将 Legacy SubLoop 或旧数据 Profile 映射宣称已迁移。；2026-10-29 S5：完整 TurnRequest 和审批续跑均委托原 Kernel，未改生产治理链或工具审批规则；真实 bootstrap 的冻结审批、原 cognitive_module_abi、生产 permission/receipt 和 runtime all-targets 通过。 证据见 kernel-convergence-s5-2026-10-29.md。；2026-11-07 声明核验（stale 批）：窄口径真跑 **25 + 4 = 29 条全绿 / exit 0**；生产调用点 = `crates/adapters/cli/src/governance_chain.rs:221 production()`（→ `ChainGovernanceHook`）→ CLI 装配根 `with_governance(...)`；链入口 = `crates/engine/runtime/src/canonical/dispatch_admission.rs:242/345` 的 `evaluate_verbose(...)` ⇒ 结论仍成立，**等级与默认不变**（无 live 模型/硬件证据 ⇒ 不抬 HARDWARE VALIDATED）。"
 
   - id: gov.reflection_queue
-    title: "R8-C 进程内延迟反思队列——默认未装配、零行为变化"
-    level: IMPLEMENTED
-    default: null
-    switch_env: null
+    title: "R8-C 进程内延迟反思队列——生产可选装配（默认 OFF）"
+    level: PRODUCTION WIRED
+    default: "OFF"
+    switch_env: APEIRETH_ENABLE_REFLECTION_QUEUE
     sources:
       - crates/foundation/governance/src/chain.rs
+      - crates/adapters/cli/src/governance_chain.rs
     tests:
       - crates/foundation/governance/src/chain.rs
+      - crates/adapters/cli/tests/reflection_queue_wiring.rs
     verified_at: 5c74f955e62cebcb1979fb3606e804d9fb10d73c
     # ⚠️ **2026-11-06 收窄**（主指挥拍板）：原命令是 crate 级宽命令
     # ⇒ ⇒ 跑 governance crate **全部** lib 单测（241 个）⇒ ⇒ 而本声明只相关 6 个
     # ⇒ ⇒ ⇒ 其余 235 个任一红 ⇒ ⇒ **本声明就红** ⇒ ⇒ 「捎带别人的红」
     # ⇒ ⇒ ⇒ 与两个兄弟声明同形（`provider_proxy` / `workspace_list` 各只跑自己的）
-    verify_cmd: "cargo test -p apeireth-governance --lib -- reflection && cargo test -p apeireth-governance --lib -- scheduler"
+    # 2026-11-07 抬级：追加 CLI 侧接线实证（production() 装配路径真跑）⇒ 两条都是窄口径
+    verify_cmd: "cargo test -p apeireth-governance --lib -- reflection && cargo test -p apeireth-cli --test reflection_queue_wiring"
     owner: governance
     next_review: "2026-11-20"
-    notes: "R8-C da7e224f：Immediate/Delayed ReflectionScheduler + 到期审计；仅库内注入面。R8-B2 装配未启用反射调度器（production 只注入 gate + 审计 sink），生产仍零反射、零行为变化 —— 保持 IMPLEMENTED，不冒称接线。"
+    notes: "R8-C da7e224f：Immediate/Delayed ReflectionScheduler + 到期审计。；2026-11-07 抬级（R8-B2 根因清除）：production() 现按开关装配调度器 —— crates/adapters/cli/src/governance_chain.rs:291 production() 读 APEIRETH_ENABLE_REFLECTION_QUEUE（仅字符 1 视为开；空值/0/true/yes/on 一律关）→ reflection_scheduler_for(bool) → DelayedReflectionScheduler(SystemChainClock, 0ms) → GovernanceChain::with_reflection_scheduler；默认 OFF ⇒ 不填开关时与接线前同行为（零行为变化）。；真跑：cargo test -p apeireth-cli --test reflection_queue_wiring ⇒ 3 passed / 0 failed（开=第 2 轮产出 governance.reflection_due 审计；关=3 轮零反射审计但仍有 governance.allowed 记录 ⇒ 断言非空转；开关只认 1）。；反向验伪：把 reflection_scheduler_for 恒改回 None ⇒ an_enabled_reflection_queue_produces_a_due_reflection_audit 变红；恢复 ⇒ 3 passed。；delay=0 语义：GovernanceChain::run 先 sweep 到期、后 schedule ⇒ 本轮刚排的条目下一轮才到期 ⇒ 不依赖墙钟 ⇒ 不 flaky。；⚠️ 口径边界：本条只证明「反思队列可接进生产治理链并真产出审计」，不证明存在 runner 消费队列 ⇒ auto-pilot 仍 NOT IMPLEMENTED；亦非 HARDWARE VALIDATED。"
 
   - id: gov.chain_drill_ci
-    title: "R8-D 治理链六段演练入 CI（rust-tests 显式步骤，尚未首跑）"
+    title: "R8-D 治理链六段演练入 CI（rust-tests 显式步骤，已前置到 nextest 之前，CI 首跑待取证）"
     level: IMPLEMENTED
     default: null
     switch_env: null
@@ -408,7 +411,7 @@ claims:
     verify_cmd: "cargo test -p apeireth-governance --test governance_chain_drill --locked"
     owner: governance
     next_review: "2026-11-20"
-    notes: "R8-D 60627d8e：rust-tests job 增治理链演练显式步骤；本地等价命令 cargo test -p apeireth-governance --test governance_chain_drill 4 passed（2026-10-31：多签守卫用例已去 #[ignore]）。远端仍 0 次执行：该步骤排在 cargo nextest --workspace 之后，三平台 nextest 常红（基座既有）导致 job 早停、步骤被 skip（2026-10-22 复核 rust.yml 运行实况）；故仅登记 IMPLEMENTED 证据面，待 nextest 基线转绿后自动进入执行面。；2026-10-29 D3：rust.yml 只修 secret-scan shell 引导并增加扫描器行为自检；governance chain drill 步骤、三路径判据与权限不变；本批 workspace 主门禁包含原回归。"
+    notes: "R8-D 60627d8e：rust-tests job 增治理链演练显式步骤；本地等价命令 cargo test -p apeireth-governance --test governance_chain_drill 4 passed（2026-10-31：多签守卫用例已去 #[ignore]）。；⚠️ 旧记（已失效，保留可追溯）：远端 0 次执行的根因是该步骤排在 cargo nextest --workspace 之后，三平台 nextest 常红导致 job 早停、步骤被 skip（2026-10-22 复核）。；2026-11-07 根因修复：把该步骤从 nextest 之后**前置到 nextest 之前**（.github/workflows/rust.yml:122 步骤；前置依赖核查 = 只依赖上一 step cargo build --workspace --tests --locked 的产物，不读 nextest 的 JUnit/产物）⇒ 早停根除：nextest 红时该步骤仍会执行。静态模拟 GitHub step 默认语义（success()）：改前 nextest 失败 ⇒ skip；改后 ⇒ run。本地等价真跑 4 passed / 0 failed / 0 ignored（通过/拒绝/超时三路径 + 多签守卫）。；⚠️ 仍保持 IMPLEMENTED：CI 首跑证据（三平台 run 日志里该 step 状态为 run 且含 4 passed）本地无法产生，待远端 run 回填后再抬级。；⚠️ 残余缺口（如实报）：若前置 cargo build 失败，该步骤仍会被 skip（改前改后同）。；2026-10-29 D3：rust.yml 只修 secret-scan shell 引导并增加扫描器行为自检；governance chain drill 步骤、三路径判据与权限不变；本批 workspace 主门禁包含原回归。"
 
   - id: sec.governance_chain_drill
     title: "M-of-N 逻辑票链三路径端到端合练（B7 验证证据）"
@@ -421,27 +424,30 @@ claims:
     tests:
       - crates/foundation/governance/tests/governance_chain_drill.rs
     verified_at: 5c74f955e62cebcb1979fb3606e804d9fb10d73c
-    verify_cmd: "cargo test -p apeireth-governance --test governance_chain_drill"
+    verify_cmd: "cargo test -p apeireth-governance --test governance_chain_drill --locked"
     owner: governance
     next_review: "2026-11-20"
-    notes: "通过/拒绝/超时三路径演练证据；验证面资产，不是新能力。M-of-N ≠ 密码学多签（口径见演练记录）。"
+    notes: "通过/拒绝/超时三路径演练证据；验证面资产，不是新能力。M-of-N ≠ 密码学多签（口径见演练记录）。；2026-11-07：verify_cmd 与 CI step 对齐加 --locked（CI 实跑即 --locked）；演练步骤已前置到 nextest 之前 ⇒ 三路径演练在 CI 里是失败即红的真门禁；本地真跑 4 passed / 0 failed / 0 ignored。；⚠️ 仍保持 IMPLEMENTED：CI 首跑证据未取（三平台 run 日志），且验证面资产不构成新的生产调用点 ⇒ 不冒称 PRODUCTION WIRED。"
 
   - id: rel.release_asset_verify
     title: "发布资产校验脚本（SHA-256 + 签名状态如实报，B8）"
-    level: IMPLEMENTED
+    level: PRODUCTION WIRED
     default: null
     switch_env: null
     sources:
       - scripts/verify-release-assets.ps1
+      - .github/workflows/publish-release.yml
       - docs/packaging/release-asset-verification.md
       - docs/04-internal/backend-enhancement/B8-release-signing-2026-10-19.md
-    tests: []
+    tests:
+      - scripts/test_verify_release_assets.py
     verified_at: c9251271
-    verify_cmd: "pwsh -NoProfile -File scripts/verify-release-assets.ps1 -ExpectedSha256 <hex> -Path <asset>"
-    verify_skip_reason: "命令含 `<hex>` / `<asset>` **占位符** ⇒ ⇒ 需**发布资产的真实 SHA-256 与路径**才能跑 ⇒ ⇒ CI 无从取得 ⇒ ⇒ 由发布流程执行时人工传入真实参数（pwsh 下）⇒ ⇒ 不在 CI 判"
+    # 2026-11-07 换验证面：原命令含 `<hex>` / `<asset>` 占位符 + 参数名写错（脚本要 -ArtifactPath，不是 -Path）
+    # ⇒ ⇒ 那条命令**跑不了** ⇒ ⇒ 验证面是装饰品；现改为可自动运行的行为契约自测（10 用例，无占位符）
+    verify_cmd: "python3 scripts/test_verify_release_assets.py"
     owner: release
     next_review: "2026-11-20"
-    notes: "7/7 手工用例见 B8 登记（无自动测试，如实登记 tests 为空）；签名/可复现构建属排期待办。；2026-10-22 批次复核：generate-release-manifest exit 0 / verify-release-assets PASS exit 0（rc.4 exe 本地 smoke）；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）"
+    notes: "7/7 手工用例见 B8 登记。；2026-11-07 抬级：① 生产调用点确凿 = .github/workflows/publish-release.yml:69-82 的 Verify installer assets against the manifest 步骤（generate-release-manifest 产 SHA256SUMS → 逐件 verify-release-assets.ps1 -ArtifactPath … -ManifestPath … → if ($LASTEXITCODE -ne 0) { exit 1 } ⇒ 失败即阻断上传/发布，fail-closed）；② 验证面从「不可运行」变「可自动运行」= scripts/test_verify_release_assets.py 行为契约自测 10 用例，真跑 Ran 10 tests OK / exit 0（真调 pwsh 跑真实脚本，非 mock）；③ 反向验伪两条：把夹具期望 SHA-256 改成全零 ⇒ FAILED (failures=5)；可复现开关 APEIRETH_VERIFY_TEST_FAULT=wrong-expected-hash ⇒ FAILED (failures=3) / exit 1 ⇒ 非恒绿断言。；⚠️ 诚实边界（不因抬级抹掉）：签名状态如实报 ≠ 签名有效（本机 Linux = 本平台无 Authenticode 校验面；发布物代码签名仍属排期待办）；哈希一致 ≠ 二进制来源可证（可复现构建证明 = 排期待办）；本条证明校验器判定语义 + 流水线接线，不证明某次真实发布产物已被验证过。；2026-10-22 批次复核：generate-release-manifest exit 0 / verify-release-assets PASS exit 0（rc.4 exe 本地 smoke）。"
 
   - id: sec.sql_readonly_gate
     title: "桌面三数据库客户端只读闸加固（B1：词法级写类拒绝 + 远程只读事务纵深）"

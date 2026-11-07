@@ -3,8 +3,8 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: 8d27059141a4d8598944dc4c5aea8370654013d496d34924a994fafe084f1c7c
-claims_total: 51
+claims_sha256: e1ebf1d6561fafc51ac5b3e5e851f51ba14c67621f9e80190fa5a723d992faca
+claims_total: 52
 items:
   - id: "rt.provider_router"
     capability: "跨 provider fallback + 健康态（运行时路由）"
@@ -307,7 +307,7 @@ items:
         - "crates/capabilities/tools/tests/process_executor.rs"
       claims_id: "sec.linux_containment"
     gaps:
-      - "未达 PRODUCTION WIRED：进程组 + setrlimit(AS/CPU/FSIZE/NPROC) + PR_SET_PDEATHSIG + PR_SET_NO_NEW_PRIVS；不承诺 cgroup/seccomp/namespace/网络隔离；memory/process-count 为 partial。；2026-10…"
+      []
   - id: "sec.gateway_tls"
     capability: "Gateway TLS 真接线（PEM 真加载 fail-closed + TLS listener + 三态状态面）"
     implemented:
@@ -394,28 +394,31 @@ items:
     gaps:
       []
   - id: "gov.reflection_queue"
-    capability: "R8-C 进程内延迟反思队列——默认未装配、零行为变化"
+    capability: "R8-C 进程内延迟反思队列——生产可选装配（默认 OFF）"
     implemented:
       sources:
         - "crates/foundation/governance/src/chain.rs"
+        - "crates/adapters/cli/src/governance_chain.rs"
     wired:
       production_refs:
+        - "crates/adapters/cli/src/governance_chain.rs"
         - "crates/foundation/governance/src/chain.rs"
-    default_enabled: "n/a"
+    default_enabled: false
     validated:
       tests:
         - "crates/foundation/governance/src/chain.rs"
+        - "crates/adapters/cli/tests/reflection_queue_wiring.rs"
       claims_id: "gov.reflection_queue"
     gaps:
-      - "未达 PRODUCTION WIRED：R8-C da7e224f：Immediate/Delayed ReflectionScheduler + 到期审计；仅库内注入面。R8-B2 装配未启用反射调度器（production 只注入 gate + 审计 sink），生产仍零反射、零行为变化 —— 保持 IMPLEMENTED，不冒称接线…"
+      []
   - id: "gov.chain_drill_ci"
-    capability: "R8-D 治理链六段演练入 CI（rust-tests 显式步骤，尚未首跑）"
+    capability: "R8-D 治理链六段演练入 CI（rust-tests 显式步骤，已前置到 nextest 之前，CI 首跑待取证）"
     implemented:
       sources:
         - ".github/workflows/rust.yml"
     wired:
       production_refs:
-        []
+        - ".github/workflows/rust.yml"
     default_enabled: "n/a"
     validated:
       tests:
@@ -438,24 +441,25 @@ items:
         - "crates/foundation/governance/tests/governance_chain_drill.rs"
       claims_id: "sec.governance_chain_drill"
     gaps:
-      - "未达 PRODUCTION WIRED：通过/拒绝/超时三路径演练证据；验证面资产，不是新能力。M-of-N ≠ 密码学多签（口径见演练记录）。"
+      - "未达 PRODUCTION WIRED：通过/拒绝/超时三路径演练证据；验证面资产，不是新能力。M-of-N ≠ 密码学多签（口径见演练记录）。；2026-11-07：verify_cmd 与 CI step 对齐加 --locked（CI 实跑即 --locked）；演练步骤已前置到 nextest 之前 ⇒ 三路径演练在 CI 里是失…"
   - id: "rel.release_asset_verify"
     capability: "发布资产校验脚本（SHA-256 + 签名状态如实报，B8）"
     implemented:
       sources:
         - "scripts/verify-release-assets.ps1"
+        - ".github/workflows/publish-release.yml"
         - "docs/packaging/release-asset-verification.md"
         - "docs/04-internal/backend-enhancement/B8-release-signing-2026-10-19.md"
     wired:
       production_refs:
-        []
+        - ".github/workflows/publish-release.yml"
     default_enabled: "n/a"
     validated:
       tests:
-        []
+        - "scripts/test_verify_release_assets.py"
       claims_id: "rel.release_asset_verify"
     gaps:
-      - "未达 PRODUCTION WIRED：7/7 手工用例见 B8 登记（无自动测试，如实登记 tests 为空）；签名/可复现构建属排期待办。；2026-10-22 批次复核：generate-release-manifest exit 0 / verify-release-assets PASS exit 0（rc.4 exe 本地 s…"
+      []
   - id: "sec.sql_readonly_gate"
     capability: "桌面三数据库客户端只读闸加固（B1：词法级写类拒绝 + 远程只读事务纵深）"
     implemented:
@@ -547,7 +551,7 @@ items:
         - "frontend/companion-desktop/tests/starport-face-apps.mjs"
       claims_id: "sec.terminal_permission_surfaces"
     gaps:
-      - "未达 PRODUCTION WIRED：4 条文案测试钉子（pnpm 82/82 套件，交付记录）；本文档描述 UI 权限边界，不改变底层审批语义。"
+      - "未找到生产引用（待核）"
   - id: "bio.tone"
     capability: "神经调质→语气（W3.4 生产装配，默认关）"
     implemented:
@@ -754,7 +758,7 @@ items:
         - "crates/engine/runtime-assembly/tests/bio_observation_cells.rs"
       claims_id: "bio.social_repair"
     gaps:
-      []
+      - "未达 PRODUCTION WIRED：① 接在：装配根 install_bio_modules 注册 BioAssemblyModule（canonical/cognitive.rs），APEIRETH_ENABLE_BIO_REPAIR_GUIDANCE 只认 \"1\"；生产装配**不注入** RepairPlan（install_bi…"
   - id: "bio.quorum"
     capability: "群体感应→审议门（SG-24，生产装配，默认关）"
     implemented:
@@ -1172,6 +1176,8 @@ items:
     capability: "Mandatory System One internal execution review"
     implemented:
       sources:
+        - "crates/adapters/cli/src/lib.rs"
+        - "crates/adapters/cli/src/llm_factory_env.rs"
         - "crates/foundation/plugin/src/system_one.rs"
         - "crates/foundation/plugin/src/module_contract.rs"
         - "crates/foundation/plugin/src/tool_execution.rs"
@@ -1184,6 +1190,8 @@ items:
         - "crates/engine/runtime-assembly/src/canonical/memory_module.rs"
     wired:
       production_refs:
+        - "crates/adapters/cli/src/lib.rs"
+        - "crates/adapters/cli/src/llm_factory_env.rs"
         - "crates/engine/runtime-assembly/src/canonical/memory_module.rs"
         - "crates/engine/runtime-assembly/src/system_one.rs"
         - "crates/engine/runtime/src/canonical/dispatcher.rs"
@@ -1201,7 +1209,7 @@ items:
         - "crates/engine/runtime-assembly/tests/modular_ale.rs"
       claims_id: "rt.system_one_internal"
     gaps:
-      - "未达 PRODUCTION WIRED：Explicit Host contract and exact supervisor provider/model only. Existing Dispatcher enforces scope/approval/epoch/cancel/lifecycle/native policy befo…"
+      - "能力矩阵未出现开关 APEIRETH_ENABLE_SYSTEM_ONE（待补）"
   - id: "rt.module_messages"
     capability: "Bounded owner-authenticated module message pipeline"
     implemented:
@@ -1253,11 +1261,13 @@ items:
     capability: "检索排序契约（混合打分：BM25 词面 + 向量 + coverage 权重 0.5）"
     implemented:
       sources:
+        - "crates/engine/memory/src/hybrid_search.rs"
         - "crates/engine/memory/src/retrieval_pipeline.rs"
         - "crates/engine/memory/src/coordinator.rs"
     wired:
       production_refs:
         - "crates/engine/memory/src/coordinator.rs"
+        - "crates/engine/memory/src/hybrid_search.rs"
         - "crates/engine/memory/src/retrieval_pipeline.rs"
     default_enabled: true
     validated:
@@ -1265,6 +1275,30 @@ items:
         - "crates/engine/memory/src/retrieval_pipeline.rs"
         - "crates/engine/memory/src/coordinator.rs"
       claims_id: "mem.retrieval_ranking"
+    gaps:
+      []
+  - id: "mem.failure_learning_bridge"
+    capability: "失败 → 学习桥（失败带归因 ⇒ 负证据 ⇒ 检索权重退；会话键真落盘）"
+    implemented:
+      sources:
+        - "crates/engine/memory/src/reflexion.rs"
+        - "crates/engine/memory/src/reflexion_tuning.rs"
+        - "crates/engine/runtime-assembly/src/canonical/retrieval_tuning_wire.rs"
+        - "crates/engine/runtime-assembly/src/canonical/cognitive.rs"
+    wired:
+      production_refs:
+        - "crates/engine/memory/src/reflexion.rs"
+        - "crates/engine/memory/src/reflexion_tuning.rs"
+        - "crates/engine/runtime-assembly/src/canonical.rs"
+        - "crates/engine/runtime-assembly/src/canonical/cognitive.rs"
+        - "crates/engine/runtime-assembly/src/canonical/retrieval_tuning_wire.rs"
+        - "crates/engine/runtime-assembly/src/desktop.rs"
+    default_enabled: false
+    validated:
+      tests:
+        - "crates/engine/runtime-assembly/tests/failure_learning_bridge.rs"
+        - "crates/engine/memory/tests/reflexion_session_persistence.rs"
+      claims_id: "mem.failure_learning_bridge"
     gaps:
       []
   - id: "mem.injection_contract"

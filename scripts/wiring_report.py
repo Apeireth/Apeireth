@@ -49,7 +49,12 @@ TEST_ONLY_RE = re.compile(
 # 待架构线裁决：真实 env 但本仓无 direct 读取点（不在产品 direct 校验里静默通过）
 PENDING_EVIDENCE_RULING = {"APEIRETH_MASTER_TOKEN"}
 SWITCH_HINT = re.compile(r"(ENABLE|DISABLE|FEATURE|ALLOW|STRICT|FORCE|SWITCH|TOGGLE|REQUIRE)")
-PROD_PREFIXES = ("crates/", "frontend/companion-desktop/src-tauri/src/")
+#: 「生产源」前缀。2026-11-07 增 `.github/workflows/`：对「CI 门禁类」能力
+#: （如 `gov.chain_drill_ci` / `rel.release_asset_verify`），**workflow 步骤就是
+#: 生产执行面**（失败即 job 红 ⇒ 真门禁）⇒ 把它排除在 production_refs 外会让
+#: 已接线的 CI 能力在账上显示「未找到生产引用（待核）」= 假缺口。
+#: ⚠️ 只接受 `*.yml`：md / toml / ps1 等仍按 is_production_source 后缀规则排除。
+PROD_PREFIXES = ("crates/", "frontend/companion-desktop/src-tauri/src/", ".github/workflows/")
 PROD_ROOTS = (
     "crates/engine/runtime-assembly/src/canonical/production.rs",
     "crates/adapters/cli/src/lib.rs",

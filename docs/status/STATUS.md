@@ -22,10 +22,10 @@
 | `sec.storage_envelope_crypto` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_SESSION_SEAL` | `5c74f955e62c` | 2026-11-20 |
 | `gov.chain_skeleton` | PRODUCTION WIRED | ON | - | `31297a40c217` | 2026-11-20 |
 | `gov.chain_hook_adapter` | PRODUCTION WIRED | ON | - | `31297a40c217` | 2026-11-20 |
-| `gov.reflection_queue` | IMPLEMENTED | - | - | `5c74f955e62c` | 2026-11-20 |
+| `gov.reflection_queue` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_REFLECTION_QUEUE` | `5c74f955e62c` | 2026-11-20 |
 | `gov.chain_drill_ci` | IMPLEMENTED | - | - | `ff52545ce8ac` | 2026-11-20 |
 | `sec.governance_chain_drill` | IMPLEMENTED | - | - | `5c74f955e62c` | 2026-11-20 |
-| `rel.release_asset_verify` | IMPLEMENTED | - | - | `c9251271` | 2026-11-20 |
+| `rel.release_asset_verify` | PRODUCTION WIRED | - | - | `c9251271` | 2026-11-20 |
 | `sec.sql_readonly_gate` | PRODUCTION WIRED | ON | - | `c9251271` | 2026-11-20 |
 | `sec.credential_endpoint_binding` | PRODUCTION WIRED | ON | - | `a9d689ed8f09` | 2026-12-01 |
 | `sec.provider_proxy_ssrf` | PRODUCTION WIRED | ON | - | `c9251271` | 2026-11-20 |
