@@ -34,7 +34,7 @@ use rusqlite::Connection;
 use serde::Serialize;
 use serde_json::{Value, json};
 
-use crate::agent_trace::TraceStore;
+use crate::agent_trace::TraceSpanStatus;
 use crate::arbitration::{ArbitrationEngine, EventSource};
 use crate::calibration::Observation;
 use crate::calibration_critic::CalibrationCritic;
@@ -49,10 +49,9 @@ use crate::metadata_filter::{MetadataFilter, PropertyPredicate};
 use crate::offline_embed;
 use crate::offline_embedding_provider::{OFFLINE_EMBEDDING_MODEL_ID, OfflineEmbeddingProvider};
 use crate::research_derived_memory::DerivedRef;
-use crate::session_lifecycle::{SessionLifecycleStore, SessionState};
+use crate::session_lifecycle::SessionState;
 use crate::swap_flow;
 use crate::vector_rebuild;
-use crate::SqliteMemoryStore;
 
 /// 单个能力的审计状态。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -200,14 +199,6 @@ fn commitment_completion(pairs: &[(f64, String)]) -> (usize, usize) {
     (done, total)
 }
 
-fn store_from_conn(conn: &Connection) -> Result<SqliteMemoryStore, String> {
-    let path = conn
-        .path()
-        .filter(|p| !p.is_empty() && *p != ":memory:")
-        .ok_or_else(|| "连接没有可重开的本库文件路径（内存库/未落盘）".to_string())?;
-    SqliteMemoryStore::open(Path::new(path)).map_err(|error| format!("重开 store 失败：{error}"))
-}
-
 /// 走一遍全部能力探针（**只读**）。
 ///
 /// `now_ms` 由调用方注入 ⇒ 审计自身不读墙钟（除 `arbitration` 的事件时间戳由
@@ -216,35 +207,46 @@ pub fn audit(conn: &Connection, now_ms: i64) -> CapabilityAudit {
     let mut probes: Vec<CapabilityProbe> = Vec::new();
     let episodes = load_episodes(conn, 40);
     let commitments = load_commitment_observations(conn);
-    let store = store_from_conn(conn);
 
-    // ── agent_trace：最近 trace 的 span 数 ─────────────────────────────
-    probes.push(match &store {
-        Ok(store) => match store.list_recent_traces(50) {
-            Ok(traces) => {
-                let spans: i64 = traces.iter().map(|t| t.span_count).sum();
-                let state = if spans > 0 {
-                    ProbeState::Armed
-                } else {
-                    ProbeState::Idle
-                };
+    // ── agent_trace：落库 span 的条数与终态比例 ─────────────────────
+    probes.push({
+        let rows: Result<Vec<(String, String)>, String> = (|| {
+            let mut statement = conn
+                .prepare("SELECT kind, status FROM agent_traces LIMIT 500")
+                .map_err(|error| format!("agent_traces 查询失败：{error}"))?;
+            let iter = statement
+                .query_map([], |row| {
+                    Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+                })
+                .map_err(|error| format!("agent_traces 读取失败：{error}"))?;
+            let mut out = Vec::new();
+            for row in iter {
+                out.push(row.map_err(|error| format!("agent_traces 行失败：{error}"))?);
+            }
+            Ok(out)
+        })();
+        match rows {
+            Ok(list) => {
+                let terminal = list
+                    .iter()
+                    .filter(|(_, status)| TraceSpanStatus::from_str(status).is_terminal())
+                    .count();
                 CapabilityProbe {
                     module: "agent_trace",
-                    state,
-                    detail: format!("最近 {} 条 trace / {} 个 span", traces.len(), spans),
+                    state: if list.is_empty() {
+                        ProbeState::Idle
+                    } else {
+                        ProbeState::Armed
+                    },
+                    detail: format!("span {} 条 · 终态 {}", list.len(), terminal),
                 }
             }
             Err(error) => CapabilityProbe {
                 module: "agent_trace",
                 state: ProbeState::Unavailable,
-                detail: format!("读 trace 失败：{error:?}"),
+                detail: error,
             },
-        },
-        Err(error) => CapabilityProbe {
-            module: "agent_trace",
-            state: ProbeState::Unavailable,
-            detail: error.clone(),
-        },
+        }
     });
 
     // ── arbitration：把最近 episode 重放成事件链并校验完整性 ────────────
@@ -414,49 +416,53 @@ pub fn audit(conn: &Connection, now_ms: i64) -> CapabilityAudit {
     });
 
     // ── forget_coordinator：持久遗忘集（只读；不执行协调遗忘） ──────────
-    let forgotten: Vec<DerivedRef> = match &store {
-        Ok(store) => match store.research_forgotten_set() {
-            Ok(set) => {
-                let mut roots: Vec<DerivedRef> = set.into_iter().collect();
-                roots.sort_by(|a, b| (a.kind.clone(), a.id.clone()).cmp(&(b.kind.clone(), b.id.clone())));
-                let draft = CoordinatedForget {
-                    roots: roots.iter().take(3).cloned().collect(),
-                    reason: "capability-audit（只读，不执行）".into(),
-                    approval_id: "未请求审批".into(),
-                };
-                probes.push(CapabilityProbe {
-                    module: "forget_coordinator",
-                    state: if roots.is_empty() {
-                        ProbeState::Idle
-                    } else {
-                        ProbeState::Armed
-                    },
-                    detail: format!(
-                        "持久遗忘集 {} 条 · 协调遗忘未执行（需审批工件）· 请求草案 roots={}",
-                        roots.len(),
-                        draft.roots.len()
-                    ),
-                });
-                roots
-            }
-            Err(error) => {
-                probes.push(CapabilityProbe {
-                    module: "forget_coordinator",
-                    state: ProbeState::Unavailable,
-                    detail: format!("读持久遗忘集失败：{error:?}"),
-                });
-                Vec::new()
-            }
-        },
-        Err(error) => {
+    let forgotten: Result<Vec<DerivedRef>, String> = (|| {
+        let mut statement = conn
+            .prepare("SELECT kind, id FROM research_forgotten_artifacts ORDER BY kind, id LIMIT 500")
+            .map_err(|error| format!("遗忘集查询失败：{error}"))?;
+        let iter = statement
+            .query_map([], |row| {
+                Ok(DerivedRef {
+                    kind: row.get::<_, String>(0)?,
+                    id: row.get::<_, String>(1)?,
+                })
+            })
+            .map_err(|error| format!("遗忘集读取失败：{error}"))?;
+        let mut out = Vec::new();
+        for row in iter {
+            out.push(row.map_err(|error| format!("遗忘集行失败：{error}"))?);
+        }
+        Ok::<Vec<DerivedRef>, String>(out)
+    })();
+    match &forgotten {
+        Ok(roots) => {
+            // 只造**请求草案**（真类型）；执行需审批工件 ⇒ ⇒ 审计**不执行**。
+            let draft = CoordinatedForget {
+                roots: roots.iter().take(3).cloned().collect(),
+                reason: "capability-audit（只读，不执行）".into(),
+                approval_id: "未请求审批".into(),
+            };
             probes.push(CapabilityProbe {
                 module: "forget_coordinator",
-                state: ProbeState::Unavailable,
-                detail: error.clone(),
+                state: if roots.is_empty() {
+                    ProbeState::Idle
+                } else {
+                    ProbeState::Armed
+                },
+                detail: format!(
+                    "持久遗忘集 {} 条 · 协调遗忘未执行（需审批工件）· 请求草案 roots={}",
+                    roots.len(),
+                    draft.roots.len()
+                ),
             });
-            Vec::new()
         }
-    };
+        Err(error) => probes.push(CapabilityProbe {
+            module: "forget_coordinator",
+            state: ProbeState::Unavailable,
+            detail: error.clone(),
+        }),
+    }
+    let forgotten: Vec<DerivedRef> = forgotten.unwrap_or_default();
 
     // ── derived_repair：以遗忘集为根算受影响闭包 ────────────────────
     {
@@ -637,35 +643,44 @@ pub fn audit(conn: &Connection, now_ms: i64) -> CapabilityAudit {
         },
     });
 
-    // ── session_lifecycle：会话富契约的行数 ────────────────────────
-    probes.push(match &store {
-        Ok(store) => match store.list_sessions(true) {
-            Ok(sessions) => {
-                let active = sessions
+    // ── session_lifecycle：会话富契约的状态分布 ────────────────────
+    probes.push({
+        let rows: Result<Vec<String>, String> = (|| {
+            let mut statement = conn
+                .prepare("SELECT state FROM sessions LIMIT 500")
+                .map_err(|error| format!("sessions.state 查询失败：{error}"))?;
+            let iter = statement
+                .query_map([], |row| row.get::<_, Option<String>>(0))
+                .map_err(|error| format!("sessions 读取失败：{error}"))?;
+            let mut out = Vec::new();
+            for row in iter {
+                let state = row.map_err(|error| format!("sessions 行失败：{error}"))?;
+                out.push(state.unwrap_or_else(|| "active".to_string()));
+            }
+            Ok(out)
+        })();
+        match rows {
+            Ok(states) => {
+                let active = states
                     .iter()
-                    .filter(|s| s.state == SessionState::Active)
+                    .filter(|state| SessionState::from_str(state) == SessionState::Active)
                     .count();
                 CapabilityProbe {
                     module: "session_lifecycle",
-                    state: if sessions.is_empty() {
+                    state: if states.is_empty() {
                         ProbeState::Idle
                     } else {
                         ProbeState::Armed
                     },
-                    detail: format!("会话 {} 条 · active {}", sessions.len(), active),
+                    detail: format!("会话 {} 条 · active {}", states.len(), active),
                 }
             }
             Err(error) => CapabilityProbe {
                 module: "session_lifecycle",
                 state: ProbeState::Unavailable,
-                detail: format!("读会话失败：{error:?}"),
+                detail: error,
             },
-        },
-        Err(error) => CapabilityProbe {
-            module: "session_lifecycle",
-            state: ProbeState::Unavailable,
-            detail: error.clone(),
-        },
+        }
     });
 
     // ── swap_flow：算法切换归档 ────────────────────────────────────
