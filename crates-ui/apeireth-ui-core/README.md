@@ -3,6 +3,14 @@
 > **⚠️ 版本状态（2026-11-04 owner 裁决）**：crates.io 上的 `2.0.0-rc.5` 是**前端重建前的历史快照**
 > （占名 + 早期可用），**不是「当前最新版」**。重建期 crates.io 侧**冻结在 rc.5**；前端重建完成后
 > 发 `rc.6` 统一口径。当前开发主线见私有仓 `Apeireth/ui-desktop` 消费的引擎线 rev（精确 SHA 锚定）。
+>
+> **⚠️ `rc.6` 的 breaking 项（2026-11-07 合并后登记，ADR-0024 §4）**：跨线合并采用了并行线的
+> `signal.rs` ⇒ **`Signal::update` / `try_update` 的闭包形状变更**：
+> `FnOnce(&mut T)`（原地改）⇒ **`FnOnce(T) -> T`**（返新值）。
+> ⇒ 这是 **breaking change**，**属 `rc.6` 的变更项**；**`rc.5` 已发布、冻结不变**（不可再发同版本号）⇒
+> ⇒ 工作区版本号仍写 `rc.5` 只是**发布流程的事实**，**不是**「rc.5 提供新 API」的承诺。
+> ⇒ 仓内影响 **0 调用点**（`crates-ui` 全 workspace 无 `update` / `try_update` 调用 ⇒ 432 测试全绿）。
+> ⇒ **不加兼容包装**（理由见 ADR-0024 §4：两个近义方法 = 长期债）。
 
 Apeireth 全栈纯 Rust 前端引擎的**响应式核心**：信号 / 派生 / 依赖图 / 调度器 / effect / 作用域。
 
@@ -37,7 +45,10 @@ ui-macro(0) ← ui-core(1) ← {ui-dom(2), ui-gpu(2)} ← ui-kit(3) ← ui(4, �
 
 - **wasm 侧微任务调度器**：`HostScheduler` 的 trait 边界已就位，但「把 flush 排进浏览器微任务队列」的实现落在 **wasm 宿主侧**（`ui-dom` 的 web-sys 后端 / 试点宿主）⇒ **本 crate 不含该实现**；native 侧用同步默认实现。
 - **DOM 写入批次挂载点**：flush 的「渲染前」队列就是 DOM 写入的落点，但**真正的 DOM 写入在 `ui-dom`** ⇒ 本 crate 只给队列与顺序保证。
-- **派生闭包的自引用环**：派生闭包若捕获**自身所在运行时的信号** ⇒ `Rc` 引用环 ⇒ 运行时不被释放（**已登记、未修**；修法是改成弱引用，属独立批次）。
+- **派生闭包的自引用环**：派生闭包若捕获**自身所在运行时的信号** ⇒ 强引用环 ⇒ 运行时不被释放。
+  ⇒ **已修（2026-11-06 跨线合并批）**：派生登记表改用**弱引用**（`runtime.rs` 的
+  `derived_nodes: RefCell<BTreeMap<NodeId, Weak<dyn DerivedOps>>>` + `self_ref: RefCell<Option<Weak<RuntimeInner>>>`）
+  ⇒ 配套提供 `Derived::dispose()` 供显式释放 ⇒ **不再是未修缺口**。
 
 ## 引擎里不出现业务名词
 
@@ -47,7 +58,7 @@ ui-macro(0) ← ui-core(1) ← {ui-dom(2), ui-gpu(2)} ← ui-kit(3) ← ui(4, �
 
 ```toml
 [dependencies]
-apeireth-ui-core = "2.0.0-rc.4"
+apeireth-ui-core = "2.0.0-rc.5"
 ```
 
 ## License
