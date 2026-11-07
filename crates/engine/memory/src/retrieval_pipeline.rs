@@ -14,10 +14,12 @@ use crate::{
 };
 use apeireth_orchestration::untrusted_envelope::{EnvelopeCompleteness, UntrustedEnvelope};
 
+mod diversity;
+mod first_pos;
 mod fusion;
 mod scoring;
 
-use scoring::{jaccard_similarity, query_coverage, token_set, COVERAGE_WEIGHT};
+use scoring::{query_coverage, COVERAGE_WEIGHT};
 
 /// Candidate source shared by lexical, vector, working, episodic, semantic,
 /// and relational implementations.
@@ -279,36 +281,7 @@ pub struct HybridRetrievalPipeline {
     pub ranking: MemoryRankingConfig,
     pub candidate_cap: usize,
     pub max_rerank_tokens: usize,
-    /// ⭐⭐ **「首命中位置」重排强度**（2026-11-07 新增，**默认 0.0 = 关闭**）。
-    ///
-    /// # 它是什么
-    /// 题面词在候选文本里**首次出现得越靠前**，越可能是该段落的主题
-    /// ⇒ ⇒ 给候选加 `alpha × 位置分` 的加成（位置分已按题归一化到 (0,1]）。
-    ///
-    /// # 实测（**两份考卷结论相反，所以默认关闭**）
-    /// ## 真实用户查询（MIRACL 中文 dev · 393 条真实母语查询 · 采样池 22862 段）
-    /// | α | recall@10 | 相对基线 |
-    /// |---|---|---|
-    /// | 0.05 | 0.8448 | **+0.1201** |
-    /// | **0.10** | **0.8473** | **+0.1227** |
-    /// | 0.50 | 0.8041 | +0.0794 |
-    /// （基线 0.7246；天花板 0.9389 ⇒ ⇒ **吃掉天花板余量的 57%**）
-    ///
-    /// ## 本项目模板考卷
-    /// | 考卷 / 语料 | α=0.10 |
-    /// |---|---|
-    /// | 词面卷 / redchamber | **-0.0252** |
-    /// | 词面卷 / watershed | **-0.0202** |
-    /// | 公平卷 / redchamber | +0.0240 |
-    /// | 公平卷 / watershed | +0.0081 |
-    ///
-    /// # ⚠️ 为什么默认关（**这是测量仪器问题，不是产品问题**）
-    /// 模板题是「{主体}后来是怎么改的？」
-    /// ⇒ ⇒ 记录开头的「却说/话说」这类**套话**被当作命中
-    /// ⇒ ⇒ ⇒ **首位置反而与相关性负相关** ⇒ ⇒ 模板卷**系统性惩罚**这个特征。
-    ///
-    /// ⇒ ⇒ 一旦闸门换成真查询卷（或双卷并行），把这里设成 **0.10** 即可。
-    /// ⇒ ⇒ ⇒ **在此之前保持 0.0：不引入任何闸门回归。**
+    /// 首命中位置加成强度（**默认 0.0 = 关闭**；机制、实测与打开方式见 [`first_pos`] 子模块文档）。
     pub first_pos_alpha: f64,
 }
 
@@ -446,30 +419,6 @@ impl HybridRetrievalPipeline {
         )
     }
 
-    /// ⭐ **首命中位置分**（2026-11-07）：题面词在正文里首次出现位置的倒数。
-    ///
-    /// # 口径
-    /// * 返回 `1/(1+pos)`，`pos` 是**首次出现处之前的字符数**；
-    /// * **没有命中**（或题面没有可用词）⇒ ⇒ 返回 `0.0`；
-    /// * 调用方**必须**按题把结果归一化到 (0,1]（见 [`Self::normalize_first_pos`]）。
-    ///
-    /// # 为什么用「字符位置」而不是「词位置」
-    /// 本仓库的分词是 CJK bigram（无词典依赖）；字符位置**不依赖分词口径**
-    /// ⇒ ⇒ 跨机器逐字一致。
-    fn first_pos_score(query_terms: &[String], content: &str) -> f64 {
-        let mut position = f64::MAX;
-        for term in query_terms {
-            if let Some(at) = content.find(term.as_str()) {
-                position = position.min(at as f64);
-            }
-        }
-        if position.is_finite() {
-            1.0 / (1.0 + position)
-        } else {
-            0.0
-        }
-    }
-
     /// 检索管线的**会话维度**内部实现（两条通道共用一条代码路径）。
     ///
     /// ⚠️ 显著性加成**只在这里**读（[`SessionContext::entry_salience`]）⇒ ⇒
@@ -554,29 +503,9 @@ impl HybridRetrievalPipeline {
         status.used_lexical_fallback =
             status.vector_candidates == 0 && status.lexical_candidates > 0;
         let mut candidates: Vec<_> = by_id.into_values().collect();
-        // ⭐⭐ **首命中位置加成**（2026-11-07，**默认 0.0 ⇒ 整段是恒等变换**）
-        //
-        // **为什么放在排序之前、而不是逐个候选加**：
-        // 位置分必须**按题归一化到 (0,1]**（否则 α 的量纲随文档长度漂移
-        // ⇒ ⇒ 不同语料/不同长度不可比）⇒ ⇒ ⇒ 归一化需要**看到全部候选的最大值**
-        // ⇒ ⇒ ⇒ 所以只能等并集建好之后统一做。
-        //
-        // ⚠️ **实测结论相反，所以默认关闭**：真实用户查询 +0.1227（α=0.10），
-        // 模板词面卷 −0.0252。详见字段 [`Self::first_pos_alpha`] 的文档。
-        if self.first_pos_alpha != 0.0 {
-            let query_terms =
-                crate::hybrid_search::tokenize(&crate::hybrid_search::normalize_for_index(query));
-            let raw: Vec<f64> = candidates
-                .iter()
-                .map(|candidate| Self::first_pos_score(&query_terms, &candidate.content))
-                .collect();
-            let max = raw.iter().cloned().fold(0.0_f64, f64::max);
-            if max > 0.0 {
-                for (candidate, value) in candidates.iter_mut().zip(raw) {
-                    candidate.score += self.first_pos_alpha * (value / max);
-                }
-            }
-        }
+        // 首命中位置加成（默认 0.0 ⇒ 整段是恒等变换；机制与实测见 `first_pos` 子模块）。
+        first_pos::apply(&mut candidates, query, self.first_pos_alpha);
+
         candidates.sort_by(|a, b| {
             b.score
                 .partial_cmp(&a.score)
@@ -584,70 +513,8 @@ impl HybridRetrievalPipeline {
                 .then_with(|| a.id.cmp(&b.id))
         });
 
-        // Greedy, deterministic MMR selection.  Candidate sources do not expose
-        // vectors, so lexical Jaccard is the honest pairwise relation fallback;
-        // semantic cosine is already used by the coordinator for relevance when
-        // valid vectors are available.
-        let lambda = self.ranking.diversity_lambda.clamp(0.0, 1.0);
-        let mut remaining = candidates;
-        let mut seen_content = HashSet::new();
-        let mut selected_tokens: Vec<HashSet<String>> = Vec::new();
-        let mut result = Vec::new();
-        let mut chars = 0;
-        while result.len() < limit && !remaining.is_empty() {
-            let mut best: Option<(usize, f64, f64)> = None;
-            for (index, candidate) in remaining.iter().enumerate() {
-                let normalized: String = candidate
-                    .content
-                    .chars()
-                    .filter(|ch| ch.is_alphanumeric())
-                    .flat_map(char::to_lowercase)
-                    .collect();
-                if normalized.is_empty() || seen_content.contains(&normalized) {
-                    continue;
-                }
-                let candidate_tokens = token_set(&candidate.content);
-                let max_similarity = selected_tokens
-                    .iter()
-                    .map(|selected| jaccard_similarity(&candidate_tokens, selected))
-                    .fold(0.0, f64::max);
-                let novelty = 1.0 - max_similarity;
-                let mmr = (1.0 - lambda) * candidate.score + lambda * novelty;
-                let better = match best {
-                    None => true,
-                    Some((best_index, best_mmr, _)) => {
-                        mmr > best_mmr + f64::EPSILON
-                            || ((mmr - best_mmr).abs() <= f64::EPSILON
-                                && candidate.id < remaining[best_index].id)
-                    }
-                };
-                if better {
-                    best = Some((index, mmr, novelty));
-                }
-            }
-            let Some((index, _, novelty)) = best else {
-                break;
-            };
-            let mut candidate = remaining.swap_remove(index);
-            let content_chars = candidate.content.chars().count();
-            if chars + content_chars > max_chars {
-                // Skip oversized candidates and continue looking for a bounded item.
-                continue;
-            }
-            let normalized: String = candidate
-                .content
-                .chars()
-                .filter(|ch| ch.is_alphanumeric())
-                .flat_map(char::to_lowercase)
-                .collect();
-            seen_content.insert(normalized);
-            // Keep source relevance and make novelty explainable without
-            // letting the post-selection annotation change ordering.
-            candidate.score_components.novelty = novelty;
-            selected_tokens.push(token_set(&candidate.content));
-            chars += content_chars;
-            result.push(candidate);
-        }
+        // 残差式多样性重排（相关性-多样性折中；机制与开关见 `diversity` 子模块）。
+        let result = diversity::select(&self.ranking, candidates, limit, max_chars);
         Ok((result, status))
     }
 
@@ -811,59 +678,6 @@ mod tests {
     use super::*;
     use crate::{MemoryProvenance, ScoreComponents};
 
-    /// ⭐⭐ **`first_pos_alpha` 默认必须是 0.0**（2026-11-07）。
-    ///
-    /// # 为什么锁这个
-    /// 该特征在**真实用户查询**上 +0.1227（α=0.10），在**模板词面卷**上 −0.0252。
-    /// 闸门用的是模板卷 ⇒ ⇒ **默认开启会直接让闸门红**。
-    /// ⇒ ⇒ 所以默认值**必须**是 0.0，等闸门升级后再考虑打开。
-    #[test]
-    fn first_pos_alpha_defaults_to_disabled() {
-        assert_eq!(
-            HybridRetrievalPipeline::default().first_pos_alpha,
-            0.0,
-            "默认必须关闭：模板卷会掉（−0.0252），真实查询卷会涨（+0.1227）"
-        );
-    }
-
-    /// ⭐ **`first_pos_alpha = 0.0` 时结果必须与「没有这个特征」逐字相同**。
-    ///
-    /// 判据：同一批候选、同一套分量，开 0.0 与开一个极大负值都**不该改变排序**
-    /// （因为整段加成被 `!= 0.0` 短路掉了）⇒ ⇒ 这里直接比对 id 序列。
-    #[test]
-    fn first_pos_alpha_zero_is_a_no_op() {
-        let sources = vec![crate::MemoryCandidate {
-            id: "a".into(),
-            layer: "episodic".into(),
-            scope: MemoryScope::Global,
-            content: "宝玉哭了".into(),
-            score: 0.0,
-            score_components: ScoreComponents {
-                lexical: 0.4,
-                ..Default::default()
-            },
-            provenance: MemoryProvenance::default(),
-        }];
-        let source = FixedSource(sources);
-        let pipeline = HybridRetrievalPipeline::default();
-        let (hits, _) = pipeline
-            .retrieve_with_status_in(
-                SessionContext::Ambient,
-                "宝玉",
-                &[MemoryScope::Global],
-                &[&source],
-                10,
-                1_000,
-            )
-            .expect("retrieve");
-        let with_feature_disabled = hits.into_iter().map(|h| h.id).collect::<Vec<_>>();
-        assert_eq!(
-            with_feature_disabled,
-            vec!["a".to_string()],
-            "first_pos 关闭时不该影响候选集合"
-        );
-    }
-
     fn candidate(id: &str, content: &str, scope: MemoryScope) -> MemoryCandidate {
         MemoryCandidate {
             id: id.into(),
@@ -877,7 +691,7 @@ mod tests {
     }
 
     /// 一个**原样返回候选**的测试源（不自己算分）⇒ ⇒ 用来精确控制各路的量纲。
-    struct FixedSource(Vec<MemoryCandidate>);
+    pub(super) struct FixedSource(pub(super) Vec<MemoryCandidate>);
 
     impl MemoryCandidateSource for FixedSource {
         fn candidates(
