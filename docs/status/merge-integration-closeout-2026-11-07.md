@@ -2,7 +2,7 @@
 
 > **用途**：AGENTS.md §0 要求的「做到哪了」的唯一权威页。本页只写**事实与证据**，
 > 数字均带命令与日期；**还差什么**逐条列出（§5）。
-> **状态**：🟡 主体完成 · 有明确遗留（§5 / §6）
+> **状态**：🟡 主体完成 · 有明确遗留（§5 / §6）｜**2026-11-07 更新**：§5-1「frontend JS 侧未实测」**已消**（`a1048c90`）
 > **Owner**：主代理（总工程师线）｜**执行记录**：`docs/adr/0024-merge-integration-contract-and-adr-numbering.md`
 
 ## 1. 这条工作线是什么
@@ -45,7 +45,7 @@
 |---|---|---|
 | `crates-ui/` | **432 passed / 0 failed / 4 ignored** | `ui-engine-ci.yml` + `ui-core-ci.yml`（**两个并存**，见 §6.1） |
 | `frontend/companion-desktop/src-tauri/` | **171 passed / 0 failed / 2 ignored** | `claims-verify.yml` |
-| `frontend/companion-desktop/`（JS 侧） | ⚠️ **未实测** —— 本机 Node 构建**无 TypeScript 支持**（`process.features.typescript = false` ⇒ `ERR_NO_TYPESCRIPT`）⇒ **环境限制**（`node_modules` 未跟踪 ⇒ 非仓库缺陷） | `pnpm test`（83 套件） |
+| `frontend/companion-desktop/`（JS 侧） | ✅ **83 of 83 suites passed**（2026-11-07 实测，exit 0）—— 本机 Node 无内置 TS 支持 ⇒ 走**类型擦除降级路径**（`tests/ts-strip-hooks.mjs`，用仓内**既有** `typescript` devDependency）⇒ 修前本机 **66 of 83 suites failed**（`ERR_NO_TYPESCRIPT`，**模块加载阶段**就死）⇒ **已从「未实测」转为「全绿」** | `pnpm test`（83 套件） |
 
 ### 3.3 合并后逐项处置（**每条都有归因**，不是「重跑一次就绿了」）
 
@@ -82,7 +82,7 @@
 
 | # | 差什么 | 为什么没做 | 判据（做完怎么验） |
 |---|---|---|---|
-| 1 | **frontend JS 侧未实测**（`pnpm test`，83 套件） | 本机 Node **无 TypeScript 支持** ⇒ **环境限制**，非仓库缺陷 | 在有 TS 支持的 Node 上 `pnpm install && pnpm test` ⇒ 0 failed |
+| 1 | ~~**frontend JS 侧未实测**~~ ⇒ ✅ **已消**（2026-11-07，`a1048c90`）：**83 of 83 suites passed**（exit 0）⇒ 缺口已由「换一台 Node」改为「**加一条降级路径**」填掉 |（原缺口来源：本机 Node 无内置 TS 支持；处置：类型擦除加载钩子，**0 新外部依赖**、**不改**任何套件断言） |**已闭环** |
 | 2 | **两个 UI CI 门禁并存**（`ui-engine-ci.yml` + `ui-core-ci.yml`，`-j` 口径不同） | 归并属 **CI 口径变更**（需装 Tauri 系统库 + sidecar + Node TS 支持）⇒ 属独立批次 | 两个 workflow 归一为一个 ⇒ CI 跑一次通过 |
 | 3 | **另 2 条红**（`migrations::concurrent_first_openers…`、`task_queue_store::concurrent_enqueues…`） | 用**裸 `rusqlite::Connection`**、**不走池** ⇒ 池收口**修不到**；且属**既有**缺陷、当前**不可复现**（700+ 次全绿） | 候选修法：输方在 `SQLITE_BUSY` 上做**有界退避**而非 `unwrap` 直接 panic |
 | 4 | **ADR 同号撞车**（0016–0021 各两份） | **裁决为不重编号**（ADR-0024 §2）⇒ 已用**并存索引 + 撞车说明**处置 ⇒ **不是未做**，是**已定案的遗留** | 新写 ADR 用下一个可用编号（0025+）；引用一律用**文件名** |
@@ -119,5 +119,5 @@ python3 scripts/docs_truth.py --verify --check    # 期望 claims=51 fail=0 stal
 # 三个独立 workspace（根门禁覆盖不到 ⇒ 必须单独跑）
 cd crates-ui && cargo test --workspace --locked                              # 432 passed
 cd frontend/companion-desktop/src-tauri && cargo test --locked                # 171 passed
-cd frontend/companion-desktop && pnpm test                                     # ⚠️ 需有 TS 支持的 Node
+cd frontend/companion-desktop && pnpm test                                     # 83 of 83 suites passed
 ```
