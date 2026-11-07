@@ -1738,7 +1738,7 @@ grep -rn "\.facts_as_of(" crates/ --include=*.rs
 | 9 | `beside_feeds` | **删除** | `crates/capabilities/tools/src/content_feed/lifecycle.rs:259` | 一行路径派生包装：转调 `FeedLifecycleStore::for_data_dir`；主路径在 `crates/capabilities/tools/src/content_feed/store.rs:274` **生产在用** ⇒ 删了能力不丢 |
 | 10 | `bio_care_config_from_env` | **删除** | `crates/engine/runtime-assembly/src/canonical/care_reminder.rs:273` | 一行包装：转调 `bio_care_config_from_env_value`；主路径在 `crates/engine/runtime-assembly/src/canonical/care_heartbeat.rs:226` + `care_reminder.rs:202` **生产在用** ⇒ 删了能力不丢 |
 | 11 | `explicit_allow_list` | 保留 | `crates/capabilities/tools/src/fetch.rs:111` | `EgressPolicy::ExplicitAllowList` 档位的**构造器**（只收紧不放宽 ⇒ 零生产消费不是「死代码」而是「没人用这一档」）⇒ 安全策略面，保留 |
-| 12 | `get_for_subject` | **接线** | `crates/engine/memory/src/commitments.rs:507` | **带主体校验**的承诺读面（生产读单条走 `store.get(&id)`，`crates/engine/runtime-assembly/src/canonical/memory_typed_sink.rs:135`）⇒ 零引用是「生产选了无主体版」的结果；同族主体版 `list_active_for_subject` 已在生产（`memory_typed_sink.rs:145` / `typed_recall.rs:110`）⇒ 接线以闭合「主体隔离一致性」缺口（⚠️ 行为变更，接线前需 owner 拍板语义） |
+| 12 | `get_for_subject` | **接线** ⇒ ⇒ **改判：保留**（2026-11-07 主指挥复核） | `crates/engine/memory/src/commitments.rs:507` | **带主体校验**的承诺读面（生产读单条走 `store.get(&id)`，`crates/engine/runtime-assembly/src/canonical/memory_typed_sink.rs:135`）⇒ 零引用是「生产选了无主体版」的结果；同族主体版 `list_active_for_subject` 已在生产（`memory_typed_sink.rs:145` / `typed_recall.rs:110`）⇒ 接线以闭合「主体隔离一致性」缺口（⚠️ 行为变更，接线前需 owner 拍板语义） |
 | 13 | `get_page` | 保留 | `crates/engine/memory/src/wiki_fs.rs:117` | wiki 知识库族**整族未接线**（同族主路径 `compile_page` 生产零引用）⇒ 零引用是族级结果 ⇒ 保留（分页读面资产） |
 | 14 | `get_persona` | 保留 | `crates/engine/memory/src/five_dimensional.rs:209` | 人格族**整族未接线**（同族 `get_working`/`get_recent`/`get_entity_facts`/`get_reflections` 全零）⇒ 保留 |
 | 15 | `held_for` | 保留 | `crates/engine/storage/src/rate_limit/mod.rs:307` | `AcquiredPermit` 的持有时长读口（限流器 permit 族在生产在用）⇒ 公开库原语面，保留 |
@@ -1967,3 +1967,33 @@ python3 scripts/audit_unwired.py --check
 - 本批**未跑 cargo** ⇒ 「命令今天还绿吗」**未实测**；只核到「引用的 test target 全部存在、`cargo test --test <name>` 形态自洽」；
 - 本批**未登记 workline**（`AGENTS.md` §0.3 要求新工作线登记 `docs/status/workline-registry.md`）
   ⇒ ⇒ **请主代理决定是否补登记**。
+
+### ⭐ 改判记录：`get_for_subject` 从「接线」⇒ ⇒ **「保留」**（2026-11-07 · 主指挥复核）
+**原判**（§5.6.2 第 12 条）：「**接线**」⇒ ⇒ 理由是「生产读单条走 `store.get(&id)`（无主体校验）⇒ ⇒ 主体隔离不一致」。
+
+**复核后推翻自己。三条实测证据**：
+1. ⭐ **id 里含 subject** ⇒ ⇒ 「表主键只有 id」也挡不住跨主体撞车
+   ⇒ ⇒ ⇒ 生产写入路径 `memory_typed_sink.rs:113`
+   `id: stable_id("memory-commitment", &[subject, &candidate.content])`
+   ⇒ ⇒ ⇒ ⇒ **id 由 subject 派生** ⇒ ⇒ ⇒ ⇒ 不同 subject ⇒ **不可能撞 id**；
+2. ⭐ **库里没有「按 id 读承诺」的对外入口**
+   ⇒ ⇒ ⇒ 查过 `crates/adapters/tools` · `crates/adapters/gateway` · `crates/capabilities/tools`
+   ⇒ ⇒ ⇒ 承诺**只经 `memory_typed_sink`（写）+ `typed_recall`（列表·已用 `list_active_for_subject`）**
+   ⇒ ⇒ ⇒ ⇒ **没有「模型/用户按 id 取某条承诺」的面** ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒
+   ⇒ ⇒ ⇒ ⇒ ⇒ **主体隔离在当前生产面上**没有**可被绕过的读口**；
+3. ⭐ ⇒ ⇒ ⇒ ⇒ **接线会是 Δ=0** ⇒ ⇒ ⇒ ⇒ 「改上去」在行为上**等价**
+   ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ **⇒ ⇒ ⇒ ⇒ 这是「表面接线」** ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒
+   ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ **★ 纪律：Δ 恰好为 0 ⇒ ⇒ 先怀疑测量 / 先证明缺口真实**
+   ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒（本仓反复应用过：融合的「delta=0」也是先查了尺子才找到真因）。
+
+**改判理由（为什么「保留」是对的）**：
+* 它是**类型级防绕过面**（同族 `list_active_for_subject` 已在生产 ⇒ ⇒ 主体版 API 面**成对存在**）
+  ⇒ ⇒ ⇒ 与 `held_for`（限流器 permit 族在用）· `explicit_allow_list`（安全策略档位）**同类**；
+* ⭐ **它仍应留在孤儿基线里**（零调用 ⇒ ⇒ 保留 + 理由）⇒ ⇒ ⇒ **基线 89 条不变**
+  ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ **不许**为了「让缺口变小」把它删掉（那是**误判**）；
+* ⚠️ **将来若出现「按 id 读承诺」的对外 API（模型/工具可传 id）⇒ ⇒ ⇒ 必须切到它**
+  ⇒ ⇒ ⇒ ⇒ **那时它立刻从「保留」变「必须接线」** ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒
+  ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ **触发条件写在这里 ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ 下一个人不用重新推一遍**。
+
+**⚠️ 纪律记录**：本次是**主指挥推翻自己上一轮的裁决** ⇒ ⇒ ⇒
+⇒ ⇒ ⇒ 「Δ=0 ⇒ ⇒ 先怀疑测量」这条**在裁决面同样适用**（不只在代码面）。
