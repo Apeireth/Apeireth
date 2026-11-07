@@ -57,7 +57,8 @@ use apeireth_memory::golden_fair::{
 };
 use apeireth_memory::golden_mining::MiningConfig;
 use apeireth_memory::golden_run::{
-    mined_to_golden, run_with_extra_sources, IndexRecord, InjectionMode, RunReport,
+    mined_to_golden, run_with_extra_sources, run_with_extra_sources_and_config, IndexRecord,
+    InjectionMode, RunReport,
 };
 use apeireth_memory::golden_set::{evaluate, EvalBatch, GoldenSet, Retrieved};
 use apeireth_memory::novel_corpus;
@@ -86,6 +87,10 @@ fn corpus_root() -> PathBuf {
 struct Abridged {
     baseline: RunReport,
     with_channel: RunReport,
+    /// **弱底座**（关掉中文停用字规范化）下的基线。
+    weak_baseline: RunReport,
+    /// **弱底座**下加通道。
+    weak_with_channel: RunReport,
 }
 
 /// 跑一份卷子的 A/B（单路 BM25 vs 并联联想通道）。
@@ -97,9 +102,42 @@ fn ab(
     let baseline = run_with_extra_sources(index, golden, K, InjectionMode::Production, &[])?;
     let with_channel =
         run_with_extra_sources(index, golden, K, InjectionMode::Production, &[channel])?;
+    // ⭐⭐ **弱底座对照**（2026-11-07，D3 纪律）：
+    // 把「**底座补漏**」与「**通道净增益**」分开算。
+    //
+    // **实测背景**：中文底座（索引侧去停用字）让 recall@10 +52.5%，
+    // 而**同一个通道**的收益因此**归零**（+0.1394 → +0.0000）
+    // ⇒ ⇒ ⇒ 只看合并的 delta ⇒ ⇒ **会把「补漏」当成「增益」** ⇒ ⇒ ⇒ **误导优先级**。
+    //
+    // **口径**：
+    // - **净增益** = 强底座（生产默认）上的 delta；
+    // - **补漏** = 弱底座上的 delta − 强底座上的 delta
+    //   （弱底座 = 关掉中文停用字规范化 = 2026-11-06 之前的生产行为）。
+    let weak_config = || apeireth_memory::hybrid_search::Bm25Config {
+        strip_cn_stopwords: false,
+        ..Default::default()
+    };
+    let weak_baseline = run_with_extra_sources_and_config(
+        index,
+        golden,
+        K,
+        InjectionMode::Production,
+        &[],
+        Some(weak_config()),
+    )?;
+    let weak_with_channel = run_with_extra_sources_and_config(
+        index,
+        golden,
+        K,
+        InjectionMode::Production,
+        &[channel],
+        Some(weak_config()),
+    )?;
     Ok(Abridged {
         baseline,
         with_channel,
+        weak_baseline,
+        weak_with_channel,
     })
 }
 
@@ -146,6 +184,19 @@ fn entry(name: &str, exam: &str, ab: &Abridged, channel_only: f64) -> serde_json
         },
         "channel_only_recall_at_k": channel_only,
         "delta": delta,
+        // ⭐⭐ **D3：补漏 vs 净增益**（2026-11-07）
+        "弱底座": {
+            "baseline_recall_at_k": ab.weak_baseline.metrics.recall_at_k,
+            "with_channel_recall_at_k": ab.weak_with_channel.metrics.recall_at_k,
+            "delta": ab.weak_with_channel.metrics.recall_at_k
+                - ab.weak_baseline.metrics.recall_at_k,
+        },
+        "拆解": {
+            "底座补漏": (ab.weak_with_channel.metrics.recall_at_k
+                - ab.weak_baseline.metrics.recall_at_k)
+                - delta,
+            "通道净增益": delta,
+        },
     })
 }
 

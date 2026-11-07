@@ -97,7 +97,17 @@ pub struct Bm25LexicalCandidateSource {
 
 impl Bm25LexicalCandidateSource {
     pub fn new(candidates: Vec<MemoryCandidate>) -> Self {
-        let mut index = Bm25Index::new(Bm25Config::default());
+        Self::with_config(candidates, Bm25Config::default())
+    }
+
+    /// ⭐ **带 BM25 配置构造**（2026-11-07）。
+    ///
+    /// # 为什么需要
+    /// 要把「**底座补漏**」与「**通道净增益**」分开算（D3 纪律）
+    /// ⇒ ⇒ ⇒ 就必须能**在弱底座上再跑一遍**做对照
+    /// ⇒ ⇒ ⇒ （中文停用字规范化让 recall@10 +52.5%，而通道收益因此归零）。
+    pub fn with_config(candidates: Vec<MemoryCandidate>, config: Bm25Config) -> Self {
+        let mut index = Bm25Index::new(config);
         let mut candidates_by_id = HashMap::new();
         let mut insertion_order = Vec::new();
         for candidate in candidates {
