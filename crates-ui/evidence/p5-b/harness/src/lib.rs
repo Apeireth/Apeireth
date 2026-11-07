@@ -3317,6 +3317,95 @@ pub fn l1_real_load_probe() -> Result<JsValue, JsValue> {
         ));
     }
 
+    // ── ③ ⭐⭐⭐⭐ **1k 行 patch 基准**（G5 的 wall-clock 部分；此前只有规模不变量）──
+    //
+    // ## 它回答什么
+    //
+    // 上面量到的都是「**窗口化之后**」的成本（只挂 O(窗口) 行）
+    // ⇒ ⇒ 但**没有**量过「如果不虚拟化、1000 行全挂、数据一变要重打多少」
+    // ⇒ ⇒ ⇒ 没有这个数就**没法回答「虚拟化值不值」**，
+    //   将来产品列表变大时也无法判断「到多少行就该上虚拟化」。
+    //
+    // ⇒ ⇒ 这里量**一次全量 1000 行 patch**（数据变了 ⇒ 重建树 ⇒ patch）
+    //   ⇒ ⇒ 与上面的 `scroll_redraw_millis`（窗口化滚动重渲染）**同一口径**可比。
+    //
+    // ⚠️ 放在**所有其它测量之后**：这一步会把渲染器拉回「1000 行全挂」状态
+    //   ⇒ ⇒ 放前面会污染后面的窗口化测量。
+    // ⚠️⚠️ **本基准我写错过两次，如实记下**（都是「量了别的东西」）：
+    //   ① 第一次用**同一个**渲染器 ⇒ ⇒ `#w0-list` 已被窗口化过 ⇒ 引擎沿用窗口态
+    //      ⇒ ⇒ DOM 仍 7 行（实测 `full_patch_1000_rows = 7`）；
+    //   ② 第二次换独立渲染器、但仍用 `build_demo_tree` ⇒ ⇒ 而它**故意忽略 `rows`**
+    //      （`build_demo_tree` 的注释：列表内容完全由窗口化负责）⇒ ⇒ 树里**没有行**
+    //      ⇒ ⇒ 实测 `full_mount_1000_rows = 0`。
+    //   ⇒ ⇒⇒ 两次都被**我自己的反向断言**抓到（「DOM 行数应接近 1000」）
+    //   ⇒ ⇒⇒ ⇒ 这说明反向断言的价值：**没有它，这两个假数字会被当成基准写进文档**。
+    //
+    // ⇒ ⇒ 正确做法：直接构造一棵**真含 1000 行**的树，在**干净渲染器**上挂载再 patch。
+    let full_dom =
+        WebDom::new().map_err(|error| JsValue::from_str(&format!("WebDom(full): {error}")))?;
+    let full_root = full_dom
+        .create_element("div")
+        .map_err(|error| JsValue::from_str(&format!("建根(full)失败：{error}")))?;
+    full_dom
+        .set_attribute(&full_root, "id", "l1-full-root")
+        .map_err(|error| JsValue::from_str(&format!("设 id(full)失败：{error}")))?;
+    if let Some(body) = document.body() {
+        let _ = body.append_child(&full_root);
+    }
+    // 克隆一份给渲染器（原节点留着，量完要摘掉）
+    let mut full_renderer =
+        apeireth_ui_dom::Renderer::new(full_dom, full_root.clone());
+
+    // 真含 1000 行的树（`suffix` 用来制造「数据变了」）
+    let full_tree = |suffix: &str| {
+        use apeireth_ui_dom::vnode::VNode;
+        let items: Vec<VNode> = (0..1000)
+            .map(|index| {
+                VNode::element("div")
+                    .attr("class", "row")
+                    .child(VNode::text(format!("行 {index}{suffix}")))
+                    .build()
+            })
+            .collect();
+        VNode::element("div")
+            .attr("id", "l1-full-list")
+            .children(items)
+            .build()
+    };
+
+    // ① 全量挂载（**不计入** patch 基准）
+    full_renderer
+        .mount(full_tree(""))
+        .map_err(|error| JsValue::from_str(&format!("1k 行全量挂载失败：{error}")))?;
+    let full_rows_before = document
+        .query_selector_all("#l1-full-root .row")
+        .ok()
+        .map(|list| list.length())
+        .unwrap_or(0);
+
+    // ② 数据变 ⇒ 全量 patch 一次（这就是「**不**虚拟化」的代价）
+    let full_patch_start = now_ms();
+    full_renderer
+        .patch(full_tree("＋"))
+        .map_err(|error| JsValue::from_str(&format!("1k 行 patch 失败：{error}")))?;
+    let full_patch_1000_millis = now_ms() - full_patch_start;
+    let full_rows = document
+        .query_selector_all("#l1-full-root .row")
+        .ok()
+        .map(|list| list.length())
+        .unwrap_or(0);
+    if full_rows_before < 900 || full_rows < 900 {
+        failures.push(format!(
+            "1k 行 patch 基准失真：挂载后 {full_rows_before} 行、patch 后 {full_rows} 行\
+             （都应接近 1000）⇒ ⇒ full_patch_1000_millis 不可信"
+        ));
+    }
+    // 量完把这个基准容器摘掉（免得留在页面上污染后续截图/测量）
+    if let Some(parent) = full_root.parent_node() {
+        let _ = parent.remove_child(&full_root);
+    }
+
+
     let result = js_sys::Object::new();
     let failures_array = js_sys::Array::new();
     for item in &failures {
@@ -3373,6 +3462,21 @@ pub fn l1_real_load_probe() -> Result<JsValue, JsValue> {
         &result,
         &JsValue::from_str("window_write_millis"),
         &JsValue::from_f64(window_write_millis),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("full_patch_1000_millis"),
+        &JsValue::from_f64(full_patch_1000_millis),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("full_mount_1000_rows"),
+        &JsValue::from_f64(full_rows_before as f64),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("full_patch_1000_rows"),
+        &JsValue::from_f64(full_rows as f64),
     );
     let _ = js_sys::Reflect::set(
         &result,
