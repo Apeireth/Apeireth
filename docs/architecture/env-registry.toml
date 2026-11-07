@@ -1652,3 +1652,13 @@ purpose = "内部执行强制复核 (System One, rt.system_one_internal) 装配�
 level = "PRODUCTION WIRED"
 status = "current"
 evidence = "direct:crates/adapters/cli/src/llm_factory_env.rs:118;direct:crates/adapters/cli/src/lib.rs:1663"
+
+[[entries]]
+name = "APEIRETH_ENABLE_REFLECTION_QUEUE"
+default = "off"
+layer = "adapters"
+owner = "apeireth-cli"
+purpose = "延迟反思队列装配开关（R8-C, gov.reflection_queue）：只认 \"1\"；关 ⇒ ⇒ 不注入反思调度器 ⇒ ⇒ 零反思、零行为变化；开 ⇒ ⇒ 每次成功审计排一个反思项 ⇒ ⇒ 下一轮治理评估补一条 governance.reflection_due 审计记录"
+level = "PRODUCTION WIRED"
+status = "current"
+evidence = "direct:crates/adapters/cli/src/governance_chain.rs:207;direct:crates/adapters/cli/src/governance_chain.rs:291"

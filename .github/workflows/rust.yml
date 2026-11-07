@@ -101,16 +101,33 @@ jobs:
       - name: cargo build --workspace --tests --locked
         run: cargo build --workspace --tests --locked
 
+      # R8-D: 治理链六段串联 + 三路径演练必须进 CI（ADR-0010 §4）
+      #
+      # ⚠️ **位置 = nextest 之前**（2026-11-07 修 · 「治理链演练入 CI」接线）：
+      # 原位置排在 `cargo nextest run --workspace` **之后**
+      # ⇒ ⇒ 三平台 nextest 常红（基座既有）⇒ ⇒ **job 早停** ⇒ ⇒ **本步骤被 skip**
+      # ⇒ ⇒ 远端 0 次执行 ⇒ ⇒ 声明 `gov.chain_drill_ci` / `sec.governance_chain_drill` 升不了级
+      # （2026-10-22 复核 rust.yml 运行实况）。
+      #
+      # ⇒ ⇒ **前置依赖核查（决定「甲 / 乙」的依据）**：
+      #   本步骤只跑 `cargo test -p apeireth-governance --test governance_chain_drill`，
+      #   所需产物由**上面**的 `cargo build --workspace --tests --locked` 提供
+      #   （`--tests` 已构建本集成测试目标）⇒ ⇒ **对 nextest 无任何前置依赖**
+      #   （不读 nextest 的 JUnit、不消费 nextest 产物）
+      #   ⇒ ⇒ ⇒ 故选**甲**（提前到 nextest 之前）⇒ ⇒ 「早停」根除：nextest 红不再 skip 本步骤。
+      #
+      # ⚠️ **失败语义**：本步骤**失败即 job 红**
+      #   （**无** `if: always()`、**无** `|| true`、**无** 失败吞掉）
+      #   ⇒ ⇒ 治理链六段演练在 CI 里是**真门禁**，不是装饰步骤。
+      - name: Governance chain drill (R8-D)
+        run: cargo test -p apeireth-governance --test governance_chain_drill --locked -- --nocapture
+
       - name: cargo nextest run --workspace --profile ci --locked
         # profile "ci" 在 .config/nextest.toml 定义 (fail-fast + retries 2)
         run: cargo nextest run --workspace --profile ci --locked
 
       - name: Canonical process isolation integration tests
         run: cargo test -p apeireth-tools-canonical --test process_executor --locked -- --nocapture
-
-      # R8-D: 治理链六段串联 + 三路径演练必须进 CI（ADR-0010 §4）
-      - name: Governance chain drill (R8-D)
-        run: cargo test -p apeireth-governance --test governance_chain_drill --locked -- --nocapture
 
       - name: Upload JUnit report
         if: always()
@@ -130,7 +147,8 @@ jobs:
       # ⇒ ⇒ ⇒ 跑完整套 nextest 后不回收 ⇒ ⇒ runner 很快见底。
       #
       # ⚠️ 位置 = **所有 cargo 步骤之后**（JUnit 上传之后）：
-      #   · nextest 之后还有两个 `cargo test` ⇒ ⇒ 提前删 ⇒ ⇒ 它们要**重编**；
+      #   · nextest 之后只剩一个 `cargo test`（canonical；治理链演练已于 2026-11-07 前置到 nextest 之前）
+      #     ⇒ ⇒ 提前删 ⇒ ⇒ 它要**重编**；
       #   · JUnit 在 `target/nextest/` ⇒ ⇒ **不在** `debug/deps` ⇒ ⇒ 清理**不伤 artifact**。
       # ⚠️ `if: always()` ⇒ ⇒ 否则**测试失败时不清理** ⇒ ⇒ 而失败时磁盘压力最大
       # ⇒ ⇒ ⇒ （ENOSPC 恰好发生在「快跑完、还要写 artifact」的时候）。

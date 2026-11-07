@@ -15,8 +15,9 @@
 use std::sync::Arc;
 
 use apeireth_governance::{
-    Action, AuditSink, ChainGovernanceHook, Decision, GovernanceChain, GovernanceHook,
-    GovernanceRequest, GovernanceVerdict, InMemoryAuditSink, OperationClass, TaskIntentEnvelopeV1,
+    Action, AuditSink, ChainGovernanceHook, Decision, DelayedReflectionScheduler, GovernanceChain,
+    GovernanceHook, GovernanceRequest, GovernanceVerdict, InMemoryAuditSink, OperationClass,
+    ReflectionScheduler, SystemChainClock, TaskIntentEnvelopeV1,
 };
 use async_trait::async_trait;
 
@@ -198,6 +199,54 @@ fn operation_families(operations: &[OperationClass]) -> Vec<OperationClass> {
     families
 }
 
+/// 延迟反思队列开关（默认关 ⇒ ⇒ **零行为变化**）。
+///
+/// 与 `APEIRETH_ENABLE_SYSTEM_ONE` 同形：**只认 `"1"`**。
+/// 关 ⇒ ⇒ 生产链**不注入**反思调度器 ⇒ ⇒ 与 R8-C 之前的链**逐字节同行为**
+/// ⇒ ⇒ ⇒ **零反思、零反思审计记录**。
+pub const ENABLE_REFLECTION_QUEUE_ENV: &str = "APEIRETH_ENABLE_REFLECTION_QUEUE";
+
+/// 反思延迟（毫秒）。
+///
+/// # 为什么是 0 而不是某个正数
+///
+/// `GovernanceChain::run` 的顺序是「**先排空到期项**（`sweep_due_reflections`）
+/// ⇒ ⇒ **后调度新项**（`schedule_reflection`）」⇒ ⇒ ⇒ 所以延迟 0 的真实语义是
+/// **「推迟到下一次治理评估才到期」** ⇒ ⇒ ⇒ 反思**不会与产生它的那次评估同批审计**
+/// ⇒ ⇒ ⇒ 这正是「延迟反思队列」的语义 ⇒ ⇒ ⇒ 且它**不依赖墙钟** ⇒ ⇒ ⇒ **无 flaky 风险**。
+pub const REFLECTION_QUEUE_DELAY_MS: i64 = 0;
+
+/// 开关判定（**只认 `"1"`**，与 `APEIRETH_ENABLE_SYSTEM_ONE` 同形）。
+pub fn reflection_queue_enabled_from_env() -> bool {
+    reflection_queue_enabled(std::env::var(ENABLE_REFLECTION_QUEUE_ENV).ok().as_deref())
+}
+
+/// 开关判定的纯函数形态（便于无环境依赖地单测）。
+///
+/// 形如 `APEIRETH_ENABLE_SYSTEM_ONE` 的「只认 1」口径：**`"1"` 开，其余（含
+/// `"0"` / `"true"` / 空白）一律关**。
+pub fn reflection_queue_enabled(value: Option<&str>) -> bool {
+    value.is_some_and(|value| value.trim() == "1")
+}
+
+/// 生产反思调度器：**开关关 ⇒ ⇒ `None`**（⇒ ⇒ 链用默认调度器 ⇒ ⇒ 零行为变化）。
+///
+/// 开 ⇒ ⇒ 注入 [`DelayedReflectionScheduler`]（系统时钟 + [`REFLECTION_QUEUE_DELAY_MS`]）
+/// ⇒ ⇒ ⇒ 每次成功审计都会**排一个反思项** ⇒ ⇒ ⇒ 到期后链会补一条
+/// `governance.reflection_due` 审计记录 ⇒ ⇒ ⇒ **这就是「生产真的在跑延迟反思」的可观测证据**。
+///
+/// ⚠️ 它是**队列不是 runner**（ADR-0010 D5）⇒ ⇒ ⇒ 无线程、无守护、无持久化
+/// ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ **进程退出即丢** ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ **auto-pilot 仍是 NOT IMPLEMENTED**。
+pub fn reflection_scheduler_for(enabled: bool) -> Option<Arc<dyn ReflectionScheduler>> {
+    if !enabled {
+        return None;
+    }
+    Some(Arc::new(DelayedReflectionScheduler::new(
+        Arc::new(SystemChainClock),
+        REFLECTION_QUEUE_DELAY_MS,
+    )))
+}
+
 /// chain 单入口 hook + 显式审计 sink (R8-B3 注入面)。
 ///
 /// **闸位**: 收窄闸包在**链的 Gate 段内**（包住授权/审批档/护栏那一层）
@@ -206,9 +255,25 @@ pub fn adapt_gate_with(
     gate: Arc<dyn GovernanceHook>,
     audit: Arc<dyn AuditSink>,
 ) -> Arc<dyn GovernanceHook> {
+    adapt_gate_with_scheduler(gate, audit, None)
+}
+
+/// chain 单入口 hook + 审计 sink + **可选反思调度器**（R8-C 生产接线面）。
+///
+/// `reflection = None` ⇒ ⇒ 链用默认调度器（只记账、**永不到期**）
+/// ⇒ ⇒ ⇒ **与 [`adapt_gate_with`] 逐字节同行为**。
+pub fn adapt_gate_with_scheduler(
+    gate: Arc<dyn GovernanceHook>,
+    audit: Arc<dyn AuditSink>,
+    reflection: Option<Arc<dyn ReflectionScheduler>>,
+) -> Arc<dyn GovernanceHook> {
     let narrowed = Arc::new(ProposalNarrowingGate::new(gate));
-    let chain = Arc::new(GovernanceChain::new(narrowed).with_audit_sink(audit));
-    Arc::new(ChainGovernanceHook::new(chain))
+    let chain = GovernanceChain::new(narrowed).with_audit_sink(audit);
+    let chain = match reflection {
+        Some(scheduler) => chain.with_reflection_scheduler(scheduler),
+        None => chain,
+    };
+    Arc::new(ChainGovernanceHook::new(Arc::new(chain)))
 }
 
 /// 生产装配 (R8-B2 + R8-B3): gate → chain 单入口 hook + 持久审计 sink。
@@ -218,9 +283,15 @@ pub fn adapt_gate_with(
 /// 「持久化通过 AuditSink 注入实现, 默认仍是内存」; 降级 = 审计不持久、重启后
 /// 无链可 verify —— 喊破, 不静默、不冒充); `run()` 期追加失败仍 fail-closed
 /// (`ChainOutcome::Denied`), 降级只影响持久性、不影响守门。
+///
+/// ⭐ **R8-C 延迟反思队列接线**（`gov.reflection_queue`）：
+/// [`ENABLE_REFLECTION_QUEUE_ENV`] **只认 `"1"`** ⇒ ⇒
+/// **默认关 ⇒ ⇒ 不注入调度器 ⇒ ⇒ 零反思、零行为变化**；
+/// 开 ⇒ ⇒ ⇒ 注入 [`DelayedReflectionScheduler`] ⇒ ⇒ ⇒ 反思推迟到下一轮治理评估才审计。
 pub fn production(gate: impl GovernanceHook + 'static) -> Arc<dyn GovernanceHook> {
     let audit = shared_audit_sink(crate::default_panel_data_dir().join("governance-audit.jsonl"));
-    adapt_gate_with(Arc::new(gate), audit)
+    let reflection = reflection_scheduler_for(reflection_queue_enabled_from_env());
+    adapt_gate_with_scheduler(Arc::new(gate), audit, reflection)
 }
 
 /// **进程内单例审计 sink**（按账本路径）。
