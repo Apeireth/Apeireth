@@ -4,7 +4,9 @@
 //! * 只走 [`ProcessExecutor`]，argv 数组、无 shell 插值；
 //! * 工具能力固定（不把任意参数透传给外部命令）；
 //! * 网络目标过 `Scope`，文件目标限域到 workspace；
-//! * 输出有上限，失败保留 stderr 片段，不假装成功。
+//! * 输出有上限，失败保留 stderr 片段，不假装成功；
+//! * 结果面（证据信封）与**失败帧**（stderr 回显面）都过凭据形状绊线 ⇒ 见
+//!   [`tripwire`]（零命中 ⇒ 逐字节不变）。
 //!
 //! 首批适配：`nmap`（只读侦察）、`tshark`（pcap 深度解析）、`exiftool`（元数据）。
 
@@ -22,6 +24,8 @@ use thiserror::Error;
 
 use crate::process::{ProcessExecutor, ProcessLimits, ProcessRequest};
 use crate::recon::{Evidence, Scope};
+
+pub mod tripwire;
 
 /// 外部工具适配错误。
 #[derive(Debug, Error)]
@@ -90,14 +94,29 @@ fn ensure_success(
     if result.success() {
         return Ok(());
     }
+    // 400 字截断是**既有合同**（先于本族接线）⇒ 不改它；截断后再过绊线 ⇒
+    // 扫的正是**真的会进帧**的那一段（形状层 + 仅命中才挂末尾 JSON 注解）。
+    let stderr: String = String::from_utf8_lossy(&result.stderr)
+        .chars()
+        .take(400)
+        .collect();
     Err(ExternalError::Failed {
         binary: binary.display().to_string(),
         code: result.exit_code(),
-        stderr: String::from_utf8_lossy(&result.stderr)
-            .chars()
-            .take(400)
-            .collect(),
+        stderr: tripwire::scan_stderr_frame(&stderr),
     })
+}
+
+/// 工具级失败帧：`{tool} failed with {code:?}: {stderr}`。
+///
+/// stderr 走本族的**回显面绊线**（形状层遮形 + 仅命中才挂末尾一行 JSON 注解）。
+/// 零命中 ⇒ 帧与接线前**逐字节相同**。
+fn failed_frame(tool: &str, result: &crate::process::ProcessResult) -> String {
+    format!(
+        "{tool} failed with {:?}: {}",
+        result.exit_code(),
+        tripwire::scan_stderr_frame(&String::from_utf8_lossy(&result.stderr))
+    )
 }
 
 fn resolve_in_root(root: &Path, raw: &str) -> Result<PathBuf, String> {
@@ -124,12 +143,10 @@ fn parameters(schema: Value) -> ToolParameters {
     params
 }
 
+/// 本族**唯一**的结果面出口：10 个 `ext.*` 工具都经这里交付证据信封（凭据形状绊线接在这一道）。
 fn ok_evidence(call: &ToolCall, name: &str, evidence: &Evidence) -> ToolResult {
-    ToolResult::ok(
-        call.id.clone(),
-        serde_json::to_value(evidence).unwrap_or(Value::Null),
-    )
-    .with_name(name)
+    let value = tripwire::sanitized_evidence_value(evidence);
+    ToolResult::ok(call.id.clone(), value).with_name(name)
 }
 
 /// `ext.nmap`：只读服务/版本侦察（connect 扫描，不需 root）。
@@ -525,15 +542,8 @@ impl ToolCapability for ExifTool {
             };
         // exiftool 对未知格式返回退出码 1，但 JSON 仍可用（含 Error 字段）。
         if !result.success() && result.exit_code() != Some(1) {
-            return ToolResult::permanent_error(
-                &call.id,
-                format!(
-                    "exiftool failed with {:?}: {}",
-                    result.exit_code(),
-                    String::from_utf8_lossy(&result.stderr)
-                ),
-            )
-            .with_name("ext.exiftool");
+            return ToolResult::permanent_error(&call.id, failed_frame("exiftool", &result))
+                .with_name("ext.exiftool");
         }
         let parsed: Value = match serde_json::from_slice(&result.stdout) {
             Ok(value) => value,
@@ -812,15 +822,8 @@ impl ToolCapability for YaraCliTool {
         };
         // yara: 0 = 命中，1 = 未命中，>=2 = 错误。
         if !result.success() && result.exit_code() != Some(1) {
-            return ToolResult::permanent_error(
-                &call.id,
-                format!(
-                    "yara failed with {:?}: {}",
-                    result.exit_code(),
-                    String::from_utf8_lossy(&result.stderr)
-                ),
-            )
-            .with_name("ext.yara");
+            return ToolResult::permanent_error(&call.id, failed_frame("yara", &result))
+                .with_name("ext.yara");
         }
         let stdout = String::from_utf8_lossy(&result.stdout);
         let mut rules_hit = std::collections::BTreeSet::new();
@@ -1725,15 +1728,8 @@ impl ToolCapability for OpenSslTool {
         let stdout = String::from_utf8_lossy(&result.stdout);
         let certificates = stdout.matches("-----BEGIN CERTIFICATE-----").count();
         if !result.success() && certificates == 0 {
-            return ToolResult::permanent_error(
-                &call.id,
-                format!(
-                    "openssl failed with {:?}: {}",
-                    result.exit_code(),
-                    String::from_utf8_lossy(&result.stderr)
-                ),
-            )
-            .with_name("ext.openssl");
+            return ToolResult::permanent_error(&call.id, failed_frame("openssl", &result))
+                .with_name("ext.openssl");
         }
 
         let mut chain: Vec<Value> = Vec::new();

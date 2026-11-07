@@ -462,7 +462,8 @@ fn tripwire_is_wired_for_exactly_the_expected_families() {
         wired.insert(family);
     }
 
-    // 批次 1 = {shell, filesystem, search, repo}；批次 2 = {fetch, git_write, worktree_apply, recon}。
+    // 批次 1 = {shell, filesystem, search, repo}；批次 2 = {fetch, git_write, worktree_apply, recon}；
+    // 批次 2c = {external}（10 个外部工具适配器，原样回显最凶的一族）。
     let expected: BTreeSet<String> = [
         "shell",
         "filesystem",
@@ -472,12 +473,13 @@ fn tripwire_is_wired_for_exactly_the_expected_families() {
         "git_write",
         "worktree_apply",
         "recon",
+        "external",
     ]
     .iter()
     .map(|name| (*name).to_string())
     .collect();
     assert_eq!(
         wired, expected,
-        "绊线的生产接线方必须恰为八族 (批次 1 四族 + 批次 2 四族)"
+        "绊线的生产接线方必须恰为九族 (批次 1 四族 + 批次 2 四族 + 批次 2c 一族)"
     );
 }
