@@ -96,6 +96,7 @@ pub use governance::{McpPermissionMapping, McpRiskMappingHook, McpToolDenyGuard}
 pub use mock::{InProcessChannel, InProcessChannelFactory, InProcessMcpServer, MockToolSpec};
 pub use tool::{mcp_output_schema, normalized_mcp_value, tool_result_from_mcp, McpDynamicTool};
 pub use transport::{
-    open_channel, HttpChannel, McpChannel, McpChannelFactory, SpecChannelFactory, SseChannel,
-    StaticChannelFactory, StdioChannel,
+    open_channel, response_deadline_for_call, HttpChannel, McpChannel, McpChannelFactory,
+    SpecChannelFactory, SseChannel, StaticChannelFactory, StdioChannel, RESPONSE_TIMEOUT,
+    TRANSPORT_DEADLINE_GRACE,
 };

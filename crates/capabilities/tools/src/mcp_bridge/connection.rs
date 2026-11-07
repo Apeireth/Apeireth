@@ -41,7 +41,9 @@ use apeireth_plugin::mcp::{
 use crate::mcp::McpError;
 
 use super::config::{McpBridgeOptions, McpServerSpec};
-use super::transport::{McpChannel, McpChannelFactory, McpFrameObserver, SpecChannelFactory};
+use super::transport::{
+    response_deadline_for_call, McpChannel, McpChannelFactory, McpFrameObserver, SpecChannelFactory,
+};
 
 /// One tool a server exposes through `tools/list`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -182,8 +184,17 @@ impl McpServerConnection {
     }
 
     /// A connection for `spec` that opens channels matching its transport.
+    ///
+    /// The links' response bound **follows** the bridge's per-call deadline
+    /// ([`response_deadline_for_call`]): the transport must never be the
+    /// stricter of the two deadlines, or it would cut a call the bridge still
+    /// allows and the failure would read as a transport failure (retryable)
+    /// instead of the bridge's own `timeout.*` classification.
     pub fn from_spec(spec: McpServerSpec, options: &McpBridgeOptions) -> Self {
-        let factory = Arc::new(SpecChannelFactory::new(spec.clone()));
+        let factory = Arc::new(SpecChannelFactory::with_response_deadline(
+            spec.clone(),
+            response_deadline_for_call(options.call_timeout_ms),
+        ));
         Self::new(spec, factory, options)
     }
 
@@ -195,6 +206,15 @@ impl McpServerConnection {
     /// The configured spec.
     pub fn spec(&self) -> &McpServerSpec {
         &self.spec
+    }
+
+    /// The bound every response wait on this connection's links runs into.
+    ///
+    /// `None` = the link's factory states no bound of its own (a
+    /// host-injected transport brings its own). The bridge's own factory
+    /// states one, and it **follows** the bridge's per-call deadline.
+    pub fn response_deadline(&self) -> Option<Duration> {
+        self.factory.response_deadline()
     }
 
     /// Current lifecycle state of the client session.

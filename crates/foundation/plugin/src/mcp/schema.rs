@@ -35,6 +35,7 @@ const WIRE_KEY_MAP: &[(&str, &str)] = &[
     ("server_info", "serverInfo"),
     ("client_info", "clientInfo"),
     ("list_changed", "listChanged"),
+    ("structured_content", "structuredContent"),
 ];
 
 /// Recursively rewrite object keys that have a known MCP camelCase form.
@@ -199,18 +200,45 @@ pub fn content_block_to_wire(block: &ContentBlock) -> Value {
 }
 
 /// MCP tools/call result (spec §tools/call).
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+///
+/// The **structured channel** is a first-class field: a server that answers
+/// with a structured result carries it in [`ToolCallResult::structured`]. The
+/// field was missing once, and serde's default (ignore unknown fields) then
+/// dropped the structured payload on the floor — the channel was broken and
+/// nothing said so.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ToolCallResult {
     pub content: Vec<ContentBlock>,
     #[serde(default, rename = "isError")]
     pub is_error: bool,
+    /// The server's structured result payload (`structuredContent`).
+    ///
+    /// `None` = the server sent no structured payload. The payload is
+    /// **server-authored**: whoever hands it to the model is responsible for
+    /// bounding and sweeping it (see the bridge's result face).
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "structuredContent"
+    )]
+    pub structured: Option<Value>,
 }
+
+/// `ToolCallResult` is an equivalence relation, so the `Eq` marker is sound.
+///
+/// `serde_json::Value` does not implement `Eq` (it could hold a float `NaN`,
+/// and `NaN != NaN`). JSON cannot express `NaN` and `serde_json` refuses to
+/// build one, so the derived `PartialEq` stays reflexive here and the marker
+/// may be stated. Without this the type would lose `Eq` — a public contract
+/// other crates may rely on.
+impl Eq for ToolCallResult {}
 
 impl ToolCallResult {
     pub fn ok(content: Vec<ContentBlock>) -> Self {
         Self {
             content,
             is_error: false,
+            structured: None,
         }
     }
 
@@ -218,7 +246,15 @@ impl ToolCallResult {
         Self {
             content,
             is_error: true,
+            structured: None,
         }
+    }
+
+    /// The same result, carrying the server's structured payload.
+    #[must_use]
+    pub fn with_structured(mut self, structured: Value) -> Self {
+        self.structured = Some(structured);
+        self
     }
 
     /// Concatenate text blocks, skipping image/resource.
@@ -237,9 +273,35 @@ impl ToolCallResult {
 }
 
 /// Normalize a tools/call result object that may use baseline snake_case.
+///
+/// The **structured payload** is data, not an envelope: its own keys are the
+/// server's data keys, so they are kept exactly as the server wrote them.
+/// Only the envelope around them is normalized — otherwise a data key such as
+/// `is_error` would silently change name on the way to the model.
 pub fn normalize_mcp_result(value: Value) -> Result<ToolCallResult, String> {
-    let normalized = normalize_wire_object(value);
+    let (envelope, structured) = split_structured_payload(value);
+    let mut normalized = normalize_wire_object(envelope);
+    if let Some(structured) = structured {
+        let object = normalized
+            .as_object_mut()
+            .ok_or_else(|| "a tools/call result must be an object".to_string())?;
+        object.insert("structuredContent".to_string(), structured);
+    }
     serde_json::from_value(normalized).map_err(|e| e.to_string())
+}
+
+/// Take the structured payload out of a tools/call result envelope.
+///
+/// The payload is taken out **before** the tolerant key rewrite, so the
+/// rewrite never reaches the server's own data keys.
+fn split_structured_payload(value: Value) -> (Value, Option<Value>) {
+    let Value::Object(mut map) = value else {
+        return (value, None);
+    };
+    let structured = map
+        .remove("structuredContent")
+        .or_else(|| map.remove("structured_content"));
+    (Value::Object(map), structured)
 }
 
 #[cfg(test)]
@@ -276,13 +338,13 @@ mod tests {
 
     #[test]
     fn normalize_wire_object_rewrites_known_keys() {
-        let donor = json!({
+        let payload = json!({
             "name": "echo",
             "input_schema": { "type": "object" },
             "mime_type": "text/plain",
             "nested": { "is_error": true, "list_changed": false }
         });
-        let out = normalize_wire_object(donor);
+        let out = normalize_wire_object(payload);
         assert_eq!(out["inputSchema"]["type"], "object");
         assert_eq!(out["mimeType"], "text/plain");
         assert_eq!(out["nested"]["isError"], true);
@@ -308,8 +370,8 @@ mod tests {
 
     #[test]
     fn content_block_from_wire_accepts_snake_case() {
-        let donor = json!({"type": "text", "text": "hi", "mime_type": "text/plain"});
-        let c = content_block_from_wire(donor).unwrap();
+        let payload = json!({"type": "text", "text": "hi", "mime_type": "text/plain"});
+        let c = content_block_from_wire(payload).unwrap();
         match c {
             ContentBlock::Text { text, mime_type } => {
                 assert_eq!(text, "hi");
@@ -332,13 +394,78 @@ mod tests {
 
     #[test]
     fn normalize_mcp_result_from_baseline_snake_case() {
-        let donor = json!({
+        let payload = json!({
             "content": [{"type": "text", "text": "ok", "mime_type": "text/plain"}],
             "is_error": false
         });
-        let r = normalize_mcp_result(donor).unwrap();
+        let r = normalize_mcp_result(payload).unwrap();
         assert!(!r.is_error);
         assert_eq!(r.extract_text(), "ok");
+    }
+
+    #[test]
+    fn the_structured_channel_survives_the_normalization() {
+        let payload = json!({
+            "content": [{"type": "text", "text": "42"}],
+            "isError": false,
+            "structuredContent": { "answer": 42 }
+        });
+        let r = normalize_mcp_result(payload).unwrap();
+        assert_eq!(
+            r.structured,
+            Some(json!({ "answer": 42 })),
+            "the structured payload must reach the caller"
+        );
+    }
+
+    #[test]
+    fn the_structured_channel_survives_the_baseline_snake_case_shape() {
+        let payload = json!({
+            "content": [{"type": "text", "text": "42"}],
+            "is_error": false,
+            "structured_content": { "answer": 42 }
+        });
+        let r = normalize_mcp_result(payload).unwrap();
+        assert_eq!(r.structured, Some(json!({ "answer": 42 })));
+    }
+
+    #[test]
+    fn the_structured_payloads_own_data_keys_are_not_rewritten() {
+        let payload = json!({
+            "content": [{"type": "text", "text": "one row"}],
+            "isError": false,
+            "structuredContent": { "rows": [{ "is_error": false }] }
+        });
+        let r = normalize_mcp_result(payload).unwrap();
+        let rows = r.structured.as_ref().expect("the payload is there");
+        assert_eq!(rows["rows"][0]["is_error"], json!(false));
+        assert!(
+            rows["rows"][0].get("isError").is_none(),
+            "a data key must not be rewritten into the envelope's dialect"
+        );
+    }
+
+    #[test]
+    fn an_answer_without_a_structured_payload_carries_none() {
+        let payload = json!({
+            "content": [{"type": "text", "text": "ok"}],
+            "isError": false
+        });
+        let r = normalize_mcp_result(payload).unwrap();
+        assert_eq!(r.structured, None);
+        // The old shape is unchanged: the field stays off the wire.
+        let wire = serde_json::to_value(&r).unwrap();
+        assert!(wire.get("structuredContent").is_none());
+    }
+
+    #[test]
+    fn the_structured_payload_round_trips_on_the_wire() {
+        let r = ToolCallResult::ok(vec![ContentBlock::text("42")])
+            .with_structured(json!({ "answer": 42 }));
+        let wire = serde_json::to_value(&r).unwrap();
+        assert_eq!(wire["structuredContent"], json!({ "answer": 42 }));
+        let back: ToolCallResult = serde_json::from_value(wire).unwrap();
+        assert_eq!(back, r);
     }
 
     #[test]

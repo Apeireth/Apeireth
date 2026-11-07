@@ -12,7 +12,8 @@
 //!
 //! Everything the server authored reaches the model through this module: the
 //! declaration (description + input schema) and the result (text + content
-//! blocks). Both are bounded and converged by [`redaction`] before they
+//! blocks + the server's **structured** payload). Both are bounded and
+//! converged by [`redaction`] before they
 //! leave: a length cap on every string, a bounded shape for the declared
 //! schema, and a clean of the invisible characters that carry injections.
 //! The convergence is *bounded*, never total — a normal schema keeps its
@@ -44,7 +45,8 @@
 //! truncate the answer.
 //!
 //! The sweep covers **text** surfaces: the joined result text, every text
-//! block, and a resource block's URI and body. It does **not** cover inline
+//! block, a resource block's URI and body, and every string leaf of the
+//! server's **structured** payload. It does **not** cover inline
 //! image data: that is a base64 payload, rewriting it would corrupt it, and
 //! the shape matchers misfire on base64.
 //!
@@ -147,7 +149,8 @@ impl McpSweepReport {
 }
 
 /// Normalize one MCP result structure into the contract's structured value:
-/// joined text, the wire content blocks, and the server's error flag.
+/// joined text, the wire content blocks, the server's error flag, and the
+/// server's **structured** payload when it sent one.
 ///
 /// The server's answer is bounded on the way in: the joined text, the block
 /// count and every block payload carry a length cap (see [`redaction`]), so
@@ -177,6 +180,12 @@ pub fn normalized_mcp_value_with_sweep(
         "content": content,
         "is_error": result.is_error,
     });
+    // The structured channel: the server's own structured payload reaches the
+    // model — bounded like every other server-authored surface. A server
+    // that sent none adds no key: such an answer keeps its old shape.
+    if let Some(structured) = &result.structured {
+        value["structured"] = redaction::bound_structured_value(structured);
+    }
     if let Some(report) = sweep {
         if report.is_hit() {
             value["egress_sweep"] = serde_json::json!({
@@ -220,6 +229,38 @@ pub fn tool_result_from_mcp_swept(
     } else {
         ToolResult::ok(call_id, normalized_mcp_value_with_sweep(&result, sweep))
             .with_name(tool_name)
+    }
+}
+
+/// Sweep one server-authored structured payload: every string leaf goes
+/// through the sweep, the shape is kept.
+///
+/// The structured channel is server-authored content like the text blocks, so
+/// it is swept the same way: a credential hiding in a string leaf of the
+/// payload must not reach the model either.
+fn sweep_structured_value(
+    value: &serde_json::Value,
+    sweeper: &mut EgressSweeper,
+    report: &mut McpSweepReport,
+) -> serde_json::Value {
+    match value {
+        serde_json::Value::String(text) => {
+            let outcome = sweeper.sweep(text);
+            report.absorb(&outcome);
+            serde_json::Value::String(outcome.text().to_string())
+        }
+        serde_json::Value::Array(items) => serde_json::Value::Array(
+            items
+                .iter()
+                .map(|item| sweep_structured_value(item, sweeper, report))
+                .collect(),
+        ),
+        serde_json::Value::Object(map) => serde_json::Value::Object(
+            map.iter()
+                .map(|(key, item)| (key.clone(), sweep_structured_value(item, sweeper, report)))
+                .collect(),
+        ),
+        other => other.clone(),
     }
 }
 
@@ -427,6 +468,11 @@ impl McpDynamicTool {
             ToolCallResult {
                 content: swept,
                 is_error: result.is_error,
+                // The structured channel is server-authored too: it is swept
+                // here and bounded on the model-facing side.
+                structured: result.structured.as_ref().map(|structured| {
+                    sweep_structured_value(structured, &mut sweeper, &mut report)
+                }),
             },
             report,
         )

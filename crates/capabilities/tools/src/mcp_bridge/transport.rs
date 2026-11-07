@@ -41,6 +41,12 @@
 //! response), it is a frame the client could not **route**. Dropping stays a
 //! drop: such a frame never closes the link, and it is still not a message.
 //!
+//! The **stdio** face loses frames the same way, and counts them the same
+//! way: a server notification (a JSON-RPC message with no `id:`) parses
+//! fine but has no caller waiting for it, so it is dropped — and it is
+//! **counted** ([`McpChannel::unrouted_frames`]) and logged, exactly like the
+//! event stream's unroutable frame.
+//!
 //! # Consumption: the stream-level fields (`id:` / `retry:`)
 //!
 //! Two SSE fields carry state that no response path consumes: `id:` (the
@@ -68,7 +74,21 @@ use crate::mcp::McpError;
 
 use super::config::{McpServerSpec, McpTransportKind};
 
-/// The deadline one response wait may take before the transport gives up.
+/// The transport's own bound on one response wait, for a link that belongs to
+/// **no** bridge deadline.
+///
+/// # The invariant this value serves
+///
+/// The transport must **never be the stricter** of the two deadlines: a
+/// transport that gives up first cuts a call the bridge still allows, and the
+/// failure then reads as a transport failure (retryable) instead of the
+/// bridge's own `timeout.*` classification.
+///
+/// A link that belongs to a bridge therefore does **not** use this constant:
+/// it uses [`response_deadline_for_call`], which **follows** the bridge's
+/// per-call deadline. This constant stays what it has always been — the
+/// **handshake tier** (the handshake is the one wait the bridge does not
+/// cover) and the bound of a link opened without a bridge.
 ///
 /// # Why this value
 ///
@@ -85,6 +105,40 @@ use super::config::{McpServerSpec, McpTransportKind};
 /// A peer that takes the request and never answers is a broken peer, not a
 /// slow one: the wait ends with a transport error, never with a silent retry.
 pub const RESPONSE_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// The margin the transport's own bound keeps **above** the bridge's deadline.
+///
+/// The bridge arms its deadline **before** the request leaves, so its timer is
+/// already running when the transport starts waiting — the bridge's timer is
+/// the earlier one. The margin turns that ordering into a **strict** one: two
+/// timers that expire inside the same millisecond would let the transport's
+/// failure win the race, and the classification would degrade back into a
+/// transport failure (retryable) instead of the bridge's `timeout.*`.
+pub const TRANSPORT_DEADLINE_GRACE: Duration = Duration::from_millis(500);
+
+/// The transport's response deadline for a bridge whose per-call deadline is
+/// `call_timeout_ms`.
+///
+/// # The rule
+///
+/// The transport's bound **follows** the bridge's per-call deadline:
+///
+/// * the bridge's deadline is **shorter** ⇒ the bridge's timer fires first
+///   (it was armed first) ⇒ the call is classified by the bridge
+///   (`timeout.*`), and the transport's bound stays the handshake tier below;
+/// * the bridge's deadline is **longer** ⇒ the transport's bound follows it
+///   up, so the transport can no longer cut a call the bridge still allows.
+///
+/// The bound is therefore **never stricter** than the bridge's — that is the
+/// invariant the transport's own comment declares — and it is **never below**
+/// the handshake tier ([`RESPONSE_TIMEOUT`]): the handshake is the one wait
+/// the bridge does not cover, so a tight per-call deadline must not shrink
+/// it.
+pub fn response_deadline_for_call(call_timeout_ms: u64) -> Duration {
+    let bridge = Duration::from_millis(call_timeout_ms);
+    let followed = bridge.saturating_add(TRANSPORT_DEADLINE_GRACE);
+    followed.max(RESPONSE_TIMEOUT)
+}
 
 /// The transport error for a response wait that ran out of time.
 ///
@@ -154,7 +208,7 @@ pub trait McpChannel: Send + Sync {
         0
     }
 
-    /// How many frames carried a payload but named **no** event type.
+    /// How many frames this channel could not **route**.
     ///
     /// **Observability, not behaviour**: such a frame is dropped exactly as
     /// before and the link stays open. What changes is that the drop is
@@ -163,9 +217,18 @@ pub trait McpChannel: Send + Sync {
     /// request that waited for it simply never gets an answer.
     ///
     /// The count is deliberately **separate** from
-    /// [`McpChannel::malformed_frames`]: a frame without an event type is
-    /// not known to be malformed (its payload may be a perfectly valid
+    /// [`McpChannel::malformed_frames`]: a frame the client could not route
+    /// is not known to be malformed (its payload may be a perfectly valid
     /// response) — it is a frame the client could not **route**.
+    ///
+    /// The two streaming faces count the same kind of loss:
+    ///
+    /// * the **event-stream** face counts a frame that carried a payload but
+    ///   named **no** event type — the protocol library dispatches on the
+    ///   event type, so such a frame reaches neither branch;
+    /// * the **stdio** face counts a JSON-RPC message that no caller is
+    ///   waiting for — a server notification (no `id:`) or a reply whose
+    ///   request is already gone.
     ///
     /// Two frame kinds are deliberately **not** counted here:
     ///
@@ -228,9 +291,42 @@ fn note_unrouted_frame(counter: &AtomicU64, source: &str) {
     }
 }
 
+/// Record one frame the stdio link could not **route**.
+///
+/// The stdio face has no event type to dispatch on: every line is a
+/// JSON-RPC message. A message the client cannot route is a **server
+/// notification** (no `id:` ⇒ no caller is waiting for it) or a reply whose
+/// request is already gone. Before this counter existed such a frame was
+/// dropped **silently**: the operation side saw nothing at all, while the
+/// event-stream face counted the very same kind of loss.
+///
+/// **Only observation**: the frame is dropped exactly as before and the link
+/// stays open. What changes is that the drop is *counted* (per link,
+/// queryable through [`McpChannel::unrouted_frames`]) and *logged* (throttled:
+/// the first drop plus every [`UNROUTED_FRAME_LOG_EVERY`]-th one).
+///
+/// The line carries the running count only, **not the frame payload**: the
+/// payload may still carry server-side content.
+fn note_unrouted_stdio_frame(counter: &AtomicU64, source: &str) {
+    let count = counter.fetch_add(1, Ordering::SeqCst) + 1;
+    if count == 1 || count % UNROUTED_FRAME_LOG_EVERY == 0 {
+        eprintln!("[mcp] {source}: frame is not a routable response (dropped, {count} so far)");
+    }
+}
+
 /// Reopens channels for one server: every (re)connect gets a fresh link.
 #[async_trait]
 pub trait McpChannelFactory: Send + Sync {
+    /// The bound every response wait on this factory's links runs into.
+    ///
+    /// `None` = the factory states no bound of its own (a host-injected
+    /// transport brings its own). The bridge's own factory states one: the
+    /// bound **follows** the bridge's per-call deadline (see
+    /// [`response_deadline_for_call`]).
+    fn response_deadline(&self) -> Option<Duration> {
+        None
+    }
+
     /// Open one fresh channel.
     async fn open(&self) -> Result<Arc<dyn McpChannel>, McpError>;
 
@@ -273,24 +369,51 @@ impl McpChannelFactory for StaticChannelFactory {
 /// A factory that opens channels according to one [`McpServerSpec`].
 pub struct SpecChannelFactory {
     spec: McpServerSpec,
+    response_deadline: Duration,
 }
 
 impl SpecChannelFactory {
-    /// A factory for `spec`.
+    /// A factory for `spec`, bounding every response wait by
+    /// [`RESPONSE_TIMEOUT`].
     pub fn new(spec: McpServerSpec) -> Self {
-        Self { spec }
+        Self {
+            spec,
+            response_deadline: RESPONSE_TIMEOUT,
+        }
+    }
+
+    /// A factory for `spec`, bounding every response wait by
+    /// `response_deadline`.
+    ///
+    /// The bridge's own wiring uses [`response_deadline_for_call`], so the
+    /// transport's bound follows the bridge's per-call deadline instead of
+    /// standing on its own.
+    pub fn with_response_deadline(spec: McpServerSpec, response_deadline: Duration) -> Self {
+        Self {
+            spec,
+            response_deadline,
+        }
     }
 
     /// The spec this factory opens channels for.
     pub fn spec(&self) -> &McpServerSpec {
         &self.spec
     }
+
+    /// The bound every response wait on this factory's links runs into.
+    pub fn response_deadline(&self) -> Duration {
+        self.response_deadline
+    }
 }
 
 #[async_trait]
 impl McpChannelFactory for SpecChannelFactory {
+    fn response_deadline(&self) -> Option<Duration> {
+        Some(self.response_deadline)
+    }
+
     async fn open(&self) -> Result<Arc<dyn McpChannel>, McpError> {
-        open_channel(&self.spec).await
+        open_channel_with_deadline(&self.spec, self.response_deadline).await
     }
 
     async fn open_with_observer(
@@ -298,39 +421,67 @@ impl McpChannelFactory for SpecChannelFactory {
         observer: Arc<dyn McpFrameObserver>,
         last_event_id: Option<&str>,
     ) -> Result<Arc<dyn McpChannel>, McpError> {
-        open_channel_with_observer(&self.spec, observer, last_event_id).await
+        open_channel_with_observer_and_deadline(
+            &self.spec,
+            self.response_deadline,
+            observer,
+            last_event_id,
+        )
+        .await
     }
 }
 
 /// Open one channel matching `spec`'s transport kind.
 pub async fn open_channel(spec: &McpServerSpec) -> Result<Arc<dyn McpChannel>, McpError> {
-    open_channel_with_observer(spec, Arc::new(IgnoredFrames), None).await
+    open_channel_with_deadline(spec, RESPONSE_TIMEOUT).await
+}
+
+/// Open one channel matching `spec`'s transport kind, bounding every response
+/// wait by `response_deadline`.
+pub async fn open_channel_with_deadline(
+    spec: &McpServerSpec,
+    response_deadline: Duration,
+) -> Result<Arc<dyn McpChannel>, McpError> {
+    open_channel_with_observer_and_deadline(spec, response_deadline, Arc::new(IgnoredFrames), None)
+        .await
 }
 
 /// Open one channel matching `spec`'s transport kind, reporting every frame
 /// the link reads to `observer` and asking the server to resume from
 /// `last_event_id`.
+pub async fn open_channel_with_observer(
+    spec: &McpServerSpec,
+    observer: Arc<dyn McpFrameObserver>,
+    last_event_id: Option<&str>,
+) -> Result<Arc<dyn McpChannel>, McpError> {
+    open_channel_with_observer_and_deadline(spec, RESPONSE_TIMEOUT, observer, last_event_id).await
+}
+
+/// Open one channel matching `spec`'s transport kind, bounding every response
+/// wait by `response_deadline`, reporting every frame the link reads to
+/// `observer` and asking the server to resume from `last_event_id`.
 ///
 /// `last_event_id` is the `id:` the server handed out on the previous link:
 /// a resumed event stream continues from it. `None` = a fresh stream (the
 /// first link of a server has nothing to resume from).
-pub async fn open_channel_with_observer(
+pub async fn open_channel_with_observer_and_deadline(
     spec: &McpServerSpec,
+    response_deadline: Duration,
     observer: Arc<dyn McpFrameObserver>,
     last_event_id: Option<&str>,
 ) -> Result<Arc<dyn McpChannel>, McpError> {
     match spec.transport {
         McpTransportKind::Stdio => {
             let command = spec.command.as_deref().unwrap_or("");
-            StdioChannel::open(command, &spec.args).await
+            StdioChannel::open_with_response_deadline(command, &spec.args, response_deadline).await
         }
         McpTransportKind::Http => {
             let url = spec.url.as_deref().unwrap_or("");
-            HttpChannel::open(url)
+            HttpChannel::open_with_response_deadline(url, response_deadline)
         }
         McpTransportKind::Sse => {
             let url = spec.url.as_deref().unwrap_or("");
-            SseChannel::open_with_observer(url, RESPONSE_TIMEOUT, observer, last_event_id).await
+            SseChannel::open_with_observer(url, response_deadline, observer, last_event_id).await
         }
     }
 }
@@ -472,6 +623,7 @@ pub struct StdioChannel {
     router: Arc<PendingRouter>,
     broken: Arc<AtomicBool>,
     malformed: Arc<AtomicU64>,
+    unrouted: Arc<AtomicU64>,
     response_deadline: Duration,
 }
 
@@ -516,9 +668,11 @@ impl StdioChannel {
         let router = Arc::new(PendingRouter::default());
         let broken = Arc::new(AtomicBool::new(false));
         let malformed = Arc::new(AtomicU64::new(0));
+        let unrouted = Arc::new(AtomicU64::new(0));
         let reader_router = Arc::clone(&router);
         let reader_broken = Arc::clone(&broken);
         let reader_malformed = Arc::clone(&malformed);
+        let reader_unrouted = Arc::clone(&unrouted);
         let reader = tokio::spawn(async move {
             let mut lines = BufReader::new(stdout).lines();
             loop {
@@ -530,7 +684,12 @@ impl StdioChannel {
                         // 坏行照样丢, 但**记一笔**（可观测, 不改行为）。
                         match serde_json::from_str::<JsonRpcResponse>(&line) {
                             Ok(response) => {
-                                reader_router.route(response);
+                                // 服务器主动通知（**无 `id`**）能解析成功, 但没有
+                                // 调用者在等它 ⇒ 路由不到 ⇒ **记一笔**（与 SSE 面
+                                // 同口径: 路由不到的帧不许静默消失）。
+                                if !reader_router.route(response) {
+                                    note_unrouted_stdio_frame(&reader_unrouted, "stdio channel");
+                                }
                             }
                             Err(error) => {
                                 note_malformed_frame(&reader_malformed, "stdio channel", &error);
@@ -552,6 +711,7 @@ impl StdioChannel {
             router,
             broken,
             malformed,
+            unrouted,
             response_deadline,
         }))
     }
@@ -659,6 +819,10 @@ impl McpChannel for StdioChannel {
 
     fn malformed_frames(&self) -> u64 {
         self.malformed.load(Ordering::SeqCst)
+    }
+
+    fn unrouted_frames(&self) -> u64 {
+        self.unrouted.load(Ordering::SeqCst)
     }
 }
 

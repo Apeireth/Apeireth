@@ -84,6 +84,11 @@ libc = { version = "0.2.189" }
 
 [dev-dependencies]
 tempfile = "3"
+# The deadline cases need a **paused** clock: the production-scale numbers (a
+# 60 s per-call deadline against the transport's own tier) must cost no
+# wall-clock time. `test-util` is tokio's own test-mode feature — **0 new
+# external package** (tokio is already a dependency of this crate).
+tokio = { workspace = true, features = ["test-util"] }
 # 测试专用 (金标准像素断言的 fixture 生成/回读 + 换核前后一致性抽样的换核前
 # 旧实现): 非产品依赖, 特性面仍只开白名单四格式。
 image = { version = "0.25.10", default-features = false, features = [

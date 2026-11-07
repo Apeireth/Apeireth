@@ -415,6 +415,121 @@ pub fn bound_content_block(block: &ContentBlock) -> ContentBlock {
     }
 }
 
+/// The maximum characters one structured result may carry in total.
+///
+/// The same 64 KiB band as the joined text: the structured payload is the
+/// server's other answer, and one answer may not be bigger than the other.
+pub const RESULT_MAX_STRUCTURED_CHARS: usize = 64 * 1024;
+
+/// The maximum nesting depth one structured result may have.
+///
+/// The model-facing depth band (the prompt assembly's default depth, 8).
+pub const RESULT_MAX_STRUCTURED_DEPTH: usize = 8;
+
+/// The maximum number of members one structured object may carry.
+pub const RESULT_MAX_STRUCTURED_KEYS: usize = 64;
+
+/// The maximum number of items one structured array may carry.
+pub const RESULT_MAX_STRUCTURED_ITEMS: usize = 64;
+
+/// The maximum number of nodes one structured result may hold.
+///
+/// The walk budget: a payload with more nodes than this is cut short, so the
+/// convergence cost stays bounded whatever the server sends.
+pub const RESULT_MAX_STRUCTURED_NODES: usize = 512;
+
+/// The bounded view of one structured result payload.
+///
+/// The payload is server-authored like every other server-authored surface,
+/// so it is bounded before it reaches the model: the depth, the member count,
+/// the item count, the node count and the total character count are all
+/// capped, and every string is cleaned of the invisible carriers.
+///
+/// A payload that fits is kept verbatim — only its invisible carriers go.
+pub fn bound_structured_value(value: &Value) -> Value {
+    let mut budget = StructuredBudget::new();
+    bound_structured(value, 0, &mut budget)
+}
+
+/// The walk budget of one structured convergence.
+struct StructuredBudget {
+    nodes: usize,
+    chars: usize,
+}
+
+impl StructuredBudget {
+    /// A budget of the full node and character allowance.
+    fn new() -> Self {
+        Self {
+            nodes: RESULT_MAX_STRUCTURED_NODES,
+            chars: RESULT_MAX_STRUCTURED_CHARS,
+        }
+    }
+
+    /// Take one node from the budget; `false` when the budget is spent.
+    fn take_node(&mut self) -> bool {
+        if self.nodes == 0 {
+            return false;
+        }
+        self.nodes -= 1;
+        true
+    }
+
+    /// Take up to `wanted` characters from the budget; the grant is what the
+    /// caller may keep.
+    fn take_chars(&mut self, wanted: usize) -> usize {
+        let granted = wanted.min(self.chars);
+        self.chars -= granted;
+        granted
+    }
+}
+
+/// Converge one structured value (any node of the payload).
+fn bound_structured(value: &Value, depth: usize, budget: &mut StructuredBudget) -> Value {
+    if !budget.take_node() {
+        // The node budget is spent: the shape of the rest is unknown.
+        return Value::Null;
+    }
+    match value {
+        Value::Object(map) => {
+            if depth >= RESULT_MAX_STRUCTURED_DEPTH {
+                // Past the depth cap the shape is unknown: an empty object
+                // keeps the payload an object without asserting a shape.
+                return Value::Object(Map::new());
+            }
+            let mut out = Map::new();
+            for (key, item) in map {
+                if out.len() >= RESULT_MAX_STRUCTURED_KEYS {
+                    break;
+                }
+                let key = truncate_text(&clean_text(key), DECLARATION_MAX_PROPERTY_NAME_CHARS);
+                if out.contains_key(&key) {
+                    continue;
+                }
+                let bounded = bound_structured(item, depth + 1, budget);
+                out.insert(key, bounded);
+            }
+            Value::Object(out)
+        }
+        Value::Array(items) => {
+            let mut out = Vec::new();
+            for item in items {
+                if out.len() >= RESULT_MAX_STRUCTURED_ITEMS {
+                    break;
+                }
+                out.push(bound_structured(item, depth + 1, budget));
+            }
+            Value::Array(out)
+        }
+        Value::String(text) => {
+            let clean = clean_text(text);
+            let granted = budget.take_chars(clean.chars().count());
+            Value::String(truncate_text(&clean, granted))
+        }
+        other => other.clone(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
