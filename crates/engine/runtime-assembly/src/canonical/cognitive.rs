@@ -5207,11 +5207,7 @@ mod tests {
             materialized, 2,
             "不同来源的同一段内容**各存各的**（不许跨来源误杀）"
         );
-        assert_eq!(
-            writeback.dedup_skipped_count(),
-            0,
-            "跨来源不该触发门"
-        );
+        assert_eq!(writeback.dedup_skipped_count(), 0, "跨来源不该触发门");
     }
 
     /// **命名空间按来源分桶**（纯函数口径）：私有 Profile 分区与普通会话

@@ -111,4 +111,4 @@ explained organ_kani_proofs  # 台账 docs/status/unwired-ledger.md §三「死 
 #   * `--update` **只许往下压**（缺口变小才压）⇒ ⇒ 涨了不许自动抬。
 # ============================================================================
 
-max_unexplained_gap = 33
+max_unexplained_gap = 32
