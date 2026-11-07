@@ -39,14 +39,17 @@ const PRODUCTION_BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 /// 场景 ①: 对方持锁时长 —— 必须**超过**既有 `busy_timeout` (5s) 才能证伪旧写法
 /// (旧写法在 5s 处就 `SQLITE_BUSY` 失败), 又必须**小于**总预算 (5s + 3s)。
 const HOLD_INSIDE_BUDGET: Duration = Duration::from_millis(5500);
-/// **名义**总等待上界 = 既有 `busy_timeout` 5s + 额外退避预算 3s + 一个 busy
-/// 窗口 250ms = **8.25s** (实测失败路径稳定在 8.25s-8.28s)。
+/// 生产配置下失败路径的断言上界。
 ///
-/// 断言用的上界放宽到 20s (名义 × ~2.4): 宿主调度抖动会让墙钟超出名义值 ——
-/// 实测机器 load average > 100 时, busy handler 的 sleep/wake 延迟把失败路径
-/// 拉到 ~8.3s、成功路径 (持锁 5.5s) 拉到 5.5s-10.1s。**无争用**的迁移正文只花
-/// ~18ms ⇒ 多出来的时间全在「等锁」上。断言要钉的是「**有界、不是无限挂起**」。
-const TOTAL_WAIT_CEILING: Duration = Duration::from_secs(20);
+/// **名义**总等待 = 既有 `busy_timeout` 5s + 额外退避预算 3s + 一个 busy 窗口
+/// 250ms = **8.25s** (实测失败路径稳定在 8.25s-8.28s)。
+///
+/// 断言上界放宽到 30s: SQLite 的 busy handler 是**睡眠预算**, 宿主被压满时
+/// (实测 load average > 100) 睡眠截止点不会准时唤醒 ⇒ 墙钟被拉长 (实测
+/// 成功路径最差 22s)。断言要钉的是「**有界、不是无限挂起**」。
+const TOTAL_WAIT_CEILING: Duration = Duration::from_secs(30);
+/// 成功路径的断言上界 (比失败路径更松: 它含持锁时长 + 正文体)。
+const SUCCESS_WAIT_CEILING: Duration = Duration::from_secs(60);
 
 /// 外部写者: 显式 `BEGIN IMMEDIATE` 持住写锁。
 ///
@@ -142,10 +145,10 @@ fn production_update_succeeds_when_the_external_writer_releases_inside_the_budge
         elapsed >= Duration::from_secs(5),
         "应当真的等对方提交, 实测耗时 {elapsed:?}"
     );
-    // 等待有界。
+    // 等待有界 (不是无限挂起)。
     assert!(
-        elapsed < TOTAL_WAIT_CEILING,
-        "等待必须有界 (< {TOTAL_WAIT_CEILING:?}), 实测耗时 {elapsed:?}"
+        elapsed < SUCCESS_WAIT_CEILING,
+        "等待必须有界 (< {SUCCESS_WAIT_CEILING:?}), 实测耗时 {elapsed:?}"
     );
 
     // 事务体**只跑了一次**: `write_seq` 恰好 +1 (重试若重跑了整档读改写, 这里

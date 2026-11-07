@@ -116,7 +116,7 @@ claims:
       - crates/engine/runtime-assembly/tests/production_mcp_factory.rs
       - crates/engine/runtime-assembly/tests/convergence_mcp.rs
       - crates/adapters/cli/tests/mcp_cli.rs
-    verified_at: 75d81677
+    verified_at: be61023d
     verify_cmd: "cargo test -p apeireth-tools-canonical mcp_bridge && cargo test -p apeireth-tools-canonical --test mcp_real_stdio_server && cargo test -p apeireth-runtime-assembly --test mcp_real_stdio_server_runtime"
     owner: tools
     next_review: "2026-11-20"
@@ -132,6 +132,24 @@ claims:
       **传输面**：`transport.rs` 的 `RESPONSE_TIMEOUT = 30 s`（一次响应等待的截止，与桥的 `DEFAULT_CALL_TIMEOUT_MS` 同档）、坏帧/裸帧**可观测**（`note_malformed_frame` 计数 + 节流 stderr）、SSE `retry:` / `id:` 真被消费（`connection.rs` 的 `observe_stream_hints` → `crates/foundation/plugin/src/mcp/reconnect.rs` 的 `ReconnectState::observe_frame` ⇒ 服务端重连提示与 Last-Event-ID 生效）。
       **名册口径已归位**：`mcp` 行 = 实际登记进运行时能力表的外部工具件数 ≥ 1（`crates/engine/runtime-assembly/src/canonical/self_status_roster.rs`）⇒ 旧口径「服务器列表已加载」不再冒充「MCP 工具可用」；`mcp_bridge` 行 = 桥面已装配（配置面事实，与件数无关）。
       **遗留（如实）**：① 结果面的内容级凭据识别**已接** —— 外部工具族的结果面与错误面走 `ToolGuardrail` 的 **`EgressSweeper::sweep`**（`guardrail.rs:718` 的包装器，内部即 `sweep_output_for_egress`；占位族脱敏 + 凭据绊线单向标签，**不新增处置语义**）⇒ ⚠️ **准确表述**：**凭据形状绊线的内核 `scan_and_sanitize_output` 另有一个生产消费者 = shell**（`shell.rs:634/637`）⇒ ⇒ 出网清扫（`EgressSweeper`）**只覆盖外部工具族**、而**凭据形状绊线覆盖 shell + 外部工具族两族** ⇒ ⇒ 缺口应表述为「**其它工具族未接凭据形状绊线**」（2026-11-07 盘点实测：26 族中 **默认开却零凭据形状绊线 = filesystem / search / repo** 三族）⇒ ⇒ **不能**声称「所有工具输出已脱敏」；② deny 闸的**配置面封禁**已落地（`McpServerSpec::deny_tools`）⇒ 被封工具不入目录、不入登记面，deny 压过只读预设 / allowlist / 族授权；但**主人可见的「当场拉黑」面仍不存在**（改配置文件 + 重启生效，库 API 有、主人面无）；③ 名册不独立复核「族授权 + 逐次人批已就位」⇒ 只报可观测代理「已登记 ≥1」；④ 工具数 N 本身不在名册（`CapabilitySwitch` 只有布尔）⇒ 计数面在接线日志（stderr）；⑤ 真服务器端到端 —— **2026-11-07 已实测 stdio 子集**（见上「四级口径」段：四环成立 + 5 类性质未覆盖）⇒ ⇒ 整体 HARDWARE VALIDATED **仍不成立**（差那 5 类）；**升级判据**：① 真第三方 http/sse 形态 server ② 会挂起/不回的真 server（覆盖传输截止与 `timeout.*` 分类）③ 真 server 真发通知帧 ④ 真 server 真分页 ⑤ 真 server 真掉线（覆盖自愈重连 + 重发现 + 一次重试）⑥ **第二个**第三方 server（把「样本量 = 1」降级）；⑥ **桥内闸仍是桥内自建策略**（生产装配走 `McpDefinition::new` → `McpToolBridge::new`，不是共享生产策略 `new_with_policy`；`external_tool_bridge.rs:53` 的同一句仍属实）⇒ 授权裁决仍在运行时治理链（族授权 + 逐次人批），桥内闸只做 deny-only。
+      **2026-11-07 真机暴露的 3 个缺陷已修**（`be61023d`）：① **传输截止不跟随桥的截止**
+      （`transport.rs` 原以 30 s 硬编码 ⇒ 不跟随 `McpBridgeOptions::call_timeout_ms` ⇒ 桥的截止 > 30 s 时
+      **传输先触发**、分类退化成 transport/retryable ⇒ **与同文件不变量注释相反**）⇒ 改为
+      `response_deadline_for_call(call_timeout_ms)` = max(桥截止 + 500 ms 余量, 握手层 30 s)，
+      经 `SpecChannelFactory::with_response_deadline` 下发到 stdio/http/sse 三面 ⇒ **传输永不比桥更严**；
+      ② **真 server 的结构化结果被静默丢弃**（`ToolCallResult` 只有 `content` + `is_error` ⇒ serde 忽略
+      未知字段 ⇒ `structuredContent` 到不了模型面）⇒ 增 `structured: Option<Value>`（`serde(default)` ⇒
+      **旧形状不变**）⇒ 先摘载荷再容错改写（**服务器自己的数据键绝不被改名**）⇒ 进模型面 ⇒
+      **过出口清扫**（结构化负载里的凭据也被改写）+ **过有界收敛**（64 KiB / 深 8 / 成员 64 / 节点 512）⇒
+      **新通道不是新的泄漏面、也不是新的绕过面**；③ **stdio 的服务器主动通知被静默丢弃**（`id` 为 `None`
+      ⇒ `route()` 静默丢、不计数不记日志 ⇒ 运维面零痕迹）⇒ 增「未路由帧」计数 ⇒ 与 SSE 面**口径对齐**。
+      **裁决记录**：手写 `impl Eq for ToolCallResult` **保留**（JSON 表达不出 NaN ⇒ derived `PartialEq`
+      自反 ⇒ `Eq` 标记可靠；去掉它对要求 `Eq` 的下游是破坏性变更）｜模型面键名用 `structured`
+      **保留**（与既有 `text` / `content` / `is_error` 的短名风格一致；线上仍是 `structuredContent`）｜
+      `WIRE_KEY_MAP` 的 `structured_content` 条目**保留**（载荷在改写前已摘出 ⇒ 当前是死条目，
+      但它表达「两种拼写都合法」的意图）｜dev-dependency 的 `tokio` 开 `test-util` **接受**
+      （暂停时钟用；**0 新包**、lock 未变、`--locked` 可过）｜`external.rs` 的 nmap 例曾因并行负载
+      抖红一次（`Text file busy` ⇒ **产物竞争**，与本能力无关）⇒ **不单独处理**。
       **⚠️ 合并后一处旧表述已过时（请主代理裁决，本批未改任何源码）**：`crates/capabilities/tools/src/mcp_bridge/mod.rs:49` 仍写「**生产未接线**：发现 / 登记 / 授权三环零生产调用点 ⇒ 生产只构造桥与模块袋，0 个外部工具进模型工具目录。」—— **已不属实**：合并后两侧都在 `production.rs` 注册（`McpModule` 登记账袋 production.rs:867 + 资源工厂 `McpDefinition` production.rs:1389），组合根 `crates/adapters/cli/src/lib.rs:1766-1767` 真接发现/登记/授权四环，外部工具真进 `tool_declarations()`。建议把该行改写为：「**生产已接线**（2026-11-06 合并后）：发现 / 登记 / 授权三环均有生产调用点 —— 组合根 `crates/adapters/cli/src/external_tools.rs`（`wire_at_startup` + `spawn_periodic_refresh`）→ `crates/engine/runtime-assembly/src/canonical/external_tool_bridge.rs`（发现 → 撤销 → 登记 → 族授权）⇒ 外部工具进运行时能力表（`tool_declarations()`）；装配面 `crates/engine/runtime-assembly/src/canonical/production.rs` 注册资源工厂形态（`McpDefinition`）与登记账袋（`McpModule`）各一份 ⇒ 不重复连进程。**遗留**：桥内闸仍是**桥内自建策略**（`McpToolBridge::new`），不是共享生产策略（`new_with_policy`）。」
       **⚠️ 合并后两条红测（2026-11-06 实测）**：合并引入的描述符前置校验（`connection.rs` 的 `call_tool_checked` 比对 `discovered` 描述符）把两条**夹具自造条目**（`input_schema: None`、未先发现）的用例前置拒掉：
       - `crates/capabilities/tools/tests/mcp_deny_guard.rs` 的 `a_denied_tool_stays_denied_after_a_reconnect` **FAILED**（`the disconnect recovery must have run`，mcp_deny_guard.rs:493）⇒ 「deny 后重连仍被封」这条**当前无通过用例覆盖**（断言在重连计数处就断了，后面的「不得被重新采纳进目录」断言未跑到）；
@@ -285,7 +303,7 @@ claims:
       - crates/engine/memory/src/migrations/tests.rs
       - crates/engine/memory/src/lesson.rs
       - crates/adapters/cli/src/lessons_command.rs
-    verified_at: 58b42e55
+    verified_at: 03655d4d
     verify_cmd: "cargo test -p apeireth-memory --lib lesson && cargo test -p apeireth-cli --lib lessons_command"
     owner: memory
     next_review: "2026-12-01"

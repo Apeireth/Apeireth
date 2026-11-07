@@ -206,6 +206,10 @@ pub fn content_block_to_wire(block: &ContentBlock) -> Value {
 /// field was missing once, and serde's default (ignore unknown fields) then
 /// dropped the structured payload on the floor — the channel was broken and
 /// nothing said so.
+///
+/// The result's `_meta` is **not** carried here: it is the protocol's own
+/// metadata channel (not model-facing content), and the model's answer is
+/// the structured payload.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ToolCallResult {
     pub content: Vec<ContentBlock>,

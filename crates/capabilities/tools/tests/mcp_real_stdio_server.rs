@@ -493,6 +493,7 @@ async fn dispatching_to_a_real_server_returns_the_servers_own_answer() {
     // The bridge-level family release (production shape).
     bridge.family_grants().grant_mcp_family();
 
+    let mut structured_answers = 0usize;
     let mut ok_calls = 0usize;
     let mut error_calls = 0usize;
     for (index, entry) in targets.iter().enumerate() {
@@ -515,6 +516,22 @@ async fn dispatching_to_a_real_server_returns_the_servers_own_answer() {
         match &result.outcome {
             ToolOutcome::Ok { value } => {
                 ok_calls += 1;
+                // **结构化通道在真机上的落地**（2026-11-07 复验）：真服务器每个工具都返回
+                // `structuredContent` ⇒ 修好之前它会被 serde 的「忽略未知字段」**静默丢弃**
+                // ⇒ 模型面**看不到**这个键；修好之后它作为**一等通道**到达模型面。
+                // ⇒ 断言写成**条件式**：服务器给了 ⇒ 模型面必须能拿到、且必须是**结构化值**
+                // （对象/数组，不是裸标量）；服务器没给 ⇒ 不作要求（**不假红**）。
+                if let Some(structured) = value.get("structured") {
+                    structured_answers += 1;
+                    assert!(
+                        matches!(
+                            structured,
+                            serde_json::Value::Object(_) | serde_json::Value::Array(_)
+                        ),
+                        "the structured channel must arrive as a structured value, got {:?}",
+                        structured
+                    );
+                }
                 let text = value["text"].as_str().unwrap_or_default();
                 assert!(
                     !text.is_empty(),
@@ -570,6 +587,7 @@ async fn dispatching_to_a_real_server_returns_the_servers_own_answer() {
     );
     eprintln!(
         "dispatched against the external stdio server: {ok_calls} successful answer(s), \
+         {structured_answers} of them carried the structured channel, \
          {error_calls} server-side error answer(s)"
     );
 }
