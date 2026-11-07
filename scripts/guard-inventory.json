@@ -606,6 +606,25 @@
       ]
     },
     {
+      "id": "check-real-query-baseline",
+      "path": "scripts/check_real_query_baseline.py",
+      "kind": "ratchet",
+      "is_guard": true,
+      "blocking": true,
+      "invocation": [
+        "python3 scripts/check_real_query_baseline.py"
+      ],
+      "ci_workflows": [],
+      "has_baseline": true,
+      "notes": "真实查询闸门（MIRACL 中文）：方向不许错",
+      "flags": [
+        "--check",
+        "--help",
+        "--update",
+        "-h"
+      ]
+    },
+    {
       "id": "check-release-version",
       "path": "scripts/check-release-version.sh",
       "kind": "guard",
