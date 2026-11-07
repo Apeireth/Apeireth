@@ -81,6 +81,12 @@ def run_report() -> tuple[dict | None, str]:
     # `E0786 Permission denied`（产物 root 拥有 ⇒ ⇒ bai 读不了）
     # ⇒ ⇒ ⇒ 那是**环境干扰**（不是代码问题）⇒ ⇒ 用**专属** target 隔离。
     env.setdefault("CARGO_TARGET_DIR", "/var/tmp/apeireth-fusion-gate-target")
+    # ⭐ **强制清空 rustc wrapper**（2026-11-07 实测根因）：`/usr/local/cargo/config.toml`
+    # 设了 `rustc-wrapper = "sccache"`，而本机 sccache 守护进程以 **root** 跑
+    # ⇒ ⇒ 它产出的 `.d` / 元数据是 root 拥有的 ⇒ ⇒ bai 身份再读就是
+    # `Permission denied`（表现为「报告跑失败」，极易误判成代码问题）。
+    # 本脚本自带专属 target 目录只隔离了产物位置，**隔离不了 wrapper 身份** ⇒ 这里显式清空。
+    env["RUSTC_WRAPPER"] = ""
     # ⭐ **语料路径**：示例自己认 `APEIRETH_DATA_DIR`（它的 `novels` 挂在数据根下）
     # ⇒ ⇒ 这里传**数据根**（不是 novels 目录）。
     if not (Path(env.get("APEIRETH_DATA_DIR", "/nonexistent")) / "novels").is_dir():
