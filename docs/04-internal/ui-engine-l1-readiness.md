@@ -73,13 +73,13 @@ flex / grid / 文本排版 / 层叠 / 动效时间线 ⇒ ⇒ r10 原型的 CSS 
 |---|------|----------|------|
 | 1 | 响应式调度 / DOM 绑定与差值写回 | IMPLEMENTED + WIRED + VALIDATED（五面逐像素） | E-34 / E-71 / 五面对照 |
 | 2 | 受控输入闭环（`value`/`checked` 差值写回 + 回读） | IMPLEMENTED + WIRED | E-90 块；`renderer.rs` 的 `patch_props` |
-| 3 | **G1 布局测量**（`bounding_box`/`scroll_metrics`/`set_scroll_top`） | IMPLEMENTED + WIRED + **浏览器已验证** | E-91 / E-98（引擎盒 ≡ JS `getBoundingClientRect`） |
+| 3 | **G1 布局测量**（`bounding_box`/`scroll_metrics`/`set_scroll_top`） | IMPLEMENTED + **PRODUCTION WIRED** + **HARDWARE VALIDATED（浏览器侧）** | E-91 / E-98（引擎盒 ≡ JS `getBoundingClientRect`） ⇒ ⇒ **生产侧消费**（2026-11-06，产品仓）：三个 API 各承担一个真判定，完成「新建后把被滚出可视区的列表滚回顶部」⇒ ⇒ 实测 `corrections = 1` / `scrollTopAfter = 0` / `first_item_top: -959 → 0` |
 | 4 | **G2 事件面（19 类）与载荷**（`checked`/坐标/`button`/`pointer_id`/`alt`/组合数据） | IMPLEMENTED + WIRED（浏览器侧载荷已验证） | E-92 / E-98 |
 | 5 | **G3 焦点栈 + 焦点陷阱** | IMPLEMENTED + WIRED + 浏览器已验证（`activeElement`） | E-93 / E-96 / E-98 |
 | 6 | **G3 IME 组合静默期**（document 级自动跟踪 + 待写队列补写） | IMPLEMENTED + WIRED + 浏览器已验证（合成事件） | E-95 / E-97 / E-98 |
 | 7 | **G5 虚拟列表**（窗口计算 / 窗口化渲染 / 嵌套子级替换 / 滚动监听 / 1k 行 O(窗口)） | IMPLEMENTED + WIRED | E-102 / E-103 / E-108 / E-109 / E-110 |
 | 8 | **G6 缩放与密度标量**（DPR × density，含命中测试） | IMPLEMENTED + WIRED + 浏览器已验证 | E-94 / E-98 |
-| 9 | **G7 资源句柄 / 加载状态 / 度量未定门控** | IMPLEMENTED + WIRED | E-107 |
+| 9 | **G7 资源句柄 / 加载状态 / 度量未定门控 / 纹理上传 / CLS 观测** | IMPLEMENTED + **PRODUCTION WIRED** + **HARDWARE VALIDATED（浏览器侧）** | E-107 ⇒ ⇒ 2026-11-06 补齐：`GpuTextureUploader` 在引擎内（零适配器）+ `ui-gpu::resource` 搬家；`drive_l1.py` 的 `upload` 段与 `l1_layout_shift_probe` 三条对照（真位移 > 0 / 亚像素 = 0 / 视口外 = 0）**EXIT 0** |
 | 10 | **G7 CLS 观测**（亚像素与视口外不计分） | IMPLEMENTED + WIRED | E-111 |
 | 11 | **G8 错误边界**（渲染失败挂兜底 + 原始错误可读） | IMPLEMENTED + WIRED + **浏览器已验证** | E-104 / E-106 |
 | 12 | **G8 panic 钩子**（消息记录 + 宿主上报器，防递归） | IMPLEMENTED + 部分 WIRED + 浏览器仅验「可安装」 | E-105 / E-106 |
