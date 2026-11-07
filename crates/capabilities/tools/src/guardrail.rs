@@ -784,8 +784,12 @@ const SHAPE_LAYER_LABELS: &[&str] = &[
 ///
 /// 约束: 不含 `:` `=` (字段层的分隔符) 与 `,` `}` `]` `#` (字段层的切分标记),
 /// 否则字段层对这一行的裁决会被占位本身带偏.
+///
+/// ⚠️ **另须避开 `APEIRETH_[A-Z0-9_]+` 形态**: 那是本仓 **env 开关命名空间**
+/// (`scripts/arch_guard.py` 的 `ENV_RE` 会把它当**新增 env 开关**计数 ⇒ env 预算 161 > 160 ⇒
+/// **棘轮会红**) ⇒ ⇒ 桥接占位是**内部标记**、不是 env ⇒ ⇒ 命名不得进入该命名空间.
 fn bridge_placeholder(index: usize) -> String {
-    format!("__APEIRETH_TRIPWIRE_MASK_{index}__")
+    format!("__TRIPWIRE_MASK_{index}__")
 }
 
 /// 形状层的遮形标签 → 桥接占位 (让字段层能看见这个值).
