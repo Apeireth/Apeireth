@@ -71,6 +71,8 @@ pub use continuity_link::{
 };
 pub mod calibration;
 pub mod calibration_critic;
+// 能力接线审计（只读；由 `apeireth memory handover` 触发 ⇒ 交接包自带真值）
+pub mod capability_audit;
 pub mod cluster_store;
 pub mod confidence;
 pub mod cross_diary;

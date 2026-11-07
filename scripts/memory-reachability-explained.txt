@@ -73,7 +73,6 @@ explained vector_distance    # 台账 docs/status/unwired-ledger.md §5.1「重�
 #     ⇒ ⇒ 模块自述 default-off / 研究原型 ⇒ ⇒ **有意不接** ⇒ ⇒ 不是债。
 
 explained dream_consolidation         # 台账 docs/status/unwired-ledger.md §5.2「有意不接（不是债）」L90：模块自述 default-off / 研究原型 ⇒ ⇒ 有意不接 ⇒ ⇒ 不是债
-explained persistent_vector           # 台账 docs/status/unwired-ledger.md §5.2「有意不接（不是债）」L91：同族 ⇒ ⇒ 有意不接 ⇒ ⇒ 不是债
 explained principles                  # 台账 docs/status/unwired-ledger.md §5.2「有意不接（不是债）」L92：同族 ⇒ ⇒ 有意不接 ⇒ ⇒ 不是债
 explained research_non_interference   # 台账 docs/status/unwired-ledger.md §5.2「有意不接（不是债）」L93：同族 ⇒ ⇒ 有意不接 ⇒ ⇒ 不是债
 explained research_roaming_memory     # 台账 docs/status/unwired-ledger.md §5.2「有意不接（不是债）」L94：同族 ⇒ ⇒ 有意不接 ⇒ ⇒ 不是债
@@ -111,4 +110,20 @@ explained organ_kani_proofs  # 台账 docs/status/unwired-ledger.md §三「死 
 #   * `--update` **只许往下压**（缺口变小才压）⇒ ⇒ 涨了不许自动抬。
 # ============================================================================
 
-max_unexplained_gap = 32
+explained golden_diag  # 台账 docs/status/unwired-ledger.md §一「W14–W32 分诊」前言（L74-76）明列为「**评估/基准/语料族** ⇒ ⇒ **不是产品能力**」：离线评测诊断夹具 ⇒ ⇒ 由 tests/examples/离线基准驱动，不进生产链路 ⇒ ⇒ 不是接线缺口
+explained golden_fair  # 台账 docs/status/unwired-ledger.md §一「W14–W32 分诊」前言（L74-76）明列为「**评估/基准/语料族** ⇒ ⇒ **不是产品能力**」：公平卷 golden 评测夹具 ⇒ ⇒ 由 tests/examples/离线基准驱动，不进生产链路 ⇒ ⇒ 不是接线缺口
+explained golden_injection  # 台账 docs/status/unwired-ledger.md §一「W14–W32 分诊」前言（L74-76）明列为「**评估/基准/语料族** ⇒ ⇒ **不是产品能力**」：注入类 golden 评测夹具（v1） ⇒ ⇒ 由 tests/examples/离线基准驱动，不进生产链路 ⇒ ⇒ 不是接线缺口
+explained golden_injection2  # 台账 docs/status/unwired-ledger.md §一「W14–W32 分诊」前言（L74-76）明列为「**评估/基准/语料族** ⇒ ⇒ **不是产品能力**」：注入类 golden 评测夹具（v2） ⇒ ⇒ 由 tests/examples/离线基准驱动，不进生产链路 ⇒ ⇒ 不是接线缺口
+explained locomo_corpus  # 台账 docs/status/unwired-ledger.md §一「W14–W32 分诊」前言（L74-76）明列为「**评估/基准/语料族** ⇒ ⇒ **不是产品能力**」：LoCoMo 语料适配 ⇒ ⇒ 由 tests/examples/离线基准驱动，不进生产链路 ⇒ ⇒ 不是接线缺口
+explained novel_corpus  # 台账 docs/status/unwired-ledger.md §一「W14–W32 分诊」前言（L74-76）明列为「**评估/基准/语料族** ⇒ ⇒ **不是产品能力**」：内部卷语料适配 ⇒ ⇒ 由 tests/examples/离线基准驱动，不进生产链路 ⇒ ⇒ 不是接线缺口
+explained git_corpus  # 台账 docs/status/unwired-ledger.md §一「W14–W32 分诊」前言（L74-76）明列为「**评估/基准/语料族** ⇒ ⇒ **不是产品能力**」：git 语料适配 ⇒ ⇒ 由 tests/examples/离线基准驱动，不进生产链路 ⇒ ⇒ 不是接线缺口
+explained delivery_metrics  # 台账 docs/status/unwired-ledger.md §一「W14–W32 分诊」前言（L74-76）明列为「**评估/基准/语料族** ⇒ ⇒ **不是产品能力**」：交付度量（评估设施） ⇒ ⇒ 由 tests/examples/离线基准驱动，不进生产链路 ⇒ ⇒ 不是接线缺口
+explained forgetting_metrics  # 台账 docs/status/unwired-ledger.md §一「W14–W32 分诊」前言（L74-76）明列为「**评估/基准/语料族** ⇒ ⇒ **不是产品能力**」：遗忘度量（评估设施） ⇒ ⇒ 由 tests/examples/离线基准驱动，不进生产链路 ⇒ ⇒ 不是接线缺口
+explained quality_metrics  # 台账 docs/status/unwired-ledger.md §一「W14–W32 分诊」前言（L74-76）明列为「**评估/基准/语料族** ⇒ ⇒ **不是产品能力**」：质量度量（评估设施） ⇒ ⇒ 由 tests/examples/离线基准驱动，不进生产链路 ⇒ ⇒ 不是接线缺口
+explained robustness_metrics  # 台账 docs/status/unwired-ledger.md §一「W14–W32 分诊」前言（L74-76）明列为「**评估/基准/语料族** ⇒ ⇒ **不是产品能力**」：鲁棒度量（评估设施） ⇒ ⇒ 由 tests/examples/离线基准驱动，不进生产链路 ⇒ ⇒ 不是接线缺口
+explained d4_eval  # 台账 docs/status/unwired-ledger.md §一「W14–W32 分诊」前言（L74-76）明列为「**评估/基准/语料族** ⇒ ⇒ **不是产品能力**」：D4 离线增量价值评估 ⇒ ⇒ 由 tests/examples/离线基准驱动，不进生产链路 ⇒ ⇒ 不是接线缺口
+explained five_dimensional  # 台账 docs/status/unwired-ledger.md §一「W14–W32 分诊」前言（L74-76）明列为「**评估/基准/语料族** ⇒ ⇒ **不是产品能力**」：五维人格评估/研究族（生产人格面走 persona_layer/persona_store_sqlite） ⇒ ⇒ 由 tests/examples/离线基准驱动，不进生产链路 ⇒ ⇒ 不是接线缺口
+explained perltqa_adapter  # 台账 docs/status/unwired-ledger.md §一「W14–W32 分诊」前言（L74-76）明列为「**评估/基准/语料族** ⇒ ⇒ **不是产品能力**」：PerLTQA 基准语料适配 ⇒ ⇒ 由 tests/examples/离线基准驱动，不进生产链路 ⇒ ⇒ 不是接线缺口
+explained facade  # 台账 docs/status/unwired-ledger.md §W33（L114，登记口径同 §5.1「重复实现（不是债）」）：`MemoryMutationFacade` 三能力（建承诺 / 承诺 CAS 完成 / 人格 CAS 增量）**逐条同源**，已被 `CanonicalMemoryTypedSink`（crates/engine/runtime-assembly/src/canonical/memory_typed_sink.rs:21，生产装配 crates/adapters/cli/src/lib.rs:2025）承担 ⇒ ⇒ 同能力已有主实现 ⇒ ⇒ 不重复接线
+
+max_unexplained_gap = 0

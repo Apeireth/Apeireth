@@ -226,3 +226,75 @@ fn a_package_without_next_steps_fails_the_drill() {
     let text = render(&report);
     assert!(text.contains("演练失败"), "报告里应写明失败：\n{text}");
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 能力接线审计（2026-11-07）：交接包报告必须**自带能力真值**
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// 纪律：**测不到就如实报「测不到」** —— 内存库没有可重开的本库路径 ⇒
+// 依赖 store 的探针必须报 `UNAVAILABLE` + 真因，**不许**静默当 0。
+
+/// 内存库没有可重开路径 ⇒ 依赖 store 的探针必须**如实**报不可测。
+#[test]
+fn the_report_carries_the_capability_audit_and_never_hides_an_unmeasurable_probe() {
+    let dir = tempdir().expect("临时目录");
+    let conn = memory_conn();
+    let out = dir.path().join("package.json");
+    let report = handover_package_from_conn(
+        &conn,
+        &out,
+        &PathBuf::from("/tmp/fake.sqlite3"),
+        Vec::new(),
+        Vec::new(),
+    )
+    .expect("打包应成功");
+    let text = render(&report);
+    assert!(
+        text.contains("能力接线审计"),
+        "报告里必须有能力审计段：\n{text}"
+    );
+    for needle in ["ARMED", "IDLE", "UNAVAILABLE"] {
+        assert!(text.contains(needle), "审计段应含计数标签 {needle}：\n{text}");
+    }
+    assert!(
+        text.contains("没有可重开的本库文件路径"),
+        "内存库上依赖 store 的探针必须**如实报真因**（不许当 0 条）：\n{text}"
+    );
+}
+
+/// 文件库（真实 schema）⇒ 写侧/读侧能力必须真的翻成 `ARMED`。
+#[test]
+fn a_file_backed_database_arms_the_real_capabilities() {
+    let dir = tempdir().expect("临时目录");
+    let db_path = dir.path().join("cognitive.sqlite3");
+    let store = apeireth_memory::SqliteMemoryStore::open(&db_path).expect("建库");
+    let conn = store.conn().expect("连接");
+    let episode = apeireth_core::kernel::memory::Episode {
+        id: "ep-cli-audit".to_string(),
+        timestamp: 1_760_000_000_000,
+        role: "user".to_string(),
+        content: "cli 侧审计用的一段真实正文".to_string(),
+        session_id: "sess-cli-audit".to_string(),
+    };
+    store
+        .put_episode_for_subject(&episode, "cid-cli-audit")
+        .expect("写记录");
+    let out = dir.path().join("package.json");
+    let report = handover_package_from_conn(
+        &conn,
+        &out,
+        &db_path,
+        Vec::new(),
+        Vec::new(),
+    )
+    .expect("打包应成功");
+    let text = render(&report);
+    assert!(
+        text.contains("ARMED"),
+        "文件库上有真记录 ⇒ 审计必须出现 ARMED：\n{text}"
+    );
+    assert!(
+        text.contains("memory_view") && text.contains("offline_embed"),
+        "审计段必须列出被审计的能力（memory_view / offline_embed）：\n{text}"
+    );
+}

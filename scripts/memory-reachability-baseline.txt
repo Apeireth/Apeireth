@@ -3,23 +3,29 @@
 #
 # 判据见脚本头部（生产入口 + 词法依赖闭包 + BFS 到不动点）。
 # 方向：宁可漏报未接线，不可虚报已接线。
-reachable_modules = 90
-total_modules = 136
-reachable_ratio = 66%
+reachable_modules = 109
+total_modules = 137
+reachable_ratio = 79%
 
 # ── 可达模块清单 ──
 reachable access_history
+reachable agent_trace
 reachable amem_graph
 reachable anchor_injection
 reachable append_only
+reachable arbitration
 reachable associative_recall
 reachable betti_hole_detector
 reachable bitemporal_graph
 reachable calibration
+reachable calibration_critic
+reachable capability_audit
 reachable chunking
 reachable cluster_store
+reachable cold_archive
 reachable commitments
 reachable community
+reachable confidence
 reachable consolidation
 reachable consolidation_trigger
 reachable context_compiler
@@ -30,15 +36,19 @@ reachable continuity_state
 reachable coordinator
 reachable cross_diary
 reachable cross_diary_wiring
+reachable daily_summary
 reachable dedup
+reachable derived_repair
 reachable diary
 reachable dream_wiring
 reachable dreaming
+reachable ensemble
 reachable episode
 reachable experience
 reachable experience_store_sqlite
 reachable extraction
 reachable forget_access_guard
+reachable forget_coordinator
 reachable gen_cache
 reachable golden_baseline
 reachable golden_mining
@@ -58,15 +68,20 @@ reachable memory_chain
 reachable memory_governance
 reachable memory_injection
 reachable memory_materializer
+reachable memory_view
 reachable meta_thinking
+reachable metadata_filter
 reachable migrate_rollback
 reachable migrations
 reachable milestone
 reachable milestone_store_sqlite
 reachable offline_archive
+reachable offline_embed
+reachable offline_embedding_provider
 reachable online_calibration
 reachable partner
 reachable partner_store_sqlite
+reachable persistent_vector
 reachable persona_layer
 reachable persona_store_sqlite
 reachable preference_store_sqlite
@@ -89,33 +104,28 @@ reachable river_topology
 reachable scope
 reachable self_assessment_store_sqlite
 reachable semantic_axis
+reachable session_lifecycle
 reachable session_note
+reachable shadow_run
 reachable signal_sources
 reachable streams
+reachable swap_flow
 reachable temporal_graph_store
 reachable three_tier_vault
 reachable topic_predictor
 reachable universal_forget
+reachable vector_rebuild
 reachable wiki_corpus
 reachable wiki_corpus_real
 
 # ── 不可达模块清单 ──
 unreachable admission_gate
-unreachable agent_trace
-unreachable arbitration
-unreachable calibration_critic
 unreachable chronicle_crystallizer
-unreachable cold_archive
-unreachable confidence
 unreachable d4_eval
-unreachable daily_summary
 unreachable delivery_metrics
-unreachable derived_repair
 unreachable dream_consolidation
-unreachable ensemble
 unreachable facade
 unreachable five_dimensional
-unreachable forget_coordinator
 unreachable forgetting_metrics
 unreachable git_corpus
 unreachable golden_diag
@@ -125,24 +135,15 @@ unreachable golden_injection2
 unreachable history_streams
 unreachable locomo_corpus
 unreachable memory_rank
-unreachable memory_view
-unreachable metadata_filter
 unreachable novel_corpus
-unreachable offline_embed
-unreachable offline_embedding_provider
 unreachable organ_kani_proofs
 unreachable perltqa_adapter
-unreachable persistent_vector
 unreachable preference_store
 unreachable principles
 unreachable quality_metrics
 unreachable research_non_interference
 unreachable research_roaming_memory
 unreachable robustness_metrics
-unreachable session_lifecycle
-unreachable shadow_run
-unreachable swap_flow
 unreachable three_layer
 unreachable vector_distance
-unreachable vector_rebuild
 unreachable wiki_fs

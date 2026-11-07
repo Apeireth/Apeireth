@@ -199,6 +199,20 @@ pub fn build_package(
     }
 }
 
+/// **能力接线审计**（只读）⇒ ⇒ 交接包摘要里如实写出「哪些记忆能力真的在跑」。
+///
+/// # 为什么挂在 handover 上
+///
+/// handover 包回答的是「**接手者不用问我们**」⇒ ⇒ 里面必须既有**数据**，
+/// 也有**能力真值**：哪些能力在这台机器的这个库上读过真数据（`ARMED`）、
+/// 哪些是「能力可用但没有输入」（`IDLE`，≠ 未接电）、哪些探测失败
+/// （`UNAVAILABLE`，带真因）⇒ ⇒ 接手者**不用猜**，也不会把「0 条」误读成「没接」。
+///
+/// 探针实现见 [`crate::capability_audit`]（只做 `SELECT` / 内存计算）。
+pub fn render_capability_audit(conn: &rusqlite::Connection, now_ms: i64) -> String {
+    crate::capability_audit::audit(conn, now_ms).render()
+}
+
 /// **默认红线**（仓库既有的硬约束，**每份包都必须带上**）。
 ///
 /// # 内容（照本仓纪律）

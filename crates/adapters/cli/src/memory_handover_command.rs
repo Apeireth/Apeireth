@@ -169,6 +169,8 @@ pub struct HandoverReport {
     pub drill_passed: bool,
     /// 演练的问题清单（全过时为空）。
     pub drill_problems: Vec<String>,
+    /// **能力接线审计**（只读真值 ⇒ 交接包自带「哪些记忆能力真的在跑」）。
+    pub capability_audit: String,
 }
 
 /// 跑打包（**只读**）。
@@ -200,6 +202,9 @@ pub fn run_handover(args: &[String]) -> Result<HandoverReport, HandoverFailure> 
         known_issues: options.issues.clone(),
     };
     let package = build_package(archive, state, options.next_steps.clone(), created_at_ms);
+    // ⭐ 能力接线审计（**只读**）：把「哪些记忆能力在这个库上真读到数据」写进报告
+    // ⇒ ⇒ 接手者不用猜，也不会把「IDLE 0 条」误读成「没接电」。
+    let capability_audit = apeireth_memory::handover::render_capability_audit(&conn, created_at_ms);
     // ⭐ **当场跑演练** ⇒ ⇒ 不产出「打出来但读不懂」的交接包。
     let (passed, problems) = drill_handover(&package);
     let payload = serde_json::to_string_pretty(&package)
@@ -219,6 +224,7 @@ pub fn run_handover(args: &[String]) -> Result<HandoverReport, HandoverFailure> 
         package_bytes,
         drill_passed: passed,
         drill_problems: problems,
+        capability_audit,
     })
 }
 
@@ -252,6 +258,9 @@ pub fn handover_package_from_conn(
         known_issues: issues,
     };
     let package = build_package(archive, state, next_steps, created_at_ms);
+    // 库级便利入口同样带审计（只读；`created_at_ms = 0` ⇒ 日期标签为 1970 起点的
+    // 「今日」边界 ⇒ ⇒ 只影响摘要标签，不影响任何判定）。
+    let capability_audit = apeireth_memory::handover::render_capability_audit(conn, created_at_ms);
     let (passed, problems) = drill_handover(&package);
     let payload = serde_json::to_string_pretty(&package)
         .map_err(|error| HandoverFailure::Unavailable(format!("序列化失败：{error}")))?;
@@ -266,6 +275,7 @@ pub fn handover_package_from_conn(
         package_bytes: std::fs::metadata(out).map(|meta| meta.len()).unwrap_or(0),
         drill_passed: passed,
         drill_problems: problems,
+        capability_audit,
     })
 }
 
@@ -294,6 +304,8 @@ pub fn render(report: &HandoverReport) -> String {
             LARGE_PACKAGE_BYTES / 1024
         ));
     }
+    lines.push(String::new());
+    lines.push(report.capability_audit.trim_end().to_string());
     lines.push(String::new());
     if report.drill_passed {
         lines.push("  ✅ **演练通过**（读方能独立读懂这个包）".to_string());
