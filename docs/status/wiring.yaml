@@ -3,7 +3,7 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: dfe2c035eaee6a4f30ee1e000083530c08e6c395a4f3b59978721fe7a3fe07ea
+claims_sha256: 87a3d430c6f1e8512a4fba0393f34e84733a32dd6b502269675e0de407d8bfcd
 claims_total: 52
 items:
   - id: "rt.provider_router"
@@ -412,7 +412,7 @@ items:
     gaps:
       []
   - id: "gov.chain_drill_ci"
-    capability: "R8-D 治理链六段演练入 CI（rust-tests 显式步骤，已前置到 nextest 之前，CI 首跑待取证）"
+    capability: "R8-D 治理链六段演练入 CI（rust-tests 显式步骤，已前置 nextest 之前，CI 已首跑）"
     implemented:
       sources:
         - ".github/workflows/rust.yml"
@@ -425,9 +425,9 @@ items:
         - "crates/foundation/governance/tests/governance_chain_drill.rs"
       claims_id: "gov.chain_drill_ci"
     gaps:
-      - "未达 PRODUCTION WIRED：R8-D 60627d8e：rust-tests job 增治理链演练显式步骤；本地等价命令 cargo test -p apeireth-governance --test governance_chain_drill 4 passed（2026-10-31：多签守卫用例已去 #[ignore]）…"
+      []
   - id: "sec.governance_chain_drill"
-    capability: "M-of-N 逻辑票链三路径端到端合练（B7 验证证据）"
+    capability: "M-of-N 逻辑票链三路径端到端合练（B7 验证证据，已入 CI 门禁并首跑）"
     implemented:
       sources:
         - "crates/foundation/governance/tests/governance_chain_drill.rs"
@@ -441,7 +441,7 @@ items:
         - "crates/foundation/governance/tests/governance_chain_drill.rs"
       claims_id: "sec.governance_chain_drill"
     gaps:
-      - "未达 PRODUCTION WIRED：通过/拒绝/超时三路径演练证据；验证面资产，不是新能力。M-of-N ≠ 密码学多签（口径见演练记录）。；2026-11-07：verify_cmd 与 CI step 对齐加 --locked（CI 实跑即 --locked）；演练步骤已前置到 nextest 之前 ⇒ 三路径演练在 CI 里是失…"
+      - "未找到生产引用（待核）"
   - id: "rel.release_asset_verify"
     capability: "发布资产校验脚本（SHA-256 + 签名状态如实报，B8）"
     implemented:
