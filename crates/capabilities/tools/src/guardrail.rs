@@ -904,6 +904,97 @@ pub(crate) fn append_credential_tripwire(text: &str, kinds: &[LeakedCredentialKi
     out
 }
 
+/// 递归扫一个 JSON 值: 逐个**字符串叶子**过形状层扫描。
+///
+/// 返回 `(终稿值, 命中族清单)`。
+///
+/// # 为什么不能把整个 JSON `to_string` 后再塞回
+///
+/// 那样会把**结构**也一起改掉 (键序、空白、数字字面量形态都变) ⇒ 下游按
+/// 结构读这个 JSON 的那一侧 (证据信封的 `details` 之类) 就读不到了。
+/// ⇒ ⇒ 本助手**只替换字符串叶子的内容**, 其余一律原样保留。
+///
+/// # 口径 (与批次 1 的结果面助手同源)
+///
+/// * 只过**形状层** (凭据形状) —— 字段值层是「键 + 分隔符 + 值」的**文本**
+///   判据, 一个孤立的 JSON 叶子值没有键上下文 ⇒ 字段层对它是空操作;
+/// * **键名不动**、数字/布尔/null 不动、数组与对象的**结构**不动
+///   (元素顺序、键集合、嵌套层级都不变);
+/// * **零命中 ⇒ 返回值与输入完全相等** (逐字节等价: 零命中时**不重建**这棵树,
+///   直接回传输入的克隆 ⇒ 序列化字节一致)。
+pub(crate) fn scan_json_string_leaves(
+    value: &serde_json::Value,
+) -> (serde_json::Value, Vec<LeakedCredentialKind>) {
+    let mut leaked_kinds: Vec<LeakedCredentialKind> = Vec::new();
+    match scan_json_leaves(value, &mut leaked_kinds) {
+        // 有叶子被替换 ⇒ 终稿值是重建后的那棵。
+        Some(scanned) => (scanned, leaked_kinds),
+        // 零命中 ⇒ **原值克隆** (不重建 ⇒ 键序/数字/布尔/null 逐字节不变)。
+        None => (value.clone(), leaked_kinds),
+    }
+}
+
+/// 递归扫 JSON 的**字符串叶子** (形状层)。
+///
+/// 返回 `Some(新值)` = 这一支有叶子被替换; `None` = 这一支**原样**
+/// (调用方据此保留原值 ⇒ 零命中的整棵树不被重建 ⇒ 逐字节等价)。
+fn scan_json_leaves(
+    value: &serde_json::Value,
+    leaked_kinds: &mut Vec<LeakedCredentialKind>,
+) -> Option<serde_json::Value> {
+    match value {
+        serde_json::Value::String(text) => {
+            let scan = scan_result_face(text);
+            if scan.leaked_kinds.is_empty() {
+                None
+            } else {
+                leaked_kinds.extend(scan.leaked_kinds.iter().copied());
+                Some(serde_json::Value::String(scan.text))
+            }
+        }
+        serde_json::Value::Array(items) => {
+            let mut changed = false;
+            let mut scanned = Vec::with_capacity(items.len());
+            for item in items {
+                match scan_json_leaves(item, leaked_kinds) {
+                    Some(replaced) => {
+                        changed = true;
+                        scanned.push(replaced);
+                    }
+                    None => scanned.push(item.clone()),
+                }
+            }
+            if changed {
+                Some(serde_json::Value::Array(scanned))
+            } else {
+                None
+            }
+        }
+        serde_json::Value::Object(map) => {
+            let mut changed = false;
+            let mut scanned = serde_json::Map::new();
+            for (key, item) in map {
+                match scan_json_leaves(item, leaked_kinds) {
+                    Some(replaced) => {
+                        changed = true;
+                        scanned.insert(key.clone(), replaced);
+                    }
+                    None => {
+                        scanned.insert(key.clone(), item.clone());
+                    }
+                }
+            }
+            if changed {
+                Some(serde_json::Value::Object(scanned))
+            } else {
+                None
+            }
+        }
+        // 数字 / 布尔 / null: 不是文本面 ⇒ 原样。
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
 
@@ -1389,6 +1480,141 @@ mod tests {
         assert!(
             super::append_credential_tripwire(&hit.text, &hit.leaked_kinds)
                 .contains("credential_tripwire")
+        );
+    }
+
+    // ── JSON 字符串叶子扫描 (批次 2 的共享助手) ──────────────────────────────
+
+    /// 形状族夹具: 一枚**合成**的裸密钥串 (非真实凭据; 长度 ≥ 20 ⇒ 命中形状族)。
+    const FAKE_KEY: &str = "sk-0123456789abcdefghijklmnop";
+
+    /// 断言两棵 JSON 树**结构相同**: 节点的种类一致、对象的**键集合**一致、
+    /// 数组的长度一致 (递归) ⇒ 「只有字符串叶子的**内容**被换」这件事本身
+    /// 可被独立验证 (不依赖逐字段肉眼比对)。
+    fn assert_same_shape(left: &serde_json::Value, right: &serde_json::Value) {
+        match (left, right) {
+            (serde_json::Value::Object(a), serde_json::Value::Object(b)) => {
+                let a_keys: std::collections::BTreeSet<&String> = a.keys().collect();
+                let b_keys: std::collections::BTreeSet<&String> = b.keys().collect();
+                assert_eq!(a_keys, b_keys, "对象的键集合必须不变");
+                for (key, value) in a {
+                    assert_same_shape(value, &b[key]);
+                }
+            }
+            (serde_json::Value::Array(a), serde_json::Value::Array(b)) => {
+                assert_eq!(a.len(), b.len(), "数组长度必须不变");
+                for (x, y) in a.iter().zip(b.iter()) {
+                    assert_same_shape(x, y);
+                }
+            }
+            (serde_json::Value::Array(_), _) | (_, serde_json::Value::Array(_)) => {
+                panic!("数组不得与其它种类互换")
+            }
+            (serde_json::Value::Object(_), _) | (_, serde_json::Value::Object(_)) => {
+                panic!("对象不得与其它种类互换")
+            }
+            (serde_json::Value::Null, serde_json::Value::Null) => {}
+            (serde_json::Value::Bool(a), serde_json::Value::Bool(b)) => assert_eq!(a, b),
+            (serde_json::Value::Number(a), serde_json::Value::Number(b)) => assert_eq!(a, b),
+            (serde_json::Value::String(_), serde_json::Value::String(_)) => {}
+            _ => panic!("叶子的种类不得互换"),
+        }
+    }
+
+    /// JSON 叶子扫描: **只换字符串叶子的内容** —— 键名、数字、布尔、null、
+    /// 数组与对象的结构一律不动。
+    #[test]
+    fn json_leaf_scan_replaces_only_string_leaves() {
+        let fixture = serde_json::json!({
+            "plain": "clean text",
+            "secret": FAKE_KEY,
+            "count": 42,
+            "ratio": 1.5,
+            "flag": true,
+            "nothing": null,
+            "nested": {
+                "inner": FAKE_KEY,
+                "deeper": {
+                    "leaf": ["clean", FAKE_KEY, 7],
+                    "kept_number": 100,
+                },
+            },
+            "list": [
+                { "k": FAKE_KEY },
+                { "k": "clean" },
+            ],
+        });
+
+        let (scanned, kinds) = super::scan_json_string_leaves(&fixture);
+
+        // 形状层命中族如实报出。
+        assert!(
+            kinds.contains(&LeakedCredentialKind::OpenAiKey),
+            "形状层必须在明文上真命中: {kinds:?}"
+        );
+
+        // 只有字符串叶子被换。
+        assert_eq!(scanned["plain"], serde_json::json!("clean text"));
+        assert_eq!(
+            scanned["secret"],
+            serde_json::json!("[REDACTED_OPENAI_KEY]")
+        );
+        assert_eq!(
+            scanned["nested"]["inner"],
+            serde_json::json!("[REDACTED_OPENAI_KEY]")
+        );
+        assert_eq!(
+            scanned["nested"]["deeper"]["leaf"][1],
+            serde_json::json!("[REDACTED_OPENAI_KEY]")
+        );
+        assert_eq!(
+            scanned["nested"]["deeper"]["leaf"][0],
+            serde_json::json!("clean")
+        );
+        assert_eq!(
+            scanned["list"][0]["k"],
+            serde_json::json!("[REDACTED_OPENAI_KEY]")
+        );
+        assert_eq!(scanned["list"][1]["k"], serde_json::json!("clean"));
+
+        // 数字 / 布尔 / null 一律不动。
+        assert_eq!(scanned["count"], serde_json::json!(42));
+        assert_eq!(scanned["ratio"], serde_json::json!(1.5));
+        assert_eq!(scanned["flag"], serde_json::json!(true));
+        assert_eq!(scanned["nothing"], serde_json::Value::Null);
+        assert_eq!(scanned["nested"]["deeper"]["leaf"][2], serde_json::json!(7));
+        assert_eq!(
+            scanned["nested"]["deeper"]["kept_number"],
+            serde_json::json!(100)
+        );
+
+        // 键名与结构不动。
+        assert_same_shape(&fixture, &scanned);
+        assert!(fixture["secret"].is_string(), "输入侧不得被就地改写");
+        assert_eq!(fixture["secret"], serde_json::json!(FAKE_KEY));
+    }
+
+    /// 零命中 ⇒ 返回值与输入**完全相等** (逐字节等价: 序列化字节一致)。
+    #[test]
+    fn json_leaf_scan_is_byte_identical_when_clean() {
+        let clean = serde_json::json!({
+            "plain": "clean text",
+            "count": 42,
+            "ratio": 1.5,
+            "flag": false,
+            "nothing": null,
+            "nested": { "inner": ["a", "b", 3] },
+            "list": [{ "k": "v" }, { "k": "w" }],
+        });
+
+        let (scanned, kinds) = super::scan_json_string_leaves(&clean);
+
+        assert!(kinds.is_empty(), "零命中不得报族: {kinds:?}");
+        assert_eq!(scanned, clean, "零命中时返回值必须与输入完全相等");
+        assert_eq!(
+            serde_json::to_string(&scanned).unwrap(),
+            serde_json::to_string(&clean).unwrap(),
+            "零命中时序列化字节必须一致"
         );
     }
 }

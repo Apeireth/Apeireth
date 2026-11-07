@@ -71,6 +71,7 @@ use crate::exec_pipeline::{
     AroundPolicy, OutputSchema, PreExecuteHook, PreExecuteRequest, PreVerdict, SchemaKind,
     DEFAULT_MAX_TIMEOUT_MS,
 };
+use crate::guardrail::{append_credential_tripwire, scan_result_face};
 use crate::live_policy::{
     current_live_policy, live_policy_allows, shared_live_permission_policy_slot,
     LivePermissionPolicySlot,
@@ -468,6 +469,25 @@ fn walk_file_keys(root: &Path, dir: &Path) -> Result<BTreeSet<String>, String> {
     Ok(keys)
 }
 
+/// 验证拍失败帧过 M1 凭据形状绊线 (批次 2) 并挂上可观测的绊线注解。
+///
+/// ⚠️ **本族的外部原文只出现在失败帧里** —— 成功路径的结果是本族自己的
+/// 结构化信息 (计划 id / 文件计数 / 动作分布), **不含**任何外部原文 ⇒
+/// ⇒ 成功路径**不动**, 只接失败帧。
+///
+/// 失败帧是**裸文本**面 (协议定的错误消息) ⇒ 挂不住结构化侧车 ⇒ 侧车以一行
+/// 可机读的 JSON 注解附在末尾 (同 filesystem 读面的做法)。
+///
+/// ⚠️ 本族**已有** M3 治理层正则 (`redact_secret_surfaces`) ⇒ ⇒ 那是**另一层**,
+/// 本层是**叠加层** (覆盖面不同: M3 认 `sk-` / `AKIA` / `ghp_` 等值形, 形状层
+/// 另认私钥块 / JWT / 令牌族 / 明文口令赋值 —— 两层共存, 谁都不漏)。
+///
+/// 零命中 ⇒ 帧**逐字节不变** (不挂任何标记)。
+fn scan_failure_frame(frame: String) -> String {
+    let scan = scan_result_face(&frame);
+    append_credential_tripwire(&scan.text, &scan.leaked_kinds)
+}
+
 /// 验证拍·校验命令 (受控通道): 结构化 argv、无 shell 解析、工作目录限域
 /// 暂存面、`ProcessLimits` 超时; 无法启动/超时/非零退出一律验证拍失败即帧。
 fn run_verification_commands(
@@ -483,7 +503,9 @@ fn run_verification_commands(
             .with_working_directory(stage_root)
             .with_limits(ProcessLimits::default());
         let result = executor.execute(&request).map_err(|error| {
-            format!("{REFUSAL_VERIFY_PREFIX} (校验命令无法启动, 整批未落地): {display} — {error}")
+            scan_failure_frame(format!(
+                "{REFUSAL_VERIFY_PREFIX} (校验命令无法启动, 整批未落地): {display} — {error}"
+            ))
         })?;
         let mut output = String::new();
         if !result.stdout.is_empty() {
@@ -497,11 +519,11 @@ fn run_verification_commands(
         }
         let output = redact_secret_surfaces(&output);
         if result.timed_out() {
-            return Err(format!(
+            return Err(scan_failure_frame(format!(
                 "{REFUSAL_VERIFY_PREFIX} (校验命令超时, 整批未落地): {display} — {} ({}ms)",
                 TimeoutErrorCode::DeadlineExpired.as_str(),
                 ProcessLimits::default().max_runtime.as_millis()
-            ));
+            )));
         }
         if !result.success() {
             let code = result
@@ -513,10 +535,10 @@ fn run_verification_commands(
             } else {
                 output.as_str()
             };
-            return Err(format!(
+            return Err(scan_failure_frame(format!(
                 "{REFUSAL_VERIFY_PREFIX} (校验命令非零退出, 整批未落地): {display} — \
                  exit {code}: {detail}"
-            ));
+            )));
         }
         entries.push(format!("$ {display}"));
     }

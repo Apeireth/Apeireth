@@ -53,6 +53,7 @@
 // `src/git_write.rs` + `src/git_write/parse.rs` 是 Rust 2018 标准模块布局
 // ⇒ `mod parse;` **自动解析**, **不需要**改 `lib.rs`（别人的文件）。
 mod parse;
+mod tripwire;
 use parse::{
     check_message_file_operands, grade_commit, grade_tag, long_option_overlaps, option_base,
     short_bundle, split_command_segments, tokenize_segment,
@@ -912,20 +913,17 @@ impl ToolCapability for GitWriteTool {
         let root = self.root.clone();
         let segments_for_run = segments.clone();
         match tokio::task::spawn_blocking(move || execute_plan(&root, &segments_for_run)).await {
-            Ok(Ok(output)) => ToolResult::ok(
-                &call.id,
-                serde_json::json!({
-                    "status": "executed",
-                    "tier": tier.label(),
-                    "commands": segments
-                        .iter()
-                        .map(|segment| segment.display.as_str())
-                        .collect::<Vec<_>>(),
-                    "output": output,
-                }),
-            )
-            .with_name(name),
-            Ok(Err(failure)) => ToolResult::permanent_error(&call.id, failure).with_name(name),
+            Ok(Ok(output)) => {
+                // M1 凭据形状绊线 (批次 2): 结果面的遮形与侧车见
+                // `crate::git_write::tripwire` (口径说明也在那里 —— 本文件在 size
+                // 棘轮基线上 ⇒ 净减 ⇒ 实现落子模块)。
+                let value = tripwire::success_value(tier.label(), &segments, &output);
+                ToolResult::ok(&call.id, value).with_name(name)
+            }
+            Ok(Err(failure)) => {
+                let failure = tripwire::scan_failure(&failure);
+                ToolResult::permanent_error(&call.id, failure).with_name(name)
+            }
             Err(error) => {
                 ToolResult::permanent_error(&call.id, format!("git_write task failed: {error}"))
                     .with_name(name)

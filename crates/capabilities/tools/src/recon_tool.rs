@@ -194,11 +194,7 @@ impl ToolCapability for ReconPackTool {
         .with_evidence(EvidenceItem::new("file", path).with_digest(digest))
         .with_limitation("static inspection only; the target is never executed");
 
-        ToolResult::ok(
-            call.id.clone(),
-            serde_json::to_value(&evidence).unwrap_or(Value::Null),
-        )
-        .with_name("re.pack")
+        evidence_result(call, "re.pack", &evidence)
     }
 }
 
@@ -235,10 +231,14 @@ fn read_bounded(path: &Path, max_bytes: u64) -> Result<Vec<u8>, String> {
     std::fs::read(path).map_err(|error| format!("cannot read target: {error}"))
 }
 
+/// 本族**唯一**的结果面出口：9 个 `re.*` 工具都经这里把证据信封交给运行时。
+///
+/// 凭据形状绊线也在这一道接：信封的字符串面（顶层字段 / `details` 的字符串叶子 /
+/// `evidence[]` / `limitations[]`）过一遍**形状层 → 字段值层**；命中即遮形并挂侧车，零命中则**逐字节**不变。
 fn evidence_result(call: &ToolCall, tool: &str, evidence: &Evidence) -> ToolResult {
     ToolResult::ok(
         call.id.clone(),
-        serde_json::to_value(evidence).unwrap_or(Value::Null),
+        crate::recon::sanitized_evidence_value(evidence),
     )
     .with_name(tool)
 }

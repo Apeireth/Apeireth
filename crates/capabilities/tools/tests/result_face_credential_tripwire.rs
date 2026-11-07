@@ -415,10 +415,15 @@ async fn the_field_layer_keeps_the_pre_wiring_label_and_the_password_family_stil
 #[test]
 fn tripwire_is_wired_for_exactly_the_expected_families() {
     let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    // ⚠️ **模式已扩**（2026-11-07 批次 2 收口）：原先只认内核入口字面量 `scan_and_sanitize_output`
+    // ⇒ 走**共享助手**（`scan_result_face` / `scan_json_string_leaves`）的族**不被枚举**
+    // ⇒ ⇒ 守卫变成「少报型」（批次 2 的 fetch / git_write / worktree_apply / recon 三族 + 一族 全漏）
+    // ⇒ ⇒ **模式扩为三者**，让守卫回到「枚举型」。
     let output = Command::new("grep")
         .arg("-rn")
         .arg("--include=*.rs")
-        .arg("scan_and_sanitize_output")
+        .arg("-E")
+        .arg("scan_and_sanitize_output|scan_result_face|scan_json_string_leaves")
         .arg(&src)
         .output()
         .expect("grep 必须可用 (接线守卫依赖它)");
@@ -433,18 +438,46 @@ fn tripwire_is_wired_for_exactly_the_expected_families() {
         let Some(path) = line.split(':').next() else {
             continue;
         };
-        let Some(stem) = Path::new(path).file_stem() else {
-            continue;
+        // ⚠️ **族级判定**：某族可能把接线放在**子模块**里（如 `git_write/tripwire.rs`、
+        // `recon/tripwire.rs`）⇒ ⇒ 只取 `file_stem` 会把它们算成 `tripwire` ⇒ ⇒ 改为
+        // 「首段目录名优先，否则用文件名去扩展」⇒ ⇒ 族名才稳定。
+        // ⚠️ grep 传的是**绝对路径**（`CARGO_MANIFEST_DIR/src`）⇒ 输出也是绝对路径
+        // ⇒ ⇒ 必须先切到 **`src` 段之后**（绝对路径以 `/` 开头 ⇒ 直接 split 会让族名塌成空串）
+        // ⇒ ⇒ 取**最后一个** `src` 段之后的相对部分（如 `fetch.rs` / `git_write/tripwire.rs`）。
+        let after_src = match path.rfind("/src/") {
+            Some(index) => &path[index + "/src/".len()..],
+            None => path,
         };
-        wired.insert(stem.to_string_lossy().to_string());
+        let mut segments = after_src.split('/');
+        let first = segments.next().unwrap_or_default();
+        let family = if segments.next().is_some() {
+            // 位于子目录 ⇒ 首段目录名即族名。
+            first.to_string()
+        } else {
+            Path::new(first)
+                .file_stem()
+                .map(|stem| stem.to_string_lossy().to_string())
+                .unwrap_or_else(|| first.to_string())
+        };
+        wired.insert(family);
     }
 
-    let expected: BTreeSet<String> = ["shell", "filesystem", "search", "repo"]
-        .iter()
-        .map(|name| (*name).to_string())
-        .collect();
+    // 批次 1 = {shell, filesystem, search, repo}；批次 2 = {fetch, git_write, worktree_apply, recon}。
+    let expected: BTreeSet<String> = [
+        "shell",
+        "filesystem",
+        "search",
+        "repo",
+        "fetch",
+        "git_write",
+        "worktree_apply",
+        "recon",
+    ]
+    .iter()
+    .map(|name| (*name).to_string())
+    .collect();
     assert_eq!(
         wired, expected,
-        "绊线的生产接线方必须恰为四族 (默认开的三族 + shell)"
+        "绊线的生产接线方必须恰为八族 (批次 1 四族 + 批次 2 四族)"
     );
 }

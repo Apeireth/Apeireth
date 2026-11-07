@@ -30,6 +30,7 @@ use serde::{Deserialize, Serialize};
 use url::Url;
 
 use crate::egress::{ControlledEgress, EgressAllowList, EgressError, EgressPolicy};
+use crate::guardrail::{attach_credential_tripwire, scan_result_face, LeakedCredentialKind};
 
 pub mod accessibility;
 pub mod html_text;
@@ -449,6 +450,28 @@ impl FetchTool {
 
         let final_url = sanitize_final_url(&response.final_url);
 
+        // M1 凭据形状绊线 (批次 2): 远程内容是**不可信源** —— 页面正文里的
+        // 凭据形状 (密钥串 / 私钥块 / 令牌) 不得裸奔进模型上下文。
+        //
+        // ⚠️ **形状扫描必须在「不可信信封」包裹之前** (这是本族的坑):
+        //   ① 扫**包裹后**的文本 ⇒ 形状层的替换会落进信封**内部**, 信封的
+        //      边界标记与正文的相对形态都被改动 ⇒ 信封不再是「原样包住原文」
+        //      的那一份 (下游按信封解包的那一面拿到的是被改写过的正文);
+        //   ② 包裹会做**边界伪造中和** (把正文里的 `<<<[` 换成 `<<< [`) ⇒
+        //      文本形态已变 ⇒ 扫描判据面对的不是原始正文。
+        // ⇒ ⇒ 顺序固定: **先扫正文, 再包裹**。
+        //
+        // 覆盖面: 响应**正文** + **最终 URL** + 三个派生视图 (`title` / `text` /
+        // `accessibility`) —— 逐项扫, 不是只扫正文 (派生视图是从远程页面另算
+        // 出来的文本, 各自独立过一遍)。
+        // 零命中 ⇒ 逐字节不变 (不挂任何标记)。
+        let url_scan = scan_result_face(&final_url);
+        let final_url = url_scan.text;
+        let body_scan = scan_result_face(&decoded);
+        let mut leaked_kinds: Vec<LeakedCredentialKind> = Vec::new();
+        leaked_kinds.extend(url_scan.leaked_kinds.iter().copied());
+        leaked_kinds.extend(body_scan.leaked_kinds.iter().copied());
+
         // ⚠️ **远程内容一律按「不可信」包裹**（2026-10-31 · 静态安全审计复核）。
         //
         // 审计指出：`tool.fetch` 把**远程页面原文**裸嵌进给模型的返回值
@@ -459,7 +482,7 @@ impl FetchTool {
         // （`apeireth-governance::untrusted_mark`，与 `content_feed` / `stealth_crawler`
         // 同一套口径）⇒ 它还负责**边界伪造中和**（把正文里的 `<<<[` 换成 `<<< [`）
         // ⇒ ⇒ 攻击者无法用伪造的闭合标记提前逃出信封。
-        let enveloped_body = UntrustedContentWrapper::wrap(&final_url, &decoded);
+        let enveloped_body = UntrustedContentWrapper::wrap(&final_url, &body_scan.text);
 
         // ⚠️ **输出侧的提示注入扫描**（2026-11-04 · P0-2 复核）。
         //
@@ -499,25 +522,43 @@ impl FetchTool {
         if essence == "text/html" || essence == "application/xhtml+xml" {
             if let Some(title) = extract_title(&decoded) {
                 // 标题是**远程页面的文字**（`<title>` 里的内容）⇒ ⇒ 同样包裹。
+                // M1 形状层 (批次 2): 标题是**另算**出来的文本面 ⇒ **逐项**过
+                // 形状层 (不是只扫正文) ⇒ 只在标题里出现的凭据形状也得遮。
+                let title_scan = scan_result_face(title.trim());
+                leaked_kinds.extend(title_scan.leaked_kinds.iter().copied());
                 value["title"] = serde_json::Value::String(UntrustedContentWrapper::wrap(
                     &final_url,
-                    title.trim(),
+                    &title_scan.text,
                 ));
             }
             if let Ok(text) = extract_text(&decoded) {
                 // 派生的纯文本视图**同样**是远程内容 ⇒ 同样包裹。
-                value["text"] =
-                    serde_json::Value::String(UntrustedContentWrapper::wrap(&final_url, &text));
+                // M1 形状层 (批次 2): 纯文本视图是**另算**出来的文本面 ⇒ 逐项过。
+                let text_scan = scan_result_face(&text);
+                leaked_kinds.extend(text_scan.leaked_kinds.iter().copied());
+                value["text"] = serde_json::Value::String(UntrustedContentWrapper::wrap(
+                    &final_url,
+                    &text_scan.text,
+                ));
             }
             let tree = extract_tree(&decoded);
             if !tree.is_empty() {
                 // 可及性快照里的节点名/属性值**同样**来自远程页面 ⇒ 同样包裹。
+                // M1 形状层 (批次 2): 快照是**另算**出来的文本面 ⇒ 逐项过。
+                let snapshot = tree.to_snapshot();
+                let snapshot_scan = scan_result_face(&snapshot);
+                leaked_kinds.extend(snapshot_scan.leaked_kinds.iter().copied());
                 value["accessibility"] = serde_json::Value::String(UntrustedContentWrapper::wrap(
                     &final_url,
-                    &tree.to_snapshot(),
+                    &snapshot_scan.text,
                 ));
             }
         }
+
+        // M1 凭据形状绊线 (批次 2): 命中可观测 —— 结果面是**对象** ⇒ 侧车挂在
+        // 对象上 (字段口径对齐 shell 结果面)。零命中 ⇒ **不挂** ⇒ 干净答案的
+        // 形状与字节都不变。
+        attach_credential_tripwire(&mut value, &leaked_kinds);
 
         // Cache only successful textual responses; error pages and
         // non-textual rejections are not worth re-serving.
