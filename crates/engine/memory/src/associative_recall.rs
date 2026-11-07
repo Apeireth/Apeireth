@@ -152,12 +152,22 @@ impl AssociativeCandidateSource {
 /// # 口径
 /// * 权重作用在**归一化之后**（`归一化分 × 权重`），**主通道保持 1.0**；
 /// * 调低后，联想候选**只填主力通道的空位**，不挤掉主力通道的正确项。
-pub const ASSOC_FUSION_WEIGHT: f64 = 0.05;
+pub const ASSOC_FUSION_WEIGHT: f64 = 1.0;
 
 impl MemoryCandidateSource for AssociativeCandidateSource {
     /// ⭐ **本路权重**（2026-11-06）：理由见 [`ASSOC_FUSION_WEIGHT`]。
     fn fusion_weight(&self) -> f64 {
         ASSOC_FUSION_WEIGHT
+    }
+
+    /// ⭐⭐ **本路是填充通道**（2026-11-07）：见 [`MemoryCandidateSource::is_filler`]。
+    ///
+    /// 实测依据：底座连续变强后，本路在内部词面卷上 −0.0032，
+    /// 而 **w = 0.05 / 0.10 / 0.20 三个数字完全相同**
+    /// ⇒ ⇒ 不是权重问题（机制见 `is_filler` 的文档）
+    /// ⇒ ⇒ ⇒ 改成**填充带**：本路候选一律排在主力所有正分候选之后。
+    fn is_filler(&self) -> bool {
+        true
     }
 
     fn candidates(
@@ -311,17 +321,34 @@ mod tests {
         );
     }
 
-    /// ⭐ **本路的融合权重必须小于 1**（辅助通道不跟主力通道同权）。
+    /// ⭐⭐ **本路必须是「填充通道」**（2026-11-07 语义变更，**实测驱动**）。
+    ///
+    /// # 为什么不再靠「亚单位权重」
+    /// 旧做法是 `fusion_weight() < 1`（用权重压住本路）。
+    /// 实测（底座连续变强后）：
+    /// * 本路在内部词面卷上 **−0.0032**；
+    /// * 而 **w = 0.05 / 0.10 / 0.20 三个数字完全相同**
+    ///   ⇒ ⇒ **不是权重太大** ⇒ ⇒ 是「辅助候选归一化后恒有约 `w` 分，
+    ///   而主力候选的**尾巴分数可能远小于 `w`** ⇒ ⇒ 必然顶掉主力最弱的命中」。
+    ///
+    /// ⇒ ⇒ 修法改成**填充带**：本路候选一律排在主力所有正分候选之后
+    /// ⇒ ⇒ **结构上不可能顶掉主力命中**（实测：四组 delta 全 **+0.0000**）。
+    ///
+    /// # 锁住三件事
+    /// 1. `is_filler()` **必须为 `true`**（否则退回到「会顶掉主力」的旧行为）；
+    /// 2. 权重**必须是正数**（=0 会把本路的正分候选整个过滤掉）；
+    /// 3. ⇒ **不再断言 `weight < 1.0`**：填充带接管之后权重**不是**压制手段，
+    ///    再要求「亚单位」只会**误导后来者**以为调小权重能解决问题。
     #[test]
-    fn associative_channel_declares_a_sub_unit_fusion_weight() {
+    fn associative_channel_is_a_filler_and_keeps_a_positive_weight() {
         let source = AssociativeCandidateSource::from_candidates(Vec::new());
         assert!(
-            source.fusion_weight() < 1.0,
-            "辅助通道的融合权重必须 < 1（实测：=1.0 时它会挤掉主力通道的正确项）"
+            source.is_filler(),
+            "本路必须声明成填充通道（否则它会顶掉主力通道的正确项，实测 −0.0032）"
         );
         assert!(
             source.fusion_weight() > 0.0,
-            "权重必须是正数（=0 等于关掉这条通道）"
+            "权重必须是正数（=0 等于把本路的正分候选整个过滤掉）"
         );
     }
 }
