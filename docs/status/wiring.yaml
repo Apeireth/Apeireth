@@ -3,7 +3,7 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: 87a3d430c6f1e8512a4fba0393f34e84733a32dd6b502269675e0de407d8bfcd
+claims_sha256: 7cefa9a63d5658e8242663a019d5baac3fa254d966f0a5d2d326a49b4d480893
 claims_total: 52
 items:
   - id: "rt.provider_router"
@@ -1143,7 +1143,7 @@ items:
     gaps:
       []
   - id: "rt.module_execution_contract"
-    capability: "Module public/private contract and task receipts"
+    capability: "Module public/private contract and task receipts（生产选举已接线）"
     implemented:
       sources:
         - "crates/foundation/plugin/src/module_contract.rs"
@@ -1154,10 +1154,12 @@ items:
         - "crates/engine/runtime/src/canonical/module_host.rs"
         - "crates/engine/runtime-assembly/src/canonical/memory_module.rs"
         - "crates/engine/runtime-assembly/src/canonical/memory_module/organizer.rs"
+        - "crates/engine/runtime-assembly/src/canonical/module_contract_wiring.rs"
     wired:
       production_refs:
         - "crates/engine/runtime-assembly/src/canonical/memory_module.rs"
         - "crates/engine/runtime-assembly/src/canonical/memory_module/organizer.rs"
+        - "crates/engine/runtime-assembly/src/canonical/module_contract_wiring.rs"
         - "crates/engine/runtime/src/canonical/capability.rs"
         - "crates/engine/runtime/src/canonical/module_host.rs"
         - "crates/foundation/plugin/src/capability.rs"
@@ -1169,9 +1171,11 @@ items:
       tests:
         - "crates/foundation/plugin/tests/module_contract.rs"
         - "crates/engine/runtime-assembly/tests/modular_ale.rs"
+        - "crates/engine/runtime-assembly/tests/module_contract_wiring.rs"
+        - "crates/adapters/cli/tests/module_contract_production.rs"
       claims_id: "rt.module_execution_contract"
     gaps:
-      - "未达 PRODUCTION WIRED：Explicit Host composition only. Existing shell wire name/frozen payload, private organizer Session, accepted task receipt, authorized status and inter…"
+      []
   - id: "rt.system_one_internal"
     capability: "Mandatory System One internal execution review"
     implemented:

@@ -784,6 +784,38 @@ impl RuntimeBuilder {
         self
     }
 
+    /// Elect the typed public/private contract of already-selected tool modules.
+    ///
+    /// `election` is the assembly's auditable table (module id → contract): an id
+    /// absent from it keeps the compatibility contract verbatim, and a module that
+    /// already carries a non-default contract is left untouched, so an explicit
+    /// election always wins and repeated application is idempotent. Election only
+    /// restricts a surface (`module_visible` / `model_visible` / effect class); it
+    /// never grants authority and never changes a wire name or a frozen payload.
+    pub fn with_module_contracts(
+        mut self,
+        election: &[(&str, apeireth_plugin::module_contract::ModuleToolContract)],
+    ) -> RuntimeResult<Self> {
+        use apeireth_plugin::module_contract::ModuleToolContract;
+        for slot in &mut self.plugins {
+            let id = slot.manifest().id.as_str();
+            let Some((_, contract)) = election.iter().find(|(elected, _)| *elected == id) else {
+                continue;
+            };
+            if slot
+                .tools()
+                .iter()
+                .any(|tool| tool.module_contract() != ModuleToolContract::default())
+            {
+                continue;
+            }
+            let inner = Arc::clone(slot);
+            *slot = apeireth_plugin::tool_module::elect_module_contract(inner, contract)
+                .map_err(RuntimeError::misconfigured)?;
+        }
+        Ok(self)
+    }
+
     /// Register a cognitive module through authenticated fixed Hooks and V1 tools.
     /// Modules run in registration order. The Host must grant their internal
     /// capabilities explicitly; registration does not authorize execution.

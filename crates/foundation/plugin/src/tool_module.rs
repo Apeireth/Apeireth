@@ -75,6 +75,123 @@ impl ToolModule {
         self
     }
 }
+
+/// A module whose tools were elected on to an explicit contract at assembly time.
+///
+/// Lifecycle, wire name, frozen payload and every executor decision stay the
+/// inner module's; only the declared/executable contract is replaced. Election
+/// restricts a surface — it never grants authority.
+struct ElectedContractModule {
+    inner: Arc<dyn Plugin>,
+    manifest: PluginManifest,
+    tools: Vec<Arc<dyn ToolCapability>>,
+}
+
+/// Elect one explicit contract for every tool `inner` implements.
+///
+/// Fails closed when the module did not declare a tool it implements (a manifest
+/// must never silently disagree with the executable surface), when the contract
+/// is invalid, or when the module owns a dynamic tool namespace (its descriptor
+/// set can change later, so a static election would go stale).
+pub fn elect_module_contract(
+    inner: Arc<dyn Plugin>,
+    contract: &crate::module_contract::ModuleToolContract,
+) -> Result<Arc<dyn Plugin>, String> {
+    use crate::module_contract::ContractTool;
+    contract.validate()?;
+    if inner.dynamic_tool_namespace().is_some() {
+        return Err(format!(
+            "module {} owns a dynamic tool namespace; its contract cannot be elected statically",
+            inner.manifest().id
+        ));
+    }
+    let tools = inner.tools();
+    if tools.is_empty() {
+        return Ok(inner);
+    }
+    let mut manifest = inner.manifest().clone();
+    let mut elected = Vec::with_capacity(tools.len());
+    for tool in tools {
+        let descriptor = manifest
+            .capabilities
+            .iter_mut()
+            .find(|descriptor| &descriptor.id == tool.id())
+            .ok_or_else(|| format!("module {} did not declare {}", manifest.id, tool.id()))?;
+        *descriptor = descriptor.clone().with_module_tool_contract(contract)?;
+        elected.push(ContractTool::wrap(tool, contract.clone())?);
+    }
+    Ok(Arc::new(ElectedContractModule {
+        inner,
+        manifest,
+        tools: elected,
+    }))
+}
+
+#[async_trait]
+impl Plugin for ElectedContractModule {
+    fn manifest(&self) -> &PluginManifest {
+        &self.manifest
+    }
+
+    fn tools(&self) -> Vec<Arc<dyn ToolCapability>> {
+        self.tools.clone()
+    }
+
+    fn providers(&self) -> Vec<Arc<dyn crate::provider::ProviderCapability>> {
+        self.inner.providers()
+    }
+
+    fn hooks(&self) -> Vec<apeireth_protocol::canonical::ModuleHookV1> {
+        self.inner.hooks()
+    }
+
+    fn uses_tool_events_v1(&self) -> bool {
+        self.inner.uses_tool_events_v1()
+    }
+
+    fn required_at_boot(&self) -> bool {
+        self.inner.required_at_boot()
+    }
+
+    fn deferred_capabilities(&self) -> bool {
+        self.inner.deferred_capabilities()
+    }
+
+    fn dynamic_tool_namespace(&self) -> Option<&str> {
+        self.inner.dynamic_tool_namespace()
+    }
+
+    fn revoke_resources(&self) {
+        self.inner.revoke_resources();
+    }
+
+    fn resource_statuses(&self) -> Vec<crate::resource_factory::ResourceStatus> {
+        self.inner.resource_statuses()
+    }
+
+    async fn initialize(&self, ctx: &PluginContext) -> PluginResult<()> {
+        self.inner.initialize(ctx).await
+    }
+
+    async fn start(&self, ctx: &PluginContext) -> PluginResult<()> {
+        self.inner.start(ctx).await
+    }
+
+    async fn refresh_tools(&self) -> PluginResult<()> {
+        self.inner.refresh_tools().await
+    }
+
+    async fn on_hook(
+        &self,
+        ctx: &crate::hooks::HookContextV1,
+    ) -> PluginResult<Vec<crate::hooks::HookToolRequest>> {
+        self.inner.on_hook(ctx).await
+    }
+
+    async fn shutdown(&self) -> PluginResult<()> {
+        self.inner.shutdown().await
+    }
+}
 #[async_trait]
 impl Plugin for ToolModule {
     fn manifest(&self) -> &PluginManifest {

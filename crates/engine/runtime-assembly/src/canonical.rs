@@ -102,6 +102,12 @@ pub mod harness_patch;
 pub mod invariant_registry;
 #[path = "canonical/memory_typed_sink.rs"]
 pub mod memory_typed_sink;
+/// `rt.module_execution_contract` 的**生产选举面**: 一张静态装配表 (无新 env
+/// 旋钮) + 两个入口 (构造期 `elect_provider_module` / builder 期 `attach`);
+/// 表内缺席 = 逐字节保持兼容合同。为何需要见文件头注释 (缺口:
+/// `production::collect_tool_module` 此前只会走 `tool_module()` 兼容默认)。
+#[path = "canonical/module_contract_wiring.rs"]
+pub mod module_contract_wiring;
 /// Wave 4 / ADR-0009 R1b-1a · 唯一 HookPoint→信号映射模块 (装配根首位注册;
 /// 恒 `continue_`, 只发布不改回合)。
 #[path = "canonical/nervous_bridge.rs"]

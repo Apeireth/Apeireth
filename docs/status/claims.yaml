@@ -987,8 +987,8 @@ claims:
 
 
   - id: rt.module_execution_contract
-    title: "Module public/private contract and task receipts"
-    level: IMPLEMENTED
+    title: "Module public/private contract and task receipts（生产选举已接线）"
+    level: PRODUCTION WIRED
     default: "OFF"
     switch_env: null
     sources:
@@ -1000,14 +1000,17 @@ claims:
       - crates/engine/runtime/src/canonical/module_host.rs
       - crates/engine/runtime-assembly/src/canonical/memory_module.rs
       - crates/engine/runtime-assembly/src/canonical/memory_module/organizer.rs
+      - crates/engine/runtime-assembly/src/canonical/module_contract_wiring.rs
     tests:
       - crates/foundation/plugin/tests/module_contract.rs
       - crates/engine/runtime-assembly/tests/modular_ale.rs
+      - crates/engine/runtime-assembly/tests/module_contract_wiring.rs
+      - crates/adapters/cli/tests/module_contract_production.rs
     verified_at: 5c74f955e62cebcb1979fb3606e804d9fb10d73c
     verify_cmd: "cargo test -p apeireth-plugin --test module_contract --locked -j 2 && cargo test -p apeireth-runtime-assembly --test modular_ale --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
-    notes: "Explicit Host composition only. Existing shell wire name/frozen payload, private organizer Session, accepted task receipt, authorized status and internal-name guessing refusal use real Runtime tests with scripted providers. No supervisor enforcement claim before P2; no live model/device evidence; no new default permissions. ADR-0023 and external P1 report contain boundaries and rollback.；2026-10-30 P2：新增可选 Host 监督服务与执行回执；原能力默认、Provider 路由与确定性权限机制保持，定向及原 MainOnly 测试/clippy/fmt 回归通过。未将兼容入口声明为已受 System One 保护，无 live model/硬件声明。；2026-10-30 P3：可选 owner-bound 消息复用 Registry/Dispatcher，委托交集与独立后台授权分离；真实 Runtime 定向及原 MainOnly test/clippy/fmt 回归通过。默认与既有等级保持，本地幂等非持久 exactly-once，新消息变体需新 reader；无 live model/硬件声明。"
+    notes: "Explicit Host composition only. Existing shell wire name/frozen payload, private organizer Session, accepted task receipt, authorized status and internal-name guessing refusal use real Runtime tests with scripted providers. No supervisor enforcement claim before P2; no live model/device evidence; no new default permissions. ADR-0023 and external P1 report contain boundaries and rollback.；2026-11-07 抬级（生产选举接线）：缺口 = 生产工具模块统一经 `canonical/production.rs:634 collect_tool_module` → `CapabilityProvider::tool_module()`（兼容默认）⇒ 生产从无 provider 选举契约 ⇒ `ContractTool` 从未构造、内部面拒绝分支不可达（只有测试在选举）。修法 = 新增 `canonical/module_contract_wiring.rs`（静态装配表 `PRODUCTION_MODULE_CONTRACTS`，**无新 env**）+ 两个接缝：① 构造期 `elect_provider_module`（collect_tool_module 的等价体）② builder 期 `attach`，由 `cognitive_registry::ProductionModules::register_with_policy` 调用（CLI 组合根 lib.rs:1706 走该路径）。表内缺席 = 逐字节保持兼容合同；选举只**收窄**面，不授予权限。真跑：`module_contract_wiring` 4 passed + `module_contract_production`（CLI 组合根）1 passed + 既有 `module_contract` / `modular_ale` 仍绿。反证：把 `attach(builder)` 停用 ⇒ `production_composition_root_elects_the_public_module_contract` 变红（已实测）。⚠️ 边界：仍无 supervisor 真执行强制（P2 只到可选监督服务与回执）；无 live 模型/设备证据；未放宽任何默认权限/冻结载荷/线名。；2026-10-30 P2：新增可选 Host 监督服务与执行回执；原能力默认、Provider 路由与确定性权限机制保持，定向及原 MainOnly 测试/clippy/fmt 回归通过。未将兼容入口声明为已受 System One 保护，无 live model/硬件声明。；2026-10-30 P3：可选 owner-bound 消息复用 Registry/Dispatcher，委托交集与独立后台授权分离；真实 Runtime 定向及原 MainOnly test/clippy/fmt 回归通过。默认与既有等级保持，本地幂等非持久 exactly-once，新消息变体需新 reader；无 live model/硬件声明。"
 
 
   - id: rt.system_one_internal

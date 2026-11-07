@@ -31,6 +31,12 @@ impl super::ProductionModules {
         // 且在**装配期**完成 ⇒ 与注册顺序无关。
         apeireth_tools_canonical::apply_patch_tool::install_shared_live_permission_policy(policy);
         let builder = self.register_context_projection(builder);
-        Ok(self.register_into(builder))
+        let builder = self.register_into(builder);
+        // `rt.module_execution_contract`: 工具模块的**生产契约选举点**。
+        // `register_into` 只把模块挂进 builder（模块保持兼容合同）; 这里按装配表
+        // （`module_contract_wiring::PRODUCTION_MODULE_CONTRACTS`）把表内模块
+        // 物化为既有 `ContractTool` 表面。表内缺席 = 逐字节零变化；已选举 =
+        // 跳过（幂等）。只收窄面, 不授予权限。
+        super::module_contract_wiring::attach(builder)
     }
 }
