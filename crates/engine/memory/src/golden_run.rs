@@ -140,12 +140,6 @@ fn best_snippet(text: &str, query: &str, max_chars: usize) -> String {
 ///
 /// 用**生产用的 BM25 源**（[`Bm25LexicalCandidateSource`]，仓里的确定性 Okapi BM25 引擎）
 /// 而不是 legacy 的 token 重叠源 ⇒ 跑出来的分数**与生产检索同口径**。
-/// ⭐ **生产默认的源**（2026-11-07）：等价于 [`build_source_with`] 的 `None` 口径。
-#[allow(dead_code)]
-fn build_source(records: &[IndexRecord]) -> Bm25LexicalCandidateSource {
-    build_source_with(records, None)
-}
-
 /// ⭐ **带 BM25 配置的源构造**（2026-11-07 实测修正）。
 ///
 /// # 为什么需要

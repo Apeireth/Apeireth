@@ -292,8 +292,3 @@ async fn production_memory_module_owns_a_child_agent_that_writes_with_its_own_gr
     assert!(!child_write.is_empty() && main_session.to_string().len() >= 32);
 }
 
-/// 让未使用的 import 检查保持安静：装配辅助在测试里只用于类型推断。
-#[allow(dead_code)]
-fn _assert_builder_type(builder: RuntimeBuilder) -> RuntimeBuilder {
-    builder
-}
