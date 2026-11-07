@@ -39,6 +39,28 @@ pub trait MemoryCandidateSource: Send + Sync {
     fn fusion_weight(&self) -> f64 {
         1.0
     }
+
+    /// ⭐⭐ **本路是不是「填充通道」**（2026-11-07 实测修正）。
+    ///
+    /// # 为什么需要它（**实测出来的机制，不是推的**）
+    /// 底座连续变强后（停用字 +52.5% ⇒ 疑问词 +7.6%），
+    /// 联想通道在内部词面卷上变成 **−0.0032**，而 **w = 0.05 / 0.10 / 0.20
+    /// 三个数字完全相同** ⇒ ⇒ ⇒ **不是「权重太大」的问题**。
+    ///
+    /// 机制：辅助候选归一化后**恒有约 `w` 分**，而主力候选的**尾巴分数可能远小于 `w`**
+    /// ⇒ ⇒ 辅助候选**必然顶掉主力最弱的那几条命中**（约 1.5 道题）
+    /// ⇒ ⇒ ⇒ ⇒ **换更小的权重救不了，因为顶掉的还是同一批弱命中。**
+    ///
+    /// # 口径（**填充带**）
+    /// `is_filler() == true` 的源，其候选分数被**映射到
+    /// 「主力所有正分候选的最小分」之下**（见 `retrieve_with_status_in`）
+    /// ⇒ ⇒ ⇒ **结构上不可能顶掉任何主力命中**
+    /// ⇒ ⇒ ⇒ 只会在主力**填不满** `limit` 个名额时补位。
+    ///
+    /// ⇒ **默认 `false`** ⇒ ⇒ 既有实现**零改动**。
+    fn is_filler(&self) -> bool {
+        false
+    }
 }
 
 /// Marker for a lexical/BM25 source.
@@ -419,7 +441,13 @@ impl HybridRetrievalPipeline {
     ) -> Result<(Vec<MemoryCandidate>, RetrievalStatus), MemoryError> {
         let mut by_id: HashMap<String, MemoryCandidate> = HashMap::new();
         let mut status = RetrievalStatus::default();
-        for source in sources {
+        // ⭐⭐ **两阶段顺序**（2026-11-07）：**主力源先跑、填充源后跑**
+        // ⇒ ⇒ ⇒ 填充源处理时，主力候选**已经全部在 `by_id` 里**
+        // ⇒ ⇒ ⇒ 于是能算出「主力正分候选的最小分」当作**填充带上限**。
+        let mut ordered: Vec<&dyn MemoryCandidateSource> =
+            sources.iter().copied().filter(|s| !s.is_filler()).collect();
+        ordered.extend(sources.iter().copied().filter(|s| s.is_filler()));
+        for source in ordered {
             let candidates = source.candidates(query, self.candidate_cap)?;
             // ⭐⭐ **按路归一化**（2026-11-06 实测修正）：**各路的分数量纲不同**
             //
@@ -463,6 +491,26 @@ impl HybridRetrievalPipeline {
                 // ⭐ **本路权重**（2026-11-06）：辅助通道**不跟主力通道同权**
                 // ⇒ ⇒ ⇒ 否则它会挤掉主力通道的正确项（实测 −0.0242）。
                 let normalized = normalized * source.fusion_weight();
+                // ⭐⭐ **填充带**（2026-11-07 实测修正）：填充源的候选
+                // **一律排在主力所有正分候选之后** ⇒ ⇒ 结构上不可能顶掉主力命中。
+                //
+                // **上限** = 主力候选里**最小的正分** ⇒ ⇒ 乘 0.999 保证严格靠后
+                // （同时**保留填充源自己的相对顺序** ⇒ ⇒ 不是简单截断）。
+                let normalized = if source.is_filler() {
+                    let ceiling = by_id
+                        .values()
+                        .map(|existing| existing.score)
+                        .filter(|score| *score > 0.0)
+                        .fold(f64::INFINITY, f64::min);
+                    if ceiling.is_finite() {
+                        normalized * ceiling * 0.999
+                    } else {
+                        // 主力**一个正分候选都没有** ⇒ ⇒ 填充源正常上（它才是唯一来源）
+                        normalized
+                    }
+                } else {
+                    normalized
+                };
                 // V4-c: 条目显著性加成 (调权生效值; 未调条目 = 0, 零改动)。
                 // ⚠️ **会话维度**: 显式 session 优先, 否则按会话作用域兜底。
                 candidate.score = normalized + session.entry_salience(&candidate.id);

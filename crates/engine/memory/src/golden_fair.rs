@@ -277,6 +277,12 @@ impl MemoryCandidateSource for CorpusAssociativeSource {
         crate::associative_recall::ASSOC_FUSION_WEIGHT
     }
 
+    /// ⭐ **与生产同口径**（2026-11-07）：替身也是**填充通道**
+    /// ⇒ ⇒ 否则尺子量与生产不同的东西（今天已经踩过一次两套口径不一致的坑）。
+    fn is_filler(&self) -> bool {
+        true
+    }
+
     fn candidates(
         &self,
         query: &str,

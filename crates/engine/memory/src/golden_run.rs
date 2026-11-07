@@ -280,6 +280,25 @@ pub fn run_with_extra_sources_and_config(
                     candidate.score *= weight;
                 }
             }
+            // ⭐⭐ **填充带**（2026-11-07）：与生产管线**同口径**。
+            //
+            // **实测依据**：底座变强后本路在内部词面卷上 −0.0032，
+            // 而 **w = 0.05 / 0.10 / 0.20 三个数字完全相同**
+            // ⇒ ⇒ 不是权重问题 ⇒ ⇒ 是「辅助候选必然顶掉主力最弱的几条命中」。
+            // ⇒ ⇒ 修法：把填充源的分**映射到主力所有正分候选之下**（乘 0.999 保证严格靠后）
+            // ⇒ ⇒ ⇒ **结构上不可能顶掉任何主力命中**。
+            if extra.is_filler() {
+                let ceiling = retrieved
+                    .iter()
+                    .map(|item| item.score)
+                    .filter(|score| *score > 0.0)
+                    .fold(f64::INFINITY, f64::min);
+                if ceiling.is_finite() {
+                    for candidate in &mut extra_candidates {
+                        candidate.score *= ceiling * 0.999;
+                    }
+                }
+            }
             for candidate in extra_candidates {
                 match retrieved.iter_mut().find(|item| item.id == candidate.id) {
                     Some(existing) if candidate.score > existing.score => {
