@@ -1,18 +1,24 @@
-//! **中文停用词 A/B**（2026-11-06）—— 在**中文真实语料**上重测「去停用词」这个杠杆。
+//! **停用字表 A/B**（2026-11-07 重写）—— 找出「既保住增益、又不削实词」的表。
 //!
-//! # 为什么测这个
-//! `locomo_levers2` 在 **LoCoMo（英文）**上测出「去停用词/疑问词」**+0.0544**，
-//! 但生产分词器（`hybrid_search::tokenize`）**不过滤停用词**
-//! ⇒ ⇒ 这个杠杆**在生产里不存在** ⇒ ⇒ 要不要接，**必须先在中文语料上量**。
+//! # 为什么重写
+//! 第一版在**生产已开启规范化**的前提下比较三张表 ⇒ ⇒ **三组数字完全相同**
+//! （基线本身就是 L1 状态）⇒ ⇒ **量不出差异**。
 //!
-//! # 三个臂（唯一变量 = 文档/题面是否去停用词）
-//! - **A 基线**：原样；
-//! - **B 文档去停用词**：只改**文档**（模拟「写入侧规范化」）；
-//! - **C 两边都去**：文档 + 题面（模拟「分词器过滤」）。
+//! # 本次口径（关键）
+//! 所有臂都用 `Bm25Config { strip_cn_stopwords: false }` **关掉生产规范化**
+//! ⇒ ⇒ 由实验**手动**应用「去疑问词 + 指定停用字表」
+//! ⇒ ⇒ ⇒ 于是「换表」成为**唯一变量**。
 //!
-//! # 口径
-//! 同一批题、同一个 k、同一套检索器；只换索引里的文本。
-//! ⇒ ⇒ 两套考卷（内部词面卷 + 公平卷）各报一遍。
+//! # 四臂
+//! - **基线**：只去疑问词，**不去停用字**；
+//! - **L1 宽表**：生产现用（41 字）；
+//! - **L2 收窄**：20 字（去掉会做实词构件的字）；
+//! - **L3 极简**：16 字。
+//!
+//! # 为什么关心「削实词」
+//! 用真实查询（`scripts/fixtures/miracl-zh-dev-queries.txt`）实测：
+//! `巴西的首都是哪里？` 经 L1 变成 `巴西首？` ⇒ ⇒ **「首都」被毁**
+//! （因为 `都` 在 L1 表里）⇒ ⇒ 这类字是**实词构件**，不该无条件删。
 
 use std::error::Error;
 use std::path::PathBuf;
@@ -20,26 +26,32 @@ use std::process::ExitCode;
 
 use apeireth_memory::golden_fair::{build_fair_exam, FairExamConfig};
 use apeireth_memory::golden_mining::MiningConfig;
-use apeireth_memory::golden_run::{mined_to_golden, run_with_extra_sources, IndexRecord};
-use apeireth_memory::golden_set::GoldenSet;
+use apeireth_memory::golden_run::{
+    mined_to_golden, run_with_extra_sources_and_config, IndexRecord,
+};
+use apeireth_memory::golden_set::{GoldenCase, GoldenSet};
 use apeireth_memory::novel_corpus;
 
 const K: usize = 10;
 const MAX_CASES_PER_RECORD: usize = 6;
 
-/// 中文停用词（**高频功能词 + 疑问词**）。
-const CN_STOPWORDS: &[&str] = &[
-    "的", "了", "是", "在", "我", "他", "她", "它", "和", "也", "就", "不", "有", "这", "那", "你",
-    "们", "之", "与", "而", "及", "以", "为", "于", "其", "但", "却", "并", "或", "很", "都", "说",
-    "道", "云", "曰", "个", "一", "上", "下", "中", "着",
+/// **L1 宽表**（生产现用）：含 `都/道/为/以/及/之/说/云/曰/一/上/下/中/着` 等**实词构件**。
+const L1_BROAD: &[char] = &[
+    '的', '了', '是', '在', '我', '他', '她', '它', '和', '也', '就', '不', '有', '这', '那', '你',
+    '们', '之', '与', '而', '及', '以', '为', '于', '其', '但', '却', '并', '或', '很', '都', '说',
+    '道', '云', '曰', '个', '一', '上', '下', '中', '着',
 ];
 
-/// 去掉中文停用词（**按字去**，因为中文分词器出的是 bigram）。
-fn strip_cn(text: &str) -> String {
-    text.chars()
-        .filter(|c| !CN_STOPWORDS.contains(&c.to_string().as_str()))
-        .collect()
-}
+/// **L2 收窄**：只保留**几乎不做实词构件**的字。
+const L2_NARROW: &[char] = &[
+    '的', '了', '是', '在', '和', '也', '就', '不', '有', '这', '那', '我', '他', '她', '它', '你',
+    '们', '与', '于', '但',
+];
+
+/// **L3 极简**：连 `与/于/但` 也去掉（它们常做构件：参与/关于/由于）。
+const L3_MINIMAL: &[char] = &[
+    '的', '了', '是', '在', '和', '也', '就', '不', '这', '那', '我', '他', '她', '它', '你', '们',
+];
 
 fn corpus_root() -> PathBuf {
     match std::env::var_os("APEIRETH_DATA_DIR") {
@@ -53,13 +65,54 @@ fn corpus_root() -> PathBuf {
     }
 }
 
+/// 按给定表 + 去疑问词生成索引与题集副本。
+fn prepare(
+    index: &[IndexRecord],
+    set: &GoldenSet,
+    stopwords: &[char],
+) -> (Vec<IndexRecord>, GoldenSet) {
+    let strip = |text: &str| -> String {
+        apeireth_memory::hybrid_search::strip_cn_interrogatives(text)
+            .chars()
+            .filter(|c| !stopwords.contains(c))
+            .collect()
+    };
+    let new_index: Vec<IndexRecord> = index
+        .iter()
+        .map(|record| IndexRecord {
+            id: record.id.clone(),
+            text: strip(&record.text),
+        })
+        .collect();
+    let new_set = GoldenSet::new(
+        format!("arm"),
+        set.cases
+            .iter()
+            .map(|case| GoldenCase {
+                id: case.id.clone(),
+                query: strip(&case.query),
+                expect_ids: case.expect_ids.clone(),
+                expect_fragments: case.expect_fragments.clone(),
+                tags: case.tags.clone(),
+            })
+            .collect(),
+    );
+    (new_index, new_set)
+}
+
+/// **关掉生产规范化**后跑批（否则基线本身就是 L1 状态 ⇒ 量不出差异）。
 fn recall(index: &[IndexRecord], set: &GoldenSet) -> Result<f64, Box<dyn Error>> {
-    let report = run_with_extra_sources(
+    let config = apeireth_memory::hybrid_search::Bm25Config {
+        strip_cn_stopwords: false,
+        ..Default::default()
+    };
+    let report = run_with_extra_sources_and_config(
         index,
         set,
         K,
         apeireth_memory::golden_run::InjectionMode::Production,
         &[],
+        Some(config),
     )?;
     Ok(report.metrics.recall_at_k)
 }
@@ -103,77 +156,47 @@ fn run() -> Result<(), Box<dyn Error>> {
             build_fair_exam(&records, FairExamConfig::default()),
         );
 
-        // 臂 B：只改文档
-        let index_b: Vec<IndexRecord> = index
-            .iter()
-            .map(|record| IndexRecord {
-                id: record.id.clone(),
-                text: strip_cn(&record.text),
-            })
-            .collect();
-        // 臂 C：文档 + 题面都改
-        let index_c: Vec<IndexRecord> = index_b.clone();
-        let lexical_c = GoldenSet::new(
-            format!("internal-{name}-c"),
-            lexical
-                .cases
-                .iter()
-                .map(|case| apeireth_memory::golden_set::GoldenCase {
-                    id: case.id.clone(),
-                    query: strip_cn(&case.query),
-                    expect_ids: case.expect_ids.clone(),
-                    expect_fragments: case.expect_fragments.clone(),
-                    tags: case.tags.clone(),
-                })
-                .collect(),
-        );
-        let fair_c = GoldenSet::new(
-            format!("fair-{name}-c"),
-            fair.cases
-                .iter()
-                .map(|case| apeireth_memory::golden_set::GoldenCase {
-                    id: case.id.clone(),
-                    query: strip_cn(&case.query),
-                    expect_ids: case.expect_ids.clone(),
-                    expect_fragments: case.expect_fragments.clone(),
-                    tags: case.tags.clone(),
-                })
-                .collect(),
-        );
-
-        for (exam, set, set_c) in [("词面卷", &lexical, &lexical_c), ("公平卷", &fair, &fair_c)]
-        {
-            let base = recall(&index, set)?;
-            let arm_b = recall(&index_b, set)?;
-            let arm_c = recall(&index_c, set_c)?;
+        for (exam, set) in [("词面卷", &lexical), ("公平卷", &fair)] {
+            let (i0, s0) = prepare(&index, set, &[]);
+            let base = recall(&i0, &s0)?;
+            let (i1, s1) = prepare(&index, set, L1_BROAD);
+            let l1 = recall(&i1, &s1)?;
+            let (i2, s2) = prepare(&index, set, L2_NARROW);
+            let l2 = recall(&i2, &s2)?;
+            let (i3, s3) = prepare(&index, set, L3_MINIMAL);
+            let l3 = recall(&i3, &s3)?;
             rows.push(serde_json::json!({
                 "语料": name,
                 "考卷": exam,
                 "题数": set.cases.len(),
-                "A基线": base,
-                "B文档去停用词": arm_b,
-                "B的Δ": arm_b - base,
-                "C两边都去": arm_c,
-                "C的Δ": arm_c - base,
+                "基线": base,
+                "L1": l1,
+                "L1的Δ": l1 - base,
+                "L2": l2,
+                "L2的Δ": l2 - base,
+                "L3": l3,
+                "L3的Δ": l3 - base,
             }));
         }
     }
     for row in &rows {
         println!(
-            "· {} / {} · 题 {} · A {:.4} · B {:.4} ({:+.4}) · C {:.4} ({:+.4})",
+            "· {} / {} · 题 {} · 基线 {:.4} | L1 {:.4} ({:+.4}) | L2 {:.4} ({:+.4}) | L3 {:.4} ({:+.4})",
             row["语料"].as_str().unwrap_or(""),
             row["考卷"].as_str().unwrap_or(""),
             row["题数"],
-            row["A基线"].as_f64().unwrap_or(0.0),
-            row["B文档去停用词"].as_f64().unwrap_or(0.0),
-            row["B的Δ"].as_f64().unwrap_or(0.0),
-            row["C两边都去"].as_f64().unwrap_or(0.0),
-            row["C的Δ"].as_f64().unwrap_or(0.0),
+            row["基线"].as_f64().unwrap_or(0.0),
+            row["L1"].as_f64().unwrap_or(0.0),
+            row["L1的Δ"].as_f64().unwrap_or(0.0),
+            row["L2"].as_f64().unwrap_or(0.0),
+            row["L2的Δ"].as_f64().unwrap_or(0.0),
+            row["L3"].as_f64().unwrap_or(0.0),
+            row["L3的Δ"].as_f64().unwrap_or(0.0),
         );
     }
     println!(
         "{}",
-        serde_json::to_string(&serde_json::json!({ "中文停用词A/B": rows })).unwrap_or_default()
+        serde_json::to_string(&serde_json::json!({ "停用字表A/B": rows })).unwrap_or_default()
     );
     Ok(())
 }

@@ -3,8 +3,8 @@
     {
       "baseline": {
         "cases": 476,
-        "ndcg_at_k": 0.303655929173048,
-        "recall_at_k": 0.4894957983193277
+        "ndcg_at_k": 0.32516979992085837,
+        "recall_at_k": 0.5304621848739496
       },
       "channel_only_recall_at_k": 0.10189075630252101,
       "delta": 0.0,
@@ -12,8 +12,8 @@
       "name": "redchamber",
       "with_channel": {
         "cases": 476,
-        "ndcg_at_k": 0.303655929173048,
-        "recall_at_k": 0.4894957983193277
+        "ndcg_at_k": 0.32516979992085837,
+        "recall_at_k": 0.5304621848739496
       },
       "弱底座": {
         "baseline_recall_at_k": 0.29831932773109243,
@@ -28,8 +28,8 @@
     {
       "baseline": {
         "cases": 248,
-        "ndcg_at_k": 0.5232480121749885,
-        "recall_at_k": 0.7157258064516129
+        "ndcg_at_k": 0.5348424396025295,
+        "recall_at_k": 0.7318548387096774
       },
       "channel_only_recall_at_k": 0.0967741935483871,
       "delta": 0.0,
@@ -37,8 +37,8 @@
       "name": "watershed",
       "with_channel": {
         "cases": 248,
-        "ndcg_at_k": 0.5232480121749885,
-        "recall_at_k": 0.7157258064516129
+        "ndcg_at_k": 0.5348424396025295,
+        "recall_at_k": 0.7318548387096774
       },
       "弱底座": {
         "baseline_recall_at_k": 0.6875,
@@ -55,7 +55,7 @@
     {
       "baseline": {
         "cases": 208,
-        "ndcg_at_k": 0.1617534102229125,
+        "ndcg_at_k": 0.16126931933625716,
         "recall_at_k": 0.35096153846153844
       },
       "channel_only_recall_at_k": 0.47596153846153844,
@@ -64,7 +64,7 @@
       "name": "redchamber",
       "with_channel": {
         "cases": 208,
-        "ndcg_at_k": 0.1617534102229125,
+        "ndcg_at_k": 0.16126931933625716,
         "recall_at_k": 0.35096153846153844
       },
       "弱底座": {
@@ -80,8 +80,8 @@
     {
       "baseline": {
         "cases": 124,
-        "ndcg_at_k": 0.13010913731635737,
-        "recall_at_k": 0.28225806451612906
+        "ndcg_at_k": 0.13225583870783478,
+        "recall_at_k": 0.2903225806451613
       },
       "channel_only_recall_at_k": 0.3629032258064516,
       "delta": 0.0,
@@ -89,8 +89,8 @@
       "name": "watershed",
       "with_channel": {
         "cases": 124,
-        "ndcg_at_k": 0.13010913731635737,
-        "recall_at_k": 0.28225806451612906
+        "ndcg_at_k": 0.13225583870783478,
+        "recall_at_k": 0.2903225806451613
       },
       "弱底座": {
         "baseline_recall_at_k": 0.2903225806451613,
