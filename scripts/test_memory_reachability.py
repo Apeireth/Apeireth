@@ -21,6 +21,7 @@
 import importlib.util
 import re
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -154,34 +155,63 @@ class EvaluateTests(unittest.TestCase):
 
 
 class WriteCapTests(unittest.TestCase):
-    """`--update` 只许把上限**往下压**（棘轮只减不增）。"""
+    """`--update` 只许把上限**往下压**（棘轮只减不增）。
 
-    def setUp(self):
-        self.original = MODULE.EXPLAINED.read_text(encoding="utf-8")
-        self.addCleanup(
-            MODULE.EXPLAINED.write_text, self.original, encoding="utf-8"
+    ⚠️ **2026-11-07 改成 hermetic（用临时夹具，不读仓库真值）**：
+    真实 `max_unexplained_gap` 已经压到**棘轮地板 0**（未解释缺口清零后），
+    旧版拿真文件算 `max(cap-1, 0)` 会变成「0 → 0」⇒ 走的是「拒绝抬上限」分支
+    ⇒ 测试不再是「能压下去」的证据。改成夹具后既恢复原意，又补一条**地板行为**。
+    """
+
+    FIXTURE = (
+        "explained fixture_a  # 台账 {ledger} §5.2 L1：有意不接\n"
+        "max_unexplained_gap = {cap}\n"
+    )
+
+    def _use_fixture(self, cap: int) -> None:
+        text = self.FIXTURE.format(ledger=LEDGER, cap=cap)
+        handle = tempfile.NamedTemporaryFile(
+            "w", suffix=".txt", delete=False, encoding="utf-8"
         )
+        handle.write(text)
+        handle.close()
+        original = MODULE.EXPLAINED
+        MODULE.EXPLAINED = Path(handle.name)
+        self.addCleanup(setattr, MODULE, "EXPLAINED", original)
+        self.addCleanup(Path(handle.name).unlink)
+
+    def _cap(self) -> int:
+        reg = MODULE.parse_explained(MODULE.EXPLAINED.read_text(encoding="utf-8"))
+        assert reg.cap is not None
+        return reg.cap
 
     def test_cap_is_never_raised(self):
-        reg = MODULE.parse_explained(self.original)
-        message = MODULE.write_cap(reg, reg.cap + 5)
+        self._use_fixture(cap=5)
+        reg = MODULE.parse_explained(MODULE.EXPLAINED.read_text(encoding="utf-8"))
+        message = MODULE.write_cap(reg, 10)
         self.assertIn("拒绝自动抬上限", message)
-        self.assertEqual(
-            self.original, MODULE.EXPLAINED.read_text(encoding="utf-8"), "文件不许被改"
-        )
+        self.assertEqual(5, self._cap(), "文件不许被改")
 
     def test_cap_is_lowered_when_gap_shrinks(self):
-        reg = MODULE.parse_explained(self.original)
-        new_cap = max(reg.cap - 1, 0)
-        message = MODULE.write_cap(reg, new_cap)
+        self._use_fixture(cap=5)
+        reg = MODULE.parse_explained(MODULE.EXPLAINED.read_text(encoding="utf-8"))
+        message = MODULE.write_cap(reg, 2)
         self.assertIn("上限已压到", message)
-        text = MODULE.EXPLAINED.read_text(encoding="utf-8")
-        self.assertRegex(text, rf"(?m)^max_unexplained_gap = {new_cap}$")
+        self.assertEqual(2, self._cap())
+
+    def test_cap_at_floor_zero_refuses_to_go_lower(self):
+        """棘轮地板：上限已经是 0 ⇒ ⇒ 既不许抬、也不许变成负数/半截。"""
+        self._use_fixture(cap=0)
+        reg = MODULE.parse_explained(MODULE.EXPLAINED.read_text(encoding="utf-8"))
+        message = MODULE.write_cap(reg, 0)
+        self.assertIn("拒绝自动抬上限", message)
+        self.assertEqual(0, self._cap())
 
     def test_human_written_reasons_are_preserved(self):
         """`--update` **不许**冲掉人工资产（理由是判断依据）。"""
-        reg = MODULE.parse_explained(self.original)
-        MODULE.write_cap(reg, max(reg.cap - 1, 0))
+        self._use_fixture(cap=5)
+        reg = MODULE.parse_explained(MODULE.EXPLAINED.read_text(encoding="utf-8"))
+        MODULE.write_cap(reg, 2)
         text = MODULE.EXPLAINED.read_text(encoding="utf-8")
         for entry in reg.entries.values():
             self.assertIn(entry.reason, text, "人工写的理由被冲掉了")
