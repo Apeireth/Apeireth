@@ -29,7 +29,7 @@ Apeireth 团队承诺漏洞披露过程透明，通过以下渠道公告：
 
 以下组件被认为是"安全边界"，其漏洞属于本政策范围（当前 workspace = 31 members：30 crates + bench harness；2026-10-31 ADR-0019 新增门面 crate `apeireth` 后口径；历史 30 members（2026-10-20 至 2026-10-31）见 CHANGELOG）：
 
-> **独立 workspace 备案（如实）**：另有**独立** Cargo workspace `crates-ui/`（**不计入**上面 30 members、与根 workspace 无依赖边），含 **1 个 crate** `apeireth-ui-core`（纯响应式内核，0 外部依赖）；范围 = IMPLEMENTED、**尚无生产前端消费点**（ADR-0021，owner 2026-10-29；自带独立 CI `ui-core-ci.yml`）⇒ **不在本政策上述安全边界范围内**（不随主产品构建/分发），此处仅作范围备案。
+> **独立 workspace 备案（如实）**：另有**独立** Cargo workspace `crates-ui/`（**不计入**上面 31 members、与根 workspace 无依赖边），含 **7 个 crate**（`apeireth-ui` 门面 / `apeireth-ui-core` 纯响应式内核 / `apeireth-ui-macro` / `apeireth-ui-dom` / `apeireth-ui-gpu` / `apeireth-ui-kit` / `apeireth-ui-demo`；其中 `ui-core` 切片 0 外部依赖）；范围 = IMPLEMENTED、**尚无生产前端消费点**（ADR-0021，owner 2026-10-29；自带独立 CI `ui-engine-ci.yml`）⇒ **不在本政策上述安全边界范围内**（不随主产品构建/分发），此处仅作范围备案。
 
 - `apeireth-core`（`crates/foundation/core`）— 稳定域原语 + kernel（IDs/时间/生命周期/事件）；键集（现行 14 键）verdict cache 与洋葱/守门语义（v1 脊椎，接线状态见 ROADMAP P0/P2）
 - `apeireth-protocol`（`crates/foundation/protocol`）— 规范化协议 DTO 与 vendor wire 翻译（不含 HTTP client）

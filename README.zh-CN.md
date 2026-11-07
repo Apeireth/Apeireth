@@ -19,7 +19,7 @@
 
 > 口径注记：**workspace = 31 members（30 个产品 crate + 1 个 bench harness，含图像核心 vendored 族 11）**（foundation 6 / engine 8 / capabilities 1 / adapters 4 = cli/gateway/sdk/tui）；门面 crate `apeireth` 于 2026-10-31 加入（ADR-0019，计入 engine 层）；`apeireth-perception` 已归档（2026-10-20，ADR-0005 R4b）；历史 30 members 口径见 CHANGELOG。
 > Tests 徽章数字取单一真源 [test-baseline.md](docs/03-reference/test-baseline.md) §1（2026-10-18 口径）；证据面见 [capabilities-matrix §0.1](docs/03-reference/capabilities-matrix.md)。
-> **独立 workspace**：`crates-ui/` 是**独立** Cargo workspace——**不计入**上面 31 members、与根 workspace 无任何依赖边——含 **1 个 crate** `apeireth-ui-core`（纯响应式内核：signal / derived / effect / 调度）。范围 = IMPLEMENTED，**尚无生产前端消费点**（ADR-0021，owner 2026-10-29；自带独立 CI `ui-core-ci.yml`）。
+> **独立 workspace**：`crates-ui/` 是**独立** Cargo workspace——**不计入**上面 31 members、与根 workspace 无任何依赖边——含 **7 个 crate**（`apeireth-ui` 门面 / `apeireth-ui-core` 纯响应式内核 / `apeireth-ui-macro` / `apeireth-ui-dom` / `apeireth-ui-gpu` / `apeireth-ui-kit` / `apeireth-ui-demo`）。范围 = IMPLEMENTED，**尚无生产前端消费点**（ADR-0021，owner 2026-10-29；自带独立 CI `ui-engine-ci.yml`）。
 > `honest gaps` 徽章 = 静态快照——手维护、不做动态计数（残余增删时手工改数）。数字取[诚实边界](#boundaries)「已定义、未接线」点名的接线残余：`/v1/ws` 服务端路由未接 · 无 Noise 握手 · 无洋葱路由 · SDK WS 传输层是桩 = 4 处。
 
 **[English](README.md) | [简体中文](README.zh-CN.md)**

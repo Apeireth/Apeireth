@@ -6,9 +6,11 @@ the product workspace.
 
 **Outside this index — independent workspace `crates-ui/`**: a *separate* Cargo workspace
 (not one of the 30 members; no dependency edge to or from the root workspace) with
-**1 crate**, `apeireth-ui-core` — a pure reactive core (signals / derived / effects /
-scheduling, 0 external dependencies). Scope = IMPLEMENTED, **no production frontend
-consumer** (ADR-0021, owner 2026-10-29; own CI `ui-core-ci.yml`). Contract registration:
+**7 crates** (`apeireth-ui` facade / `apeireth-ui-core` pure reactive core (signals / derived /
+effects / scheduling, 0 external dependencies) / `apeireth-ui-macro` / `apeireth-ui-dom` /
+`apeireth-ui-gpu` / `apeireth-ui-kit` / `apeireth-ui-demo`). Scope = IMPLEMENTED, **no production
+frontend consumer** (ADR-0015 engine line + ADR-0021 ui-core slice; own CI `ui-engine-ci.yml`).
+Contract registration:
 `docs/architecture/contract.toml` `[[workspace.independent_workspaces]]`.
 
 ## Foundation

@@ -47,7 +47,7 @@ Author: 主代理（总工程师线）
 | id | crates | ci | adr | note 的事实状态 |
 |---|---|---|---|---|
 | `ui_engine` | **7** | `ui-engine-ci.yml` | `docs/adr/0015-pure-rust-ui-engine.md` | 准确 |
-| `ui_core_slice` | **1** | `ui-core-ci.yml` | `docs/adr/0021-consolidation-ui-core-slice.md` | **已过期**：note 写「holds 1 crate (apeireth-ui-core)」与「NOT one of the **30** root members」 |
+| `ui_core_slice` | **1** | `ui-core-ci.yml`（**已于 2026-11-07 随门禁归并删除**） | `docs/adr/0021-consolidation-ui-core-slice.md` | **已过期**：note 写「holds 1 crate (apeireth-ui-core)」与「NOT one of the **30** root members」 |
 
 ⇒ `apeireth-ui-core` **本就是那 7 个 crate 之一** ⇒ `ui_core_slice` 是 **`ui_engine` 的子集重复登记**
 ⇒ 两条对同一路径给出**互相矛盾**的 crate 数（7 vs 1）与成员口径（31 vs 30）。
@@ -94,9 +94,14 @@ Author: 主代理（总工程师线）
 
 ## 5. 遗留（不在本文处置范围，如实登记）
 
-1. **两个 UI 门禁并存**：`ui-engine-ci.yml`（本线：check/clippy/fmt/test）与 `ui-core-ci.yml`
-   （并行线：check/clippy/fmt/test + doc-test 单独一趟）⇒ **门禁重复**，且 `-j` 口径不同
-   （后者 `-j 2`）⇒ 归并属 CI 口径变更，需另批。
+1. ~~**两个 UI 门禁并存**~~ ⇒ ✅ **已处置（2026-11-07）**：`ui-engine-ci.yml`（本线：8 个 job ——
+   check / clippy / fmt / test / wasm32 构建 / cargo deny / 试点对照 / 生产对照）**保留**
+   （契约 `[[workspace.independent_workspaces]].ci` 字段指向它 = 真源）；
+   `ui-core-ci.yml`（并行线：check/clippy/fmt/test + **doc-test 单独一趟**）**删除**
+   ⇒ 其**独有价值的 doc-test 关**（`cargo test --workspace --doc --locked`）**已补进**
+   `ui-engine-ci.yml` 的 test job ⇒ ⇒ **覆盖面零损失**（doc-test 覆盖 ```rust 代码块的
+   **可编译性**，普通 `cargo test` 不跑它；`ui-core` 的 3 个 `compile_fail` 期望仍被验到）
+   ⇒ ⇒ **门禁重复已消除，CI 少跑一轮重复编译**。
 2. **契约 note 里的「30 root members」**随本裁决改为 31（ADR-0019 门面 crate 口径）。
 3. **本 ADR 只处置「登记冲突」**，不处置任何能力等级；能力等级由
    `docs/status/claims.yaml`（单一真源）承担。
