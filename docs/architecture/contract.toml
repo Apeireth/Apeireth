@@ -599,6 +599,26 @@ timeout = 900
 note = "检索基线不许劣化（内部卷 + 小说语料）"
 
 [[ci_gates.gate]]
+id = "real-query-baseline"
+cmd = ["python3", "scripts/check_real_query_baseline.py", "--check"]
+stage = "deep"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
+scope = ["rust", "docs"]
+blocking = true
+required = true
+timeout = 1800
+note = "真实用户查询方向不许错（MIRACL 中文 393 条真人问句）⇒ 模板卷守「不许退步」，本闸门守「不许自欺」；⚠️ 采样池 ⇒ 召回偏乐观 ⇒ 只看相对变化；⚠️ 缺考卷 ⇒ 跳过并声明「不是通过」"
+
+[[ci_gates.gate]]
+id = "real-query-baseline-self-test"
+cmd = ["python3", "scripts/test_real_query_baseline.py"]
+stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
+scope = ["rust"]
+blocking = true
+required = true
+timeout = 120
+note = "真实查询闸门的自测（门禁也要被验证）"
+
+[[ci_gates.gate]]
 id = "golden-no-leak"
 cmd = ["python3", "scripts/check_golden_no_leak.py"]
 stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
