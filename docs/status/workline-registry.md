@@ -22,7 +22,7 @@ Author: lead
 | **护栏接线 / 越权拦截** | [guard-wiring-audit-2026-10-27.md](guard-wiring-audit-2026-10-27.md)（审计即设计依据 + 缺口清单） | [guard-wiring-audit-2026-10-27.md](guard-wiring-audit-2026-10-27.md) §4（缺口清单，逐条标「已修/未修」） | `python3 scripts/check_guard_wiring.py`（台账↔代码互校） |
 | **记忆质量路线**（已证/已否的路） | [memory-quality-route-map-2026-10-27.md](memory-quality-route-map-2026-10-27.md) | 同文件（§〇 2026-10-28 更新块） | `python3 scripts/check_golden_baseline.py`（准确度不许降 + 送达率观察项） |
 | **状态声明（29 条能力口径）** | [claims.yaml](claims.yaml) | `claims.yaml` 的 `verified_at` / `docs_truth --verify` 输出 | `python3 scripts/docs_truth.py --verify --block-stale` |
-
+| **跨线合并收口**（2026-10-24 分叉的两条线合一） | [0024-merge-integration-contract-and-adr-numbering.md](../adr/0024-merge-integration-contract-and-adr-numbering.md)（合并后三项结构性裁决）+ [test-baseline.md](../03-reference/test-baseline.md)（合并后实测基线） | [merge-integration-closeout-2026-11-07.md](merge-integration-closeout-2026-11-07.md) | `python3 scripts/arch_guard.py --strict`（棘轮）/ `python3 scripts/docs_truth.py --verify --check`（声明真源）/ `pwsh scripts/gate_full.ps1 -FailIfBusy`（全量门禁，**不覆盖** 3 个独立 workspace） |
 ## 二、登记规则（四条）
 
 1. **进度页必填**：只写设计稿不写进度页 ⇒ **不算登记**（接手者查不到"做到哪"）；
