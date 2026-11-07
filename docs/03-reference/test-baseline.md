@@ -14,12 +14,12 @@
 | 项 | 值 |
 |---|---|
 | **命令** | `pwsh scripts/gate_full.ps1 -FailIfBusy`（R6-A 唯一全量执行器：main workspace `cargo test --workspace --all-targets --locked --no-fail-fast --exclude <图像家族 11 crate>` + 图像家族独立同命令；等价于全 workspace 口径） |
-| **结果** | **372 套件 / 9176 passed / 0 failed / 51 ignored**（2026-11-05 实测；**failed 归零** —— 2026-10-31 口径那 1 例并发敏感 flaky 已在本轮修掉，见下方「并发敏感失败口径」的 2026-11-05 更新；**ignored 51 与上轮持平**；较上一次全量（361 / 8996）净增 **+32 passed**（MCP 外部工具接线批：族授权底座 + 桥层语义归位 + 生产组合根接线 + 面板族读面 + 族根单一真源） |
-| **日期** | 2026-11-05 |
+| **结果** | **504 套件 / 10782 passed / 0 failed / 47 ignored**（2026-11-07 实测；**failed = 0**；合并批收口（并入并行线 625 提交：`main.cargo-test` **427 套件 / 8473 passed / 0 failed / 14 ignored** + 图像家族 `image.cargo-test` **77 套件 / 2309 passed / 0 failed / 33 ignored**）；较上一次全量（372 / 9176）净增 **+132 套件 / +1606 passed**、**ignored 51 → 47（−4）**；⚠️ **ignored 减少的 4 例** = 合并带来的对方线用例（原被 `--ignored` 标记，合并后成为**实跑**用例）⇒ **不是**少测了用例；⚠️ **套件数净增 132** 主因是对方线的 22 条生物/模块/安全族 claim 及其测试并入） |
+| **日期** | 2026-11-07 |
 | **工具链** | rustc 1.97.1 (8bab26f4f 2026-07-14) / cargo 1.97.1 (c980f4866 2026-06-30) / rustup 1.29.1 |
 | **构建环境（Windows 实测）** | MSVC 14.44.35207（VS Build Tools 2022，C++ workload）+ Windows SDK 10.0.26100.0 |
-| **构建环境（2026-11-05 本轮实测）** | **Linux x86_64**（rustc 1.97.1 / cargo 1.97.1，target `x86_64-unknown-linux-gnu`）—— 与上方 Windows 行**并存**：Windows 是历史口径（2026-10-31 及更早），本轮数字在 Linux 实测取得，**两者环境不同，不可直接横向比较**；本轮 0 failed 是 Linux 口径下的事实，Windows 口径须由 Windows 机器复跑全量后另行登记 |
-| **来源** | 由全量门禁执行线（效率线）执行：`pwsh scripts/gate_full.ps1 -FailIfBusy` 实测 **2026-11-05、exit 0、HEAD `d24505af`**（`main.cargo-test` + `main.clippy` + `main.fmt` + 图像家族段全 OK）；日志 `logs/gate-full.log`。前序口径（2026-10-21、26.8 分钟、exit 0、HEAD `f2dad300`；`artifacts/wave4-close-full-2026-10-21.log`）保留在 §3 历史口径表 |
+| **构建环境（2026-11-07 本轮实测）** | **Linux x86_64**（rustc 1.97.1 / cargo 1.97.1，target `x86_64-unknown-linux-gnu`）—— 与上方 Windows 行**并存**：Windows 是历史口径（2026-10-31 及更早），本轮数字在 Linux 实测取得，**两者环境不同，不可直接横向比较**；本轮 0 failed 是 Linux 口径下的事实，Windows 口径须由 Windows 机器复跑全量后另行登记 |
+| **来源** | 由全量门禁执行线（效率线）执行：`pwsh scripts/gate_full.ps1 -FailIfBusy` 实测 **2026-11-07、exit 0、HEAD `0c215b74`**（`main.cargo-test` + `main.clippy` + `main.fmt` + `image.cargo-test` + `image.clippy` **五项全 OK**，脚本结论 `GATE FULL PASSED`）；日志 `logs/gate-full.log`。⚠️ **另有两个独立 workspace 不在门禁口径内**（根 members 无它们 ⇒ 门禁 0 覆盖），**本轮单独实测**：`crates-ui/` ⇒ **432 passed / 0 failed / 4 ignored**；`frontend/companion-desktop/src-tauri/` ⇒ **171 passed / 0 failed / 2 ignored**（Tauri Rust 侧）；⚠️ **`frontend/companion-desktop/` 的 JS 侧（`pnpm test`，83 套件）在本机不可跑** —— 本机 Node 构建**无 TypeScript 支持**（`process.features.typescript = false` ⇒ `ERR_NO_TYPESCRIPT`）⇒ 属**环境限制**（非仓库缺陷）⇒ 该面**未实测**，已登记。前序口径（2026-11-05 / 2026-10-21）保留在 §3 历史口径表 |
 
 > 复现提示：先 `cargo build --workspace --locked`（约 4 min，CARGO_BUILD_JOBS=8），再跑上表命令
 > （约 11 min）；数字随批次增长属正常，**以最近一次全量实测为准**，逐批交付文档只报自己批的增量。
@@ -262,6 +262,7 @@
 
 | 日期 | 结果 | 备注 |
 |---|---|---|
+| 2026-11-07 | **504 套件 / 10782 passed / 0 failed / 47 ignored** | **跨线合并批收口**（§1 现行基线）：并入并行线 625 提交（分叉点 `8ac0f9de`，合并提交 `35cf3710` + 编译收口 `bf4d5d0e` + 断言口径 `58b42e55` + claim 重核验 `4ee386e7` + 4 处红测修 `1a8ed2be` + fmt/verify_cmd `06771e74` + frontend 锁 `0199c8b6` + 尺寸拆分 `53f0bbc4` + 基线重生成 `80190015` + claim 重盖 `be964b27` + SQLite 池同步收口 `60193565` + 全 workspace fmt `0c215b74`）。**failed = 0**；**ignored 51 → 47（−4）** = 合并带来的对方线用例由 `--ignored` 转为**实跑**（**不是**少测）；**套件 +132 / passed +1606** = 对方线 22 条生物/模块/安全族 claim 及其测试并入。**命令**：`pwsh scripts/gate_full.ps1 -FailIfBusy`（exit 0，HEAD `0c215b74`，五项全 OK，脚本结论 `GATE FULL PASSED`）；**工具链** rustc 1.97.1 / cargo 1.97.1；**环境 Linux x86_64**（与 Windows 历史口径并存，见 §1）。⚠️ **门禁口径外另两个独立 workspace 的实测**：crates-ui **432 passed / 0 failed / 4 ignored**、frontend src-tauri **171 passed / 0 failed / 2 ignored**；⚠️ **frontend JS 侧未实测**（本机 Node 无 TypeScript 支持 ⇒ 环境限制） |
 | 2026-11-05 | **372 套件 / 9176 passed / 0 failed / 51 ignored** | 点对点升级批收口（§1 现行基线）：CLI 旗标判据收口 / 工具策展表口径归位 / MCP claim 降级 / 自述名册补 4 类族 / 三处灰度门禁升格 / 死脚本清理 / 出网件与外部适配器测试层补齐。**failed 由 1 → 0**（并发敏感 flaky 已修，见 §2 并发敏感失败口径的 2026-11-05 更新）。**命令**：`pwsh scripts/gate_full.ps1 -FailIfBusy`（exit 0，HEAD `d24505af`）；**工具链** rustc 1.97.1 / cargo 1.97.1；**环境 Linux x86_64**（§1 已注明与 Windows 历史口径并存） |
 | 2026-10-31 | 351 套件 / 8846 passed / 1 failed / 51 ignored | 引擎仓 / 产品仓分离批 + 门面 crate + 版本轴 rc.5（ADR-0017 / 0019 / 0020）。1 例 failed = 并发敏感 flaky（见 §3 并发敏感失败口径，pre-existing）。**命令**：`cargo test --workspace --all-targets --locked --no-fail-fast -j 2`（exit 101，失败项即上述 1 例）；**工具链** rustc 1.97.1 / cargo 1.97.1 |
 | 2026-10-21 | 341 套件 / 8570 passed / 0 failed / 51 ignored | Wave 4 收口（gate_full 实测；R4b 四岛归档后首次全量口径：main 6263 + image 2307；较 2026-10-20 的 9076 下降主要来自 R4b 归档移除的测试（SDK 607→92 等）与新增机制的净差） |
