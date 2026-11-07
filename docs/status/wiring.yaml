@@ -3,7 +3,7 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: 284defc8be3b47c08716e39997a261a9d50da9a7e1d551be0d59c4909aeaf977
+claims_sha256: 01064ec994cb140424fc214bd1378e7cc88306524d70ac59683b874591b930c8
 claims_total: 52
 items:
   - id: "rt.provider_router"
@@ -747,6 +747,7 @@ items:
         - "crates/capabilities/tools/src/self_status.rs"
         - "crates/engine/organ/src/social_repair.rs"
         - "crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_production_wiring/tests.rs"
         - "crates/engine/runtime-assembly/src/canonical/bio_social_repair.rs"
         - "crates/engine/runtime-assembly/src/canonical/cognitive.rs"
         - "crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs"
@@ -1216,7 +1217,7 @@ items:
         - "crates/engine/runtime-assembly/tests/modular_ale.rs"
       claims_id: "rt.system_one_internal"
     gaps:
-      - "能力矩阵未出现开关 APEIRETH_ENABLE_SYSTEM_ONE（待补）"
+      []
   - id: "rt.module_messages"
     capability: "Bounded owner-authenticated module message pipeline（桌面 Host 已武装）"
     implemented:
@@ -1250,23 +1251,28 @@ items:
     gaps:
       []
   - id: "rt.mesh_local_worker"
-    capability: "Governed module-owned local Mesh worker and public status"
+    capability: "Governed module-owned local Mesh worker and public status（⚠️ worker 生产已接；public status 面生产未启用）"
     implemented:
       sources:
         - "crates/engine/runtime-assembly/src/mesh.rs"
         - "crates/engine/runtime-assembly/src/lib.rs"
+        - "crates/engine/runtime-assembly/src/canonical/desktop_host.rs"
+        - "crates/engine/runtime/src/canonical/runtime.rs"
     wired:
       production_refs:
+        - "crates/engine/runtime-assembly/src/canonical/desktop_host.rs"
         - "crates/engine/runtime-assembly/src/lib.rs"
         - "crates/engine/runtime-assembly/src/mesh.rs"
+        - "crates/engine/runtime/src/canonical/runtime.rs"
     default_enabled: false
     validated:
       tests:
         - "crates/engine/runtime-assembly/tests/mesh_execution.rs"
         - "crates/engine/runtime-assembly/tests/module_message_pipeline.rs"
+        - "crates/engine/runtime-assembly/tests/mesh_production_host.rs"
       claims_id: "rt.mesh_local_worker"
     gaps:
-      - "未达 PRODUCTION WIRED：Optional portable Host composition, fixed configured loopback UDP peer only. Lifecycle-owned worker calls its registered Internal exchange through the…"
+      []
   - id: "mem.retrieval_ranking"
     capability: "检索排序契约（混合打分：BM25 词面 + 向量 + coverage 权重 0.5）"
     implemented:

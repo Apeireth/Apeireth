@@ -720,6 +720,17 @@ impl RuntimeBuilder {
         self
     }
 
+    /// Whether a mandatory supervisor is currently bound.
+    ///
+    /// Read-only probe for composition roots that must decide **before** building
+    /// whether a feature which needs enrolled internal execution can be armed at
+    /// all (the dispatcher refuses `Internal`/`Protected` tools with
+    /// `SystemOneUnavailable` when no supervisor is bound). It never binds one.
+    #[must_use]
+    pub fn system_one_configured(&self) -> bool {
+        self.system_one.is_some()
+    }
+
     #[must_use]
     pub fn with_principal_authorizations(
         mut self,

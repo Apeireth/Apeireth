@@ -1079,21 +1079,24 @@ claims:
 
 
   - id: rt.mesh_local_worker
-    title: "Governed module-owned local Mesh worker and public status"
-    level: IMPLEMENTED
+    title: "Governed module-owned local Mesh worker and public status（⚠️ worker 生产已接；public status 面生产未启用）"
+    level: PRODUCTION WIRED
     default: "OFF"
     switch_env: null
     sources:
       - crates/engine/runtime-assembly/src/mesh.rs
       - crates/engine/runtime-assembly/src/lib.rs
+      - crates/engine/runtime-assembly/src/canonical/desktop_host.rs
+      - crates/engine/runtime/src/canonical/runtime.rs
     tests:
       - crates/engine/runtime-assembly/tests/mesh_execution.rs
       - crates/engine/runtime-assembly/tests/module_message_pipeline.rs
+      - crates/engine/runtime-assembly/tests/mesh_production_host.rs
     verified_at: 5c74f955e62cebcb1979fb3606e804d9fb10d73c
-    verify_cmd: "cargo test -p apeireth-runtime-assembly --test mesh_execution --test module_message_pipeline --locked -j 2"
+    verify_cmd: "cargo test -p apeireth-runtime-assembly --test mesh_execution --test module_message_pipeline --locked -j 2 && cargo test -p apeireth-runtime-assembly --test mesh_production_host --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
-    notes: "Optional portable Host composition, fixed configured loopback UDP peer only. Lifecycle-owned worker calls its registered Internal exchange through the same deterministic Dispatcher/System One gate before each bind/send/receive. Public connect acknowledges the existing Host-scheduled task; it does not authorize arbitrary user-delegated destinations. Accepted/Handle/status, private packet isolation, authorized status Event, Main-stop independence, module drain/new generation, Deny/unavailable/no datagram and reply correlation use real Runtime/socket tests with scripted supervision. Plaintext software correlation is not cryptographic authentication/encryption. No live selected model, external device/LAN/NAT/discovery or durable job recovery validation; no default/universal protection claim. C01/C02 and D35 remain open.；2026-11-07 ⑦ 接线尝试（如实报卡点）：前置 ⑥ 已完成（桌面 Host 现在武装 message pipeline，`desktop_host.rs:51-52`）；但 `MeshConfig::loopback(peer, endpoint, private_payload)` 需要三项 **Host 显式配置**，而全仓非测试零引用、env 名额 162/162 已用尽、`production.rs`(1897 行棘轮) 与 `cli/src/lib.rs`(3774 行零余量) 是禁改面 ⇒ **不凭空造默认回环对端**（那等于伪造配置）⇒ 本条保持 IMPLEMENTED，卡点 = 缺 Host 配置面。解锁条件 = 给出 mesh 配置的合法来源（Host 配置面板 / 设置项），届时 3 处小改（配置字段 + build 注册 + 传参）即可，均可做到行数中性。See ale-system-one-p4-2026-10-30.md.；2026-10-30 CI 修复复核：普通消息期限不再从短原生 socket 超时倍乘，原生策略与 Host 上限保留；丢包 fixture 不补发旧回复，回归核验闭合错误与同一实例/Session 的后续成功。原生回归超时保持，定向零重试重复运行、普通定向测试及 workspace 全量 test/clippy/fmt 本地通过；默认 OFF/Partial 保留，远端平台结果另验收。"
+    notes: "Optional portable Host composition, fixed configured loopback UDP peer only. Lifecycle-owned worker calls its registered Internal exchange through the same deterministic Dispatcher/System One gate before each bind/send/receive. Public connect acknowledges the existing Host-scheduled task; it does not authorize arbitrary user-delegated destinations. Accepted/Handle/status, private packet isolation, authorized status Event, Main-stop independence, module drain/new generation, Deny/unavailable/no datagram and reply correlation use real Runtime/socket tests with scripted supervision. Plaintext software correlation is not cryptographic authentication/encryption. No live selected model, external device/LAN/NAT/discovery or durable job recovery validation; no default/universal protection claim. C01/C02 and D35 remain open.；2026-11-07 ⑦ 接线尝试（如实报卡点）：前置 ⑥ 已完成（桌面 Host 现在武装 message pipeline，`desktop_host.rs:51-52`）；但 `MeshConfig::loopback(peer, endpoint, private_payload)` 需要三项 **Host 显式配置**，而全仓非测试零引用、env 名额 162/162 已用尽、`production.rs`(1897 行棘轮) 与 `cli/src/lib.rs`(3774 行零余量) 是禁改面 ⇒ **不凭空造默认回环对端**（那等于伪造配置）⇒ 本条保持 IMPLEMENTED，卡点 = 缺 Host 配置面。解锁条件 = 给出 mesh 配置的合法来源（Host 配置面板 / 设置项），届时 3 处小改（配置字段 + build 注册 + 传参）即可，均可做到行数中性。See ale-system-one-p4-2026-10-30.md.；2026-10-30 CI 修复复核：普通消息期限不再从短原生 socket 超时倍乘，原生策略与 Host 上限保留；丢包 fixture 不补发旧回复，回归核验闭合错误与同一实例/Session 的后续成功。原生回归超时保持，定向零重试重复运行、普通定向测试及 workspace 全量 test/clippy/fmt 本地通过；默认 OFF/Partial 保留，远端平台结果另验收。；2026-11-07 抬级（生产接线 + 部分面如实标注）：新增 Host 配置面 `mesh.json`（数据根下 StoredDoc 信封、`exact(name,1)` 拒开语义）⇒ `canonical/desktop_host.rs:121 local_mesh_module_at` 读配置 → `:161 attach_local_mesh` 装两张授权表（模块代理授权 + message_policy 的 `internal_tools={tool.mesh.exchange}` / `allow_background=true` / `targets` 空）→ `:205 builder.with_plugin(module)`；生产入口 `build_desktop_main_runtime` 签名不变（`:221` 数据根可注入版是同段真代码），**production.rs / cli/lib.rs / cognitive_registry.rs 零改动**。⭐ 我实测发现的**第二个前置条件**（原方案未覆盖）：mesh exchange 是 `Internal + Protected`，分发器在**未绑 System One 监督者**时一律拒执行 （`dispatcher/system_one.rs:23-29` ⇒ `SystemOneUnavailable`）⇒ 故按「**双条件 + 硬失败**」：配置合法 **且** 监督者已绑才注册；有配置但没绑 ⇒ `Err`（不静默跳过，错误文案给修法）；为此新增只读探针 `RuntimeBuilder::system_one_configured()`（`runtime.rs:730`）。真跑：`mesh_production_host` 4 passed（含**真 UDP 收包**：合法配置注册 worker 并收到 private payload / 坏表拒绝 / 无监督者拒绝 / 无配置零流量 + 阳性对照）；`mesh_execution` 5 / `module_message_pipeline` 10 仍绿；反证：停用注册臂 ⇒ 收包用例 **10s 超时变红**。缺省零变化：无 `mesh.json` ⇒ `Ok(None)` 原样透传（已实测 `${HOME}/.apeireth/mesh.json` 与 `APEIRETH_DATA_DIR` 均不存在 ⇒ 当前装配就是缺省态）。⚠️ **部分面如实标注（不抹掉）**：① **public status 生产未启用** —— 配置只有 `peer/endpoint/private_payload`，未设 `MeshStatusTarget`（生产无 PublicStatus sink 模块）⇒ 标题里 『public status』 这一面在装配下**不成立**，已把 ⚠️ 写进标题；② 明文非密码学认证（包内无加密/签名）；③ 无外部设备/LAN/NAT/发现协议（仅固定回环）、无 durable recovery；④ 生产证据只有「单包回环」一条，无多 peer 组网。"
 
   - id: mem.retrieval_ranking
     title: "检索排序契约（混合打分：BM25 词面 + 向量 + coverage 权重 0.5）"
