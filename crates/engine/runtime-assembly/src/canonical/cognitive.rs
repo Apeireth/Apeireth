@@ -12,6 +12,7 @@ use std::time::Instant;
 
 use super::council_ballot_log::CouncilBallotLog;
 use apeireth_core::kernel::{Clock, Episode, SessionId};
+use apeireth_memory::dedup::{episode_fingerprint, DedupIndex};
 use apeireth_memory::{
     build_constant_injection, consolidate_persona, BoundedMemoryInput, MemoryCoordinator,
     MemoryExtractor, MemoryGovernanceStatus, MemoryGovernanceStore, MemoryMaterializer,
@@ -284,6 +285,26 @@ fn bounded(value: &str, max_chars: usize) -> String {
 
 fn session_text(session_id: &SessionId) -> String {
     session_id.to_string()
+}
+
+/// ⭐ **去重门的命名空间**（**按来源分桶** ⇒ ⇒ **不许跨来源误杀**）。
+///
+/// # 为什么按「归属锚点」分桶
+///
+/// 去重门拦的是「**同一段内容被重复落库**」⇒ ⇒ 判重必须问一句：
+/// 「这两条**是不是同一个主人**的同一件事？」
+/// ⇒ ⇒ 主人不同 ⇒ ⇒ **各存各的**（哪怕文字一模一样）
+/// ⇒ ⇒ 否则 A 会话里的一句客套话会把 B 会话里的真事实**误杀**。
+///
+/// # 两个来源桶
+///
+/// * `profile:<partition>` —— 私有 Profile 分区（**跨会话共享**的私有命名空间）；
+/// * `session:<session>` —— 普通会话锚点。
+fn dedup_namespace(profile_partition: Option<&str>, session: &str) -> String {
+    match profile_partition {
+        Some(partition) if !partition.trim().is_empty() => format!("profile:{partition}"),
+        _ => format!("session:{session}"),
+    }
 }
 
 fn hash_id(prefix: &str, parts: &[&str]) -> String {
@@ -1682,6 +1703,16 @@ pub struct MemoryWritebackModule {
     materializer: Arc<dyn MemoryMaterializerPort>,
     typed_sink: Option<Arc<dyn MemoryTypedMaterializationSink>>,
     consolidation: bool,
+    /// ⭐ **写侧去重门**（P1 接线 · 2026-11-07）：materializer 产物落库**之前**过门。
+    ///
+    /// * **命名空间 = 归属锚点**（profile 私有分区 / 会话锚点）⇒ ⇒ **不跨来源误杀**；
+    /// * **指纹** = `dedup::episode_fingerprint(role, content)`（角色 + 归一化正文）；
+    /// * **窗口** = `dedup::DEFAULT_DEDUP_WINDOW_MS`（24h）⇒ ⇒ 窗口内相同内容**只落一次**；
+    /// * ⚠️ **进程内**窗口（LRU）⇒ ⇒ **重启后清空**（持久化门 `accept_persisted` 需要
+    ///   `&SqliteMemoryStore`，而本模块只持 `Arc<dyn MemoryBackend>` ⇒ 拿不到库句柄）。
+    dedup: DedupIndex,
+    /// 去重门拦下的条数（**可观测** ⇒ 不许「静默少写」）。
+    dedup_skipped: AtomicU64,
     /// V4-a 人格记忆层: 人格提取步的落库面 (未配置 = 显式不跑, 默认未接线).
     persona: Option<Arc<dyn PersonaMemoryStore>>,
     /// V4-b 保鲜回路: 散列增量门 (整编素材同源同散列 = 跳过重复整编, 省算力防
@@ -1708,6 +1739,8 @@ impl MemoryWritebackModule {
             materializer: Arc::new(MemoryMaterializer::default()),
             typed_sink: None,
             consolidation: false,
+            dedup: DedupIndex::new(),
+            dedup_skipped: AtomicU64::new(0),
             persona: None,
             ingest_gate: None,
             consolidation_turns: Mutex::new(std::collections::BTreeMap::new()),
@@ -1793,6 +1826,39 @@ impl MemoryWritebackModule {
     /// Read-only metrics for embedding callers.
     pub fn metrics(&self) -> ModuleMetricsSnapshot {
         self.metrics.snapshot()
+    }
+
+    /// ⭐ **写侧去重门**：同一归属锚点下，窗口内的**相同内容**不再重复落库。
+    ///
+    /// # 口径
+    ///
+    /// * **指纹** = `dedup::episode_fingerprint(role, content)`（角色 + 归一化正文
+    ///   ⇒ 空白/大小写差异不算不同内容）；
+    /// * **窗口** = `dedup::DEFAULT_DEDUP_WINDOW_MS`（24h）；
+    /// * **空指纹放行**（不拿空串当去重键 ⇒ 不许「空内容把整桶误杀」）。
+    ///
+    /// # 命名空间（**不许跨来源误杀**）
+    ///
+    /// 命名空间由调用方给（[`dedup_namespace`]）⇒ ⇒ **按归属锚点分桶**
+    /// ⇒ ⇒ 不同来源的同一段文字**各存各的**。
+    fn dedup_accept(&self, namespace: &str, episode: &Episode) -> bool {
+        let fingerprint = episode_fingerprint(&episode.role, &episode.content);
+        if fingerprint.trim().is_empty() {
+            return true;
+        }
+        let now_ms = self.clock.now().timestamp_millis();
+        if self.dedup.accept(namespace, &fingerprint, now_ms) {
+            true
+        } else {
+            // ⚠️ **可观测**：拦下的条数记进计数器 ⇒ 不许「静默少写」。
+            self.dedup_skipped.fetch_add(1, Ordering::Relaxed);
+            false
+        }
+    }
+
+    /// 去重门拦下的条数（**可观测** ⇒ 「少写了」有账可查）。
+    pub fn dedup_skipped_count(&self) -> u64 {
+        self.dedup_skipped.load(Ordering::Relaxed)
     }
 
     /// Attach the shared non-sensitive telemetry sink.
@@ -1909,6 +1975,9 @@ impl MemoryWritebackModule {
                         .or_else(|| Some(candidate.id.clone())),
                 };
                 let now = self.clock.now().timestamp();
+                // ⭐ **去重门的命名空间**（**按来源分桶** ⇒ 不许跨来源误杀）：
+                // 私有 Profile 分区与普通会话是两个**不同的来源桶**。
+                let dedup_ns = dedup_namespace(self.profile_partition.as_deref(), &session);
                 // Private namespaces span sessions; provider response IDs are
                 // not an execution identity. Keep legacy IDs unchanged.
                 let response_key = if self.profile_partition.is_some() {
@@ -2020,6 +2089,15 @@ impl MemoryWritebackModule {
                             }
                             if execution.is_some_and(|e| e.cancellation.is_cancelled()) {
                                 break;
+                            }
+                            // ⭐ **写侧去重门**（P1 接线 · 2026-11-07）：materializer 产物
+                            // **落库前**过门 ⇒ ⇒ 同一归属锚点下、窗口内的**相同内容**
+                            // **不再重复落库**（重复内容 ⇒ 检索里也是重复行 ⇒ 白占预算）。
+                            //
+                            // ⚠️ **行为变化**（接线前 ⇒ 接线后）：重复内容**不再重复落库**。
+                            // ⚠️ 门只拦**内容完全相同**（角色 + 归一化正文指纹相同）的条目。
+                            if !self.dedup_accept(&dedup_ns, &item.episode) {
+                                continue;
                             }
                             let result = if let Some(coord) = &self.coordinator {
                                 coord
@@ -5008,6 +5086,153 @@ mod tests {
             .iter()
             .all(|fact| !fact.source_episode_id.is_empty()));
         assert_eq!(writeback.metrics().warnings, 0);
+    }
+
+    /// ⭐ **写侧去重门 · 行为差异**：接线前，**同一段内容**每回合都重复落库；
+    /// 接线后，**窗口内只落一次**。
+    ///
+    /// # 为什么两回合的 episode id **必须不同**
+    ///
+    /// `stable_episode_id` 把**时刻**算进 id ⇒ 两回合时刻不同 ⇒ id 不同
+    /// ⇒ ⇒ 真库里这是**两条不同的行**（`INSERT OR IGNORE` 也拦不住）
+    /// ⇒ ⇒ 去重门拦的正是这种「**内容相同、id 不同**」的重复。
+    #[tokio::test]
+    async fn writeback_dedup_gate_drops_duplicate_materialized_content() {
+        let session = SessionId::new();
+        let memory = Arc::new(FakeMemory::default());
+        let clock = Arc::new(VirtualClock::new(
+            apeireth_core::kernel::Timestamp::from_epoch_millis(1_700_000_000_000)
+                .unwrap()
+                .as_datetime(),
+        ));
+        let writeback = MemoryWritebackModule::new(memory.clone(), clock.clone());
+        let invoker: Arc<dyn super::super::module::ModuleInvoker> = Arc::new(FixedInvoker {
+            response: NormalizedResponse::text("unused", "fake", "unused"),
+            calls: AtomicU64::new(0),
+        });
+        // 用户说了**一句会被抽成记忆**的话（`RuleMemoryExtractor` 只抽 user 侧）。
+        let messages = vec![NormalizedMessage::user("I prefer concise answers")];
+
+        for round in 0..2 {
+            // 两回合的候选 id 不同 ⇒ 原始回合 episode 的 id 不同（那是另一条路径）。
+            let candidate = NormalizedResponse::text(
+                if round == 0 { "answer-1" } else { "answer-2" },
+                "fake",
+                "好的，简洁优先",
+            );
+            writeback
+                .on_hook(
+                    HookPoint::AfterTurn,
+                    &context(
+                        &session,
+                        &messages,
+                        Some(&candidate),
+                        &invoker,
+                        MEMORY_WRITEBACK_MODULE_ID,
+                    ),
+                )
+                .await
+                .unwrap();
+            // 时刻推进 ⇒ 物化 episode 的 id 变化（否则真库会按 id 直接忽略）。
+            clock.advance(chrono::Duration::seconds(60));
+        }
+
+        let materialized = memory
+            .episodes
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|episode| episode.role == "memory")
+            .count();
+        assert_eq!(
+            materialized, 1,
+            "**接线前**这里是 2（同一段内容重复落库）⇒ ⇒ 接线后只落 1 条"
+        );
+        assert_eq!(
+            writeback.dedup_skipped_count(),
+            1,
+            "被门拦下的条数必须**可观测**（不许静默少写）"
+        );
+    }
+
+    /// ⭐ **不许跨来源误杀**：同一段内容落在**两个不同来源**（两个会话）
+    /// ⇒ ⇒ **各存各的**（门只看「同一个来源桶内有没有重复」）。
+    #[tokio::test]
+    async fn writeback_dedup_gate_does_not_kill_across_sources() {
+        let memory = Arc::new(FakeMemory::default());
+        let clock = Arc::new(VirtualClock::new(
+            apeireth_core::kernel::Timestamp::from_epoch_millis(1_700_000_000_000)
+                .unwrap()
+                .as_datetime(),
+        ));
+        let writeback = MemoryWritebackModule::new(memory.clone(), clock.clone());
+        let invoker: Arc<dyn super::super::module::ModuleInvoker> = Arc::new(FixedInvoker {
+            response: NormalizedResponse::text("unused", "fake", "unused"),
+            calls: AtomicU64::new(0),
+        });
+        let messages = vec![NormalizedMessage::user("I prefer concise answers")];
+
+        for index in 0..2 {
+            // **两个不同会话** ⇒ 两个不同来源桶 ⇒ 同内容不许互相误杀。
+            let session = SessionId::new();
+            let candidate = NormalizedResponse::text(
+                if index == 0 { "answer-1" } else { "answer-2" },
+                "fake",
+                "好的，简洁优先",
+            );
+            writeback
+                .on_hook(
+                    HookPoint::AfterTurn,
+                    &context(
+                        &session,
+                        &messages,
+                        Some(&candidate),
+                        &invoker,
+                        MEMORY_WRITEBACK_MODULE_ID,
+                    ),
+                )
+                .await
+                .unwrap();
+            clock.advance(chrono::Duration::seconds(60));
+        }
+
+        let materialized = memory
+            .episodes
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|episode| episode.role == "memory")
+            .count();
+        assert_eq!(
+            materialized, 2,
+            "不同来源的同一段内容**各存各的**（不许跨来源误杀）"
+        );
+        assert_eq!(
+            writeback.dedup_skipped_count(),
+            0,
+            "跨来源不该触发门"
+        );
+    }
+
+    /// **命名空间按来源分桶**（纯函数口径）：私有 Profile 分区与普通会话
+    /// ⇒ ⇒ 两个**不同的桶** ⇒ ⇒ 门不会互相误杀。
+    #[test]
+    fn dedup_namespace_buckets_by_source() {
+        assert_eq!(
+            dedup_namespace(Some("partition-a"), "session-x"),
+            "profile:partition-a"
+        );
+        assert_eq!(dedup_namespace(None, "session-x"), "session:session-x");
+        assert_ne!(
+            dedup_namespace(Some("partition-a"), "session-x"),
+            dedup_namespace(None, "session-x"),
+            "私有分区与普通会话必须是**不同的桶**"
+        );
+        // 空分区 ⇒ 回落普通会话桶（不许造出第三种桶）。
+        assert_eq!(
+            dedup_namespace(Some("   "), "session-x"),
+            "session:session-x"
+        );
     }
 
     #[tokio::test]

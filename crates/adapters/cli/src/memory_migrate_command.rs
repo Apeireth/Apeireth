@@ -137,6 +137,37 @@ pub fn run_migrate(args: &[String]) -> u8 {
 
     // ⚠️ 执行时刻用**当前时间**（毫秒）⇒ 写进迁移报告 ⇒ 事后可查「什么时候迁的」。
     let executed_at = now_ms();
+
+    // ⭐⭐ **主体登记**（P1 接线 · 2026-11-07）：**这是本命令为什么能兑现
+    // 「`continuity_id` 的物理唯一性」的地方**。
+    //
+    // # 为什么这里是**真消费点**（不是「凑数」）
+    //
+    // 本命令是**生产面唯一**会把记录挂到**新主体**（`--to`）名下的入口
+    // ⇒ ⇒ 迁移产出的副本带 `continuity_id = to`
+    // ⇒ ⇒ 而 `continuity_id` 的**物理唯一性**靠 `identity_cards` 表的 UNIQUE 约束
+    //    （`migrations.rs` 的 `identity_cards` DDL）守护
+    // ⇒ ⇒ **主体没在 `identity_cards` 登记 ⇒ 约束永远不生效 ⇒ 表永远是空的**
+    // ⇒ ⇒ 迁移完的主体是个「黑户」：载体迁移（`record_carrier_migration`）会
+    //    直接报 `NotFound`（那张卡不存在）。
+    //
+    // # 为什么**不担心**重复登记
+    //
+    // `continuity_link::ensure_identity` **本来就是幂等的**：先 `exists` 再 `create`，
+    // 且把 `IdentityConflict::AlreadyExists` **显式**映射成「同一人已登记 ⇒ 成功」
+    // ⇒ ⇒ 每次都调安全 ⇒ ⇒ **不吞错误**（别的错误照原样报错）。
+    //
+    // # 登记**两个**锚点
+    //
+    // * `from`（源主体）—— 它的记录本来就在库里 ⇒ 它也该在册；
+    // * `to`（目标主体）—— 迁移会让它名下第一次有记录 ⇒ 它最该在册。
+    if let Err(error) = register_subjects(&store, &from, &to, &db_path) {
+        eprintln!("主体登记失败：{error}");
+        return 2;
+    }
+    // ⚠️ **可观测**：登记做了什么 ⇒ 打印出来（不许「静默写库」）。
+    println!("主体已登记：{from} / {to}（identity_cards 在册 ⇒ continuity_id 物理唯一性生效）");
+
     match apeireth_memory::continuity_link::migrate_subject(&store, &from, &to, executed_at) {
         Ok(report) => {
             let rendered = MigrateReport {
@@ -158,6 +189,38 @@ pub fn run_migrate(args: &[String]) -> u8 {
     }
 }
 
+/// ⭐ **主体登记**（`identity_cards` 在册 ⇒ `continuity_id` 的物理唯一性才生效）。
+///
+/// # 口径
+///
+/// * **幂等**：`ensure_identity` 内部先查 `exists` ⇒ 重复调用安全；
+/// * **载体（carrier）** = 认知库的**文件名主干**（如 `cognitive`）
+///   ⇒ ⇒ 主体「在哪个载体上」有据可查（不是硬编码的假字符串）；
+/// * **诞生时间** = 现在（秒）⇒ ⇒ 首次登记的时刻有据可查；
+/// * ⚠️ **失败即失败**：登记失败 ⇒ **不迁移**（不产出「有记录但没在册」的主体）。
+fn register_subjects(
+    store: &apeireth_memory::SqliteMemoryStore,
+    from: &str,
+    to: &str,
+    db_path: &Path,
+) -> Result<(), String> {
+    let carrier = db_path
+        .file_stem()
+        .map(|stem| stem.to_string_lossy().to_string())
+        .filter(|stem| !stem.trim().is_empty())
+        .unwrap_or_else(|| "cognitive".to_string());
+    let birth_time = now_ms() / 1000;
+    for anchor in [from, to] {
+        let anchor = anchor.trim();
+        if anchor.is_empty() {
+            return Err("锚点为空，无法登记主体".to_string());
+        }
+        apeireth_memory::continuity_link::ensure_identity(store, anchor, &carrier, birth_time)
+            .map_err(|error| format!("登记主体 `{anchor}` 失败：{error}"))?;
+    }
+    Ok(())
+}
+
 /// 人话报告。
 pub fn render_report(report: &MigrateReport) -> String {
     format!(
@@ -177,6 +240,155 @@ pub fn render_report(report: &MigrateReport) -> String {
         report.episodes_skipped,
         report.ledger_rekeyed,
     )
+}
+
+// ============================================================
+// `apeireth memory rollback-drill` —— 迁移回滚**演练**（可演练 ⇒ 才谈得上「可回滚」）
+// ============================================================
+
+/// 回滚演练命令的用法。
+///
+/// ⚠️ **`--db` 是必填**（没有缺省）⇒ ⇒ 逼着操作者**指名**要演练哪个库
+/// ⇒ ⇒ 不给「手一抖把生产库当演练库」的口子。
+pub const ROLLBACK_DRILL_USAGE: &str = "apeireth memory rollback-drill --from <ANCHOR> --to <ANCHOR> --db <COGNITIVE_DB>\n\n  迁移回滚演练：建账 → 真迁移 → 核对 → 回滚 → 再核对「回到迁移前」。\n\n  --from  源锚点（源 session_id；该锚点下必须有记录，否则无可演练之物）\n  --to    目标锚点（演练用的新主体）\n  --db    认知库路径（**必填** ⇒ 不提供「默认打生产库」的口子）\n\n  退出码：0 = 演练通过（已证明回到迁移前） · 2 = 参数错 / 库打不开 / 演练未通过";
+
+/// `apeireth memory` 全部子面的**总用法文本**（各面 `USAGE` 拼装）。
+///
+/// # 为什么放在这里（而不是 `main.rs`）
+///
+/// `main.rs` 是被 `scripts/arch-baseline.txt` 登记尺寸的文件（只许不变或变小）
+/// ⇒ ⇒ 把「打印 5 段用法」这种纯文本装配摊在主分派里会**净增行数**
+/// ⇒ ⇒ 而它属于 `memory` 命令族的知识 ⇒ ⇒ 归位到本模块（`main.rs` 只留一行调用）。
+pub fn memory_usage_text() -> String {
+    use crate::{
+        memory_export_command as export, memory_handover_command as handover,
+        memory_verify_command as verify,
+    };
+    [
+        verify::USAGE,
+        export::USAGE,
+        handover::USAGE,
+        USAGE,
+        ROLLBACK_DRILL_USAGE,
+    ]
+    .join("\n\n")
+}
+
+/// 执行回滚演练命令。
+///
+/// # 口径（**必须如实说清**）
+///
+/// * 演练走**真实入口** `continuity_link::migrate_subject`（同库第二个连接）
+///   ⇒ 造出真的 `mig-` 副本 ⇒ 核对 ⇒ **回滚删副本** ⇒ 再核对内容哈希；
+/// * **原记录一条都不删**（P1 底线，库内强制）；
+/// * ⚠️ **`context_ledger` 的改键副作用不回滚**（库级已知边界 ⇒ 本命令在报告里如实标注）；
+/// * ⚠️ **演练会改库**（临时摘 append-only 触发器 ⇒ 事务内复原）⇒ ⇒ **只对测试库跑**。
+///
+/// # 返回
+///
+/// * `Ok(0)` = 演练通过；
+/// * `Ok(2)` = 参数错 / 库打不开 / 演练未通过（原因已打到 stderr）。
+pub fn run_rollback_drill(args: &[String]) -> u8 {
+    let mut from: Option<String> = None;
+    let mut to: Option<String> = None;
+    let mut db: Option<PathBuf> = None;
+    let mut index = 0;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--from" => {
+                let Some(value) = args.get(index + 1) else {
+                    eprintln!("--from 缺参数");
+                    eprintln!("{ROLLBACK_DRILL_USAGE}");
+                    return 2;
+                };
+                from = Some(value.clone());
+                index += 2;
+            }
+            "--to" => {
+                let Some(value) = args.get(index + 1) else {
+                    eprintln!("--to 缺参数");
+                    eprintln!("{ROLLBACK_DRILL_USAGE}");
+                    return 2;
+                };
+                to = Some(value.clone());
+                index += 2;
+            }
+            "--db" => {
+                let Some(value) = args.get(index + 1) else {
+                    eprintln!("--db 缺参数");
+                    eprintln!("{ROLLBACK_DRILL_USAGE}");
+                    return 2;
+                };
+                db = Some(PathBuf::from(value));
+                index += 2;
+            }
+            other => {
+                eprintln!("未知参数：{other}");
+                eprintln!("{ROLLBACK_DRILL_USAGE}");
+                return 2;
+            }
+        }
+    }
+
+    let (Some(from), Some(to)) = (from, to) else {
+        eprintln!("--from 与 --to 都是必填");
+        eprintln!("{ROLLBACK_DRILL_USAGE}");
+        return 2;
+    };
+    if from.trim().is_empty() || to.trim().is_empty() {
+        eprintln!("锚点不能为空");
+        return 2;
+    }
+    if from.trim() == to.trim() {
+        eprintln!("源锚点与目标锚点相同，无需演练");
+        return 2;
+    }
+    // ⚠️ `--db` **必填**（与 `migrate-subject` 不同）⇒ 演练**必须**指名一个库。
+    let Some(db_path) = db else {
+        eprintln!("--db 是必填项（演练会改库 ⇒ 不给「默认打生产库」的口子）");
+        eprintln!("{ROLLBACK_DRILL_USAGE}");
+        return 2;
+    };
+    if !db_path.exists() {
+        eprintln!("认知库不存在：{}", db_path.display());
+        return 2;
+    }
+
+    let store = match apeireth_memory::SqliteMemoryStore::open(&db_path) {
+        Ok(store) => store,
+        Err(error) => {
+            eprintln!("打开认知库失败：{error}");
+            return 2;
+        }
+    };
+
+    // 演练要一个**可写连接**（核对 / 回滚 / 导出都走它）。
+    // ⚠️ `SqliteMemoryStore::conn()` 拿的是 Mutex 锁 ⇒ 这里**必须**在同一个
+    // 作用域里用完就放（否则第二次开同库连接会撞锁）。
+    let executed_at = now_ms();
+    let outcome = {
+        let mut guard = match store.conn() {
+            Ok(guard) => guard,
+            Err(error) => {
+                eprintln!("拿连接失败：{error}");
+                return 2;
+            }
+        };
+        apeireth_memory::migrate_rollback::drill_rollback(&mut *guard, &from, &to, executed_at)
+    };
+
+    match outcome {
+        Ok(report) => {
+            println!("回滚演练完成（库：{}）", db_path.display());
+            println!("{report}");
+            0
+        }
+        Err(error) => {
+            // ⚠️ **失败即失败**：演练没过就是没过 ⇒ 如实报错、退出码 2。
+            eprintln!("回滚演练未通过：{error}");
+            2
+        }
+    }
 }
 
 /// 缺省认知库路径（与 `memory verify` 同一口径）。

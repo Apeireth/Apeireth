@@ -117,6 +117,10 @@ pub mod novel_corpus;
 // 记忆数据的脱机归档 (设计稿 §8 B4): 保原文 + 自说明 + 可独立校验; 状态 NOT IMPLEMENTED (新增未接线).
 pub mod offline_archive;
 pub mod offline_embed; // 纯本地 embedder (无 API key/无网络): 让语义召回在离线环境可跑; 状态 NOT IMPLEMENTED (新增未接线).
+                       // 纯本地 embedder → `scope::EmbeddingProvider` 的**适配器**（生产检索要的是异步那个口）;
+                       // 状态 NOT IMPLEMENTED (新增未接线): 生产注入点在 cli/lib.rs 与 runtime-assembly/production.rs。
+pub mod offline_embedding_provider;
+pub use offline_embedding_provider::{OfflineEmbeddingProvider, OFFLINE_EMBEDDING_MODEL_ID};
 pub mod online_calibration;
 pub mod partner;
 pub mod perltqa_adapter;

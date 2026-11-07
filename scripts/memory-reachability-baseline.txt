@@ -3,9 +3,9 @@
 #
 # 判据见脚本头部（生产入口 + 词法依赖闭包 + BFS 到不动点）。
 # 方向：宁可漏报未接线，不可虚报已接线。
-reachable_modules = 88
-total_modules = 135
-reachable_ratio = 65%
+reachable_modules = 90
+total_modules = 136
+reachable_ratio = 66%
 
 # ── 可达模块清单 ──
 reachable access_history
@@ -30,6 +30,7 @@ reachable continuity_state
 reachable coordinator
 reachable cross_diary
 reachable cross_diary_wiring
+reachable dedup
 reachable diary
 reachable dream_wiring
 reachable dreaming
@@ -58,6 +59,7 @@ reachable memory_governance
 reachable memory_injection
 reachable memory_materializer
 reachable meta_thinking
+reachable migrate_rollback
 reachable migrations
 reachable milestone
 reachable milestone_store_sqlite
@@ -107,7 +109,6 @@ unreachable cold_archive
 unreachable confidence
 unreachable d4_eval
 unreachable daily_summary
-unreachable dedup
 unreachable delivery_metrics
 unreachable derived_repair
 unreachable dream_consolidation
@@ -126,9 +127,9 @@ unreachable locomo_corpus
 unreachable memory_rank
 unreachable memory_view
 unreachable metadata_filter
-unreachable migrate_rollback
 unreachable novel_corpus
 unreachable offline_embed
+unreachable offline_embedding_provider
 unreachable organ_kani_proofs
 unreachable perltqa_adapter
 unreachable persistent_vector

@@ -283,8 +283,8 @@ env APEIRETH_VOICE_SPEAK_SCOPE
 # --- size (81) ---
 size crates/adapters/cli/src/care_heartbeat.rs 1621
 size crates/adapters/cli/src/gateway_panels.rs 1526
-size crates/adapters/cli/src/lib.rs 3775
-size crates/adapters/cli/src/main.rs 1467
+size crates/adapters/cli/src/lib.rs 3774
+size crates/adapters/cli/src/main.rs 1465
 size crates/adapters/cli/src/onboarding.rs 1332
 size crates/adapters/gateway/src/canonical_entry.rs 2291
 size crates/adapters/gateway/src/events.rs 1623
@@ -331,7 +331,7 @@ size crates/engine/memory/src/coordinator.rs 2346
 size crates/engine/memory/src/golden_mining.rs 1352
 size crates/engine/memory/src/persona_layer.rs 1680
 size crates/engine/memory/src/research_derived_memory.rs 1211
-size crates/engine/memory/src/retrieval_pipeline.rs 1279
+size crates/engine/memory/src/retrieval_pipeline.rs 1276
 size crates/engine/memory/src/retrieval_tuning.rs 1270
 size crates/engine/organ/src/causal_world_model.rs 1864
 size crates/engine/organ/src/emergence.rs 1224

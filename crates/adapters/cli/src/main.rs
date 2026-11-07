@@ -46,6 +46,7 @@ Usage:
     apeireth memory export --out FILE [--db DB] [--subject SUBJECT] [--limit N]
     apeireth memory handover --out FILE [--db DB] [--issue TEXT]... [--next TEXT]
     apeireth memory migrate-subject --from ANCHOR --to ANCHOR [--db DB]
+    apeireth memory rollback-drill --from ANCHOR --to ANCHOR --db DB
   [治理与安全]
     apeireth trait report
     apeireth trait lock <SLIDER>
@@ -971,6 +972,8 @@ fn main() -> ExitCode {
 }
 
 fn run_cli() -> ExitCode {
+    use apeireth_cli::memory_migrate_command as mm;
+
     let args = env::args().skip(1).collect::<Vec<_>>();
     if args.is_empty() {
         return run_session();
@@ -1044,10 +1047,9 @@ fn run_cli() -> ExitCode {
                     ExitCode::from(2)
                 }
             },
-            // 主体锚点迁移（copy-forward）：把记忆复制到新主体，原记录保留。
-            Some("migrate-subject") => ExitCode::from(
-                apeireth_cli::memory_migrate_command::run_migrate(&args[2..]),
-            ),
+            // 主体锚点迁移（copy-forward）与迁移回滚演练（`--db` 必填 ⇒ 演练会改库）。
+            Some("migrate-subject") => ExitCode::from(mm::run_migrate(&args[2..])),
+            Some("rollback-drill") => ExitCode::from(mm::run_rollback_drill(&args[2..])),
             // 脱机可读归档物导出（只读 + 当场自校验）。
             Some("export") => ExitCode::from(apeireth_cli::memory_export_command::run(&args[2..])),
             // 交接包（数据 + 状态 + 下一步 + 红线；只读 + 当场跑演练）。
@@ -1055,13 +1057,9 @@ fn run_cli() -> ExitCode {
                 ExitCode::from(apeireth_cli::memory_handover_command::run(&args[2..]))
             }
             _ => {
-                eprintln!("{}", apeireth_cli::memory_verify_command::USAGE);
-                eprintln!();
-                eprintln!("{}", apeireth_cli::memory_export_command::USAGE);
-                eprintln!();
-                eprintln!("{}", apeireth_cli::memory_handover_command::USAGE);
-                eprintln!();
-                eprintln!("{}", apeireth_cli::memory_migrate_command::USAGE);
+                // 5 段用法文本的装配归 `memory_migrate_command::memory_usage_text()`
+                // （`main.rs` 是尺寸登记文件 ⇒ 只留一行调用）。
+                eprintln!("{}", mm::memory_usage_text());
                 ExitCode::FAILURE
             }
         },
