@@ -193,7 +193,7 @@ claims:
     tests:
       - crates/capabilities/tools/src/egress.rs
       - crates/capabilities/tools/src/fetch.rs
-    verified_at: 58b42e55
+    verified_at: 22705173
     verify_cmd: "cargo test -p apeireth-tools-canonical --lib egress"
     owner: capabilities
     next_review: "2026-12-01"
@@ -1151,7 +1151,7 @@ claims:
       - crates/engine/runtime-assembly/src/canonical/production_config.rs
     tests:
       - crates/engine/runtime-assembly/tests/prompt_injection_turn_warning.rs
-    verified_at: 80190015
+    verified_at: 22705173
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test prompt_injection_turn_warning"
     owner: runtime-assembly
     next_review: "2026-12-05"
