@@ -330,10 +330,21 @@ claims:
       - crates/foundation/governance/src/chain.rs
       - crates/adapters/cli/tests/governance_chain_equivalence.rs
     verified_at: 9db4418d5bba94b432555732a7434f638929a636
-    verify_cmd: "cargo test -p apeireth-governance --lib"
+    # ⚠️ **2026-11-07 收窄**（声明核验批，与兄弟声明同形）：原命令跑的是
+    # **governance crate 全部 lib 单测**（241 条）⇒ ⇒ 而本条真正相关的只有
+    # `chain.rs` 的 25 条 + CLI 装配根四态等价性 4 条
+    # ⇒ ⇒ ⇒ 其余 216 条任一红 ⇒ ⇒ **本条就红** ⇒ ⇒ 「捎带别人的红」
+    # ⇒ ⇒ ⇒ ⚠️ 更要紧：原命令**根本没碰**本条**真正变更过的文件**
+    # （`crates/adapters/cli/src/governance_chain.rs` ⇒ 71b8d746 在此接了
+    # `ProposalNarrowingGate`）⇒ ⇒ 也不跑本条自己列的
+    # `crates/adapters/cli/tests/governance_chain_equivalence.rs`
+    # ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ **收窄到本条自己的两块证据**
+    # ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ 与兄弟声明同形
+    # （`provider_proxy` / `workspace_list` / `reflection_queue` / `sql_readonly_gate`）
+    verify_cmd: "cargo test -p apeireth-governance --lib chain && cargo test -p apeireth-cli --test governance_chain_equivalence"
     owner: governance
     next_review: "2026-11-20"
-    notes: "R8-A fd74a669 六段骨架 + 四注入端口；R8-B2 已接线：CLI 装配根 governance_chain::production（预设包装层作 gate）→ ChainGovernanceHook 交 runtime with_governance，每次治理评估都过 GovernanceChain::run 单点，未配置仍 DenyUnconfigured fail-closed；四态等价性由 governance_chain_equivalence.rs 钉住。2026-10-22 抬级：R8-B2/B3 落地后原「生产零调用」口径失效，按实改判。"
+    notes: "R8-A fd74a669 六段骨架 + 四注入端口；R8-B2 已接线：CLI 装配根 governance_chain::production（预设包装层作 gate）→ ChainGovernanceHook 交 runtime with_governance，每次治理评估都过 GovernanceChain::run 单点，未配置仍 DenyUnconfigured fail-closed；四态等价性由 governance_chain_equivalence.rs 钉住。2026-10-22 抬级：R8-B2/B3 落地后原「生产零调用」口径失效，按实改判。；2026-11-07 声明核验（stale 批）：窄口径真跑 **25 + 4 = 29 条全绿 / exit 0**；生产调用点 = `crates/adapters/cli/src/governance_chain.rs:221 production()` → `:205 adapt_gate_with()`（Gate 段内 `:47 ProposalNarrowingGate`）→ 装配根 `with_governance`；链入口 = `crates/engine/runtime/src/canonical/dispatch_admission.rs:242/345` 的 `evaluate_verbose(...)`（每次能力派发必经）⇒ 结论仍成立，**等级与默认不变**（无 live 模型/硬件证据 ⇒ 不抬 HARDWARE VALIDATED）。"
 
   - id: gov.chain_hook_adapter
     title: "R8-B1 ChainGovernanceHook 适配器 + R8-B2 生产接线"
@@ -348,10 +359,20 @@ claims:
       - crates/foundation/governance/src/chain.rs
       - crates/adapters/cli/tests/governance_chain_equivalence.rs
     verified_at: 9db4418d5bba94b432555732a7434f638929a636
-    verify_cmd: "cargo test -p apeireth-governance --lib"
+    # ⚠️ **2026-11-07 收窄**（声明核验批，与兄弟声明同形）：原命令跑的是
+    # **governance crate 全部 lib 单测**（241 条）⇒ ⇒ 而本条真正相关的只有
+    # `chain.rs` 的 25 条 + CLI 装配根四态等价性 4 条
+    # ⇒ ⇒ ⇒ 其余 216 条任一红 ⇒ ⇒ **本条就红** ⇒ ⇒ 「捎带别人的红」
+    # ⇒ ⇒ ⇒ ⚠️ 更要紧：本条**真正变更过的两个文件**都在 CLI 侧
+    # （`crates/adapters/cli/src/governance_chain.rs` + `crates/adapters/cli/src/lib.rs`
+    # ⇒ ⇒ 71b8d746 / b80030a6）⇒ ⇒ 而原命令**一条 CLI 侧的东西都没跑**
+    # ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ **收窄到本条自己的两块证据**
+    # ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ 与兄弟声明同形
+    # （`provider_proxy` / `workspace_list` / `reflection_queue` / `sql_readonly_gate`）
+    verify_cmd: "cargo test -p apeireth-governance --lib chain && cargo test -p apeireth-cli --test governance_chain_equivalence"
     owner: governance
     next_review: "2026-11-20"
-    notes: "R8-B1 b6d902ce 适配器（ChainOutcome → GovernanceVerdict 四态映射）；R8-B2 已接生产装配根：builder.with_governance(governance_chain::production(...))，回滚 = 换回 Arc<GovernancePipeline> 一行；既有 CLI 治理/审批测试期望不变。2026-10-22 抬级：原「零生产接线」口径失效。；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）；2026-10-28 生产收敛复核：源码变更及回归证据见 kernel-convergence-final-acceptance-2026-10-28.md；不将 Legacy SubLoop 或旧数据 Profile 映射宣称已迁移。；2026-10-29 S5：完整 TurnRequest 和审批续跑均委托原 Kernel，未改生产治理链或工具审批规则；真实 bootstrap 的冻结审批、原 cognitive_module_abi、生产 permission/receipt 和 runtime all-targets 通过。 证据见 kernel-convergence-s5-2026-10-29.md。"
+    notes: "R8-B1 b6d902ce 适配器（ChainOutcome → GovernanceVerdict 四态映射）；R8-B2 已接生产装配根：builder.with_governance(governance_chain::production(...))，回滚 = 换回 Arc<GovernancePipeline> 一行；既有 CLI 治理/审批测试期望不变。2026-10-22 抬级：原「零生产接线」口径失效。；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）；2026-10-28 生产收敛复核：源码变更及回归证据见 kernel-convergence-final-acceptance-2026-10-28.md；不将 Legacy SubLoop 或旧数据 Profile 映射宣称已迁移。；2026-10-29 S5：完整 TurnRequest 和审批续跑均委托原 Kernel，未改生产治理链或工具审批规则；真实 bootstrap 的冻结审批、原 cognitive_module_abi、生产 permission/receipt 和 runtime all-targets 通过。 证据见 kernel-convergence-s5-2026-10-29.md。；2026-11-07 声明核验（stale 批）：窄口径真跑 **25 + 4 = 29 条全绿 / exit 0**；生产调用点 = `crates/adapters/cli/src/governance_chain.rs:221 production()`（→ `ChainGovernanceHook`）→ CLI 装配根 `with_governance(...)`；链入口 = `crates/engine/runtime/src/canonical/dispatch_admission.rs:242/345` 的 `evaluate_verbose(...)` ⇒ 结论仍成立，**等级与默认不变**（无 live 模型/硬件证据 ⇒ 不抬 HARDWARE VALIDATED）。"
 
   - id: gov.reflection_queue
     title: "R8-C 进程内延迟反思队列——默认未装配、零行为变化"
@@ -562,10 +583,18 @@ claims:
       - crates/engine/runtime/tests/bio_pain_wiring.rs
       - crates/engine/organ/src/nociception.rs
     verified_at: 9db4418d5bba94b432555732a7434f638929a636
-    verify_cmd: "cargo test -p apeireth-organ --lib nociception"
+    # ⚠️ **2026-11-07 收窄**（声明核验批）：原命令只跑 **organ 侧的 nociception 内核**（24 条）
+    # ⇒ ⇒ 而本条标题是「痛觉→**失败链**」⇒ ⇒ 核心证据是本条自己列的
+    # `crates/engine/runtime/tests/bio_pain_wiring.rs`（4 条接线用例）⇒ ⇒ **原命令没跑**
+    # ⇒ ⇒ ⇒ ⚠️ 且本条**真正变更过的文件** `crates/adapters/cli/src/lib.rs`
+    # （生产接线点 `bio_pain_wiring::observer_from_switch`）⇒ ⇒ **原命令一条都没碰**
+    # ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ **补上本条自己的接线证据**
+    # ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ 与**兄弟声明 `bio.recovery_protocol` 同形**
+    # （后者正是用 `cargo test -p apeireth-runtime --test bio_pain_wiring`）
+    verify_cmd: "cargo test -p apeireth-organ --lib nociception && cargo test -p apeireth-runtime --test bio_pain_wiring"
     owner: runtime
     next_review: "2026-11-20"
-    notes: "只观测记账、不改错误/重试决策（0 装边界）；失败分类为近似。；2026-10-22 批次复核：runtime bio_pain_wiring 4 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）；2026-10-28 生产收敛复核：源码变更及回归证据见 kernel-convergence-final-acceptance-2026-10-28.md；不将 Legacy SubLoop 或旧数据 Profile 映射宣称已迁移。；2026-10-29 S5：CLI 只改 Host 装配委托，原观察口、痛觉开关与错误策略未改；本批作源码差异复核，runtime all-targets、bootstrap 及包级 clippy 通过，默认仍 OFF。 证据见 kernel-convergence-s5-2026-10-29.md。"
+    notes: "只观测记账、不改错误/重试决策（0 装边界）；失败分类为近似。；2026-10-22 批次复核：runtime bio_pain_wiring 4 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）；2026-10-28 生产收敛复核：源码变更及回归证据见 kernel-convergence-final-acceptance-2026-10-28.md；不将 Legacy SubLoop 或旧数据 Profile 映射宣称已迁移。；2026-10-29 S5：CLI 只改 Host 装配委托，原观察口、痛觉开关与错误策略未改；本批作源码差异复核，runtime all-targets、bootstrap 及包级 clippy 通过，默认仍 OFF。 证据见 kernel-convergence-s5-2026-10-29.md。；2026-11-07 声明核验（stale 批）：收窄后真跑 **24 + 4 = 28 条全绿 / exit 0**；生产调用点 = `crates/adapters/cli/src/lib.rs:1679`（`bio_pain_wiring::observer_from_switch(...)`，开关关 = 不构造 = 零接线）+ `crates/foundation/plugin/src/observation.rs:9`（领域 owner 登记）⇒ 结论仍成立，**等级与默认不变**（只观测记账 ⇒ 不抬 HARDWARE VALIDATED）。"
 
   - id: bio.recovery_protocol
     title: "再生→恢复协议接失败链（W3.4，与 bio_pain 同开关，默认关）"
@@ -652,7 +681,7 @@ claims:
 
   - id: bio.social_repair
     title: "社会修复→提示词修复指令（SG-20，生产装配，默认关）"
-    level: PRODUCTION WIRED
+    level: IMPLEMENTED
     default: "OFF"
     switch_env: APEIRETH_ENABLE_BIO_REPAIR_GUIDANCE
     sources:
@@ -669,7 +698,7 @@ claims:
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_cognitive_wiring"
     owner: organ
     next_review: "2026-11-20"
-    notes: "① 接在：装配根 install_bio_modules 注册 BioAssemblyModule（canonical/cognitive.rs），APEIRETH_ENABLE_BIO_REPAIR_GUIDANCE 只认 \"1\"；生产装配**不注入** RepairPlan（install_bio_modules 只注入 context budget）⇒ 修复指令块在生产实际未产出；自述侧 SocialRepairObservationSource 订阅 NervousBus 的 ApprovalSocial::Rejected 并只读折算修复计划。② 自述在：capabilities.bio_mechanisms 的 social_repair 格（BioMechanismKind::SocialRepair，经 fill_social_repair 迟绑定同源观测源）+ 聚合面 capabilities.nervous_system 的 SG-20.social_repair 行。③ 边界：会话事件源未接（UncertaintySignal 采集未接，plan_repair 只能由调用方显式注入；nervous_snapshot.rs 记 session_event_source = not_wired）；观测格只读，不改行为。"
+    notes: "① 接在：装配根 install_bio_modules 注册 BioAssemblyModule（canonical/cognitive.rs），APEIRETH_ENABLE_BIO_REPAIR_GUIDANCE 只认 \"1\"；生产装配**不注入** RepairPlan（install_bio_modules 只注入 context budget）⇒ 修复指令块在生产实际未产出；自述侧 SocialRepairObservationSource 订阅 NervousBus 的 ApprovalSocial::Rejected 并只读折算修复计划。② 自述在：capabilities.bio_mechanisms 的 social_repair 格（BioMechanismKind::SocialRepair，经 fill_social_repair 迟绑定同源观测源）+ 聚合面 capabilities.nervous_system 的 SG-20.social_repair 行。③ ⭐ **2026-11-07 口径裁决：降级 PRODUCTION WIRED ⇒ ⇒ IMPLEMENTED**（主指挥拍板）：本条**标题点名的能力 = 产出提示词修复指令**，而生产装配**不注入** RepairPlan（`with_repair_plan` 全仓只在 tests 出现 ⇒ ⇒ 生产产出点 = 0）⇒ ⇒ ⇒ **标题点名的能力在生产没有路径** ⇒ ⇒ ⇒ 故不得记 PRODUCTION WIRED。⚠️ **与 `bio.ritual` 的区别（不是同一回事）**：ritual 标题点名的是「关怀完成面」，而 `tool.ritual_done/skip` **确实在生产注册并落盘** ⇒ ⇒ 它的「半程」只是**下游消费者**没接；⇒ ⇒ ⇒ ⇒ social_repair 的「半程」**正是标题点名的那个能力本身** ⇒ ⇒ ⇒ ⇒ 故降级。⇒ ⇒ ⇒ 判据统一为：**四级口径判的是「标题点名的能力」，不是「模块装配了没有」**⇒ ⇒ ⇒ ⇒ （与 `mem.registered_namespace` 同一判据）。③ 边界：会话事件源未接（UncertaintySignal 采集未接，plan_repair 只能由调用方显式注入；nervous_snapshot.rs 记 session_event_source = not_wired）；观测格只读，不改行为。"
 
   - id: bio.quorum
     title: "群体感应→审议门（SG-24，生产装配，默认关）"
@@ -990,11 +1019,19 @@ claims:
       - crates/engine/runtime-assembly/tests/system_one_execution.rs
       - crates/engine/runtime-assembly/tests/modular_ale.rs
     verified_at: 9db4418d5bba94b432555732a7434f638929a636
-    verify_cmd: "cargo nextest run -p apeireth-cli --test system_one_knob --offline"
+    # ⚠️ **2026-11-07 收窄 + 修缺陷**（声明核验批）：
+    # ① 原命令只跑 **CLI 旋钮**那一个测试目标（5 条）⇒ ⇒ 而本条自己列的
+    #    `crates/engine/runtime-assembly/tests/system_one_execution.rs`（11 条）**没跑**
+    #    ⇒ ⇒ ⇒ 门在 Runtime 侧的证据没被这条命令覆盖 ⇒ ⇒ **补上本条自己的第二块证据**
+    #    （与兄弟声明同形：`provider_proxy` / `workspace_list` / `reflection_queue` /
+    #      `sql_readonly_gate` / `bio_pain_wiring`）
+    # ② ⚠️ 本条原本有**两个 `notes:` 键** ⇒ ⇒ `yaml.safe_load` 取**后者**
+    #    ⇒ ⇒ 上面那段英文复核史（P2/P3/P4）被**静默丢弃**、真相系统看不到
+    #    ⇒ ⇒ ⇒ 本次**把两段合并成一段**（一个字都没丢）
+    verify_cmd: "cargo nextest run -p apeireth-cli --test system_one_knob --offline && cargo test -p apeireth-runtime-assembly --test system_one_execution --offline"
     owner: runtime
     next_review: "2026-11-20"
-    notes: "Explicit Host contract and exact supervisor provider/model only. Existing Dispatcher enforces scope/approval/epoch/cancel/lifecycle/native policy before and after asynchronous review; missing/deny/escalate/malformed/timeout/audit failure refuses effects. Durable audit and tool-free SingleShot adapter use existing Runtime/AgentInstance; scripted provider plus real file/store effects are software evidence, not live model or hardware validation. Compatibility C01/C02/C03 remains open; no universal/default protection claim. P2 MainOnly gate passed; P4 full image closure remains. See ale-system-one-p2-2026-10-30.md.；2026-10-30 P3：可选 owner-bound 消息复用 Registry/Dispatcher，委托交集与独立后台授权分离；真实 Runtime 定向及原 MainOnly test/clippy/fmt 回归通过。默认与既有等级保持，本地幂等非持久 exactly-once，新消息变体需新 reader；无 live model/硬件声明。；2026-10-30 P4 复验：最终原五段与定向/文档测试通过。C03 在新消息口完成显式委托交集和长期授权分离，C01/C02 默认兼容纳管仍待验收；嵌套审查撤权及未决幂等窗口拒绝重试均有真实 Runtime 证据。固定回环 Mesh 复用同一门禁，无 live model/外部设备网络/硬件声明。"
-    notes: "生产组合根接线（CLI 组合根，默认关）：旋钮开 = 装配 `SystemOneGate`（持久审计账本 `<数据根>/system-one-review.jsonl`）+ 绑定**真实** provider 监督（凭据来自运行时凭据解析器；无真实凭据 ⇒ ⇒ **不装配** ⇒ ⇒ 内部执行被拒 ⇒ ⇒ fail-closed，**绝不用假 provider 顶替**）；复核**不授予权限**（确定性闸前后各查一次）；旋钮关 ⇒ ⇒ 组合根**根本不调** `with_system_one` ⇒ ⇒ 零行为变化（错误码与**文案**都逐字等于接线前的「无门」路径）；⚠️ 本批**无 live 模型证据**（测试用本地端点夹具 + 真插件）⇒ ⇒ **只到 PRODUCTION WIRED**，**不是** HARDWARE VALIDATED"
+    notes: "生产组合根接线（CLI 组合根，默认关）：旋钮开 = 装配 `SystemOneGate`（持久审计账本 `<数据根>/system-one-review.jsonl`）+ 绑定**真实** provider 监督（凭据来自运行时凭据解析器；无真实凭据 ⇒ ⇒ **不装配** ⇒ ⇒ 内部执行被拒 ⇒ ⇒ fail-closed，**绝不用假 provider 顶替**）；复核**不授予权限**（确定性闸前后各查一次）；旋钮关 ⇒ ⇒ 组合根**根本不调** `with_system_one` ⇒ ⇒ 零行为变化（错误码与**文案**都逐字等于接线前的「无门」路径）；⚠️ 本批**无 live 模型证据**（测试用本地端点夹具 + 真插件）⇒ ⇒ **只到 PRODUCTION WIRED**，**不是** HARDWARE VALIDATED。 ||| （2026-11-07 合并自本条原先被丢弃的第二个 notes 键）Explicit Host contract and exact supervisor provider/model only. Existing Dispatcher enforces scope/approval/epoch/cancel/lifecycle/native policy before and after asynchronous review; missing/deny/escalate/malformed/timeout/audit failure refuses effects. Durable audit and tool-free SingleShot adapter use existing Runtime/AgentInstance; scripted provider plus real file/store effects are software evidence, not live model or hardware validation. Compatibility C01/C02/C03 remains open; no universal/default protection claim. P2 MainOnly gate passed; P4 full image closure remains. See ale-system-one-p2-2026-10-30.md.；2026-10-30 P3：可选 owner-bound 消息复用 Registry/Dispatcher，委托交集与独立后台授权分离；真实 Runtime 定向及原 MainOnly test/clippy/fmt 回归通过。默认与既有等级保持，本地幂等非持久 exactly-once，新消息变体需新 reader；无 live model/硬件声明。；2026-10-30 P4 复验：最终原五段与定向/文档测试通过。C03 在新消息口完成显式委托交集和长期授权分离，C01/C02 默认兼容纳管仍待验收；嵌套审查撤权及未决幂等窗口拒绝重试均有真实 Runtime 证据。固定回环 Mesh 复用同一门禁，无 live model/外部设备网络/硬件声明。；2026-11-07 声明核验（stale 批）：收窄后真跑 **5（nextest）+ 11 = 16 条全绿 / exit 0**；生产调用点 = `crates/adapters/cli/src/lib.rs:1663-1665`（`system_one_gate_from_env` → `builder.with_system_one(...)`，旋钮关 = 组合根**根本不调** ⇒ 零行为变化）+ `crates/adapters/cli/src/lib.rs:1767-1768`（`bind_system_one_supervisor` ⇒ 无真凭据 = 不装配 = fail-closed）⇒ 结论仍成立，**等级与默认不变**（无 live 模型/硬件证据 ⇒ **不许**写 HARDWARE VALIDATED）。"
 
 
   - id: rt.module_messages
@@ -1043,16 +1080,24 @@ claims:
     default: "ON"
     switch_env: null
     sources:
+      - crates/engine/memory/src/hybrid_search.rs
       - crates/engine/memory/src/retrieval_pipeline.rs
       - crates/engine/memory/src/coordinator.rs
     tests:
       - crates/engine/memory/src/retrieval_pipeline.rs
       - crates/engine/memory/src/coordinator.rs
     verified_at: e1127c32d57ba8444264d1f207e9213c612ac8f7
-    verify_cmd: "cargo test -p apeireth-memory --lib"
+    # ⚠️ **2026-11-07 收窄**（声明核验批，与兄弟声明同形）：原命令跑的是
+    # **apeireth-memory 整个 lib 单测**（944 条 + 1 ignored）⇒ ⇒ 而本条真正相关的
+    # 只有 `retrieval_pipeline.rs` 的 33 条 + `coordinator.rs` 的 17 条
+    # ⇒ ⇒ ⇒ 其余 894 条任一红 ⇒ ⇒ **本条就红** ⇒ ⇒ 「捎带别人的红」
+    # ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ **收窄到本条自己的两个 source**
+    # ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ 与兄弟声明同形
+    # （`provider_proxy` / `workspace_list` / `reflection_queue` / `sql_readonly_gate`）
+    verify_cmd: "cargo test -p apeireth-memory --lib retrieval && cargo test -p apeireth-memory --lib coordinator"
     owner: memory
     next_review: "2026-12-04"
-    notes: "总指挥 2026-11-04 登记（记忆线收口清单 §6 报备的口径缺位）。生产路径：tool.memory.retrieve → MemoryCoordinator::recall（coordinator.rs:685）→ HybridRetrievalPipeline；coverage 以固定权重 0.5 参与打分（retrieval_pipeline.rs:137，COVERAGE_WEIGHT 常量在 :469），与 BM25 词面分、向量源共同构成混合排序。⚠️ 此前该契约在真源里无记录 ⇒ 「coverage 接进生产排序」这条成果查不到。"
+    notes: "总指挥 2026-11-04 登记（记忆线收口清单 §6 报备的口径缺位）。生产路径：tool.memory.retrieve → MemoryCoordinator::recall（coordinator.rs:742）→ HybridRetrievalPipeline；coverage 以固定权重 0.5 参与打分（retrieval_pipeline.rs:154，COVERAGE_WEIGHT 常量在 :729），与 BM25 词面分、向量源共同构成混合排序。⚠️ 此前该契约在真源里无记录 ⇒ 「coverage 接进生产排序」这条成果查不到。；2026-11-07 声明核验（stale 批）：窄口径真跑 **33 + 17 = 50 条全绿 / exit 0**（原 944 条宽命令亦全绿：944 passed / 1 ignored / exit 0）；⚠️ **原 notes 的证据行号已过期**（原写 :137 / :469 / coordinator.rs:685 ⇒ 现值 = :154 使用点 / :729 常量定义 / coordinator.rs:742 `MemoryCoordinator::recall`，因 339f57ad + c0ba1262 两笔改了这两文件）⇒ **结论不变，仅行号订正**；生产调用点 = `crates/engine/runtime-assembly/src/canonical/production.rs:1431`（`MemoryCoordinator::new`）→ `crates/engine/runtime-assembly/src/canonical/memory_module.rs:57`（`tool.memory.{op}`）→ `coordinator.rs:742` → `retrieval_pipeline.rs:154` ⇒ **等级与默认不变**（无 live 模型/硬件证据 ⇒ 不抬 HARDWARE VALIDATED）。"
   - id: mem.failure_learning_bridge
     title: "失败 → 学习桥（失败带归因 ⇒ 负证据 ⇒ 检索权重退；会话键真落盘）"
     level: PRODUCTION WIRED
