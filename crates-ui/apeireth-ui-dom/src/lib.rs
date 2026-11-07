@@ -165,7 +165,9 @@ pub use events::{
 };
 pub use keyed::{diff_keyed, list_diff_mode, KeyedDiff, KeyedDiffError, KeyedSlot, ListDiffMode};
 pub use listeners::ListenerTable;
-pub use renderer::{MountedElement, MountedFragment, MountedNode, MountedText, Renderer};
+pub use renderer::{
+    IdentitySegment, MountedElement, MountedFragment, MountedNode, MountedText, Renderer,
+};
 pub use vnode::{AttrValue, ElementBuilder, ElementVNode, Key, PropValue, TextVNode, VNode};
 
 #[cfg(target_arch = "wasm32")]

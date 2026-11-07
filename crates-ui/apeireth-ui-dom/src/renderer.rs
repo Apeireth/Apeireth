@@ -1341,6 +1341,72 @@ impl<D: Dom> Renderer<D> {
         self.dom.bounding_box(node)
     }
 
+    /// ⭐⭐⭐⭐ **取某个路径的「身份段」**（G9：为「先记身份、后测量」提供入口）。
+    ///
+    /// ## 为什么需要（真实缺口，2026-11-07）
+    ///
+    /// 引擎原本**只能按 `&[usize]` 下标路径**寻址测量目标
+    /// ⇒ ⇒ 而路径**随重排变化** ⇒ ⇒ 上层想「记住这个元素、稍后再测它」
+    /// 只能自己遍历已挂载树（产品仓实测为此写了约 30 行 `find_mounted_by_attr`）
+    /// ⇒ ⇒ ⇒ **每个宿主都要重写一遍**，且写法会各自漂移（按 class 分词容易**静默测错**）。
+    ///
+    /// ⇒ ⇒ 本方法把「路径 ⇒ 身份」这一步公开：上层存**身份**（短小、可跨帧保存），
+    /// 之后用 [`Self::bounding_box_for_identity`] / [`Self::scroll_metrics_for_identity`]
+    /// **重排后照样测得到同一个逻辑元素**。
+    ///
+    /// ## 口径（与焦点 id 完全一致，不另立一套）
+    ///
+    /// - 有 `key` ⇒ 用 `key`（身份由**数据**决定 ⇒ 抗重排）；
+    /// - 无 `key` ⇒ 用下标（身份由**位置**决定 ⇒ **不抗重排**，与旧行为一致）。
+    ///
+    /// ⇒ ⇒ 未挂载 ⇒ 返回 `None`（不猜）。
+    #[must_use]
+    pub fn identity_segments_at(&self, path: &[usize]) -> Option<Vec<IdentitySegment>> {
+        self.identity_segments(path)
+    }
+
+    /// ⭐⭐⭐⭐ **按身份反解当前路径**（G9）。
+    ///
+    /// ⇒ ⇒ 重排后仍能找回**同一个逻辑元素**的当前路径。
+    /// ⇒ ⇒ 反解不到（元素已卸载 / key 已消失）⇒ 返回 `None`（**不猜**）。
+    #[must_use]
+    pub fn path_for_identity(&self, segments: &[IdentitySegment]) -> Option<Vec<usize>> {
+        self.resolve_identity_path(segments)
+    }
+
+    /// ⭐⭐⭐⭐⭐ **按身份测真实几何**（G9 的**正解入口**：不需要树遍历）。
+    ///
+    /// ⇒ ⇒ 上层只要存住 [`IdentitySegment`] 列表，重排后直接调本方法
+    /// ⇒ ⇒ **不必**知道当前路径、**不必**自己走树。
+    ///
+    /// # Errors
+    ///
+    /// 身份反解不到 ⇒ [`DomError::NodeNotFound`]；后端不支持测量 ⇒ [`DomError::NotImplemented`]。
+    pub fn bounding_box_for_identity(
+        &self,
+        segments: &[IdentitySegment],
+    ) -> Result<ElementBox, DomError> {
+        let path = self
+            .resolve_identity_path(segments)
+            .ok_or(DomError::NodeNotFound)?;
+        self.bounding_box_at_path(&path)
+    }
+
+    /// ⭐⭐⭐⭐ **按身份测真实滚动状态**（G9；与 [`Self::bounding_box_for_identity`] 对称）。
+    ///
+    /// # Errors
+    ///
+    /// 身份反解不到 ⇒ [`DomError::NodeNotFound`]；后端不支持测量 ⇒ [`DomError::NotImplemented`]。
+    pub fn scroll_metrics_for_identity(
+        &self,
+        segments: &[IdentitySegment],
+    ) -> Result<crate::dom::ScrollMetrics, DomError> {
+        let path = self
+            .resolve_identity_path(segments)
+            .ok_or(DomError::NodeNotFound)?;
+        self.scroll_metrics_at_path(&path)
+    }
+
     /// 元素盒换算到**设备像素**（用当前乘数）。
     pub fn bounding_box_in_device(&self, path: &[usize]) -> Result<ElementBox, DomError> {
         Ok(self
@@ -2889,7 +2955,7 @@ fn identity_segments_id(segments: &[IdentitySegment]) -> FocusId {
 /// ⇒ ⇒ ⇒ 全键控的列表 ⇒ ⇒ 焦点 id **完全不受重排影响**；
 /// ⇒ ⇒ ⇒ 完全没键控的树 ⇒ ⇒ 焦点 id **与今天完全相同**（零行为变化）。
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum IdentitySegment {
+pub enum IdentitySegment {
     /// 该元素带 `key`（身份由数据决定）。
     ///
     /// ⚠️ 存的是「**带判别式**」的字符串 ⇒ ⇒ `Key::Str("1")` 与 `Key::Int(1)`
@@ -2901,13 +2967,25 @@ enum IdentitySegment {
 
 impl IdentitySegment {
     /// 从 [`crate::vnode::Key`] 构造身份段（**带判别式**）。
-    fn from_key(key: &crate::vnode::Key) -> Self {
+    ///
+    /// ⭐ **公开**（G9）：上层要「先记下身份、重排后再测量」⇒ ⇒ 必须能自己构造身份段
+    /// ⇒ ⇒ 否则只能整段存 `Vec<IdentitySegment>`（也能用，但组合不如自建灵活）。
+    #[must_use]
+    pub fn from_key(key: &crate::vnode::Key) -> Self {
         let tagged = match key {
             crate::vnode::Key::Str(text) => format!("s:{text}"),
             crate::vnode::Key::Int(value) => format!("i:{value}"),
             crate::vnode::Key::Uint(value) => format!("u:{value}"),
         };
         IdentitySegment::Key(tagged)
+    }
+
+    /// 用**位置下标**构造身份段（该元素无 `key` 时的唯一身份）。
+    ///
+    /// ⚠️ 位置身份**不抗重排**（位置变了就是另一个元素）⇒ ⇒ 能用 key 就用 key。
+    #[must_use]
+    pub fn from_index(index: usize) -> Self {
+        IdentitySegment::Index(index)
     }
 
     fn hash_into(&self, hash: &mut u64) {
@@ -3054,6 +3132,167 @@ mod tests {
                 .expect("补写必须成功"),
             0,
             "补写后队列必须清空"
+        );
+    }
+
+    /// ⭐⭐⭐⭐⭐ **G9：按身份测量 —— 重排后仍测得到同一个逻辑元素**。
+    ///
+    /// ## 它证明什么
+    ///
+    /// 上层只能拿下标路径寻址时，「记住这个元素、稍后再测」在重排后**必然测错**
+    /// （路径指向了别的元素，而且**不会报错** ⇒ ⇒ 静默错）。
+    /// ⇒ ⇒ 身份寻址的价值就是：**重排后仍指向同一逻辑元素**。
+    ///
+    /// ⇒ ⇒ 判据三条一起看（缺一条就可能假绿）：
+    /// ① 记住 keyed 列表里 **B** 的身份；
+    /// ② 重排（B 从第 2 个变第 1 个）；
+    /// ③ 用**同一份身份**测几何 ⇒ ⇒ 必须测到 **B** 的盒子（**不是**「第 2 个位置」的盒子）。
+    #[test]
+    fn identity_measurement_survives_reorder() {
+        use crate::dom::{Dom, ElementBox, ScrollMetrics};
+        use crate::vnode::VNode;
+
+        let (mut renderer, root) = renderer_with_dom();
+
+        // 列表：A(0,0,100,50) / B(0,50,100,50)，B 带 key
+        let build = |order: &[(&str, f64)]| {
+            let items: Vec<VNode> = order
+                .iter()
+                .map(|(key, _y)| {
+                    // ⚠️ key 是 **builder** 上的字段（`ElementVNode.key`），不是属性
+                    //   ⇒ ⇒ 用 `.key(..)` 而不是 `.attr("key", ..)`（后者不会被身份机制看到）
+                    VNode::element("li")
+                        .key(crate::vnode::Key::Str(String::from(*key)))
+                        .child(VNode::text(*key))
+                        .build()
+                })
+                .collect();
+            VNode::element("ul").children(items).build()
+        };
+
+        renderer
+            .mount(build(&[("a", 0.0), ("b", 50.0)]))
+            .expect("挂载必须成功");
+        // 给 A、B 打上真实几何（B 在 y=50）
+        let list = renderer.dom().children(&root).expect("读子节点必须成功")[0];
+        let children = renderer.dom().children(&list).expect("读子节点必须成功");
+        renderer.dom().script_measurement(
+            children[0],
+            ElementBox::new(0.0, 0.0, 100.0, 50.0),
+            ScrollMetrics::default(),
+        );
+        renderer.dom().script_measurement(
+            children[1],
+            ElementBox::new(0.0, 50.0, 100.0, 50.0),
+            ScrollMetrics::default(),
+        );
+
+        // ① 记住 **B** 的身份。
+        //   ⚠️ 路径从**挂载根**算（挂载根就是 `ul` 本身）⇒ ⇒ B 是第 2 个子节点 = `[1]`
+        //   （这个口径我第一版写成 `[0, 1]`，直接把「B 的身份」取成了 None ⇒ 被断言抓到）
+        let b_identity = renderer
+            .identity_segments_at(&[1])
+            .expect("B 的身份必须可取");
+        // ② 重排：B 变成第 1 个（路径 [0, 0]）
+        renderer
+            .patch(build(&[("b", 0.0), ("a", 50.0)]))
+            .expect("打补丁必须成功");
+        let list = renderer.dom().children(&root).expect("读子节点必须成功")[0];
+        let children = renderer.dom().children(&list).expect("读子节点必须成功");
+        // 重排后几何也跟着换：B 现在在 y=0
+        renderer.dom().script_measurement(
+            children[0],
+            ElementBox::new(0.0, 0.0, 100.0, 50.0),
+            ScrollMetrics::default(),
+        );
+        renderer.dom().script_measurement(
+            children[1],
+            ElementBox::new(0.0, 50.0, 100.0, 50.0),
+            ScrollMetrics::default(),
+        );
+
+        // ③ 用**同一份身份**反解 ⇒ 必须指向 B 的**新**路径 [0, 0]
+        let resolved = renderer
+            .path_for_identity(&b_identity)
+            .expect("身份必须能反解（B 还在树里）");
+        assert_eq!(
+            resolved,
+            vec![0],
+            "⭐ 身份必须跟着**数据**走，指向 B 的新位置"
+        );
+
+        // ④ **真正的判据**：按身份测量 ⇒ 必须测到 B（y=0），而不是「第 2 个位置」（y=50）
+        let boxed = renderer
+            .bounding_box_for_identity(&b_identity)
+            .expect("按身份测量必须成功");
+        assert!(
+            (boxed.y - 0.0).abs() < 1e-9,
+            "⭐⭐ 按身份测到的必须是 **B**（y=0，重排后位置），实际 y={} ⇒ ⇒ 若测到 50 说明身份没跟着数据走",
+            boxed.y
+        );
+
+        // ⑤ 反向对照：**按下标**测 `[1]`（旧口径）现在测到的是 **A**（重排后在 y=50）
+        let by_index = renderer
+            .bounding_box_at_path(&[1])
+            .expect("按下标测量必须成功");
+        assert!(
+            (by_index.y - 50.0).abs() < 1e-9,
+            "反向对照：按下标 [1] 应测到 A（y=50），实际 y={}",
+            by_index.y
+        );
+        assert!(
+            (boxed.y - by_index.y).abs() > 1e-9,
+            "⭐ 若两者相同 ⇒ ⇒ 本测试**没有区分能力**（下标与身份恰好一致）⇒ 判据失效"
+        );
+    }
+
+    /// ⭐⭐ **G9：无 key 的元素用位置身份**（与旧行为一致，零回归）。
+    #[test]
+    fn identity_falls_back_to_index_for_unkeyed_nodes() {
+        use crate::vnode::VNode;
+
+        let (mut renderer, _root) = renderer_with_dom();
+        renderer
+            .mount(
+                VNode::element("div")
+                    .child(VNode::element("span").child(VNode::text("x")).build())
+                    .build(),
+            )
+            .expect("挂载必须成功");
+
+        let identity = renderer
+            .identity_segments_at(&[0])
+            .expect("无 key 也必须能取身份");
+        assert_eq!(identity, vec![IdentitySegment::from_index(0)]);
+        assert_eq!(renderer.path_for_identity(&identity), Some(vec![0]));
+    }
+
+    /// ⭐⭐ **G9：身份反解不到时**返回 `NodeNotFound`（**不猜、不返回别人的盒子**）。
+    #[test]
+    fn identity_measurement_reports_not_found_instead_of_guessing() {
+        use crate::vnode::Key;
+
+        let (mut renderer, _root) = renderer_with_dom();
+        renderer
+            .mount(
+                VNode::element("div")
+                    .child(VNode::element("span").child(VNode::text("x")).build())
+                    .build(),
+            )
+            .expect("挂载必须成功");
+
+        // 一个树里**不存在**的 key
+        let ghost = vec![IdentitySegment::from_key(&Key::Str(String::from("不存在")))];
+        assert!(
+            renderer.path_for_identity(&ghost).is_none(),
+            "反解不到必须是 None"
+        );
+        assert!(
+            matches!(
+                renderer.bounding_box_for_identity(&ghost),
+                Err(DomError::NodeNotFound)
+            ),
+            "⭐⭐ 反解不到必须报 NodeNotFound ⇒ ⇒ 绝不能「返回最后一个/第一个」的盒子"
         );
     }
 
