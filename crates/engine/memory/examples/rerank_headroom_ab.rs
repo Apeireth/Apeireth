@@ -372,8 +372,14 @@ fn run() -> Result<(), Box<dyn Error>> {
             // **新判据**：**原始查询**（未经规范化）里是否含疑问词
             // ⇒ ⇒ 词面卷的查询是**原文片段**（很少带疑问词）
             // ⇒ ⇒ 公平卷是**自然语言问句**（大量带「什么/怎么/为什么」）
-            let mut shape2 = Vec::new();
-            for alpha in [0.10_f64, 0.25, 0.50, 1.00] {
+            // ⭐⭐ **与 MIRACL 考卷完全相同的 first_pos 实现**（2026-11-07）
+            //
+            // **为什么必须同实现**：先前版本用**未归一化**的 `1/(1+pos)`
+            // ⇒ ⇒ α 的量纲随文档长度漂移 ⇒ ⇒ 与真实查询考卷上的数字**不可比**。
+            // 这里改成：**每题把 first_pos 归一化到 (0,1]**，α 列表也与真实查询考卷一致。
+            let alphas = [0.05_f64, 0.10, 0.20, 0.50, 1.00, 2.00];
+            let mut normalized_first_pos = Vec::new();
+            for alpha in alphas {
                 let mut hits = 0usize;
                 let mut used = 0usize;
                 let mut total_cases = 0usize;
@@ -385,39 +391,50 @@ fn run() -> Result<(), Box<dyn Error>> {
                         continue;
                     }
                     total_cases += 1;
-                    let interrogative = apeireth_memory::hybrid_search::CN_INTERROGATIVES
-                        .iter()
-                        .any(|word| case.query.contains(word));
-                    if interrogative {
-                        used += 1;
-                    }
-                    let query_terms: HashSet<String> = terms(&case.query).into_iter().collect();
+                    used += 1;
+                    // 规范化后的题面词（与生产 `normalize_for_index` 同口径）
+                    let normalized_query: String =
+                        apeireth_memory::hybrid_search::strip_cn_interrogatives(&case.query)
+                            .chars()
+                            .filter(|c| {
+                                !apeireth_memory::hybrid_search::CN_STOPWORD_CHARS.contains(c)
+                            })
+                            .collect();
+                    let query_terms: HashSet<String> =
+                        terms(&normalized_query).into_iter().collect();
                     let max_base = positive
                         .iter()
                         .map(|hit| hit.score)
                         .fold(0.0_f64, f64::max)
                         .max(1e-12);
-                    let mut ranked: Vec<(&str, f64)> = positive
+                    let mut values: Vec<(&str, f64, f64)> = positive
                         .iter()
                         .map(|hit| {
                             let base = hit.score / max_base;
-                            if !interrogative {
-                                return (hit.id.as_str(), base);
-                            }
                             let doc = content.get(hit.id.as_str()).copied().unwrap_or("");
-                            let mut pos = f64::MAX;
+                            let mut position = f64::MAX;
                             for term in &query_terms {
-                                if let Some(index) = doc.find(term.as_str()) {
-                                    pos = pos.min(index as f64);
+                                if let Some(at) = doc.find(term.as_str()) {
+                                    position = position.min(at as f64);
                                 }
                             }
-                            let value = if pos.is_finite() {
-                                1.0 / (1.0 + pos)
+                            let value = if position.is_finite() {
+                                1.0 / (1.0 + position)
                             } else {
                                 0.0
                             };
-                            (hit.id.as_str(), base + alpha * value)
+                            (hit.id.as_str(), base, value)
                         })
+                        .collect();
+                    let max_value = values.iter().map(|item| item.2).fold(0.0_f64, f64::max);
+                    if max_value > 0.0 {
+                        for item in values.iter_mut() {
+                            item.2 /= max_value;
+                        }
+                    }
+                    let mut ranked: Vec<(&str, f64)> = values
+                        .iter()
+                        .map(|(id, base, value)| (*id, base + alpha * value))
                         .collect();
                     ranked.sort_by(|a, b| {
                         b.1.partial_cmp(&a.1)
@@ -431,7 +448,7 @@ fn run() -> Result<(), Box<dyn Error>> {
                         hits += 1;
                     }
                 }
-                shape2.push(serde_json::json!({
+                normalized_first_pos.push(serde_json::json!({
                     "alpha": alpha,
                     "recall": hits as f64 / total_cases.max(1) as f64,
                     "delta": hits as f64 / total_cases.max(1) as f64 - base_recall,
@@ -525,7 +542,7 @@ fn run() -> Result<(), Box<dyn Error>> {
                 }));
             }
             rows.push(serde_json::json!({
-                "形态2": shape2,
+                "normalized_first_pos": normalized_first_pos,
                 "形态准入": shape,
                 "语料": name,
                 "考卷": exam,
@@ -549,7 +566,7 @@ fn run() -> Result<(), Box<dyn Error>> {
             row["oraclerecall"].as_f64().unwrap_or(0.0),
             row["天花板余量"].as_f64().unwrap_or(0.0),
         );
-        for s in row["形态2"].as_array().unwrap_or(&vec![]) {
+        for s in row["normalized_first_pos"].as_array().unwrap_or(&vec![]) {
             println!(
                 "     [疑问词判据] alpha {:.2} recall {:.4} ({:+.4}) · 启用 {}/{} 题",
                 s["alpha"].as_f64().unwrap_or(0.0),
