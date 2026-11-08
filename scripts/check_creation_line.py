@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
-"""**能力创造线进度页守卫** —— 让「做到哪了」不可能手写漂移。
+"""**能力创造线进度页守卫** —— 让「做到哪了」与「有没有重复」**同时**不可能漂移。
 
-# 为什么要有它（owner 2026-11-08 裁定「只拓新面」的必然要求）
+# 为什么有两个判据（2026-11-08 重复审计的产物）
 
-本线 23 个新面**全部以「仓内 0 命中」为存在性判据** ⇒ ⇒ 「这族到底做没做」
-**不是散文能回答的问题**，是**一次 grep 就能判定的问题** ⇒ ⇒ 于是：
+重复审计实测：**23 族「按名 0 命中」，但真新面 = 0**（每族都有语义先例）⇒
+⇒ **「符号 0 命中」只能证明「没造过同名物」，不能证明「没人做过这件事」**。
 
-* 进度页写「✅ 已落地」 ⇒ 该族的 0 命中探针**必须已经 >0**（否则 = 谎报）；
-* 进度页写「❌ 未开工」 ⇒ 该族的探针**必须仍是基线值**（否则 = 已被他线实现，
-  本线要么认领、要么改判，**不许装作没发生**）；
-* 族行缺失 / 状态词不在词表 ⇒ **失败**（不许悄悄删行降难度）。
+所以本守卫同时判两件事：
 
-⇒ ⇒ **没有守卫的进度页 = 散文**（施工纪律 §三.3「无脚本不发布数字」的同一条纪律）。
+1. **落地判据（探针）**：族标「✅ 已落地」⇒ 探针必须已从基线长出来；标「❌ 未开工」⇒ 探针必须仍是基线。
+   ⇒ 防谎报（页面与代码不一致）。
+2. **重复判据（先例锚点）**：每族登记**不得重建的已有面**（file + 锚点字样）⇒
+   守卫**核验这些锚点仍在**。先例被删 ⇒ **该族的重复判定作废** ⇒ 必须**重判**，不许沿用旧判定。
+   ⇒ 防「重复面被忘掉，等于把已有能力再造一遍」。
 
 # 用法
 
@@ -20,7 +21,7 @@
 
 # 退出码
 
-    0 = 页面与代码一致
+    0 = 页面状态与代码事实一致，且各族先例锚点仍在
     1 = 不一致（逐条打印差在哪 + 怎么修）
 """
 
@@ -35,41 +36,165 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 PAGE = ROOT / "docs" / "status" / "capability-creation-line-progress.md"
 
-#: 状态词表（进度页必须用这几个词之一，否则失败）。
 STATUS_TODO = "未开工"
 STATUS_WIP = "在途"
 STATUS_DONE = "已落地"
+STATUS_PENDING = "未排期"
 
-#: 23 族的存在性探针。
-#: (族 id, 一句话, 正则, 扫描范围, 基线命中数)
-#: ⚠️ 基线 = 2026-11-08 实测值（落库当时的真实命中数）；「未开工」态必须仍等于基线。
-FACTS: list[tuple[str, str, str, str, int]] = [
-    ("C-A1", "只读 UI 控件树", r"ui_automation|UiAutomation|ControlTree|element_tree", "crates", 0),
-    ("C-A2", "GUI 动作层", r"ClickAction|mouse_click|GuiAction|gui_action", "crates", 0),
-    ("C-B1", "进程树快照与取消", r"process_tree_snapshot|snapshot_process_tree|ProcessTreeSnapshot", "crates", 0),
-    ("C-B2", "带鉴权 HTTP 写面", r"Method::POST|Method::PUT", "crates", 0),
-    ("C-B3", "沙箱代码执行面", r"CodeInterpreter|python_exec|exec_python|sandbox_exec_python", "crates", 0),
-    ("C-B4", "浏览器自动化面", r"tool\.browser|BrowserAutomation|browser_automation|BrowserSession", "crates", 0),
-    ("C-C1", "网关 WS 全双工 + SDK 流式", r"/v1/ws", "crates/adapters/gateway/src", 0),
-    ("C-D1", "记忆对象级授权", r"MemoryGrant|object_grant|episode_grant", "crates", 0),
-    ("C-D2", "检查点恢复", r"resume_from_checkpoint|ContextCheckpoint|restore_checkpoint", "crates", 0),
-    ("C-D3", "跨设备漫游同步", r"cross_device|CrossDevice|sync_cursor", "crates", 0),
-    ("C-E1", "技能包格式与安装", r"SkillManifest|skill_manifest|skill_package|SkillPackage", "crates", 0),
-    ("C-E2", "包/插件签名验签", r"Ed25519Signature|ed25519_dalek|Ed25519Verifier", "crates", 0),
-    ("C-F1", "Ed25519 真多签", r"MultiSigKeyring|MultiSignKeyset|verify_multisig_ed25519|MultiSigThreshold", "crates", 0),
-    ("C-F2", "R4 反思期生效路径", r"reflection_period|ReflectionPeriod|cooling_off", "crates", 0),
-    ("C-F3", "供应链验签", r"supply_chain|SupplyChain|artifact_signature", "crates", 0),
-    ("C-G1", "OTA 灰度回滚", r"ota_update|OtaUpdate|gradual_rollout|canary_release", "crates", 0),
-    ("C-G2", "会话回放评估器", r"ReplayScorer|replay_evaluator|ReplayEvaluation", "crates", 0),
-    ("C-G3", "tracing 时间线", r"tracing_timeline|TimelineSpan|timeline_span", "crates", 0),
-    ("C-G4", "会话层崩溃恢复", r"session_crash_recovery|SessionRecovery|session_recovery", "crates", 0),
-    ("C-H1", "模型路由策略层", r"routing_policy|RoutingPolicy", "crates", 0),
-    ("C-H2", "配额深度维", r"DepthQuota|depth_quota", "crates", 0),
-    ("C-H3", "MCP 协议合规三件套", r"nextCursor|progressToken|Mcp-Session-Id", "crates/capabilities/tools/src/mcp_bridge", 0),
-    ("C-H4", "互联网检索面", r"tool\.web_search|WebSearchTool|web_search_tool", "crates", 0),
+#: 判定词表（进度页「重复判定」列必须落这几个词之一）。
+VERDICTS = ("部分重复", "待立项", "真新面")
+
+#: 族定义。
+#: (族 id, 探针正则, 扫描范围, 基线命中数, 先例锚点[(文件, 锚点字样), ...])
+#: ⚠️ 基线 = 2026-11-08 实测值；先例锚点 = 2026-11-08 重复审计认定的**不得重建**的既有面。
+FACTS: list[tuple[str, str, str, int, list[tuple[str, str]]]] = [
+    (
+        "C-A1",
+        r"native_control_tree|external_gui|external_control_tree",
+        "crates",
+        0,
+        [
+            ("crates/capabilities/tools/src/fetch/accessibility.rs", "AccessibilityTree"),
+            ("crates/adapters/gateway/src/im_bridge.rs", "action"),
+        ],
+    ),
+    (
+        "C-B1",
+        r"process_tree_snapshot|snapshot_process_tree",
+        "crates",
+        0,
+        [
+            ("crates/capabilities/tools/src/process/mod.rs", "ProcessTreeContainment"),
+            ("crates/capabilities/tools/src/std_sub_supervisor.rs", "kill"),
+        ],
+    ),
+    (
+        "C-B2",
+        r"post_with_headers|post_json|post_form|fn post\b",
+        "crates/capabilities/tools/src/egress.rs",
+        0,
+        [
+            ("crates/capabilities/tools/src/egress.rs", "get_with_headers"),
+            ("crates/adapters/sdk/src/client.rs", "post"),
+            ("crates/capabilities/tools/src/mcp_bridge/transport.rs", "fn post"),
+        ],
+    ),
+    (
+        "C-B3",
+        r"script_exec",
+        "crates",
+        0,
+        [("crates/capabilities/tools/src/shell.rs", "Shell")],
+    ),
+    (
+        "C-B4",
+        r"web_browser|BrowserSession",
+        "crates",
+        0,
+        [
+            ("crates/capabilities/tools/src/stealth_crawler.rs", "StealthCrawler"),
+            ("crates/capabilities/tools/src/fetch.rs", "FetchTool"),
+        ],
+    ),
+    (
+        "C-D1",
+        r"object_grant|MemoryGrant",
+        "crates",
+        0,
+        [
+            ("crates/engine/memory/src/scope.rs", "MemoryScope"),
+            ("crates/foundation/governance/src/permission.rs", "PermissionPolicy"),
+        ],
+    ),
+    (
+        "C-D2",
+        r"session_observability|SessionObservability",
+        "crates",
+        0,
+        [
+            ("crates/engine/memory/src/agent_trace.rs", "TraceSpan"),
+            ("crates/foundation/orchestration/src/durable/replay.rs", "recover_attempt"),
+            ("crates/engine/runtime/src/canonical/session_events.rs", "marker"),
+        ],
+    ),
+    (
+        "C-D3",
+        r"cross_device|CrossDevice|sync_cursor",
+        "crates",
+        0,
+        [("crates/engine/memory/src/research_roaming_memory.rs", "tombstone")],
+    ),
+    (
+        "C-E1",
+        r"skill_package|SkillPackage|verify_package_signature",
+        "crates",
+        0,
+        [
+            ("crates/capabilities/tools/src/skill/library.rs", "SkillLibrary"),
+            ("crates/foundation/plugin/src/manifest.rs", "PluginManifest"),
+        ],
+    ),
+    (
+        "C-F1",
+        r"Ed25519Verifier|verify_multisig_ed25519|MultiSigThreshold",
+        "crates",
+        0,
+        [
+            ("crates/foundation/core/src/onion.rs", "verify_multisig"),
+            ("crates/foundation/governance/src/chain.rs", "PlaceholderMultiSignVerifier"),
+        ],
+    ),
+    (
+        "C-G2",
+        r"replay_eval|ReplayEval",
+        "crates",
+        0,
+        [
+            ("crates/foundation/governance/src/eval.rs", "EvalScore"),
+            ("crates/engine/memory/src/d4_eval.rs", "fn score"),
+        ],
+    ),
+    (
+        "C-H1",
+        r"routing_policy|RoutingPolicy",
+        "crates/foundation/core/src",
+        0,
+        [
+            ("crates/foundation/core/src/cost_router.rs", "CostRouter"),
+            ("crates/engine/runtime/src/canonical/provider.rs", "ProviderRouter"),
+        ],
+    ),
+    (
+        "C-H2",
+        r"depth_quota|DepthQuota",
+        "crates/engine/runtime/src",
+        0,
+        [
+            ("crates/engine/runtime/src/canonical/quota.rs", "QuotaDimension"),
+            ("crates/capabilities/tools/src/self_status.rs", "depth"),
+        ],
+    ),
+    (
+        "C-H4",
+        r"tool\.web_search|WebSearchTool|web_search_tool",
+        "crates",
+        0,
+        [
+            ("crates/adapters/sdk/src/client.rs", "web_search"),
+            ("crates/capabilities/tools/src/search.rs", "SearchTool"),
+        ],
+    ),
+    (
+        "C-L1",
+        r"local_inference|LocalInferenceProvider",
+        "crates",
+        0,
+        [("crates/engine/runtime/src/canonical/provider.rs", "ProviderRouter")],
+    ),
 ]
 
-ROW_RE = re.compile(r"^\|\s*(C-[A-Z]\d)\s*\|")
+#: 进度页族级看板的列序：族 | 能力 id/面名 | 重复判定 | 已有先例 | 波次 | 状态 | 治理档 | 还差什么
+ROW_RE = re.compile(r"^\|\s*(C-[A-Z][0-9′']*)\s*\|")
 
 
 def count_matches(pattern: str, scope: str) -> int:
@@ -96,23 +221,34 @@ def _count_python(pattern: str, scope: str) -> int:
     return total
 
 
-def parse_rows() -> dict[str, str]:
-    """从进度页解析族行 ⇒ 状态词。"""
+def parse_rows() -> dict[str, tuple[str, str]]:
+    """从进度页解析族行 ⇒ (状态词, 重复判定词)。"""
     if not PAGE.exists():
         return {}
-    rows: dict[str, str] = {}
+    rows: dict[str, tuple[str, str]] = {}
     for line in PAGE.read_text(encoding="utf-8").splitlines():
         if not ROW_RE.match(line):
             continue
         parts = [p.strip() for p in line.strip().strip("|").split("|")]
-        if len(parts) < 4:
+        if len(parts) < 6:
             continue
         fam = parts[0]
         if fam in rows:
-            rows[fam] = "DUPLICATE"
+            rows[fam] = ("DUPLICATE", "")
         else:
-            rows[fam] = parts[3]
+            rows[fam] = (parts[5], parts[2])
     return rows
+
+
+def prior_alive(rel: str, needle: str) -> bool:
+    """先例锚点是否仍在（文件存在且含锚点字样）。"""
+    path = ROOT / rel
+    if not path.is_file():
+        return False
+    try:
+        return needle in path.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return False
 
 
 def main() -> int:
@@ -125,47 +261,63 @@ def main() -> int:
     problems: list[str] = []
 
     print(f"[creation-line] 族数 = {len(FACTS)}（进度页解析到 {len(rows)} 行）")
-    print(f"{'族':<7} {'实测命中':>8} {'基线':>5}  状态 / 判定")
-    for fam, label, pattern, scope, baseline in FACTS:
+    print(f"{'族':<8} {'探针命中':>8} {'基线':>5} {'先例':>6}  状态 / 判定")
+    for fam, pattern, scope, baseline, priors in FACTS:
         hits = count_matches(pattern, scope)
-        state = rows.get(fam, "（页面缺行）")
-        verdict = ""
+        state, verdict_word = rows.get(fam, ("（页面缺行）", ""))
+        alive = sum(1 for rel, needle in priors if prior_alive(rel, needle))
+        prior_mark = f"{alive}/{len(priors)}"
+        note = ""
+
         if fam not in rows:
-            verdict = "❌ 族行缺失 ⇒ 补一行（不许删行降难度）"
-            problems.append(f"{fam}: 进度页缺族行（{label}）")
+            note = "❌ 族行缺失 ⇒ 补一行（不许删行降难度）"
+            problems.append(f"{fam}: 进度页缺族行")
         elif state == "DUPLICATE":
-            verdict = "❌ 族行重复 ⇒ 页面只能有一行"
+            note = "❌ 族行重复 ⇒ 页面只能有一行"
             problems.append(f"{fam}: 进度页族行重复")
-        elif STATUS_DONE in state:
-            if hits > baseline:
-                verdict = "✅ 已落地（探针已长）"
-            else:
-                verdict = f"❌ 谎报：标已落地但探针仍 {hits}（基线 {baseline}）"
-                problems.append(
-                    f"{fam}: 标「{STATUS_DONE}」但探针命中 {hits}（基线 {baseline}）"
-                    f" ⇒ 要么回填实现，要么改状态词（改探针须同时改设计稿与本脚本 FACTS）"
-                )
-        elif STATUS_TODO in state:
-            if hits == baseline:
-                verdict = "❌ 未开工（与基线一致）"
-            else:
-                verdict = f"❌ 已被他线实现（命中 {hits} ≠ 基线 {baseline}）⇒ 认领或改判"
-                problems.append(
-                    f"{fam}: 标「{STATUS_TODO}」但探针命中 {hits}（基线 {baseline}）"
-                    f" ⇒ 该面已被他线实现 ⇒ 本线必须认领（改状态词）或改判（不在本线范围）"
-                )
-        elif STATUS_WIP in state:
-            verdict = "🟡 在途（不判成败）"
         else:
-            verdict = f"❌ 状态词不在词表（须含 {STATUS_TODO}/{STATUS_WIP}/{STATUS_DONE}）"
-            problems.append(f"{fam}: 状态词非法 = {state!r}")
-        print(f"{fam:<7} {hits:>8} {baseline:>5}  {state} ⇒ {verdict}")
+            if not any(v in verdict_word for v in VERDICTS):
+                note = f"❌ 重复判定词不在词表（须含 {'/'.join(VERDICTS)}）"
+                problems.append(f"{fam}: 重复判定词非法 = {verdict_word!r}")
+            if STATUS_DONE in state:
+                if hits > baseline:
+                    note = "✅ 已落地（探针已长）"
+                else:
+                    note = f"❌ 谎报：标已落地但探针仍 {hits}（基线 {baseline}）"
+                    problems.append(f"{fam}: 标「已落地」但探针命中 {hits}（基线 {baseline}）")
+            elif STATUS_TODO in state:
+                if hits == baseline:
+                    note = "❌ 未开工（与基线一致）"
+                else:
+                    note = f"❌ 已被他线实现（命中 {hits} ≠ 基线 {baseline}）⇒ 认领或改判"
+                    problems.append(f"{fam}: 标「未开工」但探针命中 {hits}（基线 {baseline}）")
+            elif STATUS_PENDING in state:
+                if hits == baseline:
+                    note = "⛔ 未排期（待 owner 拍板；与基线一致）"
+                else:
+                    note = f"❌ 未排期却已被他线实现（命中 {hits} ≠ 基线 {baseline}）⇒ 认领或改判"
+                    problems.append(f"{fam}: 标「未排期」但探针命中 {hits}（基线 {baseline}）")
+            elif STATUS_WIP in state:
+                note = "🟡 在途（不判成败）"
+            else:
+                note = f"❌ 状态词不在词表（须含 {STATUS_TODO}/{STATUS_WIP}/{STATUS_DONE}）"
+                problems.append(f"{fam}: 状态词非法 = {state!r}")
+
+            if alive != len(priors):
+                missing = [rel for rel, needle in priors if not prior_alive(rel, needle)]
+                note += f" ｜❌ 先例锚点消失：{', '.join(missing)}"
+                problems.append(
+                    f"{fam}: 先例锚点消失（{', '.join(missing)}）"
+                    f" ⇒ 该族的重复判定**作废** ⇒ 必须**重判**（不许沿用旧判定）"
+                )
+
+        print(f"{fam:<8} {hits:>8} {baseline:>5} {prior_mark:>6}  {state} ⇒ {note}")
 
     known = {fam for fam, *_ in FACTS}
     for fam in rows:
         if fam not in known:
             problems.append(f"{fam}: 进度页有本脚本不知道的族行 ⇒ 补进 FACTS 或删行")
-            print(f"{fam:<7} {'-':>8} {'-':>5}  {rows[fam]} ⇒ ❌ 未知族")
+            print(f"{fam:<8} {'-':>8} {'-':>5} {'-':>6}  {rows[fam][0]} ⇒ ❌ 未知族")
 
     if args.report:
         print(f"\n[creation-line] 问题数 = {len(problems)}（--report 不判成败）")
@@ -175,10 +327,10 @@ def main() -> int:
         print("\n[creation-line] ❌ FAIL")
         for p in problems:
             print(f"  - {p}")
-        print("\n修法：改实现（让探针长出来）或改状态词（认领 / 改判）——**不许改基线**。")
+        print("\n修法：改实现（让探针长出来）/ 改状态词（认领·改判）/ 重判重复性（先例变了）——**不许改基线**。")
         return 1
 
-    print("\n[creation-line] ✅ PASS（页面状态与代码事实一致）")
+    print("\n[creation-line] ✅ PASS（页面状态与代码事实一致，且各族先例锚点仍在）")
     return 0
 
 

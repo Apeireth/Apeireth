@@ -36,6 +36,32 @@ Author: lead（插件/组件/能力开发线 总指挥）
 
 ⇒ **纯「把已有实现接进生产装配根」≠ 新面** ⇒ 归存量线，本线不碰（§7 移交清单）。
 
+### 1.1b 重复判定三档（**2026-11-08 重复审计定案**；审计底稿见进度页 §3）
+
+| 判定 | 定义 | 处置 |
+|---|---|---|
+| **真新面** | 仓内**无任何**实现该族 job 的面（库级实现 / 脚本 / CI 层实现**都算**已有面） | 本线开工 |
+| **部分重复（需补强）** | 已有面实现了该族 job 的**可识别子集** ⇒ 必须写清「**已有 X（file:line）· 缺 Y**」 | 本线开工，但**只补 Y**，**不重建 X**；族规格必须带「已有先例」栏 |
+| **纯重复（应移交）** | 已有面与该族**等价**（同 job + 同目标域 + 同治理档）⇒ 实为接线/搬运 | **移交存量线**，本线不做 |
+
+> ⚠️ **按名 0 命中 ≠ 无重复**（审计实测：23 族**全部**存在语义先例，**真新面 = 0**）
+> ⇒ ⇒ **「符号 0 命中」只能证明「没造过同名物」，不能证明「没人做过这件事」**。
+
+### 1.1c 能力 id 命名空间（**生产惯例，权威源 `foundation/plugin/src/capability.rs:25` `CapabilityKind`**）
+
+| Kind | 保留前缀 | 语义 | 例 |
+|---|---|---|---|
+| Tool | `tool.` | 模型可调用 | `tool.shell` |
+| Provider | `provider.` | 补全服务 | `provider.anthropic` |
+| Memory | `memory.` | 持久召回 | `memory.sqlite` |
+| Transport | `transport.` | 外部进程/对端通道 | `transport.mcp` |
+| Observer | `observer.` | 观测运行时 | `observer.tracing` |
+| Scheduler | `scheduler.` | 决定何时跑 | `scheduler.cron` |
+| Extension | `extension.` | 逃生舱（**不是垃圾桶**） | — |
+
+⇒ **纪律**：新族的能力 id **必须**落在上述保留前缀内；**不是模型面能力**的（治理面 / 观测面 / 运行时机制面）
+⇒ **不新设能力 id**，只标**面名**（照 `module.mcp` 的先例）。
+
 ### 1.2 四级口径（承 `system-capabilities.md`，不新造）
 
 `NOT IMPLEMENTED < IMPLEMENTED < PRODUCTION WIRED < HARDWARE VALIDATED`；
@@ -65,235 +91,131 @@ Author: lead（插件/组件/能力开发线 总指挥）
 
 ---
 
-## 3. 八面能力地图（总表）
+## 3. 能力族总表（**重复判定后** · 2026-11-08 重复审计定案）
 
-> 治理档：**R0** 只读零审批 · **R1** 审计留痕 · **R2** 白名单+逐次人批 · **R3** 硬门+逐次人批 · **R4** 硬门+反思期+多签。
-> 依赖影响列：`env` = 新开关名 · `edge` = 新依赖边 · `crate` = 新 crate · `dep` = 新外部包。
+> **重复判定口径**：见 §1.1b。**真新面 = 0**（23 族全部与既有面部分重叠）⇒
+> 本表已把 **14 条新面条目**（覆盖原 18 族，含 3 处合并）与 **5 条移交条目**分开列。
+> **能力 id 已按 §1.1c 命名空间校正**，且**避开既有占名**（SDK 契约 `client.rs:76/79`、`ws_v1.rs:141`）。
 
-| 面 | 族 id | 能力 id（提案） | 一句话 | 波次 | 治理档 | 依赖影响 |
-|---|---|---|---|---|---|---|
-| **A 感知** | C-A1 | `tool.ui_control_tree` | 只读 UI 控件树（窗口→控件→稳定定位） | W4 | R0 | crate+1 · env+1 · edge+1 · dep+1 |
-| **A 感知** | C-A2 | `tool.gui_action` | GUI 动作层（点击/输入/滚动，带预览票） | W4 | R3 | env+1 · edge+1 |
-| **B 行动** | C-B1 | `tool.process_tree` | 进程树快照（只读）+ 按树取消 | W1 | R0/R3 | env+1 |
-| **B 行动** | C-B2 | `tool.http_write` | 带鉴权的 HTTP 写面（POST/PUT/PATCH，域名白名单） | W1 | R2 | env+1 · edge+1 |
-| **B 行动** | C-B3 | `tool.code_exec` | 沙箱代码执行面（受限语言 + 资源封顶 + 每次人批） | W5 | R3 | env+2 · edge+1 · dep 选型待定 |
-| **B 行动** | C-B4 | `tool.browser` | 浏览器自动化面（受控导航 + 文本抽取 + 交互动作 + 截图证据） | W4 | R3 | crate+1 · env+2 · edge+2 · dep 选型待定 |
-| **C 通联** | C-C1 | `gw.duplex_ws` / `sdk.stream` | 网关 WS 全双工路由 + SDK 流式传输 | W2 | R0/R2 | env+1 · edge+2 · dep+1 |
-| **D 记忆** | C-D1 | `mem.object_grant` | 记忆**对象级**只读授权（一条记忆授予一主体，可即时撤销） | W1 | R0/R2 | env+1 |
-| **D 记忆** | C-D2 | `rt.checkpoint_resume` | 上下文语义分页 + 检查点恢复（中断后续跑） | W1 | R0 | env+1 · edge+1 |
-| **D 记忆** | C-D3 | `rt.cross_device_sync` | 跨设备会话/记忆增量同步 + 加密漫游 | **W6** | R4 | crate+1 · env+2 · edge+2 · dep+1 |
-| **E 自进** | C-E1 | `pkg.skill_package` | 技能包格式（manifest+工具声明+权限声明）+ 安装/卸载 | W3 | R3 | crate+1 · env+2 · edge+2 · dep+1 |
-| **E 自进** | C-E2 | `pkg.signature` | 包/插件签名验签（Ed25519）+ 未签名拒装 | W3 | R3 | env+1 · edge+1 |
-| **F 治理** | C-F1 | `gov.multisig` | Ed25519 真多签（替代占位器） | **W6** | R4 | env+1 · edge+1 · dep+1 |
-| **F 治理** | C-F2 | `gov.reflection_period` | R4 反思期生效路径（冷静期 + 回滚窗口） | **W6** | R4 | env+1 |
-| **F 治理** | C-F3 | `sec.supply_chain` | 供应链验签（MCP 服务器 / 外部二进制 / 包） | W3 | R2/R3 | env+1 · edge+1 |
-| **G 运维** | C-G1 | `tool.ota_update` | OTA 灰度 + 一键回滚（版本轴 + 备份联动） | **W6** | R4 | env+2 · edge+1 |
-| **G 运维** | C-G2 | `tool.replay_eval` | 会话回放评估器（回放判定质量，不重放副作用） | **W6** | R0 | env+1 |
-| **G 运维** | C-G3 | `obs.timeline` | tracing 时间线（跨模态事件时间线 + 导出） | W5 | R0 | env+1 · edge+1 |
-| **G 运维** | C-G4 | `rt.crash_recovery` | 崩溃恢复（会话/任务账一致性恢复） | W5 | R0 | env+1 |
-| **H 智囊** | C-H1 | `rt.routing_policy` | 模型路由策略层（任务画像 × 隐私 × 成本 决策表） | W1 | R0 | env+1 |
-| **H 智囊** | C-H2 | `quota.depth` | 配额**深度维**（推理深度/思考量）真执行 | W1 | R0 | env+1 |
-| **H 智囊** | C-H3 | `tool.mcp_protocol_compliance` | MCP 合规三件套（分页 / 通知消费 / http 合规头） | W1 | R0 | env+1 |
-| **H 智囊** | C-H4 | `tool.web_search` | 互联网检索面（配置端点 + 有界收敛 + 来源标注） | W1 | R2 | env+1 |
+### 3.1 池 A —— 本线新面（**只补缺口，不重建已有面**）
 
-> **合计 23 族**（W1 = 8 · W2 = 1 · W3 = 3 · W4 = 3 · W5 = 3 · W6 = 5）。
-> **额度需求合计**（对 ADR-0025 授权上限）：crate **+4**（≤35）· edge **+12**（≤128）· env **+18**（⚠️ **超授权 +16** ⇒ W3 收口须复评）· dep **+8**。
+| 族 | 能力 id（校正后） | 重复判定 | **已有先例**（file:line） | **本族真正新增的那一面** | 波次 | 治理档 | 依赖影响 |
+|---|---|---|---|---|---|---|---|
+| **C-A1**（含 C-A2） | `tool.external_gui`（含 C-A2） | 部分重复 | `fetch/accessibility.rs:96,205`（HTML **无障碍树**，生产接线）· `gateway/im_bridge.rs:626,684`（GUI 动作链，**无生产构造点**） | **原生 OS 应用**的控件树取数（UIA/AX/AT-SPI）+ **跨应用合成输入**；读面产 **locator** ⇒ 动作面消费 **同一 locator 模型** | W4 | R0/R3 | crate+1 · env+2 · edge+2 · dep+1~2 |
+| **C-B1** | `tool.process_tree` | 部分重复 | `process/mod.rs:101` `IsolationCapability::ProcessTreeContainment`（杀整树档位）· `std_sub_supervisor.rs:167,180`（真 `child.kill()`） | **快照枚举**（pid/父/命令/状态/是否逃逸进程组）+ **按 pid 幂等取消一棵树** | W1 | R0/R3 | env+1 |
+| **C-B2** | `tool.http_write` | 部分重复（两半未合流） | `egress.rs:515,523`（`ControlledEgress` **只有 GET**）· `sdk/client.rs:752`（真 POST + Bearer） | 把「**写方法 + 鉴权头 + 受控出网闸**」并成一条**产品**工具面（egress 长出 POST） | W1 | R2 | env+1 · edge+1 |
+| **C-B3**（收窄） | `tool.script_exec`（**弃用 `code_exec`**：SDK 契约已占名） | 部分重复（半边移交） | `shell.rs:195` `tool.shell`（**已接线**的沙箱命令执行面：隔离档位+审批+对象判定+输出边界） | 只保留「**语言代码在沙箱内解释执行**」那一面；**「跑命令」整半边移交 `tool.shell` 线** | W5 | R3 | env+2 · edge+1 · dep 选型待定 |
+| **C-B4** | `tool.web_browser`（**避开 `BrowserTool`**：它在 `architecture_invariants.rs:101` 禁名单里） | 部分重复（薄） | `stealth_crawler.rs:22,83,201`（反检测配置 + UA 选取 + 抽取，**零 IO 未接线**）· `fetch.rs:210`（单 URL 受控 GET） | **真浏览器会话驱动**（导航/点击/表单/JS/多步会话）；`stealth_crawler` 先定性再复用 | W4 | R2/R3 | crate+1 · env+2 · edge+2 · dep 选型待定 |
+| **C-D1** | `tool.object_grant` | 部分重复 | `governance/permission.rs:135,177` + `gateway/panels.rs:782`（能力/族级授权 + `/v1/panel/grants`）· `memory/scope.rs:17` `MemoryScope`（**域级**可见性） | **按记忆对象 id 授权**（一条 episode/fact 只读授予某主体）+ 读路径过滤 + **撤销即时生效**（复用 `panel/grants/revoke` 的热撤销语义） | W1 | R0/R2 | env+1 |
+| **C-D2**（含 C-G4 + C-G3） | 面名 `session_observability`（**不新设能力 id**：非模型面） | 部分重复 | `memory/agent_trace.rs:184,263`（span 树 + 落库，未接线）· `runtime/trace.rs:164,173`（turn 内）· `runtime-assembly/startup.rs:118`（**生产接线**）· `orchestration/durable/replay.rs:219,351`（真崩溃恢复）· `runtime/session_events.rs:188-194`（崩溃**可检测** marker） | **会话层快照+恢复契约 + 会话层恢复执行器 + 跨源统一时间线视图**（三块拼图并成**一套事件面 + 一套 span 面**，不落三次 schema） | W5 | R0 | env+1 · edge+1 |
+| **C-D3** | `transport.cross_device` | 部分重复（薄） | `memory/research_roaming_memory.rs:95,160,180`（副本**合并 + 墓碑**原语，research 专用未接线） | 同步游标 + 冲突策略 + 传输 + 跨设备身份/加密漫游；**先提取 merge/tombstone 为通用原语** | W6 | R4 | crate+1 · env+2 · edge+2 · dep+1 |
+| **C-E1**（含 C-E2 插件那半边） | `tool.skill_package` | 部分重复 | `tools/skill/library.rs:163,194,256,283` `SkillLibrary`（单卡 + 修订归档 + 库扫描）· `plugin/manager.rs:40` + `manifest.rs:17`（插件 manifest + 生命周期） | 「**包**」这一层：manifest + 工具声明 + **权限声明** + **可签名可校验** + 安装/卸载/版本固定（**两动作同族**，避免先出无签名格式再改 schema） | W3 | R3 | crate+1 · env+2 · edge+2 · dep+1 |
+| **C-F1** | 面名 `multisig_verifier`（治理面，**不新设能力 id**） | 部分重复（薄） | `core/onion.rs:94,185` `verify_multisig`（M-of-N 计数 + offline 熔断，**签名体是自造字符串格式**）· `governance/chain.rs:201,214` `MultiSignVerifier` + `PlaceholderMultiSignVerifier`（全拒 fail-closed） | **密码学验签原语**（Ed25519）+ 一个**真** `MultiSignVerifier` 实现（替换占位器） | W6 | R4 | env+1 · edge+1 · dep+1 |
+| **C-G2** | `tool.replay_eval` | 部分重复（中） | `governance/eval.rs:13,137,147,201` `EvalScore`/`TaskSummary`/`summarize`/`to_eval_scores` · `memory/d4_eval.rs:293` `score()` · `runtime/event_log.rs:227` `fold_surface` | 「**回放一段会话 → 产出评估结论**」这条链（把 replay + event log/trace 接进**既有打分器**） | W5 | R0 | env+1 |
+| **C-H1** | 面名 `routing_policy`（**不新设能力 id**：选路不是模型面能力） | 部分重复 | `core/cost_router.rs:508,602,373` `CostRouter`/`candidates`（四档成本 × 模型档案矩阵）· `runtime/provider.rs:95,136` `ProviderRouter`（fallback + 健康度） | **统一策略层**（任务画像 × 隐私 × 成本）+ **网关侧接入**（gateway 对 `CostRouter` 零引用）⇒ **与既有两层合成一层**，不造第三套路由语义 | W1 | R0 | env+1 |
+| **C-H2** | **不新设能力 id**（沿用既有自述面路径 `budget.quota.depth`） | 部分重复（占位完备） | `runtime/quota.rs:47` `QuotaDimension`（三维真计量）+ `:20-21` 明写「depth 无调用树跟踪」· `tools/self_status.rs:320-322,2262,3428`（深度维**诚实占位 + 自述格 + 测试钉死**） | **深度维真计量**（调用树深度跟踪）—— **接口位/自述格/测试位都已留好** ⇒ 成本最低 | W1 | R0 | env+1 |
+| **C-H4** | `tool.web_search`（⚠️ **SDK 契约已占同名** `client.rs:76` ⇒ 须先对齐口径） | 部分重复（薄） | `sdk/client.rs:76,226,656`（SDK 契约已占名 + `/v1/tools/web_search/invoke` + 真 HTTP）· `tools/fetch.rs:210`（受控 GET）· `tools/search.rs:67` `SearchTool`（**本地**字面搜索，不用网络） | **检索引擎后端 + 排序 + 引用标注**（仓内既无搜索引擎也无检索 API） | W1 | R2 | env+1 |
 
----
+### 3.2 池 B —— **移交存量线**（本线不做；owner 裁「只拓新面」）
 
-## 4. 族规格（逐族）
+| 族 | 原拟能力 id | 判定 | 已有面（等价或已覆盖） | 移交去向 |
+|---|---|---|---|---|
+| **C-C1** | `gw.duplex_ws` / `sdk.stream` | **纯接线（整族移交）** | `protocol/ws_v1.rs:63` `WsFrame`（8 帧 + `validate`，**LOCKED 集成点**）· `gateway/duplex_gateway.rs:104,131` + `barge_in.rs:101,194,258`（双工/打断控制器，**未挂路由**） | 存量线（网关 `/v1/ws` 路由 + SDK `invoke_stream` 传输各归其原线） |
+| **C-F2** | `gov.reflection_period` | **纯接线（整族移交）** | `governance/chain.rs:370` `DelayedReflectionScheduler`（**真实现**）+ `:99` `GovernancePhase::Reflection` 编排位（**生产未注入**） | 治理线（owner 2026-10-26 已裁「反思期属阶梯未到」） |
+| **C-H3** | `tool.mcp_protocol_compliance` | **纯接线（整族移交）** | `plugin/mcp/subscribe.rs:421,473`（`list_changed` → `ToolEventKind::ListChanged` + 通知帧构造器）· `schema.rs:37` + `lifecycle.rs:86-112` · `mcp_bridge/catalog.rs:193` `replace_server` | MCP 线（**落点在他线在途段**；`transport.rs:961` 现为单值 `Accept`） |
+| **C-E2 半边** | （发布包签名） | **整半边移交** | `scripts/release/cosign-sign-all.sh` + `cosign-verify.sh` + `.github/workflows/cosign.yml` + `docs/security/cosign-keys.md`（8 包签名+验签+公钥发布/撤销） | CI / 发布线（本线只保留「**插件/技能包运行时验签**」那一面，已并入 C-E1） |
+| **C-F3 半边** | `sec.supply_chain`（依赖 + 自家产物两段） | **整半边移交** | `cargo-audit.yml` + `cargo-deny.yml` + `deny.toml` + `cosign.yml` + `dependabot-upgrade.yml` | CI 线（本线只保留「**第三方插件/MCP 服务器的可验证来源**」那一面） |
+| **C-G1 半边** | `tool.ota_update`（升级 + 回滚） | **整半边移交** | `scripts/upgrade/*.sh`（备份+停服+换装+起服+健康检查+回滚，`--dry-run`）· `runtime-assembly/upgrade_cycle.rs:158` `UpgradeCycle` L0-L5 | 升级线（本线只保留「**灰度放量 + 运行期 OTA 面**」） |
+| **C-B3 半边** | （跑命令） | **整半边移交** | `tools/shell.rs:195` `tool.shell`（已生产接线） | `tool.shell` 存量线（本线只保留「语言代码解释执行」） |
 
-### W1 — 0 新外部 dep 档（7 族）
+> ⇒ **池 A = 14 条新面条目**（覆盖原 18 族：3 处合并）｜**池 B = 7 条移交条目**（覆盖原 5 族 + 3 个半边）。
 
-> 共同机制：**落既有 crate 的新文件**（`max_file_loc` 零余量 ⇒ 既有大文件只读不写）；
-> 复用既有 `ToolCapability` / `ExtensionDescriptor` / 治理链 / 审批链；**0 新 crate / 0 新依赖边 / 0 新外部包**。
+### 3.3 额度重算（**合并后**）
 
-#### C-B1 `tool.process_tree` — 进程树快照与取消
+| 棘轮 | 现值 | 授权上限 | 合并后估算 | 结论 |
+|---|---:|---:|---:|---|
+| `max_workspace_crates` | 31 | 35 | **+3**（automation / web / trust） | ✅ 在额度内 |
+| `max_production_edges` | 118 | 128 | **+11** | ⚠️ 接近上限 ⇒ W3 收口复评 |
+| `max_distinct_names`（env） | 160 | 176 | **+14** | ⚠️ 接近上限 ⇒ W3 收口复评 |
+| `max_file_loc` | 6300 | 6300（不动） | ±0 | 新面一律新开文件（< 800 行） |
 
-* **语义**：列出受控子进程树快照（pid / 父 pid / 命令 / 状态 / 是否逃逸进程组）；按 pid 取消一棵子进程树（幂等）。
-* **机制**：读 `/proc`（Linux）/ `tasklist`（Windows，0 新 dep）· 复用 `ProcessExecutor` + `IsolationCapabilities.process_tree_containment` 档位。
-* **落点**：`crates/capabilities/tools/src/process/snapshot.rs`（新文件）。
-* **治理**：快照 = R0 零审批；取消 = R3（不可逆）⇒ 逐次人批 + `tool.shell` 族授权。
-* **开关**：复用 `APEIRETH_ENABLE_SHELL`（注册即闸 ⇒ shell 关 = 无进程可看，语义自洽）⇒ **0 新 env 名**。
-* **验收**：`rg -c 'process_tree_snapshot' crates/` > 0；`cargo test -p apeireth-tools-canonical --test process_executor --locked` 绿；
-  快照面零审批断言（无审批请求发生）。
+## 4. 族规格（逐族 · 池 A 14 条 + C-L1 新立项）
 
-#### C-B2 `tool.http_write` — 带鉴权的 HTTP 写面
+> **每族的「已有先例」见 §3.1**（重复判定依据，file:line 可复核）；本节只写**新增面的语义与验收**。
+> **共同纪律**：落既有 crate 的新文件（`max_file_loc` 零余量）· 复用既有 `ToolCapability` / 治理链 / 审批链 ·
+> **新增写能力默认关** + 关时逐字节零变化 + env 登记 · 每族至少 1 个对抗测试。
 
-* **语义**：对**配置白名单域名**发起 POST/PUT/PATCH/DELETE；请求体/响应体有界；凭据从既有凭据链取（不回显）。
-* **机制**：**扩既有 `ControlledEgress` 加写方法**（`get_with_headers` 的同族扩展）⇒ **新工具面不得自带 HTTP 客户端**
-  （既有不变量 `fetch_tool_uses_controlled_egress_and_no_second_http_client` 钉死 `fetch.rs` 内 `reqwest::` 为 0 命中
-  ⇒ 同理新面必须走受控出网唯一通道）；域名白名单照既有 egress 模型；凭据走既有凭据链（不回显、不进日志）。
-* **落点**：`crates/capabilities/tools/src/http_write.rs`（新文件）· **出网闸扩写方法**落 `crates/capabilities/tools/src/egress.rs`
-  ⚠️ **该文件在 egress 不变量守卫的扫描面内**（`egress.rs` **不得**出现 `apeireth_runtime`/`apeireth_gateway`/`apeireth_provider`/`FetchTool`/`BrowserTool`/`ToolRegistry`/`GovernancePipeline` 字样）⇒ 扩写方法**只加传输语义，不引入反向依赖**。
-* **治理**：R2 ⇒ 域名白名单 + **每次逐次人批** + 族授权；**默认关**。
-* **开关**：**1 个新 env 名**（`APEIRETH_ENABLE_HTTP_WRITE`）⇒ 登记 + 默认关 + 零变化测试。
-* **验收**：`rg -c 'Method::POST' crates/` 由 0 → >0（现为 **0 命中**）；`cargo test -p apeireth-tools-canonical --test http_write --locked` 绿；
-  **新增不变量测试**：新面文件内 `reqwest::` = 0 命中（照既有 fetch 不变量同款）；非白名单域名拒绝即帧；响应体上限生效。
+### 4.0 池 A 速览
 
-#### C-D1 `mem.object_grant` — 记忆对象级授权
+| 族 | 能力 id / 面名 | 波次 | 治理档 | 落点 | 验收判据（可机器判） |
+|---|---|---|---|---|---|
+| C-A1 | `tool.external_gui`（含 C-A2） | W4 | R0/R3 | 新 crate `crates/capabilities/automation/` | `rg -c 'native_control_tree\|external_gui' crates/` > 0；Windows 真机用例 1 条；**Linux 同用例须显式标未实现**（不得静默绿） |
+| C-B1 | `tool.process_tree` | W1 | R0/R3 | `crates/capabilities/tools/src/process/snapshot.rs` | `rg -c 'process_tree_snapshot' crates/` > 0；快照面**零审批**断言；平台机制名不进公共契约 |
+| C-B2 | `tool.http_write` | W1 | R2 | `crates/capabilities/tools/src/http_write.rs` + 扩 `crates/capabilities/tools/src/egress.rs` | `rg -c 'Method::POST' crates/` > 0；**新面文件内 `reqwest::` = 0 命中**（照既有 fetch 不变量）；白名单外必拒；响应体上限生效 |
+| C-B3 | `tool.script_exec`（跑命令半边移交 `tool.shell`） | W5 | R3 | `crates/capabilities/tools/src/script_exec.rs` | `rg -c 'script_exec' crates/` > 0（**且 `code_exec` 不得出现在本族**）；四类逃逸（断网/越界/超时/超内存）各有拒绝用例 |
+| C-B4 | `tool.web_browser` | W4 | R2/R3 | 新 crate `crates/capabilities/web/` | `rg -c 'web_browser' crates/` > 0；域名白名单外必拒；动作必带证据帧；**不得出现 `BrowserTool` 字样**（守卫禁名单） |
+| C-D1 | `tool.object_grant` | W1 | R0/R2 | `crates/engine/memory/src/object_grant.rs` | `rg -c 'object_grant' crates/engine/memory/src/` > 0；撤销后**立即**读不到；授权语义**叠加于** `MemoryScope`（不替代） |
+| C-D2 | 面名 `session_observability`（含 C-G4 + C-G3） | W5 | R0 | `crates/engine/runtime/src/canonical/session_observability.rs` | `rg -c 'session_observability' crates/` > 0；同一回合同一时间线**两次导出逐字节等**；恢复后副作用不重复 |
+| C-D3 | `transport.cross_device` | W6 | R4 | 新 crate | ⛔ **待 owner 逐项重拍**（阶梯 T1 + 跨主体披露） |
+| C-E1 | `tool.skill_package`（含 C-E2 插件那半边） | W3 | R3 | 新 crate `crates/foundation/trust/` | `rg -c 'skill_package' crates/` > 0；越权包拒装；**未签名包拒装**；卸载后能力表同步移除 |
+| C-F1 | 面名 `multisig_verifier` | W6 | R4 | `crates/foundation/governance/src/chain.rs` 邻域 | ⛔ **待 owner 逐项重拍**（D2 已裁 T0 不做） |
+| C-G2 | `tool.replay_eval` | W5 | R0 | `crates/engine/runtime/src/canonical/replay_eval.rs` | `rg -c 'replay_eval' crates/` > 0；**复用既有 `EvalScore` 打分器**（不新造第二套评分语义） |
+| C-H1 | 面名 `routing_policy` | W1 | R0 | `crates/foundation/core/src/routing_policy.rs` | `rg -c 'routing_policy' crates/foundation/core/src/` > 0；决策必含 `selection_reason`/`fallback_reason`；缺价不编价；**与 `CostRouter`/`ProviderRouter` 同层，不造第三套** |
+| C-H2 | 不新设 id（沿用 `budget.quota.depth`） | W1 | R0 | `crates/engine/runtime/src/canonical/quota.rs` | `rg -c 'depth_quota' crates/engine/runtime/src/` > 0；自述面深度维**不再为 null** |
+| C-L1 | `provider.local_inference` | W5 | R0/R2 | 新 crate（**大闭包 ⇒ 隔离**） | `rg -c 'local_inference' crates/` > 0；**开工前须先做重复审计**；断网可用；模型来源/许可显式标注 |
+| C-H4 | `tool.web_search` | W1 | R2 | `crates/capabilities/tools/src/web_search.rs` | `rg -c 'tool\.web_search' crates/` > 0；**先对齐 SDK 契约占名**（否则 SDK 面继续说假话）；来源缺失即拒；结果双上限 |
 
-* **语义**：把**一条**记忆（episode/fact）以只读授予某主体；被授方可读不可写；**撤销即时生效**；全程审计。
-* **机制**：grant 账（append-only）+ 读路径过滤 + 复用 `governance::permission` 族授权/审批底座；**存在性即开关**（grant 账存在才装）⇒ **0 新 env 名**。
-* **落点**：`crates/engine/memory/src/object_grant.rs`（新文件）。
-* **治理**：读 = R0；授权/撤销 = R2（跨主体披露）⇒ 逐次人批 + 审计。
-* **验收**：`rg -c 'MemoryGrant|object_grant' crates/engine/memory/src/` > 0；撤销后读取**立即**拒绝（测试钉死）；审计行存在。
+### 4.1 语义与机制的要点（逐族）
 
-#### C-D2 `rt.checkpoint_resume` — 检查点恢复
+#### C-A1 `tool.external_gui` —— 外部 GUI 能力面（读 + 动作，**一套 locator**）
 
-* **语义**：回合/长任务在关键点落**检查点**（上下文语义分页 + 状态快照）；中断后可从检查点续跑，**不重放已生效副作用**。
-* **机制**：复用既有 `compaction_checkpoint` 压缩检查点 + `TaskBoard` 任务账；恢复时按幂等键判定是否已生效。
-* **落点**：`crates/engine/runtime/src/canonical/checkpoint.rs`（新文件）。
-* **治理**：R0（读/恢复本身不改外部世界）；恢复若触发外部动作 ⇒ 走既有审批链。
-* **验收**：`rg -c 'restore_from_checkpoint|CheckpointStore' crates/` > 0；「恢复后副作用不重复」测试钉死。
+* **语义**：原生应用**窗口 → 控件树 → 稳定定位**（只读）⇒ 同一套 **locator** 供动作面消费（点击/输入/滚动）。
+* **复用**：`fetch/accessibility.rs` 的 `AccessibilityTree`（**HTML** 无障碍树）**只借鉴形状，不复用语义**（原生 ≠ HTML）⇒
+  ⚠️ **命名必须区分**（既有 `AccessibilityTree` 不改，新面用 `native_control_tree` 语汇）。
+* **平台**：Windows UIA 先行；macOS/Linux **显式标未实现**（0 装诚实）。平台机制名**只落 backend 模块**（既有不变量）。
+* **治理**：读 = R0；动作 = R3 ⇒ **预览票 + 逐次人批**（照 `device_control` 三拍先例）。
 
-#### C-H1 `rt.routing_policy` — 模型路由策略层
+#### C-B2 `tool.http_write` —— 写方法必须长在受控出网上
 
-* **语义**：任务画像（能力需求 × 隐私等级 × 成本档）× 候选模型 ⇒ 可解释选路决策（选谁 / 为什么 / 退路是什么）。
-* **机制**：复用 `apeireth-core::cost_router`（四档成本分级已实装）**扩一维**（隐私/能力），**不新造第二套路由器**。
-* **落点**：`crates/foundation/core/src/routing_policy.rs`（新文件）。
-* **治理**：R0（决策是只读计算）；**默认关**（沿 `APEIRETH_COST_ROUTING` 现状）⇒ 复用其开关名，扩 purpose ⇒ **0 新 env 名**。
-* **验收**：`rg -c 'RoutingPolicy|routing_policy' crates/foundation/core/src/` > 0；决策**可解释**（必含 `selection_reason` / `fallback_reason`，照既有 cost_router 口径）；
-  缺价不编价（无价候选不参与比较）。
+* **硬约束**：`architecture_invariants.rs:144` 禁止第二 HTTP 客户端 ⇒ `egress.rs` 的 `ControlledEgress`
+  **长出写方法**（与 `get_with_headers` 同族），新工具面**只调它**。
+* ⚠️ `egress.rs` 在 egress 不变量守卫扫描面内 ⇒ **只加传输语义，不引入反向依赖**。
 
-#### C-H2 `quota.depth` — 配额深度维
+#### C-D1 `tool.object_grant` —— 对象级授权是**叠加**，不是替代
 
-* **语义**：配额四维中的**深度维**（推理深度 / 思考量）从「只有类型」变「真执行」——超限即帧 + 自述真值。
-* **机制**：复用 `runtime::canonical::quota` 既有计量 + `self_status` 已留好的深度维自述格（现为「如实标记未接线」）。
-* **治理**：R0；拒绝面属既有治理链，**不新增档位**。
-* **验收**：`rg -c 'DepthQuota|depth_quota' crates/engine/runtime/src/` > 0；自述面深度维**不再标 null**（测试钉死）。
+* 域级可见性已有（`MemoryScope`）；**能力级/族级授权**已有（`permission.rs` + `/v1/panel/grants`）。
+* 新面 = **对象 id 粒度**的只读授予 + 撤销即时生效（复用既有热撤销语义）。
+* ⚠️ **必须先裁决**：对象级 grant 是 `MemoryScope` 的**叠加**还是**替代** ⇒ 否则出现两套可见性规则。
 
-#### C-H3 `tool.mcp_protocol_compliance` — MCP 合规三件套
+#### C-E1 `tool.skill_package` —— 包 = manifest + 声明 + 权限 + 签名（**一次成型**）
 
-* **语义**：① `tools/list` 发 cursor + 消费 `nextCursor` 分页；② 发 `_meta.progressToken` + 声明 `tools.listChanged` + **消费通知帧并刷新目录**（现状：只计数丢弃）；③ http 面发 `Accept: application/json, text/event-stream` + `Mcp-Session-Id` + `MCP-Protocol-Version`。
-* **机制**：帧构造器**已存在**（`plugin/src/mcp/schema.rs`；`subscribe.rs:421` 已认 `list_changed` ⇒ `ToolEventKind::ListChanged`）⇒ 桥侧只差「发」与「消费」。
-* **落点**：`crates/capabilities/tools/src/mcp_bridge/`（**注意：本文件所在目录有他线在途改动 ⇒ 本族排在在途收口之后**）。
-* **治理**：R0（目录刷新）；派发沿 MCP 族既有逐次人批地板。
-* **验收**：`rg -c 'nextCursor|progressToken|Mcp-Session-Id' crates/capabilities/tools/src/mcp_bridge/` 由 **0** → >0；
-  `cargo test -p apeireth-tools-canonical --test mcp_bridge_e2e --locked` 绿；claims `tool.mcp_bridge` 的「2 类实现缺口硬挡」降为 0 并 bump `verified_at`。
+* 既有：`SkillLibrary`（单卡 + 修订归档）、`PluginManifest` + `PluginManager`（生命周期）。
+* 新面：**「包」这一层**（工具声明 + **权限声明** + 版本固定 + 安装/卸载 + **可签名可校验**）。
+* ⚠️ **权限声明不得扩大宿主授权**；**未签名/验签失败 = 拒装，不降级放行**。
 
-#### C-H4 `tool.web_search` — 互联网检索面
+#### C-H1 `routing_policy` —— 与既有两层**合成一层**，不造第三套
 
-* **语义**：对**配置的检索端点**（自建/自控，如私有 SearXNG 实例）发起查询；结果**有界收敛** + **来源标注** + 未标来源的片段不得进模型上下文。
-* **机制**：复用 `reqwest`（锁内既有）+ 既有受控出网通道 + 既有 `UntrustedEnvelope` 封套（第三方内容一律按不可信处理）。
-* **落点**：`crates/capabilities/tools/src/web_search.rs`（新文件）。
-* **治理**：R2（出网 + 第三方内容）⇒ 端点白名单 + 逐次人批 + 族授权；**默认关**。
-* **验收**：`rg -c 'tool\.web_search' crates/` > 0；结果条数/字节**双上限**；来源标注缺失即拒（测试钉死）；默认关时零行为变化。
+* 既有：`CostRouter`（成本档 × 模型档案）+ `ProviderRouter`（fallback + 健康度）。
+* 新面 = **统一策略层**（任务画像 × 隐私 × 成本）+ **网关侧接入**（gateway 对 `CostRouter` 零引用）。
 
-### W2 — +1 小 dep 档（1 族）
-
-#### C-C1 `gw.duplex_ws` / `sdk.stream` — 全双工路由与流式 SDK
-
-* **语义**：网关暴露 `/v1/ws`，承载既有 8 帧协议（`Auth/Ping/Pong/UserInput/AssistantTextChunk/AssistantAudioChunk/BargeInInterrupt/StreamEnd`）；SDK `invoke_stream` 走真 WS。
-* **机制**：协议类型**已在** `foundation/protocol/src/ws_v1.rs`（库级）；网关侧 `duplex_gateway.rs` + `barge_in.rs`（库级）⇒ 缺**路由 + 传输**。
-* **依赖**：`axum 0.7.9` 的 `ws` feature ⇒ **+1 新外部包 `tokio-tungstenite`**（现锁内 **0 命中**）；SDK 侧同包。
-* **落点**：`crates/adapters/gateway/src/duplex_route.rs`（新文件）+ `crates/adapters/sdk/src/stream.rs`（新文件）。
-* **治理**：连接/心跳 = R0；`ToolInvoke` 帧 = R2 逐次人批；**默认关**（沿既有 `voice.duplex` 的 `not_assembled` 口径）。
-* **验收**：`rg -c '/v1/ws' crates/adapters/gateway/src/` 由 **0** → >0；`sdk.stream` 走真 WS（回环实测）；网关 `voice.duplex` 不再报 `not_assembled`。
-
-### W3 — 信任面档（3 族）
-
-#### C-E1 `pkg.skill_package` — 技能包格式与安装
-
-* **语义**：最小技能包 = manifest + 工具声明 + **权限声明** + 签名；本地安装/校验/卸载；越权包拒装。
-* **机制**：复用 `foundation/plugin` 的 `PluginManifest` / `ExtensionDescriptor` / `PluginManager` 生命周期（ADR-0008 单 ABI 家族）。
-* **落点**：新 crate `crates/foundation/trust/`（`apeireth-trust`）——签名验签与包格式的依赖闭包**必须隔离**（避免污染主 lock）。
-* **治理**：安装 = R3（引入可执行第三方代码）⇒ **硬门 + 逐次人批**；**权限声明逐条过治理**，包声明不得扩大宿主授权。
-* **验收**：`rg -c 'SkillManifest|skill_manifest' crates/` 由 0 → >0；越权包拒装测试钉死；卸载后能力表**同步移除**（不留残影）。
-
-#### C-E2 `pkg.signature` — 包/插件签名验签
-
-* **语义**：Ed25519 签名验签 + 信任根管理；**未签名 / 验签失败 = 拒装**（不降级为「提示后放行」）。
-* **依赖**：**+1 新外部包 `ed25519-dalek`**（现锁内 **0 命中**；仓内 `id_ed25519` 命中全为凭据形状检测，非验签）。
-* **治理**：R3。
-* **验收**：`rg -c 'ed25519::|Ed25519Signature' crates/` 由 0 → >0；篡改包**必拒**（测试钉死）；失败路径**无降级分支**。
-
-#### C-F3 `sec.supply_chain` — 供应链验签
-
-* **语义**：MCP 服务器清单 / 外部二进制清单（`tool.external.*` 依赖的系统二进制）可带签名与摘要；未登记者按既有治理档处理。
-* **落点**：`crates/foundation/trust/`（与 C-E2 同 crate）。
-* **治理**：R2/R3。
-* **验收**：篡改的外部二进制**不被派发**；清单登记面可查。
-
-### W4 — 感知/行动档（2 族）
-
-#### C-A1 `tool.ui_control_tree` — 只读 UI 控件树
-
-* **语义**：窗口 → 控件树 → 稳定定位（含去重/回退）；**只读不执行**。
-* **依赖**：平台异构三套（Windows UIA COM / macOS AX / Linux AT-SPI）⇒ **新 crate**（`apeireth-automation`）+ 新外部包；
-  **Windows 先行、macOS/Linux 显式标「未实现」**（0 装诚实，不假装三平台齐）。
-* **治理**：R0 零审批。
-* **验收**：Windows 真机跑通一条控件树用例；**Linux 环境跑同一测试必须显式标未实现**（不得静默通过）。
-
-#### C-A2 `tool.gui_action` — GUI 动作层
-
-* **语义**：点击/输入/滚动，**必须带预览票**（预览帧 → 逐次人批 → 执行）；动作目标来自 C-A1 的稳定定位。
-* **治理**：R3（不可逆/可见副作用）⇒ **硬门 + 逐次人批**；预览票一次性、载荷被改拒绝即帧（照 `device_control` 三拍先例）。
-* **验收**：无预览票的动作**必拒**；动作计数进自述节（照既有创作节口径）。
-
-#### C-B4 `tool.browser` — 浏览器自动化面
-
-* **语义**：**最小版本** = 受控导航（域名白名单）+ 正文文本抽取 + 交互动作（点击/输入）+ **截图证据**（每次动作留证据帧）；**不承诺浏览器全等价**（不做多标签/扩展/下载管理）。
-* **机制（引擎选型待定，W4 前二选一）**：① 内嵌无头内核（**新外部包 + 大闭包**，D19 教训：须隔离 crate + 钉版本）；② 驱动**宿主已装**浏览器（走其调试协议，**0 新包**但依赖宿主装浏览器 ⇒ 部署面变复杂）。
-* **落点**：新 crate `crates/capabilities/web/`（与端侧推理同属「大闭包隔离」范式）⇒ 与 C-B3 共享 crate 名不合适 ⇒ **C-B3 落 `crates/capabilities/tools/src/code_exec.rs`**（复用既有进程隔离面），**C-B4 落新 crate**。
-* **治理**：导航/抽取 = R2（出网 + 第三方内容）⇒ 白名单 + 逐次人批；**交互动作 = R3**（可见副作用）⇒ **预览票 + 逐次人批**；第三方内容一律走既有 `UntrustedEnvelope` 封套。
-* **验收**：域名白名单外**必拒**；抽取结果**有界**且带来源；动作必带证据帧；**默认关时零行为变化**。
-
-### W5 — 大闭包/运维档（3 族）
-
-#### C-B3 `tool.code_exec` — 沙箱代码执行面
-
-* **语义**：受限语言的代码执行（默认无网、工作区限域、CPU/内存/时长三重封顶），**每次逐次人批**；输出有界。
-* **机制（**选型待定，两案在 W5 前必须二选一**）**：① 子进程解释器（复用既有 `ProcessExecutor` 隔离面，0 新包，但依赖宿主装解释器）；
-  ② 进程内绑定（锁内 `pyo3 0.29.3` 已在树内，但**进程内跑不可信代码 = 越权面** ⇒ 须另起隔离进程）。
-* **治理**：R3。
-* **验收**：网断/文件越界/超时限/超内存**四种逃逸各有拒绝用例**；输出封顶生效。
-
-#### C-G3 `obs.timeline` — tracing 时间线
-
-* **语义**：跨模态事件时间线（回合/工具/审批/记忆写入）+ 导出；**只读**。
-* **机制**：复用既有 `ToolEventV1` + `RuntimeEventSink` + `NervousBus` 事件族（**不新造事件总线**）。
-* **验收**：`rg -c 'tracing_timeline|TimelineSpan' crates/` 由 0 → >0；导出可复现（同一回合同一时间线两次导出逐字节等）。
-
-#### C-G4 `rt.crash_recovery` — 崩溃恢复
-
-* **语义**：崩溃后**任务账/会话账/运行中状态**的一致性恢复（running→pending + 幂等单执行）。
-* **机制**：复用既有 `TaskQueue` 崩溃恢复语义（V6-a 已有）扩到会话层。
-* **验收**：崩溃注入（子进程 kill）后重启 ⇒ 账本一致 + 无重复执行（测试钉死）。
-
-### W6 — 需 owner 逐项重新拍板档（6 族）
-
-> ⚠️ **这 6 族不是「已排期」**，是「**候选**」——其中多签 / 漫游 / 全流程 OTA 属
-> 2026-10-26 D2 已裁「T0 不做」的产品范围，**本线不擅自推翻** ⇒ 逐项重拍后才进排期。
-
-| 族 | 能力 id | 为什么需重拍 | 前置 |
-|---|---|---|---|
-| C-D3 | `rt.cross_device_sync` | 阶梯 T1（Noise 漫游）+ 跨主体披露（R4） | W5 |
-| C-F1 | `gov.multisig` | D2 已裁「物理多签 v2.1 不做」；占位器 `NotConfigured` 是**正确的 0 装** | W5 |
-| C-F2 | `gov.reflection_period` | owner 2026-10-26 已裁「反思期属阶梯未到」⇒ 装配它 = 改产品范围 | W5 |
-| C-G1 | `tool.ota_update` | R4 系统级控制面；「T0 轻量版」（主人同意 + 自动备份 + 一键回滚）需 owner 明确授权 | W5 |
-| C-G2 | `tool.replay_eval` | 回放语义须先定义「哪些副作用不重放」 | W5 |
-| C-B3（依赖侧） | — | C-B3 本身在 W5；此处仅提示其「解释器选型」需 owner 认可 | — |
-
----
-
-## 5. 批次与依赖
+## 5. 批次与依赖（**重复审计后重切**）
 
 | 波 | 族 | 依赖前波 | 破棘轮净增（crate/edge/env/dep） | 共同收口 |
 |---|---|---|---|---|
-| **W0** | ADR + 本设计稿 + 进度页 + 登记表 | — | 0 / 0 / 0 / 0 | doc class + links + index + docs_truth 全绿 |
-| **W1** | C-B1 · C-B2 · C-D1 · C-D2 · C-H1 · C-H2 · C-H3 · C-H4（**8 族**） | W0 | 0 / 0 / +3 / 0 | `arch_guard` 0 违规 · 全量门禁绿 · claims 同步 |
-| **W2** | C-C1 | W1 | 0 / +2 / +1 / +1 | 同上 |
-| **W3** | C-E1 · C-E2 · C-F3 | W2 | +1 / +4 / +4 / +1 | 同上 |
-| **W4** | C-A1 · C-A2 · C-B4（**3 族**） | W3 | +1~2 / +4 / +3 / +1~2 | 同上 |
-| **W5** | C-B3 · C-G3 · C-G4 | W4 | 0~1 / +3 / +3 / 选型定 | 同上 |
-| **W6** | C-D3 · C-F1 · C-F2 · C-G1 · C-G2（**5 族**） | W5 + **owner 逐项重拍** | +1 / +4 / +5 / +2 | 同上 |
+| **W0** | 登记 + **重复审计** + 汇总表 | — | 0 / 0 / 0 / 0 | doc class + links + index + 族级守卫 全绿 |
+| **W1**（补强批 · **0 新外部 dep**） | C-B1 进程树快照 · C-B2 HTTP 写面 · C-D1 对象级授权 · C-H1 路由策略层 · C-H2 配额深度维 · C-H4 互联网检索（**6 条**） | W0 | 0 / 0 / +4 / 0 | `arch_guard` 0 违规 · 全量门禁绿 · claims 同步 |
+| **W2**（信任面 · +1 dep） | C-E1 技能/插件包（含运行时验签） | W1 | +1 / +3 / +2 / +1 | 同上 |
+| **W3**（平台面 · +1~2 dep） | C-A1 外部 GUI（原生控件树 + 动作）· C-B4 浏览器会话 | W2 | +2 / +4 / +3 / +1~2 | 同上 |
+| **W4**（机制面） | C-B3 脚本解释执行 · C-D2 会话可观测与恢复 · C-G2 回放评估（**3 条**） | W3 | 0~1 / +3 / +2 / 选型定 | 同上 |
+| **W5**（大闭包 · **新立项**） | C-L1 端侧推理（`provider.local_inference`，断网可用） | W4 | +1 / +2 / +2 / 闭包大 | 同上 |
+| **W6**（**待 owner 逐项重拍**） | C-D3 跨设备漫游 · C-F1 真多签（**2 条**） | W5 | +1 / +2 / +2 / +2 | 同上 |
 
-> **额度对账**：合计 crate **+3~4**（≤ 授权 +4）· edge **+15**（⚠️ **超授权 +10** ⇒ **W5/W6 需按实际重算额度**，
-> 或在 W3 收口时**重评授权额度**）· env **+18**（⚠️ **超授权 +16** ⇒ 同上）· dep **+5~7**。
-> ⇒ ⇒ **W3 收口时必须回填契约并复评额度**（[ADR-0025 §4.3](../adr/0025-capability-creation-line-charter.md)）。
+> **W5 的 C-L1 是本轮新增立项**（上一版 23 族未含端侧推理）⇒ **开工前必须先做一次重复审计**
+> （仓内 `provider.rs` 归一化层已有，但**无任何本地推理实现** ⇒ 预期为真新面，仍须核）。
 
----
+> **额度对账**（合并后）：crate **+4**（≤ 授权 +4）· edge **+14**（⚠️ **超授权 +10** ⇒ W2/W3 收口须复评）·
+> env **+15**（⚠️ **超授权 +16 内**但接近上限）· dep **+4~6**。
+> ⇒ ⇒ **每波收口回填契约并复评额度**（[ADR-0025 §4.3](../adr/0025-capability-creation-line-charter.md)）。
 
 ## 6. 验收判据（**每波机器可判**）
 
@@ -325,6 +247,8 @@ pwsh scripts/secret-scan.ps1 -Mode scan-all   # ⇒ No secrets found
 | 不做 | 理由 |
 |---|---|
 | 存量接线（记忆 P0 列封缄 / 网关成本路由 / 网关子代理端点 / R4 反思期装配） | owner 裁定「不动存量」⇒ 移交（[ADR-0025 §5](../adr/0025-capability-creation-line-charter.md)） |
+| **池 B 移交的 7 条**（C-C1 WS 路由 · C-F2 反思期装配 · C-H3 MCP 合规 · C-B3 跑命令半边 · C-E2 发布包签名半边 · C-F3 依赖/产物两段 · C-G1 升级+回滚半边） | **重复审计判定 = 等价面已存在**（§3.2 有 file:line）⇒ 本线**不重建**，只做 §3.1 那一面缺口 |
+| **重建既有面**（自造第二套路由语义 / 第二套事件 schema / 第二套评分器 / 第二套可见性规则 / 第二套 HTTP 客户端） | 既有面已覆盖 ⇒ 重造 = 概念重复（`duplicate` 权重 3 的棘轮项） |
 | 改 LOCKED 5 项（9 哲学锚本体 / 14 键 PHL-01..08 / 3 不可变脊柱 / `workspace.version` / R11 baseline） | LOCKED；workspace.version 仅 release authority 可改 |
 | 接回 13/14 键 runtime 强制 | 2026-10-11 PHL-08 前后已拍板降级为哲学标准 |
 | 改既有大文件（`doc_ops.rs` 6255 等） | `max_file_loc` 零余量 ⇒ 新面一律新开文件（< 800 行） |
@@ -364,34 +288,33 @@ pwsh scripts/secret-scan.ps1 -Mode scan-all   # ⇒ No secrets found
 
 ---
 
-## 9. 复核命令（族级 0 命中取证速查）
+## 9. 复核命令（族级探针 · **已按审计结论校正**）
+
+> ⚠️ **上一版探针的 3 个缺陷已修**（审计 §3.2）：
+> ① C-B2 探针 `Method::POST` 只匹配字面量（仓内 SDK 写 `client.post(url)`）⇒ **假阴性** ⇒ 已加 `\.post\(`；
+> ② C-E2 探针含 crate 名 `ed25519_dalek` ⇒ **一行 `use` 就长** ⇒ **假阳性** ⇒ 已改为匹配**验签调用**；
+> ③ C-H3 探针 scope 只扫 `mcp_bridge` 而帧在 `foundation/plugin` ⇒ **scope 错位** ⇒ 该族已移交，探针随之移除。
+> 另：**按名 0 命中 ≠ 无重复** ⇒ 每个族另有**「已有先例 file:line」**随族登记（见 §3.1），
+> 守卫会**同时核验先例仍在**（先例被删 ⇒ 判定作废，必须重判重复性）。
 
 ```bash
-# 感知/行动
-rg -n 'UiAutomation|ui_automation|element_tree|ControlTree' crates/ --glob '*.rs'   # 0
-rg -n 'ClickAction|click_at|mouse_click|GuiAction' crates/ --glob '*.rs'                # 0
-rg -n 'ProcessTreeSnapshot|process_tree_snapshot|snapshot_process_tree' crates/ --glob '*.rs'  # 0
-rg -n 'playwright|puppeteer|chromium|headless_browser|selenium' crates/ --glob '*.rs'   # 仅 1 处第三方借鉴注释
-rg -n 'Method::POST|Method::PUT' crates/ --glob '*.rs'                                  # 0
-# 通联/记忆/自进/治理/运维/智囊
-rg -n '/v1/ws' crates/adapters/gateway/src/                                              # 0
-rg -n 'tokio-tungstenite' crates/ --glob '*.rs'                                         # 0
-rg -n 'MemoryGrant|memory_grant|episode_grant|GrantScope' crates/ --glob '*.rs'        # 0
-rg -n 'restore_from_checkpoint|CheckpointStore' crates/ --glob '*.rs'                   # 0
-rg -n 'SkillManifest|skill_manifest' crates/ --glob '*.rs'                             # 0
-rg -n 'ed25519::|Ed25519Signature|verify_multisig' crates/ --glob '*.rs'               # 0
-rg -n 'ota_update|OtaUpdate|canary_release|gradual_rollout' crates/ --glob '*.rs'      # 0
-rg -n 'replay_evaluator|ReplayScorer' crates/ --glob '*.rs'                            # 0
-rg -n 'tracing_timeline|TimelineSpan|timeline_span' crates/ --glob '*.rs'               # 0
-rg -n 'RoutingPolicy|TaskProfile|routing_policy|task_profile' crates/foundation/core/src/ crates/engine/provider/src/  # 0
-rg -n 'DepthQuota|depth_quota' crates/ --glob '*.rs'                                    # 0
-rg -n 'nextCursor|progressToken|Mcp-Session-Id' crates/capabilities/tools/src/mcp_bridge/  # 0
-rg -n 'brave|duckduckgo|searx|bing\.com' crates/ --glob '*.rs'                          # 0
+# 池 A（14 条 + 1 新立项）
+rg -n 'process_tree_snapshot|snapshot_process_tree' crates/ --glob '*.rs'            # C-B1
+rg -n 'Method::POST|Method::PUT|\.post\(' crates/ --glob '*.rs'                     # C-B2
+rg -n 'object_grant|MemoryGrant' crates/ --glob '*.rs'                               # C-D1
+rg -n 'routing_policy|RoutingPolicy' crates/foundation/core/src/                     # C-H1
+rg -n 'depth_quota|DepthQuota' crates/engine/runtime/src/                            # C-H2
+rg -n 'tool\.web_search|WebSearchTool|web_search_tool' crates/ --glob '*.rs'        # C-H4
+rg -n 'skill_package|SkillPackage|verify_package_signature' crates/ --glob '*.rs'      # C-E1
+rg -n 'native_control_tree|external_gui|external_control_tree' crates/ --glob '*.rs'  # C-A1
+rg -n 'web_browser|BrowserSession' crates/ --glob '*.rs'                             # C-B4
+rg -n 'script_exec' crates/ --glob '*.rs'                                            # C-B3
+rg -n 'session_observability|SessionObservability' crates/ --glob '*.rs'             # C-D2
+rg -n 'replay_eval|ReplayEval' crates/ --glob '*.rs'                                 # C-G2
+rg -n 'Ed25519Verifier|verify_multisig_ed25519|MultiSigThreshold' crates/ --glob '*.rs'  # C-F1
+rg -n 'cross_device|CrossDevice|sync_cursor' crates/ --glob '*.rs'                    # C-D3
+rg -n 'local_inference|LocalInferenceProvider' crates/ --glob '*.rs'                 # C-L1（新增立项）
 ```
-
-> ⚠️ **落地前必重跑**：在途线正在改 `mcp_bridge/**` ⇒ C-H3 的三条命令**必须在其收口后重跑**再开工。
-
----
 
 ## 10. 风险台账
 
@@ -404,3 +327,6 @@ rg -n 'brave|duckduckgo|searx|bing\.com' crates/ --glob '*.rs'                  
 | R5 | 第三方内容进模型上下文（未标注来源） | C-H4 / C-C1 | 一律走既有 `UntrustedEnvelope` 封套；来源缺失即拒 |
 | R6 | Windows-only 能力在 Linux CI 假装通过 | C-A1 | 未实现平台**显式标未实现**，不得静默绿 |
 | R7 | 中性表述违规（第三方产品名进入注释） | C-A1/C-B2 借鉴既有实现时 | 新写代码零第三方产品名；既有违规文件**只在自己写域内**顺手清（他域报备） |
+| R8 | **能力 id 越界/撞名**（`CapabilityKind` 七前缀 + SDK 契约已占名） | 新族落 id 时 | 落 id 前查 `tool_taxonomy.rs` 策展表 + `sdk/client.rs:76,79` + `ws_v1.rs:141`；**已避**：`code_exec`→`script_exec`、`BrowserTool`→`web_browser` |
+| R9 | **重复面漏判**（探针只判「同名」，判不了「同 job」） | 任何新族开工前 | 族规格必须带「**已有先例 file:line**」；守卫核验先例仍在；先例变了 ⇒ **重判**，不许沿用旧判定 |
+| R10 | **合并族三处落地三次 schema**（C-D2 吸收了 3 族） | W4 开工 | 三件事**共用一套事件面 + 一套 span 面**；schema 变更一次到位，禁止「先出无签名包再补签名」式演进 |
