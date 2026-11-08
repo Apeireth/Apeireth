@@ -10,6 +10,43 @@
 use std::collections::HashSet;
 
 use super::unicode_tokens;
+use crate::{MemoryCandidate, MemoryRankingConfig};
+
+/// ⭐⭐ **某一路候选在管线里的「通道相关度」**（2026-11-07 修复）。
+///
+/// # 修复的是什么
+/// 词法源（[`super::Bm25LexicalCandidateSource`]）排序时用的是
+/// `lexical + 0.5 × coverage`（**覆盖率融合**）；而管线为了多路可比，
+/// 会用 `score_components.weighted(...)` **重新算一遍**分数
+/// ⇒ ⇒ 那次重算**只带分量、不带 coverage**（`coverage` 不是分量字段）
+/// ⇒ ⇒ **coverage 被丢掉**。
+///
+/// # 为什么这是缺陷（不是设计）
+/// 后果是「**生产排序 ≠ 质量闸门量的排序**」：
+/// * 闸门（内部卷基线 / 真人卷闸门）量的是**源自己的分数** ⇒ 含 coverage；
+/// * 生产（管线）用的是**重算后的分量分** ⇒ 不含 coverage。
+/// ⇒ ⇒ 2026-10-28 实测到的 coverage 正收益（recall +0.0125 / +0.0266）
+/// **可能从未到达生产排序**；真人卷上管线臂比单路词面臂低 **0.0013**。
+///
+/// # 口径
+/// * 只在**词法命中**（`lexical > 0`）的候选上加 ⇒ 与源里那句 `if lexical > 0`
+///   **同一条件**（否则会把「一个词都没命中的长记录」抬上来 ⇒ 噪声）。
+/// * 权重 = `COVERAGE_WEIGHT × lexical_weight` ⇒ ⇒ **单词法通道时，管线排序
+///   与源排序同序**（两者只差一个正比例因子）⇒ ⇒ 「闸门量的就是生产做的」。
+///
+/// ⚠️ 顺序不可交换：`weighted()` 里 coverage **不进**分量和 ⇒ 这里补的
+/// 一项**不能**写进 `ScoreComponents`，否则会被 `weighted()` 再乘一次权重。
+pub(super) fn route_relevance(
+    query: &str,
+    candidate: &MemoryCandidate,
+    ranking: &MemoryRankingConfig,
+) -> f64 {
+    let mut raw = candidate.score_components.weighted(ranking);
+    if candidate.score_components.lexical > 0.0 {
+        raw += COVERAGE_WEIGHT * ranking.lexical_weight * query_coverage(query, &candidate.content);
+    }
+    raw
+}
 
 pub(super) fn token_set(text: &str) -> HashSet<String> {
     unicode_tokens(text).into_iter().collect()

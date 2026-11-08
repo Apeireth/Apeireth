@@ -455,7 +455,7 @@ impl HybridRetrievalPipeline {
                 // （「这条记忆被选中过 ⇒ 往后排前面」）⇒ ⇒ 它**必须留在绝对量纲里**
                 // ⇒ ⇒ 否则按路归一化会把它**一起除掉** ⇒ ⇒ ⇒ **提权被稀释**
                 // ⇒ ⇒ ⇒ 实测：两个会话显著性测试会红（「a」读不到自己的「b」提权）。
-                let raw = candidate.score_components.weighted(&self.ranking);
+                let raw = scoring::route_relevance(query, &candidate, &self.ranking);
                 let normalized = if source_max > 0.0 {
                     raw / source_max
                 } else {
@@ -482,7 +482,7 @@ impl HybridRetrievalPipeline {
                         // ⭐ **合并时取「各路归一化分」的最大值**（2026-11-06）
                         // **不再从合并后的分量重算**，否则重算会把
                         // **本路刚归一化过的量纲又还原回去**（量纲再次不对等）。
-                        let recomputed = existing.score_components.weighted(&self.ranking)
+                        let recomputed = scoring::route_relevance(query, existing, &self.ranking)
                             + session.entry_salience(&existing.id);
                         let normalized = if source_max > 0.0 {
                             recomputed / source_max
