@@ -51,16 +51,16 @@
 | F4 | `filesystem` | `filesystem.rs:277` | **默认开** | ✅ **M1**（批次 1，`filesystem.rs:283`（read 面）/`:350`+`:353`（list 面）/`:393`（stat 面））| **A** |
 | F5 | `search` | `search.rs:455-471` | **默认开** | ✅ **M1**（批次 1，`search.rs:499-505`（结果面：查询回显 + 路径 + 命中行正文））| **A** |
 | F6 | `repo`（git） | `repo.rs:188-193`/`:208` | **默认开** | ✅ **M1**（批次 1，`repo.rs:248`（成功面）/`:273`（错误面））| **A** |
-| F7 | `repo_map` | `repo_map_tool.rs:489` | **默认开**（CLI :2152） | ❌ | A（低） |
+| F7 | `repo_map` | `repo_map_tool.rs:489` | **默认开**（CLI :2152） | ✅ **M1**（裁决 E：`3f395b79`；⚠️ 实测：大纲**只到符号签名**（函数体省略）⇒ ⇒ **真实暴露面是路径行** ⇒ ⇒ 夹具把凭据放在文件名里） | A（低） |
 | F8 | `content_feed` | 结果只含计数(`content_feed/tool.rs:751-766`)；**记忆摄取面** `content_feed/ingest.rs:151` | 默认关 | ❌ | **A（记忆面）** |
-| F9 | `doc_ops` | `doc_ops.rs:4290` | 默认关 | ❌ 仅路径拒读(:448) | **A** |
-| F10 | `sheet_ops` | `sheet_ops.rs:3110` | 默认关 | ❌ 仅路径拒读(:482) | **A** |
+| F9 | `doc_ops` | `doc_ops.rs:4290` | 默认关 | ✅ **M1**（裁决 E：`3f395b79`；逐动作正文键表：`pages`/`markdown`/`outline`/`watermark` ⇒ ⇒ **摘要面逐字不动**；族文件**净减 5**） | **A** |
+| F10 | `sheet_ops` | `sheet_ops.rs:3110` | 默认关 | ✅ **M1**（裁决 E：`3f395b79`；正文键 = `rows`/`columns`/`column` ⇒ ⇒ `column` 与 `columns` **同口径**（否则一处遮一处不遮 = 漏）；族文件**净减 22**） | **A** |
 | F11 | `image_ops` | `image_ops.rs:1548`（仅元数据） | 默认关（双闸） | — 不含凭据 | 不适用 |
 | F12 | `ext.*`×10 | `external.rs:127` → `Evidence.details`；**原样回显** = `ext.yara`(:843 raw 8192 字) / `ext.ghidra`(:1543)；含第三方任意串 = exiftool(:538)/tshark(:659)/radare2(:1066) | 默认关 `APEIRETH_ENABLE_EXTERNAL=1` | ❌ | **A**（yara/ghidra 最高危） |
 | F13 | `re.*`×9 | `recon_tool.rs:193/338/442/569/658/669/765/860/953/1147`；**`re.pack` 的 `details.strings` = 二进制可打印字符串全量提取**（`recon/pack.rs:42`）⇒ 硬编码密钥原样回显 | 默认关 `APEIRETH_ENABLE_RECON=1` | ❌ | **A** |
 | F14 | `git_write` | `git_write.rs:915` | 默认关 | ⚠️ 仅 M3(:765) | A（部分） |
 | F15 | `worktree_apply` | `worktree_apply.rs:473-524`（校验命令输出进**错误帧** :511-519） | 默认关（双闸） | ⚠️ 仅 M3(:498) | A（部分） |
-| F16-F20 | `worktree_plan`(:379) / `apply_patch`(:331) / `skill_distill`(`skill/distill.rs:417`) / `skill_search`(`skill/search.rs:185-195`) / `proposal_draft`(`proposal.rs:865,885`) | — | 默认关 | F18 ❌ / 其余不适用 | F18 = A（低-中） |
+| F16-F20 | `worktree_plan`(:379) / `apply_patch`(:331) / `skill_distill`(`skill/distill.rs:417` ✅ **M1**：`3f395b79`，**只有 `triggers[]` 是自由文本面** ⇒ ⇒ 卡名面不入扫描面（身份键）**已知残余**) / `skill_search`(`skill/search.rs:185-195`) / `proposal_draft`(`proposal.rs:865,885`) | — | 默认关 | F18 ❌ / 其余不适用 | F18 = A（低-中） |
 | F21-F25 | `exposure_audit`(`exposure_audit/tool.rs:121`，设计即零明文) / `backup_export`(`backup.rs:1158`) / `voice_speak`(`voice/speak.rs:604` 只报字数) / device×4 / `self_status`·`trait_report`·`task_board`·`care_schedule`·`education` | — | 多默认关；`self_status`/`trait_report` 默认开 | — | 不适用 |
 | F26 | `stealth_crawler` | `stealth_crawler.rs:113-142` | **未装配（0 装）**：全仓除自身无调用点 | ❌ | A（仅登记） |
 
@@ -151,6 +151,18 @@ worktree_apply / recon / external ⇒ ⇒ **26 族里 17 族未接**（原 24 �
     ⇒ ⇒ 扫描入口**必须由族文件注入**（`recon/tripwire.rs:49` / `external/tripwire.rs:83`
     各注入一次**真实函数项**）⇒ ⇒ **守卫里已加显式断言**：共享模块**不得**含那三个字面量
     ⇒ ⇒ **变异检验已做**（注入违规 ⇒ 该断言红；还原 ⇒ 绿）。
+
+### 2.6.3.5 裁决 E 落地后的**已知残余**（2026-11-08，如实登记，不粉饰）
+- ⚠️ **路径面 / 参数回显面不遮**：`doc_ops` 的 `input`/`output`/`output_dir`/`files`/`notes`、
+  `sheet_ops` 的 `source`/`output`/`value`/`expression`/`new_column`/`predicate`/`order`/`function`
+  ⇒ ⇒ **嵌在路径或参数里的硬编码密钥仍会明文进模型面** ⇒ ⇒ **理由**：它们是**位置与用户自填词**，
+  不是正文；且**敏感面路径另有拒读闸** ⇒ ⇒ **不擅自扩面** ⇒ ⇒ **若 owner 认为该遮** ⇒ ⇒
+  ⇒ **逐族另开一批**。
+- ⚠️ **`skill_distill` 的卡名面不入扫描面**：卡名是**身份键**且 `id` 由它派生 ⇒ ⇒ 遮它会打断
+  (卡名→id) 对应，也会让报告卡名与刚落盘那张卡对不上 ⇒ ⇒ **同形串落在卡名上时不被遮** ⇒ ⇒
+  ⇒ **已知残余**（交付时已用**边界钉子用例显形化**）。
+- ⚠️ **M1 仍不认「键名 + 值」的关系**（那是字段层 M4）⇒ ⇒ 明文口令赋值只按 `password=`/`password:`
+  形态命中 ⇒ ⇒ 四族**均只接形状层**（接线前**没有**字段层 ⇒ 接了会引入**新的可见变形**）。
 
 ### 2.6.4 两处**已知残余**（批次 2d 实测如实登记，不粉饰）
 1. **截断面跨边界残余**：`ext.*` 的截断面是**既有 400 字合同**（先于本族接线）⇒ 秘密串

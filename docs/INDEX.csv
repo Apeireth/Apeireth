@@ -1266,7 +1266,7 @@ docs/integration/phase5-report.md,L3,9,Phase 5 — Real Chat E2E + 最小产品�
 docs/integration/runtime-bridge.md,L3,4,Phase 4 — Agent Runtime Bridge（2026-08-19）,2026-08-19,现行,3,保留,
 docs/integration/unified-baseline.md,L3,3,Apeireth Unified Desktop Baseline (Phase 0),2026-08-27,现行,0,保留,
 docs/integration/unified-feature-map.md,L3,4,Apeireth Unified Feature Map (Phase 0),2026-08-27,现行,0,保留,
-docs/packaging/README.md,L3,5,docs/packaging — 打包与发布资产（常青）,,现行,2,索引,
+docs/packaging/README.md,L3,5,docs/packaging — 打包与发布资产（常青）,,现行,3,索引,
 docs/packaging/release-asset-verification.md,L3,4,发布资产校验与签名（来源验证环节）,2026-10-20,现行,7,保留,
 docs/packaging/windows-packaging-lifecycle.md,L3,4,Apeireth 2.0 RC — Windows Packaging & Lifecycle Specification,,现行,4,保留,
 docs/rc/README.md,L3,5,docs/rc — 候选版验收（历史卷宗）,,现行,0,索引,
