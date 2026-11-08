@@ -178,6 +178,18 @@ if chars + content_chars > max_chars { continue; }   // 装不下就跳过这条
 1. 把 `InjectionMode::Production` 改成**生产锚定口径**（并保留旧口径为对照臂）；
 2. 或**改名**（例如「闸门头截口径」）并把「送达率」在文档里**标注口径**，防止再被当成生产结论引用。
 
+### 6.1 ✅ **动作 1 已落地（2026-11-08 同日）**
+
+`crates/engine/memory/src/golden_run.rs` 的 `InjectionMode::Production`
+**已改成生产锚定口径**（复用 `anchor_injection::AnchoredInjectionConfig::PRODUCTION` +
+`context_compiler::compile_injection_with_selected_access_and_query`），
+**旧口径保留为对照臂** `InjectionMode::HeadTrunc`（逐字复刻 ⇒ 可作反证）。
+
+⇒ ⇒ 本节（§六）**上面的数字是 2026-11-08 口径迁移前**的闸门读数（**历史值，不随基线更新**）：
+`groundedness 0.2059 / 0.5282` · `delivery_rate 0.3881 / 0.7218`。
+⇒ ⇒ **迁移后**的现行读数与「哪些数变大、为什么、这不代表检索变好了」见
+**`docs/04-internal/01-handoffs/memory-gate-caliber-alignment-2026-11-08.md`**。
+
 ---
 
 ## 七、**明确未测 / 不在本文件结论范围**

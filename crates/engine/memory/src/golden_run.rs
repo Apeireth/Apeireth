@@ -20,9 +20,24 @@
 //! # 口径
 //!
 //! * **NOT IMPLEMENTED（新增未接线）**：库级实现；生产 0 调用点；无开关位。
-//! * 检索用**仓里已有的** [`BasicLexicalCandidateSource`]（确定性 token 重叠）
+//! * 检索用**仓里已有的** [`Bm25LexicalCandidateSource`]（生产同款 BM25）
 //!   ⇒ **不引新依赖**、**结果可复现**。
 //! * 评测用 [`crate::golden_set::evaluate`]（recall@k / nDCG@k / evidence 族）。
+//!
+//! # ⭐⭐ **注入口径 = 生产形态**（2026-11-08 口径对齐）
+//!
+//! 本模块是**基线闸门的测量实现** ⇒ ⇒ 它量到的必须**就是生产会送出的**。
+//!
+//! * [`InjectionMode::Production`] = **注入 + 锚定选段**
+//!   ⇒ 复用 [`crate::anchor_injection::AnchoredInjectionConfig::PRODUCTION`]（选段常量）
+//!   + [`crate::ClosedWorldContextCompiler::compile_injection_with_selected_access_and_query`]
+//!   （**生产编译器本体** ⇒ 「哪几条被送出去」由它裁决 ⇒ **不重写预算纪律**）；
+//! * [`InjectionMode::HeadTrunc`] = **旧口径**（每条正文**前 120 字**、**无总量预算**）
+//!   ⇒ **逐字复刻** 2026-10-26 基线 ⇒ 留作**反证臂**
+//!   （改回它 ⇒ 数字必须**回到旧值** ⇒ 证明闸门测的确实是**被改的那条路径**）。
+//!
+//! ⚠️ **本次只对齐「送达（注入）口径」**：**召回口径**（生产按**原始正文**给候选预算计费）
+//! 仍由另一条线修 ⇒ ⇒ 闸门与生产在**召回侧**的差异**已知且尚未消除**。
 
 use std::collections::BTreeMap;
 
@@ -33,17 +48,42 @@ use crate::scope::{MemoryCandidate, MemoryProvenance, MemoryScope};
 /// 注入口径（**注入给模型什么**）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InjectionMode {
-    /// **与生产逐字一致**：每条证据 = 记忆正文的**前 120 字**
-    /// （`memory_injection::EVIDENCE_MAX_CHARS`）⇒ 从**开头**截。
+    /// ⭐⭐ **生产形态**（2026-11-08 口径对齐）：**注入 + 锚定选段**。
+    ///
+    /// # 口径（**逐字复用生产那一套**，不复刻一套）
+    ///
+    /// * **选段** = [`crate::anchor_injection::AnchoredInjectionConfig::PRODUCTION`]
+    ///   （**主体出现处为中心**的 400 字窗口）；
+    /// * **哪几条真的被送出去** = **生产编译器本体**
+    ///   [`crate::ClosedWorldContextCompiler::compile_injection_with_selected_access_and_query`]
+    ///   （含**总量预算**裁剪 ⇒ ⇒ 不重写预算纪律）。
+    ///
+    /// ⇒ ⇒ **闸门量到的送达率 = 生产会送出的**
+    /// （2026-11-08 之前**不是** ⇒ 那就是「自欺」）。
     Production,
+    /// **旧闸门口径**（**逐字复刻** 2026-10-26 基线）：每条证据 = 正文**前 120 字**
+    /// （`memory_injection::EVIDENCE_MAX_CHARS`）⇒ 从**开头**截，**无总量预算**。
+    ///
+    /// ⇒ 用途：**对照臂 / 反证臂**（改回它 ⇒ 数字必须**回到旧基线**）
+    /// ⇒ ⇒ 证明闸门测的确实是**被改的那条路径**。
+    HeadTrunc,
     /// **对照口径**：注入与查询**最相关**的那一段
     /// ⇒ 用来量化「若改注入策略，证据族指标能涨多少」。
     BestSpan,
 }
 
 impl InjectionMode {
-    /// 生产口径的每条证据字符数（**逐字对齐生产常量**）。
+    /// ⚠️ **历史名**：它是**旧闸门口径**（每条正文**前 N 字**）的单条上限
+    /// （= 生产 XML 形态的单条上限），**不是**生产**锚定选段**的上限
+    /// （后者 = [`crate::anchor_injection::AnchoredInjectionConfig::PRODUCTION`] 的 `span_chars` = 400）。
+    ///
+    /// （**保留原名** ⇒ 外部调用方逐字兼容；新口径请用
+    /// [`crate::anchor_injection::AnchoredInjectionConfig::PRODUCTION`]。）
     pub const PRODUCTION_CHARS: usize = crate::memory_injection::EVIDENCE_MAX_CHARS;
+    /// **生产注入的总量预算**（= `MemoryRecallQuery` 的默认 `max_chars` = 4,000 字）。
+    ///
+    /// ⇒ 生产在**同一总量内重新分配**（单条放大**不增加**总消耗）⇒ ⇒ 闸门必须用同一个数。
+    pub const PRODUCTION_MAX_CHARS: usize = 4_000;
 }
 
 /// 一条可检索的记录（**可检索文本** = 正文）。
@@ -132,6 +172,147 @@ fn best_snippet(text: &str, query: &str, max_chars: usize) -> String {
     chars[best_start..(best_start + max_chars).min(chars.len())]
         .iter()
         .collect()
+}
+
+/// 闸门跑批用的**会话 id**（生产编译器只拿它做归因，**不影响送出的内容**）。
+const GATE_SESSION_ID: &str = "golden-gate";
+
+/// **旧闸门口径**的送达片段（**逐字复刻** 2026-10-26 基线）。
+///
+/// # 口径
+///
+/// * 每条证据 = 正文**前 120 字**（从开头截）；
+/// * **无总量预算** ⇒ ⇒ 送出去的条数 = 检索到的条数。
+///
+/// ⇒ 用途：**反证臂**（把闸门改回它 ⇒ 数字必须**回到旧基线**
+/// ⇒ ⇒ 实测：10 个数字**逐字相等** ⇒ 证明闸门测的确实是**被改的那条路径**）。
+fn head_trunc_fragments(records: &[IndexRecord], retrieved: &[MemoryCandidate]) -> Vec<String> {
+    retrieved
+        .iter()
+        .filter_map(|item| {
+            records
+                .iter()
+                .find(|record| record.id == item.id)
+                .map(|record| {
+                    record
+                        .text
+                        .chars()
+                        .take(InjectionMode::PRODUCTION_CHARS)
+                        .collect()
+                })
+        })
+        .collect()
+}
+
+/// ⭐⭐ **生产形态的送达片段**（2026-11-08 口径对齐）。
+///
+/// # 为什么必须改（**「自欺」的根**）
+///
+/// 2026-11-08 实测（`docs/04-internal/01-handoffs/memory-delivery-loss-decomposition-2026-11-08.md`）：
+/// 旧闸门**每条证据取正文前 120 字** ⇒ 而生产是**注入 + 锚定选段**（400 字）
+/// ⇒ ⇒ 两者**既不是同一段文本，也不是同一份预算口径**
+/// ⇒ ⇒ 「送达率 0.3881 / 0.7218」**描述的不是生产**。
+///
+/// # 复用了哪一套（**不复制一套**）
+///
+/// * **主体解析** = [`crate::anchor_injection::subject_of_query`]（**问句侧** ⇒ 非 oracle）；
+/// * **选段** = [`crate::anchor_injection::find_subject_window`]
+///   + [`crate::anchor_injection::AnchoredInjectionConfig::PRODUCTION`]（**生产常量**）；
+/// * **哪几条真的被送出去** = **生产编译器本体**
+///   [`crate::ClosedWorldContextCompiler::compile_injection_with_selected_access_and_query`]
+///   （含**总量预算**裁剪）⇒ ⇒ **不重写预算纪律**。
+///
+/// # 口径
+///
+/// * 片段 = **逐条真正送进上下文的那段文本**（渲染前）
+///   ⇒ ⇒ `evidence_precision` 的分母 = **真正送出去的条数**（不是 top-k 条数）；
+/// * 渲染层只做「加编号 + 秘密脱敏 + 截到单条上限」⇒ ⇒ 对**覆盖率**判定无影响
+///   （脱敏只命中 `token=`/`password=` 一类敏感串 ⇒ 语料里没有）。
+fn production_fragments(
+    records: &[IndexRecord],
+    retrieved: &[MemoryCandidate],
+    query: &str,
+) -> Vec<String> {
+    let config = crate::anchor_injection::AnchoredInjectionConfig::PRODUCTION;
+    let recalled = recall_result_of(records, retrieved);
+    let Some(selected) = crate::ClosedWorldContextCompiler::new()
+        .compile_injection_with_selected_access_and_query(
+            &recalled,
+            GATE_SESSION_ID,
+            InjectionMode::PRODUCTION_MAX_CHARS,
+            query,
+            config,
+        )
+    else {
+        return Vec::new();
+    };
+    let subject = crate::anchor_injection::subject_of_query(query);
+    selected
+        .selected_candidate_ids
+        .iter()
+        .filter_map(|id| {
+            let text = records
+                .iter()
+                .find(|record| &record.id == id)
+                .map(|record| record.text.as_str())?;
+            Some(delivered_text(text, subject.as_deref(), config.span_chars))
+        })
+        .collect()
+}
+
+/// **一条证据真正送到模型面前的那段文本**（与生产编译器内部**逐字同一套规则**）。
+///
+/// # 口径（与 [`crate::ClosedWorldContextCompiler::compile_injection_with_selected_access_and_query`] 内部一致）
+///
+/// * 主体解析得出来 ∧ 窗口非空 ⇒ **主体出现处为中心的窗口**；
+/// * 否则（主体解析不出 / 窗口是空）⇒ **开头 `span_chars` 字**
+///   （生产渲染器随后截到单条上限 ⇒ **逐字相同**）。
+fn delivered_text(text: &str, subject: Option<&str>, span_chars: usize) -> String {
+    if let Some(subject) = subject {
+        if let Some(span) = crate::anchor_injection::find_subject_window(text, subject, span_chars)
+        {
+            if !span.trim().is_empty() {
+                return span;
+            }
+        }
+    }
+    text.chars().take(span_chars).collect()
+}
+
+/// 把检索到的候选包成**生产的召回结果**（喂给生产编译器 ⇒ 走生产同一条路）。
+///
+/// # 口径
+///
+/// * 条目内容 = **记录的正文**（与索引里的可检索文本逐字一致 ⇒ 不泄漏答案）；
+/// * **无日记片段 / 无知识库命中节** ⇒ ⇒ overlay 里只有记忆正文行（与生产纯记忆路径一致）。
+fn recall_result_of(
+    records: &[IndexRecord],
+    retrieved: &[MemoryCandidate],
+) -> crate::MemoryRecallResult {
+    crate::MemoryRecallResult {
+        items: retrieved
+            .iter()
+            .filter_map(|candidate| {
+                let record = records.iter().find(|record| record.id == candidate.id)?;
+                Some(crate::RecalledMemoryItem {
+                    id: record.id.clone(),
+                    layer: crate::MemoryLayerKind::Episodic,
+                    content: record.text.clone(),
+                    timestamp_ms: 0,
+                    score: candidate.score,
+                    importance: 0.0,
+                    source_ref: None,
+                    score_components: Some(candidate.score_components),
+                    diary_snippets: Vec::new(),
+                })
+            })
+            .collect(),
+        total_candidates: retrieved.len(),
+        governance_filtered: 0,
+        total_chars: 0,
+        retrieval_status: None,
+        wiki_sections: Vec::new(),
+    }
 }
 
 /// 建索引（把记录变成可检索的候选源）。
@@ -349,29 +530,25 @@ pub fn run_with_extra_sources_and_config(
         // `evidence_precision` / `groundedness` 算的是「**注入的片段里有多少是期望片段**」
         // ⇒ 不填 ⇒ 这两个指标恒为 0（**看起来像检索很差，其实是没喂证据**）。
         //
-        // 口径：**按检索顺序**给每条返回记录取一段正文（`EVIDENCE_SNIPPET_CHARS` 字），
-        // ⇒ 与真实注入（把命中的记忆片段塞进上下文）**同口径**。
-        let fragments: Vec<String> = retrieved
-            .into_iter()
-            .filter_map(|item| {
-                records
-                    .iter()
-                    .find(|record| record.id == item.id)
-                    .map(|record| match mode {
-                        InjectionMode::Production => {
-                            // **与生产逐字一致**：取正文**前 120 字**（从开头截）。
-                            record
-                                .text
-                                .chars()
-                                .take(InjectionMode::PRODUCTION_CHARS)
-                                .collect()
-                        }
-                        InjectionMode::BestSpan => {
+        // ⭐⭐ **口径（2026-11-08 对齐）**：生产口径 = **注入 + 锚定选段**
+        // ⇒ ⇒ [`InjectionMode::Production`] 走**生产编译器本体**
+        // ⇒ ⇒ **闸门量到的 = 生产送出的**（旧口径挪到 [`InjectionMode::HeadTrunc`]，
+        // **逐字复刻**旧基线 ⇒ 留作反证臂）。
+        let fragments: Vec<String> = match mode {
+            InjectionMode::Production => production_fragments(records, &retrieved, &case.query),
+            InjectionMode::HeadTrunc => head_trunc_fragments(records, &retrieved),
+            InjectionMode::BestSpan => retrieved
+                .iter()
+                .filter_map(|item| {
+                    records
+                        .iter()
+                        .find(|record| record.id == item.id)
+                        .map(|record| {
                             best_snippet(&record.text, &case.query, EVIDENCE_SNIPPET_CHARS)
-                        }
-                    })
-            })
-            .collect();
+                        })
+                })
+                .collect(),
+        };
         batch.results.push(crate::golden_set::Retrieved {
             ids: retrieved_ids,
             fragments,

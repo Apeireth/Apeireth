@@ -46,12 +46,26 @@ owner 裁定（2026-10-25）「**准确度一分不许掉**」⇒ 判据已经�
 # 用法
 
 ```bash
-python3 scripts/check_golden_baseline.py
+python3 scripts/check_golden_baseline.py                 # 比对（默认；不改基线）
+python3 scripts/check_golden_baseline.py --check         # 同上（显式写出来）
+python3 scripts/check_golden_baseline.py --update \
+    --version-note anchored-injection-2026-11-08          # 重盖基线（必须写版本说明）
 ```
 
 ⚠️ **依赖真实语料**：小说文件在**仓外**（`~/.apeireth/novels/`，
 下载器 `scripts/download_novels.sh` 带 SHA-256）⇒ 缺失时**如实跳过**
 （不是「通过」⇒ 打印明说跳过）。
+
+# ⭐ `--update` 的纪律（2026-11-08 加）
+
+**重盖基线 = 承认「口径变了」** ⇒ ⇒ 所以：
+
+* `--version-note` **必填** ⇒ 口径变更的原因会**写进版本串**（`版本+说明`）
+  ⇒ ⇒ 「为什么数字变了」**永远查得到**；
+* `--update` **只改基线文件**，**绝不碰容忍度**
+  ⇒ ⇒ `TOLERANCE_RATIO` / `TOLERANCE_FLOOR` **只由人改**，脚本改不了；
+* ⚠️ **口径变了 ⇒ 送达率/groundedness 会变** ⇒ ⇒ 重盖前**先看证据页**
+  （本次：2026-11-08 注入口径对齐生产形态 ⇒ `docs/04-internal/01-handoffs/memory-gate-caliber-alignment-2026-11-08.md`）。
 
 # 状态：NOT IMPLEMENTED（新增未接线，2026-10-26）
 
@@ -67,6 +81,7 @@ python3 scripts/check_golden_baseline.py
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import subprocess
@@ -226,10 +241,75 @@ def compare(baseline: dict[str, Any], current: dict[str, Any]) -> list[str]:
     return problems
 
 
+def write_baseline(
+    baseline: dict[str, Any], current: dict[str, Any], note: str
+) -> str:
+    """用当前实测分数**重盖基线**（版本串追加口径变更说明）⇒ 返回新版本串。
+
+    ⚠️ **只改基线文件** ⇒ **绝不碰容忍度**（`TOLERANCE_*` 只由人改）。
+    """
+    version = str(baseline.get("version", "")).strip()
+    if note:
+        version = f"{version}+{note}" if version else note
+    by_name = {item.get("name"): item for item in current.get("corpora", [])}
+    corpora: list[dict[str, Any]] = []
+    for item in baseline.get("corpora", []):
+        name = item.get("name")
+        got = by_name.get(name)
+        if got is None:
+            continue
+        corpora.append(
+            {
+                "name": name,
+                "recall_at_k": got.get("recall_at_k"),
+                "ndcg_at_k": got.get("ndcg_at_k"),
+                "cases": got.get("cases"),
+                "groundedness": got.get("groundedness"),
+                "evidence_precision": got.get("evidence_precision"),
+                "delivery_rate": got.get("delivery_rate"),
+                "case_fingerprint": got.get("case_fingerprint"),
+            }
+        )
+    document = {"version": version, "k": current.get("k"), "corpora": corpora}
+    BASELINE_PATH.write_text(
+        json.dumps(document, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    return version
+
+
 def main() -> int:
+    parser = argparse.ArgumentParser(
+        prog="check_golden_baseline.py",
+        description="内部卷检索基线闸门：准确度不许掉（相对劣化 > 1% ⇒ 拦下）。",
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="只比对（默认行为）",
+    )
+    parser.add_argument(
+        "--update",
+        action="store_true",
+        help="用当前实测分数**重盖基线**（必须给 --version-note）",
+    )
+    parser.add_argument(
+        "--version-note",
+        default="",
+        help="口径变更说明（--update 时**必填** ⇒ 写进版本串）",
+    )
+    args = parser.parse_args()
+
     print("=" * 72)
     print("内部卷检索基线闸门：准确度不许掉（相对劣化 > 1% ⇒ 拦下）")
     print("=" * 72)
+
+    if args.update and not args.version_note.strip():
+        print(
+            "❌ `--update` 必须给 `--version-note`"
+            "（**口径变更的原因必须写进版本串** ⇒ 否则没人知道数字为什么变）",
+            file=sys.stderr,
+        )
+        return 1
 
     baseline = load_baseline()
     print(
@@ -272,6 +352,22 @@ def main() -> int:
             f"recall@{current.get('k')}={float(item.get('recall_at_k', 0.0)):.4f} · "
             f"nDCG@{current.get('k')}={float(item.get('ndcg_at_k', 0.0)):.4f}"
         )
+
+    # ---------- `--update`：用当前实测分数**重盖基线** ----------
+    if args.update:
+        version = write_baseline(baseline, current, args.version_note.strip())
+        print("-" * 72)
+        print(f"✅ **已重盖基线**：{BASELINE_PATH}")
+        print(f"   · 新版本串：{version}")
+        print(
+            "   · ⚠️ **口径变更说明必须同时写进证据页**"
+            "（数字变了 ⇒ 要说清「变了什么、为什么」）"
+        )
+        print(
+            "   · ⚠️ **文档里的数字要同步**"
+            "（`python3 scripts/check_doc_numbers.py` 守逐字一致）"
+        )
+        return 0
 
     # ---------- 观察项：**送达率**（**不参与闸门**，但**每次都要看见**）----------
     #

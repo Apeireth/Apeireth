@@ -143,6 +143,10 @@ fn injection_mode_changes_the_evidence_metrics() {
     // 两种注入口径必须给出**不同**的证据分数 ⇒ 证明指标确实在看「注入什么」。
     // ⚠️ **答案必须在长文本的末尾** ⇒ 「取开头 120 字」够不着它，
     // 而「取最相关片段」能取到 ⇒ 两种口径才会拉开差距。
+    // ⭐ **2026-11-08 口径迁移**：`InjectionMode::Production` 现在 = **生产形态**
+    // （注入 + 锚定选段）⇒ ⇒ 它**也能**取到末尾的答案 ⇒ ⇒ 对照臂必须换成
+    // **旧闸门口径**（`HeadTrunc`）⇒ ⇒ 断言的仍然是同一件事：
+    // 「**头截够不着、最相关片段够得着**」。
     let filler = "铺垫文字。".repeat(30);
     let records = vec![record(
         "r1",
@@ -151,13 +155,22 @@ fn injection_mode_changes_the_evidence_metrics() {
     let mut case = case("c1", "限流阈值 每秒两千次", vec!["r1"]);
     case.expect_fragments = vec!["限流阈值定在每秒两千次".to_string()];
     let set = golden(vec![case]);
-    let production = run(&records, &set, 1, InjectionMode::Production).expect("跑批");
+    let head = run(&records, &set, 1, InjectionMode::HeadTrunc).expect("跑批");
     let best = run(&records, &set, 1, InjectionMode::BestSpan).expect("跑批");
     assert!(
-        best.metrics.evidence_precision > production.metrics.evidence_precision,
+        best.metrics.evidence_precision > head.metrics.evidence_precision,
         "最相关片段口径应比「取开头」更能覆盖答案：{} vs {}",
         best.metrics.evidence_precision,
-        production.metrics.evidence_precision
+        head.metrics.evidence_precision
+    );
+    // ⭐ 生产形态（锚定选段）也必须够得着 ⇒ ⇒ 迁移后三臂的关系是
+    // 「头截 < 生产形态 ≤ 最相关片段」（生产形态按主体窗口取段 ⇒ 末尾答案也在窗口内）。
+    let production = run(&records, &set, 1, InjectionMode::Production).expect("跑批");
+    assert!(
+        production.metrics.evidence_precision >= head.metrics.evidence_precision,
+        "生产形态（锚定选段）不该比旧口径（头截）更差：{} vs {}",
+        production.metrics.evidence_precision,
+        head.metrics.evidence_precision
     );
 }
 

@@ -74,15 +74,32 @@ Author: lead
 |---|---|---|---|
 | L1 `recall@10` | **0.5305** | **0.7319** | 标准答案被检索到的比例 |
 | L1 `nDCG@10` | 0.3252 | 0.5348 | |
-| L2 `groundedness` | **0.2059** | 0.5282 | 至少拿到一条有据证据的比例 |
-| L2 `evidence_precision` | 0.0223 | 0.0654 | 片段级 |
-| **送达率** | **0.3881** | 0.7218 | `groundedness ÷ recall`（**诊断量**） |
-| ⇒ **漏送** | **61.2%** | 27.8% | 检索到了却没送到模型面前 |
+| L2 `groundedness` | **0.5903** | **0.8952** | 至少拿到一条有据证据的比例（**2026-11-08 起 = 生产注入形态**） |
+| L2 `evidence_precision` | 0.0740 | 0.1324 | 片段级 |
+| **送达率** | **1.1129** | **1.2231** | `groundedness ÷ recall`（**诊断量**；⚠️ **已不是概率** ⇒ 见口径注） |
+| ⇒ **漏送** | **不可派生** | **不可派生** | ⚠️ 该比值**已 > 1** ⇒ 「送达率」不再是概率 ⇒ **不能**用 `1 − 送达率` 算漏送 |
 
 > ⚠️ **2026-11-07 更新「当前状态」表（第二次）**：底座又收窄中文停用字表（41→20 字）⇒ recall@10 再涨
 > （redchamber 0.4895→0.5305、watershed 0.7157→0.7319）⇒ 本表六行同步到 `scripts/golden-baseline.json`
 > 现行版本（`internal-2026-10-26b+delivery+cn-stopwords20+interrogatives`）。**第二、三节里的旧数字**
 > 是历次当轮实测的历史值，用于论证「当时为什么这么排期」，**不随基线更新**。
+
+> ⚠️ ⚠️ **2026-11-08 更新「当前状态」表（第三次）—— 注入口径对齐生产形态**：
+> 闸门原来**每条证据取正文前 120 字**（`golden_run::InjectionMode::HeadTrunc` 口径）
+> ⇒ ⇒ **量的不是生产** ⇒ ⇒ 已改成**生产形态**（**注入 + 锚定选段**：主体出现处、单条 ≤ 400 字、
+> 总量 ≤ 4,000 字；复用 `anchor_injection::AnchoredInjectionConfig::PRODUCTION` +
+> `context_compiler::compile_injection_with_selected_access_and_query`）
+> ⇒ `groundedness` **0.2059 → 0.5903** / **0.5282 → 0.8952**，
+> `evidence_precision` **0.0223 → 0.0740** / **0.0654 → 0.1324**。
+> ⇒ ⚠️ **这不代表检索变好了**：`recall@10` / `nDCG@10` **一个数字都没动**
+> （0.5305 / 0.3252 / 0.7319 / 0.5348）⇒ ⇒ **只是此前量错了东西**。
+> ⇒ ⚠️ **「送达率」这个比值现在是 > 1**：它拿**题级**的 `groundedness`（至少一条被送达 ⇒ 0/1）
+> 除以**题级均值**的 `recall_at_k`（多证据题可以是 0.5）⇒ ⇒ **口径混用 ⇒ 不是概率**
+> （与 `docs/status/real-corpus-delivery-2026-10-28.md` §3 的老结论**同源**）。
+> ⇒ ⇒ **「漏送 %」不能再从它派生**；真正的漏送分解（召回没找到 / 没进注入 / 进了没答案）见
+> `docs/04-internal/01-handoffs/memory-gate-caliber-alignment-2026-11-08.md`。
+> 本表同步到 `scripts/golden-baseline.json` 现行版本
+> （`internal-2026-10-26b+delivery+cn-stopwords20+interrogatives+anchored-injection-2026-11-08`）。
 
 ## 二、✅ **已证的路**（**照着走**）
 
