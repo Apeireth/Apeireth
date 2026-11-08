@@ -133,6 +133,14 @@ pub struct McpSweepReport {
     pub redaction_hits: usize,
     /// Which credential shapes the one-way tripwire tagged, in hit order.
     pub tripwire_kinds: Vec<LeakedCredentialKind>,
+    /// Whether the answer came from a **class B** tool (a tool the operator
+    /// declared as "its result face legitimately is credential material").
+    ///
+    /// A class B answer is swept by the **reversible** channel: the model sees
+    /// placeholders and the true value only leaves the domain through the
+    /// explicit local consumption face. The flag is in the sidecar so the
+    /// difference is **observable**, not a claim in a comment.
+    pub class_b: bool,
 }
 
 impl McpSweepReport {
@@ -189,10 +197,15 @@ pub fn normalized_mcp_value_with_sweep(
     }
     if let Some(report) = sweep {
         if report.is_hit() {
-            value["egress_sweep"] = serde_json::json!({
+            let mut sidecar = serde_json::json!({
                 "redaction_hits": report.redaction_hits,
                 "tripwire_kinds": report.tripwire_kinds,
             });
+            // 类 B 标记: 只在类 B 工具的结果面出现（**默认面逐字节不变**）.
+            if report.class_b {
+                sidecar["class_b"] = serde_json::json!(true);
+            }
+            value["egress_sweep"] = sidecar;
         }
     }
     value
@@ -243,25 +256,48 @@ fn sweep_structured_value(
     value: &serde_json::Value,
     domain: &mut SessionRedactionDomain,
     report: &mut McpSweepReport,
+    class_b: bool,
 ) -> serde_json::Value {
     match value {
         serde_json::Value::String(text) => {
-            let outcome = domain.sweep_result_face(text);
+            let outcome = sweep_text_surface(domain, text, class_b);
             report.absorb(&outcome);
             serde_json::Value::String(outcome.text().to_string())
         }
         serde_json::Value::Array(items) => serde_json::Value::Array(
             items
                 .iter()
-                .map(|item| sweep_structured_value(item, domain, report))
+                .map(|item| sweep_structured_value(item, domain, report, class_b))
                 .collect(),
         ),
         serde_json::Value::Object(map) => serde_json::Value::Object(
             map.iter()
-                .map(|(key, item)| (key.clone(), sweep_structured_value(item, domain, report)))
+                .map(|(key, item)| {
+                    (
+                        key.clone(),
+                        sweep_structured_value(item, domain, report, class_b),
+                    )
+                })
                 .collect(),
         ),
         other => other.clone(),
+    }
+}
+
+/// 扫一个文本面: **类 B** 工具走可逆通道, 其余走既有占位族 + 单向绊线.
+///
+/// 两条路的差别只有一处 —— **真值登记在哪本簿**:
+/// * 占位族那一本 ⇒ 受控回程面（**自动**）能还原 ⇒ 真值可能进 transcript;
+/// * 类 B 那一本 ⇒ 只有**显式**的本地消费面能还原 ⇒ 真值不进 transcript.
+fn sweep_text_surface(
+    domain: &mut SessionRedactionDomain,
+    text: &str,
+    class_b: bool,
+) -> EgressSweepOutcome {
+    if class_b {
+        domain.sweep_class_b_result_face(text)
+    } else {
+        domain.sweep_result_face(text)
     }
 }
 
@@ -276,10 +312,11 @@ fn sweep_block(
     domain: &mut SessionRedactionDomain,
     block: ContentBlock,
     report: &mut McpSweepReport,
+    class_b: bool,
 ) -> ContentBlock {
     match block {
         ContentBlock::Text { text, mime_type } => {
-            let outcome = domain.sweep_result_face(&text);
+            let outcome = sweep_text_surface(domain, &text, class_b);
             report.absorb(&outcome);
             ContentBlock::Text {
                 text: outcome.text().to_string(),
@@ -292,11 +329,11 @@ fn sweep_block(
             text,
             mime_type,
         } => {
-            let outcome = domain.sweep_result_face(&uri);
+            let outcome = sweep_text_surface(domain, &uri, class_b);
             report.absorb(&outcome);
             let uri = outcome.text().to_string();
             let text = text.map(|body| {
-                let outcome = domain.sweep_result_face(&body);
+                let outcome = sweep_text_surface(domain, &body, class_b);
                 report.absorb(&outcome);
                 outcome.text().to_string()
             });
@@ -325,6 +362,13 @@ pub struct McpDynamicTool {
     /// of one session share it — and so the provider-facing egress gate can
     /// hold the *same* domain and recognise what this tool aliased.
     domain: Arc<Mutex<SessionRedactionDomain>>,
+    /// Whether this tool is **declared class B** — 「本工具的结果面合法地就是
+    /// 凭据」.
+    ///
+    /// 声明为类 B ⇒ 结果面走**可逆占位族**（真值登记进**类 B 登记簿**）⇒
+    /// 模型侧只见占位符, 真值只由**显式的本地消费面**交还.
+    /// 未声明 ⇒ 走既有占位族 + 单向绊线（**行为逐字节不变**）.
+    class_b: bool,
     /// The module generation this tool was built in.
     ///
     /// A tool whose module generation expired is not callable any more: the
@@ -364,15 +408,50 @@ impl McpDynamicTool {
         connection: Arc<McpServerConnection>,
         domain: Arc<Mutex<SessionRedactionDomain>>,
     ) -> Self {
+        Self::new_with_domain_and_class_b(entry, connection, domain, false)
+    }
+
+    /// A **class B** dynamic tool: its result face legitimately *is* credential
+    /// material.
+    ///
+    /// The class B result face is swept by the **reversible** channel: the
+    /// model sees placeholders, and the true value only leaves the domain
+    /// through the **explicit** local consumption face
+    /// ([`SessionRedactionDomain::restore_for_local_consumer`]).
+    ///
+    /// The domain is the caller's: the class B placeholders must be
+    /// recognisable by the same local consumer that owns the domain.
+    pub fn new_class_b(
+        entry: McpToolEntry,
+        connection: Arc<McpServerConnection>,
+        domain: Arc<Mutex<SessionRedactionDomain>>,
+    ) -> Self {
+        Self::new_with_domain_and_class_b(entry, connection, domain, true)
+    }
+
+    /// The shared constructor: a tool, its domain, and whether the tool is
+    /// declared class B.
+    pub fn new_with_domain_and_class_b(
+        entry: McpToolEntry,
+        connection: Arc<McpServerConnection>,
+        domain: Arc<Mutex<SessionRedactionDomain>>,
+        class_b: bool,
+    ) -> Self {
         let generation = connection.generation();
         let generation_scope = connection.generation_scope();
         Self {
             entry,
             connection,
             domain,
+            class_b,
             generation,
             generation_scope,
         }
+    }
+
+    /// Whether this tool is **declared class B**.
+    pub fn is_class_b(&self) -> bool {
+        self.class_b
     }
 
     /// The receipt of the descriptor this tool exposes.
@@ -470,6 +549,7 @@ impl McpDynamicTool {
     /// has not been handed to the caller yet.
     fn sweep_remote_result(&self, result: &ToolCallResult) -> (ToolCallResult, McpSweepReport) {
         let mut report = McpSweepReport::default();
+        report.class_b = self.class_b;
         let bounded: Vec<ContentBlock> = result
             .content
             .iter()
@@ -482,7 +562,7 @@ impl McpDynamicTool {
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         let swept: Vec<ContentBlock> = bounded
             .into_iter()
-            .map(|block| sweep_block(&mut domain, block, &mut report))
+            .map(|block| sweep_block(&mut domain, block, &mut report, self.class_b))
             .collect();
         (
             ToolCallResult {
@@ -490,10 +570,9 @@ impl McpDynamicTool {
                 is_error: result.is_error,
                 // The structured channel is server-authored too: it is swept
                 // here and bounded on the model-facing side.
-                structured: result
-                    .structured
-                    .as_ref()
-                    .map(|structured| sweep_structured_value(structured, &mut domain, &mut report)),
+                structured: result.structured.as_ref().map(|structured| {
+                    sweep_structured_value(structured, &mut domain, &mut report, self.class_b)
+                }),
             },
             report,
         )
@@ -509,7 +588,9 @@ impl McpDynamicTool {
             .domain
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        domain.sweep_result_face(text).text().to_string()
+        sweep_text_surface(&mut domain, text, self.class_b)
+            .text()
+            .to_string()
     }
 
     /// Execute one frozen call: the frozen server, the frozen remote tool

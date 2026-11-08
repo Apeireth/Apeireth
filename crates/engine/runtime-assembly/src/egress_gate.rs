@@ -25,13 +25,14 @@
 //! —— 于是外部工具结果面产的占位符，在本闸的受控回程里认账、可还原。
 
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use apeireth_core::kernel::{Clock, SessionId};
 use apeireth_governance::authorization::{AuthorizationAction, AuthorizationPolicy};
 use apeireth_protocol::canonical::{ContentPart, NormalizedRequest, NormalizedResponse};
-use apeireth_runtime::canonical::egress_gate::{EgressGate, EgressVerdict};
+use apeireth_runtime::canonical::egress_gate::{EgressGate, EgressVerdict, LocalConsumerRestore};
 use apeireth_tools_canonical::mcp_bridge::SessionRedactionDomain;
+use apeireth_tools_canonical::redaction_bridge::RestoreReport;
 
 use crate::accountability::{AccountabilityLedger, Affected, Boundary, ImpactStatement, Outcome};
 use crate::consequence::{ConsequenceTracker, OutcomeSource};
@@ -130,6 +131,43 @@ impl RedactionEgressGate {
     /// 本闸持有的会话脱敏域（只读引用）。
     pub fn domain(&self) -> &Arc<Mutex<SessionRedactionDomain>> {
         &self.domain
+    }
+
+    /// 把闸的会话脱敏域换成**别人持有的那一个**（共享域接线面）。
+    ///
+    /// [`RedactionEgressGate::with_domain`] 是**构造器**（造一只新闸出来）; 本
+    /// 方法是**换域**（把已经在装配里的闸换成共享域）⇒ 生产接线不必重造闸,
+    /// 账本 / 授权 / 问责 / 后果那一整套都原样留着.
+    ///
+    /// **共享域 = 一个会话一个域**: 外部工具结果面与本闸持**同一个实例**
+    /// ⇒ 两面认账（工具面产的占位符，本闸认得出）.
+    #[must_use]
+    pub fn with_shared_domain(mut self, domain: Arc<Mutex<SessionRedactionDomain>>) -> Self {
+        self.domain = domain;
+        self
+    }
+
+    /// **本地消费面**（**显式调用**）：把文本里的**类 B 占位符**换回本地真值。
+    ///
+    /// # 这是类 B 通道唯一的真值出口
+    ///
+    /// * 调用方是**本地消费方**（拿真值去做本地的事）；**模型可见面**永不调它;
+    /// * 还原**必须显式** ⇒ 模型拿到的永远是占位符;
+    /// * **类 B 真值登记在类 B 登记簿**（与占位族登记簿分开）⇒ 本闸的**受控回程**
+    ///   （[`EgressGate::restore`]，模型回信 → 本地）**认不出**类 B 占位符
+    ///   ⇒ 类 B 真值**永不**进 transcript;
+    /// * 未登记的占位符**不还原、照实留痕**（本面只认账本域类 B 登记簿里的指纹）.
+    ///
+    /// 锁被污染时**不还原**（保持占位比还原错更安全）.
+    pub fn restore_for_local_consumer(&self, text: &str) -> RestoreReport {
+        let Ok(mut domain) = self.domain.lock() else {
+            return RestoreReport {
+                text: text.to_string(),
+                restored: Vec::new(),
+                unrestored: Vec::new(),
+            };
+        };
+        domain.restore_for_local_consumer(text)
     }
 
     /// 挂上问责账本（每次外部行动写一条影响声明）。
@@ -261,6 +299,11 @@ impl EgressGate for RedactionEgressGate {
     /// 双闸的闸二 —— 还原只发生在**受控回程面**（本地落盘前），
     /// 且只还原本会话登记簿登记过的指纹；未登记占位**不还原、照实留痕**。
     /// 对出境面不可逆：出去的请求里只有占位，没有真值。
+    ///
+    /// ⚠️ **类 B 真值不在这里**：类 B 真值登记在**类 B 登记簿**（与占位族登记簿
+    /// 分开）⇒ 本闸的受控回程**认不出**类 B 占位符 ⇒ 类 B 真值**永不**进
+    /// transcript（模型回信里带回的类 B 占位符原样留着）。类 B 真值只由**显式的
+    /// 本地消费面**交还（[`RedactionEgressGate::restore_for_local_consumer`]）。
     fn restore(&self, response: &mut NormalizedResponse) {
         let Ok(mut domain) = self.domain.lock() else {
             // 登记簿不可用 → 不还原（占位保留）。**不泄漏**：保持占位比还原错更安全。
@@ -268,6 +311,16 @@ impl EgressGate for RedactionEgressGate {
         };
         let report = domain.restore_for_local(&response.content);
         response.content = report.text;
+    }
+
+    /// **本地消费面**（显式调用）—— 端口面的同一条路径。
+    fn restore_for_local_consumer(&self, text: &str) -> LocalConsumerRestore {
+        // 显式走**固有方法**（同名, 但这里要的是它, 不是本 trait 方法）.
+        let report = RedactionEgressGate::restore_for_local_consumer(self, text);
+        LocalConsumerRestore {
+            text: report.text,
+            restored: report.restored,
+        }
     }
 
     fn vet(&self, request: &NormalizedRequest) -> EgressVerdict {
@@ -348,6 +401,38 @@ pub fn egress_gate_enabled_from_value(raw: &str) -> bool {
     !(trimmed.is_empty() || trimmed == "0" || trimmed.eq_ignore_ascii_case("false"))
 }
 
+// ---------------------------------------------------------------------------
+// 会话脱敏域（一个会话一个域）：闸与外部工具结果面共用**同一个实例**
+// ---------------------------------------------------------------------------
+
+/// 进程级共享会话脱敏域（**默认关**）。
+///
+/// **一个会话一个域**：外部工具结果面与出网闸持**同一个实例** ⇒ 两面认账
+/// （工具面产的占位符，闸认得出）。
+static SHARED_SESSION_DOMAIN: OnceLock<Arc<Mutex<SessionRedactionDomain>>> = OnceLock::new();
+
+/// **共享会话脱敏域**（域注入面；**默认关**）。
+///
+/// `None` = 域注入**未开启** ⇒ 出网闸自建一份域、外部工具桥每工具一份域
+/// ⇒ 跨面互认这件事**不存在**（与接线前**逐字节一致**）。
+/// `Some` = **同一个实例** ⇒ 外部工具结果面产的占位符，出网闸认账、可还原。
+///
+/// # 开启判据 = **既有登记名**（不新增 env 名）
+///
+/// 判据是 [`EGRESS_GATE_ENV`]（`APEIRETH_ENABLE_EGRESS_GATE`）：出网闸开着，
+/// 才有一个「需要跨面互认」的会话 ⇒ 才建共享域。**不新增 `APEIRETH_*` 名**
+/// ⇒ 架构契约的 env 棘轮不受影响。
+pub fn shared_session_domain() -> Option<Arc<Mutex<SessionRedactionDomain>>> {
+    if !egress_gate_enabled_from_env() {
+        return None;
+    }
+    Some(
+        SHARED_SESSION_DOMAIN
+            .get_or_init(|| Arc::new(Mutex::new(SessionRedactionDomain::new())))
+            .clone(),
+    )
+}
+
 /// 闸 env 是否**开启**（读 env；未设 = 关）。
 ///
 /// 问责闭环第 ③ 步的**自动回填面**与问责面共用这一个开关：
@@ -409,6 +494,11 @@ pub fn egress_gate_from_env_with_all(
     }
     let ledger = Arc::new(EgressLedger::new(ledger_path));
     let mut gate = RedactionEgressGate::with_ledger(ledger);
+    // **共享会话脱敏域**（一个会话一个域）：闸与外部工具结果面持**同一个实例**
+    // ⇒ 跨面互认。**默认关**：闸没开 ⇒ 域不共享（既有行为，逐字节不变）。
+    if let Some(domain) = shared_session_domain() {
+        gate = gate.with_shared_domain(domain);
+    }
     if let Some(path) = accountability_path {
         gate = gate.with_accountability(Arc::new(AccountabilityLedger::new(Some(path))));
     }

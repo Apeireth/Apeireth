@@ -37,7 +37,9 @@ use apeireth_runtime_assembly::canonical::{
     authorize_external_tool_family, wire_external_tools, McpModule,
 };
 use apeireth_runtime_assembly::ProductionModules;
-use apeireth_tools_canonical::mcp_bridge::{McpDefinition, McpToolBridge};
+use apeireth_tools_canonical::mcp_bridge::{
+    server_list_path, ClassBDeclaration, McpDefinition, McpToolBridge, CLASS_B_DECLARATION_FILE,
+};
 
 /// 装配期取出的外部工具桥句柄。
 ///
@@ -71,6 +73,72 @@ pub fn take_handles(modules: &ProductionModules) -> ExternalToolHandles {
     }
 }
 
+/// **类 B 声明**的落点（与 MCP 服务器清单同一个数据目录）。
+///
+/// 与 `MCP_SERVERS_FILE` 同目录 ⇒ 操作者只管一个目录 ⇒ 声明与清单不会分家.
+fn class_b_declaration_path() -> std::path::PathBuf {
+    server_list_path(&crate::default_panel_data_dir()).with_file_name(CLASS_B_DECLARATION_FILE)
+}
+
+/// 读**类 B 声明**（**默认空**）。
+///
+/// * **缺文件 = 空声明** ⇒ 没有工具被声明 ⇒ 结果面行为与接线前逐字节不变;
+/// * **文件坏了 = 不猜**（fail-closed）: 声明保持空 + stderr 如实报错
+///   （不静默、不假装已开）⇒ 通道保持关.
+fn class_b_declaration() -> ClassBDeclaration {
+    let path = class_b_declaration_path();
+    match ClassBDeclaration::from_json_file(&path) {
+        Ok(declaration) => declaration,
+        Err(error) => {
+            eprintln!(
+                "[external-tools] 类 B 声明读取失败（{error}）—— 按 fail-closed 处理: 不声明任何类 B 工具"
+            );
+            ClassBDeclaration::empty()
+        }
+    }
+}
+
+/// 把**共享会话脱敏域**与**类 B 声明**注入活桥（生产接线面）。
+///
+/// # 这一步把「两个域」变成「一个域」
+///
+/// 外部工具结果面（`McpDynamicTool`）与出网闸（`RedactionEgressGate`）必须持
+/// **同一个**会话脱敏域 ⇒ 两面才认账：工具面产的占位符，出网闸认得出。
+///
+/// # 默认关（判据）
+///
+/// 域注入的判据 = **既有登记名** `APEIRETH_ENABLE_EGRESS_GATE`（**不新增**
+/// `APEIRETH_*` 名）⇒ 出网闸没开 ⇒ `shared_session_domain()` 返回 `None`
+/// ⇒ 本函数**什么都不做** ⇒ 桥保持「每工具一域 + 无类 B 声明」
+/// ⇒ 行为与接线前**逐字节一致**。
+///
+/// # 注入时机
+///
+/// 活桥是**资源工厂**在运行时初始化时交出来的 ⇒ 组合根拿到它时它已经存在 ⇒
+/// 域只能**事后**注入（`set_session_domain`）。工具是在**发现**时包装的 ⇒
+/// 注入必须发生在**第一次发现之前** —— 本函数由 [`wire_at_startup`] 在发现
+/// 之前调用。
+///
+/// 返回值 = 是否真的注入了（`false` = 没有共享域 / 没有活桥 ⇒ 未接线）。
+pub fn wire_session_redaction(handles: &ExternalToolHandles) -> bool {
+    let Some(bridge) = handles.bridge() else {
+        return false;
+    };
+    let Some(domain) = apeireth_runtime_assembly::egress_gate::shared_session_domain() else {
+        // 域注入**未开启** ⇒ 不接线（逐字节不变）。
+        return false;
+    };
+    bridge.set_session_domain(domain);
+    let declaration = class_b_declaration();
+    if !declaration.is_empty() {
+        for line in declaration.audit_lines() {
+            eprintln!("[external-tools] {line}");
+        }
+        bridge.set_class_b_declaration(declaration);
+    }
+    true
+}
+
 /// 启动期接线: 登记族授权 + 逐次人批标记, 再把发现的外部工具登记进能力表。
 ///
 /// **不抛**：外部服务器不可达 ≠ 主机不可用 ⇒ 发现失败只如实记录到 stderr，
@@ -83,6 +151,11 @@ pub async fn wire_at_startup(
     let Some(bridge) = handles.bridge() else {
         return;
     };
+    // **共享会话脱敏域 + 类 B 声明**注入（**默认关** ⇒ 未开启时本步是 no-op）。
+    //
+    // 时机: 必须在**第一次发现之前** —— 工具是在发现时包装的, 域与声明在
+    // 包装时读。`wire_external_tools` 下面那一次 `refresh()` 就是第一次发现。
+    wire_session_redaction(handles);
     // 族授权 + 族逐次人批: 族内能力运行时才发现, 无法逐个静态登记 ⇒ 族根是
     // 它们唯一的共同前缀。人批权归运行时治理链 (owner 拍板: 一律逐次人批,
     // `full` 会话预设不豁免 —— 由预设层的族地板兜住)。

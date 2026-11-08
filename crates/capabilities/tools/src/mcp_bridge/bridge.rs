@@ -64,7 +64,7 @@
 //! decide *authorization*, and none of them can bring a denied tool back.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use apeireth_core::kernel::CapabilityId;
 use apeireth_governance::PermissionPolicy;
@@ -81,7 +81,7 @@ use super::governance::{
     McpFamilyGrants, McpPermissionMapping, McpRiskMappingHook, McpToolDenyGuard,
 };
 use super::tool::{mcp_output_schema, McpDynamicTool};
-use super::SessionRedactionDomain;
+use super::{ClassBDeclaration, SessionRedactionDomain};
 
 /// Where discovered dynamic tools land (a module bag, a runtime registry).
 pub trait McpToolRegistry: Send + Sync {
@@ -168,7 +168,22 @@ pub struct McpToolBridge {
     /// [`McpToolBridge::with_session_domain`] when the session owns a single
     /// domain — then every tool of the bridge sweeps in it, and the
     /// provider-facing egress gate can hold the same one.
-    session_domain: Option<Arc<Mutex<SessionRedactionDomain>>>,
+    ///
+    /// The slot is a [`OnceLock`] because the **live** bridge of the production
+    /// assembly is built inside a resource factory (the host cannot hand it a
+    /// domain before it exists) ⇒ the domain is injected **after** construction
+    /// ([`McpToolBridge::set_session_domain`]) and before the first discovery
+    /// (the tools are wrapped at discovery time).
+    session_domain: OnceLock<Arc<Mutex<SessionRedactionDomain>>>,
+    /// The **class B declaration** — which tools' result faces legitimately
+    /// are credential material.
+    ///
+    /// `None` = **not declared**: every tool of this bridge sweeps its result
+    /// face the way it always did (the behaviour before this batch, byte for
+    /// byte). The caller injects a declaration with
+    /// [`McpToolBridge::with_class_b_declaration`] (or
+    /// [`McpToolBridge::set_class_b_declaration`] for the live bridge).
+    class_b: OnceLock<ClassBDeclaration>,
 }
 
 /// One wrapped dynamic tool plus the directory entry it was built from.
@@ -321,7 +336,8 @@ impl McpToolBridge {
             tools: Mutex::new(BTreeMap::new()),
             preset_grants: Mutex::new(BTreeSet::new()),
             refresh_lock: tokio::sync::Mutex::new(()),
-            session_domain: None,
+            session_domain: OnceLock::new(),
+            class_b: OnceLock::new(),
         })
     }
 
@@ -338,15 +354,53 @@ impl McpToolBridge {
     /// bridge is unchanged.
     #[must_use]
     pub fn with_session_domain(mut self, domain: Arc<Mutex<SessionRedactionDomain>>) -> Self {
-        self.session_domain = Some(domain);
+        let _ = self.session_domain.set(domain);
         self
     }
 
     /// The session redaction domain the tools of this bridge sweep in.
     ///
     /// `None` = **not wired** (each tool keeps its own domain).
-    pub fn session_domain(&self) -> Option<&Arc<Mutex<SessionRedactionDomain>>> {
-        self.session_domain.as_ref()
+    pub fn session_domain(&self) -> Option<Arc<Mutex<SessionRedactionDomain>>> {
+        self.session_domain.get().cloned()
+    }
+
+    /// **Inject the session domain after construction** (the live bridge of
+    /// the production assembly is built inside a resource factory, so the host
+    /// can only reach it once it exists).
+    ///
+    /// The first injection wins; a second one is ignored (the domain of a
+    /// session is a fact, not a preference). Tools are wrapped at discovery
+    /// time ⇒ inject **before the first refresh** to have the tools sweep in
+    /// this domain.
+    pub fn set_session_domain(&self, domain: Arc<Mutex<SessionRedactionDomain>>) {
+        let _ = self.session_domain.set(domain);
+    }
+
+    /// Declare which tools of this bridge are **class B** (their result face
+    /// legitimately is credential material).
+    ///
+    /// **Not declared by default**: an empty declaration (or none at all)
+    /// leaves every tool's result face exactly as it was — the behaviour before
+    /// this batch, byte for byte.
+    #[must_use]
+    pub fn with_class_b_declaration(mut self, declaration: ClassBDeclaration) -> Self {
+        let _ = self.class_b.set(declaration);
+        self
+    }
+
+    /// The class B declaration of this bridge.
+    ///
+    /// `None` = **not declared** (the default).
+    pub fn class_b_declaration(&self) -> Option<ClassBDeclaration> {
+        self.class_b.get().cloned()
+    }
+
+    /// **Inject the class B declaration after construction** (same shape as
+    /// [`McpToolBridge::set_session_domain`]: the live bridge of the
+    /// production assembly exists only after the runtime initialized it).
+    pub fn set_class_b_declaration(&self, declaration: ClassBDeclaration) {
+        let _ = self.class_b.set(declaration);
     }
 
     /// The loaded configuration.
@@ -704,13 +758,28 @@ impl McpToolBridge {
         // The session domain is the injection face: wired ⇒ every tool of the
         // session sweeps in one domain; not wired ⇒ each tool keeps its own
         // (the behaviour before this batch).
-        let dynamic = match &self.session_domain {
-            Some(domain) => Arc::new(McpDynamicTool::new_with_domain(
+        //
+        // The class B declaration is read **per entry**: a declared tool
+        // sweeps its result face in the reversible channel; an undeclared one
+        // keeps the existing sweep (byte for byte).
+        let class_b = self
+            .class_b
+            .get()
+            .map(|declaration| declaration.declares(&entry.model_name))
+            .unwrap_or(false);
+        let dynamic = match self.session_domain.get() {
+            Some(domain) => Arc::new(McpDynamicTool::new_with_domain_and_class_b(
                 entry,
                 connection,
                 Arc::clone(domain),
+                class_b,
             )),
-            None => Arc::new(McpDynamicTool::new(entry, connection)),
+            None => Arc::new(McpDynamicTool::new_with_domain_and_class_b(
+                entry,
+                connection,
+                Arc::new(Mutex::new(SessionRedactionDomain::new())),
+                class_b,
+            )),
         };
         Arc::new(PipelinedCapability::new(
             dynamic,
