@@ -230,6 +230,20 @@
       "status": "out-of-scope"
     },
     {
+      "module": "vector_rebuild",
+      "loc": 549,
+      "layer": "D2",
+      "kind": "infra",
+      "consumes": "Text",
+      "produces": "Gap",
+      "measurable_by": "not-applicable",
+      "note": "派生索引重建（B2 基建）",
+      "delta_recall": null,
+      "delta_grounded": null,
+      "measure_note": null,
+      "status": "left-pool"
+    },
+    {
       "module": "three_layer",
       "loc": 529,
       "layer": "D4",
@@ -270,20 +284,6 @@
       "delta_recall": null,
       "delta_grounded": null,
       "measure_note": null
-    },
-    {
-      "module": "vector_rebuild",
-      "loc": 460,
-      "layer": "D2",
-      "kind": "infra",
-      "consumes": "Text",
-      "produces": "Gap",
-      "measurable_by": "not-applicable",
-      "note": "派生索引重建（B2 基建）",
-      "delta_recall": null,
-      "delta_grounded": null,
-      "measure_note": null,
-      "status": "left-pool"
     },
     {
       "module": "wiki_corpus_real",
