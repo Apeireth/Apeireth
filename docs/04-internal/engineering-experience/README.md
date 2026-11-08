@@ -15,6 +15,10 @@
 | [`06-truth-and-guard.md`](06-truth-and-guard.md) | **真源矿** · 四级口径（「已实现 / 已接线」这类话）怎么保持为真（声明 / 棘轮 / 量具 / 知识库） | 批 L4 |
 | [`07-workline-and-merge.md`](07-workline-and-merge.md) | **工作线矿** · 认领、去重、合并收口与接棒（工作线登记 / 判重 / 收口 / 交接） | 批 L4 |
 
+**轴级记录**（不是矿，是轴）：[`L4-mining-map.md`](L4-mining-map.md) · 批 L4 的采矿图（挖了什么 / 没挖什么 / 下一批挖什么）；
+L 轴第一战役（2026-10-15 封账，五矿）的采矿图见
+[archive/backend-enhancement/L-experience-distillation-2026-10-15.md](../../archive/backend-enhancement/L-experience-distillation-2026-10-15.md)。
+
 ---
 
 ## 怎么用（30 秒定位）

@@ -73,6 +73,9 @@ LINK_RE = re.compile(r"\[[^\]]*\]\(\s*<?([^)\s>]+)>?(?:\s+[\"'][^)]*[\"'])?\s*\)
 #: 出处行（每条经验至少 1 行，且必须带链接 ⇒ 能指回仓内）。
 SOURCE_RE = re.compile(r"^>\s*出处[：:]")
 
+#: 可跑命令（用于【守卫】段的强制项）。
+CMD_RE = re.compile(r"(?:python3?|cargo|pwsh|bash|git)\s+[A-Za-z0-9_./-]")
+
 #: 机器层互引的两种写法：`FP:<id>` 或指向 yaml 的链接且同行含 `<id>`。
 FP_INLINE_RE = re.compile(r"FP:([A-Za-z0-9][A-Za-z0-9._-]*)")
 
@@ -130,6 +133,41 @@ def split_sections(text: str) -> list[tuple[str, int, str]]:
 def segments_of(body: str) -> set[str]:
     """正文里出现的 `【段名】`。"""
     return {m.group(1) for m in re.finditer(r"【([^】]+)】", body)}
+
+
+def segment_text(body: str, name: str) -> str:
+    """取 `【name】` 段到下一个 `【…】` 之前的正文。"""
+    match = re.search(rf"【{re.escape(name)}】(.*?)(?=【[^】]+】|\Z)", body, re.DOTALL)
+    return match.group(1) if match else ""
+
+
+def check_command_bearing_segments(path: Path, problems: list[str]) -> None:
+    """06/07 型条目：**【守卫】段必须含一条可跑命令**；**【锚点】段必须含仓内链接**。
+
+    为什么单列这两条：
+    * 【守卫】只写「（无）」⇒ 经验就退化成散文 ⇒ 违反「每条可判定的断言都要有守卫」
+      （`workline-registry.md` §二.3）⇒ 机器层面强制「命令必须真的能跑」。
+    * 【锚点】只写 commit sha ⇒ 提交会沉进历史、读者点不到 ⇒ 必须有**仓内可点击**的位置。
+    """
+    prefix = path.name[:3]
+    if prefix not in ("06-", "07-"):
+        return
+    text = path.read_text(encoding="utf-8")
+    for title, line_no, body in split_sections(text):
+        if not ENTRY_RE.match(f"## " + title):
+            continue
+        guard_seg = segment_text(body, "守卫")
+        if guard_seg and not CMD_RE.search(guard_seg):
+            problems.append(
+                f"{path.relative_to(ROOT)}:{line_no}: 条目「{title}」的【守卫】段没有可跑命令"
+                f"（须形如 `python3 scripts/xxx.py --check` / `cargo test …`）"
+            )
+        anchor_seg = segment_text(body, "锚点")
+        if anchor_seg and not LINK_RE.search(anchor_seg):
+            problems.append(
+                f"{path.relative_to(ROOT)}:{line_no}: 条目「{title}」的【锚点】段没有仓内链接"
+                f"（只写 commit sha ⇒ 读者点不到）"
+            )
 
 
 def check_segments(path: Path, problems: list[str]) -> None:
@@ -285,6 +323,7 @@ def main(argv: list[str]) -> int:
     files = mine_files()
     for path in files:
         check_segments(path, problems)
+        check_command_bearing_segments(path, problems)
         check_anchors(path, problems)
     check_index(problems)
     check_class(problems)
