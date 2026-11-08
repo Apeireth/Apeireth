@@ -465,7 +465,11 @@ fn tripwire_is_wired_for_exactly_the_expected_families() {
     // 批次 1 = {shell, filesystem, search, repo}；批次 2 = {fetch, git_write, worktree_apply, recon}；
     // 批次 2c = {external}（10 个外部工具适配器，原样回显最凶的一族）；
     // 批次 3b = {content_feed}（**记忆摄取面**：摄取内容入库前清扫 —— 那是
-    //   「凭据进存储」的面，比 transcript 更深 ⇒ ⇒ 接线落在摄取内容构造处）。
+    //   「凭据进存储」的面，比 transcript 更深 ⇒ ⇒ 接线落在摄取内容构造处）；
+    // 裁决 E = {repo_map_tool, doc_ops, sheet_ops, skill}（四族）——
+    //   ⚠️ `repo_map_tool` 是**族文件所在目录名**（该族文件在 `src/` 根 ⇒ 族名取文件名）
+    //   ⇒ ⇒ 与守卫的「首段目录名优先，否则文件名去扩展」判定一致；
+    // 并行线 = {http_write, web_search}（两族已实测接入 ⇒ ⇒ 登记它们是**如实登记**）。
     let expected: BTreeSet<String> = [
         "shell",
         "filesystem",
@@ -477,13 +481,19 @@ fn tripwire_is_wired_for_exactly_the_expected_families() {
         "recon",
         "external",
         "content_feed",
+        "repo_map_tool",
+        "doc_ops",
+        "sheet_ops",
+        "skill",
+        "http_write",
+        "web_search",
     ]
     .iter()
     .map(|name| (*name).to_string())
     .collect();
     assert_eq!(
         wired, expected,
-        "绊线的生产接线方必须恰为十族 (批次 1 四族 + 批次 2 四族 + 批次 2c 一族 + 批次 3b 一族)"
+        "绊线的生产接线方必须恰为十六族 (批次 1 四族 + 批次 2 四族 + 批次 2c 一族 + 批次 3b 一族 + 裁决 E 四族 + 并行线两族)"
     );
 
     // ⚠️ **跨族共享模块对枚举「不可见」是一条隐式契约** —— 现在把它**变成显式断言**。
