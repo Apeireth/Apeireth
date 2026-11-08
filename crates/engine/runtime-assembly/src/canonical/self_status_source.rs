@@ -30,10 +30,13 @@ use crate::weather_probe::weather_reminder_count;
 use apeireth_core::cost_router::{CostRouter, CostRoutingStatus};
 use apeireth_core::kernel::SessionId;
 use apeireth_core::model_profile::ModelProfile;
+use apeireth_core::routing_policy::RoutingPolicy;
 use apeireth_orchestration::self_tuning::TunableParam;
 use apeireth_tools_canonical::self_status::{
-    BioMechanismKind, BioMechanismProbe, BioMechanismReading, BIO_MECHANISM_NOT_WIRED_REASON,
-    BIO_SELF_STATUS_ENABLE_ENV, BIO_STAGE_WIRED,
+    BioMechanismKind, BioMechanismProbe, BioMechanismReading, RoutingPolicyCandidateRow,
+    RoutingPolicyDecision, RoutingPolicyStatus, BIO_MECHANISM_NOT_WIRED_REASON,
+    BIO_SELF_STATUS_ENABLE_ENV, BIO_STAGE_WIRED, QUOTA_DEPTH_NOT_ENABLED,
+    QUOTA_DEPTH_READING_MISSING,
 };
 use apeireth_tools_canonical::{
     derive_tuning_preset, BackupStatus, BudgetStatus, CapabilitySwitch, CareStatus,
@@ -41,7 +44,7 @@ use apeireth_tools_canonical::{
     ProposalStatus, QuotaDimensionStatus, QuotaMeterReading, QuotaStatus, SelfStatusIdentity,
     SelfStatusSnapshot, SelfStatusSource, SessionQuotaProbe, StatusProbe, TaskBoardStatus,
     TraitStatus, TuningStatus, VoiceStatus, WorkspaceStatus, BUDGET_SOURCE_CONSTANT_NOTE,
-    DATA_PROBE_NOT_WIRED, QUOTA_DEPTH_NOT_WIRED, QUOTA_METER_SCOPE_REQUIRED,
+    DATA_PROBE_NOT_WIRED, QUOTA_METER_SCOPE_REQUIRED,
 };
 
 use super::care_heartbeat::CareHeartbeatStatus;
@@ -88,7 +91,8 @@ pub fn budget_status_from_constants() -> BudgetStatus {
             tokens: QuotaDimensionStatus::without_reading(None, DATA_PROBE_NOT_WIRED),
             tool_steps: QuotaDimensionStatus::without_reading(None, DATA_PROBE_NOT_WIRED),
             cost_micros: QuotaDimensionStatus::without_reading(None, DATA_PROBE_NOT_WIRED),
-            depth: QuotaDimensionStatus::not_wired(QUOTA_DEPTH_NOT_WIRED),
+            // 深度维是 **opt-in**: 常量口径下无上限 ⇒ 未启用 (如实, 不再是「暂无接口」)。
+            depth: QuotaDimensionStatus::without_reading(None, QUOTA_DEPTH_NOT_ENABLED),
         },
         source: BUDGET_SOURCE_CONSTANT.to_string(),
         note: BUDGET_SOURCE_CONSTANT_NOTE.to_string(),
@@ -109,6 +113,7 @@ pub fn budget_status_from_configured(
     quota_max_tokens: Option<u64>,
     quota_max_tool_steps: Option<u64>,
     quota_max_cost_micros: Option<u64>,
+    quota_max_depth: Option<u64>,
 ) -> BudgetStatus {
     BudgetStatus {
         max_rounds_per_turn,
@@ -123,10 +128,43 @@ pub fn budget_status_from_configured(
                 quota_max_cost_micros,
                 DATA_PROBE_NOT_WIRED,
             ),
-            depth: QuotaDimensionStatus::not_wired(QUOTA_DEPTH_NOT_WIRED),
+            // 深度维: 上限真值来自生效旋钮 (`None` = 未设上限 ⇒ **不启用**,
+            // 整行显 "—" + 原因, 不显示成真数字); 上限存在时**必须**带口径
+            // 注记 (当前调用树可达深度 ≤ 1 ⇒ 更大的上限不可达)。
+            // 已耗在自述采集时按会话作用域现探测 (会话账本暂无深度列 ⇒ 显式
+            // null + 原因, **不报 0**)。
+            depth: match quota_max_depth {
+                // 未启用 ⇒ 整行显 "—" (未接线 / 不适用), **不**显示成真数字。
+                None => QuotaDimensionStatus::not_wired(QUOTA_DEPTH_NOT_ENABLED),
+                Some(_) => {
+                    let note = quota_depth_ceiling_note(quota_max_depth).unwrap_or_default();
+                    QuotaDimensionStatus::without_reading(
+                        quota_max_depth,
+                        format!("{note}; {QUOTA_DEPTH_READING_MISSING}"),
+                    )
+                }
+            },
         },
         source: BUDGET_SOURCE_CONFIGURED.to_string(),
         note: BUDGET_SOURCE_CONFIGURED_NOTE.to_string(),
+    }
+}
+
+/// 深度维的**口径注记** (上限的可达性)。
+///
+/// ⚠️ 深度上限取自**运行时调用树读数**; 当前运行时结构下调用树可达深度
+/// ≤ [`DEFAULT_MAX_INVOCATION_DEPTH`] (子循环那条链是「平」的) ⇒ **上限大于
+/// 该值即不可达** ⇒ 自述面必须带这句 (否则看着在计量、实际是死的)。
+pub fn quota_depth_ceiling_note(max_depth: Option<u64>) -> Option<String> {
+    let reachable = u64::from(apeireth_runtime::canonical::module::DEFAULT_MAX_INVOCATION_DEPTH);
+    match max_depth {
+        None => None,
+        Some(limit) if limit > reachable => Some(format!(
+            "口径: 深度上限取自运行时调用树读数; 当前调用树可达深度 ≤ {reachable} ⇒ 上限 {limit} 不可达"
+        )),
+        Some(_) => Some(format!(
+            "口径: 深度上限取自运行时调用树读数 (当前调用树可达深度 ≤ {reachable})"
+        )),
     }
 }
 
@@ -158,6 +196,9 @@ pub fn session_quota_probe(db_path: PathBuf) -> SessionQuotaProbe {
                 .unwrap_or(u64::MAX),
             consumed_cost_micros: loaded.quota.consumed_cost_micros,
             unpriced_rounds: u64::try_from(loaded.quota.unpriced_rounds).unwrap_or(u64::MAX),
+            // 峰值深度: 会话账本 (`CognitiveQuota`) **暂无深度列** ⇒ 已耗取不到
+            // (`None`) ⇒ 自述显式 null + 原因, **不报 0** (0 = 编造「没消耗过」)。
+            consumed_depth: None,
         })
     })
 }
@@ -167,6 +208,41 @@ pub fn session_quota_probe(db_path: PathBuf) -> SessionQuotaProbe {
 /// 路由就照实报「尚无任务被路由」, 不编造档位/选定 (0 装诚实)。
 pub fn cost_routing_probe(router: Arc<CostRouter>) -> StatusProbe<CostRoutingStatus> {
     Arc::new(move || Ok(router.status()))
+}
+
+/// 自省通道: **路由策略层**探针 (W2 · C-H1) —— 现读策略层的最近一次决策真值
+/// (选中谁 / 为什么 / 退路是谁 / 谁被排除且为何)。
+///
+/// 与任务选路**同一台** [`RoutingPolicy`] (同源) ⇒ 自述面看到的决策就是选路
+/// 真正做过的那次。尚无任务被路由 ⇒ `last_decision = None` (不编造档位/选定)。
+pub fn routing_policy_probe(policy: Arc<RoutingPolicy>) -> StatusProbe<RoutingPolicyStatus> {
+    Arc::new(move || {
+        let enabled = policy.is_enabled();
+        let last_decision = policy
+            .last_decision()
+            .map(|decision| RoutingPolicyDecision {
+                tier: decision.tier.as_str().to_string(),
+                privacy: decision.privacy.as_str().to_string(),
+                privacy_source: decision.privacy_source.as_str().to_string(),
+                selected_model: decision.selected_model.clone(),
+                selection_reason: decision.selection_reason.clone(),
+                fallback_chain: decision.fallback_chain.clone(),
+                fallback_reason: decision.fallback_reason.clone(),
+                comparisons: decision
+                    .comparisons
+                    .iter()
+                    .map(|row| RoutingPolicyCandidateRow {
+                        model_id: row.model_id.clone(),
+                        outcome: row.outcome.as_str().to_string(),
+                        exclusion_reason: row.exclusion_reason.clone(),
+                    })
+                    .collect(),
+            });
+        Ok(RoutingPolicyStatus {
+            enabled,
+            last_decision,
+        })
+    })
 }
 
 /// 自省通道: 用户域节探测口 (W3-①) —— 现探测当前域的域文档真值与域内计数。
@@ -422,6 +498,9 @@ pub struct ProductionSelfStatusSource {
     model_profile: Option<ModelProfile>,
     /// 成本分级路由节真值探测口 (H-P2): 路由器开关 + 最近决策 (同源现读)。
     cost_routing: Option<StatusProbe<CostRoutingStatus>>,
+    /// **路由策略层**真值探测口 (W2 · C-H1): 策略层开关 + 最近一次决策真值
+    /// (选中谁 / 为什么 / 退路 / 排除理由), 与任务选路同一台策略层 (同源)。
+    routing_policy: Option<StatusProbe<RoutingPolicyStatus>>,
     domain: Option<StatusProbe<DomainStatus>>,
     content_feed: Option<StatusProbe<ContentFeedStatus>>,
     care: Option<StatusProbe<CareStatus>>,
@@ -469,6 +548,7 @@ impl ProductionSelfStatusSource {
             quota: None,
             model_profile: None,
             cost_routing: None,
+            routing_policy: None,
             domain: None,
             content_feed: None,
             care: None,
@@ -544,6 +624,14 @@ impl ProductionSelfStatusSource {
     #[must_use]
     pub fn with_cost_routing_probe(mut self, probe: StatusProbe<CostRoutingStatus>) -> Self {
         self.cost_routing = Some(probe);
+        self
+    }
+
+    /// 注入**路由策略层**节探测口 (W2 · C-H1): 策略层开关 + 最近一次决策真值
+    /// (每次自述现读, 与任务选路同一台策略层, 同源)。
+    #[must_use]
+    pub fn with_routing_policy_probe(mut self, probe: StatusProbe<RoutingPolicyStatus>) -> Self {
+        self.routing_policy = Some(probe);
         self
     }
 
@@ -752,6 +840,19 @@ impl ProductionSelfStatusSource {
             self.quota_row_with(budget.quota.cost_micros, session, |row, reading| {
                 row.with_cost_reading(reading.consumed_cost_micros, reading.unpriced_rounds)
             });
+        // 深度维: 已耗 = **峰值深度**。会话行只落上限 ⇒ 计数读不到 ⇒ 读数显式
+        // null + 原因 (**不报 0**)。
+        // ⚠️ 深度维**未启用** (无上限) ⇒ 整行保持 "—" (未接线 / 不适用) ⇒ 不进
+        // 读数替换 (否则会从 "—" 变成 "—/—", 看着像在计量)。
+        if budget.quota.depth.limit.is_some() {
+            budget.quota.depth =
+                self.quota_row_with(budget.quota.depth, session, |row, reading| {
+                    match reading.consumed_depth {
+                        Some(consumed) => row.with_reading(consumed),
+                        None => row.with_missing_reading(QUOTA_DEPTH_READING_MISSING),
+                    }
+                });
+        }
         budget
     }
 
@@ -844,6 +945,17 @@ impl ProductionSelfStatusSource {
             Some(probe) => match probe() {
                 Ok(status) => (Some(status), None),
                 Err(error) => (None, Some(format!("cost routing probe failed: {error}"))),
+            },
+            None => (None, Some(DATA_PROBE_NOT_WIRED.to_string())),
+        };
+
+        // 路由策略层一节 (W2 · C-H1): 探针缺位 = 显式 null + 原因 (与成本
+        // 分级路由节同款口径); 策略层关着时探针仍在场 ⇒ enabled=false 且
+        // last_decision=None (不编造决策)。
+        let (routing_policy, routing_policy_reason) = match &self.routing_policy {
+            Some(probe) => match probe() {
+                Ok(status) => (Some(status), None),
+                Err(error) => (None, Some(format!("routing policy probe failed: {error}"))),
             },
             None => (None, Some(DATA_PROBE_NOT_WIRED.to_string())),
         };
@@ -1012,6 +1124,8 @@ impl ProductionSelfStatusSource {
             model_reason,
             cost_routing,
             cost_routing_reason,
+            routing_policy,
+            routing_policy_reason,
             domain,
             domain_reason,
             content_feed,
@@ -1088,16 +1202,18 @@ mod tests {
             budget.quota.cost_micros.reason.as_deref(),
             Some(DATA_PROBE_NOT_WIRED)
         );
-        // 深度维如实"暂无接口"。
+        // 深度维: 未设上限 ⇒ **未启用** (不再写「暂无接口」; 整行显 "—")。
+        assert_eq!(budget.quota.depth.limit, None);
+        assert_eq!(budget.quota.depth.consumed, None);
         assert_eq!(
             budget.quota.depth.reason.as_deref(),
-            Some(QUOTA_DEPTH_NOT_WIRED)
+            Some(QUOTA_DEPTH_NOT_ENABLED)
         );
     }
 
     #[test]
     fn configured_budget_status_carries_the_live_knob_values() {
-        let budget = budget_status_from_configured(2, 4, Some(5_000), None, Some(7_000));
+        let budget = budget_status_from_configured(2, 4, Some(5_000), None, Some(7_000), None);
         assert_eq!(budget.max_rounds_per_turn, 2);
         assert_eq!(budget.max_tool_calls_per_round, 4);
         assert_eq!(budget.source, BUDGET_SOURCE_CONFIGURED);
@@ -1294,6 +1410,8 @@ mod tests {
                 consumed_tool_steps: 3,
                 consumed_cost_micros: 2_000,
                 unpriced_rounds: 2,
+                // 深度维: 会话落盘只带上限 ⇒ 计数读不到 ⇒ None (不报 0)。
+                consumed_depth: None,
             })
         });
         let source = ProductionSelfStatusSource::new(Vec::new(), false, None)
@@ -1303,6 +1421,7 @@ mod tests {
                 Some(5_000),
                 Some(30),
                 Some(10_000),
+                None,
             ))
             .with_quota_probe(probe);
 
@@ -1352,10 +1471,11 @@ mod tests {
                 consumed_tool_steps: 1,
                 consumed_cost_micros: 7_000,
                 unpriced_rounds: 0,
+                consumed_depth: None,
             })
         });
         let source = ProductionSelfStatusSource::new(Vec::new(), false, None)
-            .with_budget(budget_status_from_configured(8, 16, None, None, None))
+            .with_budget(budget_status_from_configured(8, 16, None, None, None, None))
             .with_quota_probe(probe);
         let budget = source
             .snapshot_in_session(Some(SessionId::new()))
@@ -1389,8 +1509,9 @@ mod tests {
 
     #[test]
     fn a_missing_quota_probe_reports_the_missing_interface_explicitly() {
-        let source = ProductionSelfStatusSource::new(Vec::new(), false, None)
-            .with_budget(budget_status_from_configured(8, 16, Some(10), None, None));
+        let source = ProductionSelfStatusSource::new(Vec::new(), false, None).with_budget(
+            budget_status_from_configured(8, 16, Some(10), None, None, None),
+        );
         let budget = source
             .snapshot_in_session(Some(SessionId::new()))
             .budget

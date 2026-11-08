@@ -233,6 +233,11 @@ pub struct ProductionBackends {
     /// 与任务选型同一台路由器同源现读; 缺位时路由节显式 null + 原因)。
     pub self_status_cost_routing:
         Option<StatusProbe<apeireth_core::cost_router::CostRoutingStatus>>,
+    /// 自省通道: **路由策略层**节探测口 (W2 · C-H1: 策略层开关 + 最近一次决策
+    /// 真值 —— 选中谁 / 为什么 / 退路 / 谁被排除且为何, 与任务选路同一台策略层
+    /// 同源现读; 缺位时该节显式 null + 原因)。
+    pub self_status_routing_policy:
+        Option<StatusProbe<apeireth_tools_canonical::self_status::RoutingPolicyStatus>>,
     /// 自省通道: 用户域节探测口 (W3-①: 当前域 id/角色/域内计数, 现探测如实)。
     pub self_status_domain: Option<StatusProbe<apeireth_tools_canonical::DomainStatus>>,
     /// 自省通道: 内容流面探测口 (J1: 订阅数/最近拉取, 现探测如实)。
@@ -664,7 +669,7 @@ impl ProductionModules {
 
         // 带鉴权的 HTTP 写面 (`tool.http_write`, W1 C-B2, opt-in): 受控出网上的
         // POST/PUT/PATCH/DELETE —— 域名白名单 + 显式凭据绑定 + 请求/响应体有界
-        // + 不跟随重定向。治理档位 (写面逐次人批) 在治理链钩子上。
+        // + 不跟随重定向。治理档位 (写面审批) 在治理链钩子上 ⇒ 逐次人批**绝对**（列入人工审批地板 ⇒ 任何预设下都停人批）。
         // ⚠️ 白名单为空 ⇒ 每个目的地都表外 ⇒ 拒绝即帧 (fail-closed)。
         if let Some(http_write_config) = config.http_write {
             instrument.constructed(ModuleFamily::HttpWrite);
@@ -682,7 +687,7 @@ impl ProductionModules {
         }
 
         // 主人日程面 (`tool.calendar`, W1 C-H5, opt-in): 本地日程账 (查询/创建/
-        // 改期/取消); 写动作走审批档 (逐次人批)。
+        // 改期/取消); 写动作走审批档 ⇒ 逐次人批**有条件**（默认预设 `standard` 且 `approval_remember=false` 下停人批; `full` 预设或 `approval_remember=true` 下按既有口径自动放行, 与 `tool.shell`/`tool.fetch` 同款）。
         if let Some(calendar_config) = config.calendar {
             instrument.constructed(ModuleFamily::Calendar);
             let provider = CalendarModule::new(calendar_config);
@@ -692,7 +697,8 @@ impl ProductionModules {
         // 进程树快照面 (`tool.process_tree`, W1 C-B1, opt-in): 枚举 (pid / 父 /
         // 命令 / 状态) + 按 pid 幂等取消一棵树。**零配置** ⇒ 开关口径 = **复用**
         // `APEIRETH_ENABLE_SHELL` (注册即闸 ⇒ shell 关 = 无进程可看, 语义自洽)
-        // ⇒ 0 新 env 名。快照读面零审批; 取消面逐次人批 (治理钩子在治理链上)。
+        // ⇒ 0 新 env 名。快照读面零审批; 取消面逐次人批 (治理钩子在治理链上)
+        // ⇒ 逐次人批**绝对**（列入人工审批地板 ⇒ 任何预设下都停人批）。
         if config.process_tree {
             instrument.constructed(ModuleFamily::ProcessTree);
             let provider = ProcessTreeModule::new();
@@ -936,6 +942,9 @@ impl ProductionModules {
             }
             if let Some(probe) = &backends.self_status_cost_routing {
                 source = source.with_cost_routing_probe(Arc::clone(probe));
+            }
+            if let Some(probe) = &backends.self_status_routing_policy {
+                source = source.with_routing_policy_probe(Arc::clone(probe));
             }
             if let Some(probe) = &backends.self_status_domain {
                 source = source.with_domain_probe(Arc::clone(probe));

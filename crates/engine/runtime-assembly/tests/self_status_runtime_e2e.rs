@@ -513,6 +513,8 @@ async fn budget_quota_rows_report_real_values_from_the_durable_session_ledger() 
             Some(5_000),
             None,
             Some(10_000),
+            // 深度维上限 (未设 = 不启用 ⇒ 整行显 "—")。
+            None,
         )),
         self_status_quota: Some(session_quota_probe(db.clone())),
         ..ProductionBackends::default()

@@ -112,7 +112,7 @@ Author: lead（插件/组件/能力开发线 总指挥）
 | **C-E1**（含 C-E2 插件那半边） | `tool.skill_package` | 部分重复 | `tools/skill/library.rs:163,194,256,283` `SkillLibrary`（单卡 + 修订归档 + 库扫描）· `plugin/manager.rs:40` + `manifest.rs:17`（插件 manifest + 生命周期） | 「**包**」这一层：manifest + 工具声明 + **权限声明** + **可签名可校验** + 安装/卸载/版本固定（**两动作同族**，避免先出无签名格式再改 schema） | W3 | R3 | crate+1 · env+2 · edge+2 · dep+1 |
 | **C-F1** | 面名 `multisig_verifier`（治理面，**不新设能力 id**） | 部分重复（薄） | `core/onion.rs:94,185` `verify_multisig`（M-of-N 计数 + offline 熔断，**签名体是自造字符串格式**）· `governance/chain.rs:201,214` `MultiSignVerifier` + `PlaceholderMultiSignVerifier`（全拒 fail-closed） | **密码学验签原语**（Ed25519）+ 一个**真** `MultiSignVerifier` 实现（替换占位器） | W6 | R4 | env+1 · edge+1 · dep+1 |
 | **C-G2** | `tool.replay_eval` | 部分重复（中） | `governance/eval.rs:13,137,147,201` `EvalScore`/`TaskSummary`/`summarize`/`to_eval_scores` · `memory/d4_eval.rs:293` `score()` · `runtime/event_log.rs:227` `fold_surface` | 「**回放一段会话 → 产出评估结论**」这条链（把 replay + event log/trace 接进**既有打分器**） | W5 | R0 | env+1 |
-| **C-H1** | 面名 `routing_policy`（**不新设能力 id**：选路不是模型面能力） | 部分重复 | `core/cost_router.rs:508,602,373` `CostRouter`/`candidates`（四档成本 × 模型档案矩阵）· `runtime/provider.rs:95,136` `ProviderRouter`（fallback + 健康度） | **统一策略层**（任务画像 × 隐私 × 成本）+ **网关侧接入**（gateway 对 `CostRouter` 零引用）⇒ **与既有两层合成一层**，不造第三套路由语义 | W1 | R0 | env+1 |
+| **C-H1** | 面名 `routing_policy`（**不新设能力 id**：选路不是模型面能力） | 部分重复 | `core/cost_router.rs:508,602,373` `CostRouter`/`candidates`（四档成本 × 模型档案矩阵）· `runtime/provider.rs:95,136` `ProviderRouter`（fallback + 健康度） | **策略层**（任务画像 × 隐私 × 成本）**叠加在既有两层之上**（**不合成**）· 成本档位判定**原样复用** `CostRouter::candidates`（**不重算成本矩阵**）· 接入面 = **CLI 组合根**（**网关侧本批未接**：网关对 `CostRouter` 本就零引用）⇒ 口径 = **IMPLEMENTED（库级）+ CLI 接入** | W1 | R0 | **env+0**（复用 `APEIRETH_COST_ROUTING`） |
 | **C-H2** | **不新设能力 id**（沿用既有自述面路径 `budget.quota.depth`） | 部分重复（占位完备） | `runtime/quota.rs:47` `QuotaDimension`（三维真计量）+ `:20-21` 明写「depth 无调用树跟踪」· `tools/self_status.rs:320-322,2262,3428`（深度维**诚实占位 + 自述格 + 测试钉死**） | **深度维真计量**（调用树深度跟踪）—— **接口位/自述格/测试位都已留好** ⇒ 成本最低 | W1 | R0 | env+1 |
 | **C-H5** | `tool.calendar` | **真新面** | **无任何先例**（⚠️ 先前「calendar 25 命中」全是 `canonical` 的**子串误判**；仓内**零**日历实现）；`tool.care_schedule` 是**代理自身的关怀例程**（`crates/engine/organ/src/care/tool.rs:40`，add/remove/list），**不是主人日程** ⇒ 边界不同 | 主人**日程**面（本地日程账 + 查询/创建/改期/取消 + 逐次人批）；**先本地、零外部集成** | W1 | R2 | env+1 · edge+1 |
 | **C-H4** | `tool.web_search`（⚠️ **SDK 契约已占同名** `client.rs:76` ⇒ 须先对齐口径） | 部分重复（薄） | `sdk/client.rs:76,226,656`（SDK 契约已占名 + `/v1/tools/web_search/invoke` + 真 HTTP）· `tools/fetch.rs:210`（受控 GET）· `tools/search.rs:67` `SearchTool`（**本地**字面搜索，不用网络） | **检索引擎后端 + 排序 + 引用标注**（仓内既无搜索引擎也无检索 API） | W1 | R2 | env+1 |
@@ -161,14 +161,27 @@ Author: lead（插件/组件/能力开发线 总指挥）
 | C-E1 | `tool.skill_package`（含 C-E2 插件那半边） | W3 | R3 | **新名 2**：`APEIRETH_ENABLE_SKILL_PACKAGE` + `APEIRETH_SKILL_PACKAGE_TRUST_DIR` | 新 crate `crates/foundation/trust/` | `rg -c 'skill_package' crates/` > 0；越权包拒装；**未签名包拒装**；卸载后能力表同步移除 |
 | C-F1 | 面名 `multisig_verifier` | W6 | R4 | **新名 1**：`APEIRETH_ENABLE_MULTISIG` | `crates/foundation/governance/src/chain.rs` 邻域 | ⛔ **待 owner 逐项重拍**（D2 已裁 T0 不做） |
 | C-G2 | `tool.replay_eval` | W5 | R0 | **新名 1**：`APEIRETH_ENABLE_REPLAY_EVAL` | `crates/engine/runtime/src/canonical/replay_eval.rs` | `rg -c 'replay_eval' crates/` > 0；**复用既有 `EvalScore` 打分器**（不新造第二套评分语义） |
-| C-H1 | 面名 `routing_policy` | W1 | R0 | **复用** `APEIRETH_COST_ROUTING`（扩 purpose 写「策略层」面）⇒ **0 新名** | `crates/foundation/core/src/routing_policy.rs` | `rg -c 'routing_policy' crates/foundation/core/src/` > 0；决策必含 `selection_reason`/`fallback_reason`；缺价不编价；**与 `CostRouter`/`ProviderRouter` 同层，不造第三套** |
+| C-H1 | 面名 `routing_policy` | W1 | R0 | **复用** `APEIRETH_COST_ROUTING`（扩 purpose 写「策略层」面）⇒ **0 新名** | `crates/foundation/core/src/routing_policy.rs` | `rg -c 'routing_policy' crates/foundation/core/src/` > 0；决策必含 `selection_reason`/`fallback_reason`；缺价不编价；**成本档位判定原样复用 `CostRouter::candidates`**（不重算成本矩阵）· 隐私闸**收紧为明确失败**（不回退默认模型）· 层位 = **既有两层之上**（**非「合成一层」**）· 缺隐私声明按**最低档**放行 |
 | C-H2 | 不新设 id（沿用 `budget.quota.depth`） | W1 | R0 | **复用** 配额家族既有 env（扩 purpose）⇒ **0 新名** | `crates/engine/runtime/src/canonical/quota.rs` | `rg -c 'depth_quota' crates/engine/runtime/src/` > 0；自述面深度维**不再为 null** |
 | C-H4 | `tool.web_search` | W1 | R2 | **新名 1**：`APEIRETH_ENABLE_WEB_SEARCH` | `crates/capabilities/tools/src/web_search.rs` | `rg -c 'tool\.web_search' crates/` > 0；**先对齐 SDK 契约占名**（否则 SDK 面继续说假话）；来源缺失即拒；结果双上限 |
 | C-H5 | `tool.calendar` | W1 | R2 | **新名 1**：`APEIRETH_ENABLE_CALENDAR` | **新名 1**：`APEIRETH_ENABLE_CALENDAR` | `crates/capabilities/tools/src/calendar.rs` |
 | C-L1 | `provider.local_inference` | W5 | R0/R2 | **新名 1**：`APEIRETH_ENABLE_LOCAL_INFERENCE` | 新 crate（**大闭包 ⇒ 隔离**） | `rg -c 'local_inference' crates/` > 0；**开工前须先做重复审计**；断网可用；模型来源/许可显式标注 |
 
 
-### 4.1 语义与机制的要点（逐族）
+#### 4.0.1 口径校正（2026-11-08 · W2 施工期 · 依实测改规格，不追认超载）
+
+C-H1 原规格写「**与既有两层合成一层** + **网关侧接入**」⇒ **W2 对抗复核实测**：
+- 实现自述即「已有两层，本层是它们**上面**的一张表」⇒ **事实上是第三层**，**不是合成**；
+- **网关对 `RoutingPolicy` 零引用**，模块在复核时**生产零引用** ⇒ 「网关侧接入」**未交付**；
+- 成本档位判定**原样复用** `CostRouter::candidates`（**未重算成本矩阵**）⇒ 「不造第三套**成本语义**」成立，
+  但「不造第三套**路由语义**」**不成立**（多了一道候选表闸）。
+⇒ **规格据此校正**（上文已改）⇒ 交付口径 = **IMPLEMENTED（库级）+ CLI 接入**；
+  「合成一层」与「网关侧接入」两半**列为未交付**（不进本波承诺）。
+⇒ 复核同时确认：**安全面干净**（隐私闸方向正确 / 缺字段不放行 / 无回退路径 / 排除必带理由）；
+  **短板在可解释性**（「能力/窗口/价格」三类被成本档层合成一个 bool ⇒ 策略层拿不到逐条原因，
+  根因在 `CostRouter::passes_filters` ⇒ **不重算** ⇒ 记为「成本档层暴露逐行原因」待办）。
+
+## 4.1 语义与机制的要点（逐族）
 
 #### C-A1 `tool.external_gui` —— 外部 GUI 能力面（读 + 动作，**一套 locator**）
 
@@ -196,7 +209,7 @@ Author: lead（插件/组件/能力开发线 总指挥）
 * 新面：**「包」这一层**（工具声明 + **权限声明** + 版本固定 + 安装/卸载 + **可签名可校验**）。
 * ⚠️ **权限声明不得扩大宿主授权**；**未签名/验签失败 = 拒装，不降级放行**。
 
-#### C-H1 `routing_policy` —— 与既有两层**合成一层**，不造第三套
+#### C-H1 `routing_policy` —— 成本判定**复用** `CostRouter`，隐私闸**收紧为明确失败**（**不合成**既有两层）
 
 * 既有：`CostRouter`（成本档 × 模型档案）+ `ProviderRouter`（fallback + 健康度）。
 * 新面 = **统一策略层**（任务画像 × 隐私 × 成本）+ **网关侧接入**（gateway 对 `CostRouter` 零引用）。
@@ -218,6 +231,18 @@ Author: lead（插件/组件/能力开发线 总指挥）
 
 > **额度对账**（合并后）：crate **+4**（≤ 授权 +4）· edge **+15**（⚠️ **超授权 +10** ⇒ W2/W3 收口须复评）·
 > env **+16**（⚠️ **已顶格授权 +16** ⇒ W2/W3 收口须复评或追加 ADR）· dep **+4~6**。
+> **W1 实测**（2026-11-08 收口）：crate **+0**（31 → 31）· edge **+0**（118 → 118）·
+> env **+4**（160 → 164：`APEIRETH_ENABLE_CALENDAR` / `_ENABLE_HTTP_WRITE` / `_HTTP_WRITE_ALLOWLIST` /
+> `_ENABLE_WEB_SEARCH`；`tool.process_tree` **复用** `APEIRETH_ENABLE_SHELL` ⇒ 0 新名）·
+> 尺寸：5 个既有文件真增长 ⇒ **波次收口由 lead 重生成基线**（**未抬 `max_file_loc` 预算**，仍 6300；
+> EXC-0004/0005 同批退休）。
+>
+> **W2 实测**（2026-11-08 收口）：crate **+0** · edge **+0** · env **+1**（164 → **165**：
+> `APEIRETH_QUOTA_MAX_DEPTH`，**严格解析**，非法值启动即报错）⇒ 累计 env **+5 ≤ 授权 +16**。
+> 尺寸：7 个既有文件真增长 ⇒ 同上重生成基线；**深度实现外移**到新模块
+> `runtime/canonical/quota/depth.rs` ⇒ `execute.rs` 仅净增 **5** 行。
+> ⚠️ 观察项：`runtime/src/canonical/runtime.rs` 现 **1199 行**（**距棘轮阈值 1200 只差 1 行**）。
+>
 > ⇒ ⇒ **每波收口回填契约并复评额度**（[ADR-0025 §4.3](../adr/0025-capability-creation-line-charter.md)）。
 
 ## 6. 验收判据（**每波机器可判**）

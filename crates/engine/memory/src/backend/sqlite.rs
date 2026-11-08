@@ -397,7 +397,10 @@ impl crate::scope::ScopedMemoryBackend for SqliteBackend {
         &self,
         query: &crate::scope::MemoryCandidateQuery,
     ) -> Result<Vec<Episode>, Box<dyn std::error::Error + Send + Sync>> {
-        if query.visible_scopes.is_empty() || query.limit == 0 {
+        if query.visible_scopes.is_empty() && query.granted_object_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        if query.limit == 0 {
             return Ok(Vec::new());
         }
 
@@ -435,11 +438,35 @@ impl crate::scope::ScopedMemoryBackend for SqliteBackend {
             }
         }
 
-        if scope_clauses.is_empty() {
+        // **被授对象 id**（对象级授权叠加层）：候选谓词 = 域可见集合 ∪ 被授对象
+        // id 集合（**并联**，不是替代）。默认空 ⇒ 谓词与老实现**逐字节相同**。
+        let granted = crate::scope::sanitize_granted_object_ids(query.granted_object_ids.clone());
+        let granted_sql = if granted.is_empty() {
+            String::new()
+        } else {
+            let placeholders = granted.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+            for id in &granted {
+                params.push(Box::new(id.clone()));
+            }
+            format!("e.id IN ({placeholders})")
+        };
+
+        if scope_clauses.is_empty() && granted_sql.is_empty() {
             return Ok(Vec::new());
         }
 
-        let scope_sql = scope_clauses.join(" OR ");
+        // 域可见域为空（调用方一个域都没给）⇒ 域侧**一条都不放行**（老语义不变），
+        // 只可能被授对象 id 命中。
+        let scope_sql = if scope_clauses.is_empty() {
+            "0 = 1".to_string()
+        } else {
+            scope_clauses.join(" OR ")
+        };
+        let visibility_sql = if granted_sql.is_empty() {
+            format!("({scope_sql})")
+        } else {
+            format!("({scope_sql} OR {granted_sql})")
+        };
         let mut sql = format!(
             "SELECT e.id, e.timestamp, e.role,
                     COALESCE(g.content_override, e.content), e.session_id
@@ -447,7 +474,7 @@ impl crate::scope::ScopedMemoryBackend for SqliteBackend {
                LEFT JOIN episode_memory_metadata m ON m.episode_id = e.id
                LEFT JOIN episode_governance g ON g.episode_id = e.id
               WHERE (g.status IS NULL OR g.status <> 'forgotten')
-                AND ({scope_sql})"
+                AND {visibility_sql}"
         );
 
         if let Some(as_of_ms) = query.as_of_ms {

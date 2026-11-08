@@ -60,8 +60,9 @@ pub struct ProductionModulesConfig {
     /// when config is supplied.
     ///
     /// 带鉴权的受控写面: 受控出网上的 POST/PUT/PATCH/DELETE —— 域名白名单 +
-    /// 显式凭据绑定 + 请求/响应体有界 + **不跟随重定向**。治理档位 (写面逐次
-    /// 人批) 由治理链钩子承载。默认关 (opt-in, 开关名
+    /// 显式凭据绑定 + 请求/响应体有界 + **不跟随重定向**。治理档位 (写面审批)
+    /// 由治理链钩子承载 ⇒ 人批强度: 逐次人批**绝对**（列入人工审批地板 ⇒ 任何
+    /// 预设下都停人批）。默认关 (opt-in, 开关名
     /// `APEIRETH_ENABLE_HTTP_WRITE` 只认 `"1"`)。
     ///
     /// ⚠️ 写面**只认显式域名白名单**策略 ⇒ 宿主注入的配置必须带
@@ -79,7 +80,7 @@ pub struct ProductionModulesConfig {
     /// Register the owner calendar face (`tool.calendar`, W1 C-H5) when config
     /// is supplied.
     ///
-    /// 主人日程面: 本地日程账 (查询/创建/改期/取消); 写动作逐次人批 (治理档
+    /// 主人日程面: 本地日程账 (查询/创建/改期/取消); 写动作审批强度: 逐次人批**有条件**（默认预设 `standard` 且 `approval_remember=false` 下停人批; `full` 预设或 `approval_remember=true` 下按既有口径自动放行, 与 `tool.shell`/`tool.fetch` 同款） (治理档
     /// 在治理链钩子上)。默认关 (opt-in, 开关名 `APEIRETH_ENABLE_CALENDAR`
     /// 只认 `"1"`)。
     pub calendar: Option<apeireth_tools_canonical::calendar::CalendarConfig>,
@@ -89,7 +90,9 @@ pub struct ProductionModulesConfig {
     /// **零配置** (不需要端点或凭据) ⇒ 用 `bool` 开关。
     ///
     /// ⚠️ 开关口径 = **复用** `APEIRETH_ENABLE_SHELL` (注册即闸 ⇒ shell 关 =
-    /// 无进程可看, 语义自洽) ⇒ **0 新 env 名**。默认关 (opt-in)。
+    /// 无进程可看, 语义自洽) ⇒ **0 新 env 名**（**本面没有独立开关**）。默认关
+    /// (opt-in)。审批: 快照读面零审批 / 取消面逐次人批**绝对**（列入人工审批
+    /// 地板 ⇒ 任何预设下都停人批）。
     pub process_tree: bool,
     /// Register the life-integration content feed (`tool.content_feed`, J1) when
     /// config is supplied.

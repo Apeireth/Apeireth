@@ -534,7 +534,7 @@ fn the_cost_tier_decides_which_candidates_even_enter_the_comparison() {
 
 #[test]
 fn the_candidate_table_can_be_derived_from_the_profile_privacy_flags() {
-    // 隐私事实落点: 画像行的能力标记 (缺省 = 未提供 ⇒ 只承接普通档, 取更严)。
+    // 隐私事实落点: 画像行的能力标记 (缺省 = 未提供 ⇒ 只承接普通档, 双标取低档)。
     let profiles = ModelProfileTable::new(vec![
         profile_with_privacy(
             "plain-model",
@@ -587,7 +587,7 @@ fn the_candidate_table_can_be_derived_from_the_profile_privacy_flags() {
     assert_eq!(
         ceiling("contradicting-model"),
         PrivacyLevel::Restricted,
-        "双标冲突取更严的一档 (不靠标记放宽)"
+        "双标冲突取**低档** (保守: 按更小的可承接上限处理, 不靠标记放宽)"
     );
 
     // 派生表可直接喂给策略层: 机密档任务只落到标记齐全的模型上。

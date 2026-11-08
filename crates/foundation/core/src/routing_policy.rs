@@ -44,9 +44,15 @@
 //! 3. **隐私闸**: 候选的 [`PolicyCandidate::max_privacy`] 必须 ≥ 任务的
 //!    [`TaskProfile::privacy`]; 不达标 ⇒ **排除并给出排除理由** (绝不静默过滤)。
 //! 4. **候选表闸**: 候选须登记在策略候选表; 未登记 ⇒ 排除并说明 (不默认放行)。
+//!    ⚠️ **零行为变化的成立条件**: 普通档下隐私闸恒不过滤, 但**候选表闸仍在**
+//!    ⇒ 幸存集 = 候选表 ∩ 成本候选集 ⇒ **候选表若是画像表的真子集, 选出的模型可与
+//!    成本档层不同 (或直接失败)** —— 这是**候选表闸的策略语义**, 不是语义漂移。
 //! 5. **选定**: 存活集交给成本档层跑既定阶梯 ⇒ 成本口径与成本档层**同源**。
 //! 6. **退路链**: 存活集按比较单价升序 (有价优先, **缺价候选不参与价格比较**、
 //!    排在其后) ⇒ 退路是谁、按什么顺序, 写进 [`RoutingDecision::fallback_chain`]。
+//!    ⚠️ **退路排序 ≠ 选定阶梯顺序**: 阶梯是「档位首选 > 最便宜 > 默认模型 >
+//!    画像表顺序」, 退路链是**单价升序** ⇒ 退路第一名**未必**是阶梯第二名,
+//!    消费方不可把退路链当重试顺序 (见 [`RoutingDecision::fallback_reason`])。
 //!
 //! # 诚实口径
 //!
@@ -71,6 +77,41 @@
 //!   调用失败后的 provider fallback。两者是**先后**关系 (先选模型, 再由提供方层
 //!   在 provider 之间退避), 语义不重叠; 本层在 `core` (foundation 层),
 //!   **不依赖 engine/runtime**。
+//!
+//! # 隐私信号的来源 (口径事实 · 2026-11-08 实测)
+//!
+//! 仓内**没有**任务级的隐私真源, 逐条查证如下 (证据行号见 §证据):
+//!
+//! - **插件/请求层**: 插件 crate 的请求类型 (provider 请求 = `NormalizedRequest`,
+//!   协议层所有) 上**没有**任何敏感度/分类/隐私字段; 唯一可挂载处是请求既有的
+//!   `metadata` 透传通道 —— 但该通道**会被转发到厂商线**
+//!   (`protocol/src/adapters/openai_chat.rs:188-193` 把全部 metadata 写进出网 body)
+//!   ⇒ **隐私声明不放这里** (否则声明本身外泄);
+//! - **记忆域** (`engine/memory/src/scope.rs`): [`MemoryScope`] 是**可见性**边界
+//!   (谁能看), 不是**敏感度**属性 ⇒ 不作隐私信号;
+//! - **CLI 会话/工作区**: 只有 `workspace_root = current_dir()`
+//!   (`adapters/cli/src/lib.rs:2144`), 仓内**没有**「家目录 vs 公共目录」的既有
+//!   敏感度口径 ⇒ 推导它等于**新造语义** (凭空造), 不做;
+//! - **仓内既有的敏感度词表**: 只有 `apeireth_guard::observation::DataSensitivity`
+//!   (`engine/guard/src/observation.rs:39-70`) —— 那是**动作级污点**分类 (每个工具
+//!   调用一次), 且在 **engine 层**, core 依赖方向是 `core ← protocol ← plugin`
+//!   (core 无内部 crate 依赖) ⇒ **core 不可消费**, 也不是任务级输入。
+//!
+//! ⇒ **结论: 显式声明**。信号由**调用方显式提供** ([`PrivacySignal::Declared`]),
+//! 缺失时按普通档兜底 ([`PrivacySignal::Defaulted`]) 且在决策里**显式标注**
+//! (不静默); 显式给了但值不认识 ⇒ **报错拒路由**, 不静默降级 (fail-closed)。
+//!
+//! **信号口** (装配批接这三个函数即可, 0 新 env 名):
+//!
+//! - [`privacy_signal_from_str`] —— 从**原始值**读信号 (`None`/空白 ⇒ 缺位兜底);
+//! - [`privacy_signal_from_metadata`] —— 从**元数据载体**读信号 (保留键
+//!   [`PRIVACY_SIGNAL_KEY`]);
+//! - [`TaskProfile::from_signal`] —— 把信号接进任务画像 (⇒ [`TaskProfile::privacy`]
+//!   读生效等级, [`RoutingDecision::privacy_source`] 读来源)。
+//!
+//! ⚠️ 载体由装配批选, 但**不要**选「会外发到厂商」的通道 (例如规范请求的
+//! `metadata`: `protocol/src/adapters/openai_chat.rs:188-193` 会把它整包写进出网
+//! body ⇒ 声明本身会外泄)。
 //!
 //! # 接线面 (面名 `routing_policy`, **不是** `tool.*` 能力 id)
 //!
@@ -100,7 +141,9 @@ pub const PRIVACY_FLAG_RESTRICTED: &str = "privacy_restricted";
 
 /// 画像行能力标记: 该模型**可承接机密档**数据 (上限 = [`PrivacyLevel::Confidential`])。
 ///
-/// 与 [`PRIVACY_FLAG_RESTRICTED`] 同时出现 ⇒ 取**更严**的一档 (不靠标记放宽)。
+/// 与 [`PRIVACY_FLAG_RESTRICTED`] 同时出现 ⇒ 取**低档**
+/// ([`PrivacyLevel::Restricted`], 保守: 两个标记矛盾时按**更小的可承接上限**处理,
+/// 不靠标记放宽)。
 pub const PRIVACY_FLAG_CONFIDENTIAL: &str = "privacy_confidential";
 
 /// 隐私等级 (数据敏感度三档闭合词表)。
@@ -140,11 +183,14 @@ impl PrivacyLevel {
         }
     }
 
-    /// 词表解析 (ASCII 大小写不敏感); 未知词 = `None` (词表闭合, 不猜档)。
+    /// 词表解析 (ASCII 大小写不敏感, **去首尾空白** —— 与成本档层
+    /// [`CostRoutingConfig::switch_enabled`] 的 trim 口径一致); 未知词 = `None`
+    /// (词表闭合, 不猜档)。
     pub fn parse(name: &str) -> Option<PrivacyLevel> {
+        let normalized = name.trim().to_ascii_lowercase();
         PrivacyLevel::ALL
             .into_iter()
-            .find(|level| level.as_str() == name.to_ascii_lowercase())
+            .find(|level| level.as_str() == normalized)
     }
 }
 
@@ -152,6 +198,152 @@ impl fmt::Display for PrivacyLevel {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_str())
     }
+}
+
+/// 隐私信号的来源 (可解释字段: 这一档是**显式声明**的, 还是**缺省兜底**的)。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PrivacySource {
+    /// 调用方显式声明的隐私等级。
+    Declared,
+    /// 信号缺位 ⇒ 按普通档兜底 (**显式标注**, 不静默)。
+    #[default]
+    Defaulted,
+}
+
+impl PrivacySource {
+    /// 来源拼写 (`declared|defaulted`)。
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            PrivacySource::Declared => "declared",
+            PrivacySource::Defaulted => "defaulted",
+        }
+    }
+}
+
+impl fmt::Display for PrivacySource {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// 隐私信号: 一条**显式声明**或一次**缺省兜底**。
+///
+/// 两种形态的差别**必须**在决策里看得见 (缺省兜底 = 「没人声明过」, 与「声明了
+/// 普通档」不是一回事) ⇒ 决策同时带 [`PrivacyLevel`] 与 [`PrivacySource`]。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PrivacySignal {
+    /// 调用方显式声明的隐私等级。
+    Declared(PrivacyLevel),
+    /// 信号缺位 ⇒ 按普通档兜底 (**显式标注**, 不静默)。
+    #[default]
+    Defaulted,
+}
+
+impl PrivacySignal {
+    /// 生效的隐私等级 (缺省兜底 = 普通档 —— 特性默认关 ⇒ 逐字节零行为变化)。
+    pub const fn level(self) -> PrivacyLevel {
+        match self {
+            PrivacySignal::Declared(level) => level,
+            PrivacySignal::Defaulted => PrivacyLevel::Ordinary,
+        }
+    }
+
+    /// 信号来源 (显式声明 / 缺省兜底)。
+    pub const fn source(self) -> PrivacySource {
+        match self {
+            PrivacySignal::Declared(_) => PrivacySource::Declared,
+            PrivacySignal::Defaulted => PrivacySource::Defaulted,
+        }
+    }
+
+    /// 是否是**显式声明**的信号。
+    pub const fn is_declared(self) -> bool {
+        matches!(self, PrivacySignal::Declared(_))
+    }
+
+    /// 决策里的可解释标注 (缺省兜底必须写明「没人声明过」)。
+    pub fn annotation(self) -> String {
+        match self {
+            PrivacySignal::Declared(level) => {
+                format!("隐私等级 {level} (调用方显式声明)")
+            }
+            PrivacySignal::Defaulted => {
+                format!(
+                    "隐私等级 {} (缺省兜底: 调用方未提供隐私信号 ⇒ 按最不敏感档处理)",
+                    PrivacyLevel::Ordinary
+                )
+            }
+        }
+    }
+}
+
+/// 隐私信号在**元数据载体**里的保留键 (`privacy_level`)。
+///
+/// 载体由调用方选 (会话设置 / 入站请求字段 / CLI 参数 …) ⇒ **0 新 env 名**;
+/// 本层只认这一个键。⚠️ **不要**把它放进**会外发到厂商**的请求元数据通道
+/// (那会把声明本身送出去)。
+pub const PRIVACY_SIGNAL_KEY: &str = "privacy_level";
+
+/// 隐私信号解析失败。**值自由报错**: 只报键名与期望词表, 从不回显被解析的值。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PrivacySignalError {
+    /// 显式声明的值不在词表内 ⇒ **拒路由** (fail-closed: 不静默降级为普通档,
+    /// 那等于把「声明了但看不懂」当成「没人声明」= 静默放宽)。
+    InvalidValue {
+        /// 出错的键名 (键名是配置面, 不是值)。
+        key: String,
+        /// 期望词表说明 (不含值)。
+        reason: String,
+    },
+}
+
+impl fmt::Display for PrivacySignalError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InvalidValue { key, reason } => {
+                write!(f, "privacy signal entry {key:?} is invalid: {reason}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for PrivacySignalError {}
+
+/// 隐私信号端口 (纯函数): 从**原始值**读一条信号。
+///
+/// - `None` / 空白 ⇒ [`PrivacySignal::Defaulted`] (信号缺位 ⇒ 普通档兜底,
+///   **由调用方在决策里显式标注**, 不静默);
+/// - 认识的词 ⇒ [`PrivacySignal::Declared`] (ASCII 大小写不敏感, 去首尾空白);
+/// - 不认识的词 ⇒ [`PrivacySignalError::InvalidValue`] (值自由报错 ⇒ **拒路由**,
+///   不静默降级)。
+pub fn privacy_signal_from_str(value: Option<&str>) -> Result<PrivacySignal, PrivacySignalError> {
+    let Some(raw) = value.map(str::trim).filter(|text| !text.is_empty()) else {
+        return Ok(PrivacySignal::Defaulted);
+    };
+    match PrivacyLevel::parse(raw) {
+        Some(level) => Ok(PrivacySignal::Declared(level)),
+        None => Err(PrivacySignalError::InvalidValue {
+            key: PRIVACY_SIGNAL_KEY.to_string(),
+            reason: format!(
+                "unknown privacy level (accepted: {})",
+                PrivacyLevel::ALL
+                    .iter()
+                    .map(|level| level.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+        }),
+    }
+}
+
+/// 隐私信号端口 (纯函数): 从**元数据载体**读一条信号 (保留键 [`PRIVACY_SIGNAL_KEY`])。
+///
+/// 载体形状 = 规范请求元数据的形状 (`BTreeMap<String, String>`); 调用方也可直接用
+/// [`privacy_signal_from_str`] 读自己那儿的字段。
+pub fn privacy_signal_from_metadata(
+    metadata: &std::collections::BTreeMap<String, String>,
+) -> Result<PrivacySignal, PrivacySignalError> {
+    privacy_signal_from_str(metadata.get(PRIVACY_SIGNAL_KEY).map(String::as_str))
 }
 
 /// 任务的能力需求 (投影成成本档层的路由信号)。
@@ -209,8 +401,8 @@ impl CapabilityRequirement {
 /// 任务画像 = **能力需求 × 隐私等级 × 成本档**。
 ///
 /// - 能力需求: [`CapabilityRequirement`];
-/// - 隐私等级: [`PrivacyLevel`] (必填, 不猜 —— 缺省就是「最敏感」还是「最不敏感」
-///   是个策略决定, 本层要求调用方**显式声明**);
+/// - 隐私信号: [`PrivacySignal`] —— `Declared(等级)` = 调用方显式声明;
+///   `Defaulted` = 信号缺位 ⇒ 按普通档兜底 (**决策里显式标注**, 不静默);
 /// - 成本档: [`Option<CostTier>`] —— `Some` = 显式档 (最高优先); `None` = 交给
 ///   成本档层的启发式按能力信号推断 (口径复用 [`infer_tier`], 不在本层重写)。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -219,22 +411,39 @@ pub struct TaskProfile {
     pub capability: CapabilityRequirement,
     /// 显式成本档; `None` = 按能力信号推断。
     pub cost_tier: Option<CostTier>,
-    /// 任务的隐私等级 (数据敏感度)。
-    pub privacy: PrivacyLevel,
+    /// 隐私信号 (显式声明 / 缺省兜底)。
+    pub privacy_signal: PrivacySignal,
 }
 
 impl TaskProfile {
-    /// 一张任务画像。
+    /// 一张任务画像 (隐私等级 = **显式声明**)。
+    ///
+    /// 传入等级即视为调用方**显式声明** ⇒ 信号来源 = [`PrivacySource::Declared`];
+    /// 要走「信号缺位 ⇒ 普通档兜底」的口径, 用 [`TaskProfile::from_signal`]。
     pub fn new(
         capability: CapabilityRequirement,
         cost_tier: Option<CostTier>,
         privacy: PrivacyLevel,
     ) -> Self {
+        Self::from_signal(capability, cost_tier, PrivacySignal::Declared(privacy))
+    }
+
+    /// 一张任务画像 (隐私信号由信号口给)。
+    pub fn from_signal(
+        capability: CapabilityRequirement,
+        cost_tier: Option<CostTier>,
+        privacy_signal: PrivacySignal,
+    ) -> Self {
         Self {
             capability,
             cost_tier,
-            privacy,
+            privacy_signal,
         }
+    }
+
+    /// 生效的隐私等级 (缺省兜底 = 普通档)。
+    pub fn privacy(&self) -> PrivacyLevel {
+        self.privacy_signal.level()
     }
 
     /// 点名显式成本档 (压过启发式推断)。
@@ -244,10 +453,17 @@ impl TaskProfile {
         self
     }
 
-    /// 声明任务的隐私等级。
+    /// 显式声明任务的隐私等级 (信号来源随之变成「显式声明」)。
     #[must_use]
     pub fn with_privacy(mut self, privacy: PrivacyLevel) -> Self {
-        self.privacy = privacy;
+        self.privacy_signal = PrivacySignal::Declared(privacy);
+        self
+    }
+
+    /// 显式声明「信号缺位」⇒ 普通档兜底 (决策里会标注出来)。
+    #[must_use]
+    pub fn without_privacy_signal(mut self) -> Self {
+        self.privacy_signal = PrivacySignal::Defaulted;
         self
     }
 
@@ -288,7 +504,7 @@ impl PolicyCandidate {
     ///
     /// - 标记缺位 ⇒ 上限 = [`PrivacyLevel::Ordinary`] (**缺省 = 未提供 ⇒ 只承接
     ///   普通档**, fail-closed);
-    /// - 两个标记同时在场 ⇒ 取**更严**的一档 (标记不放宽);
+    /// - 两个标记同时在场 ⇒ 取**低档** (保守: 按更小的可承接上限处理, 标记不放宽);
     /// - 画像表**每一行**都登记 ⇒ 不存在「未登记 ⇒ 不可路由」的情形 (要那种语义
     ///   就自建候选表)。
     pub fn table_from_profiles(profiles: &ModelProfileTable) -> Vec<PolicyCandidate> {
@@ -302,7 +518,7 @@ impl PolicyCandidate {
             .collect()
     }
 
-    /// 画像行的能力标记 ⇒ 隐私上限 (缺省 = 普通档; 双标取更严)。
+    /// 画像行的能力标记 ⇒ 隐私上限 (缺省 = 普通档; 双标取**低档** (保守))。
     fn privacy_from_flags(flags: &[String]) -> PrivacyLevel {
         let restricted = flags.iter().any(|flag| flag == PRIVACY_FLAG_RESTRICTED);
         let confidential = flags.iter().any(|flag| flag == PRIVACY_FLAG_CONFIDENTIAL);
@@ -368,8 +584,10 @@ pub struct RoutingDecision {
     pub tier: CostTier,
     /// 档位来源 (显式 / 推断 / 默认)。
     pub tier_source: TierSource,
-    /// 生效的隐私等级 (任务画像声明)。
+    /// 生效的隐私等级 (任务画像声明; 缺省兜底 = 普通档)。
     pub privacy: PrivacyLevel,
+    /// 隐私信号的来源 (显式声明 / 缺省兜底) —— 缺省兜底必须看得见。
+    pub privacy_source: PrivacySource,
     /// 选中的模型 id。
     pub selected_model: String,
     /// 选中模型的画像行 (画像表无该行 = **显式 unknown 行**, 不编造能力事实)。
@@ -406,9 +624,12 @@ pub enum RoutingPolicyError {
         tier_source: TierSource,
         /// 生效的隐私等级。
         privacy: PrivacyLevel,
+        /// 隐私信号的来源 (显式声明 / 缺省兜底)。
+        privacy_source: PrivacySource,
         /// 如实说明 (为什么全军覆没)。
         reason: String,
-        /// 逐行比较 (每行带排除理由 —— 排除**可见**)。
+        /// 逐行比较 (每行带排除理由 —— 排除**可见**; 错误帧里**没有**「过了闸」
+        ///   的行, 行状态与「已被闸排除」一致)。
         comparisons: Vec<CandidateComparison>,
     },
 }
@@ -552,6 +773,9 @@ impl RoutingPolicy {
         }
 
         let request = profile.routing_request();
+        // 隐私信号: 生效等级 (缺省兜底 = 普通档) + 来源 (显式声明 / 缺省兜底)。
+        let privacy_level = profile.privacy();
+        let privacy_source = profile.privacy_signal.source();
         // ① 成本档判定 (复用成本档层的显式档 > 启发式推断 > 默认档口径)。
         let (tier, tier_source) = infer_tier(&request);
         // ② 档位过滤 (复用成本档层的成本矩阵: 能力需求 × 窗口下限 × 单价上限)。
@@ -574,12 +798,13 @@ impl RoutingPolicy {
             return Err(RoutingPolicyError::NoEligibleCandidate {
                 tier,
                 tier_source,
-                privacy: profile.privacy,
+                privacy: privacy_level,
                 reason: format!(
                     "{tier} 档的 {} 个候选全部被策略层排除 (隐私等级 {privacy} 闸 / 候选表闸 / 档位过滤); 宁可不选也不越闸",
                     cost_candidates.len(),
-                    privacy = profile.privacy
+                    privacy = privacy_level
                 ),
+                privacy_source,
                 comparisons: evaluation.comparisons,
             });
         }
@@ -610,13 +835,25 @@ impl RoutingPolicy {
             .route(&request)
             .ok_or(RoutingPolicyError::Disabled)?;
         let Some(selected_model) = cost_decision.selected_model else {
+            // 错误帧里**没有**「过了闸」的行: 存活集的行在此一律记为落选 (带理由),
+            // 行状态与「已被闸排除」一致 (不出现「全军覆没」却写着 eligible 的矛盾帧)。
+            let mut comparisons = evaluation.comparisons;
+            for row in &mut comparisons {
+                if row.outcome == CandidateOutcome::Eligible {
+                    row.outcome = CandidateOutcome::Excluded;
+                    row.exclusion_reason =
+                        Some("未进入选定: 成本档层在存活集上未选出模型 (默认模型缺席)".to_string());
+                    row.price_compared = false;
+                }
+            }
             return Err(RoutingPolicyError::NoEligibleCandidate {
                 tier,
                 tier_source,
-                privacy: profile.privacy,
+                privacy: privacy_level,
+                privacy_source,
                 reason: "存活集非空但成本档层未选出模型 (默认模型缺席); 如实选不出, 不硬凑"
                     .to_string(),
-                comparisons: evaluation.comparisons,
+                comparisons,
             });
         };
 
@@ -629,11 +866,13 @@ impl RoutingPolicy {
             .collect();
         let fallback_reason = if fallback_chain.is_empty() {
             Some(format!(
-                "无退路: 策略层筛选后只有 {selected_model} 这一个候选 (选中者), 没有其它可顶替的候选"
+                "无退路: 策略层筛选后只有 {selected_model} 这一个候选 (选中者), 没有其它可顶替的候选; \
+                 退路排序口径 = 比较单价升序 (与选定阶梯不是同一顺序)"
             ))
         } else {
             Some(format!(
-                "退路 {} 个 (选中者不可用时依次顶替): {}; 排序口径: 比较单价升序 (有价候选优先), 缺价候选不参与价格比较、排在其后",
+                "退路 {} 个 (选中者不可用时依次顶替): {}; 排序口径: 比较单价升序 (有价候选优先), 缺价候选不参与价格比较、排在其后; \
+                 ⚠️ 退路排序 (单价升序) **不等于**选定阶梯顺序 (档位首选 > 最便宜 > 默认模型 > 画像表顺序) ⇒ 退路第一名未必是阶梯第二名, 不可当重试顺序用",
                 fallback_chain.len(),
                 fallback_chain.join(" → ")
             ))
@@ -652,7 +891,7 @@ impl RoutingPolicy {
             &cost_decision.selection_reason,
             tier,
             tier_source,
-            profile.privacy,
+            profile.privacy_signal,
             evaluation.survivors.len(),
             &comparisons,
         );
@@ -660,7 +899,8 @@ impl RoutingPolicy {
         let decision = RoutingDecision {
             tier,
             tier_source,
-            privacy: profile.privacy,
+            privacy: privacy_level,
+            privacy_source,
             selected_profile: self.profiles.resolve(&selected_model).into_owned(),
             selected_model,
             selection_reason,
@@ -699,10 +939,11 @@ impl RoutingPolicy {
             let mut reasons: Vec<String> = Vec::new();
 
             // 隐私闸 (硬闸): 候选可承接的上限低于任务等级 ⇒ 排除 (安全 > 功能 > 性能)。
-            if candidate.max_privacy < profile.privacy {
+            if candidate.max_privacy < profile.privacy() {
                 reasons.push(format!(
                     "隐私等级 {} 超过该候选允许的上限 {} (隐私闸硬排除; 宁可无候选也不越闸)",
-                    profile.privacy, candidate.max_privacy
+                    profile.privacy(),
+                    candidate.max_privacy
                 ));
             }
             // 候选表闸: 未登记 / 事实缺位 / 没过档位过滤 ⇒ 排除 (理由可见)。
@@ -712,7 +953,7 @@ impl RoutingPolicy {
                 reasons.push("画像表的该模型行事实全缺 (能力事实未提供, 不编造)".to_string());
             } else if !cost_keys.contains(&key) {
                 reasons.push(format!(
-                    "未通过 {tier} 档过滤 (能力需求 × 窗口下限 × 单价上限)"
+                    "未通过 {tier} 档过滤 (工具支持 / 上下文窗口 / 比较单价 三条件之一未满足)"
                 ));
             }
 
@@ -765,13 +1006,14 @@ impl RoutingPolicy {
         cost_reason: &str,
         tier: CostTier,
         tier_source: TierSource,
-        privacy: PrivacyLevel,
+        privacy_signal: PrivacySignal,
         survivor_count: usize,
         comparisons: &[CandidateComparison],
     ) -> String {
         let mut reason = format!(
-            "{cost_reason}; 策略层上下文: 成本档 {tier} (来源 {}) × 隐私等级 {privacy} (硬闸), 通过全部闸门的候选 {survivor_count} 个",
-            tier_source.as_str()
+            "{cost_reason}; 策略层上下文: 成本档 {tier} (来源 {}) × {}, 通过全部闸门的候选 {survivor_count} 个",
+            tier_source.as_str(),
+            privacy_signal.annotation()
         );
         // 档位首选模型若被隐私闸/候选表闸排除, 如实说明 (不静默跳过)。
         if let Some(preferred) = self.config.preferred_models.get(&tier) {

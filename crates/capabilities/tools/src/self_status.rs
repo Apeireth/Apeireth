@@ -189,8 +189,8 @@ pub struct BudgetStatus {
     pub max_rounds_per_turn: u64,
     /// 单轮工具调用上限。
     pub max_tool_calls_per_round: u64,
-    /// 会话配额一节: token / 步数 / 花费三维真值 (上限/已耗/余量), 深度维
-    /// 如实"暂无接口" (见 [`QuotaStatus`])。
+    /// 会话配额一节: token / 步数 / 花费 / 深度四维真值 (上限/已耗/余量)
+    /// (见 [`QuotaStatus`])。
     pub quota: QuotaStatus,
     /// 取值口径: `constant` = 读编译期常量; `configured` = 读可配置值。
     pub source: String,
@@ -210,6 +210,11 @@ pub struct QuotaMeterReading {
     /// 无价轮数: cost 换算不出来的计量轮 (无单价行, 绝不编价)。> 0 时
     /// `consumed_cost_micros` 是部分计量口径, 自述如实标"部分计量"。
     pub unpriced_rounds: u64,
+    /// 会话**峰值深度** (调用树最深处的层数, 单调不降)。
+    ///
+    /// `None` = 该会话账本**暂无深度列** ⇒ 已耗取不到 (自述显式 null + 原因),
+    /// **不报 0** (报 0 = 把「读不到」写成「没消耗过」= 编造)。
+    pub consumed_depth: Option<u64>,
 }
 
 /// 会话配额计量探测口: 传会话 id, 回该会话账本的已耗读数 (失败回 `Err(原因)`)。
@@ -317,9 +322,28 @@ pub fn quota_cost_partial_note(unpriced_rounds: u64) -> String {
     format!("{QUOTA_COST_PARTIAL}: {unpriced_rounds} 个计量轮无单价未计入 (绝不编价)")
 }
 
-/// 深度维"暂无接口"的原因 (0 装诚实: 调用树深度跟踪未实施)。
+/// 深度维"暂无接口"的**退役文案** (常量保留: 既有导出路径依赖它; 新读数行
+/// 请用 [`QUOTA_DEPTH_NOT_ENABLED`] / [`QUOTA_DEPTH_READING_MISSING`]）。
+///
+/// ⚠️ 历史注记 (文案退役): 调用树深度跟踪已实施 (运行时侧 `DepthQuota`),
+/// 该文案**不再用于任何读数行** (深度维改报真值: 上限 + 已耗)。
 pub const QUOTA_DEPTH_NOT_WIRED: &str =
     "not wired: the depth dimension has no call-tree depth tracking yet";
+
+/// 深度维**未启用**的原因 (0 装诚实: 深度维是 **opt-in** —— 未设上限即不启用)。
+///
+/// ⚠️ 历史注记 (文案退役): 深度维曾以 `QUOTA_DEPTH_NOT_WIRED`
+/// ("not wired: the depth dimension has no call-tree depth tracking yet")
+/// 如实标"暂无接口" —— 调用树深度跟踪已实施 (运行时侧 `DepthQuota`), 该文案退役:
+/// 深度维改报**真值** (上限 + 已耗); 未启用时按本行如实标"未启用"。
+pub const QUOTA_DEPTH_NOT_ENABLED: &str = "深度维未启用 (opt-in: 未设深度上限 ⇒ 该维不计量)";
+
+/// 深度维**已耗取不到**的原因 (0 装诚实, 不报 0)。
+///
+/// ⚠️ 会话行**只落上限**, 深度计数**从 0 起**（改会话存储伪造不出计数）⇒
+/// 自述采集时读不到峰值深度 ⇒ 显式 null + 本行原因, **不报 0**。
+pub const QUOTA_DEPTH_READING_MISSING: &str =
+    "会话落盘只带深度上限, 计数从 0 起 ⇒ 已耗(峰值深度)取不到";
 
 /// 已耗取不到的原因: 配额计量是会话级, 本调用没有会话作用域。
 pub const QUOTA_METER_SCOPE_REQUIRED: &str =
@@ -334,8 +358,54 @@ pub struct QuotaStatus {
     pub tool_steps: QuotaDimensionStatus,
     /// 花费维 (真值: 上限/已耗/余量; 含无价轮时已耗标"部分计量")。
     pub cost_micros: QuotaDimensionStatus,
-    /// 深度维 —— 暂无接口 (调用树深度跟踪未实施)。
+    /// 深度维 (真值: 上限/已耗/余量; 深度维是 **opt-in** —— 未设上限时上限为
+    /// `None` 且已耗显式 null + 原因)。
     pub depth: QuotaDimensionStatus,
+}
+
+/// 路由策略一节: 策略层的最近一次决策 (可解释: 选谁 / 为什么 / 退路 / 排除理由)。
+///
+/// ⚠️ **只回决策真值, 不回凭据**: 候选比较里没有凭据、没有请求内容。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RoutingPolicyStatus {
+    /// 策略层开关真值 (关 = 本节无决策, 零变化)。
+    pub enabled: bool,
+    /// 最近一次决策 (尚无任务被路由 = `None`, 不编造)。
+    pub last_decision: Option<RoutingPolicyDecision>,
+}
+
+/// 策略层的一次决策 (自述形态)。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RoutingPolicyDecision {
+    /// 定下的成本档。
+    pub tier: String,
+    /// 生效的隐私等级 (任务画像声明)。
+    pub privacy: String,
+    /// 隐私档的**来源** (`declared` = 调用方显式声明; `defaulted` = 缺省兜底)。
+    ///
+    /// ⚠️ 缺省必须**看起来像缺省** ⇒ 否则「漏接 = 隐私闸静默失效」没人看得见。
+    pub privacy_source: String,
+    /// 选中的模型 id。
+    pub selected_model: String,
+    /// 选定理由。
+    pub selection_reason: String,
+    /// 退路链 (有序, 不含选中者)。
+    pub fallback_chain: Vec<String>,
+    /// 退路说明 (无退路时为 `None`)。
+    pub fallback_reason: Option<String>,
+    /// 候选逐行比较 (**含被排除者的排除理由** —— 不静默过滤)。
+    pub comparisons: Vec<RoutingPolicyCandidateRow>,
+}
+
+/// 候选比较的一行 (自述形态: 只回可解释字段)。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RoutingPolicyCandidateRow {
+    /// 模型 id。
+    pub model_id: String,
+    /// 比较结论 (选中 / 备选 / 排除)。
+    pub outcome: String,
+    /// 排除理由 (被排除时给出)。
+    pub exclusion_reason: Option<String>,
 }
 
 /// 口径注记: 预算读编译期常量, 逐回合可配置口径尚未接线。
@@ -950,6 +1020,11 @@ pub struct SelfStatusSnapshot {
     pub cost_routing: Option<CostRoutingStatus>,
     /// 成本分级路由一节不可用的原因; 可用时为 `None`。
     pub cost_routing_reason: Option<String>,
+    /// 路由策略一节 (W2 · C-H1: 统一路由策略层的最近一次决策真值 ——
+    /// 选中谁 / 为什么 / 退路是谁 / 谁被排除且为何)。
+    pub routing_policy: Option<RoutingPolicyStatus>,
+    /// 路由策略一节不可用的原因; 可用时为 `None`。
+    pub routing_policy_reason: Option<String>,
     /// 创作节 (创作工具面 W1: 最近操作计数, 只计数不回路径)。
     pub image_ops: Option<ImageOpsStatus>,
     /// 创作节不可用的原因; 可用时为 `None`。
@@ -1016,6 +1091,8 @@ impl SelfStatusSnapshot {
             proposal_reason: Some(DATA_PROBE_NOT_WIRED.to_string()),
             cost_routing: None,
             cost_routing_reason: Some(DATA_PROBE_NOT_WIRED.to_string()),
+            routing_policy: None,
+            routing_policy_reason: Some(DATA_PROBE_NOT_WIRED.to_string()),
             image_ops: None,
             image_ops_reason: Some(DATA_PROBE_NOT_WIRED.to_string()),
             doc_ops: None,
@@ -2208,6 +2285,8 @@ mod tests {
             capabilities: capability_roster([("shell", false), ("search", true)]),
             accountability: None,
             accountability_reason: None,
+            routing_policy: None,
+            routing_policy_reason: Some(DATA_PROBE_NOT_WIRED.to_string()),
             memory_ledger: Some(MemoryLedgerStats {
                 verified_lessons: Some(2),
                 candidate_lessons: Some(1),
@@ -2259,7 +2338,8 @@ mod tests {
                     tokens: QuotaDimensionStatus::metered(Some(5_000), 120),
                     tool_steps: QuotaDimensionStatus::metered(None, 3),
                     cost_micros: QuotaDimensionStatus::metered(Some(10_000), 2_000),
-                    depth: QuotaDimensionStatus::not_wired(QUOTA_DEPTH_NOT_WIRED),
+                    // 深度维: 默认样例 = **未启用** (上限未设 ⇒ 整行 "—")。
+                    depth: QuotaDimensionStatus::not_wired(QUOTA_DEPTH_NOT_ENABLED),
                 },
                 source: "constant".to_string(),
                 note: BUDGET_SOURCE_CONSTANT_NOTE.to_string(),
@@ -3425,16 +3505,23 @@ mod tests {
     }
 
     #[test]
-    fn the_depth_dimension_is_honestly_marked_not_wired() {
+    fn the_depth_dimension_is_honestly_marked_when_it_is_off() {
+        // 演进自「深度维暂无接口整行 —」: 深度维改报**真值**（上限 + 已耗）;
+        // 未启用 (上限未设) ⇒ 整行 "—" + 如实标「未启用」(不是「暂无接口」——
+        // 那是退役文案: 调用树深度跟踪已实施)。
         let value = render_snapshot(&fixture_snapshot());
         let row = &value["budget"]["quota"]["depth"];
-        assert_eq!(row["display"], "—", "深度维暂无接口整行显 —");
+        assert_eq!(row["display"], "—", "深度维未启用整行显 —");
         assert_eq!(row["limit"], Value::Null);
         assert_eq!(row["consumed"], Value::Null);
         assert_eq!(row["remaining"], Value::Null);
         assert!(
-            row["reason"].as_str().unwrap().contains("not wired"),
-            "深度维必须如实标注暂无接口: {row}"
+            row["reason"].as_str().unwrap().contains("未启用"),
+            "深度维未启用必须如实标注: {row}"
+        );
+        assert!(
+            !row["reason"].as_str().unwrap().contains("not wired"),
+            "退役文案不得再出现: {row}"
         );
     }
 

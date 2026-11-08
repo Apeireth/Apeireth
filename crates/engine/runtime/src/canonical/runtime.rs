@@ -175,6 +175,11 @@ pub struct RuntimeConfig {
     /// instead (never invented). `None` = no price source installed, so every
     /// round is unpriced and the cost total is honestly partial.
     pub cost_rates: Option<Arc<dyn super::quota::CostRateTable>>,
+    /// 深度维上限 (调用树深度 / 推理深度): `None` = 不设限 (默认 ⇒ 深度维恒不设限, 逐字节零变化)。
+    /// ⚠️ **只是预留, 不是有效防护**: 深度 = 运行时调用树读数, 存量结构下**可达深度 ≤ 1**
+    /// (顶层 0 / 侧车 1; 运行时自己在 depth 2 就拒) ⇒ **上限 > 1 不可达** (配了也不触发)。
+    /// 上限随计量器走 (会话账本 [`super::quota::DepthQuotaHandle`]), **不进** [`super::quota::SessionQuotaLimits`].
+    pub depth_ceiling: Option<u64>,
     /// 滚动窗口大小 (G-P1 指标面, 拍/层): 指标注册表每层保留最近 N 个回合
     /// 收束拍 (进程内环形, 不落盘)。默认 [`super::metrics::DEFAULT_METRICS_WINDOW_TURNS`]。
     pub metrics_window_turns: usize,
@@ -249,6 +254,7 @@ impl Default for RuntimeConfig {
             plan_mode_enabled: false,
             quota: super::quota::SessionQuotaLimits::default(),
             cost_rates: None,
+            depth_ceiling: None,
             metrics_window_turns: super::metrics::DEFAULT_METRICS_WINDOW_TURNS,
         }
     }
@@ -971,6 +977,13 @@ impl RuntimeBuilder {
     #[must_use]
     pub fn with_cost_rates(mut self, rates: Arc<dyn super::quota::CostRateTable>) -> Self {
         self.config.cost_rates = Some(rates);
+        self
+    }
+
+    /// Set the depth-dimension ceiling (`None` = no limit; 见 [`RuntimeConfig::depth_ceiling`]).
+    #[must_use]
+    pub fn with_depth_ceiling(mut self, depth_ceiling: Option<u64>) -> Self {
+        self.config.depth_ceiling = depth_ceiling;
         self
     }
     /// Install the runtime-invariant consumption point.

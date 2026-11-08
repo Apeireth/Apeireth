@@ -35,6 +35,7 @@ use super::event_log::{
     compaction_entries, fold_surface, fork_placeholder, open_tool_calls, ForkRecord, LogEntry,
     SurfaceOp, SurfaceView,
 };
+use super::quota::{DepthQuotaHandle, QuotaExceeded, SessionQuotaLimits};
 
 /// Session-level permission posture applied to subsequent turns.
 ///
@@ -122,6 +123,17 @@ pub struct Session {
     /// nothing from their transcript or approval history.
     #[serde(default)]
     pub quota: CognitiveQuota,
+    /// 会话级深度账本 (调用树深度 / 推理深度): 记运行时调用树的层数读数。
+    ///
+    /// 上限随计量器 ([`DepthQuotaHandle::with_max_depth`]) —— 不进
+    /// [`SessionQuotaLimits`] (既有装配点的字面量形状不动)。计数只由**绝对**
+    /// 深度观测抬升 (见 [`super::quota::depth`] 的口径契约); 落盘只带上限,
+    /// 计数从 0 起 ⇒ 改会话存储**伪造不出**深度计数。
+    ///
+    /// `#[serde(default)]` 是落库迁移口径: 旧会话行没有此列, 读回一个不设限
+    /// 的空账本 (计数从 0 起)。
+    #[serde(default)]
+    pub depth_quota: DepthQuotaHandle,
     /// The transcript, in order. Includes assistant tool-call messages and
     /// tool-result messages, so a resumed session can continue mid-tool-loop.
     ///
@@ -180,10 +192,21 @@ impl Session {
             active_approval_id: None,
             settings: SessionSettings::default(),
             quota: CognitiveQuota::default(),
+            depth_quota: DepthQuotaHandle::default(),
             revision: 0,
             created_at: now,
             updated_at: now,
         }
+    }
+
+    /// 四维配额检查 (token / 工具步数 / 花费 / **深度**): 第一个到顶的维度。
+    ///
+    /// 深度维只读 (`&self.depth_quota`): 它的计数由嵌套调用点观测抬升, 检查
+    /// 点只**读**账本。维度顺序固定 (口径唯一): token → 步数 → 花费 → 深度;
+    /// 深度维不设限时本函数与三维检查逐字节等 (见
+    /// [`SessionQuotaLimits::check_with_depth`]).
+    pub fn quota_exceeded(&mut self, limits: &SessionQuotaLimits) -> Option<QuotaExceeded> {
+        limits.check_with_depth(&mut self.quota, &self.depth_quota.read())
     }
 
     /// Append a message and update the modification time.
@@ -588,6 +611,8 @@ struct SessionRepr {
     settings: SessionSettings,
     #[serde(default)]
     quota: CognitiveQuota,
+    #[serde(default)]
+    depth_quota: DepthQuotaHandle,
     messages: Vec<NormalizedMessage>,
     events: Vec<SessionEvent>,
     #[serde(default)]
@@ -610,6 +635,7 @@ impl From<SessionRepr> for Session {
             authorization_epoch: repr.authorization_epoch,
             settings: repr.settings,
             quota: repr.quota,
+            depth_quota: repr.depth_quota,
             messages: repr.messages,
             events: repr.events,
             log: repr.log,

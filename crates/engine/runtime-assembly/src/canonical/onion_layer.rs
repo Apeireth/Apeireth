@@ -34,7 +34,8 @@ use async_trait::async_trait;
 /// ⚠️ **未知能力缺省落 L2** ⇒ 新的**写面**必须**显式**升 L3 (否则它会落进
 /// 「可被预设改写放行」的档)。能力创造线 W1:
 /// - `tool.http_write` / `tool.calendar` / `tool.process_tree` ⇒ **显式 L3**
-///   (写面: 出网写 / 本地账写 / 取消进程 ⇒ 逐次人批);
+///   (写面: 出网写 / 本地账写 / 取消进程 ⇒ 审批强度分两档: `tool.http_write` 与
+///   `tool.process_tree` ⇒ 逐次人批**绝对**（列入人工审批地板 ⇒ 任何预设下都停人批）; `tool.calendar` ⇒ 逐次人批**有条件**（默认预设 `standard` 且 `approval_remember=false` 下停人批; `full` 预设或 `approval_remember=true` 下按既有口径自动放行, 与 `tool.shell`/`tool.fetch` 同款）);
 /// - `tool.web_search` ⇒ **显式 L2** (出网**只读**面 ⇒ 与 `tool.fetch` 同档)。
 pub fn onion_layer_for_capability(capability: &CapabilityId) -> PermissionLayerKind {
     let id = capability.as_str();
@@ -47,7 +48,10 @@ pub fn onion_layer_for_capability(capability: &CapabilityId) -> PermissionLayerK
         // 能力创造线 W1 · 互联网检索面: 出网**只读** ⇒ 与 fetch 同档 (显式写出来,
         // 不靠缺省分支 —— 缺省分支会随别的能力改动而漂移)。
         "tool.web_search" => PermissionLayerKind::L2,
-        // 能力创造线 W1 · 三个写面: 逐次人批, 绝不进预设放行档。
+        // 能力创造线 W1 · 三个写面: 显式 L3。⚠️ 审批强度**分两档**:
+        // `tool.http_write` / `tool.process_tree` 列入人工审批地板 ⇒ 绝对;
+        // `tool.calendar` 未列地板 ⇒ 有条件 (默认预设下停人批, `full` 预设 /
+        // `approval_remember=true` 下按既有口径自动放行)。
         "tool.http_write" | "tool.calendar" | "tool.process_tree" => PermissionLayerKind::L3,
         "tool.shell" | "tool.process" | "tool.supervisor" | "tool.std_sub_supervisor" => {
             PermissionLayerKind::L3

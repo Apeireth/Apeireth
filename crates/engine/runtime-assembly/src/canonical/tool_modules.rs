@@ -185,7 +185,8 @@ impl CapabilityProvider for FetchModule {
 ///
 /// 带鉴权的受控写面: 请求一律经受控出网通道发出 (**不得自带第二个 HTTP
 /// 客户端**) ⇒ 域名白名单 / 私网判定 / 有界响应体 **全部**由传输层管。治理
-/// 档位 (写面逐次人批) 在治理链钩子上。默认关 (opt-in)。
+/// 档位 (写面审批) 在治理链钩子上: `tool.http_write` 列入人工审批地板 ⇒
+/// 逐次人批**绝对**（列入人工审批地板 ⇒ 任何预设下都停人批）。默认关 (opt-in)。
 pub struct HttpWriteModule {
     tool: Arc<apeireth_tools_canonical::http_write::HttpWriteTool>,
 }
@@ -253,7 +254,7 @@ impl CapabilityProvider for WebSearchModule {
 
 /// Module providing the owner calendar face (`tool.calendar`, W1 C-H5).
 ///
-/// 主人日程面: 本地日程账 (查询/创建/改期/取消); 写动作走审批档 (逐次人批)。
+/// 主人日程面: 本地日程账 (查询/创建/改期/取消); 写动作走审批档 ⇒ 逐次人批**有条件**（默认预设 `standard` 且 `approval_remember=false` 下停人批; `full` 预设或 `approval_remember=true` 下按既有口径自动放行, 与 `tool.shell`/`tool.fetch` 同款）。
 /// 默认关 (opt-in)。
 pub struct CalendarModule {
     tool: Arc<dyn ToolCapability>,

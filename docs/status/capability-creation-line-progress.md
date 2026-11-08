@@ -18,8 +18,10 @@ Author: lead（插件/组件/能力开发线 总指挥）
 ## 0. 一句话
 
 > **W0（登记批 + 重复审计批）已落地**：ADR + 设计稿 + 本进度页 + 族级守卫 + 工作线登记。
-> **W1 已落地 4 族**（C-B1 进程树 · C-B2 HTTP 写面 · C-H4 互联网检索 · C-H5 日历面）⇒ **PRODUCTION WIRED + 默认关**；
-> **3 族机制就绪但未接线**（C-D1 对象级授权 · C-H1 路由策略层 · C-H2 配额深度维）⇒ 如实标 🟡 在途（见 §2 各行「还差什么」）；
+> **W1 落地 4 族**（C-B1 进程树 · C-B2 HTTP 写面 · C-H4 互联网检索 · C-H5 日历面）⇒ **PRODUCTION WIRED + 默认关**；
+> **W2 落地 2 族接线**（C-H1 路由策略层 CLI 接入 + 自述探针 · C-H2 深度维接线 + 上限旋钮 + 自述真值）⇒ **PRODUCTION WIRED**，
+> **但两族各有一条硬边界**（C-H1 信号需显式注入才生效 · C-H2 当前可达深度 ≤ 1 ⇒ 上限 > 1 不可达 ⇒ 不是有效防护）；
+> **C-D1 账本加固 + 读路径并联完成，但仍未注册**（无生产激活口）⇒ 如实标 🟡 在途；
 > **C-L1 端侧推理**待重复审计 · **池 B 7 条移交** · **存量接线 6 项移交**。
 
 ---
@@ -30,6 +32,7 @@ Author: lead（插件/组件/能力开发线 总指挥）
 |---|---:|---|---|---|
 | **W0** | — | ✅ **已落地** | 本页 + 设计稿 + [ADR-0025](../adr/0025-capability-creation-line-charter.md) + `scripts/check_creation_line.py` + 登记表新增行 + **重复审计**（本页 §3） | ❌ 待 owner 复核重复判定与池 A/B 划分（**唯一待办**） |
 | **W1** | 7 | 🟡 **4 族已落地 / 3 族未接线** | C-B1 · C-B2 · C-H4 · C-H5 ⇒ **PRODUCTION WIRED + 默认关**（注册根 + 治理档 + 策展表 + 名册 + env 登记齐） | ❌ C-D1（读路径并联待 W2）· C-H1（缺隐私信号源）· C-H2（缺运行时喂深度点）未接线 |
+| **W2** | 3 | 🟡 **2 族已接线 / 1 族仍不注册** | C-H1（CLI 接入 + 自述探针 + `privacy_source` 格）· C-H2（深度接线 + `APEIRETH_QUOTA_MAX_DEPTH` 旋钮 + 自述真值） | ❌ C-D1：账本读端加固 + 读路径并联**已完成**，但 `approve_grant`/`deny_grant` **全仓只有测试调用点** ⇒ 生产里授权永远停在 pending ⇒ **不注册**（激活口属宿主面） |
 | **W2** | 1 | ❌ **未开工** | — | ❌ C-E1 未落地（技能/插件包 + 运行时验签） |
 | **W3** | 2 | ❌ **未开工** | — | ❌ C-A1 · C-B4 未落地（平台依赖；引擎选型待定） |
 | **W4** | 3 | ❌ **未开工** | — | ❌ C-B3 · C-D2 · C-G2 未落地 |
@@ -63,14 +66,14 @@ python3 scripts/docs_truth.py --verify --check     # ⇒ claims=N fail=0 stale=0
 | C-B2 | `tool.http_write` | 部分重复 | `egress.rs` get_with_headers（**只有 GET**）· `sdk/client.rs` 真 POST | W1 | ✅ 已落地 | R2 | 已落地：写方法长在 `ControlledEgress`（**不自带第二 HTTP 客户端**）+ 生产注册（production.rs:669）+ L3 + WRITE_OR_EXECUTE + 2 个新 env 名。⚠️ **凭据绑定表默认无绑定** ⇒ 生产上只能发未鉴权请求（带 `credential_ref` 的调用拒绝即帧） | ❌ **扩 ControlledEgress 写方法** + 新增「无第二 HTTP 客户端」不变量测试 |
 | C-B3 | `tool.script_exec`（跑命令半边移交 `tool.shell`） | 部分重复（半边移交） | `shell.rs` tool.shell（已接线） | W4 | ❌ 未开工 | R3 | ❌ 实现（仅语言代码解释执行）+ 四类逃逸拒绝用例 + **选型待定** |
 | C-B4 | `tool.web_browser` | 部分重复 | `stealth_crawler.rs`（零 IO 未接线）· `fetch.rs` 受控 GET | W3 | ❌ 未开工 | R2/R3 | ❌ 实现 + 白名单 + 证据帧 + **引擎选型待定** |
-| C-D1 | `tool.object_grant` | 部分重复 | `memory/scope.rs` MemoryScope · `governance/permission.rs` 授权底座 | W1 | 🟡 在途 | R0/R2 | 机制就绪（工具面 + 账本 + 叠加原语：`域可见 ∨ 有效对象 grant`，被授方 `allows_write` 恒 false，撤销即时）⇒ **本波不注册**：域级可见性是**两段过滤**（SQL 段 + 协调器段）⇒ 只并联协调器段 ⇒ 被授对象**进不了候选集**（静默失效）⇒ 读路径并联待 W2（涉 `memory/scope.rs` + `backend/{sqlite,in_memory}.rs` 的 SQL 谓词） | ❌ 实现 + **撤销即时生效**测试 + **叠加/替代裁决** |
+| C-D1 | `tool.object_grant` | 部分重复 | `memory/scope.rs` MemoryScope · `governance/permission.rs` 授权底座 | W1 | 🟡 在途 | R0/R2 | **W2 已完成**：① 读路径并联（候选侧 SQL 并入被授 id + 协调器 4 处判定并联 + 管线可见域合并，**18 例**）；② **账本读端加固**（复核查出 3 个洞：旧 `active` 行**重放复活**已撤销授权 / **伪造 `active` 行跳过人批** / `version` 从不校验 ⇒ 修法：按 version 单调择一 + `active` 须有 pending 前身且 `decided_by` 非空 + 版本区间校验；顺带修「末行缺换行 ⇒ 末条授权静默消失」）；③ 元数据收口（`check` 认证闸 / 撤销归属校验 / subject 形状校验 / 审计写失败不静默 / 不回显域不可见对象的 partition）。**仍不注册**：`approve_grant`/`deny_grant` 无生产调用点 ⇒ 授权永远停在 pending ⇒ 注册它 = 注册一个「永远不能生效」的面；**待宿主面激活口**（面板/IM 审批卡回调） | ❌ 实现 + **撤销即时生效**测试 + **叠加/替代裁决** |
 | C-D2 | 面名 `session_observability`（含 C-G4 + C-G3） | 部分重复 | `agent_trace.rs` TraceSpan · `durable/replay.rs` recover_attempt · `session_events.rs` marker | W4 | ❌ 未开工 | R0 | ❌ 实现（快照/恢复/统一时间线**共用一套事件面**）+ 两次导出逐字节等 |
 | C-D3 | `transport.cross_device` | 部分重复 | `research_roaming_memory.rs` 合并/墓碑原语（未接线） | W6 | ⛔ 未排期 | R4 | ❌ **待 owner 重拍** + 先提取 merge/tombstone 为通用原语 |
 | C-E1 | `tool.skill_package`（含 C-E2 插件那半边） | 部分重复 | `skill/library.rs` SkillLibrary · `plugin/manifest.rs` PluginManifest | W2 | ❌ 未开工 | R3 | ❌ 实现 + 越权包拒装 + 未签名拒装 + 卸载不留残影 |
 | C-F1 | 面名 `multisig_verifier` | 部分重复 | `core/onion.rs` verify_multisig · `governance/chain.rs` PlaceholderMultiSignVerifier | W6 | ⛔ 未排期 | R4 | ❌ **待 owner 重拍**（D2 已裁 T0 不做） |
 | C-G2 | `tool.replay_eval` | 部分重复 | `governance/eval.rs` EvalScore · `memory/d4_eval.rs` score | W4 | ❌ 未开工 | R0 | ❌ 实现（**复用既有打分器**，不新造第二套评分语义） |
-| C-H1 | 面名 `routing_policy` | 部分重复 | `core/cost_router.rs` CostRouter · `runtime/provider.rs` ProviderRouter | W1 | 🟡 在途 | R0 | 机制就绪（策略层**原样复用** `CostRouter::route` + 隐私硬闸 + 可解释决策 + 0 新 env 名）⇒ **本波不接线**：CLI **无任务隐私等级信号源** ⇒ 现在接上去是**零行为变化**的假接线 ⇒ 待信号源（域级隐私属性）就位再接 CLI/网关/自述三处 | ❌ 实现 + 决策可解释 + 缺价不编价 + **与既有两层同层** |
-| C-H2 | 不新设 id（`budget.quota.depth`） | 部分重复 | `runtime/quota.rs` QuotaDimension · `tools/self_status.rs` 深度维占位 | W1 | 🟡 在途 | R0 | 机制就绪（`DepthQuota` 真计数 + `check_with_depth` 四维合一 + 拒绝路径接既有配额语义）⇒ **本波不接线**：运行时喂深度点（`execute.rs` 四处 `check` → `check_with_depth` + `session.rs` 加槽 + `invocation.depth` 喂入）与自述面接线**不在本批写域**（涉尺寸棘轮跟踪文件 `execute.rs`）⇒ 待 W2 | ❌ 实现 + 自述面深度维不再为 null |
+| C-H1 | 面名 `routing_policy` | 部分重复 | `core/cost_router.rs` CostRouter · `runtime/provider.rs` ProviderRouter | W1 | ✅ 已落地 | R0 | **W2 已接线**：CLI 组合根读**显式声明**的隐私档（`privacy_signal_from_str`；不认识的值 ⇒ **拒路由**，不降级为普通档）⇒ 策略层进选路路径 + 自述面加 `privacy_source`（declared/defaulted）格 + 探针（谁被排除且为何）。⚠️ **两条硬边界**：① 仓内**无隐私信号真源**（唯一现成载体「规范请求 metadata」**会整包外发给厂商** ⇒ 已否决）⇒ **未注入 ⇒ 闸常态不生效**（漏接 = 静默失效）；② 本层是既有两层**之上**的第三层（**非**「合成一层」）⇒ **网关侧接入未交付**（规格 §4.1 已按实测校正） | ❌ 实现 + 决策可解释 + 缺价不编价 + **与既有两层同层** |
+| C-H2 | 不新设 id（`budget.quota.depth`） | 部分重复 | `runtime/quota.rs` QuotaDimension · `tools/self_status.rs` 深度维占位 | W1 | ✅ 已落地 | R0 | **W2 已接线**：`Session` 加 `depth_quota` 槽 + `execute.rs` 四处检查点改 `check_with_depth` + 喂深度点（F1/F3/F4/F7）+ `APEIRETH_QUOTA_MAX_DEPTH` 旋钮（**严格解析**，非法值启动即报错）+ 自述面真值（上限/已耗=峰值/当前层）。⚠️ **硬边界**：深度 = **运行时调用树读数**，**当前可达深度 ≤ 1**（`DEFAULT_MAX_INVOCATION_DEPTH=1` + 子循环那条链是「平」的）⇒ **上限 > 1 不可达（配了也不触发）** ⇒ 该维**目前不是有效的深度防护**；F6（侧车 agent 那一跳）未喂（子 agent 自带 session ⇒ 父账本看不见，同 token/step/cost 既有缺口）；F4 **永久偏低 1**（存量平链读数，已逐字标注） | ❌ 实现 + 自述面深度维不再为 null |
 | C-H4 | `tool.web_search` | 部分重复 | `sdk/client.rs` web_search（**契约已占名**）· `tools/search.rs` SearchTool（本地） | W1 | ✅ 已落地 | R2 | 已落地：生产注册（production.rs:678）+ 显式 **L2**（出网只读）+ env 登记 + 端点走配置面（`<data>/web_search.json`）。⚠️ **端点未配 ⇒ 面不注册**；结果正文走 `UntrustedEnvelope` 封套；条数上限按**端点原始条数**判（超限整单拒绝） | ❌ 实现 + **先对齐 SDK 契约占名** + 来源缺失即拒 + 双上限 |
 | C-H5 | `tool.calendar` | **真新面** | **无先例**（⚠️「calendar 25 命中」全是 `canonical` 子串误判）· 边界对照 `engine/organ/src/care/tool.rs` CARE_SCHEDULE（**关怀例程 ≠ 主人日程**） | W1 | ✅ 已落地 | R2 | 已落地：3 文件拆分（mod/store/tool，均 < 800 行）+ 生产注册（production.rs:686）+ L3 + WRITE_OR_EXECUTE + `CalendarApprovalHook` 已挂治理链 + env 登记。账本 = `<data>/calendar/` 两本 JSONL（条目账 + 审计账），坏行按不存在并计数上报 | ❌ 实现（本地日程账 + 查询/创建/改期/取消，**零外部集成**）+ 写动作逐次人批 + **与 `tool.care_schedule` 边界写进族规格** |
 | C-L1 | `provider.local_inference` | **待立项** | `runtime/provider.rs` ProviderRouter（归一化层；**无本地推理实现**） | W5 | ❌ 未开工 | R0/R2 | ❌ **先做重复审计** + 引擎选型 + 依赖闭包实测 |
@@ -131,6 +134,17 @@ python3 scripts/docs_truth.py --verify --check     # ⇒ claims=N fail=0 stale=0
 | 配置面（非 env） | `<data>/web_search.json`（检索端点）· `<data>/http_write.json`（凭据绑定表）⇒ **默认无内容 ⇒ 面不注册或写面拒绝即帧** |
 | 策展表 | `tool_taxonomy.rs` 版本 3 → 4（+5 行；`tool.object_grant` 留行为**策展占位**，口径 = IMPLEMENTED，**不是已接线声明**） |
 | 0 装诚实 | ① `tool.http_write` 的凭据绑定表默认无绑定 ⇒ 生产上只能发**未鉴权**请求；② `tool.web_search` 端点未配 ⇒ 面不注册；③ `tool.process_tree` 的 Windows 分支**未上真机**（收容组归属一律 `Undetermined`）；④ 3 族（对象级授权 / 路由策略层 / 配额深度维）**未接线** ⇒ 机制在、面不在 |
+
+## 3.6 W2 波次落地记录（2026-11-08）
+
+| 项 | 值 |
+|---|---|
+| 落地族 | **2 族接线**（C-H1 路由策略层 CLI 接入 + 自述探针 · C-H2 深度维接线 + 旋钮 + 自述真值）+ **1 族加固不注册**（C-D1） |
+| 并行 | **8 路同跑**：4 路实现（按 crate 切写域：memory / runtime / core+plugin / runtime-assembly+cli ⇒ **零文件重叠**）+ 4 路**只读对抗复核**（C-D1 / C-H1 / C-H2 / 接线治理）⇒ **复核产出 3 个真洞**（账本重放复活 + 伪造 active 跳过人批 + version 不校验）与 2 条治理洞 |
+| 对抗复核的硬产出 | ① C-D1：账本读端**从不校验 version** + 折算只看行序 ⇒ 旧 `active` 行重放可**复活已撤销授权**、伪造 `active` 行可**跳过人批直接生效** ⇒ 已修；② C-H1：复核证伪了规格里的「合成一层 + 网关侧接入」⇒ **规格已按实测校正**（不追认超载）；③ C-H2：运行时调用树深度读数**恒为 0/1** ⇒ 「> 1 的上限永远不可能触发」⇒ 深度维**不是有效防护**，已逐字标注；④ 治理：`full` 预设会把 RequireApproval **改写为放行** ⇒ 逐次人批**有条件** ⇒ 已把 `tool.process_tree`/`tool.http_write` 列入**人工审批地板**（存量零影响）⇒ 这两族**绝对**，另两族如实标**有条件** |
+| 新 env 名 | **+1**（`APEIRETH_QUOTA_MAX_DEPTH`，严格解析）⇒ 契约上限 164 → **165**（授权 +16 内） |
+| 额度 | crate **+0** · 依赖边 **+0** · env **+1** · 尺寸：7 个既有文件真增长 ⇒ 波次收口由 lead 重生成基线（**未抬 `max_file_loc`**，仍 6300） |
+| 0 装诚实 | ① C-H1 闸门**未注入信号时不生效**（漏接 = 静默失效 ⇒ 自述面用 `privacy_source` 暴露）；② C-H2 **上限 > 1 不可达** ⇒ 不是有效防护；③ C-D1 **未注册**（无生产激活口）；④ `runtime/src/canonical/runtime.rs` 现 **1199 行**（**距棘轮阈值 1200 只差 1 行**）⇒ 下一波动它即进逐文件棘轮 |
 
 ## 4. 额度台账（**每波收口回填**）
 

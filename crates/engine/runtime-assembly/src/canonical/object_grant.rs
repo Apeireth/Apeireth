@@ -49,7 +49,7 @@ use apeireth_memory::object_grant::{
 };
 use apeireth_memory::{MemoryCoordinator, MemoryScope};
 use apeireth_plugin::{
-    FrozenInvocation, ToolCapability, ToolExecutionContext, ToolExecutionPolicy,
+    FrozenInvocation, ToolCaller, ToolCapability, ToolExecutionContext, ToolExecutionPolicy,
     ToolPermissionPolicy,
 };
 use apeireth_protocol::canonical::{NormalizedTool, ToolCall, ToolParameters, ToolResult};
@@ -177,6 +177,9 @@ impl MemoryGrantResolver {
     /// 某主体的域可见范围（默认 = 主体自己的私有会话域）。
     #[must_use]
     pub fn scopes_for(&self, subject: &str) -> Vec<MemoryScope> {
+        // ⚠️ **统一 trim 口径**: 授权判定侧 (`read_grant_allows`) 会 trim 主体键
+        // ⇒ 这里不 trim ⇒ 同一主体的两种写法会分家（授权静默落不到人）。
+        let subject = subject.trim();
         let mut scopes = self
             .extra_scopes
             .lock()
@@ -326,8 +329,12 @@ impl ObjectGrantService {
         subject: &str,
         reason: Option<&str>,
     ) -> Result<GrantLedgerEntry, GrantError> {
-        self.registry
-            .request_grant(grantor, object_id, subject, reason, self.now_ms())
+        let audits_before = self.registry.audit_rows().len();
+        let entry =
+            self.registry
+                .request_grant(grantor, object_id, subject, reason, self.now_ms())?;
+        self.ensure_audit_written(audits_before, "授权请求登记")?;
+        Ok(entry)
     }
 
     /// 人批通过 ⇒ 授权**生效**（只读）。
@@ -336,8 +343,12 @@ impl ObjectGrantService {
         approver: &str,
         grant_id: &str,
     ) -> Result<GrantLedgerEntry, GrantError> {
-        self.registry
-            .approve_grant(approver, grant_id, self.now_ms())
+        let audits_before = self.registry.audit_rows().len();
+        let entry = self
+            .registry
+            .approve_grant(approver, grant_id, self.now_ms())?;
+        self.ensure_audit_written(audits_before, "授权人批通过")?;
+        Ok(entry)
     }
 
     /// 人批否决。
@@ -358,8 +369,12 @@ impl ObjectGrantService {
         grant_id: &str,
         reason: Option<&str>,
     ) -> Result<GrantLedgerEntry, GrantError> {
-        self.registry
-            .revoke_grant(approver, grant_id, reason, self.now_ms())
+        let audits_before = self.registry.audit_rows().len();
+        let entry = self
+            .registry
+            .revoke_grant(approver, grant_id, reason, self.now_ms())?;
+        self.ensure_audit_written(audits_before, "授权撤销")?;
+        Ok(entry)
     }
 
     /// 撤销某主体对某对象的**全部**授权（返回被撤销的单数）。
@@ -370,8 +385,52 @@ impl ObjectGrantService {
         subject: &str,
         reason: Option<&str>,
     ) -> Result<usize, GrantError> {
+        let audits_before = self.registry.audit_rows().len();
+        let count =
+            self.registry
+                .revoke_pair(approver, object_id, subject, reason, self.now_ms())?;
+        self.ensure_audit_written(audits_before, "授权撤销")?;
+        Ok(count)
+    }
+
+    /// 审计**守卫**: 写操作**必须**留下审计行 ⇒ 没留下 ⇒ 审计写失败被静默吞了
+    /// ⇒ **向上报错**（不静默放行: 授权已生效但审计丢了 = 「全部留审计行」的
+    /// 承诺被破 ⇒ 结果不可信）。
+    ///
+    /// ⚠️ 兜底深度 (0 装诚实): 审计写失败发生在**账本 crate 内部**（三处
+    /// `append_audit` 的失败被吞）⇒ 本守卫只能**事后发现并报错**，不能替它
+    /// 补写补偿行（登记处未开放审计追加口）⇒ 真正的修复在账本 crate 侧。
+    fn ensure_audit_written(&self, before: usize, what: &str) -> Result<(), GrantError> {
+        if self.registry.audit_rows().len() > before {
+            return Ok(());
+        }
+        Err(GrantError::LedgerWrite(format!(
+            "{what}: 审计行未落账 (审计写失败被吞) ⇒ 本次结果不可信, 拒绝静默放行"
+        )))
+    }
+
+    /// 某条授权的**授予人**（按授权单 id 查最近一行; 查不到 = `None`）。
+    #[must_use]
+    pub fn grantor_of(&self, grant_id: &str) -> Option<String> {
         self.registry
-            .revoke_pair(approver, object_id, subject, reason, self.now_ms())
+            .entries()
+            .into_iter()
+            .rev()
+            .find(|entry| entry.grant_id == grant_id)
+            .map(|entry| entry.grantor.trim().to_string())
+    }
+
+    /// 某 (主体, 对象) 对上**最近一行**授权的授予人。
+    #[must_use]
+    pub fn grantor_of_pair(&self, subject: &str, object_id: &str) -> Option<String> {
+        let subject = subject.trim();
+        let object_id = object_id.trim();
+        self.registry
+            .entries()
+            .into_iter()
+            .rev()
+            .find(|entry| entry.subject.trim() == subject && entry.object_id.trim() == object_id)
+            .map(|entry| entry.grantor.trim().to_string())
     }
 
     /// 读可见性分解（**零审批**）：域可见 / 对象授权 / 合计 / 写是否放行。
@@ -465,7 +524,9 @@ fn entry_json(entry: &GrantLedgerEntry) -> Value {
             GrantStatus::Denied => "denied",
             GrantStatus::Revoked => "revoked",
         },
-        "partition": entry.partition,
+        // ⚠️ **不回显 `partition`**: 域不可见对象的分区名 = 存在性 oracle
+        // （「这个 id 落在哪个域」⇒ 可枚举）。账本内部照留该列（判定要用），
+        // 工具面只报 `cross_partition` 这个**布尔**（跨分区与否）。
         "cross_partition": entry.cross_partition,
         "decided_by": entry.decided_by,
         "decided_at_ms": entry.decided_at_ms,
@@ -616,15 +677,19 @@ impl ToolCapability for ObjectGrantTool {
                 let object_id = arguments
                     .get("object_id")
                     .and_then(Value::as_str)
-                    .unwrap_or("");
-                let subject = arguments
-                    .get("subject")
-                    .and_then(Value::as_str)
-                    .unwrap_or("");
-                match self
-                    .service
-                    .request_grant(&actor, object_id, subject, reason)
-                {
+                    .unwrap_or("")
+                    .trim();
+                // 主体键归一 (trim + 形状): 同一主体的两种写法不再分家。
+                let subject = match normalize_subject_key(
+                    arguments
+                        .get("subject")
+                        .and_then(Value::as_str)
+                        .unwrap_or(""),
+                ) {
+                    Ok(subject) => subject,
+                    Err(reason) => return permanent(call, reason),
+                };
+                match self.service.request_grant(&actor, object_id, &subject, reason) {
                     Ok(entry) => ToolResult::ok(
                         &call.id,
                         json!({
@@ -639,6 +704,13 @@ impl ToolCapability for ObjectGrantTool {
                         }),
                     )
                     .with_name(OBJECT_GRANT_TOOL_NAME),
+                    // ⚠️ **存在性错误统一文案**: 「对象不存在」与「对象不可解析」
+                    // /「域不可见」**同一句话** ⇒ 不给「这个 id 存不存在」当
+                    // oracle (回显 partition 更不行)。
+                    Err(GrantError::UnknownObject(_)) => permanent(
+                        call,
+                        "object grant refused: 目标对象不可用（不存在 / 不可解析 / 域不可见，同一文案）",
+                    ),
                     Err(error) => permanent(call, format!("object grant refused: {error}")),
                 }
             }
@@ -649,6 +721,32 @@ impl ToolCapability for ObjectGrantTool {
                 let grant_id = arguments.get("grant_id").and_then(Value::as_str);
                 let object_id = arguments.get("object_id").and_then(Value::as_str);
                 let subject = arguments.get("subject").and_then(Value::as_str);
+                // ⚠️ **模型面必须校验归属**: 撤销**别人**的授权 = DoS（对方突然
+                // 读不到自己的记忆）⇒ 只许「该授权的授予人」或「被授主体本人」
+                // 撤。宿主面（审批面板的落章口）不受此限（宿主才是 owner）。
+                if matches!(ctx.caller, ToolCaller::Model) {
+                    let grantor = match grant_id {
+                        Some(grant_id) => self.service.grantor_of(grant_id),
+                        None => match (object_id, subject) {
+                            (Some(object_id), Some(subject)) => {
+                                self.service.grantor_of_pair(subject, object_id)
+                            }
+                            _ => None,
+                        },
+                    };
+                    let subject_key = subject.unwrap_or("").trim();
+                    if !caller_may_act_for(
+                        &ctx.caller,
+                        &actor,
+                        subject_key,
+                        grantor.as_deref().unwrap_or(""),
+                    ) {
+                        return permanent(
+                            call,
+                            "object_grant revoke refused: 调用者既不是该授权的授予人, 也不是被授主体本人",
+                        );
+                    }
+                }
                 let outcome = match (grant_id, object_id, subject) {
                     (Some(grant_id), _, _) => self
                         .service
@@ -695,15 +793,43 @@ impl ToolCapability for ObjectGrantTool {
                 .with_name(OBJECT_GRANT_TOOL_NAME)
             }
             ACTION_CHECK => {
-                let subject = arguments
-                    .get("subject")
-                    .and_then(Value::as_str)
-                    .unwrap_or("");
+                if actor.is_empty() {
+                    return permanent(call, "Host principal is required to check visibility");
+                }
+                // 主体键归一 (trim + 形状)。
+                let subject = match normalize_subject_key(
+                    arguments
+                        .get("subject")
+                        .and_then(Value::as_str)
+                        .unwrap_or(""),
+                ) {
+                    Ok(subject) => subject,
+                    Err(reason) => return permanent(call, reason),
+                };
                 let object_id = arguments
                     .get("object_id")
                     .and_then(Value::as_str)
-                    .unwrap_or("");
-                let view = self.service.check_read(subject, object_id);
+                    .unwrap_or("")
+                    .trim();
+                // ⚠️ **调用者必须校验**（可见性矩阵 oracle 的封口）: 本动作**零
+                // 审批** ⇒ 若放任任意主体探测「任意主体 × 任意对象是否可见」⇒
+                // 等于把可见性矩阵白送。⇒ 只许「主体本人」或「该 (主体, 对象)
+                // 授权的授予人」问。宿主面（面板的落章口）不受此限。
+                if matches!(ctx.caller, ToolCaller::Model) {
+                    let grantor = self.service.grantor_of_pair(&subject, object_id);
+                    if !caller_may_act_for(
+                        &ctx.caller,
+                        &actor,
+                        &subject,
+                        grantor.as_deref().unwrap_or(""),
+                    ) {
+                        return permanent(
+                            call,
+                            "object_grant check refused: 调用者既不是该主体本人, 也不是该授权的授予人",
+                        );
+                    }
+                }
+                let view = self.service.check_read(&subject, object_id);
                 ToolResult::ok(
                     &call.id,
                     json!({
@@ -718,6 +844,77 @@ impl ToolCapability for ObjectGrantTool {
             _ => permanent(call, "unknown object_grant action"),
         }
     }
+}
+
+/// 主体键形状被拒的**统一文案**（值自由报错: 不回显被拒的值）。
+pub const SUBJECT_SHAPE_REFUSED: &str =
+    "subject shape refused: expected profile:<uuid>/namespace:<uuid> (or a short domain key)";
+
+/// 主体键**归一**: trim + 形状校验。
+///
+/// # 为什么必须归一（静默失效的真因）
+///
+/// 同一主体两种写法（带不带空白 / 段序颠倒 / 少了半段）⇒ 授权会静默落到
+/// **另一个**主体名下 ⇒ 被授方永远读不到 ⇒ 「授了却读不到」。
+///
+/// # 形状口径
+///
+/// * 命名空间键形态 `profile:<uuid>/namespace:<uuid>` ⇒ 严格校验（两段都在、
+///   段内非空、段序固定、uuid 形态合法）;
+/// * **短键**形态（不含 `/`，宿主自定的会话域键）⇒ 接受（兼容既有宿主口径），
+///   但**必 trim** ⇒ 同一短键的两种写法不再分家。
+pub fn normalize_subject_key(raw: &str) -> Result<String, String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Err("subject must not be empty".to_string());
+    }
+    if !trimmed.contains('/') {
+        return Ok(trimmed.to_string());
+    }
+    let Some((profile, namespace)) = trimmed.split_once('/') else {
+        return Err(SUBJECT_SHAPE_REFUSED.to_string());
+    };
+    if namespace.contains('/') {
+        return Err(SUBJECT_SHAPE_REFUSED.to_string());
+    }
+    let Some(profile_id) = profile.strip_prefix("profile:") else {
+        return Err(SUBJECT_SHAPE_REFUSED.to_string());
+    };
+    let Some(namespace_id) = namespace.strip_prefix("namespace:") else {
+        return Err(SUBJECT_SHAPE_REFUSED.to_string());
+    };
+    if !is_uuid_shape(profile_id) || !is_uuid_shape(namespace_id) {
+        return Err(SUBJECT_SHAPE_REFUSED.to_string());
+    }
+    Ok(trimmed.to_string())
+}
+
+/// uuid 形态判定（8-4-4-4-12 十六进制; 不引 uuid 依赖 —— 形态够用）。
+fn is_uuid_shape(raw: &str) -> bool {
+    let parts: Vec<&str> = raw.split('-').collect();
+    parts.len() == 5
+        && [8usize, 4, 4, 4, 12]
+            .iter()
+            .zip(parts.iter())
+            .all(|(len, part)| part.len() == *len && part.chars().all(|c| c.is_ascii_hexdigit()))
+}
+
+/// 调用者的**信任分档**: 谁能替主体/授予人行事。
+///
+/// * **模型面** ([`ToolCaller::Model`]): 不受信 ⇒ 只许「主体本人 / 该授权的
+///   授予人」⇒ 否则拒绝（否则任何人可零审批探测「任意主体 × 任意对象是否
+///   可见」= 可见性矩阵 **oracle**, 或撤掉别人的授权 = **DoS**）。
+/// * **宿主面**（[`ToolCaller::Host`] / 模块面）: 宿主自己的机器（审批面板的
+///   落章口）⇒ 放行（宿主才是真正的 owner）。
+fn caller_may_act_for(caller: &ToolCaller, actor: &str, subject: &str, grantor: &str) -> bool {
+    if !matches!(caller, ToolCaller::Model) {
+        return true;
+    }
+    let actor = actor.trim();
+    if actor.is_empty() {
+        return false;
+    }
+    actor == subject.trim() || (!grantor.trim().is_empty() && actor == grantor.trim())
 }
 
 /// 造一个**装好账本**的登记处（账本文件路径 + 解析面）。

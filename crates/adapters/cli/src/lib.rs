@@ -77,6 +77,10 @@ use apeireth_guard::{
 };
 use apeireth_plugin::memory_backend::MemoryBackend;
 
+use apeireth_core::routing_policy::{
+    privacy_signal_from_str, PolicyCandidate, PrivacySignal, PrivacySignalError, RoutingPolicy,
+    RoutingPolicyError,
+};
 use apeireth_runtime::canonical::{
     ApprovalDecision, ApprovalResolution, PendingApprovalView, Runtime, SessionStore, TurnOutcome,
     TurnRequest, TurnResponse,
@@ -483,6 +487,10 @@ pub fn tool_call_limit_from_env() -> usize {
     )
 }
 
+/// 会话配额旋钮 (opt-in 深度闸): `APEIRETH_QUOTA_MAX_DEPTH=N` = 会话级**调用树
+/// 深度**上限 (峰值深度到顶即预算耗尽)。**默认未设 = 深度维不启用 ⇒ 行为逐
+/// 字节不变**。登记与上限抬升由 owner 统一做 (本处只加读取点)。
+const QUOTA_MAX_DEPTH_ENV: &str = "APEIRETH_QUOTA_MAX_DEPTH";
 /// 会话配额旋钮 (opt-in 烧钱闸): `APEIRETH_QUOTA_MAX_TOKENS=N` = 会话级 token
 /// 配额上限 (回合计量 usage 累加到上限即预算耗尽)。正整数直通 (越界钳制到
 /// `MAX_QUOTA_TOKENS`); 未设 / 空 / 0 / 非法 = 不设限 (`None`) —— 配额是
@@ -511,6 +519,25 @@ pub fn quota_max_cost_micros_from_env() -> Option<u64> {
     apeireth_runtime::canonical::parse_quota_max_cost_micros(
         std::env::var(QUOTA_MAX_COST_MICROS_ENV).ok().as_deref(),
     )
+}
+
+/// 会话配额旋钮 (opt-in 深度闸): `APEIRETH_QUOTA_MAX_DEPTH=N` = 会话级
+/// **调用树深度**上限 (峰值深度到上限即按既有配额语义拒绝)。
+///
+/// # 取值纪律 (严格)
+///
+/// **非法值明确报错**（`Err`）⇒ **启动即报错**，**不**静默按「不设限」继续 ——
+/// 深度维打错的代价是「思考深度无上限」⇒ 宁可启动失败也不要悄悄失效。
+/// 未设 / 空 ⇒ `None`（**深度维不启用** ⇒ 行为逐字节不变）。
+///
+/// ⚠️ **口径提醒**: 当前运行时结构下**调用树可达深度 ≤ 1** ⇒ 上限 > 1
+/// **不可达**（配了也不触发）⇒ 该维目前**不是**有效的深度防护，只是把既有
+/// 读数记成账 + 到顶按既有配额语义拒绝。
+pub fn quota_max_depth_from_env() -> Result<Option<u64>, String> {
+    apeireth_runtime::canonical::quota::parse_quota_max_depth_strict(
+        std::env::var(QUOTA_MAX_DEPTH_ENV).ok().as_deref(),
+    )
+    .map_err(|error| format!("quota depth ceiling refused: {error}"))
 }
 
 /// 生效模型 id (与运行时 `with_default_model` 同一解析口径): `APEIRETH_MODEL`
@@ -579,12 +606,139 @@ pub fn cost_router_from_env() -> Result<Arc<apeireth_core::cost_router::CostRout
 /// CLI 任务的路由信号口径 (H-P2): 上下文规模 = 提示字符数 / 4 的**启发式
 /// 估计** (非计量, 只够定档用); 工具调用数信号缺位 (如实 `None`, 不猜);
 /// `chat` 回合带工具循环 = 任务需要工具。
+///
+/// ⚠️ 与**策略层**的任务画像口径**同源** (同一份信号 → 成本档层请求 / 策略层
+/// 画像), 两层不各算一套 (否则两层会对同一任务给出不同信号)。
 pub fn routing_request_for_prompt(prompt: &str) -> apeireth_core::cost_router::RoutingRequest {
+    capability_requirement_for_prompt(prompt).to_routing_request(None)
+}
+
+/// CLI 任务的**能力需求**口径 (W2 · C-H1 策略层入口的信号来源)。
+///
+/// 与 [`routing_request_for_prompt`] **同一份信号** (启发式上下文规模 +
+/// 需要工具), 只是形状不同 (策略层要的是「能力需求」不是「成本档请求」)。
+pub fn capability_requirement_for_prompt(
+    prompt: &str,
+) -> apeireth_core::routing_policy::CapabilityRequirement {
     let estimated_context_tokens =
         u64::try_from(prompt.chars().count().div_ceil(4)).unwrap_or(u64::MAX);
-    apeireth_core::cost_router::RoutingRequest::new()
+    apeireth_core::routing_policy::CapabilityRequirement::new()
         .with_requires_tools(true)
         .with_estimated_context_tokens(estimated_context_tokens)
+}
+
+/// 任务**隐私信号**的解析 (W2 · C-H1 组合根读点): 调用方**显式声明**的
+/// 隐私等级 (`ordinary` / `restricted` / `confidential`)。
+///
+/// # 为什么必须由调用方显式注入
+///
+/// 仓内**无真源**、也**不可推导** (记忆域是**可见性**不是敏感度; CLI 只有
+/// `current_dir()`, 仓内无「家目录 vs 公共目录」口径) ⇒ 信号只能由调用方在
+/// **选路之前**显式注入。
+///
+/// # 失败语义 (fail-closed)
+///
+/// **不认识的值 ⇒ `Err`** ⇒ 调用方**拒路由**（**不降级为普通档** —— 那等于把
+/// 「声明了但看不懂」当成「没人声明」= 静默放宽）。值**不**回显（错误里只有
+/// 键名与期望词表）。
+///
+/// # 载体纪律
+///
+/// ⚠️ **绝对不**把声明值塞进规范请求的 `metadata`（那一整包**外发给厂商** ⇒
+/// 隐私档本身变成泄漏面 —— 单元 C 明确否决的载体）。
+///
+/// # 当前生产取值
+///
+/// ⚠️ 会话设置（`SessionSettings` / 网关侧 `SessionSettingsBody`）**当前尚无**
+/// 隐私档字段 ⇒ 组合根拿到的声明恒为缺位 ⇒ 信号 = `Defaulted`（普通档兜底）
+/// ⇒ **隐私闸恒不过滤** ⇒ 选路结果与「直接调 `CostRouter`」**逐条相同**
+/// （零变化）。字段落地后, 本函数是那条字段的**唯一**读点。
+pub fn turn_privacy_signal_from_value(
+    raw: Option<&str>,
+) -> Result<PrivacySignal, PrivacySignalError> {
+    privacy_signal_from_str(raw)
+}
+
+/// **路由策略层**装配 (W2 · C-H1): 候选表 (从画像表派生) + 画像表 + 生效模型
+/// + 配置面。
+///
+/// ⚠️ **0 新 env 名**: 开关与档位映射**复用**成本档层的
+/// `APEIRETH_COST_ROUTING` / `APEIRETH_COST_ROUTING_PREFERRED`。
+/// ⚠️ 策略层**复用** [`CostRouter`]（层内自己调它）⇒ 成本档层的判定口径一字
+/// 不改, 本层只在其上叠加**隐私维度**与**可解释比较**。
+/// 路由策略层的**进程级单例** (自述面与任务选路**同一台** ⇒ 同源)。
+///
+/// ⚠️ 为什么是单例: 自述面的策略节探针与回合选路必须读**同一台**策略层的
+/// 最近决策 ⇒ 两处各造一台 ⇒ 自述面看到的决策就**不是**真正做过的那次。
+/// 策略层是 env 派生 ⇒ 进程内一台即语义正确。
+/// 坏配置 ⇒ **不缓存** (启动即报错, 下次调用再试)。
+pub fn routing_policy_shared() -> Result<Arc<RoutingPolicy>, String> {
+    static POLICY: std::sync::OnceLock<Arc<RoutingPolicy>> = std::sync::OnceLock::new();
+    if let Some(policy) = POLICY.get() {
+        return Ok(Arc::clone(policy));
+    }
+    let policy = routing_policy_from_env()?;
+    Ok(Arc::clone(POLICY.get_or_init(|| policy)))
+}
+
+pub fn routing_policy_from_env() -> Result<Arc<RoutingPolicy>, String> {
+    let profiles = model_profile_table_from_env()?;
+    let candidates = PolicyCandidate::table_from_profiles(&profiles);
+    RoutingPolicy::from_env_values(
+        candidates,
+        profiles,
+        active_model_id(),
+        std::env::var(apeireth_core::cost_router::COST_ROUTING_ENV)
+            .ok()
+            .as_deref(),
+        std::env::var(apeireth_core::cost_router::COST_ROUTING_PREFERRED_ENV)
+            .ok()
+            .as_deref(),
+    )
+    .map(Arc::new)
+    .map_err(|error| format!("routing policy configuration refused to load: {error}"))
+}
+
+/// 回合模型解析 (W2 · C-H1: **并联**策略层, **不替换** [`CostRouter`])。
+///
+/// 口径:
+/// * 显式 `--model` 直接胜出 (显式 > 自动);
+/// * 策略层**开** ⇒ 用策略层的决策 (层内复用成本档层 ⇒ 成本档口径不变, 只
+///   多一道隐私硬闸 + 可解释比较);
+/// * 策略层**关** (`APEIRETH_COST_ROUTING` 未开) ⇒ 回既有成本档层口径 ⇒
+///   **逐字节零行为变化**;
+/// * 策略层判定**失败** (零候选 / 候选被隐私闸全排掉) ⇒ **不路由**
+///   ⇒ **不回退**成本档层 (回退 = 绕过隐私硬闸 ⇒ 安全 > 功能)。
+pub fn resolve_turn_model_with_policy(
+    user_model: Option<String>,
+    policy: &RoutingPolicy,
+    router: &apeireth_core::cost_router::CostRouter,
+    prompt: &str,
+    privacy_signal: PrivacySignal,
+) -> Option<String> {
+    if let Some(model) = user_model {
+        return Some(model);
+    }
+    // ⚠️ **信号缺省 (Defaulted)** ⇒ 隐私闸**恒不过滤** ⇒ 直接走成本档层:
+    // 选路结果与「直接调 `CostRouter`」**逐条相同** (零变化), 且成本档层的
+    // 「最近决策」仍落在自述路由节 (不为空, 不说假话)。
+    if matches!(privacy_signal, PrivacySignal::Defaulted) {
+        return router
+            .route(&routing_request_for_prompt(prompt))
+            .and_then(|decision| decision.selected_model);
+    }
+    let profile = apeireth_core::routing_policy::TaskProfile::from_signal(
+        capability_requirement_for_prompt(prompt),
+        None,
+        privacy_signal,
+    );
+    match policy.decide(&profile) {
+        Ok(decision) => Some(decision.selected_model),
+        Err(RoutingPolicyError::Disabled) => router
+            .route(&routing_request_for_prompt(prompt))
+            .and_then(|decision| decision.selected_model),
+        Err(_) => None,
+    }
 }
 
 /// 回合模型解析 (H-P2 任务选型): 显式 `--model` > 成本路由选定 > 默认模型。
@@ -1285,22 +1439,24 @@ fn build_production_governance_parts_from_env() -> (
             .lock()
             .expect("permission policy lock poisoned (0 装诚实)");
         if enable_http_write {
-            // 出网**写**面（POST/PUT/PATCH/DELETE）⇒ 逐次人批。⚠️
+            // 出网**写**面（POST/PUT/PATCH/DELETE）⇒ 逐次人批**绝对**（列入人工审批地板 ⇒ 任何预设下都停人批）。⚠️
             // `tool.http_write` 工具侧**没有**专用审批钩子 ⇒ 档位只能挂在本
-            // 授权面的 require_approval 上（既有做法, 不新造审批链）。
+            // 授权面的 require_approval 上（既有做法, 不新造审批链）⇒ 再叠
+            // 人工审批地板 ⇒ 预设改写不了它。
             guard.grant(Permission::ExecuteTool("tool.http_write".to_string()));
             guard.require_approval_for("tool.http_write");
         }
         if enable_web_search {
-            // 出网**只读**面（检索 + 来源标注）⇒ 与 `tool.fetch` 同档（L2 出网
-            // ⇒ 逐次人批）。⚠️ 工具侧同样**没有**专用审批钩子。
+            // 出网**只读**面（检索 + 来源标注）⇒ 与 `tool.fetch` 同档（L2 出网）
+            // ⇒ 逐次人批**有条件**（默认预设 `standard` 且 `approval_remember=false` 下停人批; `full` 预设或 `approval_remember=true` 下按既有口径自动放行, 与 `tool.shell`/`tool.fetch` 同款）。⚠️ 工具侧同样**没有**专用审批钩子 ⇒ 档位挂在本
+            // 授权面的 require_approval 上。
             guard.grant(Permission::ExecuteTool("tool.web_search".to_string()));
             guard.require_approval_for("tool.web_search");
         }
         if enable_calendar {
             // 日程面: 档位由 `CalendarApprovalHook` 逐动作承载（list 零审批 /
             // create·update·cancel 人批 / 词表外 fail-closed 拒绝即帧）⇒ 面级
-            // 只 grant。
+            // 只 grant ⇒ 人批强度: 逐次人批**有条件**（默认预设 `standard` 且 `approval_remember=false` 下停人批; `full` 预设或 `approval_remember=true` 下按既有口径自动放行, 与 `tool.shell`/`tool.fetch` 同款）。
             guard.grant(Permission::ExecuteTool("tool.calendar".to_string()));
         }
     }
@@ -1308,7 +1464,8 @@ fn build_production_governance_parts_from_env() -> (
         // 进程树快照面 (`tool.process_tree`): 开关口径 = **复用**
         // `APEIRETH_ENABLE_SHELL`（注册即闸 ⇒ shell 关 = 无进程可看 ⇒ 本面也
         // 不注册）。档位由 `ProcessTreeApprovalHook` 逐动作承载（snapshot 零
-        // 审批 / cancel 人批 / 词表外 fail-closed 拒绝即帧）⇒ 面级只 grant。
+        // 审批 / cancel 人批 / 词表外 fail-closed 拒绝即帧）⇒ 面级只 grant ⇒
+        // `cancel` 的人批强度: 逐次人批**绝对**（列入人工审批地板 ⇒ 任何预设下都停人批）（地板只按能力 id 判定, 快照读面仍零审批）。
         policy
             .lock()
             .expect("permission policy lock poisoned (0 装诚实)")
@@ -1830,6 +1987,12 @@ async fn build_canonical_runtime_with_parts(
         max_tool_steps: quota_max_tool_steps_from_env(),
         max_cost_micros: quota_max_cost_micros_from_env(),
     });
+    // 会话级**深度闸**旋钮 (`APEIRETH_QUOTA_MAX_DEPTH`): 严格解析 (非法值 ⇒
+    // 启动即报错) ⇒ 填进 `RuntimeConfig.depth_ceiling` ⇒ runtime 在会话建立
+    // 时 `set_max_depth`。未设 = 不启用 (深度维不计量, 行为逐字节不变)。
+    //
+    // ⚠️ 口径: 当前调用树可达深度 ≤ 1 ⇒ 上限 > 1 **不可达**（配了也不触发）。
+    builder = builder.with_depth_ceiling(quota_max_depth_from_env()?);
     // 花费维单价来源 (H-P1 画像表): 回合计量处按 `usage × 单价` 记成本列,
     // 无价模型不计入只计数 (绝不编价)。与自述模型节同一张表 (同源)。
     builder = builder.with_cost_rates(Arc::new(model_profile_table_from_env()?));
@@ -2015,6 +2178,11 @@ async fn build_cognitive_modules_at(
     // 成本分级路由 (H-P2): 画像表 + 生效模型 + 配置面装配一台路由器 ——
     // 自述路由节与任务选型**同一台** (同源)。坏配置拒开 (启动错误正式通道)。
     let cost_router = cost_router_from_env()?;
+    // 路由策略层 (W2 · C-H1): 候选表 (从画像表派生) + 画像表 + 生效模型 +
+    // 配置面 (**复用** `APEIRETH_COST_ROUTING` / `..._PREFERRED` ⇒ 0 新 env
+    // 名)。策略层**复用**成本档路由器 (不替换它) ⇒ 成本档判定口径一字不改,
+    // 本层只在其上叠加**隐私硬闸**与**可解释比较**。坏配置拒开 (同款正式通道)。
+    let routing_policy = routing_policy_shared()?;
 
     let path = memory_db;
     let pool = Arc::new(
@@ -2481,6 +2649,9 @@ async fn build_cognitive_modules_at(
             quota_max_tokens_from_env(),
             quota_max_tool_steps_from_env(),
             quota_max_cost_micros_from_env(),
+            // 深度维上限 (opt-in; 未设 = 不启用 ⇒ 该维整行显 "—" + 原因;
+            // 非法值 ⇒ 启动即报错, 不静默按「不设限」继续)。
+            quota_max_depth_from_env()?,
         )),
         // 自省通道: 会话配额计量探测口 —— 只读会话行的账本, 已耗真值与
         // 执行面同一本账 (不设限维显示 "—")。
@@ -2498,6 +2669,12 @@ async fn build_cognitive_modules_at(
         self_status_cost_routing: Some(apeireth_runtime_assembly::cost_routing_probe(Arc::clone(
             &cost_router,
         ))),
+        // 自省通道: **路由策略层**节 (W2 · C-H1) —— 策略层开关 + 最近一次决策
+        // 真值 (选中谁 / 为什么 / 退路 / 谁被排除且为何), 与任务选路同一台
+        // 策略层 (同源); 尚无任务被路由照实报 null, 不编决策。
+        self_status_routing_policy: Some(apeireth_runtime_assembly::routing_policy_probe(
+            Arc::clone(&routing_policy),
+        )),
         // 自省通道: 用户域节探测口 (W3-① 接线, 兑现 W3-2 报备的域面归口):
         // 首次组装 = 采用语义 (数据根原位数据标记为默认用户域, 零迁移零丢失),
         // 域节报当前域 id/角色/域内计数真值 (坏域配置在可失败边界拒开)。
@@ -3112,9 +3289,29 @@ pub async fn dispatch_canonical_chat(
         .transpose()?;
     let (runtime, observer, cost_router, _bio_approval) =
         build_canonical_runtime_from_env_with_observability().await?;
-    // 成本分级路由 (H-P2 任务选型): 显式 `--model` > 路由选定 > 默认模型;
-    // 开关关 = fail-closed 零行为变化。路由决策即自述路由节真值 (同一路由器)。
-    let model = resolve_turn_model(model, &cost_router, &prompt);
+    // 路由策略层 (W2 · C-H1): 与成本档路由器**并联** (不替换它)。坏配置拒开。
+    // ⚠️ 取**进程级单例** ⇒ 自述面的策略节与本回合选路同一台 (同源)。
+    let routing_policy = routing_policy_shared()?;
+    // 成本分级路由 (H-P2 任务选型) **并联**路由策略层 (W2 · C-H1): 显式
+    // `--model` > 策略层/成本档层选定 > 默认模型; 策略层关 = 回既有成本档层
+    // 口径 (fail-closed 零行为变化)。路由决策即自述路由节真值 (同一台路由器)。
+    //
+    // ⚠️ 隐私档: 插件请求层**尚未**落地隐私档字段 ⇒ 组合根取默认档
+    // `ordinary` ⇒ **隐私闸常态不生效** (零候选被排除) ⇒ 行为零变化。
+    // 隐私信号 (W2 · C-H1): **显式声明**才有值; 会话设置当前尚无该字段 ⇒
+    // 缺省兜底 (`Defaulted`) ⇒ 隐私闸恒不过滤 ⇒ 选路结果与直接调
+    // `CostRouter` 逐条相同 (零变化)。
+    // ⚠️ 不认识的值 ⇒ **拒路由** (不降级为普通档): 回合直接失败, 不把
+    // 「声明了但看不懂」当成「没人声明」。
+    let privacy_signal = turn_privacy_signal_from_value(None)
+        .map_err(|error| format!("privacy signal refused: {error}"))?;
+    let model = resolve_turn_model_with_policy(
+        model,
+        &routing_policy,
+        &cost_router,
+        &prompt,
+        privacy_signal,
+    );
     let result = execute_canonical_cli_turn(&runtime, prompt.as_str(), model, session).await;
     observer.flush().await;
     // 普通用户自动调参: 回合一结束回写用量（best-effort, 不影响回合结果;
@@ -4104,6 +4301,125 @@ mod creation_line_w1_wiring_tests {
                 None => std::env::remove_var(self.key),
             }
         }
+    }
+
+    /// **零变化**：深度维开关未设 ⇒ 深度上限为 `None`（该维**不启用** ⇒ 行为
+    /// 逐字节不变）；设成合法上限 ⇒ 读得到；非法 / 0 ⇒ 不设限。
+    #[test]
+    fn the_depth_quota_knob_is_off_unless_set() {
+        let _serial = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _depth = EnvVarGuard::set(QUOTA_MAX_DEPTH_ENV, None);
+        assert_eq!(
+            quota_max_depth_from_env().expect("未设 = 不报错"),
+            None,
+            "APEIRETH_QUOTA_MAX_DEPTH 未设 ⇒ 深度维不启用 (零变化)"
+        );
+
+        let _depth = EnvVarGuard::set(QUOTA_MAX_DEPTH_ENV, Some("8"));
+        assert_eq!(
+            quota_max_depth_from_env().expect("合法值"),
+            Some(8),
+            "正整数直通 ⇒ 深度上限 8"
+        );
+    }
+
+    /// **严格口径**: 非法值 ⇒ **报错**（启动即报错, 不静默按「不设限」继续 ——
+    /// 深度维打错的代价是「思考深度无上限」）。
+    #[test]
+    fn an_invalid_depth_ceiling_is_refused_instead_of_silently_unlimited() {
+        let _serial = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _depth = EnvVarGuard::set(QUOTA_MAX_DEPTH_ENV, Some("abc"));
+        assert!(
+            quota_max_depth_from_env().is_err(),
+            "非法值 ⇒ 报错 (不静默按「不设限」继续)"
+        );
+        let _depth = EnvVarGuard::set(QUOTA_MAX_DEPTH_ENV, Some("0"));
+        assert!(
+            quota_max_depth_from_env().is_err(),
+            "0 = 非法 (深度维没有「零上限」这档)"
+        );
+    }
+
+    /// **隐私信号**: 缺位 ⇒ 缺省兜底（普通档）; 显式声明 ⇒ 该档; **不认识的值
+    /// ⇒ 报错**（不降级为普通档 —— 那等于静默放宽）。
+    #[test]
+    fn the_privacy_signal_parses_declared_levels_and_refuses_unknown_ones() {
+        assert_eq!(
+            turn_privacy_signal_from_value(None),
+            Ok(PrivacySignal::Defaulted),
+            "缺位 ⇒ 缺省兜底 (普通档) ⇒ 隐私闸不过滤"
+        );
+        assert_eq!(
+            turn_privacy_signal_from_value(Some("  ")),
+            Ok(PrivacySignal::Defaulted),
+            "空白 = 缺位 ⇒ 缺省兜底"
+        );
+        assert_eq!(
+            turn_privacy_signal_from_value(Some("restricted")),
+            Ok(PrivacySignal::Declared(
+                apeireth_core::routing_policy::PrivacyLevel::Restricted
+            )),
+            "显式声明 ⇒ 该档"
+        );
+        assert!(
+            turn_privacy_signal_from_value(Some("secret")).is_err(),
+            "不认识的值 ⇒ 报错 (拒路由), 不降级为普通档"
+        );
+    }
+
+    /// **零变化钉桩**: 未注入声明（信号 = 缺省兜底）⇒ 策略层选路结果与「直接调
+    /// `CostRouter`」**逐条相同**。
+    #[test]
+    fn the_defaulted_privacy_signal_routes_exactly_like_the_cost_router() {
+        // 一条**支持工具**的画像行（成本档层据此选路）。
+        let profiles = apeireth_core::model_profile::ModelProfileTable::new(vec![
+            apeireth_core::model_profile::ModelProfile {
+                model_id: "model-a".to_string(),
+                context_window: Some(32_768),
+                max_output: Some(4_096),
+                supports_tools: Some(true),
+                supports_streaming: Some(true),
+                input_price_micros: Some(1_000),
+                output_price_micros: Some(2_000),
+                cache_read_price_micros: None,
+                capabilities_flags: Vec::new(),
+            },
+        ]);
+        let router = apeireth_core::cost_router::CostRouter::new(
+            profiles.clone(),
+            Some("model-a".to_string()),
+            apeireth_core::cost_router::CostRoutingConfig::from_env_values(Some("1"), None)
+                .expect("成本档层配置"),
+        );
+        let policy = RoutingPolicy::from_env_values(
+            PolicyCandidate::table_from_profiles(&profiles),
+            profiles,
+            Some("model-a".to_string()),
+            Some("1"),
+            None,
+        )
+        .expect("策略层装配");
+        let signal = turn_privacy_signal_from_value(None).expect("缺省信号");
+        let via_policy = resolve_turn_model_with_policy(None, &policy, &router, "短提示", signal);
+        let via_router = resolve_turn_model(None, &router, "短提示");
+        assert_eq!(
+            via_policy, via_router,
+            "缺省信号 ⇒ 隐私闸不过滤 ⇒ 选路结果与直接调 CostRouter 逐条相同"
+        );
+
+        // **显式声明普通档** ⇒ 走策略层本体 ⇒ 结果仍与成本档层一致（该候选的
+        // 隐私上限够 ⇒ 隐私闸不排除它）⇒ 隐私闸是**硬闸**但不误伤普通档。
+        let declared = turn_privacy_signal_from_value(Some("ordinary")).expect("显式声明");
+        let via_declared =
+            resolve_turn_model_with_policy(None, &policy, &router, "短提示", declared);
+        assert_eq!(
+            via_declared, via_router,
+            "显式普通档 ⇒ 候选够格 ⇒ 结果与成本档层相同"
+        );
+        assert!(
+            policy.last_decision().is_some(),
+            "策略层本体确实决策过 (自述面探针读的是同一台)"
+        );
     }
 
     /// **零变化**：开关未设 ⇒ 两个出网面都**不注册**（配置为 `None`）。

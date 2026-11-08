@@ -110,8 +110,11 @@ pub fn is_write_or_execute_capability(capability: &CapabilityId) -> bool {
         // (取消一棵树 = 动进程 ⇒ 执行面) ⇒ 与 `tool.shell` 同档, 只读会话应
         // 整体拒绝; 快照读面本身零审批。
         "tool.process_tree",
-        // ⚠️ `tool.web_search` **不在**本名单: 它是出网**只读**面 (检索 + 来源
-        // 标注), 与 `tool.fetch` 同口径 (只读会话可出网读)。
+        // ⚠️ `tool.web_search` **不在**本名单: 它是出网**只读**面（检索 + 来源
+        // 标注）**且不落记忆流** ⇒ 只读会话可出网读。
+        // ⚠️ 而 `tool.fetch` **在**本名单（上面的「出口 / 远端副作用」段）⇒
+        // read_only 预设**整体拒绝**它 —— 真实差异是**落不落记忆流**, 不是
+        // 「读不读外网」。
         "fs.write",
         // 出口 / 远端副作用
         "tool.fetch",
@@ -148,6 +151,9 @@ pub fn is_write_or_execute_capability(capability: &CapabilityId) -> bool {
 /// （段边界: `tool.mcp.` 前缀, `tool.mcpsomething` 不算), 与 git 写分级
 /// 的「id 全等 + 参数内容」口径不同 —— 外部工具一律逐次人批, 没有
 /// 「参数安全就免审」的分级。
+///
+/// 能力创造线 W1 的两个高风险新面（`tool.process_tree` / `tool.http_write`）
+/// 也按**纯 id** 列入地板（逐动作分档由各自的审批钩子承担 ⇒ 读动作仍零审批）。
 pub fn human_approval_floor_applies(
     capability: &CapabilityId,
     arguments: &serde_json::Value,
@@ -155,8 +161,30 @@ pub fn human_approval_floor_applies(
     if is_capability_in_family(capability.as_str(), MCP_FAMILY_ROOT) {
         return true;
     }
-    capability.as_str() == apeireth_tools_canonical::GIT_WRITE_CAPABILITY_ID
+    if capability.as_str() == apeireth_tools_canonical::GIT_WRITE_CAPABILITY_ID
         && apeireth_tools_canonical::git_write_human_approval_floor(arguments)
+    {
+        return true;
+    }
+    // 能力创造线 W1 的两个**高风险**新面（2026-11-08 lead 裁定）:
+    //
+    // - `tool.process_tree`: 面里含 `cancel`（可**杀进程**）⇒ 取消面必须逐次人批;
+    // - `tool.http_write`: **出网写**且可**带凭据** ⇒ 每次写都必须逐次人批。
+    //
+    // 地板的作用 = **阻止预设把 RequireApproval 改写为放行**（`full` 预设的
+    // 一律改写, `standard` + `approval_remember=true` 的免审记忆）⇒ 加了之后
+    // ⇒ 这两族的审批钩子**永远被咨询** ⇒ `process_tree` 的 `cancel` ⇒ 逐次
+    // 人批, `snapshot` ⇒ 仍**零审批**（钩子逐动作分档, 地板**不**强制审批）。
+    //
+    // ⚠️ **存量零影响**: 地板按**能力 id** 判定 ⇒ 只影响本批新增的两个 id ⇒
+    // `tool.shell` / `tool.fetch` / `git_write` / MCP 族的现有行为**逐字节不变**
+    // （**不改全局预设语义** ⇒ 不越权）。
+    //
+    // ⚠️ `tool.web_search`（只读出网）与 `tool.calendar`（本地日程写）
+    // **不**列入地板 ⇒ 与 `tool.shell` / `tool.fetch` 同档 ⇒ 它们的「逐次人批」
+    // 是**有条件**的（默认预设下停人批; `full` 预设或 `approval_remember=true`
+    // 下按既有口径自动放行）。
+    matches!(capability.as_str(), "tool.process_tree" | "tool.http_write")
 }
 
 /// Governance hook that applies a session's [`PermissionPreset`] to capability

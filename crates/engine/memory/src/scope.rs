@@ -30,12 +30,54 @@ pub enum MemoryScope {
 /// Query specification for storage backends that can retrieve candidate episodes
 /// according to explicit visibility scopes, rather than restricting only to
 /// the active session.
+///
+/// # 被授对象 id（对象级授权叠加层）
+///
+/// `visible_scopes` 是**域级**可见集合；`granted_object_ids` 是**对象级**授权
+/// 命中的那几条记忆（**只读授予**，逐条 id 精确生效）。
+///
+/// 候选生成谓词 = **域可见 ∪ 被授对象**（**并联**，不是替代）：
+///
+/// ```text
+/// 候选 ∈ (域可见集合) ∪ (被授对象 id 集合)
+/// ```
+///
+/// 默认空 ⇒ 候选生成**只**按域可见集合选 ⇒ **逐字节零变化**。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MemoryCandidateQuery {
     pub source_session: Option<String>,
     pub visible_scopes: Vec<MemoryScope>,
+    /// **被授对象 id**（对象级授权叠加层；默认空 ⇒ 零变化）。
+    pub granted_object_ids: Vec<String>,
     pub limit: usize,
     pub as_of_ms: Option<i64>,
+}
+
+/// 被授对象 id 集合的**上限**（防超长列表 ⇒ SQL 参数爆炸 / 内存放大）。
+pub const MAX_GRANTED_OBJECT_IDS: usize = 256;
+
+/// 规整被授对象 id 集合：去空 / 去重 / 截断（**保持顺序** ⇒ 确定性）。
+///
+/// 空 id 无意义（永远匹配不到对象）⇒ 丢弃；重复 id 无意义 ⇒ 去重；
+/// 超长列表 ⇒ 截断到 [`MAX_GRANTED_OBJECT_IDS`]（**不静默放行**：截断后仍
+/// 只覆盖前 N 条授权，其余授权在本轮**取不到候选** ⇒ fail-closed）。
+#[must_use]
+pub fn sanitize_granted_object_ids(ids: Vec<String>) -> Vec<String> {
+    let mut out: Vec<String> = Vec::with_capacity(ids.len().min(MAX_GRANTED_OBJECT_IDS));
+    for id in ids {
+        let trimmed = id.trim();
+        if trimmed.is_empty() || trimmed.len() > 256 {
+            continue;
+        }
+        if out.iter().any(|existing| existing == trimmed) {
+            continue;
+        }
+        out.push(trimmed.to_string());
+        if out.len() >= MAX_GRANTED_OBJECT_IDS {
+            break;
+        }
+    }
+    out
 }
 
 /// A storage backend capable of evaluating candidate visibility across scopes.

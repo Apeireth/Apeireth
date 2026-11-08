@@ -790,6 +790,8 @@ impl Runtime {
 
         let clock = self.clock.as_ref();
         let mut session = self.sessions.load_or_create(request.session).await?;
+        // 深度维上限随计量器 (配置是唯一真源; `None` ⇒ 恒不设限 ⇒ 零变化)。
+        session.depth_quota.set_max_depth(self.config.depth_ceiling);
         self.dispatcher.bind_session_principal(&mut session)?;
         self.expire_active_approval_if_needed(&mut session).await?;
         if session
@@ -1467,7 +1469,7 @@ impl Runtime {
 
                 // 配额烧钱闸 (回合起手检查点): 会话级账本已耗尽时不再烧 provider
                 // 往返 —— 立即以预算耗尽错误帧收束 (熔断档)。
-                if let Some(exceeded) = self.config.quota.check(&mut session.quota) {
+                if let Some(exceeded) = session.quota_exceeded(&self.config.quota) {
                     return self
                         .close_quota_exhausted(&mut session, request_id, trace_id, exceeded, None)
                         .await;
@@ -1813,7 +1815,7 @@ impl Runtime {
                         ModuleDirective::Continue => {
                             // 配额烧钱闸 (回合收束检查点): 提交最终回答前查
                             // 会话账本, 超限即帧收束 (回合中止即帧, 熔断档)。
-                            if let Some(exceeded) = self.config.quota.check(&mut session.quota) {
+                            if let Some(exceeded) = session.quota_exceeded(&self.config.quota) {
                                 return self
                                     .close_quota_exhausted(
                                         &mut session,
@@ -1961,7 +1963,7 @@ impl Runtime {
                 let call = continuation.tool_calls[index].clone();
                 // 配额烧钱闸 (工具调用点): 派发本调用前查会话账本, 超限即帧
                 // 收束 —— 本调用起的未答调用补合成结果, 已生成文本与前文保留。
-                if let Some(exceeded) = self.config.quota.check(&mut session.quota) {
+                if let Some(exceeded) = session.quota_exceeded(&self.config.quota) {
                     return self
                         .close_quota_exhausted(
                             &mut session,
@@ -2484,6 +2486,9 @@ impl Runtime {
                 manifest.id.as_str(),
                 Arc::clone(module_state),
                 invocation.depth,
+                // 深度维接线 (F1): 侧车调用的子层 = 本层 + 1 (既有调用树读数);
+                // 账本句柄与父会话**同一本** (父子记一本账 ⇒ 检查点看得见)。
+                session.depth_quota.clone(),
                 super::subloop::SubLoopExecution {
                     request: request_id,
                     agent: self.dispatcher.agent(*session_id),
@@ -3481,7 +3486,7 @@ impl Runtime {
             // 配额烧钱闸 (工具调用点, 并行窗口同口径): 准入每一调用前查
             // 会话账本, 超限即帧收束 —— 窗口尚未执行, 本窗起的调用全部补
             // 合成结果。
-            if let Some(exceeded) = self.config.quota.check(&mut session.quota) {
+            if let Some(exceeded) = session.quota_exceeded(&self.config.quota) {
                 return self
                     .close_quota_exhausted(
                         session,

@@ -1693,3 +1693,13 @@ purpose = "互联网检索面 (`tool.web_search`) 总开关（注册即闸，只
 level = "PRODUCTION WIRED"
 status = "current"
 evidence = "direct:crates/adapters/cli/src/lib.rs:139"
+
+[[entries]]
+name = "APEIRETH_QUOTA_MAX_DEPTH"
+default = "n/a"
+layer = "adapters"
+owner = "apeireth-cli"
+purpose = "会话级**深度闸**旋钮（opt-in）：`APEIRETH_QUOTA_MAX_DEPTH=N` = 会话级调用树深度上限（数值，非法值 ⇒ 启动即报错，不静默放行成「无上限」）。深度口径 = **运行时调用树读数**（顶层 0 / 侧车 1）；⚠️ **当前运行时结构下可达深度 ≤ 1**（`DEFAULT_MAX_INVOCATION_DEPTH = 1`，且子循环那条链是「平」的）⇒ **上限 > 1 不可达（配了也不触发）** ⇒ 该旋钮目前**只是预留，不是有效防护**。未设 ⇒ 深度维**恒不设限**（只计量、不拒绝）⇒ 逐字节零变化。同一额度家族：`APEIRETH_QUOTA_MAX_TOKENS` / `_TOOL_STEPS` / `_COST_MICROS`。依据 ADR-0025 §2.2 + 设计稿 C-H2。"
+level = "PRODUCTION WIRED"
+status = "current"
+evidence = "direct:crates/adapters/cli/src/lib.rs:493"

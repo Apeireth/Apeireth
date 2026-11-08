@@ -68,6 +68,11 @@ pub struct MemoryCoordinator {
     /// **一字不变**（零回退风险）⇒ ⇒ 只有**显式接上**才走增量语义。
     consolidation_trigger: Option<ConsolidationTrigger>,
     ranking: MemoryRankingConfig,
+    /// **可选**的对象级授权登记处（`tool.object_grant` 的账本）。
+    ///
+    /// ⚠️ **缺省 = 无** ⇒ ⇒ 读路径的可见性判定**逐字节不变**（老判定退化）
+    /// ⇒ ⇒ 只有**显式接上**才走「域可见 ∨ 有效对象 grant」的**叠加**语义。
+    object_grants: Option<Arc<crate::object_grant::ObjectGrantRegistry>>,
     activation_source: Option<Arc<dyn ActivationSource>>,
     typed_recall_source: Option<Arc<dyn TypedMemoryRecallSource>>,
     typed_identity: Option<TypedRecallIdentity>,
@@ -123,6 +128,22 @@ fn merge_candidates_by_id(
     merged
 }
 
+/// 读可见性**并联**判定：域可见 ∨ 有效对象 grant（**叠加 ≠ 替代**）。
+///
+/// ⚠️ **无授权面**（未注入登记处）⇒ **退化为老判定**（`scope.is_visible_in`）
+/// ⇒ ⇒ 读路径行为**逐字节不变**（零变化纪律）。
+fn overlay_allows(
+    overlay: Option<&crate::object_grant::GrantVisibility<'_>>,
+    scope: &MemoryScope,
+    visible_scopes: &[MemoryScope],
+    object_id: &str,
+) -> bool {
+    match overlay {
+        Some(overlay) => overlay.allows(scope, visible_scopes, object_id),
+        None => scope.is_visible_in(visible_scopes),
+    }
+}
+
 /// 单条 episode 的**治理判定**（三态 ⇒ **fail-closed**）。
 ///
 /// # 为什么不能只写 `if let Ok(Some(gov)) = …`
@@ -168,6 +189,7 @@ impl MemoryCoordinator {
             consolidation: MemoryConsolidationJob::new(),
             consolidation_trigger: None,
             ranking: MemoryRankingConfig::default(),
+            object_grants: None,
             activation_source: None,
             typed_recall_source: None,
             typed_identity: None,
@@ -176,6 +198,27 @@ impl MemoryCoordinator {
             wiki_root: None,
             audit_events: None,
         }
+    }
+
+    /// 注入**对象级授权登记处**（`tool.object_grant` 的账本）。
+    ///
+    /// 装上之后，读路径的可见性判定从「域可见」变成
+    /// **「域可见 ∨ 有效对象 grant」**（**叠加 ≠ 替代**）：
+    ///
+    /// * **主体键** = [`MemoryRecallQuery::session_id`]（生产 = 命名空间键，
+    ///   与私有域 scope `MemoryScope::Session { session_id }` 同源）；
+    /// * **候选生成**侧并入被授对象 id（域外的那几条记忆**进得了候选集**）；
+    /// * **判定**侧逐条并联（域可见 ⇒ 恒真；域不可见 ⇒ 看有效对象 grant）；
+    /// * **写路径**不受影响（对象授权**只读** ⇒ `allows_write` 恒 false）。
+    ///
+    /// ⚠️ **不接 = 行为逐字节不变**（老判定退化 ⇒ 零回退风险）。
+    #[must_use]
+    pub fn with_object_grants(
+        mut self,
+        registry: Arc<crate::object_grant::ObjectGrantRegistry>,
+    ) -> Self {
+        self.object_grants = Some(registry);
+        self
     }
 
     /// Attach an observation-layer sink for memory-governance audit events
@@ -403,6 +446,21 @@ impl MemoryCoordinator {
         let mut candidates = Vec::new();
         let mut candidate_meta = HashMap::new();
         let mut governance_filtered = 0;
+        // 对象级授权**叠加层**（**叠加 ≠ 替代**）：域可见 ∨ 有效对象 grant。
+        //
+        // 主体键 = `query.session_id`（生产 = 命名空间键，与私有域 scope 同源）。
+        // ⚠️ 未注入登记处 ⇒ `overlay = None` ⇒ 判定退化为老口径（逐字节不变）。
+        let subject = query.session_id.clone();
+        let overlay = self
+            .object_grants
+            .as_ref()
+            .map(|registry| crate::object_grant::GrantVisibility::new(registry, subject.as_str()));
+        // 被授对象 id（候选生成侧并入；**每次判定现读账本** ⇒ 撤销即时生效）。
+        let granted_object_ids = self
+            .object_grants
+            .as_ref()
+            .map(|registry| registry.granted_object_ids(subject.as_str()))
+            .unwrap_or_default();
         let source_reference = |layer: &str, episode: &Episode, provenance: &MemoryProvenance| {
             let source = provenance.source_session.as_deref();
             if query.exact_scope_authorization
@@ -435,7 +493,8 @@ impl MemoryCoordinator {
                         continue;
                     }
                     let (scope, provenance) = self.episode_scope_metadata(ep);
-                    if !scope.is_visible_in(&query.visible_scopes) {
+                    // 可见性**并联**：域可见 ∨ 有效对象 grant（叠加 ≠ 替代）。
+                    if !overlay_allows(overlay.as_ref(), &scope, &query.visible_scopes, &ep.id) {
                         governance_filtered += 1;
                         continue;
                     }
@@ -474,123 +533,92 @@ impl MemoryCoordinator {
 
         // Layer 2: Episodic Memory (Governed SQLite / Scoped Storage)
         if query.layers.contains(&MemoryLayerKind::Episodic) {
+            let mut episodes: Vec<Episode> = Vec::new();
             if let Some(scoped) = &self.scoped_backend {
                 let candidate_query = MemoryCandidateQuery {
                     source_session: Some(query.session_id.clone()),
                     visible_scopes: query.visible_scopes.clone(),
+                    // **并联**：域可见集合 ∪ 被授对象 id 集合（默认空 ⇒ 零变化）。
+                    granted_object_ids: crate::scope::sanitize_granted_object_ids(
+                        granted_object_ids.clone(),
+                    ),
                     limit: (query.limit * 8).max(64),
                     as_of_ms: query.as_of_ms,
                 };
                 if let Ok(scoped_episodes) = scoped.query_candidates(&candidate_query) {
-                    for ep in scoped_episodes {
-                        // 治理判定（**fail-closed**：查不出来 = 不可判定 = 过滤掉）。
-                        let decision = self.governance_decision(&ep.id);
-                        if !Self::governance_allows(&decision, query.exact_scope_authorization) {
-                            governance_filtered += 1;
-                            continue;
-                        }
-                        let (scope, provenance) = self.episode_scope_metadata(&ep);
-                        if !scope.is_visible_in(&query.visible_scopes) {
-                            governance_filtered += 1;
-                            continue;
-                        }
-                        let mut content = ep.content.clone();
-                        let mut importance = 0.5;
-                        if let GovernanceDecision::Governed(gov) = &decision {
-                            if let Some(c_override) = gov.content_override.clone() {
-                                content = c_override;
-                            }
-                            if gov.protected {
-                                importance = 0.9;
-                            }
-                        }
-                        let delta_hours =
-                            recency_delta_hours(recency_reference_ms, now_ms, ep.timestamp * 1000);
-                        let s_rec = (-query.recency_decay_lambda * delta_hours)
-                            .exp()
-                            .clamp(0.1, 1.0);
-                        let id = ep.id.clone();
-                        candidate_meta.insert(
-                            id.clone(),
-                            (
-                                MemoryLayerKind::Episodic,
-                                ep.timestamp * 1000,
-                                source_reference("episodic", &ep, &provenance),
-                            ),
-                        );
-                        candidates.push(MemoryCandidate {
-                            id,
-                            layer: "episodic".to_string(),
-                            scope,
-                            content,
-                            score: 0.0,
-                            score_components: ScoreComponents {
-                                recency: s_rec,
-                                importance,
-                                confidence: importance,
-                                activation: 0.8,
-                                ..Default::default()
-                            },
-                            provenance,
-                        });
-                    }
+                    episodes = scoped_episodes;
                 }
             } else if let Ok(raw_eps) = self
                 .backend
                 .recent_episodes(&query.session_id, (query.limit * 8).max(64))
             {
-                for ep in raw_eps {
-                    // 治理判定（**fail-closed**：查不出来 = 不可判定 = 过滤掉）。
-                    let decision = self.governance_decision(&ep.id);
-                    if !Self::governance_allows(&decision, query.exact_scope_authorization) {
-                        governance_filtered += 1;
-                        continue;
-                    }
-                    let (scope, provenance) = self.episode_scope_metadata(&ep);
-                    if !scope.is_visible_in(&query.visible_scopes) {
-                        governance_filtered += 1;
-                        continue;
-                    }
-                    let mut content = ep.content.clone();
-                    let mut importance = 0.5;
-                    if let GovernanceDecision::Governed(gov) = &decision {
-                        if let Some(c_override) = gov.content_override.clone() {
-                            content = c_override;
-                        }
-                        if gov.protected {
-                            importance = 0.9;
-                        }
-                    }
-                    let delta_hours =
-                        recency_delta_hours(recency_reference_ms, now_ms, ep.timestamp * 1000);
-                    let s_rec = (-query.recency_decay_lambda * delta_hours)
-                        .exp()
-                        .clamp(0.1, 1.0);
-                    let id = ep.id.clone();
-                    candidate_meta.insert(
-                        id.clone(),
-                        (
-                            MemoryLayerKind::Episodic,
-                            ep.timestamp * 1000,
-                            source_reference("episodic", &ep, &provenance),
-                        ),
-                    );
-                    candidates.push(MemoryCandidate {
-                        id,
-                        layer: "episodic".to_string(),
-                        scope,
-                        content,
-                        score: 0.0,
-                        score_components: ScoreComponents {
-                            recency: s_rec,
-                            importance,
-                            confidence: importance,
-                            activation: 0.8,
-                            ..Default::default()
-                        },
-                        provenance,
-                    });
+                episodes = raw_eps;
+            }
+            // 被授对象（域外）**按 id 显式取回** ⇒ 任何后端实现都能进候选集。
+            //
+            // ⚠️ 为什么不能只靠后端的 `id IN (…)` 谓词：后端**候选 SQL** 属于
+            // 各后端自己的实现（有的实现不在本 crate 的可改面内）⇒ 协调器这层
+            // 显式取回才是**保证路径**（后端谓词只是快路径）。
+            for object_id in &granted_object_ids {
+                if episodes.iter().any(|existing| &existing.id == object_id) {
+                    continue;
                 }
+                if let Ok(Some(ep)) = self.backend.get_episode(object_id) {
+                    episodes.push(ep);
+                }
+            }
+            for ep in episodes {
+                // 治理判定（**fail-closed**：查不出来 = 不可判定 = 过滤掉）。
+                let decision = self.governance_decision(&ep.id);
+                if !Self::governance_allows(&decision, query.exact_scope_authorization) {
+                    governance_filtered += 1;
+                    continue;
+                }
+                let (scope, provenance) = self.episode_scope_metadata(&ep);
+                // 可见性**并联**：域可见 ∨ 有效对象 grant（叠加 ≠ 替代）。
+                if !overlay_allows(overlay.as_ref(), &scope, &query.visible_scopes, &ep.id) {
+                    governance_filtered += 1;
+                    continue;
+                }
+                let mut content = ep.content.clone();
+                let mut importance = 0.5;
+                if let GovernanceDecision::Governed(gov) = &decision {
+                    if let Some(c_override) = gov.content_override.clone() {
+                        content = c_override;
+                    }
+                    if gov.protected {
+                        importance = 0.9;
+                    }
+                }
+                let delta_hours =
+                    recency_delta_hours(recency_reference_ms, now_ms, ep.timestamp * 1000);
+                let s_rec = (-query.recency_decay_lambda * delta_hours)
+                    .exp()
+                    .clamp(0.1, 1.0);
+                let id = ep.id.clone();
+                candidate_meta.insert(
+                    id.clone(),
+                    (
+                        MemoryLayerKind::Episodic,
+                        ep.timestamp * 1000,
+                        source_reference("episodic", &ep, &provenance),
+                    ),
+                );
+                candidates.push(MemoryCandidate {
+                    id,
+                    layer: "episodic".to_string(),
+                    scope,
+                    content,
+                    score: 0.0,
+                    score_components: ScoreComponents {
+                        recency: s_rec,
+                        importance,
+                        confidence: importance,
+                        activation: 0.8,
+                        ..Default::default()
+                    },
+                    provenance,
+                });
             }
         }
 
@@ -705,9 +733,14 @@ impl MemoryCoordinator {
         if let (Some(source), Some(identity)) = (&self.typed_recall_source, &self.typed_identity) {
             if let Ok(typed_candidates) = source.candidates(query, identity, now_ms) {
                 for candidate in typed_candidates {
-                    if !candidate.scope.is_visible_in(&query.visible_scopes)
-                        && (query.exact_scope_authorization
-                            || !typed_scope_visible(&candidate.scope, identity))
+                    // 可见性**并联**：域可见 ∨ 有效对象 grant（叠加 ≠ 替代）。
+                    if !overlay_allows(
+                        overlay.as_ref(),
+                        &candidate.scope,
+                        &query.visible_scopes,
+                        &candidate.id,
+                    ) && (query.exact_scope_authorization
+                        || !typed_scope_visible(&candidate.scope, identity))
                     {
                         governance_filtered += 1;
                         continue;
@@ -854,6 +887,31 @@ impl MemoryCoordinator {
         )
     }
 
+    /// 管线可见域 = 域可见域 ∪ **被授候选自己的 scope**。
+    ///
+    /// ⚠️ **无授权面** ⇒ 原样返回域可见域（**逐字节不变**）。
+    /// ⚠️ **不扩域**：只并入**已被叠加判定放行**的被授候选的 scope。
+    fn pipeline_visible_scopes(
+        &self,
+        query: &MemoryRecallQuery,
+        candidates: &[MemoryCandidate],
+    ) -> Vec<MemoryScope> {
+        let mut scopes = query.visible_scopes.clone();
+        let Some(registry) = self.object_grants.as_ref() else {
+            return scopes;
+        };
+        for candidate in candidates {
+            if scopes.contains(&candidate.scope) {
+                continue;
+            }
+            // 现读账本（无缓存）⇒ 撤销即时生效。
+            if registry.read_grant_allows(&query.session_id, &candidate.id) {
+                scopes.push(candidate.scope.clone());
+            }
+        }
+        scopes
+    }
+
     fn execute_hybrid_retrieval(
         &self,
         query: &MemoryRecallQuery,
@@ -877,6 +935,16 @@ impl MemoryCoordinator {
                 }
             }
         }
+        // 管线可见域 = 域可见域 ∪ **被授候选自己的 scope**。
+        //
+        // ⚠️ **为什么必须并联**（= 上一轮报的「静默失效」坑）：管线里**还有一道
+        // scope 过滤**（`retrieval_pipeline.rs`）。候选集已经由协调器的叠加判定
+        // 筛过，但被授对象的 scope **不在**调用方的域可见集合里 ⇒ ⇒ **会被管线
+        // 那道冗余闸丢掉** ⇒ 叠加判定等于没生效（**无报错、静默失效**）。
+        //
+        // ⚠️ **不扩域**：放行的 scope 只来自**已被协调器放行**的被授候选
+        // （管线输入集封闭 ⇒ 同域的其它对象根本不在输入集里 ⇒ 顺带看不到）。
+        let pipeline_scopes = self.pipeline_visible_scopes(query, &candidates);
         let lexical_source = Bm25LexicalCandidateSource::new(candidates);
         let mut sources: Vec<&dyn MemoryCandidateSource> = vec![&lexical_source];
         if let Some(ref vs) = vector_source {
@@ -889,7 +957,7 @@ impl MemoryCoordinator {
         let (primary_candidates, mut status) = pipeline.retrieve_with_status_for_session(
             &query.session_id,
             &query.query_text,
-            &query.visible_scopes,
+            &pipeline_scopes,
             &sources,
             query.limit,
             query.max_chars,
@@ -920,7 +988,7 @@ impl MemoryCoordinator {
                 let (extra_candidates, extra_status) = pipeline.retrieve_with_status_for_session(
                     &query.session_id,
                     &expanded.rewritten,
-                    &query.visible_scopes,
+                    &pipeline_scopes,
                     &sources,
                     query.limit,
                     query.max_chars,

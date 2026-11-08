@@ -25,6 +25,7 @@ use super::module::{
     ModuleInvocationError, ModuleInvocationRequest, ModuleInvocationResponse, ModuleInvoker,
     ModuleTurnState, RuntimeModuleInvoker, DEFAULT_MAX_INVOCATION_DEPTH,
 };
+use super::quota::DepthQuotaHandle;
 
 /// Specification defining the bounded constraints and goals of a SubLoop.
 #[derive(Debug, Clone)]
@@ -179,10 +180,14 @@ pub struct RuntimeSubLoopSpawner {
     module_id: Arc<str>,
     state: Arc<ModuleTurnState>,
     depth: u8,
+    /// 深度维账本句柄 (与父会话**同一本**账): 父子两处记一处, 否则父回合的
+    /// 检查点看不到子调用吃掉的深度 (上限可被绕过)。
+    depth_quota: DepthQuotaHandle,
 }
 
 impl RuntimeSubLoopSpawner {
     /// Create a new SubLoop spawner scoped to a module hook.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         tools: Vec<Arc<dyn ToolCapability>>,
         session_id: SessionId,
@@ -191,6 +196,7 @@ impl RuntimeSubLoopSpawner {
         module_id: impl Into<Arc<str>>,
         state: Arc<ModuleTurnState>,
         parent_depth: u8,
+        depth_quota: DepthQuotaHandle,
         execution: SubLoopExecution,
     ) -> Self {
         Self {
@@ -202,6 +208,7 @@ impl RuntimeSubLoopSpawner {
             module_id: module_id.into(),
             state,
             depth: parent_depth.saturating_add(1),
+            depth_quota,
         }
     }
 
@@ -213,6 +220,17 @@ impl RuntimeSubLoopSpawner {
                 maximum: DEFAULT_MAX_INVOCATION_DEPTH,
             });
         }
+        // 深度维接线 (F3): 嵌套侧车调用**真的发起** ⇒ 观测**绝对**深度 (既有
+        // 调用树读数: 本层 = 父层 + 1)。作用域守卫 drop 即回落当前层 ⇒ 早退 /
+        // `?` / panic 都不抬高计数 (不必靠自觉配对)。到顶 ⇒ 按既有配额拒绝
+        // 语义拒这次嵌套 (同一份事实 ⇒ 同一张帧, 不新增拒绝语义)。
+        let _depth = self
+            .depth_quota
+            .scope(u32::from(self.depth))
+            .map_err(|exceeded| SubLoopError::RecursionLimit {
+                depth: self.depth,
+                maximum: u8::try_from(exceeded.limit).unwrap_or(u8::MAX),
+            })?;
         let model = spec.model.unwrap_or_else(|| self.current_model.to_string());
         if model.is_empty() {
             return Err(SubLoopError::NoModel);
@@ -316,6 +334,17 @@ impl ModuleInvoker for RuntimeSubLoopSpawner {
         &self,
         request: ModuleInvocationRequest,
     ) -> Result<ModuleInvocationResponse, ModuleInvocationError> {
+        // 深度维接线 (F4): 子循环里的模块调用占住一层。⚠️ 存量链是**平**的
+        // (存量的 `saturating_sub(1)` 不改) ⇒ 这里喂的是存量平链读数
+        // (`self.depth`), 相对设计意图的子层 (`self.depth + 1`) **永久偏低 1**
+        // —— 如实标注, 不假装是完整调用树。
+        let _depth = self
+            .depth_quota
+            .scope(u32::from(self.depth))
+            .map_err(|exceeded| ModuleInvocationError::RecursionLimit {
+                depth: self.depth,
+                maximum: u8::try_from(exceeded.limit).unwrap_or(u8::MAX),
+            })?;
         RuntimeModuleInvoker::new(
             self.execution.runtime.clone(),
             apeireth_plugin::agents::AgentTaskOrigin {

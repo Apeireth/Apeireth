@@ -175,7 +175,10 @@ impl crate::scope::ScopedMemoryBackend for InMemoryBackend {
         &self,
         query: &crate::scope::MemoryCandidateQuery,
     ) -> Result<Vec<Episode>, Box<dyn std::error::Error + Send + Sync>> {
-        if query.visible_scopes.is_empty() || query.limit == 0 {
+        // **被授对象 id**（对象级授权叠加层）：候选谓词 = 域可见集合 ∪ 被授对象
+        // id 集合（**并联**，不是替代）。默认空 ⇒ 与老实现**逐字节同行为**。
+        let granted = crate::scope::sanitize_granted_object_ids(query.granted_object_ids.clone());
+        if (query.visible_scopes.is_empty() && granted.is_empty()) || query.limit == 0 {
             return Ok(Vec::new());
         }
         let episodes = self
@@ -206,7 +209,8 @@ impl crate::scope::ScopedMemoryBackend for InMemoryBackend {
                 }
             };
 
-            if scope.is_visible_in(&query.visible_scopes) {
+            // 域可见 ∪ 被授对象 id（**并联**）。
+            if scope.is_visible_in(&query.visible_scopes) || granted.iter().any(|id| id == &ep.id) {
                 matched.push(ep.clone());
             }
         }
