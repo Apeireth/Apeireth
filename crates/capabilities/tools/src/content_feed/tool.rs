@@ -32,6 +32,15 @@
 //! 可被正常整理/遗忘 (保护是人工显式动作, 不是抓取的默认权力)。写入失败
 //! **即帧** (错误走正式通道报真因, 不静默丢内容)。
 //!
+//! # J1 面的凭据形状绊线 (批次 3b-2)
+//!
+//! 本面把远端标题 + 正文**直写** episodic 记忆 (不经摄取队列) ⇒ ⇒ 那是**凭据
+//! 进存储**的路径 (不是进 transcript) ⇒ ⇒ 比 transcript 更「深」⇒ ⇒ 正文在
+//! **入库之前**过一道**形状层**扫描 (结构化面 ⇒ **JSON 字符串叶子**扫描):
+//! 零命中 ⇒ 落库内容**逐字节不变**; 命中 ⇒ **只换字符串叶子** (键名 / 数字 /
+//! 布尔 / null / 结构一律不动 ⇒ 落库记录仍是合法 JSON, 可反序列化) + 末尾一行
+//! JSON 注解 (命中不静默)。详见 [`episode_for_item`]。
+//!
 //! # 拉取→摄取接缝 (J2: 走保鲜回路)
 //!
 //! J1「拉取即入记忆流」升级: 每条摘要再投保鲜回路的 `enqueue_ingest`
@@ -78,6 +87,7 @@ use crate::content_feed::store::{
 use crate::content_feed::summary::{summarize_feed_document, FeedItemSummary};
 use crate::egress::{ControlledEgress, EgressError, EgressPolicy};
 use crate::exec_pipeline::{OutputSchema, SchemaKind};
+use crate::guardrail::{append_credential_tripwire, scan_json_string_leaves};
 
 /// 稳定能力标识 (注册表 / 治理授权 / 审批档共用)。
 pub const CONTENT_FEED_CAPABILITY_ID: &str = "tool.content_feed";
@@ -803,13 +813,29 @@ impl ContentFeedTool {
 ///
 /// 封套完整性标 [`EnvelopeCompleteness::Fragment`]: 正文是截断片段, 省略措辞
 /// 不假装是完整来源。episode **不带保护标记** (未保护记忆)。
+///
+/// # J1 面的凭据形状绊线 (批次 3b-2)
+///
+/// 本函数产出的 episode **直接进 episodic 记忆** (不经摄取队列) ⇒ ⇒ 它是
+/// **凭据进存储**的那条路径 (J1 面; J2 面走保鲜摄取队列, 已在
+/// [`crate::content_feed::ingest`] 闭) ⇒ ⇒ 正文在**入库之前**过一道**形状层**
+/// 扫描: 真 key 不进存储。
+///
+/// * **零命中** ⇒ 正文 JSON **逐字节不变** (共享助手在干净面本就原样回传)
+///   ⇒ ⇒ 落库记录逐字节不变 (与 J2 同口径: 干净内容零行为变更);
+/// * **命中** ⇒ **只换字符串叶子的内容**: 键名 / 数字 / 布尔 / null / 数组与
+///   对象的**结构**一律不动 ⇒ ⇒ 落库记录仍是**合法 JSON**, 可反序列化;
+/// * **命中可观测**: [`Episode`] 记录本身没有侧车字段 (id / timestamp / role /
+///   content / session_id) ⇒ ⇒ 侧车以**末尾一行 JSON 注解**挂在文本面
+///   (同 J2 裸文本面纪律, [`append_credential_tripwire`]) ⇒ ⇒ 命中不静默;
+///   注解**零真值** (只有命中族名, 没有凭据值)。
 pub fn episode_for_item(
     item: &FeedItemSummary,
     sequence: u64,
     envelope_budget_chars: usize,
     session_label: &str,
 ) -> Episode {
-    let body = json!({
+    let body_value = json!({
         "feed_id": item.feed_id,
         "source_url": item.source_url,
         "item_index": item.item_index,
@@ -819,8 +845,11 @@ pub fn episode_for_item(
         "published_raw": item.published_raw,
         "item_link": item.item_link,
         "fetched_at_ms": item.fetched_at_ms,
-    })
-    .to_string();
+    });
+    // J1 面的凭据形状绊线: 结构化面 ⇒ 走**JSON 字符串叶子**扫描 (键名 / 数字 /
+    // 布尔 / null / 结构一律不动, 只换字符串叶子的内容 ⇒ 落库记录仍合法 JSON)。
+    let (body_value, leaked_kinds) = scan_json_string_leaves(&body_value);
+    let body = body_value.to_string();
     let envelope = UntrustedEnvelope::new(
         format!("content_feed:{}", item.feed_id),
         body,
@@ -839,7 +868,8 @@ pub fn episode_for_item(
         ),
         timestamp: item.fetched_at_ms / 1000,
         role: CONTENT_FEED_EPISODE_ROLE.to_string(),
-        content: disclosure.text,
+        // 命中 ⇒ 末尾挂一行 JSON 注解 (文本面挂不住结构化侧车 ⇒ 注解显形)。
+        content: append_credential_tripwire(&disclosure.text, &leaked_kinds),
         session_id: session_label.to_string(),
     }
 }
@@ -1108,5 +1138,117 @@ mod tests {
         );
         assert!(description.contains("require"), "{description}");
         assert!(description.contains("refused outright"), "{description}");
+    }
+
+    // -----------------------------------------------------------------------
+    // J1 面的凭据形状绊线 (批次 3b-2)
+    // -----------------------------------------------------------------------
+
+    /// 一枚**形状合法**的密钥串 (形状夹具, 不是真凭据): `sk-` + ≥20 字节。
+    const FAKE_KEY: &str = "sk-j1fixturekeyabcdefghijklmnop";
+
+    /// 从封套正文里取出**正文 JSON** (边界标记之间的那一段)。
+    fn body_json_of(content: &str) -> String {
+        use apeireth_orchestration::untrusted_envelope::{
+            UNTRUSTED_REFERENCE_BEGIN_TOKEN, UNTRUSTED_REFERENCE_END_MARKER,
+        };
+        let start = content
+            .find(UNTRUSTED_REFERENCE_BEGIN_TOKEN)
+            .expect("封套起始")
+            + UNTRUSTED_REFERENCE_BEGIN_TOKEN.len();
+        let payload_start = start + content[start..].find(">>>\n").expect("载荷起始") + 4;
+        let payload_end = content
+            .find(UNTRUSTED_REFERENCE_END_MARKER)
+            .expect("封套结束");
+        content[payload_start..payload_end].trim_end().to_string()
+    }
+
+    /// J1 面的核心判据: 真 key **不进** episode 正文, 且**只换字符串叶子**。
+    ///
+    /// 正文 JSON 仍是**合法 JSON** (可反序列化) ⇒ 键名 / 数字 / 布尔 / null /
+    /// 结构一律不动 ⇒ 只有字符串叶子的内容被换成遮形标签。
+    #[test]
+    fn credential_shaped_body_is_masked_in_the_episode_body_json() {
+        let mut item = sample_item();
+        item.title = format!("标题 {FAKE_KEY}");
+        item.body_excerpt = format!("正文 {FAKE_KEY}");
+        let episode = episode_for_item(&item, 0, 2_400, CONTENT_FEED_SESSION_LABEL);
+        assert!(
+            !episode.content.contains(FAKE_KEY),
+            "真 key 不得进 episode (凭据进存储): {}",
+            episode.content
+        );
+        assert!(
+            episode.content.contains("[REDACTED_OPENAI_KEY]"),
+            "命中必须换成遮形标签: {}",
+            episode.content
+        );
+        // 结构完好: 正文仍是合法 JSON, 非字符串叶子原样保留。
+        let body = body_json_of(&episode.content);
+        let value: Value = serde_json::from_str(&body).expect("正文仍是合法 JSON");
+        assert_eq!(value["item_index"], json!(0), "数字叶子不动");
+        assert_eq!(value["body_truncated"], json!(false), "布尔叶子不动");
+        assert_eq!(value["feed_id"], json!("news"), "键名与字符串叶子不动");
+        assert_eq!(
+            value["published_raw"],
+            json!("Wed, 02 Oct 2024 07:00:00 GMT"),
+            "非命中的字符串叶子不动"
+        );
+        assert!(
+            value["title"]
+                .as_str()
+                .expect("标题仍是字符串")
+                .contains("[REDACTED_OPENAI_KEY]"),
+            "命中的字符串叶子必须被换掉: {body}"
+        );
+        assert_eq!(
+            value.as_object().map(|map| map.len()),
+            Some(9),
+            "键集不变 (遮形只换字符串叶子, 不加不减键): {body}"
+        );
+    }
+
+    /// 零命中 ⇒ episode 内容**逐字节不变** (遮形面必须对干净内容零行为变更)。
+    #[test]
+    fn clean_episode_content_is_byte_identical_to_the_legacy_layout() {
+        let item = sample_item();
+        let episode = episode_for_item(&item, 0, 2_400, CONTENT_FEED_SESSION_LABEL);
+        let legacy_body = json!({
+            "feed_id": item.feed_id,
+            "source_url": item.source_url,
+            "item_index": item.item_index,
+            "title": item.title,
+            "body_excerpt": item.body_excerpt,
+            "body_truncated": item.body_truncated,
+            "published_raw": item.published_raw,
+            "item_link": item.item_link,
+            "fetched_at_ms": item.fetched_at_ms,
+        })
+        .to_string();
+        assert_eq!(
+            body_json_of(&episode.content),
+            legacy_body,
+            "零命中 ⇒ 正文 JSON 必须逐字节不变"
+        );
+        assert!(
+            !episode.content.contains("credential_tripwire"),
+            "零命中 ⇒ 不挂任何标记 (干净答案的形状不变): {}",
+            episode.content
+        );
+    }
+
+    /// 命中 ⇒ 命中**可观测**: 文本面挂不住结构化侧车 ⇒ 末尾一行 JSON 注解。
+    #[test]
+    fn a_credential_hit_leaves_an_observable_marker_on_the_episode() {
+        let mut item = sample_item();
+        item.body_excerpt = format!("正文含 {FAKE_KEY}");
+        let episode = episode_for_item(&item, 0, 2_400, CONTENT_FEED_SESSION_LABEL);
+        let marker = episode
+            .content
+            .lines()
+            .find(|line| line.contains("credential_tripwire"))
+            .expect("命中必须留一行 JSON 注解");
+        assert!(!marker.contains(FAKE_KEY), "注解不得含凭据真值: {marker}");
+        assert!(marker.contains("OpenAiKey"), "注解必须报命中族: {marker}");
     }
 }
