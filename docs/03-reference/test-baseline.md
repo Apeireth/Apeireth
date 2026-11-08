@@ -14,20 +14,47 @@
 | 项 | 值 |
 |---|---|
 | **命令** | `pwsh scripts/gate_full.ps1 -FailIfBusy`（R6-A 唯一全量执行器：main workspace `cargo test --workspace --all-targets --locked --no-fail-fast --exclude <图像家族 11 crate>` + 图像家族独立同命令；等价于全 workspace 口径） |
-| **结果** | **588 套件 / 13147 passed / 0 failed / 80 ignored**（2026-11-07 19:21 实测；**failed = 0**；`main.cargo-test` **511 套件 / 10838 passed / 0 failed / 47 ignored** + `image.cargo-test` **77 套件 / 2309 passed / 0 failed / 33 ignored**；**门禁结论 = `GATE FULL PASSED`（exit 0）**）套件 / 8473 passed / 0 failed / 14 ignored** + 图像家族 `image.cargo-test` **77 套件 / 2309 passed / 0 failed / 33 ignored**）；较上一次全量（372 / 9176）净增 **+132 套件 / +1606 passed**、**ignored 51 → 47（−4）**；⚠️ **ignored 减少的 4 例** = 合并带来的对方线用例（原被 `--ignored` 标记，合并后成为**实跑**用例）⇒ **不是**少测了用例；⚠️ **套件数净增 132** 主因是对方线的 22 条生物/模块/安全族 claim 及其测试并入） |
-| **日期** | 2026-11-07 |
+| **结果** | **519 套件 / 10933 passed / 0 failed / 47 ignored**（2026-11-08 11:03 实测；**failed = 0**；`main.cargo-test` **442 套件 / 8624 passed / 0 failed / 14 ignored** + `image.cargo-test` **77 套件 / 2309 passed / 0 failed / 33 ignored**）|
+| **日期** | 2026-11-08 |
 | **工具链** | rustc 1.97.1 (8bab26f4f 2026-07-14) / cargo 1.97.1 (c980f4866 2026-06-30) / rustup 1.29.1 |
 | **构建环境（Windows 实测）** | MSVC 14.44.35207（VS Build Tools 2022，C++ workload）+ Windows SDK 10.0.26100.0 |
-| **构建环境（2026-11-07 本轮实测）** | **Linux x86_64**（rustc 1.97.1 / cargo 1.97.1，target `x86_64-unknown-linux-gnu`）—— 与上方 Windows 行**并存**：Windows 是历史口径（2026-10-31 及更早），本轮数字在 Linux 实测取得，**两者环境不同，不可直接横向比较**；本轮 0 failed 是 Linux 口径下的事实，Windows 口径须由 Windows 机器复跑全量后另行登记 |
+| **构建环境（2026-11-08 本轮实测）** | **Linux x86_64**（rustc 1.97.1 / cargo 1.97.1，target `x86_64-unknown-linux-gnu`）—— 与上方 Windows 行**并存**：Windows 是历史口径（2026-10-31 及更早），本轮数字在 Linux 实测取得，**两者环境不同，不可直接横向比较**；本轮 0 failed 是 Linux 口径下的事实，Windows 口径须由 Windows 机器复跑全量后另行登记 |
 | **来源** | 由全量门禁执行线（效率线）执行：`pwsh scripts/gate_full.ps1 -FailIfBusy` 实测 **2026-11-07 19:21、exit 0、HEAD `70e6542a`**；**逐字日志留存于 `logs/gate-full.log`**（本次段落自 `== main.cargo-test` 起 ⇒ ⇒ 数字可按该文件复核）（`main.cargo-test` + `main.clippy` + `main.fmt` + `image.cargo-test` + `image.clippy` **五项全 OK**，脚本结论 `GATE FULL PASSED`）；日志 `logs/gate-full.log`。⚠️ **另有两个独立 workspace 不在门禁口径内**（根 members 无它们 ⇒ 门禁 0 覆盖），**本轮单独实测**：`crates-ui/` ⇒ **432 passed / 0 failed / 4 ignored**；`frontend/companion-desktop/src-tauri/` ⇒ **171 passed / 0 failed / 2 ignored**（Tauri Rust 侧）；`frontend/companion-desktop/` 的 JS 侧（`pnpm test`）⇒ ✅ **83 of 83 suites passed**（exit 0）—— 本机 Node 无内置 TS 支持 ⇒ 走**类型擦除降级路径**（`tests/ts-strip-hooks.mjs`，用仓内**既有** `typescript` devDependency ⇒ **0 新外部依赖**）⇒ 修前本机 66/83 失败（`ERR_NO_TYPESCRIPT`，**模块加载阶段**就死）。前序口径（2026-11-05 / 2026-10-21）保留在 §3 历史口径表 |
 
+> **⚠️ 与上一记基线的差异（2026-11-08，如实说明，不编原因）**：上一记为
+> **588 套件 / 13147 passed / 0 failed / 80 ignored**（2026-11-07 19:21）⇒ ⇒ **两记口径不同，
+> 不可直接比**：上一记的 `main.cargo-test` 段**含图像家族 crate 的测试目标**（本次执行器用
+> `--exclude <图像家族 11 crate>` 把它们排除 ⇒ 单独成 `image.cargo-test` 段）⇒ ⇒ 套件数因此
+> 少了 69。**同口径下本次是「增」**：把上次的 main 段减去图像家族部分后 ≈ 442 套件 / 8508 passed，
+> 本次为 **442 套件 / 8624 passed** ⇒ ⇒ **新增 10 个测试二进制 / +116 用例**（全是本轮
+> 批次 1/2/2c/2d/3a/3b/3b-2/3c-1 的新测试文件，`git log` 可逐条对账）。
+> ⇒ ⇒ **故本记按执行器的两段口径记**（main 442 + image 77 = 519 套件）。
+>
+> **〔历史口径（2026-11-07 19:21）〕588 套件 / 13147 passed / 0 failed / 80 ignored**（保留原值，
+> 不追溯改写；HEAD `70e6542a`）。
+>
 > **⚠️ 与上一记基线的差异（2026-11-07，如实说明，不编原因）**：上一记为 **504 套件 / 10782 passed / 0 failed / 47 ignored**（同日，合并批收口）。⇒ **差异集中在 `main` 段**（427 → **509 套件** / 8473 → **10817 passed**），**`image` 段两次完全一致**（77 / 2309 / 33）。⇒ ⚠️ **上一记基线的门禁日志已不存在**（`logs/gate-full.log` 只留最近一次）⇒ ⇒ **差异来源无法从日志复原** ⇒ ⇒ **以本次（有日志可复核）为准**，并把「**基线数字必须配可复核日志**」登记为流程待办（见下）。⇒ ⚠️ **本次门禁首跑曾两度报红，均非代码缺陷**（如实记录，避免后人重走）：① **首跑** `main.cargo-test` exit 101（`apeireth-cli --test canonical_cli_bootstrap` 7 例红，panic 文案 = `sqlite connection pool error: timed out waiting for connection`）⇒ **单独复跑该测试 7 passed ⇒ 非稳定回归** ⇒ 归因 = 宿主 `load average 192`（同一时刻 11 个 cargo/rustc 进程 ⇒ 并行构建）；② **第二次** exit 143（**SIGTERM** ⇒ 被信号杀，非测试失败）⇒ 起因 = 用 `nohup … &` + 后台 job 启动 ⇒ job 收掉时连带杀进程组 ⇒ 改用 `setsid` 脱离；③ **第三次** exit 101 且**几十个测试二进制**报 `could not execute process … (never executed)` ⇒ **根因 = 磁盘守卫 cron**（`/etc/cron.d/apeireth-disk-guard`，每 5 分钟一次；磁盘 ≥85% 时回收 `debug/deps` 的测试二进制）⇒ 守卫日志逐字：`/var/tmp/apeireth-gate-final2: 已清 330 个测试二进制（89.0 G）`⇒ ⇒ **我的构建把磁盘顶过 85% ⇒ 守卫清了刚编好的二进制 ⇒ 整片假红** ⇒ ⇒ **处置**：清理已用完的 target 目录（回收 139 G，磁盘 889 G 盘的 39% ⇒ 低于阈值）⇒ **独占重跑 ⇒ PASSED**。⇒ ⚠️ **教训（已登记为流程待办）**：**门禁期间不得并行构建、不得新建大 target 目录**，否则会被磁盘守卫打断或清掉产物。>
 > **三个独立 workspace（根门禁 0 覆盖 ⇒ 必须单独跑，2026-11-07 同日实测）**：
 > | workspace | 实测 | 前置条件 |
 > |---|---|---|
-> | `crates-ui/` | **676 passed / 0 failed / 4 ignored** | 独立 cargo workspace；含他线在途模块 |
-> | `frontend/companion-desktop/src-tauri/` | **171 passed / 0 failed / 2 ignored** | **需 sidecar 占位**：`mkdir -p binaries && touch binaries/apeireth-x86_64-unknown-linux-gnu && chmod +x` （**与 CI `companion-desktop-ci.yml` 同口径**；`binaries/` 被 `.gitignore` ⇒ 不入仓）|
+> | `crates-ui/` | **673 passed / 0 failed / 0 ignored**（16 套件，2026-11-08 实测）| 独立 cargo workspace；**含他线在途模块 ⇒ 数字随其施工变动**（上一记 676 ⇒ 差 3 属他线变动，非本工作线）|
+> | `frontend/companion-desktop/src-tauri/` | **171 passed / 0 failed / 2 ignored**（3 套件，2026-11-08 实测）| **需 sidecar 占位**：`mkdir -p binaries && touch binaries/apeireth-x86_64-unknown-linux-gnu && chmod +x` （**与 CI `companion-desktop-ci.yml` 同口径**；`binaries/` 被 `.gitignore` ⇒ 不入仓）|
 > | `frontend/companion-desktop/`（JS 侧） | ✅ **83 of 83 suites passed** | `pnpm test`；Node **无**内置 TS 支持时走**类型擦除降级路径**（`tests/ts-strip-hooks.mjs`）⇒ **0 新外部依赖** |
+>
+> **⚠️ 跑门禁的前置条件（2026-11-07 实测固化，四次报红的共同教训）**
+>
+> | 门禁报红 | 真实根因 | 判据 |
+> |---|---|---|
+> | `main.cargo-test` exit 101（`canonical_cli_bootstrap` 7 例红，panic = `sqlite connection pool error: timed out waiting for connection`） | **宿主高负载**（实测 `load average 192`，同一时刻 11 个 cargo/rustc 进程 = 并行构建）⇒ **单独复跑 7 passed ⇒ 非稳定回归** | 该测试**单独复跑**是否绿 |
+> | exit **143**（**SIGTERM**） | **不是测试失败** —— 用 `nohup … &` + 后台 job 启动 ⇒ **job 收掉时连带杀了进程组** | 退出码 143 = 128+15（SIGTERM）⇒ ⇒ 改用 `setsid` 脱离进程组 |
+> | exit 101 且几十个二进制报 `could not execute process … (never executed)` | **磁盘守卫 cron**（`/etc/cron.d/apeireth-disk-guard`，每 5 分钟；磁盘 ≥85% 时回收 `debug/deps` 的测试二进制）⇒ 守卫日志逐字：`已清 330 个测试二进制（89.0 G）` ⇒ ⇒ **我方构建把磁盘顶过阈值** ⇒ ⇒ **整片假红** | 查守卫日志（`/tmp/apeireth-disk-guard.log`）+ `df -h /` |
+> | exit 101 + `FAILURE_CLASS=oom` | ⚠️ **该归因口径**三次都不是 OOM ⇒ ⇒ **不要**拿它当真实根因 ⇒ ⇒ 去 `logs/gate-full.log` 里找**真实 panic 文案 / 退出码** | 脚本给的归因 ≠ 真实根因 |
+>
+> ⇒ ⇒ **跑门禁的三条硬前置**：
+> ① **无并行编译**（先 `ps aux | grep -c "[c]argo"` ⇒ **0** 才跑）—— 2026-11-07 22:11 有 10 个 cargo 进程时
+>    **主动停掉了门禁**（未等它失败）；
+> ② **磁盘 < 70%**（守卫阈值 85%，峰值会越过 ⇒ 清理自己用完的 target 目录）；
+> ③ **`setsid` 脱离进程组**启动（否则后台 job 收掉会连带 SIGTERM）。
 >
 > 复现提示：先 `cargo build --workspace --locked`（约 4 min，CARGO_BUILD_JOBS=8），再跑上表命令
 > （约 11 min）；数字随批次增长属正常，**以最近一次全量实测为准**，逐批交付文档只报自己批的增量。
