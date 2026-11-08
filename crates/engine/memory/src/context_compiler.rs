@@ -18,6 +18,23 @@ const DIARY_LINES_MAX: usize = 3;
 /// 但命中节是**结果级**的（不像日记片段挂在单条命中事实上）⇒ 排在所有记忆条目之后.
 const WIKI_LINES_MAX: usize = 4;
 
+/// ⭐⭐ **单条上限的单一真源**（交付侧）—— 注入侧的生产跨度.
+///
+/// 候选侧（[`crate::MemoryRankingConfig::candidate_span_chars`]）与交付侧（本文件
+/// 的逐条裁剪）**都指到这里** ⇒ ⇒ 不存在第二份 400 ⇒ ⇒ 计费与交付永远同一口径.
+pub const DELIVERY_SPAN_CHARS: usize =
+    crate::anchor_injection::AnchoredInjectionConfig::PRODUCTION.span_chars;
+
+/// 按**字符**裁到上限（与注入渲染器的 `.chars().take(n)` 同口径）.
+///
+/// `max_chars = 0` ⇒ **不裁剪**（保留整条 = 旧口径的逃生阀）.
+fn truncate_to_chars(text: &str, max_chars: usize) -> String {
+    if max_chars == 0 {
+        return text.to_string();
+    }
+    text.chars().take(max_chars).collect()
+}
+
 /// 渲染一条关联日记片段行 (日期 + 正文摘要, 过凭据脱敏 + 单行化).
 ///
 /// 日记正文是**用户写下的内容** ⇒ 与召回正文同等对待：先过
@@ -182,11 +199,38 @@ impl ClosedWorldContextCompiler {
     /// overlay with an empty ID list when the budget admits no candidate.
     /// Selection is based on the same sanitized lines and budget checks as
     /// [`Self::compile`].
+    ///
+    /// ⭐⭐ **每条证据按「单条上限」裁剪**（2026-11-08）：候选侧（检索管线）按
+    /// **选后长度**给字符预算计费 ⇒ ⇒ 交付侧必须**同一口径**裁剪 ⇒ ⇒ 否则整条
+    /// 正文会进上下文、**突破总预算**（且交付 ≠ 计费 ⇒ 预算承诺失效）。
+    /// 单条上限的**单一真源** = [`crate::anchor_injection::AnchoredInjectionConfig::PRODUCTION`]
+    /// 的 `span_chars`（**不写第二份 400**）。
     pub fn compile_with_selected_access(
         &self,
         recalled: &MemoryRecallResult,
         session_id: &str,
         max_chars: usize,
+    ) -> Option<SelectedMemoryAccess> {
+        self.compile_with_selected_access_budget(
+            recalled,
+            session_id,
+            max_chars,
+            DELIVERY_SPAN_CHARS,
+        )
+    }
+
+    /// 同 [`Self::compile_with_selected_access`]，但**单条上限可配**。
+    ///
+    /// # 口径
+    ///
+    /// * `per_item_chars` ⇒ **每条**证据的字符上限（**总量仍由 `max_chars` 控制**）；
+    /// * `per_item_chars = 0` ⇒ **不裁剪**（保留整条正文 = 旧口径，逃生阀）。
+    pub fn compile_with_selected_access_budget(
+        &self,
+        recalled: &MemoryRecallResult,
+        session_id: &str,
+        max_chars: usize,
+        per_item_chars: usize,
     ) -> Option<SelectedMemoryAccess> {
         // ⭐ **B2 接线**：选中集**先过读契约**（窄面 + 纯数据标注）⇒ 生产路径真的走契约。
         // ⚠️ 视图是**无损投影** ⇒ ⇒ 下面的编译产物与接线前**逐字节相同**。
@@ -213,11 +257,14 @@ impl ClosedWorldContextCompiler {
 
         for item in &contract_items {
             let sanitized_content = sanitize_text(&item.content);
+            // ⭐⭐ **单条上限裁剪**（2026-11-08）：与候选侧的计费口径**同一条**
+            // ⇒ ⇒ 交付长度 == 计费长度 ⇒ ⇒ 整条正文**不会**进上下文、突破总预算。
+            let delivered = truncate_to_chars(&sanitized_content, per_item_chars);
             let line = format!(
                 "[mem:{} layer={}] {}",
                 item.id,
                 item.layer.as_str(),
-                sanitized_content
+                delivered
             );
 
             if current_chars + line.len() + 25 > max_chars {

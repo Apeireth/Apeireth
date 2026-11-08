@@ -291,8 +291,7 @@ pub struct EvidenceTally {
 
 /// **一条质量样本至少要多少条证据**（不足：不产生样本）。
 ///
-/// ⚠️ **为什么要有这个下限**：一条证据的命中率只能是 0 或 1，噪声极大
-/// 单条证据足以触发「连续偏离」告警，**假告警**。
+/// ⚠️ **为什么要有这个下限**：一条证据的命中率只能是 0 或 1，噪声极大 ⇒ 单条证据足以触发「连续偏离」告警，**假告警**。
 /// 至少要 3 条：命中率才有分辨力（1/3、2/3、3/3）。
 pub const MIN_QUALITY_SAMPLE_EVIDENCE: usize = 3;
 
@@ -588,6 +587,7 @@ impl RetrievalTuningEngine {
             novelty_weight: value(RetrievalDimension::Novelty),
             diversity_lambda: self.baseline.diversity_lambda,
             first_pos_alpha: self.baseline.first_pos_alpha,
+            candidate_span_chars: self.baseline.candidate_span_chars,
         }
     }
 

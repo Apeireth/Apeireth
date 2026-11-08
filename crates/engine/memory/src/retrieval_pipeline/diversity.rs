@@ -17,6 +17,10 @@ use crate::{MemoryCandidate, MemoryRankingConfig};
 
 /// 贪心、确定性的多样性选择：按 MMR（相关性-多样性折中）挑，再受 `max_chars` 预算约束。
 ///
+/// # 预算的**计费口径**（2026-11-08 修「静默全失」）
+/// 每条候选按 **选后长度**（`min(正文长度, 单条上限)`）计费 ⇒ ⇒ 与**交付侧**
+/// （按单条上限裁剪后注入）**同一口径** ⇒ ⇒ 预算不会再把「长记录」整批挤掉。
+///
 /// 选出后把所选候选的新颖度写进 `score_components.novelty`（**只做可解释性**，
 /// 不让后置标注改变排序）。
 pub(super) fn select(
@@ -70,8 +74,24 @@ pub(super) fn select(
             break;
         };
         let mut candidate = remaining.swap_remove(index);
+        // ⭐⭐ **计费口径 = 选后长度**（2026-11-08：修一个「静默全失」）。
+        //
+        // # 为什么不能按**原始正文长度**计费
+        // 召回交付给模型的是**选段**（单条 ≤ 单条上限），不是整条正文 ⇒ ⇒
+        // 按整条计费 ⇒ ⇒ 一条 7,400 字的记录在 4,000 字预算下**一条都装不下**
+        // ⇒ ⇒ 整批候选被跳过 ⇒ ⇒ **不报错、不告警、模型一条也收不到**（静默全失）。
+        // ⇒ ⇒ 计费必须与**交付侧同一口径**：`min(正文长度, 单条上限)`。
+        //
+        // # 单条上限从哪来
+        // [`MemoryRankingConfig::candidate_span_chars`]（默认 = 生产注入的单条跨度
+        // ⇒ **单一真源**，见 [`crate::anchor_injection::AnchoredInjectionConfig::PRODUCTION`]）
+        // ⇒ ⇒ `0` = 不限（按原始正文计费 = 旧口径，逃生阀）。
         let content_chars = candidate.content.chars().count();
-        if chars + content_chars > max_chars {
+        let billed_chars = match ranking.candidate_span_chars {
+            0 => content_chars,
+            span => content_chars.min(span),
+        };
+        if chars + billed_chars > max_chars {
             // Skip oversized candidates and continue looking for a bounded item.
             continue;
         }
@@ -86,7 +106,7 @@ pub(super) fn select(
         // letting the post-selection annotation change ordering.
         candidate.score_components.novelty = novelty;
         selected_tokens.push(token_set(&candidate.content));
-        chars += content_chars;
+        chars += billed_chars;
         result.push(candidate);
     }
     result

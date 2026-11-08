@@ -190,6 +190,20 @@ pub struct MemoryRankingConfig {
     ///
     /// ⇒ ⇒ 打开它的正当理由是「**你在自己的语料上量过**」，不是「文档说它更好」。
     pub first_pos_alpha: f64,
+    /// ⭐⭐ **候选字符预算的「单条上限」**（计费口径 = **选后长度**）。
+    ///
+    /// # 为什么要有它（2026-11-08：修一个「静默全失」）
+    /// 候选预算过去按**原始正文长度**计费 ⇒ ⇒ 一条 7,400 字的记录在 4,000 字预算下
+    /// **一条都装不下** ⇒ ⇒ 整批候选被跳过 ⇒ ⇒ **不报错、不告警、模型一条也收不到**
+    /// （静默全失）；而**注入侧**按「选段 ≤ 单条上限」交付 ⇒ ⇒ **两侧口径不一致**。
+    ///
+    /// # 口径
+    /// * 计费 = `min(正文长度, 本字段)` ⇒ ⇒ **与交付侧同一口径**（交付侧也按本上限裁）；
+    /// * `0` ⇒ **不限**（按原始正文计费 = 旧口径，留作逃生阀）；
+    /// * 默认值 = **单一真源**
+    ///   [`crate::anchor_injection::AnchoredInjectionConfig::PRODUCTION`] 的 `span_chars`
+    ///   （**不写第二份 400**）。
+    pub candidate_span_chars: usize,
 }
 
 impl Default for MemoryRankingConfig {
@@ -206,6 +220,9 @@ impl Default for MemoryRankingConfig {
             novelty_weight: 0.05,
             diversity_lambda: 0.0,
             first_pos_alpha: 0.0,
+            // 单条上限取**单一真源**（注入侧的生产跨度）⇒ ⇒ 不写第二份 400。
+            candidate_span_chars: crate::anchor_injection::AnchoredInjectionConfig::PRODUCTION
+                .span_chars,
         }
     }
 }
