@@ -69,7 +69,8 @@ const SHADOW_CONFIG_DOC_NAME: &str = "apeireth.memory.shadow_config";
 /// 本构建唯一的格式版本。
 const SHADOW_CONFIG_DOC_VERSION: u32 = 1;
 /// 归档报告目录名（相对数据根）。
-const SHADOW_ARCHIVE_DIR: &str = "memory/shadow/reports";
+/// 归档目录（**相对数据根**）—— 工具面/运维面要定位归档 ⇒ 公开。
+pub const SHADOW_ARCHIVE_DIR: &str = "memory/shadow/reports";
 /// 指针文件名（相对数据根）。
 const SHADOW_POINTER_FILE: &str = "memory/shadow/pointer.json";
 /// 指针文档身份。

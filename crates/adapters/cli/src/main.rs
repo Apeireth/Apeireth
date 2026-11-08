@@ -6,7 +6,7 @@ mod continuation_guard;
 use apeireth_cli::onboarding::UserTier;
 use apeireth_cli::{
     build_canonical_runtime_from_env, dispatch_canonical_approval, dispatch_canonical_chat,
-    dispatch_gateway_serve_with, CanonicalCliTurn,
+    dispatch_gateway_serve_with, memory_shadow_command as memory_shadow, CanonicalCliTurn,
 };
 use apeireth_runtime::ApprovalDecision;
 
@@ -47,6 +47,7 @@ Usage:
     apeireth memory handover --out FILE [--db DB] [--issue TEXT]... [--next TEXT]
     apeireth memory migrate-subject --from ANCHOR --to ANCHOR [--db DB]
     apeireth memory rollback-drill --from ANCHOR --to ANCHOR --db DB
+    apeireth memory shadow status|run | swap status|apply|rollback [--data-root DIR] [--db DB]
   [治理与安全]
     apeireth trait report
     apeireth trait lock <SLIDER>
@@ -718,8 +719,7 @@ mod nightwatch_parse_tests {
 
     #[test]
     fn nightwatch_defaults_are_sessionless_structural_audit() {
-        // 缺省 = 无会话素材 + 50 条上限 (episodes 空 → 干净报告 + 具名缺口);
-        // 非 watch 模式 = 单次审计。
+        // 缺省 = 无会话素材 + 50 条上限 (episodes 空 → 干净报告 + 具名缺口); 非 watch 模式 = 单次审计。
         assert_eq!(parse_nightwatch(&[]).unwrap(), NightwatchOptions::default());
         assert!(!parse_nightwatch(&[]).unwrap().watch);
     }
@@ -1056,9 +1056,9 @@ fn run_cli() -> ExitCode {
             Some("handover") => {
                 ExitCode::from(apeireth_cli::memory_handover_command::run(&args[2..]))
             }
+            Some("shadow") | Some("swap") => ExitCode::from(memory_shadow::run(&args[1..])), // B3 出口
             _ => {
-                // 5 段用法文本的装配归 `memory_migrate_command::memory_usage_text()`
-                // （`main.rs` 是尺寸登记文件 ⇒ 只留一行调用）。
+                // 6 段用法文本的装配归 `memory_migrate_command::memory_usage_text()`（main.rs 只留一行调用）。
                 eprintln!("{}", mm::memory_usage_text());
                 ExitCode::FAILURE
             }
@@ -1083,8 +1083,7 @@ fn run_cli() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
-        // G5 备份恢复 (本地操作): export/restore/verify 三动词, 审计行随
-        // export/restore (时间 + 清单件数), verify 只验不恢复零审计行。
+        // G5 备份恢复 (本地操作): export/restore/verify 三动词, 审计行随 export/restore (时间 + 清单件数), verify 只验不恢复零审计行。
         "backup" => match apeireth_cli::backup::run_backup(&args[1..]) {
             Ok(summary) => {
                 println!("{summary}");

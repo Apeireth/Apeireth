@@ -257,19 +257,19 @@ pub const ROLLBACK_DRILL_USAGE: &str = "apeireth memory rollback-drill --from <A
 /// # 为什么放在这里（而不是 `main.rs`）
 ///
 /// `main.rs` 是被 `scripts/arch-baseline.txt` 登记尺寸的文件（只许不变或变小）
-/// ⇒ ⇒ 把「打印 5 段用法」这种纯文本装配摊在主分派里会**净增行数**
-/// ⇒ ⇒ 而它属于 `memory` 命令族的知识 ⇒ ⇒ 归位到本模块（`main.rs` 只留一行调用）。
+/// ⇒ ⇒ 把「打印 6 段用法」这种纯文本装配摊在主分派里会**净增行数** ⇒ ⇒ 而它属于 `memory`
+/// 命令族的知识 ⇒ ⇒ 归位到本模块（`main.rs` 只留一行调用）。
 pub fn memory_usage_text() -> String {
-    use crate::{
-        memory_export_command as export, memory_handover_command as handover,
-        memory_verify_command as verify,
-    };
+    use crate::memory_export_command as export;
+    use crate::memory_handover_command as handover;
+    use crate::memory_verify_command as verify;
     [
         verify::USAGE,
         export::USAGE,
         handover::USAGE,
         USAGE,
         ROLLBACK_DRILL_USAGE,
+        crate::memory_shadow_command::USAGE,
     ]
     .join("\n\n")
 }

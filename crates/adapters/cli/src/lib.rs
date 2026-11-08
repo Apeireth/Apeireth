@@ -20,6 +20,7 @@ pub mod care_heartbeat;
 pub mod memory_export_command;
 pub mod memory_handover_command;
 pub mod memory_migrate_command;
+pub mod memory_shadow_command;
 pub mod memory_verify_command;
 // B6 会话/记忆静态加密（隐患 #6）密钥面：engine `apeireth_storage::crypto` 的 CLI 出口（密钥丢失 = 显式不可恢复）。
 pub mod crypto_keys;
@@ -274,8 +275,7 @@ fn local_read_tools_enabled_from_env() -> bool {
 
 /// 记忆核心族默认开旋钮的统一语义 (逃生门惯例与
 /// `APEIRETH_DISABLE_LOCAL_READ_TOOLS` / `APEIRETH_DISABLE_TYPED_RECALL` 一致):
-/// `APEIRETH_DISABLE_*=1` → 关 (最高优先); `APEIRETH_ENABLE_*=0` → 关;
-/// 未设 / `=1` / 其余值 → 开。
+/// `APEIRETH_DISABLE_*=1` → 关 (最高优先); `APEIRETH_ENABLE_*=0` → 关; 未设 / `=1` / 其余值 → 开。
 fn core_memory_knob_enabled(enable_env: &str, disable_env: &str) -> bool {
     if std::env::var(disable_env)
         .ok()
