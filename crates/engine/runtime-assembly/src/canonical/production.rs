@@ -1429,8 +1429,9 @@ impl ProductionModules {
                 "memory_governance",
                 "memory_governance",
             )?;
-            let mut coordinator =
-                MemoryCoordinator::new(Arc::clone(&memory), Arc::clone(&governance));
+            let coordinator = MemoryCoordinator::new(Arc::clone(&memory), Arc::clone(&governance));
+            let mut coordinator = memory_assembly::apply_retrieval_knobs(coordinator)
+                .map_err(RuntimeError::misconfigured)?;
             if let Some(scoped) = &backends.scoped_memory {
                 coordinator = coordinator.with_scoped_backend(Arc::clone(scoped));
             }
@@ -1440,8 +1441,7 @@ impl ProductionModules {
             if config.memory_injection {
                 coordinator = coordinator.with_memory_injection_format();
             }
-            // 记忆线（2026-11-03）：接上**夜间整编驱动** ⇒
-            // 「只整新料 + 同一窗口只整一次」⇒ ⇒ 老素材不再被反复重整编。
+            // 记忆线（2026-11-03）：接上**夜间整编驱动** ⇒「只整新料 + 同一窗口只整一次」。
             // ⚠️ **水位跨进程持久化**（文件）⇒ ⇒ 进程重启后**不会**把老料重整一遍。
             // ⚠️ **窗口 = 0** ⇒ **不设时间闸**（时间节奏仍由既有的
             // `APEIRETH_TUNE_CONSOLIDATION_CADENCE` 旋钮管）⇒ ⇒ 只剩「只整新料」这一条语义。

@@ -413,6 +413,7 @@ pub mod layers;
 pub mod memory_materializer;
 pub mod partner_store_sqlite;
 pub mod persona_store_sqlite;
+pub mod ranking_knobs;
 pub mod reconciler;
 pub mod retrieval_pipeline;
 // V4-c 检索维度自进化 (证据账 + 有界调权内核 + 生效值落地槽)。

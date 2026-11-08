@@ -312,3 +312,17 @@ applier.apply_patch(patch)?; // 内存预演 -> 磁盘写入 (任意异常自动
 ⚠️ **本表只记「生产调用点已存在且真跑过」的面**；每条能力的诚实边界见 `docs/status/claims.yaml` 对应 `notes`
 （例如：mesh 的 public status 未启用、bio 指令块是 untrusted V1 数据不是 system 权威、自动检索默认关、
 生产默认只注册兼容 ABI 而契约/Protected 是 Host 显式 opt-in）。
+
+---
+
+## 附录 B：检索旋钮的 **Host 配置面**（2026-11-08 · 吸收借鉴批）
+
+| 能力 | 生产调用点 | 接线后行为 | 反证（已实测变红） |
+|---|---|---|---|
+| **检索旋钮配置面**（`retrieval.json`） | `crates/engine/memory/src/ranking_knobs.rs`（读 + 校验）→ `runtime-assembly/src/canonical/memory_assembly.rs::apply_retrieval_knobs` → `production.rs` 装配根（**行中性**接线） | 文件**缺失** ⇒ 不施加任何旋钮 ⇒ **逐字节零行为变化**；文件**合法** ⇒ 只施加**显式写了**的旋钮（当前只两个：`first_pos_alpha` / `diversity_lambda`，**默认都是关**）；文件**存在但坏**（畸形/串档/未来版本/未知字段/越界）⇒ **装配失败**（坏配置不许被当成「没配置」） | ① 未知字段 ⇒ 拒开；② 越界取值 ⇒ 拒开；③ 负值 ⇒ 拒开（三条各自红）；④ 坏文件 ⇒ 装配报错（`memory_assembly` 用例红）；⑤ 缺文件 ⇒ 照常装配（不报错） |
+
+⚠️ **边界（不因接线抹掉）**
+- **不做运行中热重载**：配置**只在启动时读一次** ⇒ 会话中途静默改排序权重的做法被明确禁止（与治理链/审计口径冲突；运行时调权另有**受治理**的调权引擎）。
+- **不放整个权重向量**：权重归调权引擎管 ⇒ 两套调权面不得并存。
+- **env 额度仍是硬约束**（150/154）：配置面是**替代品**，不是绕过额度的新后门。
+- 决策台账：[`external-retrieval-mechanisms-decision-2026-11-08.md`](../04-internal/backend-enhancement/00-governance/external-retrieval-mechanisms-decision-2026-11-08.md)

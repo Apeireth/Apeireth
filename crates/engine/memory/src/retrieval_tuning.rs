@@ -587,6 +587,7 @@ impl RetrievalTuningEngine {
             graph_weight: value(RetrievalDimension::Graph),
             novelty_weight: value(RetrievalDimension::Novelty),
             diversity_lambda: self.baseline.diversity_lambda,
+            first_pos_alpha: self.baseline.first_pos_alpha,
         }
     }
 
@@ -846,7 +847,6 @@ pub fn clear_effective_for_session(session_key: &str) {
 }
 
 /// 读生效层权重: 有 override 取 override, 否则取调用方传入值 (零改动回落)。
-///
 /// ⚠️ **会话维度**：有会话作用域：读**该会话的桶**（没有则回落进程级默认桶）。
 pub fn effective_ranking_or(fallback: MemoryRankingConfig) -> MemoryRankingConfig {
     effective_ranking_or_for_session(&effective_bucket_key(), fallback)

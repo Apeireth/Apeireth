@@ -300,6 +300,8 @@ impl Default for HybridRetrievalPipeline {
 impl HybridRetrievalPipeline {
     pub fn new(ranking: MemoryRankingConfig) -> Self {
         Self {
+            // 首命中位置强度**跟着排序配置走**（默认 0.0 = 关；机制与实测见字段文档）。
+            first_pos_alpha: ranking.first_pos_alpha,
             ranking,
             ..Self::default()
         }
@@ -323,9 +325,8 @@ impl HybridRetrievalPipeline {
     /// Run scope filter, union, deduplication, ranking, diversity, and budget
     /// without mutating storage or access metadata.
     ///
-    /// ⚠️ **会话维度走兼容兜底**：生效条目显著性按**会话作用域**（线程局部）
-    /// 解析（没有作用域 ⇒ 进程级默认桶 ⇒ 旧口径不变）。
-    /// ⇒ ⇒ 想要**显式**会话，用 [`Self::retrieve_for_session`]。
+    /// ⚠️ **会话维度走兼容兜底**：生效条目显著性按**会话作用域**（线程局部）解析
+    /// （没有作用域 ⇒ 进程级默认桶 ⇒ 旧口径不变）；想要**显式**会话用 [`Self::retrieve_for_session`]。
     pub fn retrieve(
         &self,
         query: &str,
@@ -521,8 +522,7 @@ impl HybridRetrievalPipeline {
     /// Optional model reranking is bounded and falls back to deterministic
     /// ranking if the adapter fails by returning an empty result.
     ///
-    /// ⚠️ **会话维度走兼容兜底**（会话作用域）；显式会话用
-    /// [`Self::retrieve_with_reranker_for_session`]。
+    /// ⚠️ **会话维度走兼容兜底**（会话作用域）；显式会话用 [`Self::retrieve_with_reranker_for_session`]。
     pub async fn retrieve_with_reranker(
         &self,
         query: &str,

@@ -176,6 +176,18 @@ pub struct MemoryRankingConfig {
     pub graph_weight: f64,
     pub novelty_weight: f64,
     pub diversity_lambda: f64,
+    /// ⭐⭐ **首命中位置**加成强度（`0` = 关，默认关）。
+    ///
+    /// # 为什么放在**排序配置**里
+    /// 它是**管线的重排强度**（像 `diversity_lambda` 一样）⇒ ⇒ 归一化权重集中在一处
+    /// ⇒ ⇒ 调权引擎算生效权重时也能原样带上（见 `retrieval_tuning::ranking`）。
+    ///
+    /// # 实测（**两把尺子结论相反 ⇒ 默认关**）
+    /// * 真实查询卷（真人问句）：α=0.10 ⇒ recall **+16.9%**（+0.1227）；
+    /// * 内部卷（模板题）：α=0.10 ⇒ recall **−0.0252 / −0.0202**、nDCG 反向。
+    ///
+    /// ⇒ ⇒ 打开它的正当理由是「**你在自己的语料上量过**」，不是「文档说它更好」。
+    pub first_pos_alpha: f64,
 }
 
 impl Default for MemoryRankingConfig {
@@ -191,6 +203,7 @@ impl Default for MemoryRankingConfig {
             graph_weight: 0.05,
             novelty_weight: 0.05,
             diversity_lambda: 0.0,
+            first_pos_alpha: 0.0,
         }
     }
 }

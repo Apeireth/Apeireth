@@ -65,3 +65,72 @@ pub(super) fn bind_profile_mappings(
         module.attach_profile_mappings(Arc::clone(mappings));
     }
 }
+
+/// 把 **Host 配置面**的检索旋钮（`retrieval.json`）施加到 coordinator 的排序配置上。
+///
+/// # 为什么放这里
+/// `production.rs` 登记了尺寸（只许不变或变小）⇒ ⇒ 装配细节搬到这里，
+/// `production.rs` 只留**一行**调用。
+///
+/// # 三种结果（失败闭合）
+///
+/// * 文件缺失 ⇒ **不施加任何旋钮** ⇒ 逐字节零行为变化（默认态）；
+/// * 文件存在但坏 ⇒ **报错**（装配失败）：坏配置不许被当成「没配置」；
+/// * 文件存在且合法 ⇒ 只施加**文件里显式写了**的旋钮。
+///
+/// ⚠️ **只在启动时读一次**（不做运行中热重载）：热重载 = 会话中途静默改排序权重
+/// ⇒ 与治理链/审计口径冲突；我们另有**受治理的运行时调权**（证据驱动、有账）。
+pub(super) fn apply_retrieval_knobs(
+    coordinator: MemoryCoordinator,
+) -> Result<MemoryCoordinator, String> {
+    apply_retrieval_knobs_at(coordinator, &crate::paths::default_data_root())
+}
+
+/// 同上，但**数据根显式给出**（测试用；生产走 [`apply_retrieval_knobs`]）。
+pub(super) fn apply_retrieval_knobs_at(
+    coordinator: MemoryCoordinator,
+    data_root: &std::path::Path,
+) -> Result<MemoryCoordinator, String> {
+    let Some(body) = apeireth_memory::ranking_knobs::knobs_from_data_root(data_root)? else {
+        return Ok(coordinator);
+    };
+    let mut ranking = apeireth_memory::MemoryRankingConfig::default();
+    apeireth_memory::ranking_knobs::apply_knobs(&mut ranking, &body);
+    Ok(coordinator.with_ranking_config(ranking))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use apeireth_memory::{MemoryCoordinator, MemoryGovernanceStore, SqliteMemoryStore};
+    use apeireth_plugin::memory_backend::MemoryBackend;
+    use std::sync::Arc;
+
+    fn coordinator() -> MemoryCoordinator {
+        let store = Arc::new(SqliteMemoryStore::open_in_memory().expect("store"));
+        let backend: Arc<dyn MemoryBackend> = store.clone();
+        let governance: Arc<dyn MemoryGovernanceStore> = store;
+        MemoryCoordinator::new(backend, governance)
+    }
+
+    /// ⭐ **没有配置文件 ⇒ 不施加任何旋钮**（默认态 ⇒ 零行为变化）。
+    #[test]
+    fn a_missing_knob_file_leaves_the_coordinator_untouched() {
+        let dir = std::env::temp_dir().join(format!("apeireth-knobs-none-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("mkdir");
+        let result = apply_retrieval_knobs_at(coordinator(), &dir);
+        assert!(result.is_ok(), "缺文件必须照常装配（不是错误）");
+    }
+
+    /// ⭐ **配置文件坏了 ⇒ 装配失败**（失败闭合：坏配置不许被当成「没配置」）。
+    #[test]
+    fn a_broken_knob_file_refuses_to_assemble() {
+        let dir = std::env::temp_dir().join(format!("apeireth-knobs-bad-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("mkdir");
+        std::fs::write(dir.join("retrieval.json"), b"{ not json").expect("write");
+        match apply_retrieval_knobs_at(coordinator(), &dir) {
+            Ok(_) => panic!("坏配置必须报错（不许被当成「没配置」）"),
+            Err(error) => assert!(!error.is_empty(), "必须带真因"),
+        }
+    }
+}
