@@ -262,6 +262,7 @@ def main() -> int:
                   f"或把 APEIRETH_DATA_DIR 指向**语料完整**的那份")
             return 1
         print("跳过（缺语料）—— **这不是通过**（本轮没有可比分数）")
+        print(f"GATE_SKIP: 语料目录不存在（{novels_dir()}）⇒ 本门禁未执行可比测量")
         return 0
 
     current = run_current_scores()

@@ -126,6 +126,7 @@ def main() -> int:
             print("   ⇒ ⇒ 本轮**没有可比分数** ⇒ ⇒ **判红**（不许当通过）")
             return 1
         print("跳过（缺考卷 / 跑不动）—— **这不是通过**（本轮没有可比分数）")
+        print("GATE_SKIP: 考卷/语料不可用 ⇒ 本门禁未执行可比测量")
         return 0
 
     recall = float(current.get("生产口径", 0.0))

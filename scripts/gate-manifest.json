@@ -708,6 +708,22 @@
       "note": "可达率门禁的自测（门禁也要被验证）"
     },
     {
+      "id": "harness-status-self-test",
+      "cmd": [
+        "python3",
+        "scripts/test_harness_gate_status.py"
+      ],
+      "scope": [
+        "ci",
+        "contract"
+      ],
+      "blocking": true,
+      "required": true,
+      "env": "python",
+      "timeout": 120,
+      "note": "harness 门禁状态判定的自测（跳过 ≠ 通过，必须被钉住）"
+    },
+    {
       "id": "fusion-channels",
       "cmd": [
         "python3",

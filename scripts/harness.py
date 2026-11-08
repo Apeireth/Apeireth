@@ -111,6 +111,11 @@ TAIL_LINES = 40
 S_PASS = "PASS"
 S_FAIL = "FAIL"
 S_SKIPPED = "SKIPPED"
+# ⭐ **环境跳过**标记（2026-11-08）：闸门**跑了**，但**前置条件缺失**（如 CI 里没有语料）
+# ⇒ ⇒ 它**退出码是 0**，若照「退出码 0 = PASS」记 ⇒ ⇒ **「没跑」被写成「跑过且通过」**
+# ⇒ ⇒ ⇒ 闸门脚本在跳过时打印这一行标记，harness 据此把它记成 **SKIPPED（env）**
+# ⇒ ⇒ ⇒ **不是 PASS**（人只看 ✅ 的坑），但**不阻断**（环境本来就没有那些前置条件）。
+ENV_SKIP_MARKER = "GATE_SKIP:"
 S_DELEGATED = "DELEGATED"
 S_UNVERIFIED = "UNVERIFIED"
 S_WAIVED = "WAIVED"
@@ -557,8 +562,14 @@ def run_gate(gate: dict[str, Any], timeout: int) -> dict[str, Any]:
         raw = proc.stdout or b""
         exit_code = proc.returncode
         if exit_code == 0:
-            status = S_PASS
-            reason = None
+            # ⭐ **退出码 0 不等于「跑过且通过」**：闸门若打印了环境跳过标记
+            # ⇒ ⇒ 记 **SKIPPED**（不是 PASS）⇒ ⇒ 「没跑」不再冒充「跑过」。
+            if ENV_SKIP_MARKER.encode("utf-8") in raw:
+                status = S_SKIPPED
+                reason = "跳过（缺前置条件）—— **不是通过**"
+            else:
+                status = S_PASS
+                reason = None
         else:
             status = S_FAIL
             reason = f"退出码 {exit_code} ≠ 0"
@@ -597,6 +608,9 @@ def run_gate(gate: dict[str, Any], timeout: int) -> dict[str, Any]:
         "reason": reason,
         # 附加信息（不改变上面的必备字段）
         "blocking": bool(gate.get("blocking", True)),
+        # ⭐ **环境跳过**（闸门跑了但缺前置条件）⇒ 与「scope 不相交」**区分开**：
+        #    前者**不阻断**（环境本来就没有），但**绝不算 PASS**。
+        "skip_kind": "env" if status == S_SKIPPED and reason and "缺前置条件" in reason else None,
         "scope": list(gate.get("scope") or ["*"]),
         "timeout": timeout,
         "env": gate.get("env", "python"),
@@ -669,8 +683,14 @@ def evaluate_verdict(
         and g.get("status")
         not in (S_PASS, S_WAIVED, S_FAIL, S_UNVERIFIED, S_BLOCKED, S_DELEGATED)
         and g.get("scope_applies", True)
+        # ⭐ **环境跳过**（闸门跑了但缺前置条件，如 CI 无语料）⇒ **不阻断**
+        #    （环境本来就没有那些前置条件）⇒ 但它**不是 PASS**（状态显示 SKIPPED）。
+        and g.get("skip_kind") != "env"
     ]
     delegated = [g for g in gates if g.get("status") == S_DELEGATED]
+    # ⭐ **环境跳过**（闸门跑了但缺前置条件）⇒ **不阻断**，但**必须出现在理由里**
+    #    （否则「没跑」在报告里就消失了 ⇒ ⇒ 又变成「只看 ✅」）。
+    env_skipped = [g for g in gates if g.get("skip_kind") == "env"]
 
     for gate in fails:
         reasons.append(f"门禁 {gate['id']} FAIL（退出码 {gate.get('exit_code')}）")
@@ -683,6 +703,10 @@ def evaluate_verdict(
     for gate in delegated:
         reasons.append(
             f"门禁 {gate['id']} DELEGATED（由 `{gate.get('delegated_to')}` 负责 ⇒ 本层不判）"
+        )
+    for gate in env_skipped:
+        reasons.append(
+            f"门禁 {gate['id']} **跳过**（缺前置条件）—— **不是通过**（本轮没有可比测量）"
         )
     reasons.extend(blocking)
 

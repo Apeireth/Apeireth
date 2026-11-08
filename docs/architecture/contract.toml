@@ -837,6 +837,19 @@ required = true
 timeout = 120
 note = "可达率门禁的自测（门禁也要被验证）"
 
+# harness 自身的**状态判定**自测（2026-11-08）：防「退出码 0 = 跑过且通过」被改坏
+# ⇒ ⇒ 跳过（`GATE_SKIP:` 标记）必须记 SKIPPED（不是 PASS）、环境跳过不阻断但必须出现在理由里、
+# ⇒ ⇒ 「适用却没跑」的 required 门禁必须 BLOCKED。
+[[ci_gates.gate]]
+id = "harness-status-self-test"
+cmd = ["python3", "scripts/test_harness_gate_status.py"]
+stage = "fast"
+scope = ["ci", "contract"]
+blocking = true
+required = true
+timeout = 120
+note = "harness 门禁状态判定的自测（跳过 ≠ 通过，必须被钉住）"
+
 # 融合通道闸门（2026-11-05 deputy 引入 · 2026-11-06 主指挥登记进唯一真源）
 # ⇒ ⇒ 「不许不涨」的尺子：同一份考卷跑两遍（单路 BM25 vs 多路）⇒ ⇒ 量每通道 delta
 # ⇒ ⇒ `delta < 0` ⇒ ⇒ 红；`delta == 0` ⇒ ⇒ 绿（中性通道允许，但绝不虚报它涨了）

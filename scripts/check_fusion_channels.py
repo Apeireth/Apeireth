@@ -146,6 +146,7 @@ def main() -> int:
                 print("   ⇒ ⇒ 本轮**没有可比分数** ⇒ ⇒ **判红**（不许当通过）")
                 return 1
             print(f"⏭ 融合通道闸门：跳过（{error}）—— **这不是通过**")
+            print("GATE_SKIP: 语料目录不存在 ⇒ 本门禁未执行可比测量")
             return 0
         print(f"❌ 融合通道闸门：{error}")
         return 1
