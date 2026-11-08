@@ -36,6 +36,7 @@ use apeireth_memory::golden_fair::{build_fair_exam, FairExamConfig};
 use apeireth_memory::golden_mining::MiningConfig;
 use apeireth_memory::golden_run::{mined_to_golden, run_with_extra_sources, IndexRecord};
 use apeireth_memory::golden_set::GoldenSet;
+use apeireth_memory::hybrid_search::{normalize_for_index, tokenize};
 use apeireth_memory::novel_corpus;
 use apeireth_memory::retrieval_pipeline::{Bm25LexicalCandidateSource, MemoryCandidateSource};
 use apeireth_memory::{MemoryCandidate, MemoryScope};
@@ -43,36 +44,6 @@ use apeireth_memory::{MemoryCandidate, MemoryScope};
 const K: usize = 10;
 const POOL: usize = 50;
 const MAX_CASES_PER_RECORD: usize = 6;
-
-/// 粗分词：ASCII 词 + 中文单字 + 中文 bigram（与生产同构，但**独立实现**以避免耦合）。
-fn terms(text: &str) -> Vec<String> {
-    let mut out: Vec<String> = Vec::new();
-    let mut ascii = String::new();
-    let mut prev_cjk: Option<char> = None;
-    for ch in text.chars() {
-        if ch.is_ascii_alphanumeric() {
-            ascii.push(ch.to_ascii_lowercase());
-            prev_cjk = None;
-        } else {
-            if !ascii.is_empty() {
-                out.push(std::mem::take(&mut ascii));
-            }
-            if (ch as u32) > 0x2E80 && ch.is_alphabetic() {
-                out.push(ch.to_string());
-                if let Some(prev) = prev_cjk {
-                    out.push(format!("{prev}{ch}"));
-                }
-                prev_cjk = Some(ch);
-            } else {
-                prev_cjk = None;
-            }
-        }
-    }
-    if !ascii.is_empty() {
-        out.push(ascii);
-    }
-    out
-}
 
 /// 每个特征在**每个 α** 下的命中数（**不做平均** ⇒ ⇒ 每个 α 单独可解释）。
 const ALPHAS: [f64; 5] = [0.05, 0.10, 0.20, 0.50, 1.00];
@@ -124,16 +95,18 @@ fn run() -> Result<(), Box<dyn Error>> {
             })
             .collect();
         let total = index.len() as f64;
+        // ⭐⭐ **生产口径**（2026-11-08 修正）：文档侧分词同样必须用生产分词器
+        // ⇒ ⇒ 否则 IDF / 覆盖率 / 长度惩罚算的不是生产那一套。
         let avg_len = index
             .iter()
-            .map(|record| terms(&record.text).len() as f64)
+            .map(|record| tokenize(&record.text).len() as f64)
             .sum::<f64>()
             / total.max(1.0);
         // IDF：用整个索引算
         let mut doc_freq: HashMap<String, usize> = HashMap::new();
         let mut doc_terms: Vec<HashSet<String>> = Vec::with_capacity(index.len());
         for record in &index {
-            let set: HashSet<String> = terms(&record.text).into_iter().collect();
+            let set: HashSet<String> = tokenize(&record.text).into_iter().collect();
             for term in &set {
                 *doc_freq.entry(term.clone()).or_default() += 1;
             }
@@ -214,7 +187,11 @@ fn run() -> Result<(), Box<dyn Error>> {
                     continue;
                 }
                 cases += 1;
-                let query_terms: HashSet<String> = terms(&case.query).into_iter().collect();
+                // ⭐⭐ **生产口径**（2026-11-08 修正）：原先用本地「粗分词」
+                // 且**不做规范化** ⇒ ⇒ 测的不是上线的那套算法。
+                let query_terms: HashSet<String> = tokenize(&normalize_for_index(&case.query))
+                    .into_iter()
+                    .collect();
                 let in_top = |ids: &[&str]| -> bool {
                     !case.expect_ids.is_empty()
                         && case.expect_ids.iter().all(|id| ids.contains(&id.as_str()))
@@ -401,7 +378,7 @@ fn run() -> Result<(), Box<dyn Error>> {
                             })
                             .collect();
                     let query_terms: HashSet<String> =
-                        terms(&normalized_query).into_iter().collect();
+                        tokenize(&normalized_query).into_iter().collect();
                     let max_base = positive
                         .iter()
                         .map(|hit| hit.score)
@@ -479,7 +456,9 @@ fn run() -> Result<(), Box<dyn Error>> {
                         continue;
                     }
                     total_cases += 1;
-                    let query_terms: HashSet<String> = terms(&case.query).into_iter().collect();
+                    let query_terms: HashSet<String> = tokenize(&normalize_for_index(&case.query))
+                        .into_iter()
+                        .collect();
                     // overlap：查询词在**全语料**里出现的比例
                     let overlap = if query_terms.is_empty() {
                         1.0
