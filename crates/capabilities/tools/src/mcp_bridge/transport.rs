@@ -839,6 +839,73 @@ impl Drop for StdioChannel {
     }
 }
 
+/// The `Accept` header the **http** face sends on every request.
+///
+/// # Why the header is not optional
+///
+/// The protocol negotiates the response shape through this header. A server
+/// that speaks it strictly answers a request it cannot serve with
+/// `406 Not Acceptable` — so a request that names **no** response shape is
+/// not merely "less polite", it is **rejected**, and the whole face is
+/// unusable against such a server.
+///
+/// (What went out before this header existed was the HTTP client's own
+/// default wildcard `Accept: */*` — the bridge itself named no shape. A
+/// strict server that requires the protocol's two shapes to be **listed**
+/// refuses a wildcard exactly as it refuses a missing header.)
+///
+/// # Why this value
+///
+/// The protocol defines **two** response shapes for this face: a single
+/// JSON-RPC answer in the body (`application/json`) and a streamed answer
+/// (`text/event-stream`). A client that can read both says so — it lists
+/// both — because a client that lists only one may be refused the other.
+///
+/// The value is the one this repository already uses for the same face: the
+/// in-tree single-endpoint HTTP POST transport states the same pair as the
+/// protocol requirement of that face
+/// (`legacy/donor/apeireth-mcp/src/transport/http_streamable.rs`).
+///
+/// # What this header does **not** buy
+///
+/// It makes the **request** legal. It does not make this face able to read
+/// a streamed answer: the response path still decodes a JSON body, so a
+/// server that answers a request with an event stream is still not
+/// understood here (a separate capability, not this header's business).
+pub const HTTP_ACCEPT: &str = "application/json, text/event-stream";
+
+/// How long the failure path waits for the endpoint's own rejection text.
+///
+/// The rejection body is **extra** information: the status already names the
+/// failure. A peer that answers with a status and then goes quiet must not
+/// turn the failure path into another wait, so the read carries a short
+/// budget of its own.
+const REJECTION_BODY_TIMEOUT: Duration = Duration::from_secs(2);
+
+/// How much of the endpoint's rejection text the error message keeps.
+///
+/// The body is the endpoint's own words about the refusal; a few hundred
+/// characters carry the reason. The cap keeps an endless body out of the
+/// message (and out of the log line that carries it).
+const REJECTION_BODY_CHARS: usize = 512;
+
+/// The endpoint's own words about a rejection, when it sends them.
+///
+/// `None` when the body is empty, unreadable, or slower than
+/// [`REJECTION_BODY_TIMEOUT`] — in every one of those cases the status alone
+/// still names the failure.
+async fn rejection_reason(response: reqwest::Response) -> Option<String> {
+    let text = tokio::time::timeout(REJECTION_BODY_TIMEOUT, response.text())
+        .await
+        .ok()?
+        .ok()?;
+    let text = text.trim();
+    if text.is_empty() {
+        return None;
+    }
+    Some(text.chars().take(REJECTION_BODY_CHARS).collect())
+}
+
 /// An HTTP endpoint answering JSON-RPC requests directly.
 pub struct HttpChannel {
     client: reqwest::Client,
@@ -874,15 +941,22 @@ impl HttpChannel {
         let response = self
             .client
             .post(&self.url)
+            // The protocol negotiates the response shape through this header:
+            // without it a strict server answers `406 Not Acceptable` and the
+            // face is unusable (see [`HTTP_ACCEPT`]).
+            .header("Accept", HTTP_ACCEPT)
             .json(message)
             .send()
             .await
             .map_err(|e| transport_error("posting JSON-RPC message", e))?;
         if !response.status().is_success() {
-            return Err(McpError::Transport(format!(
-                "endpoint answered HTTP {}",
-                response.status()
-            )));
+            let status = response.status();
+            return Err(McpError::Transport(
+                match rejection_reason(response).await {
+                    Some(reason) => format!("endpoint answered HTTP {status}: {reason}"),
+                    None => format!("endpoint answered HTTP {status}"),
+                },
+            ));
         }
         Ok(response)
     }
@@ -1160,6 +1234,12 @@ impl Drop for SseChannel {
         self.router.fail_all();
     }
 }
+
+// The **http** face's header contract lives in its own file: the cases are
+// long enough to drown the production code they pin.
+#[cfg(test)]
+#[path = "transport_accept.rs"]
+mod accept_tests;
 
 #[cfg(test)]
 mod tests {
