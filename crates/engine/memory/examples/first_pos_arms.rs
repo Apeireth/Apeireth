@@ -223,8 +223,7 @@ fn evaluate(
     }
 
     // 每个臂的 (基线分, 位置分, id)
-    let mut arm_values: [Vec<(f64, f64, &str)>; ARM_COUNT] =
-        [Vec::new(), Vec::new(), Vec::new()];
+    let mut arm_values: [Vec<(f64, f64, &str)>; ARM_COUNT] = [Vec::new(), Vec::new(), Vec::new()];
     for hit in &positive {
         let doc = content.get(hit.id.as_str()).copied().unwrap_or("");
         let base = hit.score / max_base;

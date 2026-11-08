@@ -218,8 +218,9 @@ fn run() -> Result<(), Box<dyn Error>> {
         // 本文件此前自带一个「粗分词」，它比生产分词器**多产出每个 CJK 单字**
         //；位置分会被那些单字决定；测出来的不是**上线的那套算法**。
         //；2026-11-08 改为直接调用生产分词器。
-        let query_terms: HashSet<String> =
-            tokenize(&normalize_for_index(&case.query)).into_iter().collect();
+        let query_terms: HashSet<String> = tokenize(&normalize_for_index(&case.query))
+            .into_iter()
+            .collect();
         let max_base = positive
             .iter()
             .map(|h| h.score)
@@ -259,10 +260,8 @@ fn run() -> Result<(), Box<dyn Error>> {
 
         // 基线（α=0）—— 与 α 臂**同一口径**（两种口径各一条）
         {
-            let mut ranked: Vec<(&str, f64)> = values
-                .iter()
-                .map(|(id, base, _)| (*id, *base))
-                .collect();
+            let mut ranked: Vec<(&str, f64)> =
+                values.iter().map(|(id, base, _)| (*id, *base)).collect();
             ranked.sort_by(|a, b| {
                 b.1.partial_cmp(&a.1)
                     .unwrap_or(std::cmp::Ordering::Equal)

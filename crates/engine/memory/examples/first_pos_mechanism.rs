@@ -224,7 +224,12 @@ fn run() -> Result<(), Box<dyn Error>> {
                     let base = hit.score / max_base;
                     let doc = content.get(hit.id.as_str()).copied().unwrap_or("");
                     let raw = first_pos_value(&query_terms, doc);
-                    (hit.id.as_str(), base, raw, earliest_match(&query_terms, doc))
+                    (
+                        hit.id.as_str(),
+                        base,
+                        raw,
+                        earliest_match(&query_terms, doc),
+                    )
                 })
                 .collect();
             let max_value = values.iter().map(|item| item.2).fold(0.0_f64, f64::max);
@@ -273,7 +278,11 @@ fn run() -> Result<(), Box<dyn Error>> {
                 }
                 if let Some((term, position)) = earliest {
                     if gold.contains(id) {
-                        tally(&mut buckets.entry(kind.clone()).or_default().gold_terms, term, *position);
+                        tally(
+                            &mut buckets.entry(kind.clone()).or_default().gold_terms,
+                            term,
+                            *position,
+                        );
                     } else {
                         tally(
                             &mut buckets.entry(kind.clone()).or_default().other_terms,
@@ -344,7 +353,10 @@ fn run() -> Result<(), Box<dyn Error>> {
                 f64::NAN
             };
 
-            println!("· {name} · 题型 {key}：题 {} · 基线 {:.4}", bucket.cases, base_recall);
+            println!(
+                "· {name} · 题型 {key}：题 {} · 基线 {:.4}",
+                bucket.cases, base_recall
+            );
             println!(
                 "     标准答案条数分布 {:?} · 池内全可达率 {:.4}",
                 bucket.gold_len, pool_rate
