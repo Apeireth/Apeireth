@@ -1155,6 +1155,38 @@ claims:
     owner: memory
     next_review: "2026-12-04"
     notes: "总指挥 2026-11-04 登记（记忆线收口清单 §6 报备的口径缺位）。注入侧的可核验契约 = 注入预算为**硬上限**（golden_injection2.rs 的 total_budget_is_a_hard_cap 等用例）；片段取窗口内的正文子串，不得改写。⚠️ 此前该契约在真源里无记录。"
+  - id: mem.contract_view
+    title: "记忆读/标注契约接生产（算法只能经契约视图读、只能产纯数据标注）"
+    level: PRODUCTION WIRED
+    default: "ON"
+    switch_env: null
+    sources:
+      - crates/engine/memory/src/canonical/memory_contracts.rs
+      - crates/engine/memory/src/context_compiler.rs
+      - crates/engine/runtime-assembly/src/canonical/memory_contract_wire.rs
+    tests:
+      - crates/engine/memory/tests/memory_contract_production.rs
+      - crates/engine/runtime-assembly/tests/memory_contract_production.rs
+    verified_at: 4ac9045e
+    verify_cmd: "cargo test -p apeireth-memory --test memory_contract_production && cargo test -p apeireth-runtime-assembly --test memory_contract_production"
+    owner: memory
+    next_review: "2026-12-05"
+    notes: "2026-11-08 接入生产（主指挥批）。口径纠正：**注入契约（InjectionRenderer）早已在生产**（`compile_injection_with_renderer` 出注入 + 逐字等价安全网 `tests/injection_renderer_production.rs`）⇒ 本条接的是**读契约**（`MemoryView`）与**标注契约**（`MemoryAnnotation`）：编译前把选中集包成契约视图 `SelectedMemoryView`，编译从**无损投影**取条目；每条产出**纯数据**标注（分数 + 出处）⇒ 类型层面不可能回写原始层。⭐ **默认行为逐字节不变**（视图无损 + 可见性口径逐条一致 ⇒ 复核是恒等变换；生产装配侧断言 overlay 形态不变）。⭐ 两道**会咬人**的门：契约可见性口径与 canonical `is_visible_in` **25 组**逐组比对（**装配时**跑 ⇒ 分叉 ⇒ **拒绝启动**）+ 渲染器产出超预算 ⇒ 报错（不照用）。反证：短路 `contract_view()` ⇒ 2 条测试红。⚠️ 如实边界：读契约的「窄面」目前**名义上**（编译器仍需宽条目）⇒ 真正「算法只能读窄面」要等真有算法插进来才完全兑现；视图里记录的范围是「已授权」占位（真正范围判定仍在上游）；未接 CLI 出口。"
+  - id: mem.shadow_swap
+    title: "影子双跑 + 换算法三道闸流程接生产（默认关；无治理链 ⇒ 切换必被拒）"
+    level: PRODUCTION WIRED
+    default: "OFF"
+    switch_env: null
+    sources:
+      - crates/engine/runtime-assembly/src/canonical/shadow_wire.rs
+    tests:
+      - crates/engine/runtime-assembly/tests/shadow_swap_production.rs
+    verified_at: 4ac9045e
+    verify_cmd: "cargo test -p apeireth-runtime-assembly --test shadow_swap_production"
+    owner: memory
+    next_review: "2026-12-05"
+    notes: "2026-11-08 接入生产（主指挥批），**默认关**。配置面 `shadow.json`（StoredDoc 信封、deny_unknown_fields、失败闭合）：**缺失 ⇒ 不构造任何东西**（逐字节零行为变化、零新增文件）；**坏配置 ⇒ 拒绝装配**（不许被当成「没配置」）。影子两侧都是**真生产路径**（现役 coordinator vs 另建 coordinator，同一批只读库、只差排序旋钮）⇒ 影子**物理上碰不到现役实例**；报告里**没有答案字段**（影子纪律在数据结构上就成立）。三道闸：裁决（只放 `Approved`/`ApprovedWithGain`）→ 回退速度（`rollback_ms < switch_ms` ⇒「可回退」是假的就不许切）→ 样本充分（≥2 轮且 ≥10 题）⇒ **任一不过 ⇒ 什么都不做**（指针逐字不变、不落盘、如实返回是哪道闸 + 带数字）。切换走仓里既有的 `GovernanceChain`（不自造审批）。⚠️ 边界：① **装配根当前没有治理链句柄 ⇒ 传 `None` ⇒ 切换必被拒**（失败闭合，刻意）；② 切换的是**启动时**读的排序旋钮（**刻意不做热重载**），**「已切换」≠「已生效」**（中间有一次重启）；③ **无工具面/CLI 出口** ⇒ 目前只能程序内调用（本条最明确的缺口）；④ 候选侧只覆盖「重排旋钮」这一类变体（没做「换召回算法」）；⑤ 探针题要运维自己给（没有探针 ⇒ 裁决必然拒绝：没证据 ≠ 没变差）。反证：把装配短路成永远 `Ok(None)` ⇒ 8 个用例里 **6 个变红**。"
+
   - id: sec.output_injection_guard
     title: "回合层消费工具**输出侧**的提示注入标记 ⇒ 可见告警（固定措辞，恒不阻断）"
     level: PRODUCTION WIRED

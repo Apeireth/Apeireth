@@ -3,8 +3,8 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: cec9684b1bda4fe1f5895ed50d253d9650a347da3e5a9a4c1ae529d9e452f8be
-claims_total: 52
+claims_sha256: 84cae0dc694bc5c4a9aa3984d209a0e7d64f2c4ac609db553ad45a008b833cf1
+claims_total: 54
 items:
   - id: "rt.provider_router"
     capability: "跨 provider fallback + 健康态（运行时路由）"
@@ -1332,6 +1332,41 @@ items:
       tests:
         - "crates/engine/memory/tests/golden_injection2.rs"
       claims_id: "mem.injection_contract"
+    gaps:
+      []
+  - id: "mem.contract_view"
+    capability: "记忆读/标注契约接生产（算法只能经契约视图读、只能产纯数据标注）"
+    implemented:
+      sources:
+        - "crates/engine/memory/src/canonical/memory_contracts.rs"
+        - "crates/engine/memory/src/context_compiler.rs"
+        - "crates/engine/runtime-assembly/src/canonical/memory_contract_wire.rs"
+    wired:
+      production_refs:
+        - "crates/engine/memory/src/canonical/memory_contracts.rs"
+        - "crates/engine/memory/src/context_compiler.rs"
+        - "crates/engine/runtime-assembly/src/canonical/memory_contract_wire.rs"
+    default_enabled: true
+    validated:
+      tests:
+        - "crates/engine/memory/tests/memory_contract_production.rs"
+        - "crates/engine/runtime-assembly/tests/memory_contract_production.rs"
+      claims_id: "mem.contract_view"
+    gaps:
+      []
+  - id: "mem.shadow_swap"
+    capability: "影子双跑 + 换算法三道闸流程接生产（默认关；无治理链 ⇒ 切换必被拒）"
+    implemented:
+      sources:
+        - "crates/engine/runtime-assembly/src/canonical/shadow_wire.rs"
+    wired:
+      production_refs:
+        - "crates/engine/runtime-assembly/src/canonical/shadow_wire.rs"
+    default_enabled: false
+    validated:
+      tests:
+        - "crates/engine/runtime-assembly/tests/shadow_swap_production.rs"
+      claims_id: "mem.shadow_swap"
     gaps:
       []
   - id: "sec.output_injection_guard"

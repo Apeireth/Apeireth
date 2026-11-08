@@ -56,6 +56,8 @@
 | `mem.retrieval_ranking` | PRODUCTION WIRED | ON | - | `625fbd87` | 2026-12-04 |
 | `mem.failure_learning_bridge` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_RETRIEVAL_TUNING` | `52009d5f` | 2026-12-04 |
 | `mem.injection_contract` | PRODUCTION WIRED | ON | - | `e1127c32d57b` | 2026-12-04 |
+| `mem.contract_view` | PRODUCTION WIRED | ON | - | `4ac9045e` | 2026-12-05 |
+| `mem.shadow_swap` | PRODUCTION WIRED | OFF | - | `4ac9045e` | 2026-12-05 |
 | `sec.output_injection_guard` | PRODUCTION WIRED | ON | - | `625fbd87` | 2026-12-05 |
 
 ## 使用
