@@ -1154,7 +1154,7 @@ claims:
     verify_cmd: "cargo test -p apeireth-memory --test golden_injection2"
     owner: memory
     next_review: "2026-12-04"
-    notes: "总指挥 2026-11-04 登记（记忆线收口清单 §6 报备的口径缺位）。注入侧的可核验契约 = 注入预算为**硬上限**（golden_injection2.rs 的 total_budget_is_a_hard_cap 等用例）；片段取窗口内的正文子串，不得改写。⚠️ 此前该契约在真源里无记录。"
+    notes: "总指挥 2026-11-04 登记（记忆线收口清单 §6 报备的口径缺位）。注入侧的可核验契约 = 注入预算为**硬上限**（golden_injection2.rs 的 total_budget_is_a_hard_cap 等用例）；片段取窗口内的正文子串，不得改写。⚠️ 此前该契约在真源里无记录。；2026-11-08 送达口径更正（实测）：此前基线闸门量的「送达率 0.3881 / 0.7218、漏送 61% / 28%」是**闸门口径**（每条证据取正文**前 120 字**），**不是生产形态**。生产形态 = **注入 + 锚定选段**（主体出现处，单条 ≤ 400 字，`anchor_injection::AnchoredInjectionConfig::PRODUCTION`）：真实查询卷送达率 **1.0000（零漏送）** · 红楼梦 **0.8949** · 水浒传 **0.9867**；XML 形态（每条放整条正文）= 0.9362 / 0.0000 / 0.0000。⇒ **真瓶颈是召回**（真人卷 16.3% 没召回到），**不是送达**。证据页 `docs/04-internal/01-handoffs/memory-delivery-loss-decomposition-2026-11-08.md` + 测例 `crates/engine/memory/examples/delivery_loss_decomposition.rs`（三卷 × 四口径 × 四段分解）。⭐ 同时查出**一个真缺陷**：召回候选的字符预算按**原始正文**计费 ⇒ 长记录在预算下**静默全失**（内部卷入选 0 条）；修复中（计费改「选后长度」）。"
   - id: mem.contract_view
     title: "记忆读/标注契约接生产（算法只能经契约视图读、只能产纯数据标注）"
     level: PRODUCTION WIRED
