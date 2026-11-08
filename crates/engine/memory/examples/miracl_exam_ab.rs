@@ -11,10 +11,22 @@
 //!   ⇒ **绝对数字不可与 MIRACL 官方榜对比**；**臂间相对比较才是用途**。
 //! * **相关性**：`rel == 1` 算相关；多相关文档时**任一命中**即算命中。
 //!
+//! # ⭐⭐⚠️ **闸门口径 vs 二值口径（2026-11-08 修正）**
+//! 本例的 `first_pos` α 扫描**同时报两种口径**，且**各配一条同口径基线**：
+//!
+//! | 口径 | 定义 | 与闸门的关系 |
+//! |---|---|---|
+//! | **闸门口径** | 逐题「命中比例」再平均（`\|expect ∩ top-k\| / \|expect\|`） | **= `golden_run::metrics.recall_at_k`**，闸门判红/判绿用这个 |
+//! | 二值任一命中 | 碰到**任意一个**标准答案即算命中 | 粗看用 |
+//!
+//! **为什么必须分两种**：此前 α 扫描只统计**二值口径**，却拿它去减**闸门口径**的基线
+//!；**混口径减法**；得出的「+0.1227」**无效**
+//!；修正后同口径的 `first_pos`（α=0.10）真实收益是 **+0.0192**（不是 +0.1227）。
+//!
 //! # 四臂 + α 扫描
 //! 1. **生产口径**（去疑问词 + 收窄停用字，与 `normalize_for_index` 一致）
 //! 2. **原始口径**（不做任何规范化）
-//! 3. **生产 + `first_pos` 重排**（α 扫描）
+//! 3. **生产 + `first_pos` 重排**（α 扫描 · 两种口径）
 //! 4. **oracle**（相关文档在池里就算命中）
 //!
 //! # 输出
@@ -27,7 +39,7 @@ use std::process::ExitCode;
 
 use apeireth_memory::golden_run::{run_with_extra_sources_and_config, IndexRecord};
 use apeireth_memory::golden_set::{GoldenCase, GoldenSet};
-use apeireth_memory::hybrid_search::{strip_cn_interrogatives, Bm25Config, CN_STOPWORD_CHARS};
+use apeireth_memory::hybrid_search::{normalize_for_index, tokenize, Bm25Config};
 use apeireth_memory::retrieval_pipeline::{Bm25LexicalCandidateSource, MemoryCandidateSource};
 use apeireth_memory::{MemoryCandidate, MemoryScope};
 
@@ -57,36 +69,6 @@ fn read_lines(path: &std::path::Path) -> Result<Vec<String>, Box<dyn Error>> {
         .lines()
         .map(str::to_string)
         .collect())
-}
-
-/// 粗分词（与生产同构：ASCII 词 + CJK 单字 + bigram）。
-fn terms(text: &str) -> Vec<String> {
-    let mut out = Vec::new();
-    let mut ascii = String::new();
-    let mut prev: Option<char> = None;
-    for ch in text.chars() {
-        if ch.is_ascii_alphanumeric() {
-            ascii.push(ch.to_ascii_lowercase());
-            prev = None;
-        } else {
-            if !ascii.is_empty() {
-                out.push(std::mem::take(&mut ascii));
-            }
-            if (ch as u32) > 0x2E80 && ch.is_alphabetic() {
-                out.push(ch.to_string());
-                if let Some(p) = prev {
-                    out.push(format!("{p}{ch}"));
-                }
-                prev = Some(ch);
-            } else {
-                prev = None;
-            }
-        }
-    }
-    if !ascii.is_empty() {
-        out.push(ascii);
-    }
-    out
 }
 
 fn main() -> ExitCode {
@@ -209,6 +191,15 @@ fn run() -> Result<(), Box<dyn Error>> {
             .collect(),
     );
     let mut first_pos_hits = [0usize; ALPHAS.len()];
+    // ⭐⭐ **闸门口径**（= `golden_run::metrics.recall_at_k`）：逐题「命中比例」再平均。
+    //
+    // ⚠️⚠️ **2026-11-08 修正（混口径减法）**：此前本例只有**二值「任一命中」**的计数，
+    // 却拿它去减**闸门口径**的基线（`production`）； **两个不同的指标相减**
+    //；得出的「+0.1227」**无效**（真实值 +0.0192）。
+    //；现在**两种口径各配一条同口径基线**，delta 永远是同口径减法。
+    let mut first_pos_frac = [0.0f64; ALPHAS.len()];
+    let mut base_frac = 0.0f64;
+    let mut base_any_hits = 0usize;
     let mut oracle_hits = 0usize;
     let mut scored = 0usize;
     for case in &cases {
@@ -223,11 +214,12 @@ fn run() -> Result<(), Box<dyn Error>> {
             oracle_hits += 1;
         }
 
-        let normalized: String = strip_cn_interrogatives(&case.query)
-            .chars()
-            .filter(|c| !CN_STOPWORD_CHARS.contains(c))
-            .collect();
-        let query_terms: HashSet<String> = terms(&normalized).into_iter().collect();
+        // ⭐⭐ **必须用生产分词器**（`tokenize(normalize_for_index(query))`）：
+        // 本文件此前自带一个「粗分词」，它比生产分词器**多产出每个 CJK 单字**
+        //；位置分会被那些单字决定；测出来的不是**上线的那套算法**。
+        //；2026-11-08 改为直接调用生产分词器。
+        let query_terms: HashSet<String> =
+            tokenize(&normalize_for_index(&case.query)).into_iter().collect();
         let max_base = positive
             .iter()
             .map(|h| h.score)
@@ -265,6 +257,25 @@ fn run() -> Result<(), Box<dyn Error>> {
             }
         }
 
+        // 基线（α=0）—— 与 α 臂**同一口径**（两种口径各一条）
+        {
+            let mut ranked: Vec<(&str, f64)> = values
+                .iter()
+                .map(|(id, base, _)| (*id, *base))
+                .collect();
+            ranked.sort_by(|a, b| {
+                b.1.partial_cmp(&a.1)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+                    .then_with(|| a.0.cmp(b.0))
+            });
+            let ids: Vec<&str> = ranked.iter().take(K).map(|item| item.0).collect();
+            let found = gold.iter().filter(|id| ids.contains(id)).count() as f64;
+            base_frac += found / gold.len() as f64;
+            if gold.iter().any(|id| ids.contains(id)) {
+                base_any_hits += 1;
+            }
+        }
+
         for (alpha_index, alpha) in ALPHAS.iter().copied().enumerate() {
             let mut ranked: Vec<(&str, f64)> = values
                 .iter()
@@ -279,6 +290,8 @@ fn run() -> Result<(), Box<dyn Error>> {
             if gold.iter().any(|id| ids.contains(id)) {
                 first_pos_hits[alpha_index] += 1;
             }
+            let found = gold.iter().filter(|id| ids.contains(id)).count() as f64;
+            first_pos_frac[alpha_index] += found / gold.len() as f64;
         }
     }
 
@@ -287,6 +300,12 @@ fn run() -> Result<(), Box<dyn Error>> {
         .iter()
         .map(|hits| *hits as f64 / denominator)
         .collect();
+    let per_alpha_frac: Vec<f64> = first_pos_frac
+        .iter()
+        .map(|value| *value / denominator)
+        .collect();
+    let base_frac_avg = base_frac / denominator;
+    let base_any_avg = base_any_hits as f64 / denominator;
     let oracle = oracle_hits as f64 / denominator;
 
     println!("· MIRACL 真实查询：题 {}（有效 {}）", cases.len(), scored);
@@ -301,13 +320,20 @@ fn run() -> Result<(), Box<dyn Error>> {
         oracle,
         oracle - production
     );
+    // ⭐⭐ **两种口径，各配一条同口径基线**，**delta 永远是同口径减法**。
     println!("     == first_pos α 扫描（真实查询） ==");
+    println!(
+        "        同口径基线：闸门口径 {:.4} · 二值任一命中 {:.4}",
+        base_frac_avg, base_any_avg
+    );
     for (alpha_index, alpha) in ALPHAS.iter().copied().enumerate() {
         println!(
-            "        α={:<5} recall {:.4} ({:+.4})",
+            "        α={:<5} 闸门口径 {:.4} ({:+.4}) · 二值任一命中 {:.4} ({:+.4})",
             alpha,
+            per_alpha_frac[alpha_index],
+            per_alpha_frac[alpha_index] - base_frac_avg,
             per_alpha[alpha_index],
-            per_alpha[alpha_index] - production
+            per_alpha[alpha_index] - base_any_avg
         );
     }
     println!(
@@ -326,10 +352,13 @@ fn run() -> Result<(), Box<dyn Error>> {
                 .iter()
                 .copied()
                 .zip(per_alpha.iter().copied())
-                .map(|(alpha, recall)| serde_json::json!({
+                .zip(per_alpha_frac.iter().copied())
+                .map(|((alpha, recall), frac)| serde_json::json!({
                     "alpha": alpha,
-                    "recall": recall,
-                    "delta_vs_production": recall - production,
+                    "闸门口径recall": frac,
+                    "闸门口径delta": frac - base_frac_avg,
+                    "二值任一命中recall": recall,
+                    "二值任一命中delta": recall - base_any_avg,
                 }))
                 .collect::<Vec<_>>(),
         }))?
