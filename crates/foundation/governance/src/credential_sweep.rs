@@ -64,6 +64,30 @@ pub enum CredentialFamily {
     PlaintextPassword,
 }
 
+impl CredentialFamily {
+    /// 本族的**遮形标签** (内核既有字符串, 本模块**不新造**).
+    ///
+    /// # 为什么标签也要收口在本模块
+    ///
+    /// 族判据与族标签是**同一件事的两面** (一族 = 一个判据 + 一个标签) ⇒ ⇒
+    /// 只把判据下沉、把标签留在别处, 照样是**两份** ⇒ ⇒ 标签真源同样在本模块.
+    ///
+    /// 别处 (如能力工具面的「形状层 → 字段层」桥接占位) 需要标签清单时,
+    /// 一律走本方法 ⇒ ⇒ 仓内不再有第二份写死的标签清单.
+    pub fn label(self) -> &'static str {
+        match self {
+            CredentialFamily::SkPrefixedKey => "[REDACTED_OPENAI_KEY]",
+            CredentialFamily::AkiaPrefixedKey => "[REDACTED_AWS_KEY]",
+            CredentialFamily::GhpPrefixedToken => "[REDACTED_GITHUB_PAT]",
+            CredentialFamily::PemPrivateKey => "[REDACTED_PEM_PRIVATE_KEY]",
+            CredentialFamily::Jwt => "[REDACTED_JWT]",
+            CredentialFamily::XoxPrefixedToken => "[REDACTED_SLACK_TOKEN]",
+            CredentialFamily::BearerToken => "[REDACTED_BEARER]",
+            CredentialFamily::PlaintextPassword => "[REDACTED_PASSWORD]",
+        }
+    }
+}
+
 /// 一次形状清扫的结果: 终稿文本 + 命中族清单.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CredentialSweep {
