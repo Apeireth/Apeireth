@@ -81,6 +81,7 @@ use super::governance::{
     McpFamilyGrants, McpPermissionMapping, McpRiskMappingHook, McpToolDenyGuard,
 };
 use super::tool::{mcp_output_schema, McpDynamicTool};
+use super::SessionRedactionDomain;
 
 /// Where discovered dynamic tools land (a module bag, a runtime registry).
 pub trait McpToolRegistry: Send + Sync {
@@ -158,6 +159,16 @@ pub struct McpToolBridge {
     /// Serializes the refresh rounds: two concurrent rounds would race on
     /// the same directory and the same policy.
     refresh_lock: tokio::sync::Mutex<()>,
+    /// The **session redaction domain** every tool of this bridge sweeps its
+    /// result face in.
+    ///
+    /// `None` = **not wired**: each tool keeps its own domain, exactly as
+    /// before this batch (one alias per tool, no cross-tool recognition). The
+    /// caller injects one domain with
+    /// [`McpToolBridge::with_session_domain`] when the session owns a single
+    /// domain — then every tool of the bridge sweeps in it, and the
+    /// provider-facing egress gate can hold the same one.
+    session_domain: Option<Arc<Mutex<SessionRedactionDomain>>>,
 }
 
 /// One wrapped dynamic tool plus the directory entry it was built from.
@@ -310,7 +321,32 @@ impl McpToolBridge {
             tools: Mutex::new(BTreeMap::new()),
             preset_grants: Mutex::new(BTreeSet::new()),
             refresh_lock: tokio::sync::Mutex::new(()),
+            session_domain: None,
         })
+    }
+
+    /// Give every tool of this bridge **one** session redaction domain.
+    ///
+    /// This is the injection face of "one session, one domain": the tools
+    /// this bridge discovers sweep their result faces in `domain`, so the
+    /// alias of one value is the same alias in every tool of the session —
+    /// and the provider-facing egress gate, holding the same domain,
+    /// recognises (and can restore) what those tools produced.
+    ///
+    /// **Not wired by default**: without this call every tool keeps its own
+    /// domain, exactly as before this batch — the behaviour of an unwired
+    /// bridge is unchanged.
+    #[must_use]
+    pub fn with_session_domain(mut self, domain: Arc<Mutex<SessionRedactionDomain>>) -> Self {
+        self.session_domain = Some(domain);
+        self
+    }
+
+    /// The session redaction domain the tools of this bridge sweep in.
+    ///
+    /// `None` = **not wired** (each tool keeps its own domain).
+    pub fn session_domain(&self) -> Option<&Arc<Mutex<SessionRedactionDomain>>> {
+        self.session_domain.as_ref()
     }
 
     /// The loaded configuration.
@@ -665,7 +701,17 @@ impl McpToolBridge {
             .find(|connection| connection.server_name() == entry.server)
             .cloned()
             .expect("catalog entries always name a configured connection");
-        let dynamic = Arc::new(McpDynamicTool::new(entry, connection));
+        // The session domain is the injection face: wired ⇒ every tool of the
+        // session sweeps in one domain; not wired ⇒ each tool keeps its own
+        // (the behaviour before this batch).
+        let dynamic = match &self.session_domain {
+            Some(domain) => Arc::new(McpDynamicTool::new_with_domain(
+                entry,
+                connection,
+                Arc::clone(domain),
+            )),
+            None => Arc::new(McpDynamicTool::new(entry, connection)),
+        };
         Arc::new(PipelinedCapability::new(
             dynamic,
             Arc::clone(&self.pipeline),

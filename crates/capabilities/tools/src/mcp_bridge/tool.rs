@@ -64,11 +64,12 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 use crate::exec_pipeline::{OutputSchema, SchemaKind};
-use crate::guardrail::{EgressSweepOutcome, EgressSweeper, LeakedCredentialKind};
+use crate::guardrail::{EgressSweepOutcome, LeakedCredentialKind};
 use crate::mcp::McpError;
 
 use super::catalog::McpToolEntry;
 use super::connection::McpServerConnection;
+use super::SessionRedactionDomain;
 
 // The bounded-convergence helpers live in their own file. The bridge's
 // module root is frozen for this batch, so the file is wired in here — the
@@ -240,24 +241,24 @@ pub fn tool_result_from_mcp_swept(
 /// payload must not reach the model either.
 fn sweep_structured_value(
     value: &serde_json::Value,
-    sweeper: &mut EgressSweeper,
+    domain: &mut SessionRedactionDomain,
     report: &mut McpSweepReport,
 ) -> serde_json::Value {
     match value {
         serde_json::Value::String(text) => {
-            let outcome = sweeper.sweep(text);
+            let outcome = domain.sweep_result_face(text);
             report.absorb(&outcome);
             serde_json::Value::String(outcome.text().to_string())
         }
         serde_json::Value::Array(items) => serde_json::Value::Array(
             items
                 .iter()
-                .map(|item| sweep_structured_value(item, sweeper, report))
+                .map(|item| sweep_structured_value(item, domain, report))
                 .collect(),
         ),
         serde_json::Value::Object(map) => serde_json::Value::Object(
             map.iter()
-                .map(|(key, item)| (key.clone(), sweep_structured_value(item, sweeper, report)))
+                .map(|(key, item)| (key.clone(), sweep_structured_value(item, domain, report)))
                 .collect(),
         ),
         other => other.clone(),
@@ -272,13 +273,13 @@ fn sweep_structured_value(
 /// of a credential prefix by accident). This is a stated boundary of the
 /// result face, not a silent omission.
 fn sweep_block(
-    sweeper: &mut EgressSweeper,
+    domain: &mut SessionRedactionDomain,
     block: ContentBlock,
     report: &mut McpSweepReport,
 ) -> ContentBlock {
     match block {
         ContentBlock::Text { text, mime_type } => {
-            let outcome = sweeper.sweep(&text);
+            let outcome = domain.sweep_result_face(&text);
             report.absorb(&outcome);
             ContentBlock::Text {
                 text: outcome.text().to_string(),
@@ -291,11 +292,11 @@ fn sweep_block(
             text,
             mime_type,
         } => {
-            let outcome = sweeper.sweep(&uri);
+            let outcome = domain.sweep_result_face(&uri);
             report.absorb(&outcome);
             let uri = outcome.text().to_string();
             let text = text.map(|body| {
-                let outcome = sweeper.sweep(&body);
+                let outcome = domain.sweep_result_face(&body);
                 report.absorb(&outcome);
                 outcome.text().to_string()
             });
@@ -312,13 +313,18 @@ fn sweep_block(
 pub struct McpDynamicTool {
     entry: McpToolEntry,
     connection: Arc<McpServerConnection>,
-    /// The egress sweep domain the result face is swept in.
+    /// The session redaction domain the result face is swept in.
     ///
-    /// One instance is one redaction domain: inside it the same value always
-    /// gets the same alias, across instances it gets a different one. It is
+    /// One domain is one redaction scope: inside it the same value always
+    /// gets the same alias, across domains it gets a different one. It is
     /// shared behind a mutex because one tool serves concurrent calls and the
     /// sweep needs the registry and the ledger of a single domain.
-    sweeper: Arc<Mutex<EgressSweeper>>,
+    ///
+    /// **The domain is a session-level thing, not a tool-level one**: the
+    /// holder is injected ([`McpDynamicTool::new_with_domain`]) so the tools
+    /// of one session share it — and so the provider-facing egress gate can
+    /// hold the *same* domain and recognise what this tool aliased.
+    domain: Arc<Mutex<SessionRedactionDomain>>,
     /// The module generation this tool was built in.
     ///
     /// A tool whose module generation expired is not callable any more: the
@@ -334,30 +340,36 @@ impl McpDynamicTool {
     ///
     /// The tool gets its own sweep domain, so every external tool is swept on
     /// the result face without the caller wiring anything.
+    ///
+    /// **This is the un-wired default**: one domain per tool. A caller that
+    /// wants one session one domain injects a shared domain instead
+    /// ([`McpDynamicTool::new_with_domain`]).
     pub fn new(entry: McpToolEntry, connection: Arc<McpServerConnection>) -> Self {
-        Self::new_with_sweeper(
+        Self::new_with_domain(
             entry,
             connection,
-            Arc::new(Mutex::new(EgressSweeper::new())),
+            Arc::new(Mutex::new(SessionRedactionDomain::new())),
         )
     }
 
     /// A dynamic tool whose result face is swept in a caller-held domain.
     ///
-    /// Sharing one domain across tools of the same server keeps the alias of
-    /// one value stable across those tools (the model can correlate them);
-    /// separate domains keep the aliases unrelated.
-    pub fn new_with_sweeper(
+    /// Sharing one domain across the tools of one session keeps the alias of
+    /// one value stable across those tools (the model can correlate them),
+    /// and lets the provider-facing egress gate hold the *same* domain — so
+    /// the two faces recognise each other's aliases. Separate domains keep
+    /// the aliases unrelated.
+    pub fn new_with_domain(
         entry: McpToolEntry,
         connection: Arc<McpServerConnection>,
-        sweeper: Arc<Mutex<EgressSweeper>>,
+        domain: Arc<Mutex<SessionRedactionDomain>>,
     ) -> Self {
         let generation = connection.generation();
         let generation_scope = connection.generation_scope();
         Self {
             entry,
             connection,
-            sweeper,
+            domain,
             generation,
             generation_scope,
         }
@@ -389,13 +401,21 @@ impl McpDynamicTool {
         &self.connection
     }
 
-    /// The egress sweep domain this tool sweeps its results in.
+    /// The session redaction domain this tool sweeps its results in.
     ///
     /// The domain is also the observability face of the sweep: its ledger
     /// records every span the sweep rewrote (category and fingerprint, never
     /// a true value).
-    pub fn sweeper(&self) -> &Arc<Mutex<EgressSweeper>> {
-        &self.sweeper
+    pub fn sweep_domain(&self) -> &Arc<Mutex<SessionRedactionDomain>> {
+        &self.domain
+    }
+
+    /// The egress sweep domain this tool sweeps its results in.
+    ///
+    /// The historical name of [`McpDynamicTool::sweep_domain`]; it returns the
+    /// same handle.
+    pub fn sweeper(&self) -> &Arc<Mutex<SessionRedactionDomain>> {
+        &self.domain
     }
 
     /// The execution inputs of one call, frozen.
@@ -456,13 +476,13 @@ impl McpDynamicTool {
             .take(redaction::RESULT_MAX_BLOCKS)
             .map(|block| redaction::bound_content_block(block))
             .collect();
-        let mut sweeper = self
-            .sweeper
+        let mut domain = self
+            .domain
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         let swept: Vec<ContentBlock> = bounded
             .into_iter()
-            .map(|block| sweep_block(&mut sweeper, block, &mut report))
+            .map(|block| sweep_block(&mut domain, block, &mut report))
             .collect();
         (
             ToolCallResult {
@@ -470,9 +490,10 @@ impl McpDynamicTool {
                 is_error: result.is_error,
                 // The structured channel is server-authored too: it is swept
                 // here and bounded on the model-facing side.
-                structured: result.structured.as_ref().map(|structured| {
-                    sweep_structured_value(structured, &mut sweeper, &mut report)
-                }),
+                structured: result
+                    .structured
+                    .as_ref()
+                    .map(|structured| sweep_structured_value(structured, &mut domain, &mut report)),
             },
             report,
         )
@@ -484,11 +505,11 @@ impl McpDynamicTool {
     /// reaches the model context just like a result does — so it is swept the
     /// same way.
     fn sweep_text(&self, text: &str) -> String {
-        let mut sweeper = self
-            .sweeper
+        let mut domain = self
+            .domain
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        sweeper.sweep(text).text().to_string()
+        domain.sweep_result_face(text).text().to_string()
     }
 
     /// Execute one frozen call: the frozen server, the frozen remote tool

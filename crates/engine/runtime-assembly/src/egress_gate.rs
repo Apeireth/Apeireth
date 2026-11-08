@@ -8,22 +8,30 @@
 //!
 //! - **Pass**：本次请求没有可脱敏对象 → 原样发出；
 //! - **Redacted**：检出 PII → 以占位符替换后发出（占位对出境面不可逆，
-//!   回程还原由 `RedactionBridge::restore_for_local` 在受控回程面负责）；
-//! - **Deny**：闸自身出错（读不到策略、桥内部失败）→ **拒绝即帧**（fail-closed）。
+//!   回程还原由 `SessionRedactionDomain::restore_for_local` 在受控回程面负责）；
+//! - **Deny**：闸自身出错（读不到策略、域内部失败）→ **拒绝即帧**（fail-closed）。
 //!
 //! # 为什么默认关
 //!
 //! 脱敏会改写请求内容 —— 那是**行为变化**，不是「更安全的默认值」。
 //! 因此闸由 env 显式开启（`APEIRETH_ENABLE_EGRESS_GATE`），关时逐字节零变化。
+//!
+//! # 域归属：一个会话一个域
+//!
+//! 闸持有一个**会话脱敏域**（`apeireth_tools_canonical::mcp_bridge::SessionRedactionDomain`）。
+//! 旧行为是闸内自建一份脱敏桥 ⇒ 它的占位符与外部工具面产的占位符互不认账。
+//! 现在闸**默认仍自建一份**（**未接域注入面 ⇒ 行为与接线前逐字节一致**），
+//! 接线方可用 [`RedactionEgressGate::with_domain`] 把**同一个域实例**交给它
+//! —— 于是外部工具结果面产的占位符，在本闸的受控回程里认账、可还原。
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
-use apeireth_core::kernel::Clock;
+use apeireth_core::kernel::{Clock, SessionId};
 use apeireth_governance::authorization::{AuthorizationAction, AuthorizationPolicy};
 use apeireth_protocol::canonical::{ContentPart, NormalizedRequest, NormalizedResponse};
 use apeireth_runtime::canonical::egress_gate::{EgressGate, EgressVerdict};
-use apeireth_tools_canonical::redaction_bridge::RedactionBridge;
+use apeireth_tools_canonical::mcp_bridge::SessionRedactionDomain;
 
 use crate::accountability::{AccountabilityLedger, Affected, Boundary, ImpactStatement, Outcome};
 use crate::consequence::{ConsequenceTracker, OutcomeSource};
@@ -41,11 +49,17 @@ pub const EGRESS_AUTHORIZATION_RESOURCE: &str = "egress";
 /// 当前唯一的出网用途（场景）。多场景需要扩这里 + 策略里加 scope 项。
 pub const EGRESS_USAGE_CHAT: &str = "chat";
 
-/// 生产出网闸：用 `RedactionBridge` 把请求里的 PII 换成不可逆占位。
+/// 生产出网闸：用一个**会话脱敏域**把请求里的 PII 换成不可逆占位。
 ///
-/// 线程安全：`RedactionBridge` 内部有本会话登记簿（真值驻留处），用互斥量串行化。
+/// 线程安全：域内部有本会话登记簿（真值驻留处），用互斥量串行化。
 pub struct RedactionEgressGate {
-    bridge: Mutex<RedactionBridge>,
+    /// The session redaction domain this gate redacts and restores in.
+    ///
+    /// The gate **holds** a domain instead of building its own: a domain that
+    /// somebody else owns is a domain this gate and another surface (the
+    /// external tool result face) both recognise — the alias one surface
+    /// produced is the alias the other surface restores.
+    domain: Arc<Mutex<SessionRedactionDomain>>,
     /// **出网动作序号**（单调递增）：与毫秒时间戳一起组成 `action_id`。
     ///
     /// 修「同毫秒两次出网 ⇒ 同 `action_id`」的碰撞（2026-10-25 实测发现）：
@@ -81,8 +95,29 @@ impl RedactionEgressGate {
 
     /// 用指定会话键新建（同一会话的占位恒同、跨会话换别名）。
     pub fn with_session_key(session_key: [u8; 32]) -> Self {
+        Self::with_domain(Arc::new(Mutex::new(
+            SessionRedactionDomain::with_session_key(SessionId::new(), session_key),
+        )))
+    }
+
+    /// 用指定账本新建（生产接线：账本落盘）。
+    pub fn with_ledger(ledger: Arc<EgressLedger>) -> Self {
+        let mut gate = Self::with_domain(Arc::new(Mutex::new(SessionRedactionDomain::new())));
+        gate.ledger = ledger;
+        gate
+    }
+
+    /// 用**别人持有的**会话脱敏域新建闸 —— 「一个会话一个域」的接线面。
+    ///
+    /// 域实例共享 ⇒ 外部工具结果面（`apeireth_tools_canonical::mcp_bridge`）
+    /// 产的占位符，在本闸的受控回程里认账、可还原；反之，本闸脱敏出的占位符
+    /// 也在同一个域的登记簿里。
+    ///
+    /// **默认不接**: [`RedactionEgressGate::new`] 自建一个域，行为与接线前
+    /// 逐字节一致（跨面互认是**接上域之后**才有的性质）。
+    pub fn with_domain(domain: Arc<Mutex<SessionRedactionDomain>>) -> Self {
         Self {
-            bridge: Mutex::new(RedactionBridge::with_session_key(session_key)),
+            domain,
             action_seq: AtomicU64::new(0),
             ledger: Arc::new(EgressLedger::new(None)),
             authorization: None,
@@ -92,17 +127,9 @@ impl RedactionEgressGate {
         }
     }
 
-    /// 用指定账本新建（生产接线：账本落盘）。
-    pub fn with_ledger(ledger: Arc<EgressLedger>) -> Self {
-        Self {
-            bridge: Mutex::new(RedactionBridge::new_session()),
-            action_seq: AtomicU64::new(0),
-            ledger,
-            authorization: None,
-            clock: Arc::new(apeireth_core::kernel::SystemClock),
-            accountability: None,
-            consequences: None,
-        }
+    /// 本闸持有的会话脱敏域（只读引用）。
+    pub fn domain(&self) -> &Arc<Mutex<SessionRedactionDomain>> {
+        &self.domain
     }
 
     /// 挂上问责账本（每次外部行动写一条影响声明）。
@@ -235,11 +262,11 @@ impl EgressGate for RedactionEgressGate {
     /// 且只还原本会话登记簿登记过的指纹；未登记占位**不还原、照实留痕**。
     /// 对出境面不可逆：出去的请求里只有占位，没有真值。
     fn restore(&self, response: &mut NormalizedResponse) {
-        let Ok(mut bridge) = self.bridge.lock() else {
+        let Ok(mut domain) = self.domain.lock() else {
             // 登记簿不可用 → 不还原（占位保留）。**不泄漏**：保持占位比还原错更安全。
             return;
         };
-        let report = bridge.restore_for_local(&response.content);
+        let report = domain.restore_for_local(&response.content);
         response.content = report.text;
     }
 
@@ -275,7 +302,7 @@ impl EgressGate for RedactionEgressGate {
                 return EgressVerdict::Deny { reason };
             }
         }
-        let Ok(mut bridge) = self.bridge.lock() else {
+        let Ok(mut domain) = self.domain.lock() else {
             // 登记簿锁被 poison = 无法保证「真值不出境」→ 拒绝即帧。
             return EgressVerdict::Deny {
                 reason: "出境脱敏闸不可用（登记簿锁被污染）—— 已拒绝本次出网".to_string(),
@@ -287,7 +314,7 @@ impl EgressGate for RedactionEgressGate {
         for message in &mut replaced.messages {
             for part in &mut message.content {
                 if let ContentPart::Text { text } = part {
-                    let redaction = bridge.redact_for_egress(text);
+                    let redaction = domain.redact_for_egress(text);
                     if !redaction.hits.is_empty() {
                         any_hit = true;
                         hits.extend(redaction.hits);
