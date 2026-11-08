@@ -138,6 +138,13 @@ def main() -> int:
     payload, error = run_report()
     if payload is None:
         if "缺语料" in error:
+            # ⚠️ **「残缺」与「没有」必须分开判**（2026-11-08，与内部卷基线闸门同口径）。
+            # 语料目录**存在但文件残缺** ⇒ 半吊子环境 ⇒ **判红**（不许「跳过」冒充通过）。
+            root = _corpus_root()
+            if root is not None and root.is_dir():
+                print(f"❌ 融合通道闸门：语料目录存在（{root}）但语料残缺 ⇒ **半吊子环境**")
+                print("   ⇒ ⇒ 本轮**没有可比分数** ⇒ ⇒ **判红**（不许当通过）")
+                return 1
             print(f"⏭ 融合通道闸门：跳过（{error}）—— **这不是通过**")
             return 0
         print(f"❌ 融合通道闸门：{error}")

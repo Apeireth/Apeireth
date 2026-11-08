@@ -118,6 +118,13 @@ def main() -> int:
     current = run_current()
     if not current:
         # ⚠️ **如实跳过**：跳过**不是通过**。
+        # ⚠️ **「残缺」与「没有」分开判**（2026-11-08，与内部卷基线闸门同口径）：
+        # 考卷目录**存在但文件残缺** ⇒ 半吊子环境 ⇒ **判红**（不许「跳过」冒充通过）。
+        root = exam_root()
+        if root.is_dir() and not (root / "exam.jsonl").exists():
+            print(f"❌ 真实查询闸门：考卷目录存在（{root}）但 exam.jsonl 缺失 ⇒ **半吊子环境**")
+            print("   ⇒ ⇒ 本轮**没有可比分数** ⇒ ⇒ **判红**（不许当通过）")
+            return 1
         print("跳过（缺考卷 / 跑不动）—— **这不是通过**（本轮没有可比分数）")
         return 0
 
