@@ -30,6 +30,15 @@
 //! 面板上的热撤销 (`POST /v1/panel/grants/revoke`) 对本面**立即生效**
 //! (撤销 ⇒ 拒绝即帧)。槽为 `None` (宿主策略未装入) ⇒ **不表态** ⇒ 沿用本面
 //! 原有档位口径 ⇒ **零行为变化**。
+//!
+//! # 结果面凭据形状绊线 (M1)
+//!
+//! 沉淀结果面是**混合面** ⇒ ⇒ **逐项**处理 (不是整体扫, 也不是整体不扫):
+//! **结构化摘要面** (`status` / `id` / `name` / `revision` / `source_kind` /
+//! `source_ref` / `source_chars` / `archived_count`) **一字不动**;
+//! **蒸馏片段面** (`triggers[]` —— 从来源内容里提炼出来的措辞) 过形状层
+//! ⇒ ⇒ 零命中时结果面与接线前**逐字节相同**, 命中才挂 `credential_tripwire`
+//! 侧车 (不静默)。逐面归位的理由见 [`distill_result_face`]。
 
 use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -48,6 +57,7 @@ use crate::exec_pipeline::{
     AroundPolicy, OutputSchema, PreExecuteHook, PreExecuteRequest, PreVerdict, SchemaKind,
     DEFAULT_MAX_TIMEOUT_MS,
 };
+use crate::guardrail::{attach_credential_tripwire, scan_result_face, LeakedCredentialKind};
 use crate::live_policy::{
     current_live_policy, live_policy_allows, shared_live_permission_policy_slot,
     LivePermissionPolicySlot,
@@ -266,6 +276,72 @@ impl SkillDistillReport {
     }
 }
 
+/// 沉淀报告 → 结果面 (模型可见的结构化 JSON) + 凭据形状绊线 (M1) 的命中族清单。
+///
+/// # 这一族的结果面是**混合面** ⇒ ⇒ **逐项**处理 (既不整体扫, 也不整体不扫)
+///
+/// 沉淀报告的九个字段并不同质 ⇒ ⇒ 逐面归位:
+///
+/// | 面 | 字段 | 处置 |
+/// |---|---|---|
+/// | **结构化摘要面** | `status` / `id` / `name` / `revision` / `source_kind` / `source_ref` / `source_chars` / `archived_count` | **一字不动** (逐字节不变) |
+/// | **蒸馏片段面** | `triggers[]` | 逐词过**形状层 (M1)** |
+///
+/// # 为什么只有 `triggers[]` 算「蒸馏出的原文片段」
+///
+/// 本族做的是「从过程里蒸馏出技能」: **提炼**是模型侧的活 (调用方的 prompt
+/// 模板把来源内容里的措辞提炼成触发词 / 要点 / 操作步骤) ⇒ ⇒ 结果面里
+/// **唯一**承载「从来源内容里挑出来的自由文本」的面 = `triggers[]`
+/// ⇒ ⇒ 例如来源里的一行命令 (`export TOKEN=sk-…`) 被提炼成触发词时, 它的
+/// **明文**就在这条面里 ⇒ ⇒ 这正是要遮的。
+///
+/// 其余字段是**结构与身份**, 不是片段:
+/// * `name` = 技能库的唯一键 (同名即同张卡的版本演进), `id` 由卡名派生
+///   ⇒ ⇒ 遮卡名会打断 (卡名 → id) 的对应, 也会让报告里的卡名与**刚落盘那张
+///   卡**的卡名对不上 ⇒ ⇒ 结构化摘要面不动;
+/// * `status` / `revision` / `source_kind` / `source_chars` / `archived_count`
+///   = 枚举与计数 ⇒ 不是文本面;
+/// * `source_ref` = **来源引用** (工作区相对路径或内联标签 `inline:text`)
+///   ⇒ 与本族「来源采集」职责同源, 不是提炼出来的片段 ⇒ 不动。
+///
+/// # 层序 / 可见标签
+///
+/// 本批只接**形状层 (M1)**: 字段值层 (M4) 是「键 + 分隔符 + 值」的**文本**
+/// 判据, 而本族结果面是结构化 JSON、触发词是**孤立叶子** ⇒ ⇒ M4 对它本就是
+/// 空操作 ⇒ ⇒ 不引入它 (免得可见标签从 `[REDACTED_OPENAI_KEY]` 漂成
+/// `[redacted]`, 反而让「命中可观测」变得不可读)。
+///
+/// # 零命中
+///
+/// 零命中 ⇒ 触发词逐字节原样 + 结构一字不动 + **不挂侧车** ⇒ ⇒ 结果面与
+/// 接线前**完全相同**。
+pub(crate) fn distill_result_face(
+    report: &SkillDistillReport,
+) -> (serde_json::Value, Vec<LeakedCredentialKind>) {
+    // 蒸馏片段面: 逐词过形状层 (零命中 ⇒ 逐字节原样返回)。
+    let mut leaked_kinds: Vec<LeakedCredentialKind> = Vec::new();
+    let mut triggers = Vec::with_capacity(report.triggers.len());
+    for trigger in &report.triggers {
+        let scan = scan_result_face(trigger);
+        leaked_kinds.extend(scan.leaked_kinds.iter().copied());
+        triggers.push(scan.text);
+    }
+    (
+        serde_json::json!({
+            "status": report.status,
+            "id": report.id,
+            "name": report.name,
+            "revision": report.revision,
+            "triggers": triggers,
+            "source_kind": report.source_kind.as_str(),
+            "source_ref": report.source_ref,
+            "source_chars": report.source_chars,
+            "archived_count": report.archived_count,
+        }),
+        leaked_kinds,
+    )
+}
+
 /// 沉淀管线 (工具侧三拍): 来源采集 → 结构化 → 入技能库。`now_ms` 由调用方
 /// 给 (测试可钉死)。
 pub fn distill_into(
@@ -414,21 +490,15 @@ impl ToolCapability for SkillDistillTool {
         })
         .await
         {
-            Ok(Ok(report)) => ToolResult::ok(
-                &call.id,
-                serde_json::json!({
-                    "status": report.status,
-                    "id": report.id,
-                    "name": report.name,
-                    "revision": report.revision,
-                    "triggers": report.triggers,
-                    "source_kind": report.source_kind.as_str(),
-                    "source_ref": report.source_ref,
-                    "source_chars": report.source_chars,
-                    "archived_count": report.archived_count,
-                }),
-            )
-            .with_name(name),
+            Ok(Ok(report)) => {
+                // 凭据形状绊线 (M1): **蒸馏片段面** (`triggers[]`) 过形状层,
+                // **结构化摘要面** (卡名 / 计数 / 来源引用 …) 一字不动;
+                // 命中才挂 `credential_tripwire` 侧车 ⇒ ⇒ 零命中时结果面与
+                // 接线前逐字节相同 (不挂任何标记)。
+                let (mut value, leaked_kinds) = distill_result_face(&report);
+                attach_credential_tripwire(&mut value, &leaked_kinds);
+                ToolResult::ok(&call.id, value).with_name(name)
+            }
             Ok(Err(refusal)) => ToolResult::permanent_error(&call.id, refusal).with_name(name),
             Err(error) => {
                 ToolResult::permanent_error(&call.id, format!("skill_distill task failed: {error}"))

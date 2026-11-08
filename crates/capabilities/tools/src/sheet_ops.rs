@@ -123,6 +123,9 @@ use crate::observed_gate::{
 use crate::self_status::{SheetOpsOpCount, SheetOpsStatus};
 use crate::sensitive_path::{credential_surface_refusal, is_sensitive_path};
 
+/// 结果面工具 (帧构造 + M1 凭据形状绊线): 独立子模块 (本文件在尺寸棘轮基线上)。
+mod result_face;
+
 // ---------------------------------------------------------------------------
 // 身份与词表
 // ---------------------------------------------------------------------------
@@ -2400,15 +2403,16 @@ impl SheetOpsRunner {
     /// 执行一个动作 (参数矩阵先拒, 真因即帧; 计数如实)。
     pub fn run(&self, params: &SheetOpsParams) -> Result<Value, SheetOpsError> {
         self.counters.record_call();
+        let action = params.action.as_deref().unwrap_or_default();
         let outcome = self.run_inner(params);
         match &outcome {
             Ok((_, rows)) => {
-                let action = params.action.as_deref().unwrap_or_default();
                 self.counters.record_success(action, *rows, now_epoch_ms());
             }
             Err(_) => self.counters.record_denied(),
         }
-        outcome.map(|(frame, _)| frame)
+        // M1 凭据形状绊线: **只遮正文面** (摘要面逐字不动) ⇒ 零命中 ⇒ 帧逐字节不变。
+        outcome.map(|(frame, _)| result_face::mask_body(frame, action))
     }
 
     /// 执行内核 (无计数副作用; 回 (结果帧, 处理行数))。
@@ -2434,7 +2438,7 @@ impl SheetOpsRunner {
         };
         outcome.map(|(mut frame, rows)| {
             if let Value::Object(map) = &mut frame {
-                annotate_sheet_meta(map, &meta);
+                result_face::annotate_sheet_meta(map, &meta);
             }
             (frame, rows)
         })
@@ -2621,7 +2625,7 @@ impl SheetOpsRunner {
             params,
             &sheet.columns,
             matched_rows,
-            into_map(json!({
+            result_face::into_map(json!({
                 "action": ACTION_FILTER,
                 "status": "ok",
                 "source": source,
@@ -2686,7 +2690,7 @@ impl SheetOpsRunner {
             params,
             &sheet.columns,
             sorted,
-            into_map(json!({
+            result_face::into_map(json!({
                 "action": ACTION_SORT,
                 "status": "ok",
                 "source": source,
@@ -2797,7 +2801,7 @@ impl SheetOpsRunner {
             params,
             &columns,
             rows,
-            into_map(json!({
+            result_face::into_map(json!({
                 "action": ACTION_FORMULA,
                 "status": "ok",
                 "source": source,
@@ -2937,32 +2941,6 @@ impl SheetOpsRunner {
         frame.insert("returned".to_string(), json!(preview_cap.min(rows.len())));
         frame.insert("truncated".to_string(), Value::Bool(truncated));
         Ok((Value::Object(frame), rows_touched))
-    }
-}
-
-/// `json!` 对象 → map (帧字段增补用)。
-fn into_map(value: Value) -> serde_json::Map<String, Value> {
-    value.as_object().cloned().unwrap_or_default()
-}
-
-/// 帧随行: 输入格式恒注 (`input_format`); xlsx 另注 `formula_cells` 计数,
-/// 有公式格时带缓存值口径注记 (CSV 恒 0, 不注)。
-fn annotate_sheet_meta(frame: &mut serde_json::Map<String, Value>, meta: &SheetLoadMeta) {
-    frame.insert(
-        "input_format".to_string(),
-        Value::String(meta.format.name().to_string()),
-    );
-    if meta.format == SheetInputFormat::Xlsx {
-        frame.insert("formula_cells".to_string(), json!(meta.formula_cells));
-        if meta.formula_cells > 0 {
-            frame.insert(
-                "notes".to_string(),
-                json!([format!(
-                    "公式格 {} 个: 一律取缓存值未重算 (共享公式不展开, 如实标注口径)",
-                    meta.formula_cells
-                )]),
-            );
-        }
     }
 }
 

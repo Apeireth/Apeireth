@@ -41,6 +41,7 @@ use apeireth_core::kernel::CapabilityId;
 use apeireth_plugin::ToolCapability;
 use apeireth_protocol::canonical::{NormalizedTool, ToolCall, ToolParameters, ToolResult};
 
+use crate::guardrail::{attach_credential_tripwire, scan_json_string_leaves};
 use crate::repo_map::{RepoDependencyGraph, RepoMapGenerator, SymbolParser, SymbolTag};
 
 /// 能力 id（注册用命名空间）。
@@ -486,7 +487,18 @@ impl ToolCapability for RepoMapTool {
 
         match self.generate_inner(&requested, &focus, token_budget) {
             Ok(outcome) => match serde_json::to_value(&outcome) {
-                Ok(value) => ToolResult::ok(&call.id, value).with_name(REPO_MAP_TOOL_NAME),
+                Ok(value) => {
+                    // 结果面凭据形状绊线 (M1)：本族回显**紧凑代码大纲**（排名后的符号签名，
+                    // 函数体省略成 `...`) ⇒ ⇒ 签名里的**默认值**可能带硬编码凭据 ⇒ ⇒
+                    // 结果面是**混合面**（一个大文本字段 `map` + 可选文本 `note` + 计数）
+                    // ⇒ ⇒ 走 **JSON 字符串叶子扫描**：只换字符串叶子的内容（键名 / 数字 /
+                    // 布尔 / null / 结构一律不动 ⇒ 落库结构仍合法）⇒ ⇒ 计数与键名不受影响。
+                    // 零命中 ⇒ 逐字节不变（共享助手原样回传 + 侧车仅命中才挂）。
+                    let (masked, leaked_kinds) = scan_json_string_leaves(&value);
+                    let mut value = masked;
+                    attach_credential_tripwire(&mut value, &leaked_kinds);
+                    ToolResult::ok(&call.id, value).with_name(REPO_MAP_TOOL_NAME)
+                }
                 Err(error) => {
                     ToolResult::permanent_error(&call.id, format!("结果序列化失败: {error}"))
                         .with_name(REPO_MAP_TOOL_NAME)

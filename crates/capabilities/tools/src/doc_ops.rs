@@ -112,6 +112,9 @@ use crate::observed_gate::{
 use crate::self_status::{DocOpsOpCount, DocOpsStatus};
 use crate::sensitive_path::{credential_surface_refusal, is_sensitive_path};
 
+/// 结果面工具 (帧读取 + M1 凭据形状绊线): 独立子模块 (本文件在尺寸棘轮基线上)。
+mod result_face;
+
 // ---------------------------------------------------------------------------
 // 身份与词表
 // ---------------------------------------------------------------------------
@@ -3764,16 +3767,17 @@ impl DocOpsRunner {
     /// 执行一个动作 (参数矩阵先拒, 真因即帧; 计数如实)。
     pub fn run(&self, params: &DocOpsParams) -> Result<Value, DocOpsError> {
         self.counters.record_call();
+        let action = params.action.as_deref().unwrap_or_default();
         let outcome = self.run_inner(params);
         match &outcome {
             Ok(frame) => {
-                let action = params.action.as_deref().unwrap_or_default();
-                self.counters
-                    .record_success(action, frame_pages_touched(frame), now_epoch_ms());
+                let pages = result_face::frame_pages_touched(frame);
+                self.counters.record_success(action, pages, now_epoch_ms());
             }
             Err(_) => self.counters.record_denied(),
         }
-        outcome
+        // M1 凭据形状绊线: **只遮正文面** (摘要面逐字不动) ⇒ 零命中 ⇒ 帧逐字节不变。
+        outcome.map(|frame| result_face::mask_body(frame, action))
     }
 
     /// 执行内核 (无计数副作用)。
@@ -4694,15 +4698,6 @@ impl DocOpsCounters {
             note,
             reason: None,
         }
-    }
-}
-
-/// 从帧里读处理页数 (u64 = 页数; 数组 = 返回页行数)。
-fn frame_pages_touched(frame: &Value) -> u64 {
-    match frame.get("pages") {
-        Some(Value::Number(number)) => number.as_u64().unwrap_or(0),
-        Some(Value::Array(items)) => items.len() as u64,
-        _ => 0,
     }
 }
 
