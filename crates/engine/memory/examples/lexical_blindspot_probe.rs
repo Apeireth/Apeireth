@@ -28,7 +28,7 @@
 //! * 「在文里」= 题面词是标准答案正文的**子串**（`str::contains`）；
 //! * 只诊断**词面卷**（产品形态），另外两套卷作为对照。
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::error::Error;
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -255,22 +255,4 @@ fn classify_one(terms: &[String], gold_text: Option<&str>) -> Cause {
     }
     // 有 ≥2 字的词是子串，但 BM25 仍为 0
     Cause::InTextButNotIndexed
-}
-
-/// 保留给后续诊断：题面主体词（当前未用于归类）。
-#[allow(dead_code)]
-fn subject_of(
-    case: &GoldenCase,
-    records: &[apeireth_memory::golden_mining::MineRecord],
-) -> Option<String> {
-    records
-        .iter()
-        .find(|record| case.expect_ids.contains(&record.id))
-        .and_then(question_subject)
-}
-
-/// 未使用但保留以表明 HashSet 的用途（避免未用导入告警）。
-#[allow(dead_code)]
-fn dedupe(terms: &[String]) -> HashSet<String> {
-    terms.iter().cloned().collect()
 }
