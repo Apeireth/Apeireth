@@ -18,7 +18,7 @@ Author: lead（插件/组件/能力开发线 总指挥）
 ## 0. 一句话
 
 > **W0（登记批 + 重复审计批）已落地**：ADR + 设计稿 + 本进度页 + 族级守卫 + 工作线登记。
-> **池 A 14 条新面 + C-L1 新立项 = 15 条**尚未开工 ⇒ 全部仍为 ❌ 未开工；
+> **池 A 14 条新面 + C-H5 真新面 + C-L1 新立项 = 16 条**尚未开工 ⇒ 全部仍为 ❌ 未开工；
 > **池 B 7 条移交**（重复面 ⇒ 不在本线）· **存量接线 6 项移交**（owner 裁「不动存量」）。
 
 ---
@@ -28,7 +28,7 @@ Author: lead（插件/组件/能力开发线 总指挥）
 | 波 | 族数 | 状态 | 落地证据 | 还差什么 |
 |---|---:|---|---|---|
 | **W0** | — | ✅ **已落地** | 本页 + 设计稿 + [ADR-0025](../adr/0025-capability-creation-line-charter.md) + `scripts/check_creation_line.py` + 登记表新增行 + **重复审计**（本页 §3） | ❌ 待 owner 复核重复判定与池 A/B 划分（**唯一待办**） |
-| **W1** | 6 | ❌ **未开工** | — | ❌ C-B1 · C-B2 · C-D1 · C-H1 · C-H2 · C-H4 未落地 |
+| **W1** | 7 | ❌ **未开工** | — | ❌ C-B1 · C-B2 · C-D1 · C-H1 · C-H2 · C-H4 · C-H5 未落地 |
 | **W2** | 1 | ❌ **未开工** | — | ❌ C-E1 未落地（技能/插件包 + 运行时验签） |
 | **W3** | 2 | ❌ **未开工** | — | ❌ C-A1 · C-B4 未落地（平台依赖；引擎选型待定） |
 | **W4** | 3 | ❌ **未开工** | — | ❌ C-B3 · C-D2 · C-G2 未落地 |
@@ -71,6 +71,7 @@ python3 scripts/docs_truth.py --verify --check     # ⇒ claims=N fail=0 stale=0
 | C-H1 | 面名 `routing_policy` | 部分重复 | `core/cost_router.rs` CostRouter · `runtime/provider.rs` ProviderRouter | W1 | ❌ 未开工 | R0 | ❌ 实现 + 决策可解释 + 缺价不编价 + **与既有两层同层** |
 | C-H2 | 不新设 id（`budget.quota.depth`） | 部分重复 | `runtime/quota.rs` QuotaDimension · `tools/self_status.rs` 深度维占位 | W1 | ❌ 未开工 | R0 | ❌ 实现 + 自述面深度维不再为 null |
 | C-H4 | `tool.web_search` | 部分重复 | `sdk/client.rs` web_search（**契约已占名**）· `tools/search.rs` SearchTool（本地） | W1 | ❌ 未开工 | R2 | ❌ 实现 + **先对齐 SDK 契约占名** + 来源缺失即拒 + 双上限 |
+| C-H5 | `tool.calendar` | **真新面** | **无先例**（⚠️「calendar 25 命中」全是 `canonical` 子串误判）· 边界对照 `engine/organ/src/care/tool.rs` CARE_SCHEDULE（**关怀例程 ≠ 主人日程**） | W1 | ❌ 未开工 | R2 | ❌ 实现（本地日程账 + 查询/创建/改期/取消，**零外部集成**）+ 写动作逐次人批 + **与 `tool.care_schedule` 边界写进族规格** |
 | C-L1 | `provider.local_inference` | **待立项** | `runtime/provider.rs` ProviderRouter（归一化层；**无本地推理实现**） | W5 | ❌ 未开工 | R0/R2 | ❌ **先做重复审计** + 引擎选型 + 依赖闭包实测 |
 
 ---
@@ -85,7 +86,7 @@ python3 scripts/docs_truth.py --verify --check     # ⇒ claims=N fail=0 stale=0
 
 | 判定 | 条数 | 说明 |
 |---|---:|---|
-| **真新面** | **0** | 每一族都有语义先例（库级实现 / 脚本 / CI 层实现**都算**） |
+| **真新面** | **1** | C-H5 日历面（仓内**零**实现；先前的「calendar 25 命中」是 `canonical` 的**子串误判**） |
 | **部分重复（需补强）** | **14** | 池 A：写清「已有 X（file:line）· 缺 Y」⇒ 只补 Y |
 | **纯重复（应移交）** | **7** | 池 B：等价面已存在 ⇒ 实为接线/搬运 ⇒ 不在本线 |
 

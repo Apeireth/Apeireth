@@ -185,6 +185,13 @@ FACTS: list[tuple[str, str, str, int, list[tuple[str, str]]]] = [
         ],
     ),
     (
+        "C-H5",
+        r"tool\.calendar|CalendarStore|CalendarEvent",
+        "crates",
+        0,
+        [("crates/engine/organ/src/care/tool.rs", "CARE_SCHEDULE_CAPABILITY_ID")],
+    ),
+    (
         "C-L1",
         r"local_inference|LocalInferenceProvider",
         "crates",

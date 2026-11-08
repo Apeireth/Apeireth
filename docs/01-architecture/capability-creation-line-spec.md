@@ -114,6 +114,7 @@ Author: lead（插件/组件/能力开发线 总指挥）
 | **C-G2** | `tool.replay_eval` | 部分重复（中） | `governance/eval.rs:13,137,147,201` `EvalScore`/`TaskSummary`/`summarize`/`to_eval_scores` · `memory/d4_eval.rs:293` `score()` · `runtime/event_log.rs:227` `fold_surface` | 「**回放一段会话 → 产出评估结论**」这条链（把 replay + event log/trace 接进**既有打分器**） | W5 | R0 | env+1 |
 | **C-H1** | 面名 `routing_policy`（**不新设能力 id**：选路不是模型面能力） | 部分重复 | `core/cost_router.rs:508,602,373` `CostRouter`/`candidates`（四档成本 × 模型档案矩阵）· `runtime/provider.rs:95,136` `ProviderRouter`（fallback + 健康度） | **统一策略层**（任务画像 × 隐私 × 成本）+ **网关侧接入**（gateway 对 `CostRouter` 零引用）⇒ **与既有两层合成一层**，不造第三套路由语义 | W1 | R0 | env+1 |
 | **C-H2** | **不新设能力 id**（沿用既有自述面路径 `budget.quota.depth`） | 部分重复（占位完备） | `runtime/quota.rs:47` `QuotaDimension`（三维真计量）+ `:20-21` 明写「depth 无调用树跟踪」· `tools/self_status.rs:320-322,2262,3428`（深度维**诚实占位 + 自述格 + 测试钉死**） | **深度维真计量**（调用树深度跟踪）—— **接口位/自述格/测试位都已留好** ⇒ 成本最低 | W1 | R0 | env+1 |
+| **C-H5** | `tool.calendar` | **真新面** | **无任何先例**（⚠️ 先前「calendar 25 命中」全是 `canonical` 的**子串误判**；仓内**零**日历实现）；`tool.care_schedule` 是**代理自身的关怀例程**（`crates/engine/organ/src/care/tool.rs:40`，add/remove/list），**不是主人日程** ⇒ 边界不同 | 主人**日程**面（本地日程账 + 查询/创建/改期/取消 + 逐次人批）；**先本地、零外部集成** | W1 | R2 | env+1 · edge+1 |
 | **C-H4** | `tool.web_search`（⚠️ **SDK 契约已占同名** `client.rs:76` ⇒ 须先对齐口径） | 部分重复（薄） | `sdk/client.rs:76,226,656`（SDK 契约已占名 + `/v1/tools/web_search/invoke` + 真 HTTP）· `tools/fetch.rs:210`（受控 GET）· `tools/search.rs:67` `SearchTool`（**本地**字面搜索，不用网络） | **检索引擎后端 + 排序 + 引用标注**（仓内既无搜索引擎也无检索 API） | W1 | R2 | env+1 |
 
 ### 3.2 池 B —— **移交存量线**（本线不做；owner 裁「只拓新面」）
@@ -136,7 +137,7 @@ Author: lead（插件/组件/能力开发线 总指挥）
 |---|---:|---:|---:|---|
 | `max_workspace_crates` | 31 | 35 | **+3**（automation / web / trust） | ✅ 在额度内 |
 | `max_production_edges` | 118 | 128 | **+11** | ⚠️ 接近上限 ⇒ W3 收口复评 |
-| `max_distinct_names`（env） | 160 | 176 | **+14** | ⚠️ 接近上限 ⇒ W3 收口复评 |
+| `max_distinct_names`（env） | 160 | 176 | **+16** | ⚠️ 接近上限 ⇒ W3 收口复评 |
 | `max_file_loc` | 6300 | 6300（不动） | ±0 | 新面一律新开文件（< 800 行） |
 
 ## 4. 族规格（逐族 · 池 A 14 条 + C-L1 新立项）
@@ -147,23 +148,25 @@ Author: lead（插件/组件/能力开发线 总指挥）
 
 ### 4.0 池 A 速览
 
-| 族 | 能力 id / 面名 | 波次 | 治理档 | 落点 | 验收判据（可机器判） |
-|---|---|---|---|---|---|
-| C-A1 | `tool.external_gui`（含 C-A2） | W4 | R0/R3 | 新 crate `crates/capabilities/automation/` | `rg -c 'native_control_tree\|external_gui' crates/` > 0；Windows 真机用例 1 条；**Linux 同用例须显式标未实现**（不得静默绿） |
-| C-B1 | `tool.process_tree` | W1 | R0/R3 | `crates/capabilities/tools/src/process/snapshot.rs` | `rg -c 'process_tree_snapshot' crates/` > 0；快照面**零审批**断言；平台机制名不进公共契约 |
-| C-B2 | `tool.http_write` | W1 | R2 | `crates/capabilities/tools/src/http_write.rs` + 扩 `crates/capabilities/tools/src/egress.rs` | `rg -c 'Method::POST' crates/` > 0；**新面文件内 `reqwest::` = 0 命中**（照既有 fetch 不变量）；白名单外必拒；响应体上限生效 |
-| C-B3 | `tool.script_exec`（跑命令半边移交 `tool.shell`） | W5 | R3 | `crates/capabilities/tools/src/script_exec.rs` | `rg -c 'script_exec' crates/` > 0（**且 `code_exec` 不得出现在本族**）；四类逃逸（断网/越界/超时/超内存）各有拒绝用例 |
-| C-B4 | `tool.web_browser` | W4 | R2/R3 | 新 crate `crates/capabilities/web/` | `rg -c 'web_browser' crates/` > 0；域名白名单外必拒；动作必带证据帧；**不得出现 `BrowserTool` 字样**（守卫禁名单） |
-| C-D1 | `tool.object_grant` | W1 | R0/R2 | `crates/engine/memory/src/object_grant.rs` | `rg -c 'object_grant' crates/engine/memory/src/` > 0；撤销后**立即**读不到；授权语义**叠加于** `MemoryScope`（不替代） |
-| C-D2 | 面名 `session_observability`（含 C-G4 + C-G3） | W5 | R0 | `crates/engine/runtime/src/canonical/session_observability.rs` | `rg -c 'session_observability' crates/` > 0；同一回合同一时间线**两次导出逐字节等**；恢复后副作用不重复 |
-| C-D3 | `transport.cross_device` | W6 | R4 | 新 crate | ⛔ **待 owner 逐项重拍**（阶梯 T1 + 跨主体披露） |
-| C-E1 | `tool.skill_package`（含 C-E2 插件那半边） | W3 | R3 | 新 crate `crates/foundation/trust/` | `rg -c 'skill_package' crates/` > 0；越权包拒装；**未签名包拒装**；卸载后能力表同步移除 |
-| C-F1 | 面名 `multisig_verifier` | W6 | R4 | `crates/foundation/governance/src/chain.rs` 邻域 | ⛔ **待 owner 逐项重拍**（D2 已裁 T0 不做） |
-| C-G2 | `tool.replay_eval` | W5 | R0 | `crates/engine/runtime/src/canonical/replay_eval.rs` | `rg -c 'replay_eval' crates/` > 0；**复用既有 `EvalScore` 打分器**（不新造第二套评分语义） |
-| C-H1 | 面名 `routing_policy` | W1 | R0 | `crates/foundation/core/src/routing_policy.rs` | `rg -c 'routing_policy' crates/foundation/core/src/` > 0；决策必含 `selection_reason`/`fallback_reason`；缺价不编价；**与 `CostRouter`/`ProviderRouter` 同层，不造第三套** |
-| C-H2 | 不新设 id（沿用 `budget.quota.depth`） | W1 | R0 | `crates/engine/runtime/src/canonical/quota.rs` | `rg -c 'depth_quota' crates/engine/runtime/src/` > 0；自述面深度维**不再为 null** |
-| C-L1 | `provider.local_inference` | W5 | R0/R2 | 新 crate（**大闭包 ⇒ 隔离**） | `rg -c 'local_inference' crates/` > 0；**开工前须先做重复审计**；断网可用；模型来源/许可显式标注 |
-| C-H4 | `tool.web_search` | W1 | R2 | `crates/capabilities/tools/src/web_search.rs` | `rg -c 'tool\.web_search' crates/` > 0；**先对齐 SDK 契约占名**（否则 SDK 面继续说假话）；来源缺失即拒；结果双上限 |
+| 族 | 能力 id / 面名 | 波次 | 治理档 | 开关口径（env 名 ⇒ 新增数） | 落点 | 验收判据（可机器判） |
+|---|---|---|---|---|---|---|
+| C-A1 | `tool.external_gui`（含 C-A2） | W4 | R0/R3 | **新名 2**：`APEIRETH_ENABLE_GUI_READ` + `APEIRETH_ENABLE_GUI_ACTION` | 新 crate `crates/capabilities/automation/` | `rg -c 'native_control_tree\ |
+| C-B1 | `tool.process_tree` | W1 | R0/R3 | **复用** `APEIRETH_ENABLE_SHELL`（注册即闸 ⇒ shell 关 = 无进程可看，语义自洽）⇒ **0 新名** | `crates/capabilities/tools/src/process/snapshot.rs` | `rg -c 'process_tree_snapshot' crates/` > 0；快照面**零审批**断言；平台机制名不进公共契约 |
+| C-B2 | `tool.http_write` | W1 | R2 | **新名 1**：`APEIRETH_ENABLE_HTTP_WRITE`（默认关 + 零变化测试 + 登记） | `crates/capabilities/tools/src/http_write.rs` + 扩 `crates/capabilities/tools/src/egress.rs` | `rg -c 'Method::POST' crates/` > 0；**新面文件内 `reqwest::` = 0 命中**（照既有 fetch 不变量）；白名单外必拒；响应体上限生效 |
+| C-B3 | `tool.script_exec`（跑命令半边移交 `tool.shell`） | W5 | R3 | **新名 2**：`APEIRETH_ENABLE_SCRIPT_EXEC` + `APEIRETH_SCRIPT_RUNTIME` | `crates/capabilities/tools/src/script_exec.rs` | `rg -c 'script_exec' crates/` > 0（**且 `code_exec` 不得出现在本族**）；四类逃逸（断网/越界/超时/超内存）各有拒绝用例 |
+| C-B4 | `tool.web_browser` | W4 | R2/R3 | **新名 1**：`APEIRETH_ENABLE_WEB_BROWSER` | 新 crate `crates/capabilities/web/` | `rg -c 'web_browser' crates/` > 0；域名白名单外必拒；动作必带证据帧；**不得出现 `BrowserTool` 字样**（守卫禁名单） |
+| C-D1 | `tool.object_grant` | W1 | R0/R2 | **存在性即开关**（grant 账存在才装）⇒ **0 新名** | `crates/engine/memory/src/object_grant.rs` | `rg -c 'object_grant' crates/engine/memory/src/` > 0；撤销后**立即**读不到；授权语义**叠加于** `MemoryScope`（不替代） |
+| C-D2 | 面名 `session_observability`（含 C-G4 + C-G3） | W5 | R0 | **新名 1**：`APEIRETH_ENABLE_SESSION_OBSERVABILITY` | `crates/engine/runtime/src/canonical/session_observability.rs` | `rg -c 'session_observability' crates/` > 0；同一回合同一时间线**两次导出逐字节等**；恢复后副作用不重复 |
+| C-D3 | `transport.cross_device` | W6 | R4 | **新名 2**：`APEIRETH_ENABLE_CROSS_DEVICE` + `APEIRETH_ROAMING_IDENTITY_FILE` | 新 crate | ⛔ **待 owner 逐项重拍**（阶梯 T1 + 跨主体披露） |
+| C-E1 | `tool.skill_package`（含 C-E2 插件那半边） | W3 | R3 | **新名 2**：`APEIRETH_ENABLE_SKILL_PACKAGE` + `APEIRETH_SKILL_PACKAGE_TRUST_DIR` | 新 crate `crates/foundation/trust/` | `rg -c 'skill_package' crates/` > 0；越权包拒装；**未签名包拒装**；卸载后能力表同步移除 |
+| C-F1 | 面名 `multisig_verifier` | W6 | R4 | **新名 1**：`APEIRETH_ENABLE_MULTISIG` | `crates/foundation/governance/src/chain.rs` 邻域 | ⛔ **待 owner 逐项重拍**（D2 已裁 T0 不做） |
+| C-G2 | `tool.replay_eval` | W5 | R0 | **新名 1**：`APEIRETH_ENABLE_REPLAY_EVAL` | `crates/engine/runtime/src/canonical/replay_eval.rs` | `rg -c 'replay_eval' crates/` > 0；**复用既有 `EvalScore` 打分器**（不新造第二套评分语义） |
+| C-H1 | 面名 `routing_policy` | W1 | R0 | **复用** `APEIRETH_COST_ROUTING`（扩 purpose 写「策略层」面）⇒ **0 新名** | `crates/foundation/core/src/routing_policy.rs` | `rg -c 'routing_policy' crates/foundation/core/src/` > 0；决策必含 `selection_reason`/`fallback_reason`；缺价不编价；**与 `CostRouter`/`ProviderRouter` 同层，不造第三套** |
+| C-H2 | 不新设 id（沿用 `budget.quota.depth`） | W1 | R0 | **复用** 配额家族既有 env（扩 purpose）⇒ **0 新名** | `crates/engine/runtime/src/canonical/quota.rs` | `rg -c 'depth_quota' crates/engine/runtime/src/` > 0；自述面深度维**不再为 null** |
+| C-H4 | `tool.web_search` | W1 | R2 | **新名 1**：`APEIRETH_ENABLE_WEB_SEARCH` | `crates/capabilities/tools/src/web_search.rs` | `rg -c 'tool\.web_search' crates/` > 0；**先对齐 SDK 契约占名**（否则 SDK 面继续说假话）；来源缺失即拒；结果双上限 |
+| C-H5 | `tool.calendar` | W1 | R2 | **新名 1**：`APEIRETH_ENABLE_CALENDAR` | **新名 1**：`APEIRETH_ENABLE_CALENDAR` | `crates/capabilities/tools/src/calendar.rs` |
+| C-L1 | `provider.local_inference` | W5 | R0/R2 | **新名 1**：`APEIRETH_ENABLE_LOCAL_INFERENCE` | 新 crate（**大闭包 ⇒ 隔离**） | `rg -c 'local_inference' crates/` > 0；**开工前须先做重复审计**；断网可用；模型来源/许可显式标注 |
+
 
 ### 4.1 语义与机制的要点（逐族）
 
@@ -203,7 +206,7 @@ Author: lead（插件/组件/能力开发线 总指挥）
 | 波 | 族 | 依赖前波 | 破棘轮净增（crate/edge/env/dep） | 共同收口 |
 |---|---|---|---|---|
 | **W0** | 登记 + **重复审计** + 汇总表 | — | 0 / 0 / 0 / 0 | doc class + links + index + 族级守卫 全绿 |
-| **W1**（补强批 · **0 新外部 dep**） | C-B1 进程树快照 · C-B2 HTTP 写面 · C-D1 对象级授权 · C-H1 路由策略层 · C-H2 配额深度维 · C-H4 互联网检索（**6 条**） | W0 | 0 / 0 / +4 / 0 | `arch_guard` 0 违规 · 全量门禁绿 · claims 同步 |
+| **W1**（补强批 · **0 新外部 dep**） | C-B1 进程树快照 · C-B2 HTTP 写面 · C-D1 对象级授权 · C-H1 路由策略层 · C-H2 配额深度维 · C-H4 互联网检索 · **C-H5 日历面**（**7 条**） | W0 | 0 / +2 / **+3** / 0 | `arch_guard` 0 违规 · 全量门禁绿 · claims 同步 |
 | **W2**（信任面 · +1 dep） | C-E1 技能/插件包（含运行时验签） | W1 | +1 / +3 / +2 / +1 | 同上 |
 | **W3**（平台面 · +1~2 dep） | C-A1 外部 GUI（原生控件树 + 动作）· C-B4 浏览器会话 | W2 | +2 / +4 / +3 / +1~2 | 同上 |
 | **W4**（机制面） | C-B3 脚本解释执行 · C-D2 会话可观测与恢复 · C-G2 回放评估（**3 条**） | W3 | 0~1 / +3 / +2 / 选型定 | 同上 |
@@ -213,8 +216,8 @@ Author: lead（插件/组件/能力开发线 总指挥）
 > **W5 的 C-L1 是本轮新增立项**（上一版 23 族未含端侧推理）⇒ **开工前必须先做一次重复审计**
 > （仓内 `provider.rs` 归一化层已有，但**无任何本地推理实现** ⇒ 预期为真新面，仍须核）。
 
-> **额度对账**（合并后）：crate **+4**（≤ 授权 +4）· edge **+14**（⚠️ **超授权 +10** ⇒ W2/W3 收口须复评）·
-> env **+15**（⚠️ **超授权 +16 内**但接近上限）· dep **+4~6**。
+> **额度对账**（合并后）：crate **+4**（≤ 授权 +4）· edge **+15**（⚠️ **超授权 +10** ⇒ W2/W3 收口须复评）·
+> env **+16**（⚠️ **已顶格授权 +16** ⇒ W2/W3 收口须复评或追加 ADR）· dep **+4~6**。
 > ⇒ ⇒ **每波收口回填契约并复评额度**（[ADR-0025 §4.3](../adr/0025-capability-creation-line-charter.md)）。
 
 ## 6. 验收判据（**每波机器可判**）
@@ -326,7 +329,7 @@ rg -n 'local_inference|LocalInferenceProvider' crates/ --glob '*.rs'            
 | R4 | 新面绕过治理链（造出越权面） | 任一写面 | 新面一律复用既有 `ToolCapability` + 治理链 + 审批链；对抗测试钉死 |
 | R5 | 第三方内容进模型上下文（未标注来源） | C-H4 / C-C1 | 一律走既有 `UntrustedEnvelope` 封套；来源缺失即拒 |
 | R6 | Windows-only 能力在 Linux CI 假装通过 | C-A1 | 未实现平台**显式标未实现**，不得静默绿 |
-| R7 | 中性表述违规（第三方产品名进入注释） | C-A1/C-B2 借鉴既有实现时 | 新写代码零第三方产品名；既有违规文件**只在自己写域内**顺手清（他域报备） |
+| R7 || 中性表述违规（第三方产品名进入注释） | C-A1/C-B2 借鉴既有实现时 | **新名 2**：`APEIRETH_ENABLE_GUI_READ` + `APEIRETH_ENABLE_GUI_ACTION` | 新写代码零第三方产品名；既有违规文件**只在自己写域内**顺手清（他域报备） |
 | R8 | **能力 id 越界/撞名**（`CapabilityKind` 七前缀 + SDK 契约已占名） | 新族落 id 时 | 落 id 前查 `tool_taxonomy.rs` 策展表 + `sdk/client.rs:76,79` + `ws_v1.rs:141`；**已避**：`code_exec`→`script_exec`、`BrowserTool`→`web_browser` |
 | R9 | **重复面漏判**（探针只判「同名」，判不了「同 job」） | 任何新族开工前 | 族规格必须带「**已有先例 file:line**」；守卫核验先例仍在；先例变了 ⇒ **重判**，不许沿用旧判定 |
 | R10 | **合并族三处落地三次 schema**（C-D2 吸收了 3 族） | W4 开工 | 三件事**共用一套事件面 + 一套 span 面**；schema 变更一次到位，禁止「先出无签名包再补签名」式演进 |
