@@ -19,17 +19,17 @@
 
 ### 仓库事实（**自动生成** · 真源 = `docs/architecture/contract.toml`）
 
-- **workspace.version**：`2.0.0-rc.4`（契约 `1.0` · 状态 `adjudicated`）
-- **workspace 成员**：`30`（产品 crate `29`）
+- **workspace.version**：`2.0.0-rc.5`（契约 `1.0` · 状态 `adjudicated`）
+- **workspace 成员**：`31`（产品 crate `30`）
 - **受锁源码（0 触碰 · CI hard-walls 实际清单）**：
   - `crates/foundation/core/src/eight_anchors.rs`
   - `crates/foundation/core/src/onion.rs`
   - `crates/foundation/core/src/philosophy.rs`
 - **哲学锚**：**9** 条（`docs/01-architecture/philosophy.md`）
 - **workflow**：**46** 个（`.github/workflows/*.yml`）
-- **crate**：**29** 个（`crates/*/Cargo.toml`）
+- **crate**：**30** 个（`crates/*/Cargo.toml`）
 - **门禁登记表**：`docs/architecture/contract.toml` 的 `[ci_gates]`（共 **38** 条 · required **36** 条）
-  - 本地可跑（`31` 条）：`docs-truth` · `doc-class` · `yaml-duplicate-keys` · `matrix-module-paths` · `doc-caliber` · `doc-numbers` · `doc-paths` · `docs-links` · `batch-status` · `claims-verify` · `arch-strict` · `arch-doc` · `crate-budget` · `dead-code` · `unwired` · `unwired-groups` · `stale-binaries` · `mod-targets` · `guard-wiring` · `quality-metrics` · `golden-baseline` · `golden-no-leak` · `internal-golden` · `d4-ledger` · `wiring-report` · `verify-ledger` · `failure-knowledge` · `guard-inventory` · `toolchain-pin` · `gate-manifest` · `self-status-vocab`
+  - 本地可跑（`32` 条）：`docs-truth` · `doc-class` · `yaml-duplicate-keys` · `matrix-module-paths` · `doc-caliber` · `doc-numbers` · `doc-paths` · `docs-links` · `batch-status` · `claims-verify` · `arch-strict` · `arch-doc` · `crate-budget` · `dead-code` · `unwired` · `unwired-groups` · `stale-binaries` · `mod-targets` · `guard-wiring` · `quality-metrics` · `golden-baseline` · `golden-no-leak` · `internal-golden` · `d4-ledger` · `wiring-report` · `verify-ledger` · `failure-knowledge` · `experience-anchors` · `guard-inventory` · `toolchain-pin` · `gate-manifest` · `self-status-vocab`
   - 完整清单与命令：**不要在这里复制**，改看契约 `[ci_gates]`（`scripts/harness.py plan` 会按变更范围列出该跑哪几条）
 
 ### 硬约束（**数字全部来自上面那块，不要在此手写**）

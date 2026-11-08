@@ -90,3 +90,102 @@ patterns:
     occurrences: 1
     category: false-positive
     source: docs/status/harness-convergence-decision-2026-10-30.md
+  - id: blind-verified-at-bump
+    trigger: 批量刷 `verified_at`
+    failure: 声明的 `verified_at` 是**证据基线**不是时间戳 ⇒ 不看 diff 就批量刷 ⇒ 盖章变装饰 ⇒ **把真实的状态变化一起掩盖**（声明与代码可无限脱节）
+    prevention: 盖章 = 「该提交上被复核过」⇒ 逐条实跑 `verify_cmd` 后才改；只改 `verified_at`，语义变才动 `level`/`default`
+    guard: python3 scripts/docs_truth.py --verify --block-stale
+    first_seen: "2026-11-08"
+    occurrences: 3
+    category: stale-base
+    source: docs/04-internal/engineering-experience/06-truth-and-guard.md
+  - id: verify-cmd-empty-run
+    trigger: `verify_cmd` 用子串过滤
+    failure: 过滤串不匹配任何用例名 ⇒ 实跑 `0 passed / N filtered out` ⇒ **exit 0 看起来是绿的，其实零校验力**（红测会被人看见，空跑不会）
+    prevention: 每条声明的 `verify_cmd` 实跑后**看 passed 数 > 0**（不是看 exit code）；过滤串精确到用例名
+    guard: python3 scripts/check_claims_verify.py --check
+    first_seen: "2026-11-08"
+    occurrences: 1
+    category: false-positive
+    source: docs/04-internal/engineering-experience/06-truth-and-guard.md
+  - id: yaml-boolean-literal-quoting
+    trigger: YAML 里裸写 `ON` / `OFF`
+    failure: YAML 1.1 的布尔味字面量裸写 ⇒ 语义从字符串变成布尔（`default: OFF` ≠ `default: "OFF"`）⇒ 机械替换时最易踩 ⇒ 真源字段类型漂移
+    prevention: 真源里的布尔味字面量**必须带引号**；改真源后跑一次解析复核
+    guard: python3 scripts/docs_truth.py --verify --check
+    first_seen: "2026-11-08"
+    occurrences: 1
+    category: contract-drift
+    source: docs/04-internal/engineering-experience/06-truth-and-guard.md
+  - id: zero-reference-not-wired
+    trigger: 「零引用 ⇒ 可删 / 没接线」
+    failure: 「零引用」有五种假阳性形态（同名遮蔽 / 间接消费链 / 语言边界（PyO3 由 Python import 调用）/ 模块自述 default-off / 名字出现≠真调用）⇒ 且判据常**只扫 crates/** ⇒ 漏掉 fuzz/examples/benches/tests 的消费者 ⇒ 第 6 次假阳性：**差点误删活代码**
+    prevention: 判据要**按可见性分层**（`pub(crate)` 不是公开 API）⇒ 零引用必须扫**全部消费者面** ⇒ 删前在「删除前的树上」重验 ⇒ 判「已接线」看限定名 + 宿主生产使用双重核对
+    guard: python3 scripts/audit_unwired.py --check
+    first_seen: "2026-11-08"
+    occurrences: 6
+    category: false-positive
+    source: docs/04-internal/engineering-experience/06-truth-and-guard.md
+  - id: root-reexport-inflates-reachability
+    trigger: 把 `lib.rs` 当依赖边来源
+    failure: `lib.rs` 是「模块清单」不是「模块」⇒ 它的 `pub mod`/`pub use` 让**每个**模块都成出边 ⇒ 而 `lib.rs` 被生产引用 ⇒ ⇒ **所有模块都变「可达」**（可达率虚高 51% vs 真值）
+    prevention: 清单文件（`lib.rs`/`mod.rs`）**不作依赖边来源、且不入分母**；数字与既有口径不一致时逐条对账，不猜
+    guard: python3 scripts/check_memory_reachability.py --check
+    first_seen: "2026-11-08"
+    occurrences: 1
+    category: false-positive
+    source: docs/04-internal/engineering-experience/06-truth-and-guard.md
+  - id: changed-truth-source-without-regenerating-artifacts
+    trigger: 改了真源没跑 `--gen`
+    failure: 真源（`claims.yaml`）与生成物（`STATUS.md` / `wiring.yaml`）**必须成对提交** ⇒ 忘了重生成 ⇒ **两道门禁同时红**，且红因指向"漂移"而非"忘了生成"
+    prevention: 改真源 ⇒ 同一批里跑生成器重生成（**禁手改生成物**）⇒ 提交前跑 `--check` / `--verify`
+    guard: python3 scripts/docs_truth.py --verify --check
+    first_seen: "2026-11-08"
+    occurrences: 1
+    category: contract-drift
+    source: docs/04-internal/engineering-experience/06-truth-and-guard.md
+  - id: guard-never-green-key-mismatch
+    trigger: 守卫的 `--check` 与 `--update` 键格式不一致
+    failure: 孤儿审计脚本的键格式两处不一致 ⇒ `--check` **永远报「新增 N 条」** ⇒ 这个闸**从来没可能通过** ⇒ 也就**从来没接进 CI** ⇒ 一个永远红的闸 = 训练人忽略告警（比没有闸更坏）
+    prevention: 新守卫上线前必须先证明「**它能绿**」（跑一次真数据 ⇒ 期望集合非空且退出码 0）；守卫的红先查真因再判定「守卫坏了」
+    guard: python3 scripts/check_guard_inventory.py
+    first_seen: "2026-11-08"
+    occurrences: 1
+    category: harness-bug
+    source: docs/04-internal/engineering-experience/06-truth-and-guard.md
+  - id: env-namespace-budget-exhausted
+    trigger: 新增一个 `APEIRETH_[A-Z0-9_]+` 名
+    failure: env 命名空间已用满（契约 `max_distinct_names = 160`，登记表恰好 160 条）⇒ **哪怕只写死一次、哪怕只在注释里** ⇒ 计数 161 ⇒ **棘轮红**
+    prevention: 新增前先问「该不该占产品命名空间」⇒ 改名 / 复用**已登记**名 / 拼名（**弱化 src 口径检测 ⇒ 必须写进登记表 purpose**）/ 抬预算（须 ADR）
+    guard: python3 scripts/arch_guard.py --strict
+    first_seen: "2026-11-08"
+    occurrences: 1
+    category: contract-drift
+    source: docs/04-internal/engineering-experience/06-truth-and-guard.md
+  - id: git-zero-conflict-not-merge-correct
+    trigger: git 报 0 冲突就当合并正确
+    failure: 两条线**各自**给同一个 YAML step 加了**同一类键**（位置不同）⇒ git **0 冲突**（自动合并把两行都留下）⇒ YAML 同层重复键 ⇒ GitHub 拒解析整个 workflow ⇒ **该 workflow 静默失效（0 job）**；常规自检查不出（`yaml.safe_load` 与 Ruby YAML 都静默取最后一个键）
+    prevention: 同键不同位置的冲突 git 看不见 ⇒ 只能靠**严格 loader**的机器守卫抓 ⇒ 合并后逐项复核 + 跑一遍新守卫 ⇒ 同批文件必须排队
+    guard: python3 scripts/check_yaml_duplicate_keys.py
+    first_seen: "2026-11-08"
+    occurrences: 3
+    category: harness-bug
+    source: docs/04-internal/engineering-experience/07-workline-and-merge.md
+  - id: status-word-vs-probe-divergence
+    trigger: 状态词与探针不同步
+    failure: 族标「✅ 已落地」而探针未长（谎报）／族标「❌ 未开工」而探针已长（他线已实现）⇒ 进度页与代码事实分叉 ⇒ 「做到哪了」不可复核
+    prevention: **状态词与探针必须同时变**（守卫互校）⇒ 另加**先例锚点**判据（先例被删 ⇒ 重复判定作废 ⇒ 必须重判）
+    guard: python3 scripts/check_creation_line.py --check
+    first_seen: "2026-11-08"
+    occurrences: 2
+    category: contract-drift
+    source: docs/04-internal/engineering-experience/07-workline-and-merge.md
+  - id: git-checkout-clobbers-parallel-line-work
+    trigger: 对有并行线在途改动的文件跑 `git checkout`
+    failure: `git checkout <file>` 会**连带回退另一条并行线在该文件里尚未提交的工作** ⇒ 别人的成果当场丢失且不易察觉
+    prevention: 改用**精确的文本编辑**；确需回退先确认该文件无他线在途改动 ⇒ 同批文件必须排队
+    guard: ""
+    first_seen: "2026-11-08"
+    occurrences: 1
+    category: environment-failure
+    source: docs/04-internal/engineering-experience/07-workline-and-merge.md

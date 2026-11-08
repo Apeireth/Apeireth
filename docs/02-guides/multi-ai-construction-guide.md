@@ -111,6 +111,8 @@ N. **<接棒项名>**（<落点文件>，<并发注意事项>）：<注册条件
 | 口径裁决集（裁定与被拒案） | [03-design-verdicts.md](../04-internal/engineering-experience/03-design-verdicts.md) |
 | 已验证配方与执行细则 | [04-methodology.md](../04-internal/engineering-experience/04-methodology.md) |
 | 产品洞察（判词如何变成制度） | [05-product-insights.md](../04-internal/engineering-experience/05-product-insights.md) |
+| 真源面经验（声明盖章 / 棘轮 / 量具先自证 / 守卫怎么写） | [06-truth-and-guard.md](../04-internal/engineering-experience/06-truth-and-guard.md) |
+| 工作线面经验（认领 / 判重 / 合并收口 / 交接口径） | [07-workline-and-merge.md](../04-internal/engineering-experience/07-workline-and-merge.md) |
 | 测试数字真源 / 什么测过什么没测 | [test-baseline.md](../03-reference/test-baseline.md) / [live-verification-ledger.md](../04-internal/live-verification-ledger.md) |
 
 > 分层读法（一份真源一处抄写）：本文是**操作手册层**——只讲"怎么做"；"为什么"在宪章与经验矿；

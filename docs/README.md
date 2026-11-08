@@ -42,7 +42,8 @@
 
 > 经验与教训是**唯一跨层的一族** —— 它们不是目录，而是一条**提炼流水线**：
 > `L4 在飞 → L5 卷宗 → 提炼成可复用条目（engineering-experience/）→ 门禁检查同类坑二次出现时是否被引用`。
-> 容器：[04-internal/engineering-experience/](04-internal/engineering-experience/)（`01-collaboration-patterns` = 经验，`02-failure-anatomy` = 教训）。
+> 容器：[04-internal/engineering-experience/](04-internal/engineering-experience/)（`01-collaboration-patterns` = 经验，`02-failure-anatomy` = 教训，`06-truth-and-guard` = 真源与守卫面，`07-workline-and-merge` = 工作线与合并面）。
+> **流水线的最后一环已接上**（2026-11-08）：「门禁检查同类坑二次出现时是否被引用」⇒ `python3 scripts/check_experience_anchors.py --check`（条目段型 + 出处锚点可达 + 族内索引覆盖 + **人读层⇄机器层失败模式双向互引**）。
 
 ---
 

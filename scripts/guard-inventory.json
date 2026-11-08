@@ -47,7 +47,7 @@
       "is_guard": true,
       "blocking": true,
       "invocation": [
-        "python scripts/arch_guard.py --report",
+        "python scripts/arch_guard.py --strict",
         "python scripts/arch_guard.py --self-test"
       ],
       "ci_workflows": [
@@ -252,6 +252,25 @@
       ]
     },
     {
+      "id": "check-creation-line",
+      "path": "scripts/check_creation_line.py",
+      "kind": "guard",
+      "is_guard": true,
+      "blocking": true,
+      "invocation": [
+        "python3 scripts/check_creation_line.py"
+      ],
+      "ci_workflows": [],
+      "has_baseline": false,
+      "notes": "能力创造线进度页守卫 —— 让「做到哪了」与「有没有重复」同时不可能漂移",
+      "flags": [
+        "--check",
+        "--help",
+        "--report",
+        "-h"
+      ]
+    },
+    {
       "id": "check-dead-code",
       "path": "scripts/check_dead_code.py",
       "kind": "ratchet",
@@ -361,6 +380,25 @@
       "flags": [
         "--help",
         "--json",
+        "-h"
+      ]
+    },
+    {
+      "id": "check-experience-anchors",
+      "path": "scripts/check_experience_anchors.py",
+      "kind": "guard",
+      "is_guard": true,
+      "blocking": true,
+      "invocation": [
+        "python3 scripts/check_experience_anchors.py"
+      ],
+      "ci_workflows": [],
+      "has_baseline": true,
+      "notes": "经验矿守卫（2026-11-08）—— 让「经验沉淀体系」本身不许漂成散文",
+      "flags": [
+        "--check",
+        "--help",
+        "--report",
         "-h"
       ]
     },
@@ -485,6 +523,25 @@
       "flags": []
     },
     {
+      "id": "check-memory-reachability",
+      "path": "scripts/check_memory_reachability.py",
+      "kind": "ratchet",
+      "is_guard": true,
+      "blocking": true,
+      "invocation": [
+        "python3 scripts/check_memory_reachability.py"
+      ],
+      "ci_workflows": [],
+      "has_baseline": true,
+      "notes": "记忆 crate 能力可达率闸门 —— 把「多少能力真的接在生产链路上」变成一个数字",
+      "flags": [
+        "--check",
+        "--help",
+        "--update",
+        "-h"
+      ]
+    },
+    {
       "id": "check-mod-files",
       "path": "scripts/check_mod_files.py",
       "kind": "guard",
@@ -561,20 +618,6 @@
         "--update",
         "-h"
       ]
-    },
-    {
-      "id": "check-release-version",
-      "path": "scripts/check-release-version.sh",
-      "kind": "guard",
-      "is_guard": false,
-      "blocking": true,
-      "invocation": [
-        "bash scripts/check-release-version.sh"
-      ],
-      "ci_workflows": [],
-      "has_baseline": false,
-      "notes": "Validates release version consistency across all authoritative sources:",
-      "flags": []
     },
     {
       "id": "check-self-status-vocab",
@@ -917,20 +960,6 @@
       "flags": []
     },
     {
-      "id": "run-cargo-audit-deny",
-      "path": "scripts/audit/run-cargo-audit-deny.sh",
-      "kind": "generator",
-      "is_guard": false,
-      "blocking": true,
-      "invocation": [
-        "bash scripts/audit/run-cargo-audit-deny.sh"
-      ],
-      "ci_workflows": [],
-      "has_baseline": false,
-      "notes": "R20 阶段 6 — cargo audit + cargo deny 一键扫描 (1.0 release #3 security)",
-      "flags": []
-    },
-    {
       "id": "sbom",
       "path": "scripts/sbom.sh",
       "kind": "generator",
@@ -1067,7 +1096,7 @@
       "invocation": [
         "python3 scripts/wiring_report.py --check-env-registry",
         "python3 scripts/wiring_report.py --verify",
-        "python3 scripts/wiring_report.py --crosscheck"
+        "python3 scripts/wiring_report.py --crosscheck --strict"
       ],
       "ci_workflows": [
         ".github/workflows/docs-truth.yml",

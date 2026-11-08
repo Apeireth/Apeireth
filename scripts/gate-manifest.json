@@ -1,8 +1,8 @@
 {
   "schema": "apeireth.gate-manifest.v1",
   "generated_from": "docs/architecture/contract.toml [ci_gates]",
-  "workspace_version": "2.0.0-rc.4",
-  "workspace_members": 30,
+  "workspace_version": "2.0.0-rc.5",
+  "workspace_members": 31,
   "locked_sources": [
     "crates/foundation/core/src/eight_anchors.rs",
     "crates/foundation/core/src/onion.rs",
@@ -11,7 +11,7 @@
   "repo_facts": {
     "philosophy_anchors": 9,
     "workflows": 46,
-    "crates": 29
+    "crates": 30
   },
   "gates": [
     {
@@ -449,6 +449,22 @@
       "note": "**失败知识库不许陈旧**：条目里指向的守卫必须真实存在（改名/删除 ⇒ 知识失效）"
     },
     {
+      "id": "experience-anchors",
+      "cmd": [
+        "python3",
+        "scripts/check_experience_anchors.py",
+        "--check"
+      ],
+      "scope": [
+        "docs"
+      ],
+      "blocking": true,
+      "required": true,
+      "env": "python",
+      "timeout": 300,
+      "note": "**经验矿不许退化成散文**：条目段型 + 出处锚点可达 + 族内索引覆盖 + 人读层⇄机器层失败模式双向互引"
+    },
+    {
       "id": "guard-inventory",
       "cmd": [
         "python3",
@@ -610,22 +626,6 @@
       "env": "cargo",
       "timeout": 3600,
       "note": "CI 专属：文档测试"
-    },
-    {
-      "id": "ci-cargo-deny",
-      "cmd": [
-        "bash",
-        "scripts/audit/run-cargo-audit-deny.sh"
-      ],
-      "scope": [
-        "rust",
-        "lock"
-      ],
-      "blocking": true,
-      "required": true,
-      "env": "ci",
-      "timeout": 1800,
-      "note": "CI 专属：依赖策略（cargo deny）"
     },
     {
       "id": "ci-promise-audit",

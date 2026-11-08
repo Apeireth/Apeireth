@@ -2,12 +2,13 @@
 
 > 写经验条目用的模板与格式样例。
 
-**6 篇**。
+**7 篇**。
 
 | 篇 | 是什么 |
 |---|---|
 | [`commit-message.md`](commit-message.md) | 模板 · Commit Message（O-6 三阶审查） |
 | [`delivery-doc-skeleton.md`](delivery-doc-skeleton.md) | 模板 · 批次交付文档骨架（Delivery Doc Skeleton） |
+| [`experience-entry-template.md`](experience-entry-template.md) | 模板 · 经验条目（Experience Entry —— 加经验时直接套） |
 | [`handoff-report-skeleton.md`](handoff-report-skeleton.md) | 模板 · 交接报告骨架（Handoff Report Skeleton） |
 | [`preflight-checklist.md`](preflight-checklist.md) | 模板 · 开工自检清单（Preflight Checklist） |
 | [`resumption-entry.md`](resumption-entry.md) | 模板 · 接棒条目与复测注记（Resumption Entry & Retest Note） |

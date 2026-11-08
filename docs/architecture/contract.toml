@@ -713,6 +713,16 @@ timeout = 300
 note = "**失败知识库不许陈旧**：条目里指向的守卫必须真实存在（改名/删除 ⇒ 知识失效）"
 
 [[ci_gates.gate]]
+id = "experience-anchors"
+cmd = ["python3", "scripts/check_experience_anchors.py", "--check"]
+stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
+scope = ["docs"]
+blocking = true
+required = true
+timeout = 300
+note = "**经验矿不许退化成散文**：条目段型 + 出处锚点可达 + 族内索引覆盖 + 人读层⇄机器层失败模式双向互引"
+
+[[ci_gates.gate]]
 id = "guard-inventory"
 cmd = ["python3", "scripts/check_guard_inventory.py"]
 stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
@@ -813,17 +823,11 @@ delegated_to = ".github/workflows/rustdoc-test.yml"   # 由该 workflow 负责 �
 timeout = 3600
 note = "CI 专属：文档测试"
 
-[[ci_gates.gate]]
-id = "ci-cargo-deny"
-cmd = ["bash", "scripts/audit/run-cargo-audit-deny.sh"]
-stage = "deep"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
-scope = ["rust", "lock"]
-blocking = true
-required = true
-env = "ci"
-delegated_to = ".github/workflows/cargo-deny.yml"   # 由该 workflow 负责 ⇒ 裁决层不重复执行
-timeout = 1800
-note = "CI 专属：依赖策略（cargo deny）"
+# ci-cargo-deny（依赖策略 / cargo deny）：**2026-11-08 移出裁决层登记**。
+#   理由：它的本地脚本 `scripts/audit/run-cargo-audit-deny.sh` 已于 2026-10-24（ddae723e「清理死脚本面」）删除
+#   ⇒ 契约里仍登记它 = 一条**永远跑不起来的假门禁**（`gen_gate_manifest.py --check` 判「引用的脚本不存在」⇒ 门禁红）。
+#   覆盖没有丢：依赖策略由 `.github/workflows/cargo-deny.yml` 独立守护（`env = "ci"` 的门禁本来就不在裁决层执行）。
+#   ⇒ 纪律：**门禁要么有活脚本，要么明确写「由哪道 CI 守着」——不两样都没有**（见 07 矿条目 11）。
 
 [[ci_gates.gate]]
 id = "ci-promise-audit"

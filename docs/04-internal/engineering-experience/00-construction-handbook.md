@@ -49,6 +49,12 @@ Author:          经验总装批施工者
 |---|---|---|---|
 | **第一次进场** | 两份宪章 + [multi-ai-construction-guide](../../02-guides/multi-ai-construction-guide.md) §一 | `preflight-checklist.md` | `git log --oneline -5` 对 HEAD 口径 |
 | **改 src（任何）** | MANIFESTO §8/§10（LOCKED 5 项 + 工序） | `commit-message.md` | 三件套（见 §3 命令卡） |
+| **认领一条工作线** | [07-workline-and-merge.md](07-workline-and-merge.md) 条目 1–3 + [workline-registry](../../status/workline-registry.md) §一/§二 | — | 该工作线登记表里的**守卫命令** |
+| **判断「这事是不是有人做过了」** | [07-workline-and-merge.md](07-workline-and-merge.md) 条目 4–6（语义重叠三档 + 双判据守卫） | `experience-entry-template.md` | `python3 scripts/check_creation_line.py --check`（族级面）|
+| **要写「已实现 / 已接线 / 数字 = N」** | [06-truth-and-guard.md](06-truth-and-guard.md) 条目 1–6 + [system-capabilities.md](../../01-architecture/system-capabilities.md) 四级口径 | `experience-entry-template.md` | `python3 scripts/docs_truth.py --verify --block-stale` |
+| **给一份文档配守卫** | [06-truth-and-guard.md](06-truth-and-guard.md) 条目 7–9（守卫三形态 + 四硬要求） | — | `python3 scripts/check_guard_inventory.py` |
+| **造量具 / 写探针 / 定判据** | [06-truth-and-guard.md](06-truth-and-guard.md) 条目 4、5、8、10、11（量具先自证 + 假阳性六连） | — | 量具自己的 `--check` + **变异检验** |
+| **合并两条线 / 做收口批** | [07-workline-and-merge.md](07-workline-and-merge.md) 条目 7–12（0 冲突 ≠ 合并正确 + 逐项处置） | — | `pwsh scripts/gate_full.ps1 -FailIfBusy` |
 | **派子代理** | MANIFESTO §6（workflow + 3 问 + 亲验义务） | `subagent-brief.md` | 派前自己先跑一遍基线 |
 | **判某能力到底做没做** | [engineering-review-handoff-2026-10-06.md](../engineering-review-handoff-2026-10-06.md) §2.3（三关）+ [system-capabilities.md](../../01-architecture/system-capabilities.md) 四级口径 | — | 三关命令见本册 §4 |
 | **写交付文档** | 任一份 *-delivery.md 卷宗抬头（接缝注先例） | `delivery-doc-skeleton.md` | `python scripts/check_doc_caliber.py <doc>` |
@@ -106,6 +112,9 @@ powershell scripts/check-neutral-terms.ps1                           # 期望 0 
 | `\\?\` 前缀 / canonical 键分叉 | 路径归一只认一把尺；悬案走示踪三选一 | ops §6.2 / 02 矿 4a |
 | CRLF 吃替换 | 正则容 `\r?$`；替换后断言命中数；批量手术后配平校验 | 02 矿 4b |
 | CI 绿 ≠ 本地绿 | cfg(unix) 块本地不编译；动跨平台代码后 WSL 侧过一遍 check | ops §6 |
+| **env 命名空间已用满**（160/160） | 契约 `[env].max_distinct_names = 160`，登记表 `env-registry.toml` **恰好 160 条** ⇒ **任何新增一个 distinct `APEIRETH_[A-Z0-9_]+` 名**（**哪怕只写死一次、哪怕只在注释里**）⇒ 计数 161 ⇒ **棘轮红** ⇒ 处置顺序：① 先问「该不该占产品命名空间」⇒ 改名 ② 复用**已登记**名 ③ 拼名（**弱化 src 口径检测 ⇒ 必须写进登记表 purpose**）④ 抬预算（须 ADR） | [contract.toml](../../architecture/contract.toml) `[env]` / 06 矿条目 6 |
+| **跑全量门禁的三条硬前置** | ① **无并行编译**（`ps aux \| grep -c "[c]argo"` = 0 才跑）② **磁盘 < 70%**（磁盘守卫会清 `target/debug/deps` ⇒ 整片假红）③ **`setsid` 脱离进程组**（否则 exit 143 会被误读成测试失败）⇒ 三条任一不满足 ⇒ **先修环境再谈代码** | [test-baseline.md](../../03-reference/test-baseline.md) §1 / 07 矿条目 10 |
+| **根门禁覆盖不到 3 个独立 workspace** | `crates-ui/`（`ui-engine-ci.yml`）· `frontend/companion-desktop/src-tauri/`（`companion-desktop-ci.yml`）· JS 侧（同 workflow 的 `pnpm test`）⇒ **根门禁绿 ≠ 全仓绿**（限定成立，但有明确归属） | [merge-integration-closeout](../../status/merge-integration-closeout-2026-11-07.md) §3.2 / 07 矿条目 11 |
 
 ### 3.4 跨线共树（多 AI 同树施工呼吸规则）
 
@@ -141,8 +150,14 @@ powershell scripts/check-neutral-terms.ps1                           # 期望 0 
 | [templates/commit-message.md](templates/commit-message.md) | commit message（O-6 三阶审查） | MANIFESTO §8.2（LOCKED 口径） |
 | [templates/subagent-brief.md](templates/subagent-brief.md) | 派子代理 brief | MANIFESTO §6.2 |
 | [templates/resumption-entry.md](templates/resumption-entry.md) | 接棒清单条目 + 复测注记 | 04-methodology §二/§四 |
+| [templates/experience-entry-template.md](templates/experience-entry-template.md) | **经验条目骨架**（加一条经验时直接套） | 06-truth-and-guard / 07-workline-and-merge（段型）+ `scripts/check_experience_anchors.py`（守卫） |
 
 新增模板纪律：一模板一文件；头部必带口径真源链接；与真源漂移即病（模板是「复制形态」，不是第二真源）。
+
+> **经验族本身的纪律（2026-11-08 起）**：族内每篇 `NN-*.md` 的条目必须符合**该矿型的段型**
+> （见 [templates/experience-entry-template.md](templates/experience-entry-template.md) §B），
+> 每条经验必须带**可点击的出处**与**一条退出码可判的守卫** ⇒ 缺一即红
+> （`python3 scripts/check_experience_anchors.py --check`）。
 
 ---
 
