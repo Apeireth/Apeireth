@@ -20,6 +20,7 @@
 
 use std::fmt;
 
+use apeireth_core::kernel::SessionId;
 use apeireth_protocol::canonical::{NormalizedRequest, NormalizedResponse};
 
 /// 出网闸的判定结果。
@@ -76,6 +77,23 @@ pub trait EgressGate: Send + Sync {
     /// 判定一次出网请求。
     fn vet(&self, request: &NormalizedRequest) -> EgressVerdict;
 
+    /// **会话域**判定：闸按**会话**取域时走这一条。
+    ///
+    /// **默认实现 = 忽略会话**（直接走 [`Self::vet`]）⇒ **既有实现逐字节不变**
+    /// —— 这一条是**增量面**：只有真正按会话分域的闸才覆写它。
+    ///
+    /// 存在的理由：占位域的粒度是「**一个会话一个域**」⇒ 闸必须知道**这一
+    /// 次出网属于哪个会话**，否则闸与外部工具结果面无法在**同一个会话**里
+    /// 互认占位符（而**不同会话**又绝不能共用一个域）。
+    fn vet_in_session(
+        &self,
+        session: Option<SessionId>,
+        request: &NormalizedRequest,
+    ) -> EgressVerdict {
+        let _ = session;
+        self.vet(request)
+    }
+
     /// **受控回程还原**（双闸的闸二）：把模型回信里的占位符换回本地真值。
     ///
     /// 默认实现 = 不动（未接线时逐字节零行为变化）。
@@ -85,6 +103,15 @@ pub trait EgressGate: Send + Sync {
     /// - 还原只发生在**受控回程面**（本地落盘前），不是出境面；
     /// - 对出境面不可逆 —— 出去的请求里只有占位，没有真值。
     fn restore(&self, _response: &mut NormalizedResponse) {}
+
+    /// **会话域**的受控回程还原（增量面：默认实现 = 忽略会话）。
+    ///
+    /// 语义与 [`Self::restore`] 相同，只是域由**这一回合的会话**决定 ⇒
+    /// 跨会话的占位符**互不认账**（A 会话产的占位符在 B 会话还原不出来）。
+    fn restore_in_session(&self, session: Option<SessionId>, response: &mut NormalizedResponse) {
+        let _ = session;
+        self.restore(response)
+    }
 
     /// **本地消费面**（**显式调用**）：把文本里的占位符换回本地真值。
     ///
@@ -104,6 +131,19 @@ pub trait EgressGate: Send + Sync {
             text: text.to_string(),
             restored: Vec::new(),
         }
+    }
+
+    /// **会话域**的本地消费面（增量面：默认实现 = 忽略会话）。
+    ///
+    /// 语义与 [`Self::restore_for_local_consumer`] 相同，只是认账的是**这一
+    /// 个会话**的登记簿 ⇒ **跨会话不可互还原**。
+    fn restore_for_local_consumer_in_session(
+        &self,
+        session: Option<SessionId>,
+        text: &str,
+    ) -> LocalConsumerRestore {
+        let _ = session;
+        self.restore_for_local_consumer(text)
     }
 }
 

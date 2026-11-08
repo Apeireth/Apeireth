@@ -431,6 +431,117 @@ impl fmt::Debug for SessionRedactionDomain {
 }
 
 // ---------------------------------------------------------------------------
+// 域注册表 (one domain per session)
+// ---------------------------------------------------------------------------
+
+/// **域注册表** —— `session_id → 域` 的持有者.
+///
+/// # 为什么需要它（把「一个域」降成「一个会话一只域」）
+///
+/// 3c-1 落的 [`SessionRedactionDomain`] 是「一个会话一个域」的**持有者**，但**注入
+/// 面是进程级**的（外部工具桥持**一只**域）⇒ ⇒ **一进程一域** ⇒ ⇒ 多会话并发时，
+/// **跨会话的同一个值**会得到**同一个占位符** ⇒ ⇒ 跨会话可关联 ⇒ ⇒ 违裁决 #4
+/// 「一个会话一个域」。
+///
+/// 本类型把粒度落到**会话**：
+///
+/// * [`SessionDomainRegistry::domain_for`] —— **逐调用按会话取域**（没有就建一只）;
+/// * [`SessionDomainRegistry::end_session`] —— **会话结束 ⇒ 域销毁**（登记簿随之消失）。
+///
+/// # 不变量（跨会话绝不共用域）
+///
+/// * **跨会话 ⇒ 不同占位符** ⇒ 模型**不可**跨会话关联同一个值;
+/// * **跨会话 ⇒ 不可互还原** —— 别会话的域**认不出**本会话登记过的指纹;
+/// * **同会话 ⇒ 恒同域** ⇒ 同会话跨两个工具仍是**同一个**占位符（模型可关联）。
+///
+/// # 生命周期（如实登记）
+///
+/// * **域按会话创建**：第一次用到某会话时建一只，密钥由**会话 id** 派生
+///   （[`derive_session_key`]）⇒ 同会话恒同别名;
+/// * **会话结束 ⇒ 域销毁**：[`Self::end_session`] 把域从注册表里摘掉 ⇒ 域连同
+///   它的**登记簿（真值驻留处）**与账本一起消失;
+/// * ⚠️ **跨进程 / 跨重启续接不成立**：登记簿**只在内存**，且会话密钥掺了
+///   **进程级秘密**（[`derive_session_key`]）⇒ 新进程里同一个会话 id 派生出的
+///   密钥**不同** ⇒ 别名不同、真值也没了。**本类型不假装支持续接。**
+pub struct SessionDomainRegistry {
+    /// 活着的域：`session_id → 域句柄`。
+    domains: Mutex<BTreeMap<SessionId, Arc<Mutex<SessionRedactionDomain>>>>,
+}
+
+impl SessionDomainRegistry {
+    /// 新建一只**空**注册表（还没有任何会话的域）。
+    pub fn new() -> Self {
+        Self {
+            domains: Mutex::new(BTreeMap::new()),
+        }
+    }
+
+    /// **逐调用按会话取域**：这个会话的域（没有就建一只）。
+    ///
+    /// 同一会话**恒同**一只 ⇒ 同会话跨两个工具是同一个占位符；
+    /// 不同会话**各持一只** ⇒ 跨会话同值是不同占位符。
+    pub fn domain_for(&self, session: SessionId) -> Arc<Mutex<SessionRedactionDomain>> {
+        let mut domains = self
+            .domains
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        Arc::clone(
+            domains.entry(session).or_insert_with(|| {
+                Arc::new(Mutex::new(SessionRedactionDomain::for_session(session)))
+            }),
+        )
+    }
+
+    /// **会话结束 ⇒ 域销毁**（登记簿随之消失）。
+    ///
+    /// 返回 `true` = 这个会话的域确实存在过（已被销毁）；`false` = 本来就没有
+    /// （重复结束会话是**幂等**的，不报错）。
+    pub fn end_session(&self, session: SessionId) -> bool {
+        let mut domains = self
+            .domains
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        domains.remove(&session).is_some()
+    }
+
+    /// 注册表里**活着的域数**（= 活着的会话数）。
+    pub fn len(&self) -> usize {
+        self.domains
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .len()
+    }
+
+    /// 一个域都没有。
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// 某个会话的域**在不在**（观测面）。
+    pub fn contains(&self, session: SessionId) -> bool {
+        self.domains
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .contains_key(&session)
+    }
+}
+
+impl Default for SessionDomainRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl fmt::Debug for SessionDomainRegistry {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // 只报**计数** ⇒ Debug 面零真值（域里的登记簿不在这里）。
+        f.debug_struct("SessionDomainRegistry")
+            .field("sessions", &self.len())
+            .finish()
+    }
+}
+
+// ---------------------------------------------------------------------------
 // 类 B 声明面 (the declaration surface)
 // ---------------------------------------------------------------------------
 

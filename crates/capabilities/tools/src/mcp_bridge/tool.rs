@@ -56,7 +56,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use apeireth_core::kernel::CapabilityId;
+use apeireth_core::kernel::{CapabilityId, SessionId};
 use apeireth_plugin::mcp::{content_block_to_wire, ContentBlock, ToolCallResult};
 use apeireth_plugin::{FrozenInvocation, ToolCapability};
 use apeireth_protocol::canonical::{NormalizedTool, ToolCall, ToolResult};
@@ -69,7 +69,7 @@ use crate::mcp::McpError;
 
 use super::catalog::McpToolEntry;
 use super::connection::McpServerConnection;
-use super::SessionRedactionDomain;
+use super::{SessionDomainRegistry, SessionRedactionDomain};
 
 // The bounded-convergence helpers live in their own file. The bridge's
 // module root is frozen for this batch, so the file is wired in here — the
@@ -361,7 +361,22 @@ pub struct McpDynamicTool {
     /// holder is injected ([`McpDynamicTool::new_with_domain`]) so the tools
     /// of one session share it — and so the provider-facing egress gate can
     /// hold the *same* domain and recognise what this tool aliased.
+    ///
+    /// **This is the fallback**: when a **registry** is installed
+    /// ([`McpDynamicTool::new_with_registry`]) the domain is picked **per
+    /// call** by the call's session; this handle is then only the landing
+    /// spot for calls that carry **no** session (host-side invocations) —
+    /// exactly the behaviour before the registry existed.
     domain: Arc<Mutex<SessionRedactionDomain>>,
+    /// The **session domain registry** — the per-call domain selector.
+    ///
+    /// `None` = **not wired**: every call sweeps in [`Self::domain`] (the
+    /// behaviour before this batch, byte for byte). `Some` = the domain is
+    /// looked up **per call** by the call's session ⇒ **cross-session calls
+    /// never share a domain** ⇒ the same value in two sessions gets two
+    /// aliases ⇒ the two sessions cannot correlate it and cannot restore
+    /// each other's aliases.
+    registry: Option<Arc<SessionDomainRegistry>>,
     /// Whether this tool is **declared class B** — 「本工具的结果面合法地就是
     /// 凭据」.
     ///
@@ -443,10 +458,59 @@ impl McpDynamicTool {
             entry,
             connection,
             domain,
+            registry: None,
             class_b,
             generation,
             generation_scope,
         }
+    }
+
+    /// A dynamic tool whose domain is picked **per call** by the call's
+    /// session — 「一个会话一个域」的**粒度**面.
+    ///
+    /// # 与固定域的差别
+    ///
+    /// * 固定域（[`McpDynamicTool::new_with_domain`]）：**一个域** ⇒ 全进程共用 ⇒
+    ///   跨会话的同一个值得到**同一个占位符** ⇒ 跨会话可关联（违裁决 #4）;
+    /// * 注册表（本构造器）：**逐调用按会话取域** ⇒ 跨会话**绝不共用域** ⇒
+    ///   跨会话同值 ⇒ **不同占位符** ⇒ 不可互认、不可互还原。
+    ///
+    /// `fallback` 是**没有会话标识**的调用（宿主侧直调）的落点 —— 那种调用
+    /// 本来就没有会话可依 ⇒ 沿用既有行为（逐字节不变）。
+    pub fn new_with_registry(
+        entry: McpToolEntry,
+        connection: Arc<McpServerConnection>,
+        registry: Arc<SessionDomainRegistry>,
+        fallback: Arc<Mutex<SessionRedactionDomain>>,
+        class_b: bool,
+    ) -> Self {
+        let generation = connection.generation();
+        let generation_scope = connection.generation_scope();
+        Self {
+            entry,
+            connection,
+            domain: fallback,
+            registry: Some(registry),
+            class_b,
+            generation,
+            generation_scope,
+        }
+    }
+
+    /// **逐调用按会话取域**。
+    ///
+    /// * 注册表已装 **且** 调用带会话 ⇒ 该会话的域（没有就建一只）;
+    /// * 其余（未装注册表 / 调用没有会话）⇒ [`Self::domain`]（既有行为）。
+    fn domain_for_call(&self, session: Option<SessionId>) -> Arc<Mutex<SessionRedactionDomain>> {
+        match (&self.registry, session) {
+            (Some(registry), Some(session)) => registry.domain_for(session),
+            _ => Arc::clone(&self.domain),
+        }
+    }
+
+    /// 这只工具的**域注册表**（`None` = 未接注册表）。
+    pub fn registry(&self) -> Option<&Arc<SessionDomainRegistry>> {
+        self.registry.as_ref()
     }
 
     /// Whether this tool is **declared class B**.
@@ -547,7 +611,11 @@ impl McpDynamicTool {
     ///
     /// This is the right place for the sweep: the result is complete, and it
     /// has not been handed to the caller yet.
-    fn sweep_remote_result(&self, result: &ToolCallResult) -> (ToolCallResult, McpSweepReport) {
+    fn sweep_remote_result(
+        &self,
+        result: &ToolCallResult,
+        domain: &Arc<Mutex<SessionRedactionDomain>>,
+    ) -> (ToolCallResult, McpSweepReport) {
         let mut report = McpSweepReport::default();
         report.class_b = self.class_b;
         let bounded: Vec<ContentBlock> = result
@@ -556,13 +624,12 @@ impl McpDynamicTool {
             .take(redaction::RESULT_MAX_BLOCKS)
             .map(|block| redaction::bound_content_block(block))
             .collect();
-        let mut domain = self
-            .domain
+        let mut guard = domain
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         let swept: Vec<ContentBlock> = bounded
             .into_iter()
-            .map(|block| sweep_block(&mut domain, block, &mut report, self.class_b))
+            .map(|block| sweep_block(&mut guard, block, &mut report, self.class_b))
             .collect();
         (
             ToolCallResult {
@@ -571,7 +638,7 @@ impl McpDynamicTool {
                 // The structured channel is server-authored too: it is swept
                 // here and bounded on the model-facing side.
                 structured: result.structured.as_ref().map(|structured| {
-                    sweep_structured_value(structured, &mut domain, &mut report, self.class_b)
+                    sweep_structured_value(structured, &mut guard, &mut report, self.class_b)
                 }),
             },
             report,
@@ -583,12 +650,11 @@ impl McpDynamicTool {
     /// A server's error message is server-authored content too, and it
     /// reaches the model context just like a result does — so it is swept the
     /// same way.
-    fn sweep_text(&self, text: &str) -> String {
-        let mut domain = self
-            .domain
+    fn sweep_text(&self, text: &str, domain: &Arc<Mutex<SessionRedactionDomain>>) -> String {
+        let mut guard = domain
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        sweep_text_surface(&mut domain, text, self.class_b)
+        sweep_text_surface(&mut guard, text, self.class_b)
             .text()
             .to_string()
     }
@@ -600,8 +666,17 @@ impl McpDynamicTool {
     /// the descriptor-checked path: the scope stops the call when the module
     /// generation died while it waited, and the checked path refuses a
     /// descriptor that changed since the discovery.
-    async fn execute_frozen(&self, call: &ToolCall, frozen: &McpFrozenInvocation) -> ToolResult {
+    ///
+    /// `session` is the **dispatching turn's session** — it decides **which
+    /// domain** the result face is swept in (see [`Self::domain_for_call`]).
+    async fn execute_frozen(
+        &self,
+        call: &ToolCall,
+        frozen: &McpFrozenInvocation,
+        session: Option<SessionId>,
+    ) -> ToolResult {
         let name = self.entry.model_name.as_str();
+        let domain = self.domain_for_call(session);
         match self
             .generation_scope
             .run(self.connection.call_tool_checked(
@@ -614,11 +689,11 @@ impl McpDynamicTool {
             .unwrap_or_else(|_| Err(McpError::Transport("module generation stopped".into())))
         {
             Ok(result) => {
-                let (swept, report) = self.sweep_remote_result(&result);
+                let (swept, report) = self.sweep_remote_result(&result, &domain);
                 tool_result_from_mcp_swept(&call.id, name, swept, Some(&report))
             }
             Err(McpError::Transport(reason)) => {
-                let reason = self.sweep_text(&reason);
+                let reason = self.sweep_text(&reason, &domain);
                 ToolResult::retryable_error(
                     &call.id,
                     format!("mcp transport failure for {name}: {reason}"),
@@ -626,7 +701,7 @@ impl McpDynamicTool {
                 .with_name(name)
             }
             Err(McpError::JsonRpc { code, message }) => {
-                let message = self.sweep_text(&message);
+                let message = self.sweep_text(&message, &domain);
                 ToolResult::permanent_error(
                     &call.id,
                     format!("mcp error for {name} (code {code}): {message}"),
@@ -634,7 +709,7 @@ impl McpDynamicTool {
                 .with_name(name)
             }
             Err(other) => {
-                let other = self.sweep_text(&other.to_string());
+                let other = self.sweep_text(&other.to_string(), &domain);
                 ToolResult::permanent_error(
                     &call.id,
                     format!("mcp call failed for {name}: {other}"),
@@ -642,6 +717,74 @@ impl McpDynamicTool {
                 .with_name(name)
             }
         }
+    }
+
+    /// 这只工具的模块代际还活着吗（代际是它的存活令牌）。
+    fn generation_alive(&self, call_id: &str) -> Result<(), ToolResult> {
+        if self.connection.accepts_generation(self.generation) {
+            return Ok(());
+        }
+        Err(ToolResult::permanent_error(
+            call_id,
+            "external tool belongs to an expired module generation",
+        )
+        .with_name(&self.entry.model_name))
+    }
+
+    /// 校验并解出**冻结载荷**（审批回程面）。
+    ///
+    /// 载荷坏了 / 版本不对 / 描述符变了 ⇒ **拒绝即帧**（不猜、不降级）。
+    fn decode_frozen(
+        &self,
+        call: &ToolCall,
+        frozen: &FrozenInvocation,
+    ) -> Result<McpFrozenInvocation, ToolResult> {
+        let mcp_frozen: McpFrozenInvocation = match serde_json::from_value(frozen.payload.clone()) {
+            Ok(mcp_frozen) => mcp_frozen,
+            Err(error) => {
+                return Err(ToolResult::permanent_error(
+                    &call.id,
+                    format!("frozen external invocation is invalid: {error}"),
+                )
+                .with_name(&self.entry.model_name))
+            }
+        };
+
+        if mcp_frozen.version != MCP_FROZEN_VERSION {
+            return Err(ToolResult::permanent_error(
+                &call.id,
+                format!(
+                    "unsupported frozen external invocation version {} (expected {})",
+                    mcp_frozen.version, MCP_FROZEN_VERSION
+                ),
+            )
+            .with_name(&self.entry.model_name));
+        }
+
+        // The frozen server must be the one this tool executes through: a
+        // payload naming another server is not this tool's call (fail-closed).
+        if mcp_frozen.server != self.entry.server {
+            return Err(ToolResult::permanent_error(
+                &call.id,
+                format!(
+                    "frozen external invocation names server {:?}, but this tool executes through {:?}",
+                    self.entry.server, mcp_frozen.server
+                ),
+            )
+            .with_name(&self.entry.model_name));
+        }
+
+        // The descriptor the human approved must still be the live one: the
+        // approval covers **that** descriptor, not a different one wearing the
+        // same name. A changed descriptor needs a new approval.
+        if mcp_frozen.descriptor != self.descriptor_receipt() {
+            return Err(ToolResult::permanent_error(
+                &call.id,
+                "external tool descriptor changed since approval; approve a new call",
+            )
+            .with_name(&self.entry.model_name));
+        }
+        Ok(mcp_frozen)
     }
 }
 
@@ -689,67 +832,53 @@ impl ToolCapability for McpDynamicTool {
             return self.invoke(call).await;
         };
 
-        let mcp_frozen: McpFrozenInvocation = match serde_json::from_value(frozen.payload.clone()) {
+        let mcp_frozen = match self.decode_frozen(call, frozen) {
             Ok(mcp_frozen) => mcp_frozen,
-            Err(error) => {
-                return ToolResult::permanent_error(
-                    &call.id,
-                    format!("frozen external invocation is invalid: {error}"),
-                )
-                .with_name(&self.entry.model_name)
-            }
+            Err(result) => return result,
         };
 
-        if mcp_frozen.version != MCP_FROZEN_VERSION {
-            return ToolResult::permanent_error(
-                &call.id,
-                format!(
-                    "unsupported frozen external invocation version {} (expected {})",
-                    mcp_frozen.version, MCP_FROZEN_VERSION
-                ),
-            )
-            .with_name(&self.entry.model_name);
-        }
+        self.execute_frozen(call, &mcp_frozen, None).await
+    }
 
-        // The frozen server must be the one this tool executes through: a
-        // payload naming another server is not this tool's call (fail-closed).
-        if mcp_frozen.server != self.entry.server {
-            return ToolResult::permanent_error(
-                &call.id,
-                format!(
-                    "frozen external invocation names server {:?}, but this tool executes through {:?}",
-                    mcp_frozen.server, self.entry.server
-                ),
-            )
-            .with_name(&self.entry.model_name);
-        }
-
-        // The descriptor the human approved must still be the live one: the
-        // approval covers **that** descriptor, not a different one wearing
-        // the same name. A changed descriptor needs a new approval.
-        if mcp_frozen.descriptor != self.descriptor_receipt() {
-            return ToolResult::permanent_error(
-                &call.id,
-                "external tool descriptor changed since approval; approve a new call",
-            )
-            .with_name(&self.entry.model_name);
-        }
-
-        self.execute_frozen(call, &mcp_frozen).await
+    /// **逐调用按会话取域**的入口。
+    ///
+    /// 运行时把**派发这一回合的会话**交给工具（`ToolExecutionContext.session`
+    /// ⇒ 见 [`apeireth_plugin::ToolCapability::invoke_in_session`]）⇒ 本工具
+    /// 用它去注册表里取**那个会话的域** ⇒ 结果面扫在**会话自己的域**里。
+    ///
+    /// ⇒ **跨会话绝不共用域**：两个会话的同一个值得到两个占位符 ⇒ 不可互认、
+    /// 不可互还原（裁决 #4「一个会话一个域」的粒度面）。
+    ///
+    /// 没有会话标识的调用（宿主侧直调）⇒ 落回 [`Self::domain`]（既有行为，
+    /// 逐字节不变）。
+    async fn invoke_in_session(
+        &self,
+        call: &ToolCall,
+        frozen: Option<&FrozenInvocation>,
+        session: Option<SessionId>,
+    ) -> ToolResult {
+        let Some(frozen) = frozen else {
+            // 没有冻结载荷 ⇒ 与 `invoke` **同形**（代际检查照旧 ⇒ 逐字节不变）。
+            if let Err(result) = self.generation_alive(&call.id) {
+                return result;
+            }
+            let built = self.build_frozen(call);
+            return self.execute_frozen(call, &built, session).await;
+        };
+        let mcp_frozen = match self.decode_frozen(call, frozen) {
+            Ok(mcp_frozen) => mcp_frozen,
+            Err(result) => return result,
+        };
+        self.execute_frozen(call, &mcp_frozen, session).await
     }
 
     async fn invoke(&self, call: &ToolCall) -> ToolResult {
-        let name = self.entry.model_name.as_str();
         // The module generation is the tool's aliveness token: a tool whose
         // generation died must not run any more.
-        if !self.connection.accepts_generation(self.generation) {
-            return ToolResult::permanent_error(
-                &call.id,
-                "external tool belongs to an expired module generation",
-            )
-            .with_name(name);
+        if let Err(result) = self.generation_alive(&call.id) {
+            return result;
         }
         let frozen = self.build_frozen(call);
-        self.execute_frozen(call, &frozen).await
+        self.execute_frozen(call, &frozen, None).await
     }
 }

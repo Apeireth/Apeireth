@@ -296,7 +296,10 @@ impl ProviderRouter {
         // 出网闸：请求发出前判定一次（ADR-0014 §1.2 —— 上下文出境即行动）。
         // 默认 AllowAll 时这一支恒为 Pass，零行为变化。
         let redacted_request: Option<NormalizedRequest>;
-        let request: &NormalizedRequest = match self.egress.vet(request) {
+        let request: &NormalizedRequest = match self
+            .egress
+            .vet_in_session(identity.map(|(session, _)| session), request)
+        {
             EgressVerdict::Pass => request,
             EgressVerdict::Redacted(next) => {
                 redacted_request = Some(next);
@@ -421,7 +424,8 @@ impl ProviderRouter {
                     self.record_success(&id, elapsed);
                     // 受控回程还原（ADR-0014 §1.2 双闸的闸二）：把回信里的占位符
                     // 换回本地真值。默认闸不做任何事 = 零行为变化。
-                    self.egress.restore(&mut response);
+                    self.egress
+                        .restore_in_session(identity.map(|(session, _)| session), &mut response);
                     return Ok(RoutedCompletion {
                         served_by: id,
                         response,

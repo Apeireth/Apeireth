@@ -27,11 +27,15 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
-use apeireth_core::kernel::{Clock, SessionId};
+use apeireth_core::kernel::{Clock, PluginId, SessionId};
 use apeireth_governance::authorization::{AuthorizationAction, AuthorizationPolicy};
-use apeireth_protocol::canonical::{ContentPart, NormalizedRequest, NormalizedResponse};
+use apeireth_plugin::hooks::{HookContextV1, HookToolRequest};
+use apeireth_plugin::{Plugin, PluginContext, PluginManifest, PluginResult};
+use apeireth_protocol::canonical::{
+    ContentPart, ModuleHookV1, NormalizedRequest, NormalizedResponse,
+};
 use apeireth_runtime::canonical::egress_gate::{EgressGate, EgressVerdict, LocalConsumerRestore};
-use apeireth_tools_canonical::mcp_bridge::SessionRedactionDomain;
+use apeireth_tools_canonical::mcp_bridge::{SessionDomainRegistry, SessionRedactionDomain};
 use apeireth_tools_canonical::redaction_bridge::RestoreReport;
 
 use crate::accountability::{AccountabilityLedger, Affected, Boundary, ImpactStatement, Outcome};
@@ -61,6 +65,16 @@ pub struct RedactionEgressGate {
     /// external tool result face) both recognise — the alias one surface
     /// produced is the alias the other surface restores.
     domain: Arc<Mutex<SessionRedactionDomain>>,
+    /// The **session domain registry** — the per-call domain selector.
+    ///
+    /// `None` = **not wired**: the gate redacts and restores in its own
+    /// [`Self::domain`] (the behaviour before this batch, byte for byte).
+    /// `Some` = the domain is looked up **per call** by the call's session ⇒
+    /// the gate and the external tool result face, holding the **same**
+    /// registry instance, pick the **same** domain for the **same** session
+    /// ⇒ **cross-family recognition** (tool face alias ⇒ gate recognises it)
+    /// **without** letting two sessions share a domain.
+    registry: Option<Arc<SessionDomainRegistry>>,
     /// **出网动作序号**（单调递增）：与毫秒时间戳一起组成 `action_id`。
     ///
     /// 修「同毫秒两次出网 ⇒ 同 `action_id`」的碰撞（2026-10-25 实测发现）：
@@ -119,6 +133,7 @@ impl RedactionEgressGate {
     pub fn with_domain(domain: Arc<Mutex<SessionRedactionDomain>>) -> Self {
         Self {
             domain,
+            registry: None,
             action_seq: AtomicU64::new(0),
             ledger: Arc::new(EgressLedger::new(None)),
             authorization: None,
@@ -131,6 +146,34 @@ impl RedactionEgressGate {
     /// 本闸持有的会话脱敏域（只读引用）。
     pub fn domain(&self) -> &Arc<Mutex<SessionRedactionDomain>> {
         &self.domain
+    }
+
+    /// **挂上域注册表**（闸侧**按会话取域**）。
+    ///
+    /// 装配根与外部工具桥拿的是**同一个实例** ⇒ 两面按**同一个会话**取到
+    /// **同一个域** ⇒ 跨族互认；**不同会话**取到**不同域** ⇒ 跨会话不可互认、
+    /// 不可互还原。
+    ///
+    /// **默认不挂**：[`RedactionEgressGate::new`] 自建一个域，行为与接线前
+    /// 逐字节一致（跨面互认是**挂上之后**才有的性质）。
+    #[must_use]
+    pub fn with_registry(mut self, registry: Arc<SessionDomainRegistry>) -> Self {
+        self.registry = Some(registry);
+        self
+    }
+
+    /// 本闸挂着的**域注册表**（`None` = 未挂 ⇒ 固定域）。
+    pub fn registry(&self) -> Option<&Arc<SessionDomainRegistry>> {
+        self.registry.as_ref()
+    }
+
+    /// **按会话取域**：注册表已挂 **且** 这一调用带会话 ⇒ 该会话的域；
+    /// 其余（未挂 / 无会话）⇒ [`Self::domain`]（既有行为）。
+    fn domain_for(&self, session: Option<SessionId>) -> Arc<Mutex<SessionRedactionDomain>> {
+        match (&self.registry, session) {
+            (Some(registry), Some(session)) => registry.domain_for(session),
+            _ => Arc::clone(&self.domain),
+        }
     }
 
     /// 把闸的会话脱敏域换成**别人持有的那一个**（共享域接线面）。
@@ -160,14 +203,48 @@ impl RedactionEgressGate {
     ///
     /// 锁被污染时**不还原**（保持占位比还原错更安全）.
     pub fn restore_for_local_consumer(&self, text: &str) -> RestoreReport {
-        let Ok(mut domain) = self.domain.lock() else {
+        self.restore_for_local_consumer_in_domain(text, &self.domain)
+    }
+
+    /// **本地消费面**（**按会话取域**）—— 把文本里的**类 B 占位符**换回本地真值.
+    ///
+    /// 与 [`Self::restore_for_local_consumer`] 的差别只有一处：**取哪个域**。
+    /// 挂上注册表后 ⇒ 这一调用属于哪个会话，就用哪个会话的域 ⇒ **跨会话不可
+    /// 互还原**（A 会话的占位符在 B 会话还原不出来）。
+    ///
+    /// 没有会话标识 ⇒ 落回固定域（既有行为，逐字节不变）。
+    pub fn restore_for_local_consumer_in_session(
+        &self,
+        session: Option<SessionId>,
+        text: &str,
+    ) -> RestoreReport {
+        let domain = self.domain_for(session);
+        self.restore_for_local_consumer_in_domain(text, &domain)
+    }
+
+    /// 本地消费面的**会话入口**（端口面调用的那一层）。
+    pub(crate) fn restore_for_local_consumer_in_session_impl(
+        &self,
+        session: Option<SessionId>,
+        text: &str,
+    ) -> RestoreReport {
+        self.restore_for_local_consumer_in_session(session, text)
+    }
+
+    /// 本地消费面的**共用实现**（域由调用方给定）。
+    fn restore_for_local_consumer_in_domain(
+        &self,
+        text: &str,
+        domain: &Arc<Mutex<SessionRedactionDomain>>,
+    ) -> RestoreReport {
+        let Ok(mut guard) = domain.lock() else {
             return RestoreReport {
                 text: text.to_string(),
                 restored: Vec::new(),
                 unrestored: Vec::new(),
             };
         };
-        domain.restore_for_local_consumer(text)
+        guard.restore_for_local_consumer(text)
     }
 
     /// 挂上问责账本（每次外部行动写一条影响声明）。
@@ -210,6 +287,91 @@ impl RedactionEgressGate {
 }
 
 impl RedactionEgressGate {
+    /// 受控回程还原的**共用实现**（域由调用方给定）。
+    fn restore_in_domain(
+        &self,
+        response: &mut NormalizedResponse,
+        domain: &Arc<Mutex<SessionRedactionDomain>>,
+    ) {
+        let Ok(mut guard) = domain.lock() else {
+            // 登记簿不可用 → 不还原（占位保留）。**不泄漏**：保持占位比还原错更安全。
+            return;
+        };
+        let report = guard.restore_for_local(&response.content);
+        response.content = report.text;
+    }
+
+    /// 出网判定的**共用实现**（域由调用方给定）。
+    fn vet_in_domain(
+        &self,
+        request: &NormalizedRequest,
+        domain: &Arc<Mutex<SessionRedactionDomain>>,
+    ) -> EgressVerdict {
+        // 授权判定**先于**脱敏：没授权就不必做脱敏工作量，也不必进登记簿。
+        //
+        // 粒度：资源固定 `egress`，scope 装**用途**（当前唯一用途 `chat`）。
+        // provider 级粒度由出网控制层管（两层不混）。
+        if let Some(policy) = &self.authorization {
+            let now_ms = self.clock.now().timestamp_millis();
+            if !policy.allows_at(
+                EGRESS_AUTHORIZATION_RESOURCE,
+                EGRESS_USAGE_CHAT,
+                &AuthorizationAction::Egress,
+                now_ms,
+            ) {
+                let reason = if !policy.is_valid_at(now_ms) {
+                    "出网未获授权：授权策略已失效（撤销或过期）—— 已拒绝本次出网".to_string()
+                } else {
+                    format!(
+                        "出网未获授权：策略未授予 `{EGRESS_AUTHORIZATION_RESOURCE}` 资源的 \
+                         `{EGRESS_USAGE_CHAT}` 用途出网权限 —— 已拒绝本次出网"
+                    )
+                };
+                self.record(
+                    "deny",
+                    &[],
+                    "provider",
+                    EGRESS_USAGE_CHAT,
+                    Some(reason.clone()),
+                );
+                self.declare_impact("provider", false);
+                return EgressVerdict::Deny { reason };
+            }
+        }
+        let Ok(mut guard) = domain.lock() else {
+            // 登记簿锁被 poison = 无法保证「真值不出境」→ 拒绝即帧。
+            return EgressVerdict::Deny {
+                reason: "出境脱敏闸不可用（登记簿锁被污染）—— 已拒绝本次出网".to_string(),
+            };
+        };
+        let mut replaced = request.clone();
+        let mut any_hit = false;
+        let mut hits = Vec::new();
+        for message in &mut replaced.messages {
+            for part in &mut message.content {
+                if let ContentPart::Text { text } = part {
+                    let redaction = guard.redact_for_egress(text);
+                    if !redaction.hits.is_empty() {
+                        any_hit = true;
+                        hits.extend(redaction.hits);
+                        *text = redaction.text;
+                    }
+                }
+            }
+        }
+        // 出域账本：每次判定记一行（**零真值**：只记对象类型与指纹）。
+        // 记账失败**不阻断出网**（账本是观测面，不是闸）。
+        if any_hit {
+            self.record("redacted", &hits, "provider", EGRESS_USAGE_CHAT, None);
+            self.declare_impact("provider", true);
+            EgressVerdict::Redacted(replaced)
+        } else {
+            self.record("pass", &[], "provider", EGRESS_USAGE_CHAT, None);
+            self.declare_impact("provider", true);
+            EgressVerdict::Pass
+        }
+    }
+
     /// 记一行出域账本。
     fn record(
         &self,
@@ -305,12 +467,16 @@ impl EgressGate for RedactionEgressGate {
     /// transcript（模型回信里带回的类 B 占位符原样留着）。类 B 真值只由**显式的
     /// 本地消费面**交还（[`RedactionEgressGate::restore_for_local_consumer`]）。
     fn restore(&self, response: &mut NormalizedResponse) {
-        let Ok(mut domain) = self.domain.lock() else {
-            // 登记簿不可用 → 不还原（占位保留）。**不泄漏**：保持占位比还原错更安全。
-            return;
-        };
-        let report = domain.restore_for_local(&response.content);
-        response.content = report.text;
+        self.restore_in_domain(response, &self.domain);
+    }
+
+    /// **会话域**的受控回程还原（端口面的会话入口）。
+    ///
+    /// 挂上注册表后 ⇒ 按**这一回合的会话**取域 ⇒ 工具面在会话 S 产的占位符，
+    /// 只有**闸在会话 S 上**才认账 ⇒ **跨会话不可互还原**。
+    fn restore_in_session(&self, session: Option<SessionId>, response: &mut NormalizedResponse) {
+        let domain = self.domain_for(session);
+        self.restore_in_domain(response, &domain);
     }
 
     /// **本地消费面**（显式调用）—— 端口面的同一条路径。
@@ -323,70 +489,31 @@ impl EgressGate for RedactionEgressGate {
         }
     }
 
+    /// **会话域**的本地消费面（端口面的会话入口）。
+    fn restore_for_local_consumer_in_session(
+        &self,
+        session: Option<SessionId>,
+        text: &str,
+    ) -> LocalConsumerRestore {
+        let report = self.restore_for_local_consumer_in_session_impl(session, text);
+        LocalConsumerRestore {
+            text: report.text,
+            restored: report.restored,
+        }
+    }
+
     fn vet(&self, request: &NormalizedRequest) -> EgressVerdict {
-        // 授权判定**先于**脱敏：没授权就不必做脱敏工作量，也不必进登记簿。
-        //
-        // 粒度：资源固定 `egress`，scope 装**用途**（当前唯一用途 `chat`）。
-        // provider 级粒度由出网控制层管（两层不混）。
-        if let Some(policy) = &self.authorization {
-            let now_ms = self.clock.now().timestamp_millis();
-            if !policy.allows_at(
-                EGRESS_AUTHORIZATION_RESOURCE,
-                EGRESS_USAGE_CHAT,
-                &AuthorizationAction::Egress,
-                now_ms,
-            ) {
-                let reason = if !policy.is_valid_at(now_ms) {
-                    "出网未获授权：授权策略已失效（撤销或过期）—— 已拒绝本次出网".to_string()
-                } else {
-                    format!(
-                        "出网未获授权：策略未授予 `{EGRESS_AUTHORIZATION_RESOURCE}` 资源的 \
-                         `{EGRESS_USAGE_CHAT}` 用途出网权限 —— 已拒绝本次出网"
-                    )
-                };
-                self.record(
-                    "deny",
-                    &[],
-                    "provider",
-                    EGRESS_USAGE_CHAT,
-                    Some(reason.clone()),
-                );
-                self.declare_impact("provider", false);
-                return EgressVerdict::Deny { reason };
-            }
-        }
-        let Ok(mut domain) = self.domain.lock() else {
-            // 登记簿锁被 poison = 无法保证「真值不出境」→ 拒绝即帧。
-            return EgressVerdict::Deny {
-                reason: "出境脱敏闸不可用（登记簿锁被污染）—— 已拒绝本次出网".to_string(),
-            };
-        };
-        let mut replaced = request.clone();
-        let mut any_hit = false;
-        let mut hits = Vec::new();
-        for message in &mut replaced.messages {
-            for part in &mut message.content {
-                if let ContentPart::Text { text } = part {
-                    let redaction = domain.redact_for_egress(text);
-                    if !redaction.hits.is_empty() {
-                        any_hit = true;
-                        hits.extend(redaction.hits);
-                        *text = redaction.text;
-                    }
-                }
-            }
-        }
-        // 出域账本：每次判定记一行（**零真值**：只记对象类型与指纹）。
-        // 记账失败**不阻断出网**（账本是观测面，不是闸）。
-        if any_hit {
-            self.record("redacted", &hits, "provider", EGRESS_USAGE_CHAT, None);
-            self.declare_impact("provider", true);
-            EgressVerdict::Redacted(replaced)
-        } else {
-            self.record("pass", &[], "provider", EGRESS_USAGE_CHAT, None);
-            self.declare_impact("provider", true);
-            EgressVerdict::Pass
-        }
+        self.vet_in_domain(request, &self.domain)
+    }
+
+    /// **会话域**的出网判定（端口面的会话入口）。
+    fn vet_in_session(
+        &self,
+        session: Option<SessionId>,
+        request: &NormalizedRequest,
+    ) -> EgressVerdict {
+        let domain = self.domain_for(session);
+        self.vet_in_domain(request, &domain)
     }
 }
 
@@ -431,6 +558,121 @@ pub fn shared_session_domain() -> Option<Arc<Mutex<SessionRedactionDomain>>> {
             .get_or_init(|| Arc::new(Mutex::new(SessionRedactionDomain::new())))
             .clone(),
     )
+}
+
+/// 进程级共享**域注册表**槽（**默认关**；**第一个安装者赢**）。
+///
+/// **一个会话一个域**的**粒度**面：外部工具结果面与出网闸持**同一个注册表**
+/// ⇒ 两面按**同一个会话**取到**同一个域** ⇒ 跨族互认；而**不同会话**取到
+/// **不同域** ⇒ 跨会话不可互认、不可互还原。
+static SHARED_SESSION_REGISTRY: OnceLock<Arc<SessionDomainRegistry>> = OnceLock::new();
+
+/// 装一份**共享域注册表**（**第一个安装者赢**；返回是否装上了）。
+///
+/// 装配根（`canonical::production`）调用它 ⇒ MCP 桥与 M5 闸取**同一个实例**。
+pub fn install_shared_session_registry(registry: Arc<SessionDomainRegistry>) -> bool {
+    SHARED_SESSION_REGISTRY.set(registry).is_ok()
+}
+
+/// 取**共享域注册表**（进程级槽；没装 = `None`）。
+pub fn shared_session_registry() -> Option<Arc<SessionDomainRegistry>> {
+    SHARED_SESSION_REGISTRY.get().cloned()
+}
+
+/// **装配根那一步**：按**既有登记名**的判据造出**唯一一份**注册表并装上。
+///
+/// 判据 = [`EGRESS_GATE_ENV`]（`APEIRETH_ENABLE_EGRESS_GATE`）⇒ **不新增**
+/// `APEIRETH_*` 名 ⇒ env 棘轮不动。闸没开 ⇒ **不装** ⇒ 两面各持各的域
+/// （与接线前逐字节一致）。
+///
+/// 闸与外部工具桥**都**从这里取 ⇒ 同一个实例 ⇒ 跨族同域。**幂等**：多次调用
+/// 拿到的是**同一个**实例（`get_or_init`）。
+pub fn install_shared_session_registry_if_enabled() -> Option<Arc<SessionDomainRegistry>> {
+    if !egress_gate_enabled_from_env() {
+        return None;
+    }
+    Some(
+        SHARED_SESSION_REGISTRY
+            .get_or_init(|| Arc::new(SessionDomainRegistry::new()))
+            .clone(),
+    )
+}
+
+/// **生产接线那一步**：把**指定**的域注册表挂到闸上.
+///
+/// 闸与外部工具桥取的是**同一个实例** ⇒ 两面按**同一个会话**取到**同一个域**
+/// ⇒ 跨族互认; 而**不同会话**取到**不同域** ⇒ 跨会话不可互认、不可互还原.
+#[must_use]
+pub fn attach_session_registry(
+    gate: RedactionEgressGate,
+    registry: Arc<SessionDomainRegistry>,
+) -> RedactionEgressGate {
+    gate.with_registry(registry)
+}
+
+// ---------------------------------------------------------------------------
+// 会话结束 ⇒ 域销毁（登记簿随之消失）
+// ---------------------------------------------------------------------------
+
+/// **会话域作用域**插件：会话结束 ⇒ **域销毁**（登记簿随之消失）。
+///
+/// 注册了 [`ModuleHookV1::SessionEnd`] ⇒ 运行时结束一个会话时调它 ⇒ 那只会话
+/// 的域连同它的**登记簿（真值驻留处）**与账本一起消失 ⇒ 会话的真值不留在
+/// 进程里等一个**永远不会来的**下一次访问。
+///
+/// **默认不注册**：共享槽里没有注册表 ⇒ 装配根不装它（逐字节不变）。
+pub struct SessionDomainScopePlugin {
+    registry: Arc<SessionDomainRegistry>,
+    manifest: PluginManifest,
+}
+
+impl SessionDomainScopePlugin {
+    /// 插件 id（稳定 ⇒ 自述面可认）。
+    pub const PLUGIN_ID: &str = "module.session.domain.scope";
+
+    /// 新建（注入那**唯一一份**注册表）。
+    pub fn new(registry: Arc<SessionDomainRegistry>) -> Self {
+        Self {
+            registry,
+            manifest: PluginManifest::new(
+                PluginId::new(Self::PLUGIN_ID).expect("static plugin id"),
+                "2.0.0-rc.5",
+                "Session Domain Scope",
+            ),
+        }
+    }
+
+    /// 本插件持有的**域注册表**（只读引用）。
+    pub fn registry(&self) -> &Arc<SessionDomainRegistry> {
+        &self.registry
+    }
+}
+
+#[async_trait::async_trait]
+impl Plugin for SessionDomainScopePlugin {
+    fn manifest(&self) -> &PluginManifest {
+        &self.manifest
+    }
+
+    async fn initialize(&self, _ctx: &PluginContext) -> PluginResult<()> {
+        Ok(())
+    }
+
+    fn hooks(&self) -> Vec<ModuleHookV1> {
+        vec![ModuleHookV1::SessionEnd]
+    }
+
+    async fn on_hook(&self, ctx: &HookContextV1) -> PluginResult<Vec<HookToolRequest>> {
+        if ctx.hook == ModuleHookV1::SessionEnd {
+            // 会话结束 ⇒ 域销毁（登记簿随之消失）。重复结束是**幂等**的。
+            self.registry.end_session(ctx.session);
+        }
+        Ok(Vec::new())
+    }
+
+    async fn shutdown(&self) -> PluginResult<()> {
+        Ok(())
+    }
 }
 
 /// 闸 env 是否**开启**（读 env；未设 = 关）。
@@ -498,6 +740,12 @@ pub fn egress_gate_from_env_with_all(
     // ⇒ 跨面互认。**默认关**：闸没开 ⇒ 域不共享（既有行为，逐字节不变）。
     if let Some(domain) = shared_session_domain() {
         gate = gate.with_shared_domain(domain);
+    }
+    // **共享域注册表**（按会话取域）：装配根造的**同一个实例** ⇒ 闸与外部工具
+    // 桥按**同一个会话**取到**同一个域** ⇒ 跨族同域。**默认关**：没装 ⇒ 不挂
+    // （既有行为，逐字节不变）。
+    if let Some(registry) = install_shared_session_registry_if_enabled() {
+        gate = attach_session_registry(gate, registry);
     }
     if let Some(path) = accountability_path {
         gate = gate.with_accountability(Arc::new(AccountabilityLedger::new(Some(path))));

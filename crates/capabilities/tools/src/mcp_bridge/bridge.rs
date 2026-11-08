@@ -81,7 +81,7 @@ use super::governance::{
     McpFamilyGrants, McpPermissionMapping, McpRiskMappingHook, McpToolDenyGuard,
 };
 use super::tool::{mcp_output_schema, McpDynamicTool};
-use super::{ClassBDeclaration, SessionRedactionDomain};
+use super::{ClassBDeclaration, SessionDomainRegistry, SessionRedactionDomain};
 
 /// Where discovered dynamic tools land (a module bag, a runtime registry).
 pub trait McpToolRegistry: Send + Sync {
@@ -184,6 +184,19 @@ pub struct McpToolBridge {
     /// [`McpToolBridge::with_class_b_declaration`] (or
     /// [`McpToolBridge::set_class_b_declaration`] for the live bridge).
     class_b: OnceLock<ClassBDeclaration>,
+    /// The **session domain registry** — the per-call domain selector.
+    ///
+    /// `None` = **not wired**: every tool sweeps in its own (or in the
+    /// injected fixed) domain, exactly as before this batch. `Some` = the
+    /// domain is looked up **per call** by the call's session ⇒ **cross-session
+    /// calls never share a domain** ⇒ the same value in two sessions gets two
+    /// aliases ⇒ the two sessions cannot correlate it and cannot restore each
+    /// other's aliases.
+    ///
+    /// The registry is injected **after** construction (the live bridge of the
+    /// production assembly is built inside a resource factory) — same shape as
+    /// [`McpToolBridge::set_session_domain`].
+    registry: OnceLock<Arc<SessionDomainRegistry>>,
 }
 
 /// One wrapped dynamic tool plus the directory entry it was built from.
@@ -338,6 +351,7 @@ impl McpToolBridge {
             refresh_lock: tokio::sync::Mutex::new(()),
             session_domain: OnceLock::new(),
             class_b: OnceLock::new(),
+            registry: OnceLock::new(),
         })
     }
 
@@ -401,6 +415,37 @@ impl McpToolBridge {
     /// production assembly exists only after the runtime initialized it).
     pub fn set_class_b_declaration(&self, declaration: ClassBDeclaration) {
         let _ = self.class_b.set(declaration);
+    }
+
+    /// Give every tool of this bridge the **session domain registry** — the
+    /// per-call domain selector.
+    ///
+    /// **Not wired by default**: without this call every tool keeps the
+    /// behaviour before this batch (byte for byte). With it, the domain of a
+    /// call is picked **by the call's session** ⇒ **cross-session calls never
+    /// share a domain** ⇒ the same value in two sessions gets two aliases ⇒
+    /// the two sessions cannot correlate it and cannot restore each other's
+    /// aliases (the granularity half of "one session, one domain").
+    ///
+    /// The **first** injection wins (the registry is a fact, not a preference);
+    /// inject it **before the first refresh** (tools are wrapped at discovery
+    /// time).
+    #[must_use]
+    pub fn with_session_registry(mut self, registry: Arc<SessionDomainRegistry>) -> Self {
+        let _ = self.registry.set(registry);
+        self
+    }
+
+    /// The session domain registry of this bridge (`None` = **not wired**).
+    pub fn session_registry(&self) -> Option<Arc<SessionDomainRegistry>> {
+        self.registry.get().cloned()
+    }
+
+    /// **Inject the registry after construction** (same shape as
+    /// [`McpToolBridge::set_session_domain`]: the live bridge of the production
+    /// assembly exists only after the runtime initialized it).
+    pub fn set_session_registry(&self, registry: Arc<SessionDomainRegistry>) {
+        let _ = self.registry.set(registry);
     }
 
     /// The loaded configuration.
@@ -767,18 +812,26 @@ impl McpToolBridge {
             .get()
             .map(|declaration| declaration.declares(&entry.model_name))
             .unwrap_or(false);
-        let dynamic = match self.session_domain.get() {
-            Some(domain) => Arc::new(McpDynamicTool::new_with_domain_and_class_b(
+        // 域的落点有两级:
+        //   * **注册表已装** ⇒ 逐调用按会话取域（跨会话绝不共用域）;
+        //   * **未装** ⇒ 固定域（接了会话域就共用那一只）⇒ 没接就每工具一只
+        //     （接线前逐字节一致的行为）。
+        // 固定域在注册表模式下仍是**无会话调用**的落点（宿主侧直调没有会话
+        // 可依 ⇒ 沿用既有行为）。
+        let fallback = match self.session_domain.get() {
+            Some(domain) => Arc::clone(domain),
+            None => Arc::new(Mutex::new(SessionRedactionDomain::new())),
+        };
+        let dynamic = match self.registry.get() {
+            Some(registry) => Arc::new(McpDynamicTool::new_with_registry(
                 entry,
                 connection,
-                Arc::clone(domain),
+                Arc::clone(registry),
+                fallback,
                 class_b,
             )),
             None => Arc::new(McpDynamicTool::new_with_domain_and_class_b(
-                entry,
-                connection,
-                Arc::new(Mutex::new(SessionRedactionDomain::new())),
-                class_b,
+                entry, connection, fallback, class_b,
             )),
         };
         Arc::new(PipelinedCapability::new(

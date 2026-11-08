@@ -98,12 +98,21 @@ fn class_b_declaration() -> ClassBDeclaration {
     }
 }
 
-/// 把**共享会话脱敏域**与**类 B 声明**注入活桥（生产接线面）。
+/// 把**共享会话脱敏域**、**域注册表**与**类 B 声明**注入活桥（生产接线面）。
 ///
 /// # 这一步把「两个域」变成「一个域」
 ///
 /// 外部工具结果面（`McpDynamicTool`）与出网闸（`RedactionEgressGate`）必须持
 /// **同一个**会话脱敏域 ⇒ 两面才认账：工具面产的占位符，出网闸认得出。
+///
+/// # 域注册表 = **按会话取域**（粒度面）
+///
+/// 固定域是「**一进程一域**」⇒ 多会话并发时跨会话的同一个值会得到**同一个
+/// 占位符** ⇒ 跨会话可关联 ⇒ 违「一个会话一个域」。**域注册表**把粒度落到
+/// **会话**：桥逐调用按**调用的会话**取域 ⇒ 跨会话**绝不共用域** ⇒ 跨会话同值
+/// ⇒ **不同占位符** ⇒ 不可互认、不可互还原。
+///
+/// 注册表实例由**装配根**造出（进程级槽）⇒ 桥与闸取**同一个实例** ⇒ 跨族同域。
 ///
 /// # 默认关（判据）
 ///
@@ -129,6 +138,13 @@ pub fn wire_session_redaction(handles: &ExternalToolHandles) -> bool {
         return false;
     };
     bridge.set_session_domain(domain);
+    // **域注册表**（按会话取域）：装配根造的**同一个实例** ⇒ 桥与闸按**同一个
+    // 会话**取到**同一个域** ⇒ 跨族同域, 且跨会话绝不共用域。
+    if let Some(registry) =
+        apeireth_runtime_assembly::egress_gate::install_shared_session_registry_if_enabled()
+    {
+        bridge.set_session_registry(registry);
+    }
     let declaration = class_b_declaration();
     if !declaration.is_empty() {
         for line in declaration.audit_lines() {

@@ -487,6 +487,15 @@ impl ProductionModules {
         roster_config.community_triage = config.community_triage && backends.graph.is_some();
         // 外部工具面两行口径分离: `mcp` = 实际登记件数 (启动期接线后才有数 ⇒ 现投影)。
         roster_config.mcp_bridge = mcp_server_config.is_some();
+        // **域注册表** (`SessionDomainRegistry`): 装配根造出**唯一一份** ⇒ 外部
+        // 工具桥与出网闸各取**同一个实例** ⇒ 跨族同域 (按会话取域)。**默认关**:
+        // 判据 = 既有登记名 `APEIRETH_ENABLE_EGRESS_GATE` (**不新增** env 名)。
+        // 装配根装好它, 两面随后各取同一实例 ⇒ 跨会话绝不共用域。
+        if let Some(registry) = crate::egress_gate::install_shared_session_registry_if_enabled() {
+            tool_modules.push(Arc::new(crate::egress_gate::SessionDomainScopePlugin::new(
+                registry,
+            )));
+        }
         // 自学习 / 类型化召回 / 检索调权的生效值 = 接线事实 AND 上游槽 (自学习
         // 信号只走记忆召回模块, 类型化召回候选只走记忆协调器, 检索调权挂记忆召回)。
         let self_tuning_effective = backends.self_tuning.is_some() && config.memory_recall;
@@ -978,22 +987,13 @@ impl ProductionModules {
         //（开关关 / 缺目录 = `None` = 槽保持空；fill 未知武装时 no-op）。
         bio_probe_slots.fill_ritual_store(bio_ritual_store.as_ref());
 
-        // External tool bridge (MCP): the slot is opt-in, and enabling it loads
-        // the server list at assembly time (env primary, data-directory stored
-        // document secondary) with fail-closed semantics. Connections are
+        // External tool bridge (MCP): the slot is opt-in; enabling it loads the
+        // server list at assembly time (fail-closed). Connections are
         // established asynchronously after build; the module bag is the
-        // registration target for the dynamic tools discovery produces. The
-        // server list was loaded above (before the roster projection) — a
-        // server list with no enabled entry assembles an inert bridge (no
-        // external tools), and the roster reports that honestly.
-        //
-        // 合并说明（2026-11-06）: 两侧的外部工具面在此**合一为一条接线**:
-        //   * 对方线的**资源工厂形态**（`McpDefinition` + 资源工厂模块）: 运行时
-        //     初始化时实例化桥, 外部工具经插件/资源工厂通道进运行时目录。
-        //   * 本线的**登记账袋**（`McpModule`）: 早建的袋 ⇒ 自述面可晚绑定
-        //     「实际登记进运行时能力表的外部工具件数」。
-        // 两侧共用**同一个桥**（资源工厂在初始化时交出的活桥, 见
-        // [`Self::mcp_bridge`]）⇒ 不重复连进程、不重复构造桥对象。
+        // registration target for the discovered tools.
+        // 合并说明（2026-11-06）: 两侧的外部工具面在此**合一为一条接线** ——
+        // 资源工厂形态（`McpDefinition`）+ 登记账袋（`McpModule`）共用**同一个
+        // 桥**（见 [`Self::mcp_bridge`]）⇒ 不重复连进程、不重复构造桥对象。
         let mut mcp_definition = None;
         let mut mcp_module = None;
         if let (Some(server_config), Some(module)) = (mcp_server_config, mcp_tool_bag.clone()) {
