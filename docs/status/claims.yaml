@@ -29,11 +29,11 @@ claims:
     tests:
       - crates/engine/runtime/src/canonical/provider/compat_tests.rs
       - crates/engine/runtime/tests/canonical_multi_provider.rs
-    verified_at: 8d43c6e7ff2153189c95f5738f331bce81acdd84
+    verified_at: d24dad53ef030af25615ff0b08e2d6d4a2f81685
     verify_cmd: "cargo test -p apeireth-runtime --test canonical_multi_provider"
     owner: runtime
     next_review: "2026-11-20"
-    notes: "Runtime 持有 ProviderRouter；fallback 顺序/健康 EMA/retryable 才下抛/permanent 立即失败。；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）；2026-10-27 KC-2 复核：runtime.rs 新增控制命令/插件工具同名启动期拒绝，本 claim 语义未变（实测见 75ee2464 正文）；2026-10-28 Phase 3 复核：Runtime 工具目录与模块装配改变，ProviderRouter 的路由/fallback/健康与并发边界未改；原回归随本批全量门禁通过。；本批复核：实际请求边界新增 owner 用量、可取消 Provider semaphore 与 Retry-After 退避；原 fallback/egress 测试保留，实例并发/限流/失败用量验收通过。；2026-10-28 生产收敛复核：源码变更及回归证据见 kernel-convergence-final-acceptance-2026-10-28.md；不将 Legacy SubLoop 或旧数据 Profile 映射宣称已迁移。；2026-10-29 S1 复核：任务 gate 在实际 Provider 候选请求处预留共享预算，fallback/overflow 不绕预算；原路由、并发、出网和核算边界保持，证据见 kernel-convergence-s1-2026-10-29.md。；2026-10-29 S3 复核：builder 兼容行为统一注册工具路径，Provider routing/default 与限流语义不变；canonical_multi_provider 及 workspace 原命令通过，见 kernel-convergence-s3-2026-10-29.md。；2026-10-29 S4 复核：Runtime 新增可选 Host epoch，回合与审批恢复受撤销约束；Provider 路由、fallback、并发、预算与默认不变。runtime all-targets 及本轮包级 clippy 通过，见 kernel-convergence-s4-2026-10-29.md。；2026-10-29 S5：桌面执行经 managed main 委托同一 Kernel/ProviderRouter；路由、fallback、治理与限流算法未改。真实 bootstrap、多入口和 runtime all-targets 回归通过；不声明外部 API 实测。 证据见 kernel-convergence-s5-2026-10-29.md。；2026-10-29 D3：仅新增兼容 Host 路由契约并移除未调用的内部 Arc getter，生产 gated 请求路径未变；fallback/逐候选 tool 投影、流式回落、会话计量与拒绝测试通过。；2026-10-30 P2：新增可选 Host 监督服务与执行回执；原能力默认、Provider 路由与确定性权限机制保持，定向及原 MainOnly 测试/clippy/fmt 回归通过。未将兼容入口声明为已受 System One 保护，无 live model/硬件声明。；2026-10-30 P3：可选 owner-bound 消息复用 Registry/Dispatcher，委托交集与独立后台授权分离；真实 Runtime 定向及原 MainOnly test/clippy/fmt 回归通过。默认与既有等级保持，本地幂等非持久 exactly-once，新消息变体需新 reader；无 live model/硬件声明。；2026-11-08 复核：stale 来源为**他线 3c-1b**（`provider.rs` 的 `vet` → `vet_in_session`，**默认实现 = 既有行为逐字节不变**）⇒ 路由 / fallback / 健康度语义未变 ⇒ 一并重盖。"
+    notes: "Runtime 持有 ProviderRouter；fallback 顺序/健康 EMA/retryable 才下抛/permanent 立即失败。；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）；2026-10-27 KC-2 复核：runtime.rs 新增控制命令/插件工具同名启动期拒绝，本 claim 语义未变（实测见 75ee2464 正文）；2026-10-28 Phase 3 复核：Runtime 工具目录与模块装配改变，ProviderRouter 的路由/fallback/健康与并发边界未改；原回归随本批全量门禁通过。；本批复核：实际请求边界新增 owner 用量、可取消 Provider semaphore 与 Retry-After 退避；原 fallback/egress 测试保留，实例并发/限流/失败用量验收通过。；2026-10-28 生产收敛复核：源码变更及回归证据见 kernel-convergence-final-acceptance-2026-10-28.md；不将 Legacy SubLoop 或旧数据 Profile 映射宣称已迁移。；2026-10-29 S1 复核：任务 gate 在实际 Provider 候选请求处预留共享预算，fallback/overflow 不绕预算；原路由、并发、出网和核算边界保持，证据见 kernel-convergence-s1-2026-10-29.md。；2026-10-29 S3 复核：builder 兼容行为统一注册工具路径，Provider routing/default 与限流语义不变；canonical_multi_provider 及 workspace 原命令通过，见 kernel-convergence-s3-2026-10-29.md。；2026-10-29 S4 复核：Runtime 新增可选 Host epoch，回合与审批恢复受撤销约束；Provider 路由、fallback、并发、预算与默认不变。runtime all-targets 及本轮包级 clippy 通过，见 kernel-convergence-s4-2026-10-29.md。；2026-10-29 S5：桌面执行经 managed main 委托同一 Kernel/ProviderRouter；路由、fallback、治理与限流算法未改。真实 bootstrap、多入口和 runtime all-targets 回归通过；不声明外部 API 实测。 证据见 kernel-convergence-s5-2026-10-29.md。；2026-10-29 D3：仅新增兼容 Host 路由契约并移除未调用的内部 Arc getter，生产 gated 请求路径未变；fallback/逐候选 tool 投影、流式回落、会话计量与拒绝测试通过。；2026-10-30 P2：新增可选 Host 监督服务与执行回执；原能力默认、Provider 路由与确定性权限机制保持，定向及原 MainOnly 测试/clippy/fmt 回归通过。未将兼容入口声明为已受 System One 保护，无 live model/硬件声明。；2026-10-30 P3：可选 owner-bound 消息复用 Registry/Dispatcher，委托交集与独立后台授权分离；真实 Runtime 定向及原 MainOnly test/clippy/fmt 回归通过。默认与既有等级保持，本地幂等非持久 exactly-once，新消息变体需新 reader；无 live model/硬件声明。；2026-11-08 复核：stale 来源为**他线 3c-1b**（`provider.rs` 的 `vet` → `vet_in_session`，**默认实现 = 既有行为逐字节不变**）⇒ 路由 / fallback / 健康度语义未变 ⇒ 一并重盖。；2026-11-08 W2 波次复核：所涉文件**只新增**可选字段/注册段（`RuntimeConfig.depth_ceiling` 默认 `None`；`Session.depth_quota` 默认空槽；生产配置默认关 ⇒ **逐字节零变化**）⇒ **既有路径未动** ⇒ 本声明语义不变。"
 
   - id: core.cost_router
     title: "成本分级路由（H-P2，四档选模）"
@@ -46,11 +46,11 @@ claims:
     tests:
       - crates/foundation/core/src/cost_router.rs
       - crates/adapters/cli/tests/production_knobs.rs
-    verified_at: 8d43c6e7ff2153189c95f5738f331bce81acdd84
+    verified_at: d24dad53ef030af25615ff0b08e2d6d4a2f81685
     verify_cmd: "cargo test -p apeireth-core cost_router"
     owner: core
     next_review: "2026-11-20"
-    notes: "默认关 fail-closed；CLI chat 任务选型已接；网关任务源路由/显式档 CLI 旗标未接线（H-P2 记录）。；2026-10-22 批次复核：core cost_router 12 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）；2026-10-28 生产收敛复核：源码变更及回归证据见 kernel-convergence-final-acceptance-2026-10-28.md；不将 Legacy SubLoop 或旧数据 Profile 映射宣称已迁移。；2026-10-29 S5：CLI 变更限于 Host bootstrap，任务选型与该可选成本路由开关的原分支未改；本批作源码差异复核，bootstrap 与所触包 clippy 通过，不声称网关任务选型新增接线。 证据见 kernel-convergence-s5-2026-10-29.md。；2026-11-08 W1 波次复核：本批 CLI 组合根新增 4 族的 env 段 / 授权 / 钩子；**成本档层的选型路径未动**（新策略层是**另一族**，本波未接线）⇒ 语义不变。"
+    notes: "默认关 fail-closed；CLI chat 任务选型已接；网关任务源路由/显式档 CLI 旗标未接线（H-P2 记录）。；2026-10-22 批次复核：core cost_router 12 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）；2026-10-28 生产收敛复核：源码变更及回归证据见 kernel-convergence-final-acceptance-2026-10-28.md；不将 Legacy SubLoop 或旧数据 Profile 映射宣称已迁移。；2026-10-29 S5：CLI 变更限于 Host bootstrap，任务选型与该可选成本路由开关的原分支未改；本批作源码差异复核，bootstrap 与所触包 clippy 通过，不声称网关任务选型新增接线。 证据见 kernel-convergence-s5-2026-10-29.md。；2026-11-08 W1 波次复核：本批 CLI 组合根新增 4 族的 env 段 / 授权 / 钩子；**成本档层的选型路径未动**（新策略层是**另一族**，本波未接线）⇒ 语义不变。；2026-11-08 W2 波次复核：CLI 组合根**新增**两处接线（隐私声明读取（默认 `ordinary` ⇒ 闸不生效 ⇒ 零行为变化）+ `APEIRETH_QUOTA_MAX_DEPTH` 旋钮（默认未设 ⇒ 恒不设限））⇒ **既有组合根路径与授权口径未动** ⇒ 本声明语义不变。"
 
   - id: tool.task_board
     title: "任务簿（V6-a 持久任务队列工具面）"
@@ -64,11 +64,11 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/task_board_tool.rs
       - crates/adapters/cli/tests/task_board_knob.rs
-    verified_at: 8d43c6e7ff2153189c95f5738f331bce81acdd84
+    verified_at: d24dad53ef030af25615ff0b08e2d6d4a2f81685
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test task_board_tool"
     owner: runtime-assembly
     next_review: "2026-11-20"
-    notes: "写面每次人批；失败只能人判；无 failed/retry 动作面。；2026-10-22 批次复核：assembly task_board_tool 6 + cli task_board_knob 2 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）；2026-10-28 生产收敛复核：源码变更及回归证据见 kernel-convergence-final-acceptance-2026-10-28.md；不将 Legacy SubLoop 或旧数据 Profile 映射宣称已迁移。；2026-10-29 S5：完整请求适配保留生产所选工具、显式授权和冻结审批；task_board 注册/开关/写入治理分支未改。本批作源码差异复核并通过 bootstrap、生产认知与包级 clippy，未扩展工具动作或默认开关。 证据见 kernel-convergence-s5-2026-10-29.md。；2026-11-08 W1 波次复核：本批在生产装配根**新增 4 族注册**（进程树快照 / HTTP 写面 / 互联网检索 / 主人日程，均默认关）+ 名册与策展表扩充 + CLI 组合根新增 env 段与授权钩子；**本声明所指的既有能力，其注册条件与执行路径逐字未动** ⇒ 口径不变。"
+    notes: "写面每次人批；失败只能人判；无 failed/retry 动作面。；2026-10-22 批次复核：assembly task_board_tool 6 + cli task_board_knob 2 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）；2026-10-28 生产收敛复核：源码变更及回归证据见 kernel-convergence-final-acceptance-2026-10-28.md；不将 Legacy SubLoop 或旧数据 Profile 映射宣称已迁移。；2026-10-29 S5：完整请求适配保留生产所选工具、显式授权和冻结审批；task_board 注册/开关/写入治理分支未改。本批作源码差异复核并通过 bootstrap、生产认知与包级 clippy，未扩展工具动作或默认开关。 证据见 kernel-convergence-s5-2026-10-29.md。；2026-11-08 W1 波次复核：本批在生产装配根**新增 4 族注册**（进程树快照 / HTTP 写面 / 互联网检索 / 主人日程，均默认关）+ 名册与策展表扩充 + CLI 组合根新增 env 段与授权钩子；**本声明所指的既有能力，其注册条件与执行路径逐字未动** ⇒ 口径不变。；2026-11-08 W2 波次复核：CLI 组合根**新增**两处接线（隐私声明读取（默认 `ordinary` ⇒ 闸不生效 ⇒ 零行为变化）+ `APEIRETH_QUOTA_MAX_DEPTH` 旋钮（默认未设 ⇒ 恒不设限））⇒ **既有组合根路径与授权口径未动** ⇒ 本声明语义不变。"
 
   - id: tool.mcp_bridge
     title: "MCP 外部工具桥（catalog/连接/治理映射/配置面）"
@@ -116,7 +116,7 @@ claims:
       - crates/engine/runtime-assembly/tests/production_mcp_factory.rs
       - crates/engine/runtime-assembly/tests/convergence_mcp.rs
       - crates/adapters/cli/tests/mcp_cli.rs
-    verified_at: 8d43c6e7ff2153189c95f5738f331bce81acdd84
+    verified_at: d24dad53ef030af25615ff0b08e2d6d4a2f81685
     verify_cmd: "cargo test -p apeireth-tools-canonical mcp_bridge && cargo test -p apeireth-tools-canonical --test mcp_real_stdio_server && cargo test -p apeireth-runtime-assembly --test mcp_real_stdio_server_runtime"
     owner: tools
     next_review: "2026-11-20"
@@ -173,11 +173,11 @@ claims:
       - crates/capabilities/tools/tests/voice_speak.rs
       - crates/capabilities/tools/tests/voice_speak_live_policy.rs
       - crates/adapters/cli/tests/voice_speak_knob.rs
-    verified_at: 8d43c6e7ff2153189c95f5738f331bce81acdd84
+    verified_at: d24dad53ef030af25615ff0b08e2d6d4a2f81685
     verify_cmd: "cargo test -p apeireth-tools-canonical --test voice_speak"
     owner: tools
     next_review: "2026-11-20"
-    notes: "2026-10-31 复核：**情绪源已接线**（CLI lib.rs:2161 with_emotion_reader），下面「未接线」表述作废（保留历史）；定制音色后置。；情绪→语气微调生产情绪源未接线（无数据 = 零微调，如实）；定制音色后置。；2026-10-22 批次复核：voice_speak 16 passed / 2 ignored；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）；2026-10-28 生产收敛复核：源码变更及回归证据见 kernel-convergence-final-acceptance-2026-10-28.md；不将 Legacy SubLoop 或旧数据 Profile 映射宣称已迁移。；2026-10-29 S5：CLI 变更限于 Host bootstrap，语音注册、权限及默认开关的原分支未改；本批作源码差异复核并通过 bootstrap 与包级 clippy，无硬件/播放实测声明。 证据见 kernel-convergence-s5-2026-10-29.md。；2026-11-08 W1 波次复核：本批在生产装配根**新增 4 族注册**（进程树快照 / HTTP 写面 / 互联网检索 / 主人日程，均默认关）+ 名册与策展表扩充 + CLI 组合根新增 env 段与授权钩子；**本声明所指的既有能力，其注册条件与执行路径逐字未动** ⇒ 口径不变。"
+    notes: "2026-10-31 复核：**情绪源已接线**（CLI lib.rs:2161 with_emotion_reader），下面「未接线」表述作废（保留历史）；定制音色后置。；情绪→语气微调生产情绪源未接线（无数据 = 零微调，如实）；定制音色后置。；2026-10-22 批次复核：voice_speak 16 passed / 2 ignored；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）；2026-10-28 生产收敛复核：源码变更及回归证据见 kernel-convergence-final-acceptance-2026-10-28.md；不将 Legacy SubLoop 或旧数据 Profile 映射宣称已迁移。；2026-10-29 S5：CLI 变更限于 Host bootstrap，语音注册、权限及默认开关的原分支未改；本批作源码差异复核并通过 bootstrap 与包级 clippy，无硬件/播放实测声明。 证据见 kernel-convergence-s5-2026-10-29.md。；2026-11-08 W1 波次复核：本批在生产装配根**新增 4 族注册**（进程树快照 / HTTP 写面 / 互联网检索 / 主人日程，均默认关）+ 名册与策展表扩充 + CLI 组合根新增 env 段与授权钩子；**本声明所指的既有能力，其注册条件与执行路径逐字未动** ⇒ 口径不变。；2026-11-08 W2 波次复核：CLI 组合根**新增**两处接线（隐私声明读取（默认 `ordinary` ⇒ 闸不生效 ⇒ 零行为变化）+ `APEIRETH_QUOTA_MAX_DEPTH` 旋钮（默认未设 ⇒ 恒不设限））⇒ **既有组合根路径与授权口径未动** ⇒ 本声明语义不变。"
 
   - id: sec.egress_control
     title: "受控出网（域名/地址许可 + 策略档；fetch 工具走同一闸）"
@@ -236,11 +236,11 @@ claims:
       - crates/adapters/cli/tests/exposure_cli.rs
       - crates/adapters/cli/tests/exposure_audit_knob.rs
       - crates/adapters/cli/tests/exposure_out_flag.rs
-    verified_at: 8d43c6e7ff2153189c95f5738f331bce81acdd84
+    verified_at: d24dad53ef030af25615ff0b08e2d6d4a2f81685
     verify_cmd: "cargo test -p apeireth-tools-canonical --lib exposure_audit"
     owner: capabilities
     next_review: "2026-12-01"
-    notes: "六个暴露面（credential / binding / backup / listener / funnel / external_surface；其中 external_surface **显式「未测」**）只读体检：工具面 `tool.exposure_audit` 与 CLI `apeireth exposure report` **同一内核两出口**；自述面也读它（暴露面计数）。默认关（按 grant 开启）。体检只读，不写被测面任何字节，报告是唯一产出。；2026-11-08 W1 波次复核：本批在生产装配根**新增 4 族注册**（进程树快照 / HTTP 写面 / 互联网检索 / 主人日程，均默认关）+ 名册与策展表扩充 + CLI 组合根新增 env 段与授权钩子；**本声明所指的既有能力，其注册条件与执行路径逐字未动** ⇒ 口径不变。"
+    notes: "六个暴露面（credential / binding / backup / listener / funnel / external_surface；其中 external_surface **显式「未测」**）只读体检：工具面 `tool.exposure_audit` 与 CLI `apeireth exposure report` **同一内核两出口**；自述面也读它（暴露面计数）。默认关（按 grant 开启）。体检只读，不写被测面任何字节，报告是唯一产出。；2026-11-08 W1 波次复核：本批在生产装配根**新增 4 族注册**（进程树快照 / HTTP 写面 / 互联网检索 / 主人日程，均默认关）+ 名册与策展表扩充 + CLI 组合根新增 env 段与授权钩子；**本声明所指的既有能力，其注册条件与执行路径逐字未动** ⇒ 口径不变。；2026-11-08 W2 波次复核：所涉文件**只新增**可选字段/注册段（`RuntimeConfig.depth_ceiling` 默认 `None`；`Session.depth_quota` 默认空槽；生产配置默认关 ⇒ **逐字节零变化**）⇒ **既有路径未动** ⇒ 本声明语义不变。"
 
   - id: sec.egress_gate
     title: "模型出网闸（上下文→provider 边界；出境脱敏 + fail-closed 拒绝）"
@@ -277,7 +277,7 @@ claims:
       - crates/engine/runtime-assembly/tests/consequence_backfill_e2e.rs
       - crates/adapters/cli/tests/egress_bind_backfill.rs
       - crates/adapters/cli/tests/egress_flag_parsing.rs
-    verified_at: 8d43c6e7ff2153189c95f5738f331bce81acdd84
+    verified_at: d24dad53ef030af25615ff0b08e2d6d4a2f81685
     verify_cmd: "cargo test -p apeireth-runtime --lib egress && cargo test -p apeireth-runtime-assembly --lib egress_gate"
     owner: runtime
     next_review: "2026-12-01"
@@ -285,7 +285,7 @@ claims:
 **问责闭环五步构件已落地，但按四级口径只有 2/5 生产已接**（ADR-0014 §5；2026-10-24 实测复核）：①影响声明 + 事实→行动索引（零真值）——**PRODUCTION WIRED**（`egress_gate.rs` 三条出网路径各写一条 + CLI `egress impact` 读出端）；②决策回执（面向被影响的人一行话）——**IMPLEMENTED 未接线**（`notification_duty.rs` 的 `DecisionReceipt` 有类型 + 单测，**全仓零生产调用点**，回执从不生成）；③后果追踪（`unknown` 是一等公民，append-only 不改写历史）——**PRODUCTION WIRED**（`egress_gate.rs` 挂 tracker + 写账本）；④通知义务（**不自动外发**、不被引用就不打扰）——**IMPLEMENTED 未接线**（`assess_correction` 是纯函数且**只被测试调用**，记忆纠正事件到通知义务无挂钩）；⑤自述面 `capabilities.accountability` 只读计数——**IMPLEMENTED 未接线**（`accountability_probe` 的装配函数 `with_accountability_probe` **零调用点**，且 `self_status_source.rs:462` 的 `accountability` 字段默认 `None` ⇒ `capabilities.accountability` 键**永不渲染**）。
 **更深的缺口**：④要触发需先有「事实→行动索引」里有记录，而 `egress_gate.rs:204` 的 `facts_used` 当前**恒为空数组**（闸看不到上下文用了哪些记忆条目）⇒ 索引在生产里结构性为空 ⇒ 即使把④接上也永远不会触发。**「发现影响时通知你」目前没有可兑现的输入来源。**
 **读出端已接**：出域账本 `apeireth egress ledger`（观测面）+ 问责账本 `apeireth egress impact`（责任面：授权/可逆性/影响谁/后果）。
-**后果回填通道已接**（`apeireth egress outcome <ACTION_ID> <confirmed|failed>`）：用户/回执渠道显式回填，系统不猜（只接受 confirmed/failed）；状态机把关（已确认的事实不能退回）；后果账本 append-only 持久化（`consequence-ledger.jsonl`）。**仍未接**：回执渠道的**自动**回报（当前只能用户手动回填）。；2026-11-08 W1 波次复核：本批的 `egress.rs` 读路径做了**共用化重构**（GET 与写共用 `send()` 与响应读取器；TLS 校验 / 禁代理 / 逐跳重校验 / 体上限语义逐项保留，`egress` 单测 38 例 + fetch 不变量绿）⇒ **语义未变，实现路径变了**；另 stale 部分来自他线 3c-1b 的**增量面**。"
+**后果回填通道已接**（`apeireth egress outcome <ACTION_ID> <confirmed|failed>`）：用户/回执渠道显式回填，系统不猜（只接受 confirmed/failed）；状态机把关（已确认的事实不能退回）；后果账本 append-only 持久化（`consequence-ledger.jsonl`）。**仍未接**：回执渠道的**自动**回报（当前只能用户手动回填）。；2026-11-08 W1 波次复核：本批的 `egress.rs` 读路径做了**共用化重构**（GET 与写共用 `send()` 与响应读取器；TLS 校验 / 禁代理 / 逐跳重校验 / 体上限语义逐项保留，`egress` 单测 38 例 + fetch 不变量绿）⇒ **语义未变，实现路径变了**；另 stale 部分来自他线 3c-1b 的**增量面**。；2026-11-08 W2 波次复核：CLI 组合根**新增**两处接线（隐私声明读取（默认 `ordinary` ⇒ 闸不生效 ⇒ 零行为变化）+ `APEIRETH_QUOTA_MAX_DEPTH` 旋钮（默认未设 ⇒ 恒不设限））⇒ **既有组合根路径与授权口径未动** ⇒ 本声明语义不变。"
 
   - id: mem.lesson_object
     title: "教训对象（四拍状态机：经历→候选→新场景验证→撤回留痕）"
@@ -371,11 +371,11 @@ claims:
       - crates/adapters/cli/src/lib.rs
     tests:
       - crates/adapters/gateway/tests/tls_serve.rs
-    verified_at: 8d43c6e7ff2153189c95f5738f331bce81acdd84
+    verified_at: d24dad53ef030af25615ff0b08e2d6d4a2f81685
     verify_cmd: "cargo test -p apeireth-gateway --test tls_serve"
     owner: gateway
     next_review: "2026-11-20"
-    notes: "APEIRETH_TLS_CERT + APEIRETH_TLS_KEY 指向 PEM 才启用；缺/坏 PEM fail-closed；状态三态 + 审计事件 gateway.tls_enabled；非默认开。；2026-10-22 批次复核：gateway tls_serve 7 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）；2026-10-28 生产收敛复核：源码变更及回归证据见 kernel-convergence-final-acceptance-2026-10-28.md；不将 Legacy SubLoop 或旧数据 Profile 映射宣称已迁移。；2026-10-29 S5：listener/TLS/CORS 与域/用户归属逻辑未改；同一 gateway Runtime 执行入口委托 managed main。原 HTTP、审批、多客户端、域隔离和真实 bootstrap 回归通过，不新增暴露面或提升默认开关。 证据见 kernel-convergence-s5-2026-10-29.md。；2026-11-08 W1 波次复核：本批在生产装配根**新增 4 族注册**（进程树快照 / HTTP 写面 / 互联网检索 / 主人日程，均默认关）+ 名册与策展表扩充 + CLI 组合根新增 env 段与授权钩子；**本声明所指的既有能力，其注册条件与执行路径逐字未动** ⇒ 口径不变。"
+    notes: "APEIRETH_TLS_CERT + APEIRETH_TLS_KEY 指向 PEM 才启用；缺/坏 PEM fail-closed；状态三态 + 审计事件 gateway.tls_enabled；非默认开。；2026-10-22 批次复核：gateway tls_serve 7 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）；2026-10-28 生产收敛复核：源码变更及回归证据见 kernel-convergence-final-acceptance-2026-10-28.md；不将 Legacy SubLoop 或旧数据 Profile 映射宣称已迁移。；2026-10-29 S5：listener/TLS/CORS 与域/用户归属逻辑未改；同一 gateway Runtime 执行入口委托 managed main。原 HTTP、审批、多客户端、域隔离和真实 bootstrap 回归通过，不新增暴露面或提升默认开关。 证据见 kernel-convergence-s5-2026-10-29.md。；2026-11-08 W1 波次复核：本批在生产装配根**新增 4 族注册**（进程树快照 / HTTP 写面 / 互联网检索 / 主人日程，均默认关）+ 名册与策展表扩充 + CLI 组合根新增 env 段与授权钩子；**本声明所指的既有能力，其注册条件与执行路径逐字未动** ⇒ 口径不变。；2026-11-08 W2 波次复核：CLI 组合根**新增**两处接线（隐私声明读取（默认 `ordinary` ⇒ 闸不生效 ⇒ 零行为变化）+ `APEIRETH_QUOTA_MAX_DEPTH` 旋钮（默认未设 ⇒ 恒不设限））⇒ **既有组合根路径与授权口径未动** ⇒ 本声明语义不变。"
 
   - id: sec.storage_envelope_crypto
     title: "会话/记忆静态信封加密 + 备份恢复（B6 库级 + B6-2a sessions.data 试点）"
@@ -428,11 +428,11 @@ claims:
     tests:
       - crates/foundation/governance/src/chain.rs
       - crates/adapters/cli/tests/governance_chain_equivalence.rs
-    verified_at: 8d43c6e7ff2153189c95f5738f331bce81acdd84
+    verified_at: d24dad53ef030af25615ff0b08e2d6d4a2f81685
     verify_cmd: "cargo test -p apeireth-governance --lib"
     owner: governance
     next_review: "2026-11-20"
-    notes: "R8-B1 b6d902ce 适配器（ChainOutcome → GovernanceVerdict 四态映射）；R8-B2 已接生产装配根：builder.with_governance(governance_chain::production(...))，回滚 = 换回 Arc<GovernancePipeline> 一行；既有 CLI 治理/审批测试期望不变。2026-10-22 抬级：原「零生产接线」口径失效。；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）；2026-10-28 生产收敛复核：源码变更及回归证据见 kernel-convergence-final-acceptance-2026-10-28.md；不将 Legacy SubLoop 或旧数据 Profile 映射宣称已迁移。；2026-10-29 S5：完整 TurnRequest 和审批续跑均委托原 Kernel，未改生产治理链或工具审批规则；真实 bootstrap 的冻结审批、原 cognitive_module_abi、生产 permission/receipt 和 runtime all-targets 通过。 证据见 kernel-convergence-s5-2026-10-29.md。；2026-11-08 W1 波次复核：本批在生产装配根**新增 4 族注册**（进程树快照 / HTTP 写面 / 互联网检索 / 主人日程，均默认关）+ 名册与策展表扩充 + CLI 组合根新增 env 段与授权钩子；**本声明所指的既有能力，其注册条件与执行路径逐字未动** ⇒ 口径不变。"
+    notes: "R8-B1 b6d902ce 适配器（ChainOutcome → GovernanceVerdict 四态映射）；R8-B2 已接生产装配根：builder.with_governance(governance_chain::production(...))，回滚 = 换回 Arc<GovernancePipeline> 一行；既有 CLI 治理/审批测试期望不变。2026-10-22 抬级：原「零生产接线」口径失效。；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）；2026-10-28 生产收敛复核：源码变更及回归证据见 kernel-convergence-final-acceptance-2026-10-28.md；不将 Legacy SubLoop 或旧数据 Profile 映射宣称已迁移。；2026-10-29 S5：完整 TurnRequest 和审批续跑均委托原 Kernel，未改生产治理链或工具审批规则；真实 bootstrap 的冻结审批、原 cognitive_module_abi、生产 permission/receipt 和 runtime all-targets 通过。 证据见 kernel-convergence-s5-2026-10-29.md。；2026-11-08 W1 波次复核：本批在生产装配根**新增 4 族注册**（进程树快照 / HTTP 写面 / 互联网检索 / 主人日程，均默认关）+ 名册与策展表扩充 + CLI 组合根新增 env 段与授权钩子；**本声明所指的既有能力，其注册条件与执行路径逐字未动** ⇒ 口径不变。；2026-11-08 W2 波次复核：CLI 组合根**新增**两处接线（隐私声明读取（默认 `ordinary` ⇒ 闸不生效 ⇒ 零行为变化）+ `APEIRETH_QUOTA_MAX_DEPTH` 旋钮（默认未设 ⇒ 恒不设限））⇒ **既有组合根路径与授权口径未动** ⇒ 本声明语义不变。"
 
   - id: gov.reflection_queue
     title: "R8-C 进程内延迟反思队列——默认未装配、零行为变化"
@@ -631,11 +631,11 @@ claims:
     tests:
       - crates/engine/runtime/tests/bio_pain_wiring.rs
       - crates/engine/organ/src/nociception.rs
-    verified_at: 8d43c6e7ff2153189c95f5738f331bce81acdd84
+    verified_at: d24dad53ef030af25615ff0b08e2d6d4a2f81685
     verify_cmd: "cargo test -p apeireth-runtime --test bio_pain_wiring"
     owner: runtime
     next_review: "2026-11-20"
-    notes: "只观测记账、不改错误/重试决策（0 装边界）；失败分类为近似。；2026-10-22 批次复核：runtime bio_pain_wiring 4 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）；2026-10-28 生产收敛复核：源码变更及回归证据见 kernel-convergence-final-acceptance-2026-10-28.md；不将 Legacy SubLoop 或旧数据 Profile 映射宣称已迁移。；2026-10-29 S5：CLI 只改 Host 装配委托，原观察口、痛觉开关与错误策略未改；本批作源码差异复核，runtime all-targets、bootstrap 及包级 clippy 通过，默认仍 OFF。 证据见 kernel-convergence-s5-2026-10-29.md。；2026-11-08 W1 波次复核：本批在生产装配根**新增 4 族注册**（进程树快照 / HTTP 写面 / 互联网检索 / 主人日程，均默认关）+ 名册与策展表扩充 + CLI 组合根新增 env 段与授权钩子；**本声明所指的既有能力，其注册条件与执行路径逐字未动** ⇒ 口径不变。"
+    notes: "只观测记账、不改错误/重试决策（0 装边界）；失败分类为近似。；2026-10-22 批次复核：runtime bio_pain_wiring 4 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）；2026-10-28 生产收敛复核：源码变更及回归证据见 kernel-convergence-final-acceptance-2026-10-28.md；不将 Legacy SubLoop 或旧数据 Profile 映射宣称已迁移。；2026-10-29 S5：CLI 只改 Host 装配委托，原观察口、痛觉开关与错误策略未改；本批作源码差异复核，runtime all-targets、bootstrap 及包级 clippy 通过，默认仍 OFF。 证据见 kernel-convergence-s5-2026-10-29.md。；2026-11-08 W1 波次复核：本批在生产装配根**新增 4 族注册**（进程树快照 / HTTP 写面 / 互联网检索 / 主人日程，均默认关）+ 名册与策展表扩充 + CLI 组合根新增 env 段与授权钩子；**本声明所指的既有能力，其注册条件与执行路径逐字未动** ⇒ 口径不变。；2026-11-08 W2 波次复核：CLI 组合根**新增**两处接线（隐私声明读取（默认 `ordinary` ⇒ 闸不生效 ⇒ 零行为变化）+ `APEIRETH_QUOTA_MAX_DEPTH` 旋钮（默认未设 ⇒ 恒不设限））⇒ **既有组合根路径与授权口径未动** ⇒ 本声明语义不变。"
 
   - id: bio.recovery_protocol
     title: "再生→恢复协议接失败链（W3.4，与 bio_pain 同开关，默认关）"
@@ -670,11 +670,11 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/bio_observation_cells.rs
       - crates/engine/runtime-assembly/tests/bio_cognitive_wiring.rs
-    verified_at: 58b42e55
+    verified_at: d24dad53ef030af25615ff0b08e2d6d4a2f81685
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_observation_cells"
     owner: organ
     next_review: "2026-11-20"
-    notes: "① 接在：装配根 install_bio_modules 注册 BioAssemblyModule（canonical/cognitive.rs）+ ObservedBioAssemblyModule 观测装饰器（canonical/bio_production_wiring.rs）；开关值经 NervousSwitchboard::BioSwitch::ContextPolicy 单入口解析，env 只认 \"1\"，默认关。② 自述在：capabilities.bio_mechanisms 的 homeostasis 格（BioMechanismKind::Homeostasis，经 BioProbeSlots::fill_homeostasis 迟绑定同源句柄）+ 聚合面 capabilities.nervous_system 的 SG-14.homeostasis 行。③ 边界：仅 ContextPressure 为实测值，其余 4 维沿用 VitalSignSet::healthy() 中性基线（nervous_snapshot.rs 记 vital_sign_inputs = partial）；观测格只读，不剪枝、不改行为。"
+    notes: "① 接在：装配根 install_bio_modules 注册 BioAssemblyModule（canonical/cognitive.rs）+ ObservedBioAssemblyModule 观测装饰器（canonical/bio_production_wiring.rs）；开关值经 NervousSwitchboard::BioSwitch::ContextPolicy 单入口解析，env 只认 \"1\"，默认关。② 自述在：capabilities.bio_mechanisms 的 homeostasis 格（BioMechanismKind::Homeostasis，经 BioProbeSlots::fill_homeostasis 迟绑定同源句柄）+ 聚合面 capabilities.nervous_system 的 SG-14.homeostasis 行。③ 边界：仅 ContextPressure 为实测值，其余 4 维沿用 VitalSignSet::healthy() 中性基线（nervous_snapshot.rs 记 vital_sign_inputs = partial）；观测格只读，不剪枝、不改行为。；2026-11-08 W2 波次复核：自述面**新增**两格（深度维真值 `consumed_depth` + `privacy_source`（declared/defaulted））⇒ **既有自述字段与投影口径逐字未动** ⇒ 本声明语义不变。"
 
   - id: bio.immune_memory
     title: "免疫记忆→守卫证据（SG-15，生产装配，默认关）"
@@ -692,11 +692,11 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/bio_quorum_immune_wiring.rs
       - crates/engine/guard/src/immune_memory.rs
-    verified_at: 8d43c6e7ff2153189c95f5738f331bce81acdd84
+    verified_at: d24dad53ef030af25615ff0b08e2d6d4a2f81685
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_quorum_immune_wiring"
     owner: guard
     next_review: "2026-11-20"
-    notes: "① 接在：CLI 生产入口把同一份共享免疫账挂到 BehaviorChainGuardHook（crates/adapters/cli/src/lib.rs 的 ENABLE_IMMUNE_MEMORY_ENV，只认 \"1\"）；机制内核 apeireth-guard::immune_memory 的 ImmuneMemory::observe 只向 guard evidence/verdict 追加 immune 字段，不改主结论。② 自述在：capabilities.bio_mechanisms 的 immune_memory 格（BioMechanismKind::ImmuneMemory，经 BioProbeSlots::fill_immune_memory 迟绑定 guard 同一份 SharedImmuneMemory）+ 聚合面 capabilities.nervous_system 的 SG-15.immune_memory 行。③ 边界：只观察 Deny/RequireApproval 两类事件；升级信号另作审议门 Conflict 外部源（同 record_key 出现次数节流）；自述格脱敏，不回 record key / 路径 / 原文。；2026-11-08 W1 波次复核：本批在生产装配根**新增 4 族注册**（进程树快照 / HTTP 写面 / 互联网检索 / 主人日程，均默认关）+ 名册与策展表扩充 + CLI 组合根新增 env 段与授权钩子；**本声明所指的既有能力，其注册条件与执行路径逐字未动** ⇒ 口径不变。"
+    notes: "① 接在：CLI 生产入口把同一份共享免疫账挂到 BehaviorChainGuardHook（crates/adapters/cli/src/lib.rs 的 ENABLE_IMMUNE_MEMORY_ENV，只认 \"1\"）；机制内核 apeireth-guard::immune_memory 的 ImmuneMemory::observe 只向 guard evidence/verdict 追加 immune 字段，不改主结论。② 自述在：capabilities.bio_mechanisms 的 immune_memory 格（BioMechanismKind::ImmuneMemory，经 BioProbeSlots::fill_immune_memory 迟绑定 guard 同一份 SharedImmuneMemory）+ 聚合面 capabilities.nervous_system 的 SG-15.immune_memory 行。③ 边界：只观察 Deny/RequireApproval 两类事件；升级信号另作审议门 Conflict 外部源（同 record_key 出现次数节流）；自述格脱敏，不回 record key / 路径 / 原文。；2026-11-08 W1 波次复核：本批在生产装配根**新增 4 族注册**（进程树快照 / HTTP 写面 / 互联网检索 / 主人日程，均默认关）+ 名册与策展表扩充 + CLI 组合根新增 env 段与授权钩子；**本声明所指的既有能力，其注册条件与执行路径逐字未动** ⇒ 口径不变。；2026-11-08 W2 波次复核：自述面**新增**两格（深度维真值 `consumed_depth` + `privacy_source`（declared/defaulted））⇒ **既有自述字段与投影口径逐字未动** ⇒ 本声明语义不变。"
 
   - id: bio.attachment
     title: "依恋/分离-重聚→关怀候选（SG-19，生产装配，默认关）"
@@ -714,11 +714,11 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/bio_care_wiring.rs
       - crates/engine/runtime-assembly/tests/bio_mechanisms_self_status.rs
-    verified_at: 58b42e55
+    verified_at: d24dad53ef030af25615ff0b08e2d6d4a2f81685
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_care_wiring"
     owner: organ
     next_review: "2026-11-20"
-    notes: "① 接在：CLI care_heartbeat 心跳宿主供给 presence Turn 帧 + SessionStore 可续线索 → apeireth-organ::attachment / care::reunion 产出 reunion_candidate（非 Brief）→ care 纪律管道；开关 APEIRETH_ENABLE_BIO_CARE_CANDIDATES 只认 \"1\"。② 自述在：capabilities.bio_mechanisms 的 attachment 格（BioMechanismKind::Attachment，槽由 CLI 的 fill_care_status 填 CareHeartbeatStatus 读取口，与关怀生产者同一状态闭包）+ 聚合面 capabilities.nervous_system 的 SG-19.attachment 行。③ 边界：quiet 窗口抑制候选；未挂心跳宿主的运行面槽空 ⇒ 该格 null + 真因「未接线」，不编值；候选只进关怀纪律管道，不改回合决策。"
+    notes: "① 接在：CLI care_heartbeat 心跳宿主供给 presence Turn 帧 + SessionStore 可续线索 → apeireth-organ::attachment / care::reunion 产出 reunion_candidate（非 Brief）→ care 纪律管道；开关 APEIRETH_ENABLE_BIO_CARE_CANDIDATES 只认 \"1\"。② 自述在：capabilities.bio_mechanisms 的 attachment 格（BioMechanismKind::Attachment，槽由 CLI 的 fill_care_status 填 CareHeartbeatStatus 读取口，与关怀生产者同一状态闭包）+ 聚合面 capabilities.nervous_system 的 SG-19.attachment 行。③ 边界：quiet 窗口抑制候选；未挂心跳宿主的运行面槽空 ⇒ 该格 null + 真因「未接线」，不编值；候选只进关怀纪律管道，不改回合决策。；2026-11-08 W2 波次复核：自述面**新增**两格（深度维真值 `consumed_depth` + `privacy_source`（declared/defaulted））⇒ **既有自述字段与投影口径逐字未动** ⇒ 本声明语义不变。"
 
   - id: bio.social_repair
     title: "社会修复→提示词修复指令（SG-20，生产装配，默认关）"
@@ -735,11 +735,11 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/bio_cognitive_wiring.rs
       - crates/engine/runtime-assembly/tests/bio_observation_cells.rs
-    verified_at: 58b42e55
+    verified_at: d24dad53ef030af25615ff0b08e2d6d4a2f81685
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_cognitive_wiring"
     owner: organ
     next_review: "2026-11-20"
-    notes: "① 接在：装配根 install_bio_modules 注册 BioAssemblyModule（canonical/cognitive.rs），APEIRETH_ENABLE_BIO_REPAIR_GUIDANCE 只认 \"1\"；生产装配**不注入** RepairPlan（install_bio_modules 只注入 context budget）⇒ 修复指令块在生产实际未产出；自述侧 SocialRepairObservationSource 订阅 NervousBus 的 ApprovalSocial::Rejected 并只读折算修复计划。② 自述在：capabilities.bio_mechanisms 的 social_repair 格（BioMechanismKind::SocialRepair，经 fill_social_repair 迟绑定同源观测源）+ 聚合面 capabilities.nervous_system 的 SG-20.social_repair 行。③ 边界：会话事件源未接（UncertaintySignal 采集未接，plan_repair 只能由调用方显式注入；nervous_snapshot.rs 记 session_event_source = not_wired）；观测格只读，不改行为。"
+    notes: "① 接在：装配根 install_bio_modules 注册 BioAssemblyModule（canonical/cognitive.rs），APEIRETH_ENABLE_BIO_REPAIR_GUIDANCE 只认 \"1\"；生产装配**不注入** RepairPlan（install_bio_modules 只注入 context budget）⇒ 修复指令块在生产实际未产出；自述侧 SocialRepairObservationSource 订阅 NervousBus 的 ApprovalSocial::Rejected 并只读折算修复计划。② 自述在：capabilities.bio_mechanisms 的 social_repair 格（BioMechanismKind::SocialRepair，经 fill_social_repair 迟绑定同源观测源）+ 聚合面 capabilities.nervous_system 的 SG-20.social_repair 行。③ 边界：会话事件源未接（UncertaintySignal 采集未接，plan_repair 只能由调用方显式注入；nervous_snapshot.rs 记 session_event_source = not_wired）；观测格只读，不改行为。；2026-11-08 W2 波次复核：自述面**新增**两格（深度维真值 `consumed_depth` + `privacy_source`（declared/defaulted））⇒ **既有自述字段与投影口径逐字未动** ⇒ 本声明语义不变。"
 
   - id: bio.quorum
     title: "群体感应→审议门（SG-24，生产装配，默认关）"
@@ -757,11 +757,11 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/bio_quorum_wiring.rs
       - crates/engine/runtime-assembly/tests/bio_quorum_immune_wiring.rs
-    verified_at: 58b42e55
+    verified_at: d24dad53ef030af25615ff0b08e2d6d4a2f81685
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_quorum_wiring"
     owner: orchestration
     next_review: "2026-11-20"
-    notes: "① 接在：OrganModule → OrganOrchestrator（canonical/orchestrator.rs）的 QuorumGate → decide_with_invoker_gated，开关 APEIRETH_ENABLE_QUORUM_GATE 只认 \"1\"；含 guard 免疫升级转 Conflict 的外部源（按 (record_key,occurrences) 节流）。② 自述在：capabilities.bio_mechanisms 的 quorum 格（BioMechanismKind::Quorum，经 fill_from_organ_module 读 organ 模块 last_quorum_trace 门账）+ 聚合面 capabilities.nervous_system 的 SG-24.quorum 行。③ 边界：Hold/Cooldown 不召开顾问、不伪造否决；自述格只回计数与裁决档位，不回理由原文；门账仅进程内、不持久化。"
+    notes: "① 接在：OrganModule → OrganOrchestrator（canonical/orchestrator.rs）的 QuorumGate → decide_with_invoker_gated，开关 APEIRETH_ENABLE_QUORUM_GATE 只认 \"1\"；含 guard 免疫升级转 Conflict 的外部源（按 (record_key,occurrences) 节流）。② 自述在：capabilities.bio_mechanisms 的 quorum 格（BioMechanismKind::Quorum，经 fill_from_organ_module 读 organ 模块 last_quorum_trace 门账）+ 聚合面 capabilities.nervous_system 的 SG-24.quorum 行。③ 边界：Hold/Cooldown 不召开顾问、不伪造否决；自述格只回计数与裁决档位，不回理由原文；门账仅进程内、不持久化。；2026-11-08 W2 波次复核：自述面**新增**两格（深度维真值 `consumed_depth` + `privacy_source`（declared/defaulted））⇒ **既有自述字段与投影口径逐字未动** ⇒ 本声明语义不变。"
 
   - id: bio.lifecycle
     title: "资产生命周期→五态账本（SG-18，生产装配，默认关）"
@@ -778,11 +778,11 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/bio_lifecycle_wiring.rs
       - crates/engine/runtime-assembly/tests/bio_lifecycle_production.rs
-    verified_at: 58b42e55
+    verified_at: d24dad53ef030af25615ff0b08e2d6d4a2f81685
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_lifecycle_wiring"
     owner: orchestration
     next_review: "2026-11-20"
-    notes: "① 接在：装配根 install_bio_modules 注册 BioLifecycleModule（canonical/bio_lifecycle.rs），APEIRETH_ENABLE_BIO_LIFECYCLE 只认 \"1\"，关 = 不构造状态 / 不注册模块 / 一次时钟都不读；真实工具结果经 nervous.bridge → NervousBus 订阅驱动记账（R1b-2b），AfterTurn 只做 evaluate。② 自述在：capabilities.bio_mechanisms 的 lifecycle 格（BioMechanismKind::Lifecycle，经 fill_lifecycle_state 迟绑定与注册模块同一 Arc）+ 聚合面 capabilities.nervous_system 的 SG-18.lifecycle 行。③ 边界：持久化 <care_dir>/lifecycle_state.json（StoredDoc v1，坏档拒开；目录缺省 = 纯内存）；AfterTurn 评估仍走钩子、未迁总线。"
+    notes: "① 接在：装配根 install_bio_modules 注册 BioLifecycleModule（canonical/bio_lifecycle.rs），APEIRETH_ENABLE_BIO_LIFECYCLE 只认 \"1\"，关 = 不构造状态 / 不注册模块 / 一次时钟都不读；真实工具结果经 nervous.bridge → NervousBus 订阅驱动记账（R1b-2b），AfterTurn 只做 evaluate。② 自述在：capabilities.bio_mechanisms 的 lifecycle 格（BioMechanismKind::Lifecycle，经 fill_lifecycle_state 迟绑定与注册模块同一 Arc）+ 聚合面 capabilities.nervous_system 的 SG-18.lifecycle 行。③ 边界：持久化 <care_dir>/lifecycle_state.json（StoredDoc v1，坏档拒开；目录缺省 = 纯内存）；AfterTurn 评估仍走钩子、未迁总线。；2026-11-08 W2 波次复核：自述面**新增**两格（深度维真值 `consumed_depth` + `privacy_source`（declared/defaulted））⇒ **既有自述字段与投影口径逐字未动** ⇒ 本声明语义不变。"
 
   - id: bio.play
     title: "游戏练习场四工具面（SG-21，生产装配，默认关）"
@@ -799,11 +799,11 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/bio_play_wiring.rs
       - crates/engine/runtime-assembly/tests/bio_mechanisms_self_status.rs
-    verified_at: 58b42e55
+    verified_at: d24dad53ef030af25615ff0b08e2d6d4a2f81685
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_play_wiring"
     owner: organ
     next_review: "2026-11-20"
-    notes: "① 接在：装配根 install_bio_play 注册四工具 tool.play_propose/start/finish/abort（canonical/play_tools.rs），APEIRETH_ENABLE_BIO_PLAY 只认 \"1\" 且必须注入工作区根（缺根 = 无法证明 sandbox_dir 包含性 = 不注册）；四工具共享同一本内存练习账。② 自述在：capabilities.bio_mechanisms 的 play 格（BioMechanismKind::Play，play_probe 读同一本练习账；练习开关未开 ⇒ 该格 wired:false + 真因）+ 聚合面 capabilities.nervous_system 的 SG-21.play 行。③ 边界：无 IM 卡 / 无持久化（账本只在内存，重启丢 session）/ 沙箱非 OS 隔离（不创建目录）；产物只走 PlayOutcome.artifacts 元数据、不写主体记忆；审批钩子由适配器接线，本装配根不注册。"
+    notes: "① 接在：装配根 install_bio_play 注册四工具 tool.play_propose/start/finish/abort（canonical/play_tools.rs），APEIRETH_ENABLE_BIO_PLAY 只认 \"1\" 且必须注入工作区根（缺根 = 无法证明 sandbox_dir 包含性 = 不注册）；四工具共享同一本内存练习账。② 自述在：capabilities.bio_mechanisms 的 play 格（BioMechanismKind::Play，play_probe 读同一本练习账；练习开关未开 ⇒ 该格 wired:false + 真因）+ 聚合面 capabilities.nervous_system 的 SG-21.play 行。③ 边界：无 IM 卡 / 无持久化（账本只在内存，重启丢 session）/ 沙箱非 OS 隔离（不创建目录）；产物只走 PlayOutcome.artifacts 元数据、不写主体记忆；审批钩子由适配器接线，本装配根不注册。；2026-11-08 W2 波次复核：自述面**新增**两格（深度维真值 `consumed_depth` + `privacy_source`（declared/defaulted））⇒ **既有自述字段与投影口径逐字未动** ⇒ 本声明语义不变。"
 
   - id: bio.ritual
     title: "仪式→关怀完成面（SG-22，生产装配，默认关）"
@@ -821,11 +821,11 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/bio_ritual_tools.rs
       - crates/engine/runtime-assembly/tests/bio_observation_cells.rs
-    verified_at: 58b42e55
+    verified_at: d24dad53ef030af25615ff0b08e2d6d4a2f81685
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_ritual_tools"
     owner: organ
     next_review: "2026-11-20"
-    notes: "① 接在：装配根 install_bio_ritual_tools 注册两工具 tool.ritual_done / tool.ritual_skip（canonical/ritual_tools.rs），复用 APEIRETH_ENABLE_BIO_CARE_CANDIDATES（只认 \"1\"）且必须注入关怀数据目录（缺目录 = 无处落盘 = 不注册）；状态存 <care_dir>/ritual_state.json（StoredDoc v1 + 原子写）。② 自述在：capabilities.bio_mechanisms 的 ritual 格（BioMechanismKind::Ritual，经 fill_ritual_store 读同一本仪式账，只读统计、不投递不打卡）+ 聚合面 capabilities.nervous_system 的 SG-22.ritual 行。③ 边界：半程 —— 纯 CLI chat 无心跳宿主时仪式写入暂无候选消费（nervous_snapshot.rs 该行 level = HALF；claims 四级无 HALF 档，故本条记 PRODUCTION WIRED 并在此如实标注半程缺口）；工具面是唯一生产写者，显式 record_ritual_done/skip 注入口保留且无跨实例锁。"
+    notes: "① 接在：装配根 install_bio_ritual_tools 注册两工具 tool.ritual_done / tool.ritual_skip（canonical/ritual_tools.rs），复用 APEIRETH_ENABLE_BIO_CARE_CANDIDATES（只认 \"1\"）且必须注入关怀数据目录（缺目录 = 无处落盘 = 不注册）；状态存 <care_dir>/ritual_state.json（StoredDoc v1 + 原子写）。② 自述在：capabilities.bio_mechanisms 的 ritual 格（BioMechanismKind::Ritual，经 fill_ritual_store 读同一本仪式账，只读统计、不投递不打卡）+ 聚合面 capabilities.nervous_system 的 SG-22.ritual 行。③ 边界：半程 —— 纯 CLI chat 无心跳宿主时仪式写入暂无候选消费（nervous_snapshot.rs 该行 level = HALF；claims 四级无 HALF 档，故本条记 PRODUCTION WIRED 并在此如实标注半程缺口）；工具面是唯一生产写者，显式 record_ritual_done/skip 注入口保留且无跨实例锁。；2026-11-08 W2 波次复核：自述面**新增**两格（深度维真值 `consumed_depth` + `privacy_source`（declared/defaulted））⇒ **既有自述字段与投影口径逐字未动** ⇒ 本声明语义不变。"
 
   - id: bio.ecosystem_health
     title: "工具生态健康度观测（SG-25，生产装配，默认关）"
@@ -842,11 +842,11 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/bio_tool_ecosystem.rs
       - crates/engine/runtime-assembly/src/canonical/tool_taxonomy.rs
-    verified_at: 8d43c6e7ff2153189c95f5738f331bce81acdd84
+    verified_at: d24dad53ef030af25615ff0b08e2d6d4a2f81685
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_tool_ecosystem"
     owner: tools
     next_review: "2026-11-20"
-    notes: "① 接在：装配末端 production.rs 调 bio_probe_slots.fill_ecosystem_profiles(&capabilities) 把静态工具能力表剖面填入迟绑定槽；探针在 canonical/tool_ecosystem_probe.rs，纯函数在 apeireth-tools-canonical::ecosystem_health::analyze，策展表在 canonical/tool_taxonomy.rs（代码内常量快照）。② 自述在：capabilities.bio_mechanisms 的 ecosystem_health 格（BioMechanismKind::EcosystemHealth）+ 聚合面 capabilities.nervous_system 的 SG-25.ecosystem_health 行。③ 边界：本机制无专属开关，随观测面总闸 APEIRETH_ENABLE_BIO_SELF_STATUS 开合（nervous_snapshot.rs 该行 enabled_env = null）；快照 = 装配期静态注册面，运行期动态发现的 MCP 工具不在其中（未覆盖工具如实计 untagged）；完整 taxonomy 合同（工具声明自带标签）仍属 B 类 ADR 前置、未做；只读不剪枝。；2026-11-08 W1 波次复核：本批在生产装配根**新增 4 族注册**（进程树快照 / HTTP 写面 / 互联网检索 / 主人日程，均默认关）+ 名册与策展表扩充 + CLI 组合根新增 env 段与授权钩子；**本声明所指的既有能力，其注册条件与执行路径逐字未动** ⇒ 口径不变。"
+    notes: "① 接在：装配末端 production.rs 调 bio_probe_slots.fill_ecosystem_profiles(&capabilities) 把静态工具能力表剖面填入迟绑定槽；探针在 canonical/tool_ecosystem_probe.rs，纯函数在 apeireth-tools-canonical::ecosystem_health::analyze，策展表在 canonical/tool_taxonomy.rs（代码内常量快照）。② 自述在：capabilities.bio_mechanisms 的 ecosystem_health 格（BioMechanismKind::EcosystemHealth）+ 聚合面 capabilities.nervous_system 的 SG-25.ecosystem_health 行。③ 边界：本机制无专属开关，随观测面总闸 APEIRETH_ENABLE_BIO_SELF_STATUS 开合（nervous_snapshot.rs 该行 enabled_env = null）；快照 = 装配期静态注册面，运行期动态发现的 MCP 工具不在其中（未覆盖工具如实计 untagged）；完整 taxonomy 合同（工具声明自带标签）仍属 B 类 ADR 前置、未做；只读不剪枝。；2026-11-08 W1 波次复核：本批在生产装配根**新增 4 族注册**（进程树快照 / HTTP 写面 / 互联网检索 / 主人日程，均默认关）+ 名册与策展表扩充 + CLI 组合根新增 env 段与授权钩子；**本声明所指的既有能力，其注册条件与执行路径逐字未动** ⇒ 口径不变。；2026-11-08 W2 波次复核：自述面**新增**两格（深度维真值 `consumed_depth` + `privacy_source`（declared/defaulted））⇒ **既有自述字段与投影口径逐字未动** ⇒ 本声明语义不变。"
 
   - id: bio.capacity
     title: "承载力/演替/关键种→自述格（SG-26，生产装配，默认关）"
@@ -861,11 +861,11 @@ claims:
       - crates/capabilities/tools/src/self_status.rs
     tests:
       - crates/engine/runtime-assembly/tests/bio_mechanisms_self_status.rs
-    verified_at: 58b42e55
+    verified_at: d24dad53ef030af25615ff0b08e2d6d4a2f81685
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_mechanisms_self_status"
     owner: orchestration
     next_review: "2026-11-20"
-    notes: "① 接在：capacity_bio_probe(queue, limit) 读与 tool.task_board 同一本任务队列（apeireth-orchestration::capacity）；注册点 install_bio_self_status（canonical/bio_production_wiring.rs），随观测面总闸 APEIRETH_ENABLE_BIO_SELF_STATUS（只认 \"1\"）。② 自述在：capabilities.bio_mechanisms 的 capacity 格（BioMechanismKind::Capacity；挂在既有 capabilities 节内，不是新的顶层节）+ 聚合面 capabilities.nervous_system 的 SG-26.capacity 行（observed 由 bio_mechanisms 同源推导）。③ 边界：只读（不认领 / 不改派 / 不结算任务）；未配任务板 ⇒ probe 不注册 ⇒ 该格 wired:false + 真因；并发上限 active_task_limit 未配置时阈值显式 null，不编阈值。"
+    notes: "① 接在：capacity_bio_probe(queue, limit) 读与 tool.task_board 同一本任务队列（apeireth-orchestration::capacity）；注册点 install_bio_self_status（canonical/bio_production_wiring.rs），随观测面总闸 APEIRETH_ENABLE_BIO_SELF_STATUS（只认 \"1\"）。② 自述在：capabilities.bio_mechanisms 的 capacity 格（BioMechanismKind::Capacity；挂在既有 capabilities 节内，不是新的顶层节）+ 聚合面 capabilities.nervous_system 的 SG-26.capacity 行（observed 由 bio_mechanisms 同源推导）。③ 边界：只读（不认领 / 不改派 / 不结算任务）；未配任务板 ⇒ probe 不注册 ⇒ 该格 wired:false + 真因；并发上限 active_task_limit 未配置时阈值显式 null，不编阈值。；2026-11-08 W2 波次复核：自述面**新增**两格（深度维真值 `consumed_depth` + `privacy_source`（declared/defaulted））⇒ **既有自述字段与投影口径逐字未动** ⇒ 本声明语义不变。"
 
   - id: rt.registered_module_v1
     title: "注册模块生命周期、固定 V1 Hook 与唯一治理工具目录"
@@ -913,11 +913,11 @@ claims:
       - crates/adapters/cli/tests/gateway_panels.rs
       - crates/engine/runtime-assembly/tests/production_cognitive_v1.rs
       - crates/engine/runtime-assembly/tests/profile_memory_authorization.rs
-    verified_at: 8d43c6e7ff2153189c95f5738f331bce81acdd84
+    verified_at: d24dad53ef030af25615ff0b08e2d6d4a2f81685
     verify_cmd: "cargo test -p apeireth-runtime --test registry_runtime_v1 --locked && cargo test -p apeireth-runtime-assembly --test capability_modules_v1 --locked"
     owner: runtime
     next_review: "2026-11-28"
-    notes: "Kernel 不自动安装业务工具；Desktop 将原配置选择的工具注册为普通 ToolModule，注册后沿用 V1 协议。default ON 只表示该生产装配机制，未新开 Shell/网络/文件写权限，原业务开关不变。复用唯一 PluginManager 与 CapabilityRegistry；自动 Hook 输出仍经同一治理/冻结审批入口与 ToolEventV1 成对投影。新增执行上下文、局部并发、原生取消/排水；旧参数/日志兼容及 AfterToolCall 串行屏障保留。真实 Runtime 模拟模型回合覆盖四协议 Adapter。动态 MCP 完整 owner 生命周期、Memory 自动 overlay、专有设备原生清理、共享 Arc 热插拔与完整多实例仍未完成；无云 API/设备实测。Phase 2 历史 default OFF 不追改；Phase 3 接线证据见 docs/04-internal/capability-modules-phase3-2026-10-28.md。；本批复核：动态 MCP owner、独立 Agent Scope/Principal、Memory 固定 Hook 已在真实 Runtime 测试；Managed Runtime 无模块也使用 V1。Desktop 默认旧 Memory/Persona/Organ Overlay 和旧 SubLoop 尚未退出，不声称完整 Convergence。；2026-10-28 生产收敛：桌面认知回调经 RegisteredBehavior 私有工具与固定 Hook 注入 V1；空观察审计消费、模型猜名拒绝、旧投影不被重新学习有真实生产回归。with_module / SubLoop 仍为明确残留，不能视为全部 Legacy 后端退出。；2026-10-29 S1：SubLoop 已委托同一 AgentInstance/execute_outcome，独立 provider/round 循环已删除；注册 owner 世代、共享预算、隔离审批与原生排水经真实 Runtime 验证。with_module/Overlay 和两种 ModuleInvoker 后端仍留后续，见 kernel-convergence-s1-2026-10-29.md。；2026-10-29 S2：两种 ModuleInvoker 均委托既有 AgentInstance 单次私有任务，直接 Router 后端已删除；无工具声明/派发、无递归 Hook、完整响应与 served_by 保真、child/真实模块 owner 用量和父来源经真实 Runtime 验证。with_module/Overlay、Profile 映射与桌面 managed 默认仍留后续，整体 Convergence 为 Partial，见 kernel-convergence-s2-2026-10-29.md。；2026-10-29 S3：with_module / with_behavior 与 with_registered_behavior 共用 RegisteredBehavior、固定 Hook、原治理/Dispatcher 与 V1；execute 直接 callback fallback 和动态 system Overlay 插槽已删除。动态数据只成对投影一次，空观察仅审计，预算/spill/溢出收缩重组认证工具载荷；静态 Host policy、审批/指令时序及旧 reader 保留。Host grant、模型假 receipt/同名工具拒绝、开放批闭合、stop/unload 无回退及 principal 跳过旧全局引擎有真实 Runtime/旧 DB 回归。整体 Convergence 仍 Partial，S4 映射/S5 桌面主入口未实施，见 kernel-convergence-s3-2026-10-29.md。；2026-10-29 S4：兼容 callback receipt 与 Dispatcher 上下文绑定完整 principal/epoch，未映射私有引擎继续默认拒绝；Host 显式选择的映射属于 IMPLEMENTED，映射未默认启用，原注册/治理/V1 机制等级与默认不变。指定窄门禁与真实 Runtime 对抗场景通过；整体 Convergence 仍 Partial，S5 桌面受管主入口未实施，见 kernel-convergence-s4-2026-10-29.md。；2026-10-29 S5：生产认知 load/stop/permission/guessed receipt/module-only 原用例切入 managed desktop；兼容 builder 另保留原装配并扩展 managed/private principal 回归。主实例与模块 child 使用同一实例服务及短锁执行视图；注册仍不授权，整体 Convergence 保持 Partial。 证据见 kernel-convergence-s5-2026-10-29.md。；2026-10-29 S6：兼容子执行经既有实例、Kernel 与 Dispatcher，未新增 Provider 后端或重复计量；真实 Runtime 验证多 child/round 复用 wire id 的独立事实、前端隔离、取消保账、native drain 后的持久 AgentTaskInterrupted 与重复 stop 幂等。新 reader 保留旧日志，新增变体不承诺旧二进制降级读取；pending 只表示最后 checkpoint 未闭合，不证明副作用回滚。原五段 gate_full 清理磁盘后重试通过；宽泛等级与默认不变，平台/性能及最终结论见 kernel-convergence-s6-2026-10-29.md。；2026-10-29 D3：只移除已无调用的内部旧 invoker getter；注册/生命周期生产边界不变，新增保留 Host adapter 的 schema、session scope 与 shutdown 拒绝契约通过。；2026-10-29 P1：显式 Host 选择的 ModuleToolContract 与任务句柄/状态查询经真实 Runtime 回归；既有目录/生命周期/默认权限不变，完整五段门禁通过。监督门禁仍待 P2，无新默认启用或硬件声明。；2026-10-30 P2：新增可选 Host 监督服务与执行回执；原能力默认、Provider 路由与确定性权限机制保持，定向及原 MainOnly 测试/clippy/fmt 回归通过。未将兼容入口声明为已受 System One 保护，无 live model/硬件声明。；2026-10-30 P3：可选 owner-bound 消息复用 Registry/Dispatcher，委托交集与独立后台授权分离；真实 Runtime 定向及原 MainOnly test/clippy/fmt 回归通过。默认与既有等级保持，本地幂等非持久 exactly-once，新消息变体需新 reader；无 live model/硬件声明。；2026-11-08 W1 波次复核：本批在生产装配根**新增 4 族注册**（进程树快照 / HTTP 写面 / 互联网检索 / 主人日程，均默认关）+ 名册与策展表扩充 + CLI 组合根新增 env 段与授权钩子；**本声明所指的既有能力，其注册条件与执行路径逐字未动** ⇒ 口径不变。"
+    notes: "Kernel 不自动安装业务工具；Desktop 将原配置选择的工具注册为普通 ToolModule，注册后沿用 V1 协议。default ON 只表示该生产装配机制，未新开 Shell/网络/文件写权限，原业务开关不变。复用唯一 PluginManager 与 CapabilityRegistry；自动 Hook 输出仍经同一治理/冻结审批入口与 ToolEventV1 成对投影。新增执行上下文、局部并发、原生取消/排水；旧参数/日志兼容及 AfterToolCall 串行屏障保留。真实 Runtime 模拟模型回合覆盖四协议 Adapter。动态 MCP 完整 owner 生命周期、Memory 自动 overlay、专有设备原生清理、共享 Arc 热插拔与完整多实例仍未完成；无云 API/设备实测。Phase 2 历史 default OFF 不追改；Phase 3 接线证据见 docs/04-internal/capability-modules-phase3-2026-10-28.md。；本批复核：动态 MCP owner、独立 Agent Scope/Principal、Memory 固定 Hook 已在真实 Runtime 测试；Managed Runtime 无模块也使用 V1。Desktop 默认旧 Memory/Persona/Organ Overlay 和旧 SubLoop 尚未退出，不声称完整 Convergence。；2026-10-28 生产收敛：桌面认知回调经 RegisteredBehavior 私有工具与固定 Hook 注入 V1；空观察审计消费、模型猜名拒绝、旧投影不被重新学习有真实生产回归。with_module / SubLoop 仍为明确残留，不能视为全部 Legacy 后端退出。；2026-10-29 S1：SubLoop 已委托同一 AgentInstance/execute_outcome，独立 provider/round 循环已删除；注册 owner 世代、共享预算、隔离审批与原生排水经真实 Runtime 验证。with_module/Overlay 和两种 ModuleInvoker 后端仍留后续，见 kernel-convergence-s1-2026-10-29.md。；2026-10-29 S2：两种 ModuleInvoker 均委托既有 AgentInstance 单次私有任务，直接 Router 后端已删除；无工具声明/派发、无递归 Hook、完整响应与 served_by 保真、child/真实模块 owner 用量和父来源经真实 Runtime 验证。with_module/Overlay、Profile 映射与桌面 managed 默认仍留后续，整体 Convergence 为 Partial，见 kernel-convergence-s2-2026-10-29.md。；2026-10-29 S3：with_module / with_behavior 与 with_registered_behavior 共用 RegisteredBehavior、固定 Hook、原治理/Dispatcher 与 V1；execute 直接 callback fallback 和动态 system Overlay 插槽已删除。动态数据只成对投影一次，空观察仅审计，预算/spill/溢出收缩重组认证工具载荷；静态 Host policy、审批/指令时序及旧 reader 保留。Host grant、模型假 receipt/同名工具拒绝、开放批闭合、stop/unload 无回退及 principal 跳过旧全局引擎有真实 Runtime/旧 DB 回归。整体 Convergence 仍 Partial，S4 映射/S5 桌面主入口未实施，见 kernel-convergence-s3-2026-10-29.md。；2026-10-29 S4：兼容 callback receipt 与 Dispatcher 上下文绑定完整 principal/epoch，未映射私有引擎继续默认拒绝；Host 显式选择的映射属于 IMPLEMENTED，映射未默认启用，原注册/治理/V1 机制等级与默认不变。指定窄门禁与真实 Runtime 对抗场景通过；整体 Convergence 仍 Partial，S5 桌面受管主入口未实施，见 kernel-convergence-s4-2026-10-29.md。；2026-10-29 S5：生产认知 load/stop/permission/guessed receipt/module-only 原用例切入 managed desktop；兼容 builder 另保留原装配并扩展 managed/private principal 回归。主实例与模块 child 使用同一实例服务及短锁执行视图；注册仍不授权，整体 Convergence 保持 Partial。 证据见 kernel-convergence-s5-2026-10-29.md。；2026-10-29 S6：兼容子执行经既有实例、Kernel 与 Dispatcher，未新增 Provider 后端或重复计量；真实 Runtime 验证多 child/round 复用 wire id 的独立事实、前端隔离、取消保账、native drain 后的持久 AgentTaskInterrupted 与重复 stop 幂等。新 reader 保留旧日志，新增变体不承诺旧二进制降级读取；pending 只表示最后 checkpoint 未闭合，不证明副作用回滚。原五段 gate_full 清理磁盘后重试通过；宽泛等级与默认不变，平台/性能及最终结论见 kernel-convergence-s6-2026-10-29.md。；2026-10-29 D3：只移除已无调用的内部旧 invoker getter；注册/生命周期生产边界不变，新增保留 Host adapter 的 schema、session scope 与 shutdown 拒绝契约通过。；2026-10-29 P1：显式 Host 选择的 ModuleToolContract 与任务句柄/状态查询经真实 Runtime 回归；既有目录/生命周期/默认权限不变，完整五段门禁通过。监督门禁仍待 P2，无新默认启用或硬件声明。；2026-10-30 P2：新增可选 Host 监督服务与执行回执；原能力默认、Provider 路由与确定性权限机制保持，定向及原 MainOnly 测试/clippy/fmt 回归通过。未将兼容入口声明为已受 System One 保护，无 live model/硬件声明。；2026-10-30 P3：可选 owner-bound 消息复用 Registry/Dispatcher，委托交集与独立后台授权分离；真实 Runtime 定向及原 MainOnly test/clippy/fmt 回归通过。默认与既有等级保持，本地幂等非持久 exactly-once，新消息变体需新 reader；无 live model/硬件声明。；2026-11-08 W1 波次复核：本批在生产装配根**新增 4 族注册**（进程树快照 / HTTP 写面 / 互联网检索 / 主人日程，均默认关）+ 名册与策展表扩充 + CLI 组合根新增 env 段与授权钩子；**本声明所指的既有能力，其注册条件与执行路径逐字未动** ⇒ 口径不变。；2026-11-08 W2 波次复核：所涉文件**只新增**可选字段/注册段（`RuntimeConfig.depth_ceiling` 默认 `None`；`Session.depth_quota` 默认空槽；生产配置默认关 ⇒ **逐字节零变化**）⇒ **既有路径未动** ⇒ 本声明语义不变。"
 
   - id: rt.owned_agents
     title: "同一 Runtime 的模块拥有独立 Agent 与分层核算"
@@ -956,11 +956,11 @@ claims:
       - crates/engine/runtime-assembly/tests/managed_main.rs
       - crates/adapters/cli/tests/canonical_cli_bootstrap.rs
       - crates/adapters/cli/tests/care_heartbeat_host.rs
-    verified_at: 8d43c6e7ff2153189c95f5738f331bce81acdd84
+    verified_at: d24dad53ef030af25615ff0b08e2d6d4a2f81685
     verify_cmd: "cargo test -p apeireth-runtime --test cognitive_module_abi --locked -j 2 && cargo test -p apeireth-runtime --test canonical_subloop --locked -j 2 && cargo test -p apeireth-runtime-assembly --test convergence_agents --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
-    notes: "可由 Host API 组合；12 项真实实例测试覆盖并发、私有历史、预算、取消、模块自主创建及原生资源排水。不是桌面后台任务全面迁移，也不替代旧 SubLoop。；2026-10-28 生产收敛：请求使用共享服务的只读执行目录视图，模型等待期间不持控制读锁；热注册获得受限 ModuleAgents 端口，模块停止不影响主 Agent。PortableHost 已接线；桌面 Raw Runtime 和旧 SubLoop 的完整多实例迁移仍未完成，维持 IMPLEMENTED 口径。；2026-10-29 S1：SubLoop 路径为 PRODUCTION WIRED；规范化任务端口保留完整响应及本次 usage，父子身份/历史隔离、持久工具对、预算与 native drain 经真实 Runtime 验证。桌面 managed 默认及全部 Legacy 迁移仍未完成，整体维持 IMPLEMENTED，见 kernel-convergence-s1-2026-10-29.md。；2026-10-29 S2：生产与独立 ModuleInvoker 共用 SingleShot 任务策略，意外 tool_calls 原样返回但不执行；请求事实归 child 与真实注册 owner，来源关联父 request/trace，适配器无重复计量。共享预算、跨 turn/session、失败/取消、未知缓存与缺失 usage 的 fail-closed 已实测；原 with_module 的兼容 Host owner 留 S3，不抬升整体等级，见 kernel-convergence-s2-2026-10-29.md。；2026-10-29 S3：旧 builder 回调也绑定真实注册模块 owner 与世代，受原生命周期、内部 capability、父 scope 和模块 child grant 约束；原 SubLoop/Invoker 用量、预算与取消回归通过。未改桌面 managed 默认或旧数据 Profile 映射，不抬升整体等级，见 kernel-convergence-s3-2026-10-29.md。；2026-10-29 S4：子任务核对父 principal/epoch，旧 invoker、fork、reload、审批与后台整理不能复用替换后的 grant；Profile 切换取消旧执行，新 main 不继承旧缓存。runtime all-targets 与 profile_memory_authorization 通过；维持 IMPLEMENTED，S5 默认主入口未实施，见 kernel-convergence-s4-2026-10-29.md。；2026-10-29 S5：默认桌面 Host-owned main 使用现有 ManagedAgent；完整请求、流式、审批、CLI/gateway 和实际 heartbeat producer 共享同一 AgentRuntime/AgentId，历史按 Session 保留，用量在原实际边界记账后按身份汇总。Host 显式选择 SessionQuota，有限实例/共享预算仍默认拒绝未知用量；别实例 Session 认领、跨会话预算、阻塞 Provider 期间热控制/并发/关闭与原实例回归通过。该默认路径另有独立 PRODUCTION WIRED claim，宽泛本项维持 IMPLEMENTED，整体仍 Partial。 证据见 kernel-convergence-s5-2026-10-29.md。；2026-10-29 S6：兼容子执行经既有实例、Kernel 与 Dispatcher，未新增 Provider 后端或重复计量；真实 Runtime 验证多 child/round 复用 wire id 的独立事实、前端隔离、取消保账、native drain 后的持久 AgentTaskInterrupted 与重复 stop 幂等。新 reader 保留旧日志，新增变体不承诺旧二进制降级读取；pending 只表示最后 checkpoint 未闭合，不证明副作用回滚。原五段 gate_full 清理磁盘后重试通过；宽泛等级与默认不变，平台/性能及最终结论见 kernel-convergence-s6-2026-10-29.md。；2026-10-29 S6 Android 库复验：aarch64-linux-android 的 runtime 库 check/build 与 assembly no-default-features 库 check 均 exit 0，精确命令与日志见 kernel-convergence-s6-2026-10-29.md。仅库编译，无设备/JNI/UI/HARDWARE VALIDATED；冷启动目标未达，整体仍 Partial，能力等级与默认不变。；2026-10-29 D3：移除仅内部且无调用的 providers_arc；受管实例仍用原 gated router/执行视图，不把兼容 Host API 测试宣称新增生产接线；原实例回归随 workspace 主门禁通过。；2026-10-30 P2：新增可选 Host 监督服务与执行回执；原能力默认、Provider 路由与确定性权限机制保持，定向及原 MainOnly 测试/clippy/fmt 回归通过。未将兼容入口声明为已受 System One 保护，无 live model/硬件声明。；2026-10-30 P3：可选 owner-bound 消息复用 Registry/Dispatcher，委托交集与独立后台授权分离；真实 Runtime 定向及原 MainOnly test/clippy/fmt 回归通过。默认与既有等级保持，本地幂等非持久 exactly-once，新消息变体需新 reader；无 live model/硬件声明。；2026-11-08 W1 波次复核：本批在生产装配根**新增 4 族注册**（进程树快照 / HTTP 写面 / 互联网检索 / 主人日程，均默认关）+ 名册与策展表扩充 + CLI 组合根新增 env 段与授权钩子；**本声明所指的既有能力，其注册条件与执行路径逐字未动** ⇒ 口径不变。"
+    notes: "可由 Host API 组合；12 项真实实例测试覆盖并发、私有历史、预算、取消、模块自主创建及原生资源排水。不是桌面后台任务全面迁移，也不替代旧 SubLoop。；2026-10-28 生产收敛：请求使用共享服务的只读执行目录视图，模型等待期间不持控制读锁；热注册获得受限 ModuleAgents 端口，模块停止不影响主 Agent。PortableHost 已接线；桌面 Raw Runtime 和旧 SubLoop 的完整多实例迁移仍未完成，维持 IMPLEMENTED 口径。；2026-10-29 S1：SubLoop 路径为 PRODUCTION WIRED；规范化任务端口保留完整响应及本次 usage，父子身份/历史隔离、持久工具对、预算与 native drain 经真实 Runtime 验证。桌面 managed 默认及全部 Legacy 迁移仍未完成，整体维持 IMPLEMENTED，见 kernel-convergence-s1-2026-10-29.md。；2026-10-29 S2：生产与独立 ModuleInvoker 共用 SingleShot 任务策略，意外 tool_calls 原样返回但不执行；请求事实归 child 与真实注册 owner，来源关联父 request/trace，适配器无重复计量。共享预算、跨 turn/session、失败/取消、未知缓存与缺失 usage 的 fail-closed 已实测；原 with_module 的兼容 Host owner 留 S3，不抬升整体等级，见 kernel-convergence-s2-2026-10-29.md。；2026-10-29 S3：旧 builder 回调也绑定真实注册模块 owner 与世代，受原生命周期、内部 capability、父 scope 和模块 child grant 约束；原 SubLoop/Invoker 用量、预算与取消回归通过。未改桌面 managed 默认或旧数据 Profile 映射，不抬升整体等级，见 kernel-convergence-s3-2026-10-29.md。；2026-10-29 S4：子任务核对父 principal/epoch，旧 invoker、fork、reload、审批与后台整理不能复用替换后的 grant；Profile 切换取消旧执行，新 main 不继承旧缓存。runtime all-targets 与 profile_memory_authorization 通过；维持 IMPLEMENTED，S5 默认主入口未实施，见 kernel-convergence-s4-2026-10-29.md。；2026-10-29 S5：默认桌面 Host-owned main 使用现有 ManagedAgent；完整请求、流式、审批、CLI/gateway 和实际 heartbeat producer 共享同一 AgentRuntime/AgentId，历史按 Session 保留，用量在原实际边界记账后按身份汇总。Host 显式选择 SessionQuota，有限实例/共享预算仍默认拒绝未知用量；别实例 Session 认领、跨会话预算、阻塞 Provider 期间热控制/并发/关闭与原实例回归通过。该默认路径另有独立 PRODUCTION WIRED claim，宽泛本项维持 IMPLEMENTED，整体仍 Partial。 证据见 kernel-convergence-s5-2026-10-29.md。；2026-10-29 S6：兼容子执行经既有实例、Kernel 与 Dispatcher，未新增 Provider 后端或重复计量；真实 Runtime 验证多 child/round 复用 wire id 的独立事实、前端隔离、取消保账、native drain 后的持久 AgentTaskInterrupted 与重复 stop 幂等。新 reader 保留旧日志，新增变体不承诺旧二进制降级读取；pending 只表示最后 checkpoint 未闭合，不证明副作用回滚。原五段 gate_full 清理磁盘后重试通过；宽泛等级与默认不变，平台/性能及最终结论见 kernel-convergence-s6-2026-10-29.md。；2026-10-29 S6 Android 库复验：aarch64-linux-android 的 runtime 库 check/build 与 assembly no-default-features 库 check 均 exit 0，精确命令与日志见 kernel-convergence-s6-2026-10-29.md。仅库编译，无设备/JNI/UI/HARDWARE VALIDATED；冷启动目标未达，整体仍 Partial，能力等级与默认不变。；2026-10-29 D3：移除仅内部且无调用的 providers_arc；受管实例仍用原 gated router/执行视图，不把兼容 Host API 测试宣称新增生产接线；原实例回归随 workspace 主门禁通过。；2026-10-30 P2：新增可选 Host 监督服务与执行回执；原能力默认、Provider 路由与确定性权限机制保持，定向及原 MainOnly 测试/clippy/fmt 回归通过。未将兼容入口声明为已受 System One 保护，无 live model/硬件声明。；2026-10-30 P3：可选 owner-bound 消息复用 Registry/Dispatcher，委托交集与独立后台授权分离；真实 Runtime 定向及原 MainOnly test/clippy/fmt 回归通过。默认与既有等级保持，本地幂等非持久 exactly-once，新消息变体需新 reader；无 live model/硬件声明。；2026-11-08 W1 波次复核：本批在生产装配根**新增 4 族注册**（进程树快照 / HTTP 写面 / 互联网检索 / 主人日程，均默认关）+ 名册与策展表扩充 + CLI 组合根新增 env 段与授权钩子；**本声明所指的既有能力，其注册条件与执行路径逐字未动** ⇒ 口径不变。；2026-11-08 W2 波次复核：CLI 组合根**新增**两处接线（隐私声明读取（默认 `ordinary` ⇒ 闸不生效 ⇒ 零行为变化）+ `APEIRETH_QUOTA_MAX_DEPTH` 旋钮（默认未设 ⇒ 恒不设限））⇒ **既有组合根路径与授权口径未动** ⇒ 本声明语义不变。"
 
   - id: mem.registered_namespace
     title: "注册式 Memory 工具、固定 Hook 与通用 Profile 隔离"
@@ -986,11 +986,11 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/convergence_memory.rs
       - crates/engine/runtime-assembly/tests/profile_memory_authorization.rs
-    verified_at: 8d43c6e7ff2153189c95f5738f331bce81acdd84
+    verified_at: d24dad53ef030af25615ff0b08e2d6d4a2f81685
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test profile_memory_authorization --locked -j 2 && cargo test -p apeireth-runtime-assembly --test convergence_memory --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
-    notes: "新 Host 组合中的 9 项真实 Runtime 测试通过；七工具、合法 V1 检索、后台 Agent、审批 CAS、持久化与 fork Scope 隔离。默认 ProductionCognitiveModules 的旧 Memory/Persona/Organ 尚未替换，旧数据不自动归属新 Namespace。；2026-10-28 生产收敛复核：源码变更及回归证据见 kernel-convergence-final-acceptance-2026-10-28.md；不将 Legacy SubLoop 或旧数据 Profile 映射宣称已迁移。；2026-10-29 S1 复核：父范围约束仅由 SubLoop 适配显式绑定，原模块整理 Agent 独立 Host grant 与 Namespace 语义保持；convergence_memory 原断言复跑通过，旧数据 Profile 映射仍待 S4。证据见 kernel-convergence-s1-2026-10-29.md。；2026-10-29 S4：IMPLEMENTED（可选 Host 组合）的 ProfileMemoryMappings 显式绑定完整 Profile/Namespace 与旧 scope、Preference 来源会话、专属认知 store；共享来源只读，写回归目标私有分区，未映射与过期授权默认拒绝且无全局回退。精确 scope 在原排序前过滤并在工具边界复核，治理/protected/CAS/typed sink/真实来源保持；带回执或调优的 recall 不允许只读共享。撤销、审批、后台整理、fork/reload 与切换由真实 Runtime 对抗测试覆盖。旧数据库不自动迁移，映射未默认启用；整体 Convergence 仍 Partial，S5 未实施，无外部 API/硬件实测。证据见 kernel-convergence-s4-2026-10-29.md。；2026-10-29 P1：显式 Host 选择的 ModuleToolContract 与任务句柄/状态查询经真实 Runtime 回归；既有目录/生命周期/默认权限不变，完整五段门禁通过。监督门禁仍待 P2，无新默认启用或硬件声明。；2026-10-30 P2：新增可选 Host 监督服务与执行回执；原能力默认、Provider 路由与确定性权限机制保持，定向及原 MainOnly 测试/clippy/fmt 回归通过。未将兼容入口声明为已受 System One 保护，无 live model/硬件声明。；2026-10-30 P3：可选 owner-bound 消息复用 Registry/Dispatcher，委托交集与独立后台授权分离；真实 Runtime 定向及原 MainOnly test/clippy/fmt 回归通过。默认与既有等级保持，本地幂等非持久 exactly-once，新消息变体需新 reader；无 live model/硬件声明。；2026-11-08 W1 波次复核：本批在生产装配根**新增 4 族注册**（进程树快照 / HTTP 写面 / 互联网检索 / 主人日程，均默认关）+ 名册与策展表扩充 + CLI 组合根新增 env 段与授权钩子；**本声明所指的既有能力，其注册条件与执行路径逐字未动** ⇒ 口径不变。"
+    notes: "新 Host 组合中的 9 项真实 Runtime 测试通过；七工具、合法 V1 检索、后台 Agent、审批 CAS、持久化与 fork Scope 隔离。默认 ProductionCognitiveModules 的旧 Memory/Persona/Organ 尚未替换，旧数据不自动归属新 Namespace。；2026-10-28 生产收敛复核：源码变更及回归证据见 kernel-convergence-final-acceptance-2026-10-28.md；不将 Legacy SubLoop 或旧数据 Profile 映射宣称已迁移。；2026-10-29 S1 复核：父范围约束仅由 SubLoop 适配显式绑定，原模块整理 Agent 独立 Host grant 与 Namespace 语义保持；convergence_memory 原断言复跑通过，旧数据 Profile 映射仍待 S4。证据见 kernel-convergence-s1-2026-10-29.md。；2026-10-29 S4：IMPLEMENTED（可选 Host 组合）的 ProfileMemoryMappings 显式绑定完整 Profile/Namespace 与旧 scope、Preference 来源会话、专属认知 store；共享来源只读，写回归目标私有分区，未映射与过期授权默认拒绝且无全局回退。精确 scope 在原排序前过滤并在工具边界复核，治理/protected/CAS/typed sink/真实来源保持；带回执或调优的 recall 不允许只读共享。撤销、审批、后台整理、fork/reload 与切换由真实 Runtime 对抗测试覆盖。旧数据库不自动迁移，映射未默认启用；整体 Convergence 仍 Partial，S5 未实施，无外部 API/硬件实测。证据见 kernel-convergence-s4-2026-10-29.md。；2026-10-29 P1：显式 Host 选择的 ModuleToolContract 与任务句柄/状态查询经真实 Runtime 回归；既有目录/生命周期/默认权限不变，完整五段门禁通过。监督门禁仍待 P2，无新默认启用或硬件声明。；2026-10-30 P2：新增可选 Host 监督服务与执行回执；原能力默认、Provider 路由与确定性权限机制保持，定向及原 MainOnly 测试/clippy/fmt 回归通过。未将兼容入口声明为已受 System One 保护，无 live model/硬件声明。；2026-10-30 P3：可选 owner-bound 消息复用 Registry/Dispatcher，委托交集与独立后台授权分离；真实 Runtime 定向及原 MainOnly test/clippy/fmt 回归通过。默认与既有等级保持，本地幂等非持久 exactly-once，新消息变体需新 reader；无 live model/硬件声明。；2026-11-08 W1 波次复核：本批在生产装配根**新增 4 族注册**（进程树快照 / HTTP 写面 / 互联网检索 / 主人日程，均默认关）+ 名册与策展表扩充 + CLI 组合根新增 env 段与授权钩子；**本声明所指的既有能力，其注册条件与执行路径逐字未动** ⇒ 口径不变。；2026-11-08 W2 波次复核：C-D1 的读路径并联**未注册生产**（无生产激活口）⇒ 协调器的**既有域可见判定逐字未改**（域可见路径不变；未注入登记处退化为老判定）⇒ 本声明语义不变。"
 
   - id: rt.desktop_managed_main
     title: "默认桌面 main：同一受管 Host 的 CLI、gateway、审批、流式与心跳"
@@ -1012,11 +1012,11 @@ claims:
       - crates/engine/runtime-assembly/tests/managed_main.rs
       - crates/engine/runtime-assembly/tests/production_cognitive_v1.rs
       - crates/engine/runtime-assembly/tests/portable_host.rs
-    verified_at: 8d43c6e7ff2153189c95f5738f331bce81acdd84
+    verified_at: d24dad53ef030af25615ff0b08e2d6d4a2f81685
     verify_cmd: "cargo test -p apeireth-cli --test canonical_cli_bootstrap --test care_heartbeat_host --locked -j 2 && cargo test -p apeireth-runtime-assembly --test managed_main --test production_cognitive_v1 --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
-    notes: "2026-10-29 S5：真实 bootstrap 的默认 main 为现有 ManagedAgent。完整 TurnRequest、Session 连续性、静态 system/security、域/用户校验、写闸、审批 ID/冻结恢复和增量 delta 保留；Host 显式选择模块 child grants 与原 SessionQuota，有限实例及共享预算仍默认拒绝未知用量。ProfileMemoryMappings 保持可选，principal 未映射时旧全局认知默认拒绝。PortableHost normal feature graph 无桌面组合。整体 Production Convergence 仍 Partial，S6/最终 gates 未实施，无外部 API、原生 UI 或硬件实测。证据见 kernel-convergence-s5-2026-10-29.md。；2026-10-29 S6：兼容子执行经既有实例、Kernel 与 Dispatcher，未新增 Provider 后端或重复计量；真实 Runtime 验证多 child/round 复用 wire id 的独立事实、前端隔离、取消保账、native drain 后的持久 AgentTaskInterrupted 与重复 stop 幂等。新 reader 保留旧日志，新增变体不承诺旧二进制降级读取；pending 只表示最后 checkpoint 未闭合，不证明副作用回滚。原五段 gate_full 清理磁盘后重试通过；宽泛等级与默认不变，平台/性能及最终结论见 kernel-convergence-s6-2026-10-29.md。；2026-10-30 P2：新增可选 Host 监督服务与执行回执；原能力默认、Provider 路由与确定性权限机制保持，定向及原 MainOnly 测试/clippy/fmt 回归通过。未将兼容入口声明为已受 System One 保护，无 live model/硬件声明。；2026-10-30 P3：可选 owner-bound 消息复用 Registry/Dispatcher，委托交集与独立后台授权分离；真实 Runtime 定向及原 MainOnly test/clippy/fmt 回归通过。默认与既有等级保持，本地幂等非持久 exactly-once，新消息变体需新 reader；无 live model/硬件声明。；2026-11-08 W1 波次复核：本批在生产装配根**新增 4 族注册**（进程树快照 / HTTP 写面 / 互联网检索 / 主人日程，均默认关）+ 名册与策展表扩充 + CLI 组合根新增 env 段与授权钩子；**本声明所指的既有能力，其注册条件与执行路径逐字未动** ⇒ 口径不变。"
+    notes: "2026-10-29 S5：真实 bootstrap 的默认 main 为现有 ManagedAgent。完整 TurnRequest、Session 连续性、静态 system/security、域/用户校验、写闸、审批 ID/冻结恢复和增量 delta 保留；Host 显式选择模块 child grants 与原 SessionQuota，有限实例及共享预算仍默认拒绝未知用量。ProfileMemoryMappings 保持可选，principal 未映射时旧全局认知默认拒绝。PortableHost normal feature graph 无桌面组合。整体 Production Convergence 仍 Partial，S6/最终 gates 未实施，无外部 API、原生 UI 或硬件实测。证据见 kernel-convergence-s5-2026-10-29.md。；2026-10-29 S6：兼容子执行经既有实例、Kernel 与 Dispatcher，未新增 Provider 后端或重复计量；真实 Runtime 验证多 child/round 复用 wire id 的独立事实、前端隔离、取消保账、native drain 后的持久 AgentTaskInterrupted 与重复 stop 幂等。新 reader 保留旧日志，新增变体不承诺旧二进制降级读取；pending 只表示最后 checkpoint 未闭合，不证明副作用回滚。原五段 gate_full 清理磁盘后重试通过；宽泛等级与默认不变，平台/性能及最终结论见 kernel-convergence-s6-2026-10-29.md。；2026-10-30 P2：新增可选 Host 监督服务与执行回执；原能力默认、Provider 路由与确定性权限机制保持，定向及原 MainOnly 测试/clippy/fmt 回归通过。未将兼容入口声明为已受 System One 保护，无 live model/硬件声明。；2026-10-30 P3：可选 owner-bound 消息复用 Registry/Dispatcher，委托交集与独立后台授权分离；真实 Runtime 定向及原 MainOnly test/clippy/fmt 回归通过。默认与既有等级保持，本地幂等非持久 exactly-once，新消息变体需新 reader；无 live model/硬件声明。；2026-11-08 W1 波次复核：本批在生产装配根**新增 4 族注册**（进程树快照 / HTTP 写面 / 互联网检索 / 主人日程，均默认关）+ 名册与策展表扩充 + CLI 组合根新增 env 段与授权钩子；**本声明所指的既有能力，其注册条件与执行路径逐字未动** ⇒ 口径不变。；2026-11-08 W2 波次复核：CLI 组合根**新增**两处接线（隐私声明读取（默认 `ordinary` ⇒ 闸不生效 ⇒ 零行为变化）+ `APEIRETH_QUOTA_MAX_DEPTH` 旋钮（默认未设 ⇒ 恒不设限））⇒ **既有组合根路径与授权口径未动** ⇒ 本声明语义不变。"
 
 
   - id: rt.module_execution_contract
@@ -1062,11 +1062,11 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/system_one_execution.rs
       - crates/engine/runtime-assembly/tests/modular_ale.rs
-    verified_at: 9db4418d5bba94b432555732a7434f638929a636
+    verified_at: d24dad53ef030af25615ff0b08e2d6d4a2f81685
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test system_one_execution --test modular_ale --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
-    notes: "Explicit Host contract and exact supervisor provider/model only. Existing Dispatcher enforces scope/approval/epoch/cancel/lifecycle/native policy before and after asynchronous review; missing/deny/escalate/malformed/timeout/audit failure refuses effects. Durable audit and tool-free SingleShot adapter use existing Runtime/AgentInstance; scripted provider plus real file/store effects are software evidence, not live model or hardware validation. Compatibility C01/C02/C03 remains open; no universal/default protection claim. P2 MainOnly gate passed; P4 full image closure remains. See ale-system-one-p2-2026-10-30.md.；2026-10-30 P3：可选 owner-bound 消息复用 Registry/Dispatcher，委托交集与独立后台授权分离；真实 Runtime 定向及原 MainOnly test/clippy/fmt 回归通过。默认与既有等级保持，本地幂等非持久 exactly-once，新消息变体需新 reader；无 live model/硬件声明。；2026-10-30 P4 复验：最终原五段与定向/文档测试通过。C03 在新消息口完成显式委托交集和长期授权分离，C01/C02 默认兼容纳管仍待验收；嵌套审查撤权及未决幂等窗口拒绝重试均有真实 Runtime 证据。固定回环 Mesh 复用同一门禁，无 live model/外部设备网络/硬件声明。"
+    notes: "Explicit Host contract and exact supervisor provider/model only. Existing Dispatcher enforces scope/approval/epoch/cancel/lifecycle/native policy before and after asynchronous review; missing/deny/escalate/malformed/timeout/audit failure refuses effects. Durable audit and tool-free SingleShot adapter use existing Runtime/AgentInstance; scripted provider plus real file/store effects are software evidence, not live model or hardware validation. Compatibility C01/C02/C03 remains open; no universal/default protection claim. P2 MainOnly gate passed; P4 full image closure remains. See ale-system-one-p2-2026-10-30.md.；2026-10-30 P3：可选 owner-bound 消息复用 Registry/Dispatcher，委托交集与独立后台授权分离；真实 Runtime 定向及原 MainOnly test/clippy/fmt 回归通过。默认与既有等级保持，本地幂等非持久 exactly-once，新消息变体需新 reader；无 live model/硬件声明。；2026-10-30 P4 复验：最终原五段与定向/文档测试通过。C03 在新消息口完成显式委托交集和长期授权分离，C01/C02 默认兼容纳管仍待验收；嵌套审查撤权及未决幂等窗口拒绝重试均有真实 Runtime 证据。固定回环 Mesh 复用同一门禁，无 live model/外部设备网络/硬件声明。；2026-11-08 W2 波次复核：所涉文件**只新增**可选字段/注册段（`RuntimeConfig.depth_ceiling` 默认 `None`；`Session.depth_quota` 默认空槽；生产配置默认关 ⇒ **逐字节零变化**）⇒ **既有路径未动** ⇒ 本声明语义不变。"
 
 
   - id: rt.module_messages
@@ -1120,11 +1120,11 @@ claims:
     tests:
       - crates/engine/memory/src/retrieval_pipeline.rs
       - crates/engine/memory/src/coordinator.rs
-    verified_at: 65fd1caedc4b79ad2e48dfbff0eb38ad2d525709
+    verified_at: d24dad53ef030af25615ff0b08e2d6d4a2f81685
     verify_cmd: "cargo test -p apeireth-memory --lib"
     owner: memory
     next_review: "2026-12-04"
-    notes: "总指挥 2026-11-04 登记（记忆线收口清单 §6 报备的口径缺位）。生产路径：tool.memory.retrieve → MemoryCoordinator::recall（coordinator.rs:685）→ HybridRetrievalPipeline；coverage 以固定权重 0.5 参与打分（retrieval_pipeline.rs:137，COVERAGE_WEIGHT 常量在 :469），与 BM25 词面分、向量源共同构成混合排序。⚠️ 此前该契约在真源里无记录 ⇒ 「coverage 接进生产排序」这条成果查不到。"
+    notes: "总指挥 2026-11-04 登记（记忆线收口清单 §6 报备的口径缺位）。生产路径：tool.memory.retrieve → MemoryCoordinator::recall（coordinator.rs:685）→ HybridRetrievalPipeline；coverage 以固定权重 0.5 参与打分（retrieval_pipeline.rs:137，COVERAGE_WEIGHT 常量在 :469），与 BM25 词面分、向量源共同构成混合排序。⚠️ 此前该契约在真源里无记录 ⇒ 「coverage 接进生产排序」这条成果查不到。；2026-11-08 W2 波次复核：C-D1 的读路径并联**未注册生产**（无生产激活口）⇒ 协调器的**既有域可见判定逐字未改**（域可见路径不变；未注入登记处退化为老判定）⇒ 本声明语义不变。"
   - id: mem.injection_contract
     title: "注入契约（召回片段按预算硬上限截断，预算不可超）"
     level: PRODUCTION WIRED
@@ -1135,11 +1135,11 @@ claims:
       - crates/engine/memory/tests/golden_injection2.rs
     tests:
       - crates/engine/memory/tests/golden_injection2.rs
-    verified_at: 65fd1caedc4b79ad2e48dfbff0eb38ad2d525709
+    verified_at: d24dad53ef030af25615ff0b08e2d6d4a2f81685
     verify_cmd: "cargo test -p apeireth-memory --test golden_injection2"
     owner: memory
     next_review: "2026-12-04"
-    notes: "总指挥 2026-11-04 登记（记忆线收口清单 §6 报备的口径缺位）。注入侧的可核验契约 = 注入预算为**硬上限**（golden_injection2.rs 的 total_budget_is_a_hard_cap 等用例）；片段取窗口内的正文子串，不得改写。⚠️ 此前该契约在真源里无记录。"
+    notes: "总指挥 2026-11-04 登记（记忆线收口清单 §6 报备的口径缺位）。注入侧的可核验契约 = 注入预算为**硬上限**（golden_injection2.rs 的 total_budget_is_a_hard_cap 等用例）；片段取窗口内的正文子串，不得改写。⚠️ 此前该契约在真源里无记录。；2026-11-08 W2 波次复核：C-D1 的读路径并联**未注册生产**（无生产激活口）⇒ 协调器的**既有域可见判定逐字未改**（域可见路径不变；未注入登记处退化为老判定）⇒ 本声明语义不变。"
   - id: sec.output_injection_guard
     title: "回合层消费工具**输出侧**的提示注入标记 ⇒ 可见告警（固定措辞，恒不阻断）"
     level: PRODUCTION WIRED
@@ -1152,8 +1152,147 @@ claims:
       - crates/engine/runtime-assembly/src/canonical/production_config.rs
     tests:
       - crates/engine/runtime-assembly/tests/prompt_injection_turn_warning.rs
-    verified_at: 8d43c6e7ff2153189c95f5738f331bce81acdd84
+    verified_at: d24dad53ef030af25615ff0b08e2d6d4a2f81685
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test prompt_injection_turn_warning"
     owner: runtime-assembly
     next_review: "2026-12-05"
-    notes: "总指挥 2026-11-05 登记（外部审计 P0-2 的连带残留）。前批已在 fetch **产出输出处**写下 `prompt_injection` 标记（fetch.rs:54/489，用治理面**同一个**启发式 `PromptInjectionHeuristic`）⇒ 但**全仓无任何消费者** ⇒ 治理面的 `input_security.prompt_injection` 只扫**入参**（`Action::CapabilityDispatch` 的 arguments）⇒ ⇒ 「间接提示词注入」在治理管线里没有落点。本条 = 回合层在 `HookPoint::AfterToolResult`（工具结果刚进 transcript 之后、下一次 completion 组装之前）读该标记 ⇒ 通过 `ModuleOutcome::with_system_overlay` 投影进**下一次 provider 请求**（模型真的看得见）⇒ 并落 session 事件审计面；告警账（计数 + 有界记录表 256 条）经 `ProductionModules::prompt_injection_report()` 暴露。⚠️ **恒不阻断**（directive 恒 `Continue`，已单测钉住）⇒ 「命中即拒工具结果」是独立的产品决策。⚠️ 告警措辞**固定**（逐字复用 `FETCH_PROMPT_INJECTION_WARNING`）⇒ 敌意载荷无法「说服」告警本身。⚠️ 与治理面的入参扫描**互补不重叠**（入参扫「模型要调什么」，输出侧扫「远端给模型看什么」）。；2026-11-08 W1 波次复核：本批在生产装配根**新增 4 族注册**（进程树快照 / HTTP 写面 / 互联网检索 / 主人日程，均默认关）+ 名册与策展表扩充 + CLI 组合根新增 env 段与授权钩子；**本声明所指的既有能力，其注册条件与执行路径逐字未动** ⇒ 口径不变。"
+    notes: "总指挥 2026-11-05 登记（外部审计 P0-2 的连带残留）。前批已在 fetch **产出输出处**写下 `prompt_injection` 标记（fetch.rs:54/489，用治理面**同一个**启发式 `PromptInjectionHeuristic`）⇒ 但**全仓无任何消费者** ⇒ 治理面的 `input_security.prompt_injection` 只扫**入参**（`Action::CapabilityDispatch` 的 arguments）⇒ ⇒ 「间接提示词注入」在治理管线里没有落点。本条 = 回合层在 `HookPoint::AfterToolResult`（工具结果刚进 transcript 之后、下一次 completion 组装之前）读该标记 ⇒ 通过 `ModuleOutcome::with_system_overlay` 投影进**下一次 provider 请求**（模型真的看得见）⇒ 并落 session 事件审计面；告警账（计数 + 有界记录表 256 条）经 `ProductionModules::prompt_injection_report()` 暴露。⚠️ **恒不阻断**（directive 恒 `Continue`，已单测钉住）⇒ 「命中即拒工具结果」是独立的产品决策。⚠️ 告警措辞**固定**（逐字复用 `FETCH_PROMPT_INJECTION_WARNING`）⇒ 敌意载荷无法「说服」告警本身。⚠️ 与治理面的入参扫描**互补不重叠**（入参扫「模型要调什么」，输出侧扫「远端给模型看什么」）。；2026-11-08 W1 波次复核：本批在生产装配根**新增 4 族注册**（进程树快照 / HTTP 写面 / 互联网检索 / 主人日程，均默认关）+ 名册与策展表扩充 + CLI 组合根新增 env 段与授权钩子；**本声明所指的既有能力，其注册条件与执行路径逐字未动** ⇒ 口径不变。；2026-11-08 W2 波次复核：所涉文件**只新增**可选字段/注册段（`RuntimeConfig.depth_ceiling` 默认 `None`；`Session.depth_quota` 默认空槽；生产配置默认关 ⇒ **逐字节零变化**）⇒ **既有路径未动** ⇒ 本声明语义不变。"
+
+  - id: tool.http_write
+    title: "带鉴权的 HTTP 写面（出网写方法 + 凭据绑定 + 受控出网闸）"
+    level: PRODUCTION WIRED
+    default: "OFF"
+    switch_env: "APEIRETH_ENABLE_HTTP_WRITE"
+    sources:
+      - crates/capabilities/tools/src/http_write.rs
+      - crates/capabilities/tools/src/egress.rs
+      - crates/engine/runtime-assembly/src/canonical/production.rs
+      - crates/adapters/cli/src/lib.rs
+      - docs/architecture/env-registry.toml
+    tests:
+      - crates/capabilities/tools/tests/http_write.rs
+      - crates/capabilities/tools/tests/architecture_invariants.rs
+    verified_at: d24dad53ef030af25615ff0b08e2d6d4a2f81685
+    verify_cmd: "cargo test -p apeireth-tools-canonical --test http_write --locked -j 2"
+    owner: runtime-assembly
+    next_review: "2026-12-08"
+    notes: "写方法长在 `ControlledEgress::write` ⇒ **不自带第二个 HTTP 客户端**（源级不变量钉死）；域名白名单必须显式列举（`EgressPolicy::ExplicitAllowList`；未设 ⇒ 拒绝即帧）；写请求**不跟随重定向**（凭据不外发第二跳）；请求体/响应体双上限；凭据回显**按值精确遮蔽**。治理：L3 + `WRITE_OR_EXECUTE`；逐次人批**绝对**（列入人工审批地板 ⇒ 任何预设下都停人批）。⚠️ **凭据绑定表默认无绑定** ⇒ 生产上只能发未鉴权请求（带 `credential_ref` 的调用拒绝即帧）。"
+
+  - id: tool.web_search
+    title: "互联网检索面（配置端点 + 有界收敛 + 来源标注）"
+    level: PRODUCTION WIRED
+    default: "OFF"
+    switch_env: "APEIRETH_ENABLE_WEB_SEARCH"
+    sources:
+      - crates/capabilities/tools/src/web_search.rs
+      - crates/engine/runtime-assembly/src/canonical/production.rs
+      - crates/adapters/cli/src/lib.rs
+      - docs/architecture/env-registry.toml
+    tests:
+      - crates/capabilities/tools/tests/web_search.rs
+    verified_at: d24dad53ef030af25615ff0b08e2d6d4a2f81685
+    verify_cmd: "cargo test -p apeireth-tools-canonical --test web_search --locked -j 2"
+    owner: runtime-assembly
+    next_review: "2026-12-08"
+    notes: "检索**端点走配置面**（数据目录配置账）⇒ **无内置默认端点、无内置密钥**；端点未配 ⇒ **面不注册**。条数上限按端点返回的**原始条数**判（超限**整单拒绝**，不替端点裁剪）；每条结果**必须带来源标注**（缺失即丢弃）；第三方正文经 `UntrustedEnvelope` 封套进上下文。治理：出网**只读** ⇒ L2（同 `tool.fetch` 档）+ 面级逐次人批（**有条件**：`full` 预设或 `approval_remember=true` 下按既有口径放行，与 `tool.shell`/`tool.fetch` 同款）。"
+
+  - id: tool.calendar
+    title: "主人日程面（本地日程账 + 增改期取消 + 逐次人批；≠ `tool.care_schedule` 关怀例程）"
+    level: PRODUCTION WIRED
+    default: "OFF"
+    switch_env: "APEIRETH_ENABLE_CALENDAR"
+    sources:
+      - crates/capabilities/tools/src/calendar/mod.rs
+      - crates/capabilities/tools/src/calendar/store.rs
+      - crates/capabilities/tools/src/calendar/tool.rs
+      - crates/engine/runtime-assembly/src/canonical/production.rs
+      - crates/adapters/cli/src/lib.rs
+      - docs/architecture/env-registry.toml
+    tests:
+      - crates/capabilities/tools/tests/calendar.rs
+    verified_at: d24dad53ef030af25615ff0b08e2d6d4a2f81685
+    verify_cmd: "cargo test -p apeireth-tools-canonical --test calendar --locked -j 2"
+    owner: runtime-assembly
+    next_review: "2026-12-08"
+    notes: "日程账 = 数据目录下两本 append-only JSONL（条目账 + 审计账），逐行一个 `StoredDoc` 信封，追加复用仓内唯一手续；**坏行按「不存在」并计数上报**（不砖化整本）；有效条目上限与账本行数上限**双闸**，超限**拒绝即帧**而非截断。治理：L3 + `WRITE_OR_EXECUTE`；写动作逐次人批（**有条件**：默认预设停人批，`full`/`approval_remember=true` 下按既有口径放行），读动作零审批。"
+
+  - id: tool.process_tree
+    title: "进程树快照面（只读快照 + 按 pid 幂等取消一棵树）"
+    level: PRODUCTION WIRED
+    default: "OFF"
+    switch_env: "APEIRETH_ENABLE_SHELL"
+    sources:
+      - crates/capabilities/tools/src/process/snapshot.rs
+      - crates/capabilities/tools/src/process_tree_tool.rs
+      - crates/engine/runtime-assembly/src/canonical/production.rs
+      - crates/adapters/cli/src/lib.rs
+    tests:
+      - crates/capabilities/tools/tests/process_tree_snapshot.rs
+      - crates/capabilities/tools/tests/process_tree_tool.rs
+    verified_at: d24dad53ef030af25615ff0b08e2d6d4a2f81685
+    verify_cmd: "cargo test -p apeireth-tools-canonical --test process_tree_tool --locked -j 2"
+    owner: runtime-assembly
+    next_review: "2026-12-08"
+    notes: "开关**复用** `APEIRETH_ENABLE_SHELL`（注册即闸 ⇒ shell 关 = 无进程可看 ⇒ 0 新 env 名；shell 开则本面开）。治理：L3 + `WRITE_OR_EXECUTE`（含 `cancel` ⇒ 可杀进程 ⇒ 只读会话整体拒绝）；`snapshot` 零审批 / `cancel` 逐次人批**绝对**（列入人工审批地板）。归属靠**父链上溯证明**（链上出现本进程 pid 才算命中）且**冻结期与执行期各验一次**（防 pid 复用）⇒ 证不出即**拒绝即帧**。⚠️ **平台实况**：Linux 真做了（`/proc` + 收容组归属真判定）；**Windows 已实现但未上真机**（收容组归属一律 `Undetermined`）；**macOS 显式未实现**（不返回空快照冒充成功）。"
+
+  - id: tool.object_grant
+    title: "记忆对象级授权面（按对象 id 只读授予 + 读路径并联 + 撤销即时）"
+    level: IMPLEMENTED
+    default: "OFF"
+    switch_env: null
+    sources:
+      - crates/engine/memory/src/object_grant.rs
+      - crates/engine/memory/src/coordinator.rs
+      - crates/engine/memory/src/scope.rs
+      - crates/engine/runtime-assembly/src/canonical/object_grant.rs
+      - crates/engine/runtime-assembly/src/canonical/tool_taxonomy.rs
+    tests:
+      - crates/engine/runtime-assembly/tests/object_grant.rs
+      - crates/engine/memory/tests/object_grant_visibility.rs
+    verified_at: d24dad53ef030af25615ff0b08e2d6d4a2f81685
+    verify_cmd: "cargo test -p apeireth-memory --test object_grant_visibility --locked -j 2"
+    owner: memory
+    next_review: "2026-12-08"
+    notes: "**口径 = IMPLEMENTED（未接线）· 本波不注册生产**：`approve_grant`/`deny_grant` 全仓**只有测试调用点** ⇒ 生产里每个授权**永远停在 pending** ⇒ 注册它等于注册一个「永远不能生效」的面；激活口（面板/IM 审批卡回调）属**宿主面**，记待办。机制：叠加语义 = **域可见 ∨ 有效对象 grant**（并联，不替代域级语义；grant 只对**那一个 object id** 生效、不扩域）；被授方**只读**（`allows_write` 恒 false）；撤销**即时生效**。账本**读端加固**（对抗复核查出 3 洞已修）：同 grant_id 取 **version 最大者** + 版本区间校验 + 严格递增 + `active` 行须有**同 grant_id 的 pending 前身且 `decided_by` 非空**，否则按「不存在」处理 ⇒ **旧行重放不能复活已撤销授权、伪造 active 行不能跳过人批**；并修「末行缺换行 ⇒ 末条授权静默消失」。读路径并联：候选侧 SQL 并入被授对象 id + 协调器 4 处判定并联 + 管线可见域合并（**只作用于已封闭的候选集 ⇒ 不扩域**）。⚠️ 剩余缺口：`retrieval_pipeline.rs` 还有一道 scope 过滤（本波以协调器侧合并绕过，未改该文件）。"
+
+  - id: core.routing_policy
+    title: "模型路由策略层（任务画像 × 隐私硬闸 × 成本档位；成本判定复用 `CostRouter`）"
+    level: PRODUCTION WIRED
+    default: "OFF"
+    switch_env: "APEIRETH_COST_ROUTING"
+    sources:
+      - crates/foundation/core/src/routing_policy.rs
+      - crates/foundation/core/src/cost_router.rs
+      - crates/adapters/cli/src/lib.rs
+      - crates/engine/runtime-assembly/src/canonical/self_status_source.rs
+      - crates/capabilities/tools/src/self_status.rs
+    tests:
+      - crates/foundation/core/tests/routing_policy.rs
+      - crates/foundation/core/tests/routing_policy_signal.rs
+    verified_at: d24dad53ef030af25615ff0b08e2d6d4a2f81685
+    verify_cmd: "cargo test -p apeireth-core --test routing_policy_signal --locked -j 2"
+    owner: core
+    next_review: "2026-12-08"
+    notes: "成本档位判定**原样复用** `CostRouter::candidates`（**不重算成本矩阵**）；隐私闸**收紧为明确失败**（候选全被排除 ⇒ `NoEligibleCandidate` 逐行带理由，**不回退默认模型、不静默放宽**）；排除必带理由。开关**复用** `APEIRETH_COST_ROUTING` ⇒ 0 新 env 名。⚠️ **两条硬边界**：① **信号源 = 显式声明**（仓内**无隐私信号真源**、也**不可推导**；唯一现成载体「规范请求 `metadata`」**会整包外发给厂商** ⇒ 已明确否决）⇒ 调用方未注入 ⇒ 闸**常态不生效**（漏接 = 静默失效）⇒ 自述面用 `privacy_source`（declared/defaulted）暴露「缺省≠普通」；不认识的声明值 ⇒ **拒路由**（不降级为普通档）。② 本层是既有两层**之上**的第三层（**非**「合成一层」）⇒ **网关侧接入未交付**（规格 §4.1 已按实测校正，不追认超载）。"
+
+  - id: budget.quota.depth
+    title: "会话配额深度维（调用树深度真计量 + 四维合一检查）"
+    level: PRODUCTION WIRED
+    default: "OFF"
+    switch_env: "APEIRETH_QUOTA_MAX_DEPTH"
+    sources:
+      - crates/engine/runtime/src/canonical/quota/depth.rs
+      - crates/engine/runtime/src/canonical/quota.rs
+      - crates/engine/runtime/src/canonical/session.rs
+      - crates/engine/runtime/src/canonical/execute.rs
+      - crates/engine/runtime/src/canonical/runtime.rs
+      - crates/capabilities/tools/src/self_status.rs
+      - docs/architecture/env-registry.toml
+    tests:
+      - crates/engine/runtime/tests/quota_depth.rs
+      - crates/engine/runtime/tests/quota_depth_wiring.rs
+    verified_at: d24dad53ef030af25615ff0b08e2d6d4a2f81685
+    verify_cmd: "cargo test -p apeireth-runtime --test quota_depth_wiring --locked -j 2"
+    owner: runtime
+    next_review: "2026-12-08"
+    notes: "四维合一检查（`check_with_depth`）沿用**既有配额语义**（同一 `QuotaExceeded`、同一拒绝帧、维度名 `depth` 为**新名**）；深度上限**随计量器走**（**不进 `SessionQuotaLimits`** ⇒ 不破全仓 5 处穷尽字面量构造）；env 走**严格解析**（非法值**启动即报错**，不静默放行成「无上限」）；未设上限 ⇒ 深度维**恒不设限**（逐字节零变化）；自述面的**已耗读数为 `Option<u64>`**（`None` = 读不到，**不报 0**）—— 因 `SessionQuotaLimits`/`CognitiveQuota` 无深度列 ⇒ 计数落不了盘（口径偏差已登记，不伪装成 0）。⚠️ **硬边界**：深度 = **运行时调用树读数**，**当前可达深度 ≤ 1**（`DEFAULT_MAX_INVOCATION_DEPTH = 1`，且子循环那条链是「平」的）⇒ **上限 > 1 不可达（配了也不触发）** ⇒ 该维**目前不是有效的深度防护**，只是把既有读数记成账 + 到顶按既有配额语义拒绝。另有三处已知偏差：F6（侧车 agent 那一跳）未喂（子 agent 自带 session ⇒ 父账本看不见，同 token/step/cost 既有缺口）· F4 **永久偏低 1**（存量平链读数，已逐字标注）· 侧车调用入口未喂（触碰会改存量语义）。反序列化**只接受上限**、计数从 0 起 ⇒ 伪造不出计数。"
