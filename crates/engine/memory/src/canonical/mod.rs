@@ -7,6 +7,7 @@
 pub mod domain;
 pub mod error;
 pub mod graph;
+pub mod memory_contracts;
 pub mod repository;
 pub mod retrieval;
 pub mod sqlite;

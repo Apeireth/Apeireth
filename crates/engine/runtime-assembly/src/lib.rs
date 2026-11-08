@@ -38,6 +38,7 @@ pub use desktop::*;
 pub mod memory_module;
 #[cfg(all(feature = "memory", feature = "desktop"))]
 pub use canonical::memory_module;
+pub use canonical::shadow_wire;
 
 #[cfg(all(feature = "profile-store", not(feature = "desktop")))]
 pub mod profile_store;

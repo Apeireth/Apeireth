@@ -1429,9 +1429,9 @@ impl ProductionModules {
                 "memory_governance",
                 "memory_governance",
             )?;
-            let coordinator = MemoryCoordinator::new(Arc::clone(&memory), Arc::clone(&governance));
-            let mut coordinator = memory_assembly::apply_retrieval_knobs(coordinator)
-                .map_err(RuntimeError::misconfigured)?;
+            let mut coordinator =
+                memory_assembly::assemble_memory(Arc::clone(&memory), Arc::clone(&governance))
+                    .map_err(RuntimeError::misconfigured)?;
             if let Some(scoped) = &backends.scoped_memory {
                 coordinator = coordinator.with_scoped_backend(Arc::clone(scoped));
             }

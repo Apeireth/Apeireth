@@ -27,7 +27,8 @@
 use super::memory_module::MemoryModule;
 use crate::profile_memory::ProfileMemoryMappings;
 use apeireth_core::kernel::Clock;
-use apeireth_memory::MemoryCoordinator;
+use apeireth_memory::{MemoryCoordinator, MemoryGovernanceStore};
+use apeireth_plugin::memory_backend::MemoryBackend;
 use apeireth_plugin::{Plugin, ToolCapability};
 use std::sync::Arc;
 
@@ -84,6 +85,41 @@ pub(super) fn apply_retrieval_knobs(
     coordinator: MemoryCoordinator,
 ) -> Result<MemoryCoordinator, String> {
     apply_retrieval_knobs_at(coordinator, &crate::paths::default_data_root())
+}
+
+/// 装配记忆的**三个面**：**排序旋钮配置面** + **契约口径自检** + **影子双跑/换算法**。
+///
+/// # 为什么放这里
+/// `production.rs` 登记了尺寸（只许不变或变小）⇒ ⇒ 装配细节搬到这里，
+/// `production.rs` 只留**一行**调用。
+///
+/// # 失败闭合（三条，逐条可复核）
+///
+/// * 排序旋钮配置坏 ⇒ **拒绝装配**（坏配置不许被当成「没配置」）；
+/// * 契约可见性口径与 canonical 分叉 ⇒ **拒绝启动**（`memory_contract_wire::install`）；
+/// * 影子配置坏 ⇒ **拒绝装配**；配置**缺失** ⇒ **不构造任何东西**（逐字节零行为变化）。
+///
+/// ⚠️ 影子/换算法的**治理链**暂传 `None` ⇒ ⇒ **切换会被拒绝**（失败闭合，刻意）
+/// ⇒ ⇒ 要真放行，需要装配根手里有治理链句柄（当前没有 ⇒ 这是**如实缺口**，不是漏接）。
+pub(super) fn assemble_memory(
+    memory: Arc<dyn MemoryBackend>,
+    governance: Arc<dyn MemoryGovernanceStore>,
+) -> Result<MemoryCoordinator, String> {
+    // ① 契约口径自检（两套可见性口径分叉 ⇒ 进程起不来）
+    crate::canonical::memory_contract_wire::install()?;
+    // ② 排序旋钮配置面（默认关 ⇒ 零行为变化；坏配置 ⇒ 拒绝装配）
+    let coordinator = apply_retrieval_knobs(MemoryCoordinator::new(
+        Arc::clone(&memory),
+        Arc::clone(&governance),
+    ))?;
+    // ③ 影子双跑 + 换算法流程（服务落在进程级槽里 ⇒ 调用方**不必**持有句柄）
+    let _shadow = crate::canonical::shadow_wire::install_shadow(
+        memory,
+        governance,
+        &crate::paths::default_data_root(),
+        None,
+    )?;
+    Ok(coordinator)
 }
 
 /// 同上，但**数据根显式给出**（测试用；生产走 [`apply_retrieval_knobs`]）。

@@ -283,6 +283,95 @@ pub async fn rebuild_vector_index(
     })
 }
 
+/// ⭐ **运维入口**：重建派生向量索引 + **检索结果一致性**复核。
+///
+/// # 为什么是「运维入口」而不是「读路径」
+/// 派生索引的重建是**运维动作**（删了重建 + 比对）⇒ ⇒ 放进**每请求**的读路径
+/// 会把「一次运维」变成「每次召回都重建一遍」⇒ ⇒ 读路径**只读**、重建走这里。
+///
+/// # 「重建前后结果一致」怎么证
+/// 用**同一个 embedder**（⇒ 同一个查询向量）分别检索：
+/// * **重建前**的 top-k id 序列；
+/// * **重建后**的 top-k id 序列；
+/// ⇒ 两条序列**逐项相同** ⇒ ⇒ 重建**没有改变检索结果**（这是比「向量逐条相同」
+/// **更强**的证据：向量相同但排序口径变了，结果也会变）。
+///
+/// # 诚实边界
+/// * 一致性只在**同模型同输入**下成立（模型变了 ⇒ 那是**换代**，不假装一致）；
+/// * 首次建索引没有「重建前」⇒ `identical` 记 `false` 并附 `verdict` 说明。
+#[derive(Debug, Clone, PartialEq)]
+pub struct RebuildRetrievalCheck {
+    /// 重建结论（向量级）。
+    pub verdict: RebuildVerdict,
+    /// 重建前的 top-k id 序列（首次建索引 ⇒ 空）。
+    pub before: Vec<String>,
+    /// 重建后的 top-k id 序列。
+    pub after: Vec<String>,
+    /// 重建前后**检索结果是否逐项相同**。
+    pub identical: bool,
+    /// 人读说明（含真因）。
+    pub detail: String,
+}
+
+/// ⭐ **重建 + 检索一致性复核**（运维入口）。
+///
+/// # 流程
+/// ① 重建前检索（索引不存在 ⇒ 空序列）；② 重建（既有实现）；③ 重建后检索；
+/// ④ 比对两条序列。
+pub async fn rebuild_and_verify_retrieval(
+    index_path: &std::path::Path,
+    records: &[SourceRecord],
+    embedder: &dyn EmbeddingProvider,
+    query: &str,
+    top_k: usize,
+) -> Result<RebuildRetrievalCheck, String> {
+    let query_vector = embedder
+        .embed(query)
+        .await
+        .map_err(|e| format!("embed 查询失败: {e}"))?;
+    let before = search_ids(index_path, &query_vector, top_k)?;
+    let outcome = rebuild_vector_index(index_path, records, embedder).await?;
+    let after = search_ids(index_path, &query_vector, top_k)?;
+    let identical = !before.is_empty() && before == after;
+    let detail = format!(
+        "{}；重建前 top-{top_k} = {:?}；重建后 top-{top_k} = {:?}；{}",
+        outcome.detail,
+        before,
+        after,
+        if identical {
+            "检索结果**逐项相同** ⇒ 重建没有改变召回"
+        } else if before.is_empty() {
+            "首次建索引（无重建前结果可比）"
+        } else {
+            "⚠️ **检索结果变了**（重建没有保持一致）"
+        }
+    );
+    Ok(RebuildRetrievalCheck {
+        verdict: outcome.verdict,
+        before,
+        after,
+        identical,
+        detail,
+    })
+}
+
+/// 在索引里检索并取 top-k 的 id 序列（索引不存在 ⇒ **空序列**，不是错误）。
+fn search_ids(
+    index_path: &std::path::Path,
+    query_vector: &[f32],
+    top_k: usize,
+) -> Result<Vec<String>, String> {
+    if !index_path.exists() {
+        return Ok(Vec::new());
+    }
+    let index = PersistentVectorIndex::open(index_path)
+        .map_err(|e| format!("打开向量索引失败 ({}): {e}", index_path.display()))?;
+    let hits = index
+        .search(query_vector, top_k, None)
+        .map_err(|e| format!("向量检索失败 ({}): {e}", index_path.display()))?;
+    Ok(hits.into_iter().map(|hit| hit.id).collect())
+}
+
 /// **逐条比对**两个向量索引的向量（**在容差内**才算一致）。
 ///
 /// # 口径

@@ -100,6 +100,10 @@ pub mod guard_observer;
 pub mod harness_patch;
 #[path = "canonical/invariant_registry.rs"]
 pub mod invariant_registry;
+/// B2 批「三接口契约」的**生产装配接线**（读契约 / 标注契约 / 注入契约）
+/// + **口径对齐自检**（分叉 ⇒ 拒绝装配）。
+#[path = "canonical/memory_contract_wire.rs"]
+pub mod memory_contract_wire;
 #[path = "canonical/memory_typed_sink.rs"]
 pub mod memory_typed_sink;
 /// `rt.module_execution_contract` 的**生产选举面**: 一张静态装配表 (无新 env
@@ -350,6 +354,12 @@ pub mod memory_module;
 /// 模块自有 Agent 面），并支持注册期迟绑定 Host 映射表。为何需要见文件头注释。
 #[path = "canonical/memory_assembly.rs"]
 mod memory_assembly;
+
+/// **B3 生产接线**：影子双跑 + 换算法流程（零风险上线 / 可回退）。
+/// 默认关（`shadow.json` 不存在 ⇒ 不构造任何东西 ⇒ 逐字节零行为变化）；
+/// 切换走仓里既有的治理面 ⇒ 没有治理面 ⇒ 不许换。为何需要见文件头注释。
+#[path = "canonical/shadow_wire.rs"]
+pub mod shadow_wire;
 
 #[path = "canonical/cognitive_registry.rs"]
 mod cognitive_registry;
