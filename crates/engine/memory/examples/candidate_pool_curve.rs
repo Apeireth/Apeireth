@@ -8,10 +8,10 @@
 //!
 //! | 结论 | 出处 | 它实际量的是 |
 //! |---|---|---|
-//! | 「**`NotInPool = 0` 题** ⇒ 瓶颈在排序层」 | `recall_gap_report` | **候选池 = 全部记录** ⇒ 目标当然都在池里（**空洞统计**）|
+//! | 「**`NotInPool = 0` 题**，瓶颈在排序层」 | `recall_gap_report` | **候选池 = 全部记录**，目标当然都在池里（**空洞统计**）|
 //! | 「模板卷 **26%~27%** 的题答案不在**前 50** 候选里」 | `first_pos_mechanism` | **前 50 候选** |
 //!
-//! ⇒ ⇒ 后者说明：**池子上限本身就是一道召回天花板**，
+//!；后者说明：**池子上限本身就是一道召回天花板**，
 //! 而任何「重排」都只能在这道天花板以下做功。
 //!
 //! # 本例测什么
@@ -22,12 +22,12 @@
 //! * `P` 继续变大：看**天花板在哪**；
 //! * `P = 全库`：**理论极限**（池子不再是瓶颈）。
 //!
-//! 同时报 **oracle 可达率**（标准答案在池里就算）⇒ ⇒ 两者一减就是「排序层还能捞多少」。
+//! 同时报 **oracle 可达率**（标准答案在池里就算）； 两者一减就是「排序层还能捞多少」。
 //!
 //! # 口径（与生产逐字一致）
 //! * 检索 = 生产 BM25 源；**一次搜全量，再按前缀切片**
-//!   （源内部按「分数降序 + id 升序」排好 ⇒ ⇒ 前缀与直接 `candidates(query, P)` 等价）；
-//! * 分数按池内 max 归一 ⇒ ⇒ **归一化基准与 P 无关**（全量 max），所以切片不改变排序；
+//!   （源内部按「分数降序 + id 升序」排好；前缀与直接 `candidates(query, P)` 等价）；
+//! * 分数按池内 max 归一；**归一化基准与 P 无关**（全量 max），所以切片不改变排序；
 //! * 只保留分数 > 0 的候选（与生产同口径）；
 //! * k = 10。
 //!
@@ -95,8 +95,14 @@ struct Column {
     frac_sum: f64,
     /// 二值「全部命中」题数。
     all_hits: usize,
-    /// 池内可达题数（标准答案全在池里）。
+    /// 池内可达题数（标准答案**全部**在池里）。
     reachable: usize,
+    /// ⭐ **闸门口径下的可达上限**：逐题「可达金标数 / 金标总数」之和。
+    ///
+    /// **为什么必须有这个**：闸门的指标是 `|gold ∩ top-k| / |gold|` 的**平均**
+    ///；一道 2 金标题若只有 1 条可达，这题的**上限就是 0.5**
+    ///；用「全金标可达」（二值）当上限会**低估**可达性、**高估**余量。
+    frac_oracle_sum: f64,
     cases: usize,
 }
 
@@ -109,6 +115,10 @@ impl Column {
     }
     fn reach(&self) -> f64 {
         self.reachable as f64 / self.cases.max(1) as f64
+    }
+    /// 闸门口径下的可达上限（逐题可达金标比例的平均）。
+    fn frac_oracle(&self) -> f64 {
+        self.frac_oracle_sum / self.cases.max(1) as f64
     }
 }
 
@@ -179,7 +189,7 @@ fn run() -> Result<(), Box<dyn Error>> {
             index,
         });
     } else {
-        eprintln!("· 真人卷考卷不在 ⇒ 跳过（这不是通过）");
+        eprintln!("· 真人卷考卷不在，跳过（这不是通过）");
     }
 
     // 我们的两套卷
@@ -243,9 +253,7 @@ fn run() -> Result<(), Box<dyn Error>> {
             exam.index.len(),
             columns[0].cases
         );
-        println!(
-            "     池上限     闸门口径recall   全部命中     池内可达率"
-        );
+        println!("     池上限     闸门口径recall   全部命中     全可达率    **闸门口径可达上限**");
         for (index, pool) in POOLS.iter().enumerate() {
             let label = if *pool == usize::MAX {
                 "全库".to_string()
@@ -258,12 +266,17 @@ fn run() -> Result<(), Box<dyn Error>> {
                 ""
             };
             println!(
-                "     {:<10} {:.4}          {:.4}       {:.4}{}",
+                "     {:<10} {:.4}          {:.4}       {:.4}      {:.4}{}",
                 label,
                 columns[index].frac(),
                 columns[index].all(),
                 columns[index].reach(),
-                if *pool == PRODUCTION_CAP { "  ← 生产默认 64" } else { marker },
+                columns[index].frac_oracle(),
+                if *pool == PRODUCTION_CAP {
+                    "  ← 生产默认 64"
+                } else {
+                    marker
+                },
             );
         }
         // 关键读数：从生产上限加到全库，还能捞回多少
@@ -281,12 +294,17 @@ fn run() -> Result<(), Box<dyn Error>> {
             full.all() - production.all(),
             full.reach() - production.reach(),
         );
-        // 排序层余量（全库池下的 oracle 减 recall）
+        // ⭐ 排序层余量（**必须用闸门口径的上限**才算得对）
         println!(
-            "     全库池下的排序余量：可达率 {:.4} − recall {:.4} = {:+.4}",
-            full.reach(),
+            "     全库池下的排序余量（闸门口径）：上限 {:.4} − recall {:.4} = {:+.4}",
+            full.frac_oracle(),
             full.frac(),
-            full.reach() - full.frac()
+            full.frac_oracle() - full.frac()
+        );
+        println!(
+            "     其中「不可能被检索到的金标」占 {:.2}%（上限 1 − {:.4}）",
+            (1.0 - full.frac_oracle()) * 100.0,
+            full.frac_oracle()
         );
 
         summary.push(serde_json::json!({
@@ -299,7 +317,10 @@ fn run() -> Result<(), Box<dyn Error>> {
                 "闸门口径recall": column.frac(),
                 "全部命中": column.all(),
                 "池内可达率": column.reach(),
+                "闸门口径可达上限": column.frac_oracle(),
             })).collect::<Vec<_>>(),
+            "闸门口径可达上限": full.frac_oracle(),
+            "不可能达到的金标占比": 1.0 - full.frac_oracle(),
             "生产上限到全库的增量": {
                 "闸门口径": full.frac() - production.frac(),
                 "全部命中": full.all() - production.all(),
@@ -358,6 +379,8 @@ fn measure(exam: &Exam) -> Result<Vec<Column>, Box<dyn Error>> {
             if gold.iter().all(|id| ids.contains(id)) {
                 column.reachable += 1;
             }
+            // 闸门口径下的可达上限（逐题「可达金标数 / 金标总数」）
+            column.frac_oracle_sum += fraction(&gold, &ids);
             // 前 k（k 与池上限取小）
             let top: Vec<&str> = ids.iter().take(K).copied().collect();
             column.frac_sum += fraction(&gold, &top);
