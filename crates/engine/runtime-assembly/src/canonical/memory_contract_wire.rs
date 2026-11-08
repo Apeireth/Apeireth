@@ -1,36 +1,27 @@
 //! B2 批「三接口契约」的**生产装配接线**（读契约 / 标注契约 / 注入契约）。
 //!
 //! # 这个文件解决什么问题
-//!
-//! 三契约**早就实现好了**，但**生产零调用** ⇒ ⇒ 契约**约束不到任何东西**
-//! （只是「库级完成」）。本文件把它们接进生产装配，并给出**会真的挡住事故**的那一道门。
+//! 三契约**早就实现好了**，但**生产零调用** ⇒ 契约**约束不到任何东西**（只是「库级完成」）⇒ 本文件把它们接进生产装配，并给出**会真的挡住事故**的那一道门。
 //!
 //! # 三条契约各自接在哪
 //!
-//! | 契约 | 生产落点 | 状态 |
-//! |---|---|---|
-//! | **注入契约**（`InjectionRenderer`） | `context_compiler::compile_injection_with_renderer` 用契约渲染器出注入 | ⭐ **已在生产**（本批**核实**确认；此前口径写「零调用」是**错的**） |
-//! | **读契约**（`MemoryView`） | `context_compiler` 编译前把选中集**包成契约视图**，编译从视图的**无损投影**取条目 | ⭐ **本批接入** |
-//! | **标注契约**（`MemoryAnnotation`） | 同一步产出**纯数据**标注（分数 + 出处）⇒ 类型层面**不可能**回写原始层 | ⭐ **本批接入** |
+//! * **注入契约**（`InjectionRenderer`）⇒ `context_compiler::compile_injection_with_renderer` 用契约渲染器出注入（⭐ **已在生产**；此前口径写「零调用」是**错的**）；
+//! * **读契约**（`MemoryView`）⇒ `context_compiler` 编译前把选中集**包成契约视图**，编译从视图的**无损投影**取条目（⭐ **本批接入**）；
+//! * **标注契约**（`MemoryAnnotation`）⇒ 同一步产出**纯数据**标注（分数 + 出处）⇒ 类型层面**不可能**回写原始层（⭐ **本批接入**）。
 //!
 //! # 「会真的挡住」的那道门：口径对齐自检
 //!
-//! 契约的可见性口径（`memory_view::scope_visible`）与 canonical 的
-//! `MemoryScope::is_visible_in` 是**两套**实现 ⇒ ⇒ 一旦分叉，**同一批记忆在两处
-//! 会得到不同的可见性** ⇒ ⇒ **权限判定分叉 = 安全风险**。
-//!
-//! ⇒ [`install`] 在**装配时**逐组比对（5 类范围 × 5 类范围 = 25 组）
-//! ⇒ ⇒ **不一致 ⇒ 拒绝装配**（不是「记一笔继续跑」）。
+//! 契约的可见性口径（`memory_view::scope_visible`）与 canonical 的 `MemoryScope::is_visible_in`
+//! 是**两套**实现 ⇒ 一旦分叉，**同一批记忆在两处会得到不同的可见性** ⇒ **权限判定分叉 = 安全风险**
+//! ⇒ [`install`] 在**装配时**逐组比对（5 × 5 = 25 组）⇒ **不一致 ⇒ 拒绝装配**（不是「记一笔继续跑」）。
 //!
 //! # 为什么**不**在读路径里做重建
-//!
-//! `vector_rebuild` 是**运维动作**（删派生索引 → 重建 → 比对），不是**每请求动作**
-//! ⇒ ⇒ 它走**运维入口**，不进读路径（详见 `crates/engine/memory/src/vector_rebuild.rs`）。
+//! `vector_rebuild` 是**运维动作**（删派生索引 → 重建 → 比对），不是**每请求动作** ⇒ 它走**运维入口**，不进读路径。
 //!
 //! # 中性表述
-//!
 //! 只描述**机制**（契约 / 口径对齐 / 失败闭合），不引用任何外部产品名。
 
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use apeireth_memory::canonical::memory_contracts::{assert_scope_alignment, SelectedMemoryView};
@@ -40,6 +31,14 @@ use apeireth_memory::memory_view::{AlgoStamp, Scope};
 
 /// 契约对齐自检覆盖的**范围组数**（5 类范围 × 5 类授权范围）。
 pub const ALIGNMENT_PAIRS: usize = 25;
+
+/// 契约面被经过的次数（**只读诊断面**：不参与判定，只供「链路真的过了契约」取证）。
+static CONTRACT_INSTALLS: AtomicU64 = AtomicU64::new(0);
+
+/// 契约面被经过的次数（**只读诊断面**：装配真的过了契约门 ⇒ 计数会涨）。
+pub fn contract_install_count() -> u64 {
+    CONTRACT_INSTALLS.load(Ordering::Relaxed)
+}
 
 /// 生产装配拿到的**契约束**。
 #[derive(Clone)]
@@ -61,6 +60,7 @@ pub struct MemoryContractBundle {
 /// let _contracts = memory_contract_wire::install().map_err(RuntimeError::misconfigured)?;
 /// ```
 pub fn install() -> Result<MemoryContractBundle, String> {
+    CONTRACT_INSTALLS.fetch_add(1, Ordering::Relaxed);
     assert_scope_alignment()?;
     Ok(MemoryContractBundle {
         renderer: Arc::new(PlainRenderer::new()),
