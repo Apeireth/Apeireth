@@ -83,7 +83,13 @@ use apeireth_runtime::canonical::{
 };
 use apeireth_runtime_assembly::canonical::BioApprovalSocialSource;
 use apeireth_runtime_assembly::{canonical::production::BioProbeSlots, SqliteSessionStore};
-use apeireth_tools_canonical::{FetchConfig, TrustedShellConfig, APPLY_PATCH_CAPABILITY_ID};
+use apeireth_tools_canonical::calendar::CalendarConfig;
+use apeireth_tools_canonical::http_write::{AuthScheme, CredentialBinding, HttpWriteConfig};
+use apeireth_tools_canonical::web_search::WebSearchConfig;
+use apeireth_tools_canonical::{
+    ControlledEgress, EgressAllowList, EgressPolicy, FetchConfig, TrustedShellConfig,
+    APPLY_PATCH_CAPABILITY_ID,
+};
 pub(crate) use llm_factory_env::{council_config_from_env, llm_factory_from_env};
 
 /// One persistent SQLite database is shared by the cognitive backends; `APEIRETH_COGNITIVE_DB` may override the path; Judge remains opt-in.
@@ -116,6 +122,21 @@ pub const DISABLE_LOCAL_READ_TOOLS_ENV: &str = "APEIRETH_DISABLE_LOCAL_READ_TOOL
 // organs / preference_learning 为认知模块装配旋钮。
 const ENABLE_SHELL_ENV: &str = "APEIRETH_ENABLE_SHELL";
 const ENABLE_FETCH_ENV: &str = "APEIRETH_ENABLE_FETCH";
+// 能力创造线 W1 · 带鉴权 HTTP 写面旋钮 (`tool.http_write`): 注册 + 策略 grant +
+// require_approval (写面逐次人批, 无自动放行档)。默认关 (fail-closed);
+// `APEIRETH_ENABLE_HTTP_WRITE=1` = 注册工具 + grant。**只认精确 `"1"`**。
+const ENABLE_HTTP_WRITE_ENV: &str = "APEIRETH_ENABLE_HTTP_WRITE";
+// 写面的**域名白名单** (逗号分隔; 每项 `host` 或 `host:port`)。
+// ⚠️ 白名单是写面**唯一**能到达的目的地集合 (写面只认显式白名单策略);
+//   **未设 ⇒ 空白名单 ⇒ 每个目的地都表外 ⇒ 拒绝即帧** (不是「放开公网」)。
+const HTTP_WRITE_ALLOWLIST_ENV: &str = "APEIRETH_HTTP_WRITE_ALLOWLIST";
+// 能力创造线 W1 · 互联网检索面旋钮 (`tool.web_search`): 注册 + 策略 grant
+// (出网**只读**面 ⇒ 零审批)。默认关 (fail-closed);
+// `APEIRETH_ENABLE_WEB_SEARCH=1` = 注册工具 + grant。**只认精确 `"1"`**。
+//
+// ⚠️ **没有第 5 个 env**: 检索端点走**配置面** (数据目录里的
+// `web_search.json`), 没配端点 ⇒ 面不注册 (fail-closed)。
+const ENABLE_WEB_SEARCH_ENV: &str = "APEIRETH_ENABLE_WEB_SEARCH";
 // 内容流接入旋钮 (`tool.content_feed`, J1): 注册 + 策略 grant + 审批档钩子。
 // 默认关 (fail-closed); `APEIRETH_ENABLE_CONTENT_FEED=1` = 注册工具 + grant
 // (「工具面有人拍板」) + [`apeireth_tools_canonical::ContentFeedApprovalHook`]
@@ -1204,7 +1225,7 @@ fn build_production_governance_parts_from_env() -> (
     Arc<BehaviorChainGuardHook>,
 ) {
     let enable_local_read_tools = local_read_tools_enabled_from_env();
-    let (pipeline, policy, guard_hook) = build_production_governance_parts_with_dataset(
+    let (mut pipeline, policy, guard_hook) = build_production_governance_parts_with_dataset(
         enable_local_read_tools,
         production_guard_dataset_recorder(),
         file_write_risk_level_from_env(),
@@ -1242,6 +1263,71 @@ fn build_production_governance_parts_from_env() -> (
             guard.grant(Permission::ExecuteTool("tool.fetch".to_string()));
             guard.require_approval_for("tool.fetch");
         }
+    }
+    // 能力创造线 W1 · 四个新面 = **开关开 = 注册 + 授权同源**（同一开关值同时
+    // 决定装配侧注册与本授权面 ⇒ 不出现「注册了但权力没到手」）。
+    //
+    // ⚠️ 档位分两种挂法（**不许留「治理未挂」的面进生产**）：
+    // * **面级 `require_approval`** —— 面里**全是写动作**、工具侧又**没有**专用
+    //   审批钩子 ⇒ 每次调用都停人工审批（与 `tool.shell` / `tool.fetch` 同款）。
+    // * **专用审批钩子** —— 面里有读有写、工具侧**提供了**逐动作分档的钩子 ⇒
+    //   面级**只** grant（挂 `require_approval` 会把读动作也拖进审批 ⇒ 与
+    //   「读面零审批」口径矛盾），档位交给钩子。
+    let enable_http_write = std::env::var(ENABLE_HTTP_WRITE_ENV)
+        .ok()
+        .is_some_and(|value| value.trim() == "1");
+    let enable_web_search = std::env::var(ENABLE_WEB_SEARCH_ENV)
+        .ok()
+        .is_some_and(|value| value.trim() == "1");
+    let enable_calendar = apeireth_tools_canonical::calendar::calendar_enabled_from_env();
+    if enable_http_write || enable_web_search || enable_calendar {
+        let mut guard = policy
+            .lock()
+            .expect("permission policy lock poisoned (0 装诚实)");
+        if enable_http_write {
+            // 出网**写**面（POST/PUT/PATCH/DELETE）⇒ 逐次人批。⚠️
+            // `tool.http_write` 工具侧**没有**专用审批钩子 ⇒ 档位只能挂在本
+            // 授权面的 require_approval 上（既有做法, 不新造审批链）。
+            guard.grant(Permission::ExecuteTool("tool.http_write".to_string()));
+            guard.require_approval_for("tool.http_write");
+        }
+        if enable_web_search {
+            // 出网**只读**面（检索 + 来源标注）⇒ 与 `tool.fetch` 同档（L2 出网
+            // ⇒ 逐次人批）。⚠️ 工具侧同样**没有**专用审批钩子。
+            guard.grant(Permission::ExecuteTool("tool.web_search".to_string()));
+            guard.require_approval_for("tool.web_search");
+        }
+        if enable_calendar {
+            // 日程面: 档位由 `CalendarApprovalHook` 逐动作承载（list 零审批 /
+            // create·update·cancel 人批 / 词表外 fail-closed 拒绝即帧）⇒ 面级
+            // 只 grant。
+            guard.grant(Permission::ExecuteTool("tool.calendar".to_string()));
+        }
+    }
+    if enable_shell {
+        // 进程树快照面 (`tool.process_tree`): 开关口径 = **复用**
+        // `APEIRETH_ENABLE_SHELL`（注册即闸 ⇒ shell 关 = 无进程可看 ⇒ 本面也
+        // 不注册）。档位由 `ProcessTreeApprovalHook` 逐动作承载（snapshot 零
+        // 审批 / cancel 人批 / 词表外 fail-closed 拒绝即帧）⇒ 面级只 grant。
+        policy
+            .lock()
+            .expect("permission policy lock poisoned (0 装诚实)")
+            .grant(Permission::ExecuteTool("tool.process_tree".to_string()));
+    }
+    // 能力创造线 W1 · 两个**专用审批钩子**的挂载（关 ⇒ 连钩子都不装 ⇒ 零变化）。
+    //
+    // ⚠️ 挂载位 = 治理链尾段：这两个钩子**只管自己的面**（别的能力一律放行），
+    // 与通用闸（内容风险 / 行为链 / 双洋葱）**顺序无关** ⇒ 放尾段不影响
+    // 既有闸的判定次序。
+    if enable_calendar {
+        pipeline = pipeline.with(Arc::new(
+            apeireth_tools_canonical::calendar::CalendarApprovalHook::new(),
+        ));
+    }
+    if enable_shell {
+        pipeline = pipeline.with(Arc::new(
+            apeireth_tools_canonical::process_tree_tool::ProcessTreeApprovalHook::new(),
+        ));
     }
     // education Dx-Check 工具 (`tool.education`, 纯确定性自查, 0 副作用):
     // **开关开 = 注册 + 授权同源** (开关名与权力相符, 与 shell/fetch 同款
@@ -2159,6 +2245,24 @@ async fn build_cognitive_modules_at(
                 .with_sandbox(shell_sandbox_enabled_from_env())
         }),
         fetch: fetch_enabled.then(FetchConfig::public_internet_only),
+        // 能力创造线 W1 · 带鉴权 HTTP 写面 (`tool.http_write`): 注册即闸
+        // (`APEIRETH_ENABLE_HTTP_WRITE=1`) + **显式域名白名单**
+        // (`APEIRETH_HTTP_WRITE_ALLOWLIST`; 未设 ⇒ 空白名单 ⇒ 拒绝即帧) +
+        // 凭据链 (既有 keyring/热写链) + 绑定表 (数据目录配置面)。
+        // 治理档: 写面逐次人批 (治理链钩子), 无自动放行档。
+        http_write: http_write_config_from_env()?,
+        // 能力创造线 W1 · 互联网检索面 (`tool.web_search`): 注册即闸
+        // (`APEIRETH_ENABLE_WEB_SEARCH=1`) + 端点走**配置面** (数据目录
+        // `web_search.json`; 没配端点 ⇒ 面不注册)。出网**只读**面 ⇒ 零审批。
+        web_search: web_search_config_from_env()?,
+        // 能力创造线 W1 · 主人日程面 (`tool.calendar`): 注册即闸
+        // (`APEIRETH_ENABLE_CALENDAR=1`, 开关名与读法都在工具侧) + 日程账
+        // 落在数据目录。写动作逐次人批 (治理链钩子)。
+        calendar: CalendarConfig::from_env(default_panel_data_dir()),
+        // 能力创造线 W1 · 进程树快照面 (`tool.process_tree`): **复用**
+        // `APEIRETH_ENABLE_SHELL` (注册即闸 ⇒ shell 关 = 无进程可看 ⇒ 本面也
+        // 不注册; 0 新 env 名)。快照读面零审批; 取消面逐次人批。
+        process_tree: shell_enabled,
         // 内容流接入 (J1): 注册工具 (治理档在治理链: 拉取与入库都经审批档)。
         content_feed: content_feed_config,
         // 双引擎主动关怀 (V3-a): 注册关怀规则面工具 (治理档在治理链: 改规则 =
@@ -2457,6 +2561,199 @@ async fn build_cognitive_modules_at(
 /// 同源: 每次请求现解析, admin 热更凭据后下一请求即生效。
 fn llm_credential_resolver() -> Arc<dyn apeireth_plugin::CredentialResolver> {
     keyring_bootstrap::build_keyring_resolver()
+}
+
+// ============================================================
+// 能力创造线 W1 · 生产装配接线 (C-B2 `tool.http_write` / C-H4 `tool.web_search`)
+// ============================================================
+
+/// 写面凭据绑定表（数据目录配置面 `<data>/http_write.json`）。
+///
+/// 绑定 = 「哪个凭据逻辑名 → 哪个主机 + 哪个头 + 哪种方式」。
+/// ⚠️ 绑定表**不在** env 里（本批 0 新 env 名）⇒ 走配置面。
+#[derive(Debug, serde::Deserialize)]
+struct HttpWriteBindingFile {
+    /// 凭据逻辑名（`CredentialResolver` 的 key；**不是**秘密）。
+    name: String,
+    /// 这条绑定允许发往的**唯一**主机（换主机 = 换凭据 = 拒绝）。
+    host: String,
+    /// 鉴权头名（默认 `authorization`）。
+    #[serde(default = "default_http_write_auth_header")]
+    header: String,
+    /// 鉴权方式（`bearer` / `raw`；默认 `bearer`）。
+    #[serde(default = "default_http_write_auth_scheme")]
+    scheme: AuthScheme,
+}
+
+/// 写面绑定表文件（`{"credentials": [...]}`）。
+#[derive(Debug, serde::Deserialize)]
+struct HttpWriteBindingsFile {
+    #[serde(default)]
+    credentials: Vec<HttpWriteBindingFile>,
+}
+
+fn default_http_write_auth_header() -> String {
+    "authorization".to_string()
+}
+
+fn default_http_write_auth_scheme() -> AuthScheme {
+    AuthScheme::Bearer
+}
+
+/// 检索面端点配置（数据目录配置面 `<data>/web_search.json`）。
+///
+/// ⚠️ **没有第 5 个 env**：检索端点只从配置面来 ⇒ 端点没配 ⇒ 面不注册。
+#[derive(Debug, serde::Deserialize)]
+struct WebSearchConfigFile {
+    /// 检索端点（绝对 http(s) URL；**没有默认值**）。
+    endpoint: String,
+    /// 查询参数名（默认 `q`）。
+    #[serde(default = "default_web_search_query_param")]
+    query_param: String,
+    /// 结果条数上限（默认取工具侧口径）。
+    #[serde(default)]
+    max_results: Option<usize>,
+}
+
+fn default_web_search_query_param() -> String {
+    "q".to_string()
+}
+
+/// 从**绝对 http(s) URL** 里取 `(host, port)`（CLI 依赖面固定 ⇒ 不引 URL 解析库）。
+///
+/// ⚠️ 口径保守：解析不出来 ⇒ `None` ⇒ 调用方 fail-closed（面不注册 / 白名单空）。
+fn http_origin_of(raw: &str) -> Option<(String, Option<u16>)> {
+    let (scheme, rest) = raw.split_once("://")?;
+    let scheme = scheme.trim().to_ascii_lowercase();
+    if scheme != "http" && scheme != "https" {
+        return None;
+    }
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or_default();
+    // 去 userinfo（写面拒 userinfo ⇒ 端点也不该带）。
+    let authority = authority.rsplit('@').next().unwrap_or_default();
+    if authority.is_empty() {
+        return None;
+    }
+    let (host, port) = if let Some(stripped) = authority.strip_prefix('[') {
+        // IPv6 字面量 `[::1]:8080`。
+        let (host, tail) = stripped.split_once(']')?;
+        (
+            host.trim().to_string(),
+            tail.strip_prefix(':')
+                .map(|port| port.parse::<u16>().ok())
+                .flatten(),
+        )
+    } else {
+        match authority.rsplit_once(':') {
+            Some((host, port)) => {
+                // 端口写错 ⇒ 解析失败（不放宽成「任意端口」）。
+                (host.trim().to_string(), Some(port.parse::<u16>().ok()?))
+            }
+            None => (authority.trim().to_string(), None),
+        }
+    };
+    let host = host
+        .trim_matches(|c| c == '[' || c == ']')
+        .to_ascii_lowercase();
+    if host.is_empty() {
+        return None;
+    }
+    Some((host, port))
+}
+
+/// 写面的**域名白名单**（env 逗号分隔；每项 `host` 或 `host:port`）。
+///
+/// ⚠️ 白名单是写面**唯一**能到达的目的地集合（写面只认显式白名单策略）；
+/// **未设 ⇒ 空白名单 ⇒ 每个目的地都表外 ⇒ 拒绝即帧**（不是「放开公网」）。
+fn http_write_allowlist_from_env() -> EgressAllowList {
+    let raw_allowlist = std::env::var(HTTP_WRITE_ALLOWLIST_ENV).unwrap_or_default();
+    let mut list = EgressAllowList::new();
+    for entry in raw_allowlist.split(',') {
+        let entry = entry.trim();
+        if entry.is_empty() {
+            continue;
+        }
+        let (host, port) = match entry.rsplit_once(':') {
+            Some((host, port)) => match port.trim().parse::<u16>() {
+                Ok(port) => (host.trim().to_string(), Some(port)),
+                // 端口不是数字 ⇒ 整项当主机名入表（**匹配不到任何目的地** ⇒
+                // 这项是死的 ⇒ fail-closed，不静默放宽成「任意端口」）。
+                Err(_) => (entry.to_string(), None),
+            },
+            None => (entry.to_string(), None),
+        };
+        if host.is_empty() {
+            continue;
+        }
+        list = list.allow(host, port);
+    }
+    list
+}
+
+/// 写面配置面：**域名白名单**（env）+ **凭据链**（既有）+ **绑定表**（配置面）。
+///
+/// ⚠️ **未设白名单 ⇒ 空白名单 ⇒ 每个目的地都表外 ⇒ 拒绝即帧**（不是放开公网）。
+/// ⚠️ 绑定表里的绑定**无效** ⇒ 启动硬失败（坏配置拒开）：静默丢一条绑定会让写
+/// 请求**降级成未鉴权** ⇒ 宁可不开机。
+fn http_write_config_from_env() -> Result<Option<HttpWriteConfig>, String> {
+    let enabled = std::env::var(ENABLE_HTTP_WRITE_ENV)
+        .ok()
+        .is_some_and(|value| value.trim() == "1");
+    if !enabled {
+        return Ok(None);
+    }
+    let egress = Arc::new(ControlledEgress::new(EgressPolicy::ExplicitAllowList(
+        http_write_allowlist_from_env(),
+    )));
+    let mut config = HttpWriteConfig::new(egress, llm_credential_resolver())
+        .map_err(|error| format!("http write config refused: {error}"))?;
+
+    let bindings_path = default_panel_data_dir().join("http_write.json");
+    if let Ok(raw) = std::fs::read_to_string(&bindings_path) {
+        let parsed: HttpWriteBindingsFile = serde_json::from_str(&raw)
+            .map_err(|error| format!("http write credential bindings refused: {error}"))?;
+        for entry in parsed.credentials {
+            let binding = match entry.scheme {
+                AuthScheme::Bearer => CredentialBinding::bearer(entry.name, entry.host),
+                AuthScheme::Raw => CredentialBinding::raw(entry.name, entry.host, entry.header),
+            };
+            config = config
+                .with_binding(binding)
+                .map_err(|error| format!("http write credential binding refused: {error}"))?;
+        }
+    }
+    Ok(Some(config))
+}
+
+/// 检索面配置面：**端点**（配置面）+ 受控通道（白名单 = **端点主机**，从配置推导）。
+///
+/// ⚠️ 端点没配 ⇒ `None` ⇒ 面不注册（fail-closed）；开关没开 ⇒ `None`。
+fn web_search_config_from_env() -> Result<Option<WebSearchConfig>, String> {
+    let enabled = std::env::var(ENABLE_WEB_SEARCH_ENV)
+        .ok()
+        .is_some_and(|value| value.trim() == "1");
+    if !enabled {
+        return Ok(None);
+    }
+    let path = default_panel_data_dir().join("web_search.json");
+    let Ok(raw) = std::fs::read_to_string(&path) else {
+        // 端点没配 ⇒ 不注册 (不造「永远拒绝即帧」的空面)。
+        return Ok(None);
+    };
+    let parsed: WebSearchConfigFile = serde_json::from_str(&raw)
+        .map_err(|error| format!("web search config refused: {error}"))?;
+    let (host, port) = http_origin_of(&parsed.endpoint)
+        .ok_or_else(|| format!("web search endpoint refused: {:?}", parsed.endpoint))?;
+    // 受控通道的白名单 = **配置端点的主机**（从配置推导 ⇒ 0 新 env；端点换了，
+    // 白名单跟着换 ⇒ 检索面永远只打那一个端点的主机）。
+    let list = EgressAllowList::new().allow(host, port);
+    let egress = Arc::new(ControlledEgress::new(EgressPolicy::ExplicitAllowList(list)));
+    let mut config = WebSearchConfig::new(Some(parsed.endpoint), egress);
+    config = config.with_query_param(parsed.query_param);
+    if let Some(max_results) = parsed.max_results {
+        config = config.with_max_results(max_results);
+    }
+    Ok(Some(config))
 }
 
 /// 构造 Council 后端（2026-09-08 用户旋钮批）：优先 OpenAI-compatible
@@ -3770,5 +4067,129 @@ mod immune_memory_switch_tests {
                 "免疫记忆开关面不得新增日志输出 (命中 {needle}): 不打 env 值 / 凭据"
             );
         }
+    }
+}
+
+/// 能力创造线 W1 · 生产装配接线批的**零变化 + 解析口径**测试组。
+///
+/// env 是进程全局 ⇒ 两个 env 用例串在同一把锁后，并用 Drop 守卫逐键保存-恢复
+/// （用例 panic 也不残留）。
+#[cfg(test)]
+mod creation_line_w1_wiring_tests {
+    use super::*;
+
+    static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    /// 单个 env 键的保存-恢复守卫（进程 env 零残留）。
+    struct EnvVarGuard {
+        key: &'static str,
+        previous: Option<String>,
+    }
+
+    impl EnvVarGuard {
+        fn set(key: &'static str, value: Option<&str>) -> Self {
+            let previous = std::env::var(key).ok();
+            match value {
+                Some(value) => std::env::set_var(key, value),
+                None => std::env::remove_var(key),
+            }
+            Self { key, previous }
+        }
+    }
+
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            match self.previous.take() {
+                Some(value) => std::env::set_var(self.key, value),
+                None => std::env::remove_var(self.key),
+            }
+        }
+    }
+
+    /// **零变化**：开关未设 ⇒ 两个出网面都**不注册**（配置为 `None`）。
+    #[test]
+    fn the_two_egress_faces_stay_unregistered_without_their_switches() {
+        let _serial = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _http_write = EnvVarGuard::set(ENABLE_HTTP_WRITE_ENV, None);
+        let _web_search = EnvVarGuard::set(ENABLE_WEB_SEARCH_ENV, None);
+
+        assert!(
+            http_write_config_from_env().expect("解析不炸").is_none(),
+            "APEIRETH_ENABLE_HTTP_WRITE 未设 ⇒ 写面不注册 (默认关, 逐字节零变化)"
+        );
+        assert!(
+            web_search_config_from_env().expect("解析不炸").is_none(),
+            "APEIRETH_ENABLE_WEB_SEARCH 未设 ⇒ 检索面不注册 (默认关, 逐字节零变化)"
+        );
+    }
+
+    /// 开关只认**精确 `"1"`**（与仓内既有惯例一致）。
+    #[test]
+    fn the_switches_accept_only_explicit_one() {
+        let _serial = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        for value in ["0", "true", "yes", "1 ", " 1"] {
+            let _http_write = EnvVarGuard::set(ENABLE_HTTP_WRITE_ENV, Some(value));
+            // `" 1"` 与 `"1 "` 是既有惯例容忍的空白形态 ⇒ 视为开；其余一律关。
+            let expected = value.trim() == "1";
+            let registered = http_write_config_from_env().expect("解析不炸").is_some();
+            assert_eq!(registered, expected, "env 值 {value:?} 的开关口径不对");
+        }
+    }
+
+    /// 白名单解析口径：`host` / `host:port` / 逗号分隔 / **端口写错 = 死项**。
+    #[test]
+    fn the_allow_list_parses_hosts_ports_and_rejects_broken_ports() {
+        let _serial = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _allowlist = EnvVarGuard::set(HTTP_WRITE_ALLOWLIST_ENV, None);
+        assert!(
+            http_write_allowlist_from_env().is_empty(),
+            "未设 ⇒ 空白名单 ⇒ 每个目的地都表外"
+        );
+
+        let _allowlist = EnvVarGuard::set(
+            HTTP_WRITE_ALLOWLIST_ENV,
+            Some("api.example.com, other.example.com:8443"),
+        );
+        let list = http_write_allowlist_from_env();
+        assert!(list.contains("api.example.com", 443));
+        assert!(list.contains("other.example.com", 8443));
+        assert!(
+            !list.contains("other.example.com", 443),
+            "端口维度也是白名单维度"
+        );
+        assert!(!list.contains("evil.example.com", 443));
+
+        // 端口写错 ⇒ 整项当主机名入表 ⇒ 匹配不到任何**真实**目的地（fail-closed）。
+        let _allowlist = EnvVarGuard::set(HTTP_WRITE_ALLOWLIST_ENV, Some("api.example.com:abc"));
+        let list = http_write_allowlist_from_env();
+        assert!(
+            !list.contains("api.example.com", 443),
+            "端口写错的项不得被当成真主机放行"
+        );
+        assert!(
+            list.contains("api.example.com:abc", 443),
+            "写坏的那一项是**死项**（字面主机名匹配不到任何真实目的地）"
+        );
+    }
+
+    /// 端点 origin 解析：只认绝对 http(s) URL；解析不出来 ⇒ `None`（fail-closed）。
+    #[test]
+    fn the_endpoint_origin_parser_is_conservative() {
+        assert_eq!(
+            http_origin_of("https://search.example.com/query"),
+            Some(("search.example.com".to_string(), None))
+        );
+        assert_eq!(
+            http_origin_of("http://search.example.com:8080/query?a=1"),
+            Some(("search.example.com".to_string(), Some(8080)))
+        );
+        assert_eq!(
+            http_origin_of("https://user:pw@search.example.com/"),
+            Some(("search.example.com".to_string(), None)),
+            "userinfo 不参与端点比较"
+        );
+        assert_eq!(http_origin_of("ftp://search.example.com/"), None);
+        assert_eq!(http_origin_of("not a url"), None);
+        assert_eq!(http_origin_of("https://"), None);
     }
 }

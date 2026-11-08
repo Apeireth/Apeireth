@@ -30,6 +30,12 @@ use async_trait::async_trait;
 /// - **L3 关键操作**: `tool.shell` / `tool.process` / `tool.supervisor` /
 ///   `tool.std_sub_supervisor` / MCP 动态能力 (W1 AppContainer 沙箱 + guardrail +
 ///   审批面多重把守的执行面)。
+///
+/// ⚠️ **未知能力缺省落 L2** ⇒ 新的**写面**必须**显式**升 L3 (否则它会落进
+/// 「可被预设改写放行」的档)。能力创造线 W1:
+/// - `tool.http_write` / `tool.calendar` / `tool.process_tree` ⇒ **显式 L3**
+///   (写面: 出网写 / 本地账写 / 取消进程 ⇒ 逐次人批);
+/// - `tool.web_search` ⇒ **显式 L2** (出网**只读**面 ⇒ 与 `tool.fetch` 同档)。
 pub fn onion_layer_for_capability(capability: &CapabilityId) -> PermissionLayerKind {
     let id = capability.as_str();
     if id.starts_with("tool.mcp") {
@@ -38,6 +44,11 @@ pub fn onion_layer_for_capability(capability: &CapabilityId) -> PermissionLayerK
     match id {
         "tool.filesystem" => PermissionLayerKind::L1,
         "tool.fetch" => PermissionLayerKind::L2,
+        // 能力创造线 W1 · 互联网检索面: 出网**只读** ⇒ 与 fetch 同档 (显式写出来,
+        // 不靠缺省分支 —— 缺省分支会随别的能力改动而漂移)。
+        "tool.web_search" => PermissionLayerKind::L2,
+        // 能力创造线 W1 · 三个写面: 逐次人批, 绝不进预设放行档。
+        "tool.http_write" | "tool.calendar" | "tool.process_tree" => PermissionLayerKind::L3,
         "tool.shell" | "tool.process" | "tool.supervisor" | "tool.std_sub_supervisor" => {
             PermissionLayerKind::L3
         }

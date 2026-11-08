@@ -40,3 +40,14 @@ updated_at = "2026-10-20"
 #   退休原因（2026-10-20 效率线 R3a 同步）: 该开关已进 env-registry.toml（owner=TODO-OWNER,
 #   level=UNCLASSIFIED, 登记先行），W3 违规消失 → 例外按 ADR-0001「到期/解决即删」退休；
 #   零变化测试仍由生物线收口批提供，若登记表条目被删则 W3 回归、再开新例外。
+
+# --- W1 例外已退休（2026-11-08 波次收口）---
+# EXC-0004 / EXC-0005：W1 新增 2 个模块 ⇒ 宿主文件各 +1 行（`pub mod …;` 声明）。
+#   **已退休**：W1 波次收口由 lead 重生成 `scripts/arch-baseline.txt` 的 size 条目
+#   （`baseline_update_policy` 授权）⇒ 违规消失 ⇒ 例外按 ADR-0001「到期/解决即删」退休
+#   （**未抬 `max_file_loc` 预算**，仍 6300）。原登记指纹 =
+#   "size-grow crates/foundation/core/src/lib.rs" / "size-grow crates/capabilities/tools/src/process/mod.rs"。
+# EXC-0004 / EXC-0005：W1 新增 2 个模块 ⇒ 各自宿主文件 **+1 行**（`pub mod …;` 声明）。
+#   形态与 EXC-0002 / EXC-0003 完全同型（size-grow），处理方式也同：
+#   **波次收口时由 lead 重生成基线**（`baseline_update_policy` 授权）⇒ 违规消失 ⇒ 例外退休。
+#   不选「抬 max_file_loc」（那是永久放宽预算）；不选「拆文件」（+1 行模块声明拆不动）。

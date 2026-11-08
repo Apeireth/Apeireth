@@ -53,12 +53,13 @@ use super::self_status_source::{
     task_board_status_probe, ProductionSelfStatusSource,
 };
 use super::tool_modules::{
-    ApplyPatchModule, BackupExportModule, CareScheduleModule, ContentFeedModule, DocOpsModule,
-    EducationModule, ExposureAuditModule, ExternalToolsModule, FetchModule, FilesystemModule,
-    GitWriteModule, ImageOpsModule, McpModule, ProcessModule, ProposalModule, ReconModule,
-    RepoMapModule, RepoModule, SearchModule, SelfStatusModule, SheetOpsModule, ShellModule,
-    SkillDistillModule, SkillSearchModule, TaskBoardModule, TraitReportModule, VoiceSpeakModule,
-    WorktreeApplyModule, WorktreePlanModule,
+    ApplyPatchModule, BackupExportModule, CalendarModule, CareScheduleModule, ContentFeedModule,
+    DocOpsModule, EducationModule, ExposureAuditModule, ExternalToolsModule, FetchModule,
+    FilesystemModule, GitWriteModule, HttpWriteModule, ImageOpsModule, McpModule, ProcessModule,
+    ProcessTreeModule, ProposalModule, ReconModule, RepoMapModule, RepoModule, SearchModule,
+    SelfStatusModule, SheetOpsModule, ShellModule, SkillDistillModule, SkillSearchModule,
+    TaskBoardModule, TraitReportModule, VoiceSpeakModule, WebSearchModule, WorktreeApplyModule,
+    WorktreePlanModule,
 };
 use super::trait_growth::{trait_growth_probe, trait_status_probe};
 use crate::consequence_backfill::{default_data_root, ConsequenceBackfillModule};
@@ -659,6 +660,43 @@ impl ProductionModules {
             // 装点、告警措辞与告警账的说明见 `prompt_injection_guard::install`。
             prompt_injection_report =
                 Some(prompt_injection_guard::install(&mut modules, instrument));
+        }
+
+        // 带鉴权的 HTTP 写面 (`tool.http_write`, W1 C-B2, opt-in): 受控出网上的
+        // POST/PUT/PATCH/DELETE —— 域名白名单 + 显式凭据绑定 + 请求/响应体有界
+        // + 不跟随重定向。治理档位 (写面逐次人批) 在治理链钩子上。
+        // ⚠️ 白名单为空 ⇒ 每个目的地都表外 ⇒ 拒绝即帧 (fail-closed)。
+        if let Some(http_write_config) = config.http_write {
+            instrument.constructed(ModuleFamily::HttpWrite);
+            let provider = HttpWriteModule::new(http_write_config);
+            collect_tool_module(&mut tool_modules, &mut capabilities, &provider)?;
+        }
+
+        // 互联网检索面 (`tool.web_search`, W1 C-H4, opt-in): 打**运维显式配置**
+        // 的检索端点, 结果有界收敛 + 来源标注。出网**只读**面 ⇒ 零审批。
+        // ⚠️ 没有内置默认端点 ⇒ 端点没配 = 每次调用拒绝即帧。
+        if let Some(web_search_config) = config.web_search {
+            instrument.constructed(ModuleFamily::WebSearch);
+            let provider = WebSearchModule::new(web_search_config);
+            collect_tool_module(&mut tool_modules, &mut capabilities, &provider)?;
+        }
+
+        // 主人日程面 (`tool.calendar`, W1 C-H5, opt-in): 本地日程账 (查询/创建/
+        // 改期/取消); 写动作走审批档 (逐次人批)。
+        if let Some(calendar_config) = config.calendar {
+            instrument.constructed(ModuleFamily::Calendar);
+            let provider = CalendarModule::new(calendar_config);
+            collect_tool_module(&mut tool_modules, &mut capabilities, &provider)?;
+        }
+
+        // 进程树快照面 (`tool.process_tree`, W1 C-B1, opt-in): 枚举 (pid / 父 /
+        // 命令 / 状态) + 按 pid 幂等取消一棵树。**零配置** ⇒ 开关口径 = **复用**
+        // `APEIRETH_ENABLE_SHELL` (注册即闸 ⇒ shell 关 = 无进程可看, 语义自洽)
+        // ⇒ 0 新 env 名。快照读面零审批; 取消面逐次人批 (治理钩子在治理链上)。
+        if config.process_tree {
+            instrument.constructed(ModuleFamily::ProcessTree);
+            let provider = ProcessTreeModule::new();
+            collect_tool_module(&mut tool_modules, &mut capabilities, &provider)?;
         }
 
         // 内容流接入 (`tool.content_feed`, J1, opt-in): 订阅源管理 + 受控拉取 +

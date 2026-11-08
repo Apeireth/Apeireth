@@ -120,6 +120,9 @@ pub mod nervous_switchboard;
 /// 守夜人 Nightwatch — 离线闲时审计器 (2026-10-10, 主人批准设计)。
 #[path = "canonical/nightwatch.rs"]
 pub mod nightwatch;
+/// W1 C-D1 记忆对象级授权（**叠加**于 `MemoryScope` 的对象粒度只读授予；域级隔离不被突破）。
+#[path = "canonical/object_grant.rs"]
+pub mod object_grant;
 /// W3 三洋葱 L3-L5 物理执行面: 双洋葱判定的治理 hook (2026-10-10)。
 #[path = "canonical/onion_layer.rs"]
 pub mod onion_layer;
@@ -465,4 +468,19 @@ pub enum ModuleFamily {
     PersonaConstantInjection,
     /// 记忆写回族 (`memory_writeback`)。
     MemoryWriteback,
+    /// 能力创造线 W1 · 带鉴权 HTTP 写面族 (`http_write`): 受控出网上的
+    /// POST/PUT/PATCH/DELETE —— 域名白名单 + 显式凭据绑定 + 请求/响应体有界
+    /// + 不跟随重定向。默认关 (`APEIRETH_ENABLE_HTTP_WRITE=1` 才装)。
+    HttpWrite,
+    /// 能力创造线 W1 · 互联网检索面族 (`web_search`): 打**运维显式配置**的
+    /// 检索端点, 结果有界收敛 + 来源标注 (出网**只读**面)。默认关
+    /// (`APEIRETH_ENABLE_WEB_SEARCH=1` 才装)。
+    WebSearch,
+    /// 能力创造线 W1 · 主人日程面族 (`calendar`): 本地日程账 (查询/创建/改期/
+    /// 取消), 写动作逐次人批。默认关 (`APEIRETH_ENABLE_CALENDAR=1` 才装)。
+    Calendar,
+    /// 能力创造线 W1 · 进程树快照面族 (`process_tree`): 枚举 (pid / 父 / 命令 /
+    /// 状态) + 按 pid 幂等取消一棵树。**零配置** ⇒ 开关口径 = 复用
+    /// `APEIRETH_ENABLE_SHELL` (注册即闸) ⇒ 0 新 env 名。
+    ProcessTree,
 }

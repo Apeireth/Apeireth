@@ -99,6 +99,19 @@ pub fn is_write_or_execute_capability(capability: &CapabilityId) -> bool {
         // 只读会话不应改账面; 读侧在 `tool.self_status` 的生物机制子对象。
         "tool.ritual_done",
         "tool.ritual_skip",
+        // 能力创造线 W1 · 带鉴权 HTTP 写面 (`tool.http_write`): 出网**写**面
+        // (POST/PUT/PATCH/DELETE) ⇒ 只读会话不应外联写; 写动作逐次人批
+        // (L3 显式档, 见 `onion_layer`)。
+        "tool.http_write",
+        // 能力创造线 W1 · 主人日程面 (`tool.calendar`): 改日程 = 改本地日程账
+        // (写面), 只读会话不应改; 「读」在日程面自身的 list 动作。
+        "tool.calendar",
+        // 能力创造线 W1 · 进程树快照面 (`tool.process_tree`): 面里含**取消**动作
+        // (取消一棵树 = 动进程 ⇒ 执行面) ⇒ 与 `tool.shell` 同档, 只读会话应
+        // 整体拒绝; 快照读面本身零审批。
+        "tool.process_tree",
+        // ⚠️ `tool.web_search` **不在**本名单: 它是出网**只读**面 (检索 + 来源
+        // 标注), 与 `tool.fetch` 同口径 (只读会话可出网读)。
         "fs.write",
         // 出口 / 远端副作用
         "tool.fetch",

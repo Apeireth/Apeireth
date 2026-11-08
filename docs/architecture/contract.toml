@@ -380,7 +380,10 @@ target = "R2（ADR-0008 Accepted）: 公共面 2026-10-20 收敛；plugin 内部
 #           `rg` 全 crates 含 tests 为 158 distinct —— 守卫只按 src 计, 两口径不混用。
 # 逐条登记字段迁移见 R3。
 policy = "所有 APEIRETH_* 开关必须登记; 新增必须默认关 + 关时零变化测试"
-max_distinct_names = 160            # 棘轮: 只减不增（按 src 口径）
+max_distinct_names = 164            # 棘轮: 只减不增（按 src 口径）。2026-11-08 W1 波次抬 +4：
+                                    # APEIRETH_ENABLE_CALENDAR / APEIRETH_ENABLE_HTTP_WRITE /
+                                    # APEIRETH_HTTP_WRITE_ALLOWLIST / APEIRETH_ENABLE_WEB_SEARCH
+                                    # （授权：ADR-0025 §2.2，上限 +16 ⇒ 只抬本波实际用掉的量）
 baseline_file = "scripts/arch-baseline.txt"
 registry_file = "docs/architecture/env-registry.toml"   # R3a 登记表（ADR-0004）; 登记名无需进基线
 # level 枚举与占位口径（ADR-0004 §7）：UNCLASSIFIED = 登记先行占位，不属四级口径、不得对外宣称

@@ -18,8 +18,9 @@ Author: lead（插件/组件/能力开发线 总指挥）
 ## 0. 一句话
 
 > **W0（登记批 + 重复审计批）已落地**：ADR + 设计稿 + 本进度页 + 族级守卫 + 工作线登记。
-> **池 A 14 条新面 + C-H5 真新面 + C-L1 新立项 = 16 条**尚未开工 ⇒ 全部仍为 ❌ 未开工；
-> **池 B 7 条移交**（重复面 ⇒ 不在本线）· **存量接线 6 项移交**（owner 裁「不动存量」）。
+> **W1 已落地 4 族**（C-B1 进程树 · C-B2 HTTP 写面 · C-H4 互联网检索 · C-H5 日历面）⇒ **PRODUCTION WIRED + 默认关**；
+> **3 族机制就绪但未接线**（C-D1 对象级授权 · C-H1 路由策略层 · C-H2 配额深度维）⇒ 如实标 🟡 在途（见 §2 各行「还差什么」）；
+> **C-L1 端侧推理**待重复审计 · **池 B 7 条移交** · **存量接线 6 项移交**。
 
 ---
 
@@ -28,7 +29,7 @@ Author: lead（插件/组件/能力开发线 总指挥）
 | 波 | 族数 | 状态 | 落地证据 | 还差什么 |
 |---|---:|---|---|---|
 | **W0** | — | ✅ **已落地** | 本页 + 设计稿 + [ADR-0025](../adr/0025-capability-creation-line-charter.md) + `scripts/check_creation_line.py` + 登记表新增行 + **重复审计**（本页 §3） | ❌ 待 owner 复核重复判定与池 A/B 划分（**唯一待办**） |
-| **W1** | 7 | ❌ **未开工** | — | ❌ C-B1 · C-B2 · C-D1 · C-H1 · C-H2 · C-H4 · C-H5 未落地 |
+| **W1** | 7 | 🟡 **4 族已落地 / 3 族未接线** | C-B1 · C-B2 · C-H4 · C-H5 ⇒ **PRODUCTION WIRED + 默认关**（注册根 + 治理档 + 策展表 + 名册 + env 登记齐） | ❌ C-D1（读路径并联待 W2）· C-H1（缺隐私信号源）· C-H2（缺运行时喂深度点）未接线 |
 | **W2** | 1 | ❌ **未开工** | — | ❌ C-E1 未落地（技能/插件包 + 运行时验签） |
 | **W3** | 2 | ❌ **未开工** | — | ❌ C-A1 · C-B4 未落地（平台依赖；引擎选型待定） |
 | **W4** | 3 | ❌ **未开工** | — | ❌ C-B3 · C-D2 · C-G2 未落地 |
@@ -58,20 +59,20 @@ python3 scripts/docs_truth.py --verify --check     # ⇒ claims=N fail=0 stale=0
 | 族 | 能力 id / 面名 | 重复判定 | 已有先例（file:line，**不得重建**） | 波次 | 状态 | 治理档 | 还差什么 |
 |---|---|---|---|---|---|---|---|
 | C-A1 | `tool.external_gui`（含 C-A2） | 部分重复 | `fetch/accessibility.rs` AccessibilityTree · `gateway/im_bridge.rs` 动作链 | W3 | ❌ 未开工 | R0/R3 | ❌ 实现 + Windows 真机用例（Linux 须显式标未实现）+ locator 模型 |
-| C-B1 | `tool.process_tree` | 部分重复 | `process/mod.rs` ProcessTreeContainment · `std_sub_supervisor.rs` 真 kill | W1 | ❌ 未开工 | R0/R3 | ❌ 实现 + 快照零审批断言 + 平台机制名不进公共契约 |
-| C-B2 | `tool.http_write` | 部分重复 | `egress.rs` get_with_headers（**只有 GET**）· `sdk/client.rs` 真 POST | W1 | ❌ 未开工 | R2 | ❌ **扩 ControlledEgress 写方法** + 新增「无第二 HTTP 客户端」不变量测试 |
+| C-B1 | `tool.process_tree` | 部分重复 | `process/mod.rs` ProcessTreeContainment · `std_sub_supervisor.rs` 真 kill | W1 | ✅ 已落地 | R0/R3 | 已落地：库级内核 + 模型面工具 + 生产注册（production.rs:696）+ L3 + WRITE_OR_EXECUTE + 复用 `APEIRETH_ENABLE_SHELL`。⚠️ Windows 已实现**未上真机**（收容组归属一律 `Undetermined`）· macOS 显式未实现 | ❌ 实现 + 快照零审批断言 + 平台机制名不进公共契约 |
+| C-B2 | `tool.http_write` | 部分重复 | `egress.rs` get_with_headers（**只有 GET**）· `sdk/client.rs` 真 POST | W1 | ✅ 已落地 | R2 | 已落地：写方法长在 `ControlledEgress`（**不自带第二 HTTP 客户端**）+ 生产注册（production.rs:669）+ L3 + WRITE_OR_EXECUTE + 2 个新 env 名。⚠️ **凭据绑定表默认无绑定** ⇒ 生产上只能发未鉴权请求（带 `credential_ref` 的调用拒绝即帧） | ❌ **扩 ControlledEgress 写方法** + 新增「无第二 HTTP 客户端」不变量测试 |
 | C-B3 | `tool.script_exec`（跑命令半边移交 `tool.shell`） | 部分重复（半边移交） | `shell.rs` tool.shell（已接线） | W4 | ❌ 未开工 | R3 | ❌ 实现（仅语言代码解释执行）+ 四类逃逸拒绝用例 + **选型待定** |
 | C-B4 | `tool.web_browser` | 部分重复 | `stealth_crawler.rs`（零 IO 未接线）· `fetch.rs` 受控 GET | W3 | ❌ 未开工 | R2/R3 | ❌ 实现 + 白名单 + 证据帧 + **引擎选型待定** |
-| C-D1 | `tool.object_grant` | 部分重复 | `memory/scope.rs` MemoryScope · `governance/permission.rs` 授权底座 | W1 | ❌ 未开工 | R0/R2 | ❌ 实现 + **撤销即时生效**测试 + **叠加/替代裁决** |
+| C-D1 | `tool.object_grant` | 部分重复 | `memory/scope.rs` MemoryScope · `governance/permission.rs` 授权底座 | W1 | 🟡 在途 | R0/R2 | 机制就绪（工具面 + 账本 + 叠加原语：`域可见 ∨ 有效对象 grant`，被授方 `allows_write` 恒 false，撤销即时）⇒ **本波不注册**：域级可见性是**两段过滤**（SQL 段 + 协调器段）⇒ 只并联协调器段 ⇒ 被授对象**进不了候选集**（静默失效）⇒ 读路径并联待 W2（涉 `memory/scope.rs` + `backend/{sqlite,in_memory}.rs` 的 SQL 谓词） | ❌ 实现 + **撤销即时生效**测试 + **叠加/替代裁决** |
 | C-D2 | 面名 `session_observability`（含 C-G4 + C-G3） | 部分重复 | `agent_trace.rs` TraceSpan · `durable/replay.rs` recover_attempt · `session_events.rs` marker | W4 | ❌ 未开工 | R0 | ❌ 实现（快照/恢复/统一时间线**共用一套事件面**）+ 两次导出逐字节等 |
 | C-D3 | `transport.cross_device` | 部分重复 | `research_roaming_memory.rs` 合并/墓碑原语（未接线） | W6 | ⛔ 未排期 | R4 | ❌ **待 owner 重拍** + 先提取 merge/tombstone 为通用原语 |
 | C-E1 | `tool.skill_package`（含 C-E2 插件那半边） | 部分重复 | `skill/library.rs` SkillLibrary · `plugin/manifest.rs` PluginManifest | W2 | ❌ 未开工 | R3 | ❌ 实现 + 越权包拒装 + 未签名拒装 + 卸载不留残影 |
 | C-F1 | 面名 `multisig_verifier` | 部分重复 | `core/onion.rs` verify_multisig · `governance/chain.rs` PlaceholderMultiSignVerifier | W6 | ⛔ 未排期 | R4 | ❌ **待 owner 重拍**（D2 已裁 T0 不做） |
 | C-G2 | `tool.replay_eval` | 部分重复 | `governance/eval.rs` EvalScore · `memory/d4_eval.rs` score | W4 | ❌ 未开工 | R0 | ❌ 实现（**复用既有打分器**，不新造第二套评分语义） |
-| C-H1 | 面名 `routing_policy` | 部分重复 | `core/cost_router.rs` CostRouter · `runtime/provider.rs` ProviderRouter | W1 | ❌ 未开工 | R0 | ❌ 实现 + 决策可解释 + 缺价不编价 + **与既有两层同层** |
-| C-H2 | 不新设 id（`budget.quota.depth`） | 部分重复 | `runtime/quota.rs` QuotaDimension · `tools/self_status.rs` 深度维占位 | W1 | ❌ 未开工 | R0 | ❌ 实现 + 自述面深度维不再为 null |
-| C-H4 | `tool.web_search` | 部分重复 | `sdk/client.rs` web_search（**契约已占名**）· `tools/search.rs` SearchTool（本地） | W1 | ❌ 未开工 | R2 | ❌ 实现 + **先对齐 SDK 契约占名** + 来源缺失即拒 + 双上限 |
-| C-H5 | `tool.calendar` | **真新面** | **无先例**（⚠️「calendar 25 命中」全是 `canonical` 子串误判）· 边界对照 `engine/organ/src/care/tool.rs` CARE_SCHEDULE（**关怀例程 ≠ 主人日程**） | W1 | ❌ 未开工 | R2 | ❌ 实现（本地日程账 + 查询/创建/改期/取消，**零外部集成**）+ 写动作逐次人批 + **与 `tool.care_schedule` 边界写进族规格** |
+| C-H1 | 面名 `routing_policy` | 部分重复 | `core/cost_router.rs` CostRouter · `runtime/provider.rs` ProviderRouter | W1 | 🟡 在途 | R0 | 机制就绪（策略层**原样复用** `CostRouter::route` + 隐私硬闸 + 可解释决策 + 0 新 env 名）⇒ **本波不接线**：CLI **无任务隐私等级信号源** ⇒ 现在接上去是**零行为变化**的假接线 ⇒ 待信号源（域级隐私属性）就位再接 CLI/网关/自述三处 | ❌ 实现 + 决策可解释 + 缺价不编价 + **与既有两层同层** |
+| C-H2 | 不新设 id（`budget.quota.depth`） | 部分重复 | `runtime/quota.rs` QuotaDimension · `tools/self_status.rs` 深度维占位 | W1 | 🟡 在途 | R0 | 机制就绪（`DepthQuota` 真计数 + `check_with_depth` 四维合一 + 拒绝路径接既有配额语义）⇒ **本波不接线**：运行时喂深度点（`execute.rs` 四处 `check` → `check_with_depth` + `session.rs` 加槽 + `invocation.depth` 喂入）与自述面接线**不在本批写域**（涉尺寸棘轮跟踪文件 `execute.rs`）⇒ 待 W2 | ❌ 实现 + 自述面深度维不再为 null |
+| C-H4 | `tool.web_search` | 部分重复 | `sdk/client.rs` web_search（**契约已占名**）· `tools/search.rs` SearchTool（本地） | W1 | ✅ 已落地 | R2 | 已落地：生产注册（production.rs:678）+ 显式 **L2**（出网只读）+ env 登记 + 端点走配置面（`<data>/web_search.json`）。⚠️ **端点未配 ⇒ 面不注册**；结果正文走 `UntrustedEnvelope` 封套；条数上限按**端点原始条数**判（超限整单拒绝） | ❌ 实现 + **先对齐 SDK 契约占名** + 来源缺失即拒 + 双上限 |
+| C-H5 | `tool.calendar` | **真新面** | **无先例**（⚠️「calendar 25 命中」全是 `canonical` 子串误判）· 边界对照 `engine/organ/src/care/tool.rs` CARE_SCHEDULE（**关怀例程 ≠ 主人日程**） | W1 | ✅ 已落地 | R2 | 已落地：3 文件拆分（mod/store/tool，均 < 800 行）+ 生产注册（production.rs:686）+ L3 + WRITE_OR_EXECUTE + `CalendarApprovalHook` 已挂治理链 + env 登记。账本 = `<data>/calendar/` 两本 JSONL（条目账 + 审计账），坏行按不存在并计数上报 | ❌ 实现（本地日程账 + 查询/创建/改期/取消，**零外部集成**）+ 写动作逐次人批 + **与 `tool.care_schedule` 边界写进族规格** |
 | C-L1 | `provider.local_inference` | **待立项** | `runtime/provider.rs` ProviderRouter（归一化层；**无本地推理实现**） | W5 | ❌ 未开工 | R0/R2 | ❌ **先做重复审计** + 引擎选型 + 依赖闭包实测 |
 
 ---
@@ -118,13 +119,26 @@ python3 scripts/docs_truth.py --verify --check     # ⇒ claims=N fail=0 stale=0
 
 ---
 
+## 3.5 W1 波次落地记录（2026-11-08）
+
+| 项 | 值 |
+|---|---|
+| 落地族 | **4 族 PRODUCTION WIRED（默认关）**：`tool.process_tree` / `tool.http_write` / `tool.web_search` / `tool.calendar` |
+| 生产装配 | 4 个 `ModuleFamily` 变体 + 4 段注册（`production.rs:669/678/686/696`）+ 4 个配置字段（`production_config.rs`） |
+| 治理 | 显式档位：`http_write`/`calendar`/`process_tree` ⇒ **L3**；`web_search` ⇒ **L2**；`WRITE_OR_EXECUTE` 进 http_write/calendar/process_tree（web_search 只读**不进**） |
+| 审批钩子 | `CalendarApprovalHook` + `ProcessTreeApprovalHook` **已挂治理链**（按开关装，关时连钩子都不装）；`http_write`/`web_search` 走**面级 `require_approval_for`**（每次停人批，无自动放行档） |
+| env | **+4 个新名**（`APEIRETH_ENABLE_CALENDAR` / `APEIRETH_ENABLE_HTTP_WRITE` / `APEIRETH_HTTP_WRITE_ALLOWLIST` / `APEIRETH_ENABLE_WEB_SEARCH`）；`process_tree` **复用** `APEIRETH_ENABLE_SHELL` ⇒ 契约上限 **160 → 164** |
+| 配置面（非 env） | `<data>/web_search.json`（检索端点）· `<data>/http_write.json`（凭据绑定表）⇒ **默认无内容 ⇒ 面不注册或写面拒绝即帧** |
+| 策展表 | `tool_taxonomy.rs` 版本 3 → 4（+5 行；`tool.object_grant` 留行为**策展占位**，口径 = IMPLEMENTED，**不是已接线声明**） |
+| 0 装诚实 | ① `tool.http_write` 的凭据绑定表默认无绑定 ⇒ 生产上只能发**未鉴权**请求；② `tool.web_search` 端点未配 ⇒ 面不注册；③ `tool.process_tree` 的 Windows 分支**未上真机**（收容组归属一律 `Undetermined`）；④ 3 族（对象级授权 / 路由策略层 / 配额深度维）**未接线** ⇒ 机制在、面不在 |
+
 ## 4. 额度台账（**每波收口回填**）
 
 | 棘轮 | 现值 | 本 ADR 授权上限 | W0 落库后 | 还差什么 |
 |---|---:|---:|---:|---|
 | `max_workspace_crates` | 31 | 35 | **31（未动）** | ❌ 合并后估算 +3~4 ⇒ 波次收口时抬（用不完就少抬） |
 | `max_production_edges` | 118 | 128 | **118（未动）** | ❌ 估算 **+14 超授权 +10** ⇒ W2/W3 收口须复评或追加 ADR |
-| `max_distinct_names`（env） | 160 | 176 | **160（未动）** | ❌ 估算 +15（上限内但逼近）⇒ 收口复评 |
+| `max_distinct_names`（env） | 160 | 176 | **164（本波已抬 +4：CALENDAR / HTTP_WRITE / HTTP_WRITE_ALLOWLIST / WEB_SEARCH）** | ✅ 在授权额度内（+16）⇒ 剩 +12 |
 | `max_file_loc` | 6300 | 6300（不动） | 6300 | — （零余量 ⇒ 新面一律新开文件） |
 
 ---

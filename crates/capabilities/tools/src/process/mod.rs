@@ -32,6 +32,12 @@
 //! Callers query [`current_platform_capabilities`], declare
 //! [`IsolationRequirement`]s on a [`ProcessRequest`], and fail closed when the
 //! platform cannot meet the requirement.
+//!
+//! # 进程树快照面
+//!
+//! [`snapshot`] 补两件事：**只读**的受控子进程树快照（pid / 父 pid / 命令 / 状态 /
+//! 是否逃逸收容组）与**按 pid 幂等**取消一棵树。两者都只作用于**本会话**自己的树；
+//! 不属于本会话的 pid 一律**拒绝**（不越权动别人的进程）。
 
 use std::ffi::{OsStr, OsString};
 use std::io::Read;
@@ -50,8 +56,17 @@ pub(crate) mod linux;
 pub(crate) mod macos;
 #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
 pub(crate) mod platform;
+pub mod snapshot;
 #[cfg(windows)]
 pub mod windows;
+
+// 进程树快照面（C-B1）的公开导出：快照枚举 + 按 pid 幂等取消。
+// 公共契约只暴露平台无关的类型与能力语义；平台机制名只落各平台后端。
+pub use snapshot::{
+    cancel_process_tree, process_tree_snapshot, process_tree_support, GroupContainment,
+    ProcessTreeCancel, ProcessTreeEntry, ProcessTreeError, ProcessTreeSnapshot, ProcessTreeStatus,
+    ProcessTreeSupport,
+};
 
 /// Timeout used when waiting for an already-killed child to disappear.
 const POST_KILL_WAIT: Duration = Duration::from_secs(5);

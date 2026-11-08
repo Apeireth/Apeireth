@@ -3,27 +3,46 @@
 //!
 //! # What is metered
 //!
-//! Three dimensions are metered:
+//! Four dimensions are metered:
 //!
 //! * **tokens** — the sum of per-round usage metering (`usage.total_tokens` of
 //!   every provider response), accumulated on the session's ledger;
 //! * **tool steps** — one step per dispatched tool call;
 //! * **cost** — every provider round's usage converted to micro-units at the
 //!   round model's unit price (the frozen [`CostRateMicros::cost_micros`]
-//!   arithmetic, looked up through a [`CostRateTable`]) and accumulated on the
+//! arithmetic, looked up through a [`CostRateTable`]) and accumulated on the
 //!   ledger's cost column. A round whose model carries no unit price converts
 //!   to `None`: it is **not** counted (nothing is ever invented) and lands in
 //!   the ledger's `unpriced_rounds` counter instead, so a non-zero count marks
 //!   the cost total as "部分计量" (partial coverage, honestly annotated in the
 //!   self-report).
+//! * **depth** — the call tree's nesting depth (推理深度 / 思考量), tracked by
+//!   [`DepthQuota`]. The meter counts real nesting transitions and refuses a
+//!   nesting step that would pass the ceiling, producing the **same**
+//!   [`QuotaExceeded`] fact the other dimensions produce (no second
+//!   governance tier, no new stop).
 //!
-//! The fourth dimension of the four-dimension quota design is honestly *not*
-//! wired: **depth** has no call-tree tracking. Nothing pretends otherwise.
+//! # Depth: what it counts (and what it does not)
+//!
+//! [`DepthQuota`] is a *meter over* the call tree, not a second call tree: it
+//! holds two counters (the current nesting level and the high-water mark) and
+//! no frames, arguments or tool names. The levels themselves come from the
+//! **existing** call-tree readouts (top-level turn = 0, isolated side call =
+//! 1; see [`super::module::InvocationContext::depth`]); the meter only turns
+//! them into a ledger.
+//!
+//! The depth ceiling travels **with the meter** ([`DepthQuota::with_max_depth`])
+//! rather than inside [`SessionQuotaLimits`], so the existing assembly points
+//! keep their exact literal shape and an unconfigured depth dimension changes
+//! nothing: [`SessionQuotaLimits::check_with_depth`] returns byte-identical
+//! facts to [`SessionQuotaLimits::check`] when the depth dimension is
+//! unlimited.
 //!
 //! # Opt-in limits
 //!
 //! Quotas are opt-in: [`SessionQuotaLimits`] carries `Option` ceilings and
-//! `None` means *no limit* (the ledger then receives an unreachable ceiling).
+//! `None` means *no limit* (the ledger then receives an unreachable ceiling);
+//! the depth ceiling is opt-in the same way ([`DepthQuota::with_max_depth`]).
 //! The metering itself always runs, so the self-report's "consumed" column is
 //! real even when nothing is capped.
 //!
@@ -35,6 +54,12 @@
 //! checkpoint with a budget-exhausted error frame carrying the dimension name,
 //! the limit, and the consumed count. The ask-for-more-budget stop is an
 //! interface stub, explicitly not wired (see [`QuotaExhaustedAction`]).
+//!
+//! The depth dimension joins that **same** stop: an over-deep nesting step is
+//! refused at the call site ([`DepthQuota::enter`] → `Err`) and the checkpoint
+//! check ([`SessionQuotaLimits::check_with_depth`]) reports the same
+//! [`QuotaExceeded`] fact under the `depth` dimension name. No new
+//! governance tier, no new stop.
 
 use std::fmt;
 
@@ -53,6 +78,11 @@ pub enum QuotaDimension {
     /// without a unit price are not converted (never invented) and mark the
     /// total as partial.
     CostMicros,
+    /// 调用树深度 (推理深度 / 思考量): 由 [`DepthQuota`] 真计量。
+    ///
+    /// 越上限的嵌套步被**拒** (同一套配额拒绝语义: 出既有
+    /// [`QuotaExceeded`] 事实 ⇒ 熔断档收束), 不新增治理档位。
+    Depth,
 }
 
 impl QuotaDimension {
@@ -62,6 +92,7 @@ impl QuotaDimension {
             Self::Tokens => "tokens",
             Self::ToolSteps => "tool_steps",
             Self::CostMicros => "cost_micros",
+            Self::Depth => "depth",
         }
     }
 }
@@ -91,6 +122,13 @@ pub const MAX_QUOTA_TOOL_STEPS: u64 = u32::MAX as u64;
 /// 一份真实预算而是数值噪音; 越界值钳到锚点, 不发明更高的"预算"。
 pub const MAX_QUOTA_COST_MICROS: u64 = u32::MAX as u64;
 
+/// Largest session call-tree depth a configuration value is clamped to.
+///
+/// 家族钳制锚点与 [`MAX_QUOTA_TOKENS`] / [`MAX_QUOTA_TOOL_STEPS`] /
+/// [`MAX_QUOTA_COST_MICROS`] 同口径 (u32::MAX 层): 深度计数是嵌套层数
+/// (u32), 越界值钳到锚点, 不发明更深的"预算"。
+pub const MAX_QUOTA_DEPTH: u64 = u32::MAX as u64;
+
 /// Resolve the session token quota from a raw configuration value.
 ///
 /// Quota knobs are opt-in, so the fallback is *no limit*: an absent, empty,
@@ -117,6 +155,14 @@ pub fn parse_quota_max_tool_steps(raw: Option<&str>) -> Option<u64> {
 /// unlimited.
 pub fn parse_quota_max_cost_micros(raw: Option<&str>) -> Option<u64> {
     parse_quota_ceiling(raw, MAX_QUOTA_COST_MICROS)
+}
+
+/// Resolve the session call-tree depth ceiling from a raw configuration value.
+///
+/// 同家族纪律: 正整数直通 (钳制到 [`MAX_QUOTA_DEPTH`]); 0 / 负数 / 非法 /
+/// 未设 = `None` = 不设限 (深度维是 opt-in, 默认不限)。
+pub fn parse_quota_max_depth(raw: Option<&str>) -> Option<u64> {
+    parse_quota_ceiling(raw, MAX_QUOTA_DEPTH)
 }
 
 fn parse_quota_ceiling(raw: Option<&str>, ceiling: u64) -> Option<u64> {
@@ -207,6 +253,20 @@ impl SessionQuotaLimits {
         }
         None
     }
+
+    /// 四维合一检查: token → 工具步数 → 花费 → 深度。
+    ///
+    /// 维度顺序固定 (口径唯一): 前三维的历史优先级**不动**, 深度维排最后 ——
+    /// 同一份账本上, 帧里的维度名永远一致。深度维不设限时
+    /// ([`DepthQuota::unlimited`]) 本函数与 [`Self::check`] **逐字节等**:
+    /// 同一事实、同一顺序、同一维度名 (未启用 = 旧路径零变化)。
+    pub fn check_with_depth(
+        &self,
+        meter: &mut CognitiveQuota,
+        depth: &DepthQuota,
+    ) -> Option<QuotaExceeded> {
+        self.check(meter).or_else(|| depth.check())
+    }
 }
 
 /// The exhausted-dimension fact a budget-exhausted frame reports: the
@@ -242,6 +302,155 @@ impl QuotaExhaustedAction {
     /// break is wired; the ask stop is an interface stub.
     pub fn is_wired(self) -> bool {
         matches!(self, Self::CircuitBreak)
+    }
+}
+
+/// 深度维计量器 (调用树深度跟踪) —— **真计量**, 不是占位。
+///
+/// # 不造第二棵调用树
+///
+/// 本计量器**不持有**任何调用帧 / 参数 / 工具名: 它只记两个计数器 ——
+/// `current_depth` (当前嵌套层) 与 `peak_depth` (高水位)。层数本身由
+/// **既有**调用树读数给出 (顶层回合 = 0, 隔离侧车调用 = 1, 见
+/// [`super::module::InvocationContext::depth`]), 本计量器只把它记成账。
+///
+/// # 口径 (与其它三维同读法)
+///
+/// * 已耗 = **峰值深度** (单调不降: 出栈不洗白已经越限的树);
+/// * 耗尽 = `peak_depth >= max_depth` (与 token / 步数 / 花费同读法:
+///   恰好等于上限即耗尽);
+/// * 上限 = `max_depth` = 允许嵌套到的最大层数 (`None` = 不设限)。
+///
+/// 因此: 上限 N ⇒ 调用树可嵌套到第 N 层 (到达即到顶), 再往下一层被
+/// **拒** ([`DepthQuota::enter`] 的 `Err` = 既有配额拒绝语义的事实)。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DepthQuota {
+    /// 深度上限 (可嵌套的最大层数); `None` = 不设限 (opt-in 默认)。
+    max_depth: Option<u64>,
+    /// 当前嵌套层数 (顶层回合 = 0)。
+    current_depth: u32,
+    /// 本会话已达的最深层数 (高水位, 单调不降)。
+    peak_depth: u32,
+}
+
+impl DepthQuota {
+    /// 不设限的深度计量器 (默认: 深度维是 opt-in)。
+    pub const fn unlimited() -> Self {
+        Self {
+            max_depth: None,
+            current_depth: 0,
+            peak_depth: 0,
+        }
+    }
+
+    /// 带上限的深度计量器 (`None` = 不设限)。
+    ///
+    /// 注: 上限 `0` 只可能由直接构造得到 (配置解析把 0 读成"不设限",
+    /// 见 [`parse_quota_max_depth`]), 语义是"不容许任何嵌套层" —— 顶层
+    /// 回合即到顶。
+    pub const fn with_max_depth(max_depth: Option<u64>) -> Self {
+        Self {
+            max_depth,
+            current_depth: 0,
+            peak_depth: 0,
+        }
+    }
+
+    /// 深度上限 (`None` = 不设限)。
+    pub const fn max_depth(&self) -> Option<u64> {
+        self.max_depth
+    }
+
+    /// 当前嵌套层数 (出栈后会回落; 永不为负)。
+    pub const fn current_depth(&self) -> u32 {
+        self.current_depth
+    }
+
+    /// 峰值深度 (高水位, 单调不降) —— 自述面的"已耗"取它。
+    pub const fn peak_depth(&self) -> u32 {
+        self.peak_depth
+    }
+
+    /// 已耗口径 = 峰值深度 (自述面直接用这个数)。
+    pub fn consumed(&self) -> u64 {
+        u64::from(self.peak_depth)
+    }
+
+    /// 自述读数 (接线点: 自述面的深度维格子填这份真值, 不再是 null)。
+    pub const fn reading(&self) -> DepthQuotaReading {
+        DepthQuotaReading {
+            limit: self.max_depth,
+            current_depth: self.current_depth,
+            peak_depth: self.peak_depth,
+        }
+    }
+
+    /// 耗尽事实 (`None` = 未到顶)。
+    ///
+    /// 读法与其它三维一致: 已耗 (`peak_depth`) >= 上限 (`max_depth`) 即耗尽,
+    /// 事实带真数字 (上限 / 已耗), 从不编造。
+    pub fn check(&self) -> Option<QuotaExceeded> {
+        let limit = self.max_depth?;
+        if u64::from(self.peak_depth) >= limit {
+            Some(QuotaExceeded {
+                dimension: QuotaDimension::Depth,
+                limit,
+                consumed: u64::from(self.peak_depth),
+            })
+        } else {
+            None
+        }
+    }
+
+    /// 进入一层 (栈纪律): 允许则返回新层数; 已到顶则**拒**。
+    ///
+    /// 拒绝 = 既有配额拒绝语义的事实 ([`QuotaExceeded`], 维度名 `depth`),
+    /// 由既有的熔断档收束 (不新增治理档位)。被拒的进入**不改**调用树:
+    /// 层数不涨, 峰值不动 —— 拒绝不是"先放进去再报错"。
+    pub fn enter(&mut self) -> Result<u32, QuotaExceeded> {
+        if let Some(exceeded) = self.check() {
+            return Err(exceeded);
+        }
+        self.current_depth = self.current_depth.saturating_add(1);
+        self.peak_depth = self.peak_depth.max(self.current_depth);
+        Ok(self.current_depth)
+    }
+
+    /// 出一层 (饱和到 0): 永不为负, 也不会抹掉峰值。
+    pub fn exit(&mut self) -> u32 {
+        self.current_depth = self.current_depth.saturating_sub(1);
+        self.current_depth
+    }
+
+    /// 观测既有调用树的深度读数 (只抬峰值, 不抬当前层)。
+    ///
+    /// 接线口: 已有绝对深度读数的调用点 (侧车调用 / 子循环那条链) 直接把
+    /// 读数喂进来, 不必自己维护栈。峰值单调 ⇒ 观测口**洗不白**已经越限的
+    /// 调用树 (报一个更小的深度不会让已到顶的树回到顶下)。
+    pub fn observe_depth(&mut self, depth: u32) -> u32 {
+        self.peak_depth = self.peak_depth.max(depth);
+        self.peak_depth
+    }
+}
+
+/// 深度维的自述读数 (接线点)。
+///
+/// 自述面的深度维格子要的是**真值**: 上限 + 已耗 (峰值深度) —— 不再是
+/// null / "暂无接口"。本结构就是那次读数的形状。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DepthQuotaReading {
+    /// 深度上限 (`None` = 不设限)。
+    pub limit: Option<u64>,
+    /// 当前嵌套层数 (出栈后会回落)。
+    pub current_depth: u32,
+    /// 峰值深度 (单调不降) —— 自述面的"已耗"取它 (与上限的差即余量)。
+    pub peak_depth: u32,
+}
+
+impl DepthQuotaReading {
+    /// 已耗口径 = 峰值深度 (自述面的 `consumed` 直接用这个数)。
+    pub fn consumed(&self) -> u64 {
+        u64::from(self.peak_depth)
     }
 }
 
@@ -638,6 +847,78 @@ mod tests {
                 .map(|fact| fact.dimension),
             Some(QuotaDimension::Tokens),
             "花费累计不牵连 token 维"
+        );
+    }
+
+    #[test]
+    fn the_depth_dimension_counts_the_call_tree_and_refuses_the_over_deep_step() {
+        // 深度维真计量: 上限 2 ⇒ 嵌套到第 2 层即到顶, 第 3 层被拒;
+        // 拒绝出的是既有配额拒绝语义的事实 (同一形状, 维度名 depth)。
+        let mut depth = DepthQuota::with_max_depth(Some(2));
+        assert_eq!(depth.enter(), Ok(1));
+        assert_eq!(depth.enter(), Ok(2));
+        assert_eq!(
+            depth.check(),
+            Some(QuotaExceeded {
+                dimension: QuotaDimension::Depth,
+                limit: 2,
+                consumed: 2,
+            }),
+            "恰好等于上限即耗尽 (与其它三维同读法)"
+        );
+        let refused = depth.enter().expect_err("第三层必须被拒");
+        assert_eq!(refused.dimension, QuotaDimension::Depth);
+        assert_eq!(depth.current_depth(), 2, "被拒的进入不改调用树");
+    }
+
+    #[test]
+    fn the_depth_dimension_is_unlimited_by_default_and_never_binds() {
+        // opt-in: 深度维默认不设限 ⇒ 不出事实, 计量照跑 (自述面已耗是真数字)。
+        let mut depth = DepthQuota::unlimited();
+        assert_eq!(depth.max_depth(), None);
+        for expected in 1..=4u32 {
+            assert_eq!(depth.enter(), Ok(expected));
+        }
+        assert_eq!(depth.check(), None);
+        assert_eq!(depth.consumed(), 4, "不设限也要有真读数");
+        assert_eq!(depth.reading().consumed(), 4);
+    }
+
+    #[test]
+    fn the_depth_ceiling_parses_with_the_family_discipline() {
+        assert_eq!(parse_quota_max_depth(Some("4")), Some(4));
+        for raw in [None, Some(""), Some("0"), Some("-1"), Some("abc")] {
+            assert_eq!(
+                parse_quota_max_depth(raw),
+                None,
+                "深度上限必须读 {raw:?} 为不设限"
+            );
+        }
+        assert_eq!(
+            parse_quota_max_depth(Some("99999999999999")),
+            Some(MAX_QUOTA_DEPTH),
+            "越界钳到家族锚点, 不发明更深的预算"
+        );
+    }
+
+    #[test]
+    fn the_four_dimension_check_keeps_the_old_path_when_depth_is_unwired() {
+        // 零变化: 深度维不设限时, 四维检查与旧三维检查逐字节等。
+        let limits = SessionQuotaLimits {
+            max_tokens: Some(10),
+            max_tool_steps: Some(2),
+            max_cost_micros: Some(1_000),
+        };
+        let depth = DepthQuota::unlimited();
+        let mut meter = CognitiveQuota::default();
+        meter.consume_tokens(5);
+        meter.consume_tool_step();
+        assert_eq!(limits.check_with_depth(&mut meter, &depth), None);
+        meter.consume_tokens(5);
+        assert_eq!(
+            limits.check_with_depth(&mut meter, &depth),
+            limits.check(&mut meter),
+            "同一事实、同一顺序、同一维度名"
         );
     }
 }

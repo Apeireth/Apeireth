@@ -30,6 +30,10 @@ Author: lead（插件/组件/能力开发线 总指挥）
 | `docs/architecture/env-registry.toml` | 每个 `APEIRETH_*` 开关的登记（`default` / `level` / `purpose` / `evidence`） |
 | `docs/status/claims.yaml` | 对外承诺台账（`level` / `default` / `switch_env` / `verify_cmd` / `verified_at`） |
 
+> 另有三处**实现级**真源被逐格回核：生产装配根
+> `crates/engine/runtime-assembly/src/canonical/production.rs`（可达性 + 装配点行号）、
+> 配置默认档 `production_config.rs`、能力名册 `self_status_roster.rs`（行为面开关全表）。
+
 ### 0.2 怎么复核本页（**守卫**）
 
 ```bash
@@ -44,137 +48,149 @@ python3 scripts/docs_truth.py --verify --check         # ⇒ claims=N fail=0 sta
 ```
 
 > **每次生成还会回核四件事**（不一致 ⇒ `--check` 非 0 退出）：
-> ① 能力 id **必须在策展表里**（动态族除外）⇒ 新增能力不登记策展表 ⇒ 红；
+> ① 表内每一格**都能在真源里指到出处**（策展表 / 装配点 / env 登记表 / 台账）；
 > ② 开关名**必须在 env 登记表里**且**默认档与登记表一致** ⇒ 口径打架 ⇒ 红；
 > ③ 台账等级**必须在四级口径词表内**；
 > ④ **证据 file:line 必须仍指向活文件**（文件存在 + 行号在范围内）⇒ 既有面被搬走 ⇒ 红。
+>
+> 另有一类**不判红**的提示：策展表自身与生产面的出入（漏登 / 幽灵条目）。
+> 那不是本表的漂移（表已如实反映现状），守卫在 Rust 侧
+> `cargo test -p apeireth-runtime-assembly --lib tool_taxonomy`。
 
 ---
 
 <!-- BEGIN:generated -->
 ### ① 生产装配根可达 · 静态能力 id
 
-| # | 能力 id | 模型面工具名 | 所属族 | 四级口径 | 默认 | 开关 | 证据（file:line，回核过） |
-|---:|---|---|---|---|:---:|---|---|
-| 1 | `tool.filesystem` | filesystem | Filesystem | PRODUCTION WIRED | ON | 无 env 开关（APEIRETH_DISABLE_LOCAL_READ_TOOLS=1 只撤授权，不撤注册） | 装配 production.rs:531-538；默认 production_config.rs:364；组合根 cli/src/lib.rs:2261(..default()) |
-| 2 | `tool.search` | search | Search | PRODUCTION WIRED | ON | 同上 | 装配 production.rs:540-546；默认 production_config.rs:365 |
-| 3 | `tool.repo` | repo | Repo | PRODUCTION WIRED | ON | 同上 | 装配 production.rs:548-554；默认 production_config.rs:366 |
-| 4 | `tool.repo_map` | repo_map | Repo（子族） | PRODUCTION WIRED | ON | 无 env 开关（组合根硬写 repo_map: true） | 装配 production.rs:560-566；组合根 cli/src/lib.rs:2152 |
-| 5 | `tool.self_status` | self_status | SelfStatus | PRODUCTION WIRED | ON | 无 env 开关（默认 true，组合根不覆盖） | 装配 production.rs:852-984；默认 production_config.rs:393 |
-| 6 | `tool.trait_report` | trait_report | TraitReport | PRODUCTION WIRED | ON | 无 env 开关（组合根恒注入成长账落位） | 装配 production.rs:721-725；组合根 cli/src/lib.rs:2210-2212 |
-| 7 | `tool.shell` | shell | Shell | PRODUCTION WIRED | OFF | APEIRETH_ENABLE_SHELL=1（只认 "1"） | 装配 production.rs:645-649；默认 production_config.rs:367(shell: None)；env cli/src/lib.rs:117,2048-2050,2157-2160 |
-| 8 | `tool.fetch` | fetch | Fetch | PRODUCTION WIRED | OFF | APEIRETH_ENABLE_FETCH=1 | 装配 production.rs:651-662；默认 production_config.rs:368(fetch: None)；env cli/src/lib.rs:118,2051-2053,2161 |
-| 9 | `tool.apply_patch` | apply_patch | ApplyPatch（受控写） | PRODUCTION WIRED | OFF | APEIRETH_ENABLE_FILE_WRITE=1 且 工作区根已注入 | 装配 production.rs:573-579；默认 production_config.rs:394(file_write: false)；env cli/src/lib.rs:176,626-630,2183 |
-| 10 | `tool.git_write` | git_write | GitWrite | PRODUCTION WIRED | OFF | APEIRETH_ENABLE_GIT_WRITE=1 且工作区根 | 装配 production.rs:604-610；默认 production_config.rs:396；env cli/src/lib.rs:186,668-672,2185 |
-| 11 | `tool.worktree_plan` | worktree_plan | WorktreePlan | PRODUCTION WIRED | OFF | APEIRETH_ENABLE_WORKTREE_PLAN=1 且 APEIRETH_ENABLE_FILE_WRITE=1（子依赖）且工作区根 | 装配 production.rs:585-591（config.worktree_plan && config.file_write）；env cli/src/lib.rs:196,686-691,2190 |
-| 12 | `tool.worktree_apply` | worktree_apply | WorktreeApply | PRODUCTION WIRED | OFF | APEIRETH_ENABLE_WORKTREE_APPLY=1 且 …WORKTREE_PLAN=1 且 …FILE_WRITE=1 且工作区根 | 装配 production.rs:593-599；env cli/src/lib.rs:197,696-701,2191 |
-| 13 | `tool.skill_distill` | skill_distill | SkillDistill | PRODUCTION WIRED | OFF | APEIRETH_ENABLE_SKILL_DISTILL=1 且 …FILE_WRITE=1 且工作区根 且 技能库目录 | 装配 production.rs:616-622；env cli/src/lib.rs:202,706-711,2194-2197 |
-| 14 | `tool.skill_search` | skill_search | SkillSearch | PRODUCTION WIRED | OFF | APEIRETH_ENABLE_SKILL_SEARCH=1 且 技能库目录 | 装配 production.rs:624-633；env cli/src/lib.rs:203,714-718,2195-2197 |
-| 15 | `tool.image_ops` | image_ops | ImageOps | PRODUCTION WIRED | OFF | APEIRETH_ENABLE_IMAGE_OPS=1 且 …FILE_WRITE=1 且工作区根 | 装配 production.rs:750-757（config.image_ops && config.file_write）；env cli/src/lib.rs:2228 + tools/src/image_ops.rs:107,2094-2098 |
-| 16 | `tool.doc_ops` | doc_ops | DocOps | PRODUCTION WIRED | OFF | APEIRETH_ENABLE_DOC_OPS=1（写动作另受 …FILE_WRITE=1） | 装配 production.rs:764-770；env tools/src/doc_ops.rs:131,384-388 + cli/src/lib.rs:2233 |
-| 17 | `tool.sheet_ops` | sheet_ops | SheetOps | PRODUCTION WIRED | OFF | APEIRETH_ENABLE_SHEET_OPS=1（写动作另受 …FILE_WRITE=1） | 装配 production.rs:778-784；env tools/src/sheet_ops.rs:142,411-415 + cli/src/lib.rs:2238 |
-| 18 | `tool.content_feed` | content_feed | ContentFeed | PRODUCTION WIRED | OFF | APEIRETH_ENABLE_CONTENT_FEED=1 | 装配 production.rs:667-671；默认 production_config.rs:369；env cli/src/lib.rs:123,732-736,2163 |
-| 19 | `tool.care_schedule` | care_schedule | CareSchedule | PRODUCTION WIRED | OFF | APEIRETH_ENABLE_CARE=1 | 装配 production.rs:678-682；默认 production_config.rs:370；env cli/src/lib.rs:128,741-745,2167 |
-| 20 | `tool.backup_export` | backup_export | BackupExport | PRODUCTION WIRED | OFF | APEIRETH_ENABLE_BACKUP_EXPORT=1 | 装配 production.rs:687-691；默认 production_config.rs:372；env cli/src/lib.rs:132,749-753,1899-1902,2170 |
-| 21 | `tool.voice_speak` | voice_speak | VoiceSpeak | PRODUCTION WIRED | OFF | APEIRETH_ENABLE_VOICE_SPEAK=1 | 装配 production.rs:697-704；默认 production_config.rs:371；env cli/src/lib.rs:138,759-763,2175 |
-| 22 | `tool.task_board` | task_board | TaskBoard | PRODUCTION WIRED | OFF | APEIRETH_ENABLE_TASK_BOARD=1 | 装配 production.rs:711-715；默认 production_config.rs:373；env cli/src/lib.rs:142,769-773,2179 |
-| 23 | `tool.exposure_audit` | exposure_audit | ExposureAudit | PRODUCTION WIRED | OFF | APEIRETH_ENABLE_EXPOSURE_AUDIT=1 | 装配 production.rs:730-734；默认 production_config.rs:404；env cli/src/lib.rs:148,399-418,2216 |
-| 24 | `tool.proposal_draft` | proposal_draft | Proposals | PRODUCTION WIRED | OFF | APEIRETH_ENABLE_PROPOSALS=1 | 装配 production.rs:740-743；默认 production_config.rs:405；env tools/src/proposal.rs:69,1134-1137 + cli/src/lib.rs:2221-2223 |
-| 25 | `tool.education` | education | Education | PRODUCTION WIRED | OFF | APEIRETH_ENABLE_EDUCATION=1 | 装配 production.rs:636-640；默认 production_config.rs:391(education: false)；env cli/src/lib.rs:3055-3061,2151 |
-| 26 | `tool.device_sense` | device_sense | DeviceSense | PRODUCTION WIRED | OFF | APEIRETH_ENABLE_DEVICE_SENSE=1 | 装配 production.rs:791-796；默认 production_config.rs:409；env tools/src/device/sense.rs:74,794-798 + cli/src/lib.rs:2242-2244 |
-| 27 | `tool.weather` | weather | Weather | PRODUCTION WIRED | OFF | APEIRETH_ENABLE_DEVICE_SENSE=1（同族同闸） | 装配 production.rs:797-801；env tools/src/device/weather.rs:768-771 + cli/src/lib.rs:2245-2247 |
-| 28 | `tool.device_control` | device_control | DeviceControl | PRODUCTION WIRED | OFF | APEIRETH_ENABLE_DEVICE_SENSE=1 且 APEIRETH_ENABLE_DEVICE_CONTROL=1（双闸） | 装配 production.rs:809-815；env tools/src/device/device_control.rs:126,130,145-147,196-204 + cli/src/lib.rs:2251-2254 |
-| 29 | `tool.guard_watch` | guard_watch | GuardWatch | PRODUCTION WIRED | OFF | APEIRETH_ENABLE_DEVICE_SENSE=1 且 APEIRETH_ENABLE_GUARD_WATCH=1（双闸） | 装配 production.rs:822-826；env tools/src/device/guard_watch.rs:74,1105-1119 + cli/src/lib.rs:2258-2260 |
-| 30 | `tool.play_propose` | play_propose | BioPlay（install_bio_play） | PRODUCTION WIRED | OFF | APEIRETH_ENABLE_BIO_PLAY=1 且工作区根 | 装配 production.rs:831-837 → bio_production_wiring.rs:249-267；id 常量 canonical/play_tools.rs:61,70；env play_tools.rs:58 |
-| 31 | `tool.play_start` | play_start | BioPlay | PRODUCTION WIRED | OFF | 同上 | 同上；id play_tools.rs:63,72 |
-| 32 | `tool.play_finish` | play_finish | BioPlay | PRODUCTION WIRED | OFF | 同上 | 同上；id play_tools.rs:65,74 |
-| 33 | `tool.play_abort` | play_abort | BioPlay | PRODUCTION WIRED | OFF | 同上 | 同上；id play_tools.rs:67,76 |
-| 34 | `tool.ritual_done` | ritual_done | 仪式面（install_bio_ritual_tools） | PRODUCTION WIRED | OFF | APEIRETH_ENABLE_BIO_CARE_CANDIDATES=1 且 关怀数据目录已注入 | 装配 production.rs:842-847 → bio_production_wiring.rs:281-299；id canonical/ritual_tools.rs:77,82；env care_reminder.rs:255 |
-| 35 | `tool.ritual_skip` | ritual_skip | 仪式面 | PRODUCTION WIRED | OFF | 同上 | 同上；id ritual_tools.rs:79,84 |
-| 36 | `tool.recon.pack` | re.pack | Recon | PRODUCTION WIRED | OFF | APEIRETH_ENABLE_RECON=1 且工作区根（+ APEIRETH_TOOL_SCOPE） | 装配 production.rs:1023-1029；id tools/src/recon_tool.rs:33；env tools/src/recon/wiring.rs:32,48-50 + cli/src/lib.rs:2204 |
-| 37 | `tool.recon.binfmt` | re.binfmt | Recon | PRODUCTION WIRED | OFF | 同上 | production.rs:1023-1029；id recon_tool.rs:278 |
-| 38 | `tool.recon.yara` | re.yara | Recon | PRODUCTION WIRED | OFF | 同上 | production.rs:1023-1029；id recon_tool.rs:359 |
-| 39 | `tool.recon.net` | re.net.recon | Recon（网络子族） | PRODUCTION WIRED | OFF | 同上（scope 为空 ⇒ 目标全拒） | production.rs:1023-1029；id recon_tool.rs:462；网络子族 id 表 tools/src/recon/wiring.rs（RECON_NETWORK_TOOL_IDS） |
-| 40 | `tool.recon.dotnet` | re.dotnet | Recon | PRODUCTION WIRED | OFF | 同上 | production.rs:1023-1029；id recon_tool.rs:586 |
-| 41 | `tool.recon.js` | re.js | Recon | PRODUCTION WIRED | OFF | 同上 | production.rs:1023-1029；id recon_tool.rs:694 |
-| 42 | `tool.recon.pcap` | re.pcap | Recon | PRODUCTION WIRED | OFF | 同上 | production.rs:1023-1029；id recon_tool.rs:784 |
-| 43 | `tool.recon.web` | re.web.probe | Recon（网络子族） | PRODUCTION WIRED | OFF | 同上 | production.rs:1023-1029；id recon_tool.rs:876 |
-| 44 | `tool.recon.tls` | re.tls | Recon（网络子族） | PRODUCTION WIRED | OFF | 同上 | production.rs:1023-1029；id recon_tool.rs:969 |
-| 45 | `tool.external.nmap` | ext.nmap | ExternalTools | PRODUCTION WIRED | OFF | APEIRETH_ENABLE_EXTERNAL=1 | 装配 production.rs:1034-1038；id tools/src/external.rs:165；env tools/src/recon/wiring.rs:34,53-55 + cli/src/lib.rs:2205 |
-| 46 | `tool.external.exiftool` | ext.exiftool | ExternalTools | PRODUCTION WIRED | OFF | 同上 | production.rs:1034-1038；id external.rs:481 |
-| 47 | `tool.external.tshark` | ext.tshark | ExternalTools | PRODUCTION WIRED | OFF | 同上 | production.rs:1034-1038；id external.rs:593 |
-| 48 | `tool.external.yara` | ext.yara | ExternalTools | PRODUCTION WIRED | OFF | 同上 | production.rs:1034-1038；id external.rs:730 |
-| 49 | `tool.external.binwalk` | ext.binwalk | ExternalTools | PRODUCTION WIRED | OFF | 同上 | production.rs:1034-1038；id external.rs:874 |
-| 50 | `tool.external.radare2` | ext.radare2 | ExternalTools | PRODUCTION WIRED | OFF | 同上 | production.rs:1034-1038；id external.rs:991 |
-| 51 | `tool.external.jadx` | ext.jadx | ExternalTools | PRODUCTION WIRED | OFF | 同上 | production.rs:1034-1038；id external.rs:1156 |
-| 52 | `tool.external.apktool` | ext.apktool | ExternalTools | PRODUCTION WIRED | OFF | 同上 | production.rs:1034-1038；id external.rs:1278 |
-| 53 | `tool.external.ghidra` | ext.ghidra | ExternalTools | PRODUCTION WIRED | OFF | 同上 | production.rs:1034-1038；id external.rs:1433 |
-| 54 | `tool.external.openssl` | ext.openssl | ExternalTools | PRODUCTION WIRED | OFF | 同上 | production.rs:1034-1038；id external.rs:1591 |
-| — | **tool.mcp.<server>.<tool>（动态族，逐个外部工具生成；不存在固定 tool.mcp 能力 id）** | mcp:<server>:<tool> | Mcp | IMPLEMENTED+PRODUCTION WIRED｜DEFAULT ENABLED 不成立｜HARDWARE VALIDATED 不成立（docs/status/claims.yaml:124：2026-11-07 起四环已在真第三方 stdio MCP 服务器端到端成立，但仍有 5 类性质未覆盖 ⇒ 整体口径不成立） | OFF | APEIRETH_ENABLE_MCP=1（+ 服务器列表可加载） | 装配 production.rs:999-1017；id 生成 tools/src/mcp_bridge/catalog.rs:137-143；族根 tools/src/mcp_bridge/family.rs:20；env cli/src/lib.rs:212,2054-2056,2200-2201 |
+| # | 能力 id | 模型面工具名 | 所属族/域 | 四级口径 | 默认 ON/OFF | 开关名 | 证据（file:line，回核过） | 真源出处 |
+|---:|---|---|---|:---:|:---:|---|---|---|
+| 1 | `tool.apply_patch` | apply_patch | apply_patch（域：filesystem） | PRODUCTION WIRED | OFF | APEIRETH_ENABLE_FILE_WRITE | 注册 crates/capabilities/tools/src/apply_patch_tool.rs:50；装配 production.rs:578 | 策展表 tool_taxonomy.rs；env 登记表 APEIRETH_ENABLE_FILE_WRITE；装配根 production.rs:578 |
+| 2 | `tool.backup_export` | （未在源中派生） | backup_export（域：document） | PRODUCTION WIRED | OFF | （无 env 开关） | 注册 crates/capabilities/tools/src/backup.rs:70；装配 production.rs:728 | 策展表 tool_taxonomy.rs；装配根 production.rs:728 |
+| 3 | `tool.calendar` | calendar | calendar（域：companion） | PRODUCTION WIRED | OFF | APEIRETH_ENABLE_CALENDAR | 注册 crates/capabilities/tools/src/calendar/mod.rs:113；装配 production.rs:689 | 策展表 tool_taxonomy.rs；env 登记表 APEIRETH_ENABLE_CALENDAR；装配根 production.rs:689 |
+| 4 | `tool.care_schedule` | care_schedule | care_schedule（域：companion） | PRODUCTION WIRED | OFF | APEIRETH_ENABLE_CARE | 注册 crates/engine/organ/src/care/tool.rs:40；装配 production.rs:719 | 策展表 tool_taxonomy.rs；env 登记表 APEIRETH_ENABLE_CARE；装配根 production.rs:719 |
+| 5 | `tool.content_feed` | content_feed | content_feed（域：network） | PRODUCTION WIRED | OFF | （无 env 开关） | 注册 crates/capabilities/tools/src/content_feed/tool.rs:93；装配 production.rs:708 | 策展表 tool_taxonomy.rs；装配根 production.rs:708 |
+| 6 | `tool.device_control` | device_control | device_control（域：device） | PRODUCTION WIRED | OFF | APEIRETH_ENABLE_DEVICE_SENSE | 注册 crates/capabilities/tools/src/device/device_control.rs:116；装配 production.rs:852 | 策展表 tool_taxonomy.rs；env 登记表 APEIRETH_ENABLE_DEVICE_SENSE；装配根 production.rs:852 |
+| 7 | `tool.device_sense` | device_sense | device_sense（域：device） | PRODUCTION WIRED | OFF | APEIRETH_ENABLE_DEVICE_SENSE | 注册 crates/capabilities/tools/src/device/sense.rs:59；装配 production.rs:833 | 策展表 tool_taxonomy.rs；env 登记表 APEIRETH_ENABLE_DEVICE_SENSE；装配根 production.rs:833 |
+| 8 | `tool.doc_ops` | doc_ops | doc_ops（域：document） | PRODUCTION WIRED | OFF | APEIRETH_ENABLE_DOC_OPS | 注册 crates/capabilities/tools/src/doc_ops.rs:120；装配 production.rs:807 | 策展表 tool_taxonomy.rs；env 登记表 APEIRETH_ENABLE_DOC_OPS；装配根 production.rs:807 |
+| 9 | `tool.education` | education | education（域：document/companion） | PRODUCTION WIRED | OFF | （无 env 开关） | 注册 crates/capabilities/tools/src/education.rs:302；装配 production.rs:640 | 策展表 tool_taxonomy.rs；装配根 production.rs:640 |
+| 10 | `tool.exposure_audit` | exposure_audit | exposure_audit（域：governance） | PRODUCTION WIRED | OFF | （无 env 开关） | 注册 crates/capabilities/tools/src/exposure_audit/tool.rs:22；装配 production.rs:771 | 策展表 tool_taxonomy.rs；装配根 production.rs:771 |
+| 11 | `tool.external.apktool` | ext.apktool | external（域：filesystem/compute） | PRODUCTION WIRED | OFF | （无 env 开关） | 注册 crates/capabilities/tools/src/external.rs:1278；装配 production.rs:1074 | 策展表 tool_taxonomy.rs；装配根 production.rs:1074 |
+| 12 | `tool.external.binwalk` | ext.binwalk | external（域：filesystem/compute） | PRODUCTION WIRED | OFF | （无 env 开关） | 注册 crates/capabilities/tools/src/external.rs:874；装配 production.rs:1074 | 策展表 tool_taxonomy.rs；装配根 production.rs:1074 |
+| 13 | `tool.external.exiftool` | ext.exiftool | external（域：filesystem） | PRODUCTION WIRED | OFF | （无 env 开关） | 注册 crates/capabilities/tools/src/external.rs:481；装配 production.rs:1074 | 策展表 tool_taxonomy.rs；装配根 production.rs:1074 |
+| 14 | `tool.external.ghidra` | ext.ghidra | external（域：filesystem/compute） | PRODUCTION WIRED | OFF | （无 env 开关） | 注册 crates/capabilities/tools/src/external.rs:1433；装配 production.rs:1074 | 策展表 tool_taxonomy.rs；装配根 production.rs:1074 |
+| 15 | `tool.external.jadx` | ext.jadx | external（域：filesystem/compute） | PRODUCTION WIRED | OFF | （无 env 开关） | 注册 crates/capabilities/tools/src/external.rs:1156；装配 production.rs:1074 | 策展表 tool_taxonomy.rs；装配根 production.rs:1074 |
+| 16 | `tool.external.nmap` | ext.nmap | external（域：network） | PRODUCTION WIRED | OFF | （无 env 开关） | 注册 crates/capabilities/tools/src/external.rs:165；装配 production.rs:1074 | 策展表 tool_taxonomy.rs；装配根 production.rs:1074 |
+| 17 | `tool.external.openssl` | ext.openssl | external（域：network） | PRODUCTION WIRED | OFF | （无 env 开关） | 注册 crates/capabilities/tools/src/external.rs:1591；装配 production.rs:1074 | 策展表 tool_taxonomy.rs；装配根 production.rs:1074 |
+| 18 | `tool.external.radare2` | ext.radare2 | external（域：filesystem/compute） | PRODUCTION WIRED | OFF | （无 env 开关） | 注册 crates/capabilities/tools/src/external.rs:991；装配 production.rs:1074 | 策展表 tool_taxonomy.rs；装配根 production.rs:1074 |
+| 19 | `tool.external.tshark` | ext.tshark | external（域：filesystem/network） | PRODUCTION WIRED | OFF | （无 env 开关） | 注册 crates/capabilities/tools/src/external.rs:593；装配 production.rs:1074 | 策展表 tool_taxonomy.rs；装配根 production.rs:1074 |
+| 20 | `tool.external.yara` | ext.yara | external（域：filesystem/search） | PRODUCTION WIRED | OFF | （无 env 开关） | 注册 crates/capabilities/tools/src/external.rs:730；装配 production.rs:1074 | 策展表 tool_taxonomy.rs；装配根 production.rs:1074 |
+| 21 | `tool.fetch` | fetch | fetch（域：network） | PRODUCTION WIRED | OFF | （无 env 开关） | 注册 crates/capabilities/tools/src/fetch.rs:210；装配 production.rs:655 | 策展表 tool_taxonomy.rs；装配根 production.rs:655 |
+| 22 | `tool.filesystem` | filesystem | filesystem（域：filesystem） | PRODUCTION WIRED | ON | （无 env 开关） | 注册 crates/capabilities/tools/src/filesystem.rs:84；装配 production.rs:537 | 策展表 tool_taxonomy.rs；装配根 production.rs:537 |
+| 23 | `tool.git_write` | git_write | git_write（域：filesystem/process） | PRODUCTION WIRED | OFF | APEIRETH_ENABLE_GIT_WRITE | 注册 crates/capabilities/tools/src/git_write.rs:86；装配 production.rs:609 | 策展表 tool_taxonomy.rs；env 登记表 APEIRETH_ENABLE_GIT_WRITE；装配根 production.rs:609 |
+| 24 | `tool.guard_watch` | guard_watch | guard_watch（域：governance） | PRODUCTION WIRED | OFF | APEIRETH_ENABLE_GUARD_WATCH | 注册 crates/capabilities/tools/src/device/guard_watch.rs:60；装配 production.rs:863 | 策展表 tool_taxonomy.rs；env 登记表 APEIRETH_ENABLE_GUARD_WATCH；装配根 production.rs:863 |
+| 25 | `tool.http_write` | http_write | http_write（域：network） | PRODUCTION WIRED | OFF | APEIRETH_ENABLE_HTTP_WRITE | 注册 crates/capabilities/tools/src/http_write.rs:345；装配 production.rs:672 | 策展表 tool_taxonomy.rs；env 登记表 APEIRETH_ENABLE_HTTP_WRITE；装配根 production.rs:672 |
+| 26 | `tool.image_ops` | image_ops | image_ops（域：media） | PRODUCTION WIRED | OFF | APEIRETH_ENABLE_IMAGE_OPS | 注册 crates/capabilities/tools/src/image_ops.rs:101；装配 production.rs:793 | 策展表 tool_taxonomy.rs；env 登记表 APEIRETH_ENABLE_IMAGE_OPS；装配根 production.rs:793 |
+| 27 | `tool.play_abort` | play_abort | play_abort（域：companion） | PRODUCTION WIRED | OFF | APEIRETH_ENABLE_BIO_PLAY | 注册 crates/engine/runtime-assembly/src/canonical/play_tools.rs:67；装配 production.rs:866 | 策展表 tool_taxonomy.rs；env 登记表 APEIRETH_ENABLE_BIO_PLAY；装配根 production.rs:866 |
+| 28 | `tool.play_finish` | play_finish | play_finish（域：companion） | PRODUCTION WIRED | OFF | APEIRETH_ENABLE_BIO_PLAY | 注册 crates/engine/runtime-assembly/src/canonical/play_tools.rs:65；装配 production.rs:866 | 策展表 tool_taxonomy.rs；env 登记表 APEIRETH_ENABLE_BIO_PLAY；装配根 production.rs:866 |
+| 29 | `tool.play_propose` | play_propose | play_propose（域：companion） | PRODUCTION WIRED | OFF | APEIRETH_ENABLE_BIO_PLAY | 注册 crates/engine/runtime-assembly/src/canonical/play_tools.rs:61；装配 production.rs:866 | 策展表 tool_taxonomy.rs；env 登记表 APEIRETH_ENABLE_BIO_PLAY；装配根 production.rs:866 |
+| 30 | `tool.play_start` | play_start | play_start（域：companion） | PRODUCTION WIRED | OFF | APEIRETH_ENABLE_BIO_PLAY | 注册 crates/engine/runtime-assembly/src/canonical/play_tools.rs:63；装配 production.rs:866 | 策展表 tool_taxonomy.rs；env 登记表 APEIRETH_ENABLE_BIO_PLAY；装配根 production.rs:866 |
+| 31 | `tool.process_tree` | process_tree | process_tree（域：process） | PRODUCTION WIRED | OFF | APEIRETH_ENABLE_SHELL | 注册 crates/capabilities/tools/src/process_tree_tool.rs:71；装配 production.rs:699 | 策展表 tool_taxonomy.rs；env 登记表 APEIRETH_ENABLE_SHELL；装配根 production.rs:699 |
+| 32 | `tool.proposal_draft` | proposal_draft | proposal_draft（域：governance） | PRODUCTION WIRED | OFF | APEIRETH_ENABLE_PROPOSALS | 注册 crates/capabilities/tools/src/proposal.rs:49；装配 production.rs:780 | 策展表 tool_taxonomy.rs；env 登记表 APEIRETH_ENABLE_PROPOSALS；装配根 production.rs:780 |
+| 33 | `tool.recon.binfmt` | re.binfmt | recon（域：filesystem/compute） | PRODUCTION WIRED | OFF | （无 env 开关） | 注册 crates/capabilities/tools/src/recon_tool.rs:257；装配 production.rs:1065 | 策展表 tool_taxonomy.rs；装配根 production.rs:1065 |
+| 34 | `tool.recon.dotnet` | re.dotnet | recon（域：filesystem/compute） | PRODUCTION WIRED | OFF | （无 env 开关） | 注册 crates/capabilities/tools/src/recon_tool.rs:586；装配 production.rs:1065 | 策展表 tool_taxonomy.rs；装配根 production.rs:1065 |
+| 35 | `tool.recon.js` | re.js | recon（域：filesystem/compute） | PRODUCTION WIRED | OFF | （无 env 开关） | 注册 crates/capabilities/tools/src/recon_tool.rs:694；装配 production.rs:1065 | 策展表 tool_taxonomy.rs；装配根 production.rs:1065 |
+| 36 | `tool.recon.net` | re.net.recon | recon（域：network） | PRODUCTION WIRED | OFF | （无 env 开关） | 注册 crates/capabilities/tools/src/recon_tool.rs:462；装配 production.rs:1065 | 策展表 tool_taxonomy.rs；装配根 production.rs:1065 |
+| 37 | `tool.recon.pack` | re.pack | recon（域：filesystem/compute） | PRODUCTION WIRED | OFF | （无 env 开关） | 注册 crates/capabilities/tools/src/recon_tool.rs:33；装配 production.rs:1065 | 策展表 tool_taxonomy.rs；装配根 production.rs:1065 |
+| 38 | `tool.recon.pcap` | re.pcap | recon（域：filesystem/network） | PRODUCTION WIRED | OFF | （无 env 开关） | 注册 crates/capabilities/tools/src/recon_tool.rs:784；装配 production.rs:1065 | 策展表 tool_taxonomy.rs；装配根 production.rs:1065 |
+| 39 | `tool.recon.tls` | re.tls | recon（域：network） | PRODUCTION WIRED | OFF | （无 env 开关） | 注册 crates/capabilities/tools/src/recon_tool.rs:969；装配 production.rs:1065 | 策展表 tool_taxonomy.rs；装配根 production.rs:1065 |
+| 40 | `tool.recon.web` | re.web.probe | recon（域：network） | PRODUCTION WIRED | OFF | （无 env 开关） | 注册 crates/capabilities/tools/src/recon_tool.rs:876；装配 production.rs:1065 | 策展表 tool_taxonomy.rs；装配根 production.rs:1065 |
+| 41 | `tool.recon.yara` | re.yara | recon（域：filesystem/search） | PRODUCTION WIRED | OFF | （无 env 开关） | 注册 crates/capabilities/tools/src/recon_tool.rs:359；装配 production.rs:1065 | 策展表 tool_taxonomy.rs；装配根 production.rs:1065 |
+| 42 | `tool.repo` | repo | repo（域：filesystem/search） | PRODUCTION WIRED | ON | （无 env 开关） | 注册 crates/capabilities/tools/src/plugin.rs:106；装配 production.rs:553 | 策展表 tool_taxonomy.rs；装配根 production.rs:553 |
+| 43 | `tool.repo_map` | repo_map | repo_map（域：filesystem/compute） | PRODUCTION WIRED | ON | （无 env 开关） | 注册 crates/capabilities/tools/src/repo_map_tool.rs:47；装配 production.rs:565 | 策展表 tool_taxonomy.rs；装配根 production.rs:565 |
+| 44 | `tool.ritual_done` | ritual_done | ritual_done（域：companion） | PRODUCTION WIRED | OFF | （无 env 开关） | 注册 crates/engine/runtime-assembly/src/canonical/ritual_tools.rs:77；装配 production.rs:1324 | 策展表 tool_taxonomy.rs；装配根 production.rs:1324 |
+| 45 | `tool.ritual_skip` | ritual_skip | ritual_skip（域：companion） | PRODUCTION WIRED | OFF | （无 env 开关） | 注册 crates/engine/runtime-assembly/src/canonical/ritual_tools.rs:79；装配 production.rs:1324 | 策展表 tool_taxonomy.rs；装配根 production.rs:1324 |
+| 46 | `tool.search` | search | search（域：search） | PRODUCTION WIRED | ON | （无 env 开关） | 注册 crates/capabilities/tools/src/plugin.rs:95；装配 production.rs:545 | 策展表 tool_taxonomy.rs；装配根 production.rs:545 |
+| 47 | `tool.self_status` | self_status | self_status（域：self） | PRODUCTION WIRED | ON | （无 env 开关） | 注册 crates/capabilities/tools/src/self_status.rs:2060；装配 production.rs:1021 | 策展表 tool_taxonomy.rs；装配根 production.rs:1021 |
+| 48 | `tool.sheet_ops` | sheet_ops | sheet_ops（域：document） | PRODUCTION WIRED | OFF | APEIRETH_ENABLE_SHEET_OPS | 注册 crates/capabilities/tools/src/sheet_ops.rs:131；装配 production.rs:821 | 策展表 tool_taxonomy.rs；env 登记表 APEIRETH_ENABLE_SHEET_OPS；装配根 production.rs:821 |
+| 49 | `tool.shell` | shell | shell（域：process） | PRODUCTION WIRED | OFF | （无 env 开关） | 注册 crates/capabilities/tools/src/plugin.rs:126；装配 production.rs:649 | 策展表 tool_taxonomy.rs；装配根 production.rs:649 |
+| 50 | `tool.skill_distill` | skill_distill | skill_distill（域：memory） | PRODUCTION WIRED | OFF | APEIRETH_ENABLE_SKILL_DISTILL | 注册 crates/capabilities/tools/src/skill/distill.rs:60；装配 production.rs:621 | 策展表 tool_taxonomy.rs；env 登记表 APEIRETH_ENABLE_SKILL_DISTILL；装配根 production.rs:621 |
+| 51 | `tool.skill_search` | skill_search | skill_search（域：search/memory） | PRODUCTION WIRED | OFF | APEIRETH_ENABLE_SKILL_DISTILL | 注册 crates/capabilities/tools/src/skill/search.rs:26；装配 production.rs:632 | 策展表 tool_taxonomy.rs；env 登记表 APEIRETH_ENABLE_SKILL_DISTILL；装配根 production.rs:632 |
+| 52 | `tool.task_board` | task_board | task_board（域：governance） | PRODUCTION WIRED | OFF | （无 env 开关） | 注册 crates/engine/runtime-assembly/src/canonical/task_board_tool.rs:44；装配 production.rs:752 | 策展表 tool_taxonomy.rs；台账 claims.yaml#tool.task_board；装配根 production.rs:752 |
+| 53 | `tool.trait_report` | trait_report | trait_report（域：self/governance） | PRODUCTION WIRED | ON | （无 env 开关） | 注册 crates/engine/runtime-assembly/src/canonical/trait_report_tool.rs:44；装配 production.rs:762 | 策展表 tool_taxonomy.rs；装配根 production.rs:762 |
+| 54 | `tool.voice_speak` | voice_speak | voice_speak（域：media） | PRODUCTION WIRED | OFF | （无 env 开关） | 注册 crates/capabilities/tools/src/voice/speak.rs:83；装配 production.rs:741 | 策展表 tool_taxonomy.rs；台账 claims.yaml#tool.voice_speak；装配根 production.rs:741 |
+| 55 | `tool.weather` | weather | weather（域：network） | PRODUCTION WIRED | OFF | （无 env 开关） | 注册 crates/capabilities/tools/src/device/weather.rs:45；装配 production.rs:838 | 策展表 tool_taxonomy.rs；装配根 production.rs:838 |
+| 56 | `tool.web_search` | web_search | web_search（域：network/search） | PRODUCTION WIRED | OFF | APEIRETH_ENABLE_WEB_SEARCH | 注册 crates/capabilities/tools/src/web_search.rs:87；装配 production.rs:681 | 策展表 tool_taxonomy.rs；env 登记表 APEIRETH_ENABLE_WEB_SEARCH；装配根 production.rs:681 |
+| 57 | `tool.worktree_apply` | worktree_apply | worktree_apply（域：filesystem） | PRODUCTION WIRED | OFF | APEIRETH_ENABLE_WORKTREE_APPLY | 注册 crates/capabilities/tools/src/worktree_apply.rs:87；装配 production.rs:598 | 策展表 tool_taxonomy.rs；env 登记表 APEIRETH_ENABLE_WORKTREE_APPLY；装配根 production.rs:598 |
+| 58 | `tool.worktree_plan` | worktree_plan | worktree_plan（域：filesystem） | PRODUCTION WIRED | OFF | APEIRETH_ENABLE_WORKTREE_PLAN | 注册 crates/capabilities/tools/src/worktree_plan.rs:36；装配 production.rs:590 | 策展表 tool_taxonomy.rs；env 登记表 APEIRETH_ENABLE_WORKTREE_PLAN；装配根 production.rs:590 |
+| — | **`tool.mcp.<server>.<tool>`**（动态族，逐个外部工具生成） | mcp:<server>:<tool> | Mcp | IMPLEMENTED+PRODUCTION WIRED｜DEFAULT ENABLED 不成立｜HARDWARE VALIDATED 不成立 | OFF | APEIRETH_ENABLE_MCP | 族根 tool_taxonomy.rs | 策展表 tool_taxonomy.rs（DYNAMIC_FAMILY_ROOTS） |
 
 ### ② 有能力 id 形态，但生产装配根**不可达**
 
-| # | 能力 id | 模型面工具名 | 所属族 | 四级口径 | 默认 | 证据（file:line） | 为什么不可达 |
-|---:|---|---|---|---|:---:|---|---|
-| 1 | `tool.memory.retrieve` | （无模型面名，MemoryTool 内部能力） | MemoryModule | grep -v "/tests/" ⇒ 只命中定义处） | OFF | id 生成 runtime-assembly/src/canonical/memory_module.rs:57；impl ToolCapability :276；全仓无 MemoryModule::new 调用（rg -n "\bMemoryModule\b" crates/ --glob '*.rs' \ | 构造点全仓只在 `tests/` 被调 |
-| 2 | `tool.memory.write` | 同上 | MemoryModule | IMPLEMENTED｜PRODUCTION WIRED 不成立｜HARDWARE VALIDATED 不成立 | OFF | 同上（OPERATIONS 常量 memory_module.rs:25-27） | 构造点全仓只在 `tests/` 被调 |
-| 3 | `tool.memory.update` | 同上 | MemoryModule | IMPLEMENTED｜PRODUCTION WIRED 不成立｜HARDWARE VALIDATED 不成立 | OFF | 同上 | 构造点全仓只在 `tests/` 被调 |
-| 4 | `tool.memory.delete` | 同上 | MemoryModule | IMPLEMENTED｜PRODUCTION WIRED 不成立｜HARDWARE VALIDATED 不成立 | OFF | 同上 | 构造点全仓只在 `tests/` 被调 |
-| 5 | `tool.memory.search` | 同上 | MemoryModule | IMPLEMENTED｜PRODUCTION WIRED 不成立｜HARDWARE VALIDATED 不成立 | OFF | 同上 | 构造点全仓只在 `tests/` 被调 |
-| 6 | `tool.memory.compact` | 同上 | MemoryModule | IMPLEMENTED｜PRODUCTION WIRED 不成立｜HARDWARE VALIDATED 不成立 | OFF | 同上 | 构造点全仓只在 `tests/` 被调 |
-| 7 | `tool.memory.organize` | 同上 | MemoryModule | IMPLEMENTED｜PRODUCTION WIRED 不成立｜HARDWARE VALIDATED 不成立 | OFF | 同上 | 构造点全仓只在 `tests/` 被调 |
-| 8 | `tool.mesh.connect` | （MeshTool 内部能力） | Mesh | IMPLEMENTED｜PRODUCTION WIRED 不成立｜HARDWARE VALIDATED 不成立（docs/status/claims.yaml:1094-1110 rt.mesh_local_worker 等级 = IMPLEMENTED、default OFF，与本表一致） | OFF | id 生成 runtime-assembly/src/mesh.rs:26；Kind::suffix :301-307；全仓 MeshModule::new 只在 tests/mesh_execution.rs | 构造点全仓只在 `tests/` 被调 |
-| 9 | `tool.mesh.status` | 同上 | Mesh | IMPLEMENTED｜PRODUCTION WIRED 不成立｜HARDWARE VALIDATED 不成立 | OFF | 同上 | 构造点全仓只在 `tests/` 被调 |
-| 10 | `tool.mesh.exchange` | 同上 | Mesh | IMPLEMENTED｜PRODUCTION WIRED 不成立｜HARDWARE VALIDATED 不成立 | OFF | 同上 | 构造点全仓只在 `tests/` 被调 |
-| 11 | `tool.process` | 无（库级面，非工具） | Process（库级保留面） | IMPLEMENTED（库级）｜PRODUCTION WIRED 不成立（永不可达）｜HARDWARE VALIDATED 不成立 | 不适用 | 无 ToolCapability 实现（rg -c "impl ToolCapability for" crates/capabilities/tools/src/process/ ⇒ 0）；仅被分类器引用 permission_preset.rs:61；仓内显式登记为「未注册为工具」tool_taxonomy.rs:92-104 | 库级保留面（**无 `ToolCapability` 实现**） |
-| 12 | `tool.supervisor` | 无 | Supervisor（库级保留面） | IMPLEMENTED（库级）｜PRODUCTION WIRED 不成立｜HARDWARE VALIDATED 不成立 | 不适用 | 同上（tools/src/supervisor.rs 无 ToolCapability）；tool_taxonomy.rs:97-104 | 库级保留面（**无 `ToolCapability` 实现**） |
-| 13 | `tool.std_sub_supervisor` | 无 | Supervisor（库级保留面） | IMPLEMENTED（库级）｜PRODUCTION WIRED 不成立｜HARDWARE VALIDATED 不成立 | 不适用 | 同上（tools/src/std_sub_supervisor.rs 无 ToolCapability）；tool_taxonomy.rs:95-104 | 库级保留面（**无 `ToolCapability` 实现**） |
+| # | 能力 id | 模型面工具名 | 所属族/域 | 四级口径 | 默认 ON/OFF | 开关名 | 证据（file:line） | 为什么不可达 | 真源出处 |
+|---:|---|---|---|:---:|:---:|---|---|---|---|
+| 1 | `tool.process` | 无（库级面，非工具） | Process（库级保留面） | IMPLEMENTED（库级）｜PRODUCTION WIRED 不成立（永不可达）｜HARDWARE VALIDATED 不成立 | 不适用 | 无（策略分类器按 id 形态引用） | crates/capabilities/tools/src/process/mod.rs:360 | 库级保留面（**无 `ToolCapability` 实现**） | 策展表 tool_taxonomy.rs（LIBRARY_LEVEL_FACES） |
+| 2 | `tool.std_sub_supervisor` | 无（库级面，非工具） | Supervisor（库级保留面） | IMPLEMENTED（库级）｜PRODUCTION WIRED 不成立（永不可达）｜HARDWARE VALIDATED 不成立 | 不适用 | 无（策略分类器按 id 形态引用） | crates/capabilities/tools/src/std_sub_supervisor.rs:46 | 库级保留面（**无 `ToolCapability` 实现**） | 策展表 tool_taxonomy.rs（LIBRARY_LEVEL_FACES） |
+| 3 | `tool.supervisor` | 无（库级面，非工具） | Supervisor（库级保留面） | IMPLEMENTED（库级）｜PRODUCTION WIRED 不成立（永不可达）｜HARDWARE VALIDATED 不成立 | 不适用 | 无（策略分类器按 id 形态引用） | crates/capabilities/tools/src/supervisor.rs:158 | 库级保留面（**无 `ToolCapability` 实现**） | 策展表 tool_taxonomy.rs（LIBRARY_LEVEL_FACES） |
+| 4 | `tool.object_grant` | object_grant | — | IMPLEMENTED｜PRODUCTION WIRED 不成立｜HARDWARE VALIDATED 不成立 | OFF | 无（无 env 开关） | 注册 crates/engine/runtime-assembly/src/canonical/object_grant.rs:62 | 生产装配根无构造点 | 仓内实现 |
+| 5 | `tool.memory.compact` | compact（运行期生成） | tool.memory（运行期生成） | IMPLEMENTED｜PRODUCTION WIRED 不成立｜HARDWARE VALIDATED 不成立 | OFF | 无（无 env 开关） | id 生成 crates/engine/runtime-assembly/src/canonical/memory_module.rs:57 | 能力 id 运行期拼出（`format!`）⇒ 静态策展表不收 | 运行期拼装 + 装配根无构造点 |
+| 6 | `tool.memory.delete` | delete（运行期生成） | tool.memory（运行期生成） | IMPLEMENTED｜PRODUCTION WIRED 不成立｜HARDWARE VALIDATED 不成立 | OFF | 无（无 env 开关） | id 生成 crates/engine/runtime-assembly/src/canonical/memory_module.rs:57 | 能力 id 运行期拼出（`format!`）⇒ 静态策展表不收 | 运行期拼装 + 装配根无构造点 |
+| 7 | `tool.memory.organize` | organize（运行期生成） | tool.memory（运行期生成） | IMPLEMENTED｜PRODUCTION WIRED 不成立｜HARDWARE VALIDATED 不成立 | OFF | 无（无 env 开关） | id 生成 crates/engine/runtime-assembly/src/canonical/memory_module.rs:57 | 能力 id 运行期拼出（`format!`）⇒ 静态策展表不收 | 运行期拼装 + 装配根无构造点 |
+| 8 | `tool.memory.retrieve` | retrieve（运行期生成） | tool.memory（运行期生成） | IMPLEMENTED｜PRODUCTION WIRED 不成立｜HARDWARE VALIDATED 不成立 | OFF | 无（无 env 开关） | id 生成 crates/engine/runtime-assembly/src/canonical/memory_module.rs:57 | 能力 id 运行期拼出（`format!`）⇒ 静态策展表不收 | 运行期拼装 + 装配根无构造点 |
+| 9 | `tool.memory.search` | search（运行期生成） | tool.memory（运行期生成） | IMPLEMENTED｜PRODUCTION WIRED 不成立｜HARDWARE VALIDATED 不成立 | OFF | 无（无 env 开关） | id 生成 crates/engine/runtime-assembly/src/canonical/memory_module.rs:57 | 能力 id 运行期拼出（`format!`）⇒ 静态策展表不收 | 运行期拼装 + 装配根无构造点 |
+| 10 | `tool.memory.update` | update（运行期生成） | tool.memory（运行期生成） | IMPLEMENTED｜PRODUCTION WIRED 不成立｜HARDWARE VALIDATED 不成立 | OFF | 无（无 env 开关） | id 生成 crates/engine/runtime-assembly/src/canonical/memory_module.rs:57 | 能力 id 运行期拼出（`format!`）⇒ 静态策展表不收 | 运行期拼装 + 装配根无构造点 |
+| 11 | `tool.memory.write` | write（运行期生成） | tool.memory（运行期生成） | IMPLEMENTED｜PRODUCTION WIRED 不成立｜HARDWARE VALIDATED 不成立 | OFF | 无（无 env 开关） | id 生成 crates/engine/runtime-assembly/src/canonical/memory_module.rs:57 | 能力 id 运行期拼出（`format!`）⇒ 静态策展表不收 | 运行期拼装 + 装配根无构造点 |
+| 12 | `tool.mesh.connect` | connect（运行期生成） | tool.mesh（运行期生成） | IMPLEMENTED｜PRODUCTION WIRED 不成立｜HARDWARE VALIDATED 不成立 | OFF | 无（无 env 开关） | id 生成 crates/engine/runtime-assembly/src/mesh.rs:26 | 能力 id 运行期拼出（`format!`）⇒ 静态策展表不收 | 运行期拼装 + 装配根无构造点 |
+| 13 | `tool.mesh.exchange` | exchange（运行期生成） | tool.mesh（运行期生成） | IMPLEMENTED｜PRODUCTION WIRED 不成立｜HARDWARE VALIDATED 不成立 | OFF | 无（无 env 开关） | id 生成 crates/engine/runtime-assembly/src/mesh.rs:26 | 能力 id 运行期拼出（`format!`）⇒ 静态策展表不收 | 运行期拼装 + 装配根无构造点 |
+| 14 | `tool.mesh.status` | status（运行期生成） | tool.mesh（运行期生成） | IMPLEMENTED｜PRODUCTION WIRED 不成立｜HARDWARE VALIDATED 不成立 | OFF | 无（无 env 开关） | id 生成 crates/engine/runtime-assembly/src/mesh.rs:26 | 能力 id 运行期拼出（`format!`）⇒ 静态策展表不收 | 运行期拼装 + 装配根无构造点 |
 
 ### ③ 库级模块面（**有实现、无能力 id ⇒ 不是能力**）
 
-| 库级面 | 用途 | 证据 |
-|---|---|---|
-| `tool.guardrail` | 前置守门 / 凭据绊线（消费方，不是能力） | tools/src/guardrail.rs（impl ToolCapability for ⇒ 0） |
-| `tool.stealth_crawler` | 3 个纯函数，零 IO，未接线 | tools/src/stealth_crawler.rs（无 ToolCapability） |
-| `tool.spill` | 会话级有界大文本溢出存储 | tools/src/spill.rs（无 ToolCapability） |
-| `tool.object_access` | 对象级访问判定（E-P3） | tools/src/object_access.rs（无 ToolCapability） |
-| `tool.redaction_bridge` | 出境脱敏双向闸 | tools/src/redaction_bridge.rs（无 ToolCapability） |
-| `tool.write_intent` | shell 侧写意图词法扫描 | tools/src/write_intent.rs（无 ToolCapability） |
-| `tool.live_policy` | 进程内共享 live 权限策略 | tools/src/live_policy.rs（无 ToolCapability） |
-| `tool.observed_gate` | 读前观测门禁 | tools/src/observed_gate.rs（无 ToolCapability） |
-| `tool.egress` | 受控出网策略 | tools/src/egress.rs（无 ToolCapability） |
-| `tool.escalation` | 沙箱升级阶梯提示 | tools/src/escalation.rs（无 ToolCapability） |
-| `tool.ecosystem_health` | 工具生态健康度内核（纯内核未接线） | tools/src/ecosystem_health.rs（无 ToolCapability） |
-| `tool.proposal_push` | 提案推送账 | tools/src/proposal_push.rs（无 ToolCapability） |
-| `tool.exec_pipeline` | 五段流水线基础设施 | tools/src/exec_pipeline/（PipelinedCapability 是包装器，不是新能力 id） |
-| `tool.evidence_faces` | 证据面 | tools/src/evidence_faces.rs（无 ToolCapability） |
-| `tool.accountability_view` | 只读视图 | tools/src/accountability_view.rs（无 ToolCapability） |
-| `tool.memory_ledger_view` | 只读视图 | tools/src/memory_ledger_view.rs（无 ToolCapability） |
+| 库级面 | 所属族/域 | 用途 | 证据（file:line） | 真源出处 |
+|---|---|---|---|---|
+| `accountability_view` | 库级面（无能力 id） | 中间件/守卫/投影类实现，**不产出能力 id** | crates/capabilities/tools/src/accountability_view.rs:28（无 ToolCapability 实现） | tools crate `pub mod accountability_view` |
+| `apply_patch` | 库级面（无能力 id） | 中间件/守卫/投影类实现，**不产出能力 id** | crates/capabilities/tools/src/apply_patch.rs:37（无 ToolCapability 实现） | tools crate `pub mod apply_patch` |
+| `ecosystem_health` | 库级面（无能力 id） | 中间件/守卫/投影类实现，**不产出能力 id** | crates/capabilities/tools/src/ecosystem_health.rs:111（无 ToolCapability 实现） | tools crate `pub mod ecosystem_health` |
+| `egress` | 库级面（无能力 id） | 中间件/守卫/投影类实现，**不产出能力 id** | crates/capabilities/tools/src/egress.rs:35（无 ToolCapability 实现） | tools crate `pub mod egress` |
+| `escalation` | 库级面（无能力 id） | 中间件/守卫/投影类实现，**不产出能力 id** | crates/capabilities/tools/src/escalation.rs:34（无 ToolCapability 实现） | tools crate `pub mod escalation` |
+| `evidence_faces` | 库级面（无能力 id） | 中间件/守卫/投影类实现，**不产出能力 id** | crates/capabilities/tools/src/evidence_faces.rs:61（无 ToolCapability 实现） | tools crate `pub mod evidence_faces` |
+| `guardrail` | 库级面（无能力 id） | 中间件/守卫/投影类实现，**不产出能力 id** | crates/capabilities/tools/src/guardrail.rs:36（无 ToolCapability 实现） | tools crate `pub mod guardrail` |
+| `live_policy` | 库级面（无能力 id） | 中间件/守卫/投影类实现，**不产出能力 id** | crates/capabilities/tools/src/live_policy.rs:43（无 ToolCapability 实现） | tools crate `pub mod live_policy` |
+| `mcp` | 库级面（无能力 id） | 中间件/守卫/投影类实现，**不产出能力 id** | crates/capabilities/tools/src/mcp.rs:22（无 ToolCapability 实现） | tools crate `pub mod mcp` |
+| `memory_ledger_view` | 库级面（无能力 id） | 中间件/守卫/投影类实现，**不产出能力 id** | crates/capabilities/tools/src/memory_ledger_view.rs:23（无 ToolCapability 实现） | tools crate `pub mod memory_ledger_view` |
+| `object_access` | 库级面（无能力 id） | 中间件/守卫/投影类实现，**不产出能力 id** | crates/capabilities/tools/src/object_access.rs:65（无 ToolCapability 实现） | tools crate `pub mod object_access` |
+| `observed_gate` | 库级面（无能力 id） | 中间件/守卫/投影类实现，**不产出能力 id** | crates/capabilities/tools/src/observed_gate.rs:39（无 ToolCapability 实现） | tools crate `pub mod observed_gate` |
+| `proposal_push` | 库级面（无能力 id） | 中间件/守卫/投影类实现，**不产出能力 id** | crates/capabilities/tools/src/proposal_push.rs:39（无 ToolCapability 实现） | tools crate `pub mod proposal_push` |
+| `recon` | 库级面（无能力 id） | 中间件/守卫/投影类实现，**不产出能力 id** | crates/capabilities/tools/src/recon:1（无 ToolCapability 实现） | tools crate `pub mod recon` |
+| `redaction_bridge` | 库级面（无能力 id） | 中间件/守卫/投影类实现，**不产出能力 id** | crates/capabilities/tools/src/redaction_bridge.rs:88（无 ToolCapability 实现） | tools crate `pub mod redaction_bridge` |
+| `repo_map` | 库级面（无能力 id） | 中间件/守卫/投影类实现，**不产出能力 id** | crates/capabilities/tools/src/repo_map.rs:19（无 ToolCapability 实现） | tools crate `pub mod repo_map` |
+| `spill` | 库级面（无能力 id） | 中间件/守卫/投影类实现，**不产出能力 id** | crates/capabilities/tools/src/spill.rs:52（无 ToolCapability 实现） | tools crate `pub mod spill` |
+| `stealth_crawler` | 库级面（无能力 id） | 中间件/守卫/投影类实现，**不产出能力 id** | crates/capabilities/tools/src/stealth_crawler.rs:22（无 ToolCapability 实现） | tools crate `pub mod stealth_crawler` |
+| `write_intent` | 库级面（无能力 id） | 中间件/守卫/投影类实现，**不产出能力 id** | crates/capabilities/tools/src/write_intent.rs:34（无 ToolCapability 实现） | tools crate `pub mod write_intent` |
 
 ### ④ 认知 / 行为模块族（**不是 `tool.*` 能力 id**，登记在 `tool.self_status` 名册里）
 
-| 模块 | 默认 | 开关 | 证据 |
-|:---:|:---:|---|---|
-| `memory_recall` | **ON** | 无（默认 true） | production_config.rs:356；装配 production.rs:1117-1156 |
-| `memory_writeback` | **ON** | 无（默认 true） | production_config.rs:359；装配 production.rs:1317-1361 |
-| `preference_recall` | **ON** | 无（默认 true） | production_config.rs:360；装配 production.rs:1158-1168 |
-| `self_assessment` | **ON** | 无（默认 true） | production_config.rs:361；装配 production.rs:1192-1206 |
-| `preference_learning` | **ON（CLI 覆盖层默认开）** | APEIRETH_ENABLE_PREFERENCE_LEARNING=0 关 / APEIRETH_DISABLE_PREFERENCE_LEARNING=1 关（DISABLE 优先） | cli/src/lib.rs:360-368,2137；core_memory_knob_enabled cli/src/lib.rs:272-288 |
-| `proactive_recall` | **ON** | APEIRETH_ENABLE_PROACTIVE_RECALL=0 关 / APEIRETH_DISABLE_PROACTIVE_RECALL=1 关 | cli/src/lib.rs:290-296,2138 |
-| `memory_injection` | **ON** | APEIRETH_ENABLE_MEMORY_INJECTION=0 关 / APEIRETH_DISABLE_MEMORY_INJECTION=1 关 | cli/src/lib.rs:353-358,2139 |
-| `consolidation` | **OFF** | APEIRETH_ENABLE_CONSOLIDATION=1 | cli/src/lib.rs:370-376,2140 |
-| `persona_consolidation` | **OFF** | APEIRETH_ENABLE_PERSONA_CONSOLIDATION=1 | cli/src/lib.rs:378-386,2143 |
-| `consolidation_hash_gate` | **OFF** | APEIRETH_ENABLE_CONSOLIDATION_HASH_GATE=1 | cli/src/lib.rs:388-395,2146 |
-| `reflexion` | **OFF** | APEIRETH_ENABLE_REFLEXION=1 | cli/src/lib.rs:420-426,2147 |
-| `partner_bond` | **OFF** | APEIRETH_ENABLE_PARTNER_BOND=1 | cli/src/lib.rs:3031-3037,2148 |
-| `morphology_recall` | **OFF** | APEIRETH_ENABLE_MORPHOLOGY_RECALL=1 | cli/src/lib.rs:3039-3045,2149 |
-| `community_triage` | **OFF** | APEIRETH_ENABLE_COMMUNITY_TRIAGE=1 | cli/src/lib.rs:3047-3053,2150 |
-| `absorption_insight` | **OFF** | APEIRETH_ENABLE_ABSORPTION_INSIGHT=1 | cli/src/lib.rs:3063-3070,2153 |
-| `judge` | **OFF** | APEIRETH_COGNITIVE_JUDGE=1 | cli/src/lib.rs:92,2038-2040,2131-2134 |
-| `council` | **OFF** | APEIRETH_COGNITIVE_COUNCIL=1 | cli/src/lib.rs:93,2041-2043,2135 |
-| `organs` | **OFF** | APEIRETH_ENABLE_ORGANS=1 | cli/src/lib.rs:213,2044-2046,2136 |
-| `bio_play（4 个工具面）` | **OFF** | APEIRETH_ENABLE_BIO_PLAY=1 | production.rs:430,831-837；nervous_switchboard.rs:51-99 |
-| `bio_care_candidates（2 个仪式工具面）` | **OFF** | APEIRETH_ENABLE_BIO_CARE_CANDIDATES=1 | production.rs:431,842-847；nervous_switchboard.rs:51-99 |
+| 模块 | 所属族/域 | 默认 ON/OFF | 开关名 | 证据（file:line） | 真源出处 |
+|:---:|---|:---:|---|---|---|
+| `absorption_insight` | 行为面（无 `tool.*` 能力 id） | OFF | （无 env 开关） | crates/engine/runtime-assembly/src/canonical/self_status_roster.rs:203 | 名册 self_status_roster.rs |
+| `community_triage` | 行为面（无 `tool.*` 能力 id） | OFF | （无 env 开关） | crates/engine/runtime-assembly/src/canonical/self_status_roster.rs:199 | 名册 self_status_roster.rs |
+| `consolidation` | 行为面（无 `tool.*` 能力 id） | OFF | APEIRETH_ENABLE_CONSOLIDATION | crates/engine/runtime-assembly/src/canonical/self_status_roster.rs:168 | 名册 self_status_roster.rs |
+| `consolidation_hash_gate` | 行为面（无 `tool.*` 能力 id） | OFF | APEIRETH_ENABLE_CONSOLIDATION_HASH_GATE | crates/engine/runtime-assembly/src/canonical/self_status_roster.rs:182 | 名册 self_status_roster.rs |
+| `council` | 行为面（无 `tool.*` 能力 id） | OFF | （无 env 开关） | crates/engine/runtime-assembly/src/canonical/self_status_roster.rs:189 | 名册 self_status_roster.rs |
+| `file_write_auto_pass` | 行为面（无 `tool.*` 能力 id） | OFF | APEIRETH_ENABLE_FILE_WRITE_AUTO_PASS | crates/engine/runtime-assembly/src/canonical/self_status_roster.rs:90 | 名册 self_status_roster.rs |
+| `git_write_auto_pass_l1` | 行为面（无 `tool.*` 能力 id） | OFF | APEIRETH_ENABLE_GIT_WRITE_AUTO_PASS_L1 | crates/engine/runtime-assembly/src/canonical/self_status_roster.rs:113 | 名册 self_status_roster.rs |
+| `judge` | 行为面（无 `tool.*` 能力 id） | OFF | （无 env 开关） | crates/engine/runtime-assembly/src/canonical/self_status_roster.rs:188 | 名册 self_status_roster.rs |
+| `memory_injection` | 行为面（无 `tool.*` 能力 id） | ON | APEIRETH_ENABLE_MEMORY_INJECTION | crates/engine/runtime-assembly/src/canonical/self_status_roster.rs:151 | 名册 self_status_roster.rs |
+| `memory_recall` | 行为面（无 `tool.*` 能力 id） | ON | （无 env 开关） | crates/engine/runtime-assembly/src/canonical/self_status_roster.rs:149 | 名册 self_status_roster.rs |
+| `memory_writeback` | 行为面（无 `tool.*` 能力 id） | ON | （无 env 开关） | crates/engine/runtime-assembly/src/canonical/self_status_roster.rs:150 | 名册 self_status_roster.rs |
+| `morphology_recall` | 行为面（无 `tool.*` 能力 id） | OFF | （无 env 开关） | crates/engine/runtime-assembly/src/canonical/self_status_roster.rs:193 | 名册 self_status_roster.rs |
+| `organs` | 行为面（无 `tool.*` 能力 id） | OFF | （无 env 开关） | crates/engine/runtime-assembly/src/canonical/self_status_roster.rs:190 | 名册 self_status_roster.rs |
+| `partner_bond` | 行为面（无 `tool.*` 能力 id） | OFF | （无 env 开关） | crates/engine/runtime-assembly/src/canonical/self_status_roster.rs:191 | 名册 self_status_roster.rs |
+| `persona_consolidation` | 行为面（无 `tool.*` 能力 id） | OFF | APEIRETH_ENABLE_PERSONA_CONSOLIDATION | crates/engine/runtime-assembly/src/canonical/self_status_roster.rs:175 | 名册 self_status_roster.rs |
+| `preference_learning` | 行为面（无 `tool.*` 能力 id） | OFF | （无 env 开关） | crates/engine/runtime-assembly/src/canonical/self_status_roster.rs:165 | 名册 self_status_roster.rs |
+| `preference_recall` | 行为面（无 `tool.*` 能力 id） | ON | （无 env 开关） | crates/engine/runtime-assembly/src/canonical/self_status_roster.rs:164 | 名册 self_status_roster.rs |
+| `proactive_recall` | 行为面（无 `tool.*` 能力 id） | OFF | （无 env 开关） | crates/engine/runtime-assembly/src/canonical/self_status_roster.rs:155 | 名册 self_status_roster.rs |
+| `reflexion` | 行为面（无 `tool.*` 能力 id） | OFF | （无 env 开关） | crates/engine/runtime-assembly/src/canonical/self_status_roster.rs:186 | 名册 self_status_roster.rs |
+| `self_assessment` | 行为面（无 `tool.*` 能力 id） | ON | （无 env 开关） | crates/engine/runtime-assembly/src/canonical/self_status_roster.rs:187 | 名册 self_status_roster.rs |
 
 ### ⑤ 对外承诺台账（`docs/status/claims.yaml`）
 
@@ -189,16 +205,16 @@ python3 scripts/docs_truth.py --verify --check         # ⇒ claims=N fail=0 sta
 
 | 指标 | 值 |
 |---|---:|
-| 生产可达静态能力 id | **54** |
-| 动态能力族 | **1**（`tool.mcp.<server>.<tool>`，成员数随运行期发现而变） |
+| 生产可达静态能力 id | **58** |
+| 动态能力族 | **1**（成员数随运行期发现而变） |
 | 默认 ON | **6** |
-| 默认 OFF | **48** |
-| 有 id 但生产不可达 | **13** |
-| 无能力 id 的库级模块面 | **16** |
+| 默认 OFF | **52** |
+| 有 id 但生产不可达 | **14** |
+| 无能力 id 的库级模块面 | **19** |
 | 认知 / 行为模块族 | **20** |
 | 对外承诺（claims） | **51** |
 | **HARDWARE VALIDATED 达成** | **0** |
-| 策展表条目（`TOOL_TAXONOMY`） | **57** |
+| 策展表条目（`TOOL_TAXONOMY`） | **62** |
 <!-- END:generated -->
 
 ---

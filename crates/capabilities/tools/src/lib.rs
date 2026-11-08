@@ -26,6 +26,8 @@ pub mod backup;
 // 受控拉取 + 结构化摘要 + 入记忆流 (L2 封套披露, 跨源内容不直进提示词);
 // 治理 = RequireApproval 级 (拉取与入库都经审批档, 改订阅走 write_intent 同族)。
 pub mod content_feed;
+// W1 C-H5 日历面（主人日程；与 tool.care_schedule 的关怀例程边界不同）。
+pub mod calendar;
 // K 轴 · 物理在场与设备控制 (`device/`, K1 在场感知骨架 + L3/L4 受控执行骨架):
 // 设备表 `devices.json` (StoredDoc 拒开, 白名单制默认零设备) + 适配器插槽图
 // (mock 已接固定 fixture, 真实协议族留插槽不接) + `tool.device_sense` (摄像头类
@@ -71,6 +73,8 @@ pub mod guardrail;
 // 输出写归档**文件写入族** (读码定归档, 见模块头), 注册即闸
 // `APEIRETH_ENABLE_IMAGE_OPS` + `file_write` 唯一写总闸, 默认关 fail-closed。
 pub mod image_ops;
+// W1 C-B2 带鉴权 HTTP 写面（写方法必须长在 ControlledEgress 上，不得自带 HTTP 客户端）。
+pub mod http_write;
 pub mod mcp;
 // MCP 工具桥 (最后一公里接线): 服务器配置面 (env / 数据目录 StoredDoc 拒开语义) +
 // 每服务器一连接 (生命周期 + 断线重连后重发现) + 动态工具 (mcp:<server>:<tool>,
@@ -92,7 +96,9 @@ pub mod object_access;
 // 读前观测门禁: 「未读不得覆盖写」会话期护栏 + 版本 CAS 双钥匙 (纯事件门禁)。
 pub mod observed_gate;
 pub mod plugin;
+// W1 C-B1 进程树快照的模型面工具（库级内核在 process/snapshot.rs）。
 pub mod process;
+pub mod process_tree_tool;
 // 自主度第一小步 · 边角料提案面 (保守版: 它提案, 人点头): `tool.proposal_draft`
 // 对发现的边角料 (重复劳动/小错漏/待整理) 起草结构化提案 —— **提案只入提案账**
 // (`proposals.jsonl` append-only), 不落任何真面; 人审温柔 (detail 恒含「建议你
@@ -142,7 +148,9 @@ pub mod supervisor;
 // 通用嗓 TTS 闭环 (V3-b): `tool.voice_speak` 发声面 (合成即播 + 受控播放 +
 // 语句账本 spoken.jsonl + 安静纪律), 治理 = 发声面档 (注册即闸, 与 shell
 // 的执行档分立)。
+// W1 C-H4 互联网检索面（配置端点 + 有界收敛 + 来源标注；第三方内容走不可信封套）。
 pub mod voice;
+pub mod web_search;
 // 文件写入总闸的 shell 侧写意图词法扫描 (内测整改): 命中且总闸未开 → 拒绝即帧。
 pub mod write_intent;
 // 干活能力轴 P2 · 只读改单面 (`tool.worktree_plan`): 任务目标 → 改单

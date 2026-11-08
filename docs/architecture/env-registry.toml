@@ -1652,3 +1652,44 @@ purpose = "转录面凭据形状兜底扫描开关（默认关，fail-closed：�
 level = "IMPLEMENTED"
 status = "current"
 evidence = "direct:crates/foundation/governance/src/credential_sweep.rs:105;direct:crates/foundation/governance/src/credential_sweep.rs:113;direct:crates/engine/runtime/src/canonical/session.rs:198;direct:crates/engine/runtime/src/canonical/session.rs:223"
+
+# --- 能力创造线 W1（2026-11-08）新增 4 个开关 ---
+[[entries]]
+name = "APEIRETH_ENABLE_CALENDAR"
+default = "off"
+layer = "capabilities"
+owner = "apeireth-runtime-assembly"
+purpose = "主人日程面 (`tool.calendar`) 总开关（注册即闸，只认精确 \"1\"，默认关 fail-closed）。面 = 本地日程账（`StoredDoc` JSONL 追加账 + 审计账）+ 动作 `list`/`create`/`update`/`cancel`；写动作逐次人批（`CalendarApprovalHook`），读动作零审批。**与 `tool.care_schedule` 边界**：后者是**代理自身的关怀例程**（`crates/engine/organ/src/care/tool.rs:40`），不是主人日程。开关只认精确 \"1\"，未设 ⇒ 不注册 ⇒ 逐字节零变化。依据 ADR-0025 §2.2（额度）+ 设计稿 C-H5。"
+level = "PRODUCTION WIRED"
+status = "current"
+evidence = "direct:crates/capabilities/tools/src/calendar/mod.rs:119"
+
+[[entries]]
+name = "APEIRETH_ENABLE_HTTP_WRITE"
+default = "off"
+layer = "capabilities"
+owner = "apeireth-runtime-assembly"
+purpose = "带鉴权的 HTTP 写面 (`tool.http_write`) 总开关（注册即闸，只认精确 \"1\"，默认关 fail-closed）。写方法**长在受控出网上**（`ControlledEgress::write`）⇒ **不自带第二个 HTTP 客户端**（源级不变量 `architecture_invariants.rs` 钉死）；域名白名单走 `EgressPolicy::ExplicitAllowList`（**未设 ⇒ DenyAll ⇒ 拒绝即帧**）；请求体/响应体双上限；**写请求不跟随重定向**（凭据不外发第二跳）；凭据回显按值精确遮蔽。治理：出网写 ⇒ L3 + 逐次人批。依据 ADR-0025 §2.2 + 设计稿 C-B2。"
+level = "PRODUCTION WIRED"
+status = "current"
+evidence = "direct:crates/adapters/cli/src/lib.rs:128"
+
+[[entries]]
+name = "APEIRETH_HTTP_WRITE_ALLOWLIST"
+default = "off"
+layer = "capabilities"
+owner = "apeireth-runtime-assembly"
+purpose = "HTTP 写面 (`tool.http_write`) 的**目标域名白名单**（逗号分隔 `host` 或 `host:port`）。⚠️ **写面专用**：读面走 `PublicInternetOnly`，写面**必须**显式列举目标 ⇒ 未设 ⇒ 空白名单 ⇒ `EgressPolicy::ExplicitAllowList` 拒绝一切 ⇒ 拒绝即帧（默认关）。与 `APEIRETH_ENABLE_HTTP_WRITE` **并存**：开写面但未列域名 ⇒ 写面存在但全部拒绝（fail-closed）。依据 ADR-0025 §2.2 + 设计稿 C-B2。"
+level = "PRODUCTION WIRED"
+status = "current"
+evidence = "direct:crates/adapters/cli/src/lib.rs:132"
+
+[[entries]]
+name = "APEIRETH_ENABLE_WEB_SEARCH"
+default = "off"
+layer = "capabilities"
+owner = "apeireth-runtime-assembly"
+purpose = "互联网检索面 (`tool.web_search`) 总开关（注册即闸，只认精确 \"1\"，默认关 fail-closed）。检索**端点**走配置面（数据目录配置账，**无内置默认端点、无内置密钥**）⇒ 未配端点 ⇒ 每次调用拒绝即帧。治理：出网**只读** ⇒ L2（同 `tool.fetch` 档）+ 逐次人批；结果条数/字节**双上限**（按端点返回的**原始条数**判，超限**整单拒绝**不裁剪）；每条结果**必须带来源标注**（来源缺失 ⇒ 丢弃该条），正文经 `UntrustedEnvelope` 封套进模型上下文。依据 ADR-0025 §2.2 + 设计稿 C-H4。"
+level = "PRODUCTION WIRED"
+status = "current"
+evidence = "direct:crates/adapters/cli/src/lib.rs:139"

@@ -50,6 +50,17 @@ pub fn roster_from_config(
         CapabilitySwitch::new("repo", config.repo && workspace_root_present),
         CapabilitySwitch::new("shell", config.shell.is_some()),
         CapabilitySwitch::new("fetch", config.fetch.is_some()),
+        // 能力创造线 W1 · 带鉴权 HTTP 写面 (`tool.http_write`): 配置注入即注册
+        // (域名白名单为空 ⇒ 每个目的地都表外 ⇒ 拒绝即帧)。
+        CapabilitySwitch::new("http_write", config.http_write.is_some()),
+        // 能力创造线 W1 · 互联网检索面 (`tool.web_search`): 配置注入即注册
+        // (端点没配 ⇒ 每次调用拒绝即帧)。
+        CapabilitySwitch::new("web_search", config.web_search.is_some()),
+        // 能力创造线 W1 · 主人日程面 (`tool.calendar`): 日程账落位注入即注册。
+        CapabilitySwitch::new("calendar", config.calendar.is_some()),
+        // 能力创造线 W1 · 进程树快照面 (`tool.process_tree`): 开关口径 = 复用
+        // `APEIRETH_ENABLE_SHELL` (shell 关 = 无进程可看 ⇒ 本面也不注册)。
+        CapabilitySwitch::new("process_tree", config.process_tree),
         // 内容流接入 (`tool.content_feed`, J1): 配置注入即注册; 治理 RequireApproval 级。
         CapabilitySwitch::new("content_feed", config.content_feed.is_some()),
         // V3-a 主动关怀规则面: 数据目录已注入即注册。
@@ -210,4 +221,47 @@ pub fn roster_from_config(
     roster.extend(extras.iter().cloned());
     roster.sort_by(|a, b| a.name.cmp(&b.name));
     roster
+}
+
+/// 能力创造线 W1 接线批的**零变化**断言（名册 = 实际注册事实）。
+#[cfg(test)]
+mod creation_line_w1_roster_tests {
+    use super::*;
+
+    fn switch_of(roster: &[CapabilitySwitch], name: &str) -> Option<bool> {
+        roster
+            .iter()
+            .find(|row| row.name == name)
+            .map(|row| row.enabled)
+    }
+
+    /// 默认配置（开关全关）⇒ 四个新面**都不注册** ⇒ 名册四行全 false。
+    #[test]
+    fn the_four_new_faces_are_off_by_default() {
+        let config = ProductionModulesConfig::default();
+        let roster = roster_from_config(&config, true, false, false, false, &[]);
+        for name in ["http_write", "web_search", "calendar", "process_tree"] {
+            assert_eq!(
+                switch_of(&roster, name),
+                Some(false),
+                "{name} 默认必须关 (逐字节零变化)"
+            );
+        }
+    }
+
+    /// 配置注入即注册 ⇒ 名册照实报 true（名册不复述「配置说开」而注册没成）。
+    #[test]
+    fn the_four_new_faces_follow_their_registration_conditions() {
+        let mut config = ProductionModulesConfig::default();
+        config.process_tree = true;
+        let roster = roster_from_config(&config, true, false, false, false, &[]);
+        assert_eq!(switch_of(&roster, "process_tree"), Some(true));
+        for name in ["http_write", "web_search", "calendar"] {
+            assert_eq!(
+                switch_of(&roster, name),
+                Some(false),
+                "{name} 未注入配置 ⇒ 不注册"
+            );
+        }
+    }
 }

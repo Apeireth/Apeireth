@@ -57,7 +57,7 @@ use apeireth_tools_canonical::ecosystem_health::{ToolProfile, ToolSource};
 use apeireth_tools_canonical::mcp_bridge::{is_capability_in_family, MCP_FAMILY_ROOT};
 
 /// 策展表版本：表内容（条目或词汇表）变更时 +1，冻结进自述读数。
-pub const TOOL_TAXONOMY_VERSION: u32 = 3;
+pub const TOOL_TAXONOMY_VERSION: u32 = 4;
 
 /// 封闭标签词汇表（顺序即展示顺序；表条目只能引用此处出现的标签）。
 pub const TAXONOMY_TAGS: &[&str] = &[
@@ -132,6 +132,13 @@ pub const TOOL_TAXONOMY: &[TaxonomyEntry] = &[
     TaxonomyEntry {
         key: "tool.backup_export",
         tags: &["document"],
+        source: ToolSource::Builtin,
+    },
+    // 能力创造线 W1 · 主人日程面 (`tool.calendar`): 本地日程账 (陪伴面:
+    // 主人的日程本身, 与「代理自身的关怀例程」是两面)。
+    TaxonomyEntry {
+        key: "tool.calendar",
+        tags: &["companion"],
         source: ToolSource::Builtin,
     },
     TaxonomyEntry {
@@ -241,6 +248,13 @@ pub const TOOL_TAXONOMY: &[TaxonomyEntry] = &[
         tags: &["governance"],
         source: ToolSource::Builtin,
     },
+    // 能力创造线 W1 · 带鉴权 HTTP 写面 (`tool.http_write`): 出网**写**面
+    // (受控通道上的 POST/PUT/PATCH/DELETE)。
+    TaxonomyEntry {
+        key: "tool.http_write",
+        tags: &["network"],
+        source: ToolSource::Builtin,
+    },
     TaxonomyEntry {
         key: "tool.image_ops",
         tags: &["media"],
@@ -251,6 +265,19 @@ pub const TOOL_TAXONOMY: &[TaxonomyEntry] = &[
         key: MCP_FAMILY_ROOT,
         tags: &["mcp"],
         source: ToolSource::Mcp,
+    },
+    // 能力创造线 W1 · 记忆对象级授权面 (`tool.object_grant`): 记忆面 (对象 id
+    // 粒度的可见性授权) + 治理面 (逐次人批 + 审计)。
+    //
+    // ⚠️ **策展占位, 不是「已接线」声明**: 本批**不注册**该面 (域级可见性是
+    // 两段过滤, 只并联协调器那一段 ⇒ 授予会**静默失效** ⇒ 要真接线必须同批
+    // 改存储层 SQL 谓词, 超出本批写域) ⇒ 该面停在 IMPLEMENTED。
+    // 本行之所以必须存在: 完整性闸门按**源码扫描**登记面 (含未注册的实现体)
+    // ⇒ 漏了这一行, 闸门会以「生产已注册但策展表漏登」报红。
+    TaxonomyEntry {
+        key: "tool.object_grant",
+        tags: &["memory", "governance"],
+        source: ToolSource::Builtin,
     },
     TaxonomyEntry {
         key: "tool.play_abort",
@@ -275,6 +302,13 @@ pub const TOOL_TAXONOMY: &[TaxonomyEntry] = &[
     // 库级保留面（**未注册为工具**）：见 [`LIBRARY_LEVEL_FACES`]。
     TaxonomyEntry {
         key: "tool.process",
+        tags: &["process"],
+        source: ToolSource::Builtin,
+    },
+    // 能力创造线 W1 · 进程树快照面 (`tool.process_tree`): 进程面 (枚举 + 幂等
+    // 取消一棵树 ⇒ 触执行面)。
+    TaxonomyEntry {
+        key: "tool.process_tree",
         tags: &["process"],
         source: ToolSource::Builtin,
     },
@@ -413,6 +447,13 @@ pub const TOOL_TAXONOMY: &[TaxonomyEntry] = &[
     TaxonomyEntry {
         key: "tool.weather",
         tags: &["network"],
+        source: ToolSource::Builtin,
+    },
+    // 能力创造线 W1 · 互联网检索面 (`tool.web_search`): 出网**只读**面 (检索 +
+    // 来源标注) ⇒ 与 `tool.fetch` 同域, 额外带「检索」这一维。
+    TaxonomyEntry {
+        key: "tool.web_search",
+        tags: &["network", "search"],
         source: ToolSource::Builtin,
     },
     TaxonomyEntry {
@@ -596,7 +637,7 @@ mod tests {
         let mut unique = keys.clone();
         unique.dedup();
         assert_eq!(unique.len(), keys.len(), "策展表 key 不得重复");
-        assert_eq!(TOOL_TAXONOMY_VERSION, 3, "表内容变更时必须同步 +版本号");
+        assert_eq!(TOOL_TAXONOMY_VERSION, 4, "表内容变更时必须同步 +版本号");
     }
 
     // ---------- 生产注册面扫描（完整性闸门的真源） ----------

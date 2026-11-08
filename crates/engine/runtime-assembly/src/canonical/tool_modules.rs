@@ -181,6 +181,142 @@ impl CapabilityProvider for FetchModule {
     }
 }
 
+/// Module providing the authenticated HTTP write face (`tool.http_write`, W1 C-B2).
+///
+/// 带鉴权的受控写面: 请求一律经受控出网通道发出 (**不得自带第二个 HTTP
+/// 客户端**) ⇒ 域名白名单 / 私网判定 / 有界响应体 **全部**由传输层管。治理
+/// 档位 (写面逐次人批) 在治理链钩子上。默认关 (opt-in)。
+pub struct HttpWriteModule {
+    tool: Arc<apeireth_tools_canonical::http_write::HttpWriteTool>,
+}
+
+impl HttpWriteModule {
+    /// 造一个写面模块 (域名白名单 + 凭据链已在配置里)。
+    pub fn new(config: apeireth_tools_canonical::http_write::HttpWriteConfig) -> Self {
+        Self {
+            tool: Arc::new(apeireth_tools_canonical::http_write::HttpWriteTool::new(
+                config,
+            )),
+        }
+    }
+
+    /// 底层写面工具。
+    pub fn tool(&self) -> &Arc<apeireth_tools_canonical::http_write::HttpWriteTool> {
+        &self.tool
+    }
+}
+
+impl CapabilityProvider for HttpWriteModule {
+    fn id(&self) -> &str {
+        "module.tool.http_write"
+    }
+
+    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
+        vec![self.tool.clone()]
+    }
+}
+
+/// Module providing the internet search face (`tool.web_search`, W1 C-H4).
+///
+/// 互联网检索面: 打**运维显式配置**的检索端点, 结果有界收敛 + 来源标注。
+/// **没有内置默认端点** ⇒ 端点没配 = 每次调用拒绝即帧。治理档位: 出网**只读**
+/// 面 (零审批)。默认关 (opt-in)。
+pub struct WebSearchModule {
+    tool: Arc<apeireth_tools_canonical::web_search::WebSearchTool>,
+}
+
+impl WebSearchModule {
+    /// 造一个检索面模块 (端点 + 受控出网通道已在配置里)。
+    pub fn new(config: apeireth_tools_canonical::web_search::WebSearchConfig) -> Self {
+        Self {
+            tool: Arc::new(apeireth_tools_canonical::web_search::WebSearchTool::new(
+                config,
+            )),
+        }
+    }
+
+    /// 底层检索面工具。
+    pub fn tool(&self) -> &Arc<apeireth_tools_canonical::web_search::WebSearchTool> {
+        &self.tool
+    }
+}
+
+impl CapabilityProvider for WebSearchModule {
+    fn id(&self) -> &str {
+        "module.tool.web_search"
+    }
+
+    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
+        vec![self.tool.clone()]
+    }
+}
+
+/// Module providing the owner calendar face (`tool.calendar`, W1 C-H5).
+///
+/// 主人日程面: 本地日程账 (查询/创建/改期/取消); 写动作走审批档 (逐次人批)。
+/// 默认关 (opt-in)。
+pub struct CalendarModule {
+    tool: Arc<dyn ToolCapability>,
+}
+
+impl CalendarModule {
+    /// 造一个日程面模块 (日程账落位已在配置里)。
+    pub fn new(config: apeireth_tools_canonical::calendar::CalendarConfig) -> Self {
+        Self {
+            tool: apeireth_tools_canonical::calendar::calendar_capability(config),
+        }
+    }
+
+    /// 底层日程面能力 (带五段流水线: 边界 Guard → 超时 → 输出归一合同)。
+    pub fn capability(&self) -> Arc<dyn ToolCapability> {
+        Arc::clone(&self.tool)
+    }
+}
+
+impl CapabilityProvider for CalendarModule {
+    fn id(&self) -> &str {
+        "module.tool.calendar"
+    }
+
+    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
+        vec![Arc::clone(&self.tool)]
+    }
+}
+
+/// Module providing the process-tree snapshot face (`tool.process_tree`, W1 C-B1).
+///
+/// 进程树快照面: 枚举 (pid / 父 / 命令 / 状态 / 是否逃逸进程组) + 按 pid
+/// 幂等取消一棵树。**零配置** (不需要端点或凭据)。快照读面零审批; 取消面逐次
+/// 人批 (治理钩子在治理链上)。开关口径 = 复用 `APEIRETH_ENABLE_SHELL`
+/// (注册即闸 ⇒ shell 关 = 无进程可看) ⇒ 0 新 env 名。默认关 (opt-in)。
+pub struct ProcessTreeModule {
+    tool: Arc<apeireth_tools_canonical::process_tree_tool::ProcessTreeTool>,
+}
+
+impl ProcessTreeModule {
+    /// 造一个进程树快照面模块 (零配置)。
+    pub fn new() -> Self {
+        Self {
+            tool: Arc::new(apeireth_tools_canonical::process_tree_tool::ProcessTreeTool::new()),
+        }
+    }
+
+    /// 底层进程树快照面工具。
+    pub fn tool(&self) -> &Arc<apeireth_tools_canonical::process_tree_tool::ProcessTreeTool> {
+        &self.tool
+    }
+}
+
+impl CapabilityProvider for ProcessTreeModule {
+    fn id(&self) -> &str {
+        "module.tool.process_tree"
+    }
+
+    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
+        vec![self.tool.clone()]
+    }
+}
+
 /// Module providing the life-integration content feed (`tool.content_feed`, J1).
 ///
 /// 内容流接入: 订阅源管理 + 受控拉取 + 结构化摘要 + 入记忆流 (L2 封套披露,

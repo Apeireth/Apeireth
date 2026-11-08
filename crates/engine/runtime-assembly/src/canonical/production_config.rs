@@ -56,6 +56,41 @@ pub struct ProductionModulesConfig {
     pub shell: Option<TrustedShellConfig>,
     /// Register fetch tool module when config is supplied.
     pub fetch: Option<FetchConfig>,
+    /// Register the authenticated HTTP write face (`tool.http_write`, W1 C-B2)
+    /// when config is supplied.
+    ///
+    /// 带鉴权的受控写面: 受控出网上的 POST/PUT/PATCH/DELETE —— 域名白名单 +
+    /// 显式凭据绑定 + 请求/响应体有界 + **不跟随重定向**。治理档位 (写面逐次
+    /// 人批) 由治理链钩子承载。默认关 (opt-in, 开关名
+    /// `APEIRETH_ENABLE_HTTP_WRITE` 只认 `"1"`)。
+    ///
+    /// ⚠️ 写面**只认显式域名白名单**策略 ⇒ 宿主注入的配置必须带
+    /// `EgressPolicy::ExplicitAllowList`; 白名单为空 ⇒ 每个目的地都表外 ⇒
+    /// 拒绝即帧。
+    pub http_write: Option<apeireth_tools_canonical::http_write::HttpWriteConfig>,
+    /// Register the internet search face (`tool.web_search`, W1 C-H4) when
+    /// config is supplied.
+    ///
+    /// 互联网检索面: 打**运维显式配置**的检索端点, 结果有界收敛 + 来源标注
+    /// (出网**只读**面 ⇒ 零审批)。**没有任何内置默认端点**: 端点没配 ⇒
+    /// 每次调用拒绝即帧。默认关 (opt-in, 开关名 `APEIRETH_ENABLE_WEB_SEARCH`
+    /// 只认 `"1"`)。
+    pub web_search: Option<apeireth_tools_canonical::web_search::WebSearchConfig>,
+    /// Register the owner calendar face (`tool.calendar`, W1 C-H5) when config
+    /// is supplied.
+    ///
+    /// 主人日程面: 本地日程账 (查询/创建/改期/取消); 写动作逐次人批 (治理档
+    /// 在治理链钩子上)。默认关 (opt-in, 开关名 `APEIRETH_ENABLE_CALENDAR`
+    /// 只认 `"1"`)。
+    pub calendar: Option<apeireth_tools_canonical::calendar::CalendarConfig>,
+    /// Register the process-tree snapshot face (`tool.process_tree`, W1 C-B1).
+    ///
+    /// 进程树快照面: 枚举 (pid / 父 / 命令 / 状态) + 按 pid 幂等取消一棵树。
+    /// **零配置** (不需要端点或凭据) ⇒ 用 `bool` 开关。
+    ///
+    /// ⚠️ 开关口径 = **复用** `APEIRETH_ENABLE_SHELL` (注册即闸 ⇒ shell 关 =
+    /// 无进程可看, 语义自洽) ⇒ **0 新 env 名**。默认关 (opt-in)。
+    pub process_tree: bool,
     /// Register the life-integration content feed (`tool.content_feed`, J1) when
     /// config is supplied.
     ///
@@ -366,6 +401,10 @@ impl Default for ProductionModulesConfig {
             repo: true,
             shell: None,
             fetch: None,
+            http_write: None,
+            web_search: None,
+            calendar: None,
+            process_tree: false,
             content_feed: None,
             care_schedule: None,
             voice_speak: None,

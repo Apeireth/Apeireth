@@ -6,10 +6,10 @@
 //! redirect hop; [`crate::process`] platform backends decide whether a spawned
 //! child is physically denied network access.
 //!
-//! The transport is intentionally small. It supports GET only, never disables
-//! TLS certificate/hostname verification, never follows redirects opaquely,
-//! never inherits ambient proxy settings, and always bounds response size and
-//! time.
+//! The transport is intentionally small. It supports a **closed set** of read
+//! and write methods, never disables TLS certificate/hostname verification,
+//! never follows redirects opaquely, never inherits ambient proxy settings,
+//! and always bounds request size, response size, and time.
 
 use std::collections::HashSet;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
@@ -27,6 +27,8 @@ pub const DEFAULT_EGRESS_TIMEOUT: Duration = Duration::from_secs(30);
 pub const DEFAULT_MAX_RESPONSE_BYTES: usize = 1024 * 1024;
 /// Default maximum number of redirect hops.
 pub const DEFAULT_MAX_REDIRECTS: usize = 10;
+/// Default maximum **request** body bytes for controlled write requests.
+pub const DEFAULT_MAX_REQUEST_BYTES: usize = 256 * 1024;
 
 /// Errors produced by the controlled egress boundary.
 #[derive(Debug, thiserror::Error)]
@@ -47,6 +49,8 @@ pub enum EgressError {
     TlsFailed(String),
     #[error("response body exceeded maximum size")]
     ResponseTooLarge,
+    #[error("request body exceeded maximum size")]
+    RequestTooLarge,
     #[error("too many redirects")]
     TooManyRedirects,
     #[error("request timed out")]
@@ -404,6 +408,64 @@ pub struct EgressHttpResponse {
     pub redirects: usize,
 }
 
+/// 受控**写方法**白名单（**闭合词表**）。
+///
+/// # 为什么是闭合枚举而不是自由字符串
+///
+/// 写请求会**携带凭据**出境 ⇒ 方法名一旦可由调用方自由书写, 就多出一条
+/// 「用别的方法去撞服务端」的路（回显型方法把请求头原样吐回来、隧道型方法
+/// 把通道让出去）⇒ ⇒ 只认这四个写方法, **表外无法表达**（解析不到 ⇒ 调用方
+/// 拒绝即帧）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum EgressMethod {
+    Post,
+    Put,
+    Patch,
+    Delete,
+}
+
+impl EgressMethod {
+    /// 闭合词表（顺序固定 ⇒ 展示与测试口径稳定）。
+    pub const ALL: [EgressMethod; 4] = [
+        EgressMethod::Post,
+        EgressMethod::Put,
+        EgressMethod::Patch,
+        EgressMethod::Delete,
+    ];
+
+    /// 方法名（HTTP 大写形态）。
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            EgressMethod::Post => "POST",
+            EgressMethod::Put => "PUT",
+            EgressMethod::Patch => "PATCH",
+            EgressMethod::Delete => "DELETE",
+        }
+    }
+
+    /// 词表解析（大小写不敏感；**表外返回 `None`** ⇒ 调用方拒绝即帧）。
+    pub fn parse(raw: &str) -> Option<EgressMethod> {
+        match raw.trim().to_ascii_uppercase().as_str() {
+            "POST" => Some(EgressMethod::Post),
+            "PUT" => Some(EgressMethod::Put),
+            "PATCH" => Some(EgressMethod::Patch),
+            "DELETE" => Some(EgressMethod::Delete),
+            _ => None,
+        }
+    }
+
+    /// 词表 → 传输层方法（**只在这一处**做映射 ⇒ 传输层拿不到自由方法名）。
+    fn to_transport_method(self) -> reqwest::Method {
+        match self {
+            EgressMethod::Post => reqwest::Method::POST,
+            EgressMethod::Put => reqwest::Method::PUT,
+            EgressMethod::Patch => reqwest::Method::PATCH,
+            EgressMethod::Delete => reqwest::Method::DELETE,
+        }
+    }
+}
+
 #[async_trait]
 trait EgressResolver: Send + Sync {
     async fn resolve(&self, host: &str, port: u16) -> Result<Vec<SocketAddr>, EgressError>;
@@ -438,15 +500,26 @@ impl EgressResolver for TokioResolver {
     }
 }
 
-/// Controlled HTTP GET transport that physically enforces [`EgressPolicy`].
+/// Controlled HTTP transport that physically enforces [`EgressPolicy`].
 ///
 /// The transport resolves the destination, validates every resolved address,
 /// pins the HTTP client to those validated addresses, disables ambient proxy
 /// use, and manually follows redirects so each hop is fully revalidated.
+///
+/// # 读与写
+///
+/// * 读：[`Self::get`] / [`Self::get_with_headers`]。
+/// * 写：[`Self::write`] —— **闭合**的四个写方法（[`EgressMethod`]）。
+///
+/// 两条路径**共用同一套**目的地判定（[`EgressPolicy::validate_destination`]）、
+/// 同一套解析后地址判定（[`EgressPolicy::validate_resolved`]）、同一套 DNS 钉扎、
+/// 同一套代理禁用、同一套超时与响应体上限、同一套请求头合法性校验 ⇒ ⇒ 写面
+/// **不可能**长出第二套白名单或第二套私网判定。
 pub struct ControlledEgress {
     policy: EgressPolicy,
     timeout: Duration,
     max_response_bytes: usize,
+    max_request_bytes: usize,
     max_redirects: usize,
     resolver: Arc<dyn EgressResolver>,
 }
@@ -457,6 +530,7 @@ impl std::fmt::Debug for ControlledEgress {
             .field("policy", &self.policy)
             .field("timeout", &self.timeout)
             .field("max_response_bytes", &self.max_response_bytes)
+            .field("max_request_bytes", &self.max_request_bytes)
             .field("max_redirects", &self.max_redirects)
             .finish_non_exhaustive()
     }
@@ -468,6 +542,7 @@ impl ControlledEgress {
             policy,
             timeout: DEFAULT_EGRESS_TIMEOUT,
             max_response_bytes: DEFAULT_MAX_RESPONSE_BYTES,
+            max_request_bytes: DEFAULT_MAX_REQUEST_BYTES,
             max_redirects: DEFAULT_MAX_REDIRECTS,
             resolver: Arc::new(TokioResolver),
         }
@@ -482,6 +557,12 @@ impl ControlledEgress {
     /// Set the maximum response body size in bytes.
     pub fn with_max_response_bytes(mut self, max_response_bytes: usize) -> Self {
         self.max_response_bytes = max_response_bytes;
+        self
+    }
+
+    /// Set the maximum **request** body size in bytes (write requests only).
+    pub fn with_max_request_bytes(mut self, max_request_bytes: usize) -> Self {
+        self.max_request_bytes = max_request_bytes;
         self
     }
 
@@ -504,6 +585,11 @@ impl ControlledEgress {
     /// The configured maximum response body size.
     pub const fn max_response_bytes(&self) -> usize {
         self.max_response_bytes
+    }
+
+    /// The configured maximum **request** body size.
+    pub const fn max_request_bytes(&self) -> usize {
+        self.max_request_bytes
     }
 
     /// The configured maximum number of redirect hops.
@@ -552,7 +638,14 @@ impl ControlledEgress {
             self.policy.validate_resolved(&destination, &addresses)?;
 
             let response = self
-                .send(&destination, &addresses, &current, headers)
+                .send(
+                    reqwest::Method::GET,
+                    &destination,
+                    &addresses,
+                    &current,
+                    headers,
+                    None,
+                )
                 .await?;
 
             let status = response.status().as_u16();
@@ -578,17 +671,8 @@ impl ControlledEgress {
                 }
             }
 
-            let content_type = response
-                .headers()
-                .get(reqwest::header::CONTENT_TYPE)
-                .and_then(|v| v.to_str().ok())
-                .map(ToOwned::to_owned);
-            let content_length = response
-                .headers()
-                .get(reqwest::header::CONTENT_LENGTH)
-                .and_then(|v| v.to_str().ok())
-                .and_then(|v| v.parse::<u64>().ok());
-            let body = read_limited(response, self.max_response_bytes).await?;
+            let (status, content_type, content_length, body) =
+                self.read_bounded_response(response).await?;
             return Ok(EgressHttpResponse {
                 status,
                 final_url: current.to_string(),
@@ -598,6 +682,119 @@ impl ControlledEgress {
                 redirects: hops,
             });
         }
+    }
+
+    /// 发起一次**受控写请求**（`POST` / `PUT` / `PATCH` / `DELETE`）。
+    ///
+    /// # 与 [`Self::get_with_headers`] 同族
+    ///
+    /// 同一套目的地白名单（[`EgressPolicy::validate_destination`]）、同一套
+    /// 解析后地址判定（[`EgressPolicy::validate_resolved`]，即 SSRF 纵深）、
+    /// 同一套 DNS 钉扎与代理禁用、同一套超时、同一套响应体上限、同一套请求头
+    /// 合法性校验 ⇒ ⇒ 写面**不可能**长出第二套白名单或第二套私网判定。
+    ///
+    /// # 与读路径的四处**故意**不同
+    ///
+    /// ① **不跟随重定向**：写请求可能带凭据 ⇒ 3xx 一律**拒绝即帧**
+    ///    （凭据不外发到第二跳, 也不替服务端「换个方法再试」）。
+    /// ② **请求体有界**：超过 [`Self::max_request_bytes`] 在**发出之前**拒绝。
+    /// ③ **方法闭合**：只认 [`EgressMethod`] 的四个写方法（表外无法表达）。
+    /// ④ **响应体上限照旧**：读路径的响应体上限对写路径同样生效。
+    ///
+    /// # 凭据口径
+    ///
+    /// 本方法**只搬运**调用方给的请求头, 不认识凭据、不记录请求头、不把请求头
+    /// 写进任何日志 ⇒ 调用方（工具面）负责「凭据从哪来」与「凭据不回显」。
+    pub async fn write(
+        &self,
+        method: EgressMethod,
+        url: &str,
+        headers: &[(&str, &str)],
+        body: &[u8],
+    ) -> Result<EgressHttpResponse, EgressError> {
+        validate_headers(headers)?;
+        if body.len() > self.max_request_bytes {
+            return Err(EgressError::RequestTooLarge);
+        }
+        let parsed = Url::parse(url).map_err(|e| EgressError::InvalidUrl(e.to_string()))?;
+        let first = EgressDestination::parse(&parsed)?;
+        self.policy.validate_destination(&first)?;
+
+        tokio::time::timeout(
+            self.timeout,
+            self.write_inner(method, parsed, headers, body),
+        )
+        .await
+        .map_err(|_| EgressError::Timeout)?
+    }
+
+    /// 写请求的**单跳**执行体。
+    ///
+    /// 写请求**只走一跳**（不跟随重定向）⇒ 白名单判定 → DNS 钉扎 → 解析后
+    /// 地址判定 → 发送 → 读有界响应, 顺序与读路径**完全一致**。
+    async fn write_inner(
+        &self,
+        method: EgressMethod,
+        current: Url,
+        headers: &[(&str, &str)],
+        body: &[u8],
+    ) -> Result<EgressHttpResponse, EgressError> {
+        let destination = EgressDestination::parse(&current)?;
+        self.policy.validate_destination(&destination)?;
+        let addresses = self.resolve(&destination).await?;
+        self.policy.validate_resolved(&destination, &addresses)?;
+
+        let response = self
+            .send(
+                method.to_transport_method(),
+                &destination,
+                &addresses,
+                &current,
+                headers,
+                Some(body),
+            )
+            .await?;
+
+        let status = response.status().as_u16();
+        if (300..400).contains(&status) {
+            // 写请求**不跟随重定向**: 凭据不外发到第二跳, 也不替服务端换方法重试。
+            return Err(EgressError::RedirectDenied {
+                reason: format!("write requests do not follow redirects (status {status})"),
+            });
+        }
+
+        let (status, content_type, content_length, body) =
+            self.read_bounded_response(response).await?;
+        Ok(EgressHttpResponse {
+            status,
+            final_url: current.to_string(),
+            content_type,
+            content_length,
+            body,
+            redirects: 0,
+        })
+    }
+
+    /// 读一个**非重定向**响应的元信息与**有界**正文。
+    ///
+    /// 读路径与写路径共用 ⇒ 响应体上限只有**一处**实现。
+    async fn read_bounded_response(
+        &self,
+        response: reqwest::Response,
+    ) -> Result<(u16, Option<String>, Option<u64>, Vec<u8>), EgressError> {
+        let status = response.status().as_u16();
+        let content_type = response
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .map(ToOwned::to_owned);
+        let content_length = response
+            .headers()
+            .get(reqwest::header::CONTENT_LENGTH)
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.parse::<u64>().ok());
+        let body = read_limited(response, self.max_response_bytes).await?;
+        Ok((status, content_type, content_length, body))
     }
 
     async fn resolve(
@@ -612,12 +809,18 @@ impl ControlledEgress {
             .await
     }
 
+    /// 发一次请求（读与写共用 ⇒ **只有一处**建客户端、钉 DNS、禁代理）。
+    ///
+    /// `body` 为 `None` = 无请求体（读路径）；`Some` = 写路径的请求体
+    /// （**已在上层按上限校验过**，这里只搬运）。
     async fn send(
         &self,
+        method: reqwest::Method,
         destination: &EgressDestination,
         addresses: &[SocketAddr],
         url: &Url,
         headers: &[(&str, &str)],
+        body: Option<&[u8]>,
     ) -> Result<reqwest::Response, EgressError> {
         let mut builder = reqwest::Client::builder()
             .redirect(reqwest::redirect::Policy::none())
@@ -632,9 +835,12 @@ impl ControlledEgress {
         let client = builder
             .build()
             .map_err(|e| EgressError::ConnectionFailed(e.to_string()))?;
-        let mut request = client.get(url.clone());
+        let mut request = client.request(method, url.clone());
         for (name, value) in headers {
             request = request.header(*name, *value);
+        }
+        if let Some(body) = body {
+            request = request.body(body.to_vec());
         }
         request.send().await.map_err(map_reqwest_error)
     }
@@ -961,6 +1167,140 @@ mod tests {
     fn public_internet_only_rejects_local_url_before_connection() {
         let dest = dest("http://127.0.0.1:8080");
         assert_eq!(dest.address, Some("127.0.0.1".parse().unwrap()));
+    }
+
+    // ===== C-B2 (2026-11-08 · 能力创造线 W1): 受控写方法 =====
+
+    /// 写方法词表**闭合**: 四个写方法, 表外一律解析不到。
+    #[test]
+    fn write_method_vocabulary_is_closed() {
+        assert_eq!(EgressMethod::ALL.len(), 4);
+        for (raw, expected) in [
+            ("post", EgressMethod::Post),
+            ("POST", EgressMethod::Post),
+            (" put ", EgressMethod::Put),
+            ("patch", EgressMethod::Patch),
+            ("delete", EgressMethod::Delete),
+        ] {
+            assert_eq!(EgressMethod::parse(raw), Some(expected), "{raw}");
+        }
+        for raw in ["get", "head", "options", "connect", "trace", "", "postx"] {
+            assert_eq!(EgressMethod::parse(raw), None, "{raw} 必须在表外");
+        }
+    }
+
+    /// 写请求的**请求体上限**在**发出之前**生效。
+    #[tokio::test]
+    async fn write_rejects_an_oversized_request_body_before_contact() {
+        let transport = ControlledEgress::new(EgressPolicy::Unrestricted).with_max_request_bytes(8);
+        let err = transport
+            .write(
+                EgressMethod::Post,
+                "http://127.0.0.1:1/items",
+                &[],
+                &[0u8; 9],
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(err, EgressError::RequestTooLarge), "{err:?}");
+    }
+
+    /// 写请求与读请求**共用**同一套目的地白名单。
+    #[tokio::test]
+    async fn write_uses_the_same_destination_allow_list_as_read() {
+        let transport = ControlledEgress::new(EgressPolicy::ExplicitAllowList(allowlist(&[(
+            "allowed.example",
+            None,
+        )])));
+        let err = transport
+            .write(EgressMethod::Post, "http://evil.example/items", &[], b"{}")
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, EgressError::DestinationDenied { .. }),
+            "{err:?}"
+        );
+    }
+
+    /// 写请求**不跟随重定向**（凭据不外发到第二跳）。
+    #[tokio::test]
+    async fn write_refuses_to_follow_a_redirect() {
+        let listener = crate::test_support::bind_loopback_ephemeral()
+            .await
+            .expect("bind loopback listener");
+        let port = listener.local_addr().unwrap().port();
+
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut buf = [0u8; 1024];
+            let _ = socket.read(&mut buf).await.unwrap();
+            use tokio::io::{AsyncReadExt, AsyncWriteExt};
+            socket
+                .write_all(
+                    b"HTTP/1.1 302 Found\r\nlocation: http://127.0.0.1:1/moved\r\ncontent-length: 0\r\n\r\n",
+                )
+                .await
+                .unwrap();
+        });
+
+        let transport = ControlledEgress::new(EgressPolicy::ExplicitAllowList(allowlist(&[(
+            "127.0.0.1",
+            None,
+        )])))
+        .with_timeout(Duration::from_secs(5));
+        let err = transport
+            .write(
+                EgressMethod::Post,
+                &format!("http://127.0.0.1:{port}/items"),
+                &[],
+                b"{}",
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(err, EgressError::RedirectDenied { .. }), "{err:?}");
+        server.await.unwrap();
+    }
+
+    /// 写请求**真的**把方法与请求体发出去（传输层语义，不是空壳）。
+    #[tokio::test]
+    async fn write_sends_the_method_and_the_body() {
+        let listener = crate::test_support::bind_loopback_ephemeral()
+            .await
+            .expect("bind loopback listener");
+        let port = listener.local_addr().unwrap().port();
+
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            use tokio::io::{AsyncReadExt, AsyncWriteExt};
+            let mut buf = vec![0u8; 2048];
+            let read = socket.read(&mut buf).await.unwrap();
+            let head = String::from_utf8_lossy(&buf[..read]).to_string();
+            socket
+                .write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 2\r\n\r\nok")
+                .await
+                .unwrap();
+            head
+        });
+
+        let transport = ControlledEgress::new(EgressPolicy::ExplicitAllowList(allowlist(&[(
+            "127.0.0.1",
+            None,
+        )])))
+        .with_timeout(Duration::from_secs(5));
+        let response = transport
+            .write(
+                EgressMethod::Patch,
+                &format!("http://127.0.0.1:{port}/items"),
+                &[("content-type", "application/json")],
+                b"{\"a\":1}",
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status, 200);
+        assert_eq!(response.body, b"ok");
+        let head = server.await.unwrap();
+        assert!(head.starts_with("PATCH "), "{head}");
+        assert!(head.contains("{\"a\":1}"), "{head}");
     }
 
     struct FakeResolver {

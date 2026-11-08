@@ -70,7 +70,7 @@ FACTS: list[tuple[str, str, str, int, list[tuple[str, str]]]] = [
     ),
     (
         "C-B2",
-        r"post_with_headers|post_json|post_form|fn post\b",
+        r"pub async fn write\b",
         "crates/capabilities/tools/src/egress.rs",
         0,
         [

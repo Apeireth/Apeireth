@@ -141,6 +141,18 @@ fn fetch_code_raw() -> String {
     include_str!("../src/fetch.rs").to_string()
 }
 
+fn http_write_code() -> String {
+    strip_comments(include_str!("../src/http_write.rs"))
+}
+
+fn http_write_code_raw() -> String {
+    include_str!("../src/http_write.rs").to_string()
+}
+
+fn egress_code_raw() -> String {
+    include_str!("../src/egress.rs").to_string()
+}
+
 #[test]
 fn fetch_tool_uses_controlled_egress_and_no_second_http_client() {
     let code = fetch_code();
@@ -164,5 +176,64 @@ fn fetch_tool_uses_controlled_egress_and_no_second_http_client() {
     assert!(
         fetch_code_raw().contains("get_with_headers"),
         "fetch tool must execute through ControlledEgress::get_with_headers"
+    );
+}
+
+/// C-B2（能力创造线 W1）：**带鉴权的 HTTP 写面**。
+///
+/// 两条钉死：
+///
+/// ① 新面文件内**零** HTTP 客户端痕迹 ⇒ 写请求只能走受控出网通道；
+/// ② 写方法**必须长在** `ControlledEgress` 上（否则写面就会自带第二套
+///    白名单 / 私网判定 —— 那是仓内既有不变量要拦的东西）。
+#[test]
+fn http_write_tool_uses_controlled_egress_and_no_second_http_client() {
+    let code = http_write_code();
+
+    for forbidden in [
+        "reqwest::",
+        "tokio::net::lookup_host",
+        "Command::new(\"curl\")",
+        "Command::new(\"wget\")",
+        "ProcessExecutor",
+        "is_private_host",
+        "is_ssrf",
+        "validate_localhost",
+    ] {
+        assert!(
+            !code.contains(forbidden),
+            "http write tool must not bypass controlled egress with {forbidden:?}"
+        );
+    }
+
+    // ⚠️ 连**注释里**都不许出现 HTTP 客户端库名（新文件零命中）。
+    let raw = http_write_code_raw();
+    assert!(
+        !raw.contains("reqwest"),
+        "http write tool source must not mention an HTTP client library at all"
+    );
+
+    assert!(
+        raw.contains("ControlledEgress"),
+        "http write tool must execute through the controlled egress transport"
+    );
+    assert!(
+        raw.contains(".write("),
+        "http write tool must call the controlled egress write method"
+    );
+    assert!(
+        !raw.contains("get_with_headers"),
+        "http write tool must not reach the network through the read path"
+    );
+
+    // 写方法**长在**受控通道上（同一套白名单 / 私网判定 / 闸）。
+    let egress_raw = egress_code_raw();
+    assert!(
+        egress_raw.contains("pub async fn write("),
+        "the controlled egress transport must own the write method"
+    );
+    assert!(
+        egress_raw.contains("EgressMethod"),
+        "the controlled egress transport must own the write method vocabulary"
     );
 }
