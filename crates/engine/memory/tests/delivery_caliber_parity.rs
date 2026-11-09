@@ -108,14 +108,21 @@ fn anchored_path_delivers_what_head_truncation_loses() {
     );
 }
 
-/// ⭐ **候选名额被长候选吃光**（钉住现状 ⇒ 改成「按选后长度计费」时必红一次）。
+/// ⭐ **长候选不再吃光名额**（2026-11-09 翻转：计费已从「原始正文」改成「选后长度」）。
 ///
-/// 生产管线给候选的字符预算按**原始正文**计费 ⇒ ⇒ 一条 1,000 字的候选占掉 1,000 字
-/// ⇒ ⇒ 同样的 4,000 字预算只装得下 **4 条** ⇒ ⇒ **排在第 5～10 位的候选根本没机会进注入**。
+/// # 这条用例原来是**绊线**
+/// 原版钉的是改造前现状：「按**原始正文**计费，一条 1,000 字的候选占掉 1,000 字
+/// ，4,000 字预算只装得下 4 条，排在第 5～10 位的候选根本没机会进注入」，
+/// 并在注释里写明「**改成按选后长度计费时必红一次**」。
 ///
-/// ⭐ 而生产注入端**每条只送 400 字**（锚定选段）⇒ ⇒ 这 3,600 字预算**被浪费了**。
+/// # 现在已红过，按约定翻转成**新不变量**
+/// 计费改成 `min(正文长度, 单条跨度 400)` 之后：1,000 字/条只算 **400 字**，
+/// ；4,000 字预算**装得下全部 10 条**（10 × 400 = 4,000）。
+/// ；；而这正是生产要的形态：注入端每条只送 400 字（锚定选段），预算不再被浪费。
+///
+/// 翻转后的守护面：**长正文不得再挤掉后面的候选**（谁把计费改回原始长度，这条就红）。
 #[test]
-fn long_candidates_eat_the_candidate_slots() {
+fn long_candidates_no_longer_eat_the_candidate_slots() {
     let documents: Vec<apeireth_memory::MemoryCandidate> = (0..10)
         .map(|index| apeireth_memory::MemoryCandidate {
             id: format!("doc-{index:02}"),
@@ -139,11 +146,22 @@ fn long_candidates_eat_the_candidate_slots() {
             MAX_CHARS,
         )
         .expect("检索应成功");
-    assert!(
-        admitted.len() < 10,
-        "按**原始正文**计费 ⇒ ⇒ 1,000 字/条 ⇒ ⇒ 4,000 字预算只装得下 {} 条 ⇒ ⇒ 名额被吃光",
-        admitted.len()
+    assert_eq!(
+        admitted.len(),
+        10,
+        "按**选后长度**（min(正文, 400)）计费，1,000 字/条只算 400 字，4,000 字预算装得下全部 10 条"
     );
+    // 计费总量 = 10 × 400 = 4,000 ≤ MAX_CHARS，预算刚好用满而**不超**。
+    let billed: usize = admitted
+        .iter()
+        .map(|item| {
+            item.content
+                .chars()
+                .count()
+                .min(AnchoredInjectionConfig::PRODUCTION.span_chars)
+        })
+        .sum();
+    assert_eq!(billed, MAX_CHARS, "计费总量应恰好用满预算：{billed}");
 
     let relaxed = pipeline
         .retrieve(
