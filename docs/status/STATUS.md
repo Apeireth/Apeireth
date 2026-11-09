@@ -46,17 +46,17 @@
 | `bio.ecosystem_health` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_SELF_STATUS` | `52009d5f` | 2026-11-20 |
 | `bio.capacity` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_SELF_STATUS` | `52009d5f` | 2026-11-20 |
 | `rt.registered_module_v1` | PRODUCTION WIRED | ON | - | `6a6c75e6` | 2026-11-28 |
-| `rt.owned_agents` | PRODUCTION WIRED | - | - | `67ffc277` | 2026-11-20 |
-| `mem.registered_namespace` | PRODUCTION WIRED | - | - | `36986aae` | 2026-11-20 |
-| `rt.desktop_managed_main` | PRODUCTION WIRED | ON | - | `67ffc277` | 2026-11-20 |
+| `rt.owned_agents` | PRODUCTION WIRED | - | - | `822d3cac` | 2026-11-20 |
+| `mem.registered_namespace` | PRODUCTION WIRED | - | - | `822d3cac` | 2026-11-20 |
+| `rt.desktop_managed_main` | PRODUCTION WIRED | ON | - | `822d3cac` | 2026-11-20 |
 | `rt.module_execution_contract` | PRODUCTION WIRED | OFF | - | `05759be1` | 2026-11-20 |
 | `rt.system_one_internal` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_SYSTEM_ONE` | `05759be1` | 2026-11-20 |
-| `rt.module_messages` | PRODUCTION WIRED | OFF | - | `67ffc277` | 2026-11-20 |
-| `rt.mesh_local_worker` | PRODUCTION WIRED | OFF | - | `67ffc277` | 2026-11-20 |
-| `mem.retrieval_ranking` | PRODUCTION WIRED | ON | - | `36986aae` | 2026-12-04 |
+| `rt.module_messages` | PRODUCTION WIRED | OFF | - | `822d3cac` | 2026-11-20 |
+| `rt.mesh_local_worker` | PRODUCTION WIRED | OFF | - | `822d3cac` | 2026-11-20 |
+| `mem.retrieval_ranking` | PRODUCTION WIRED | ON | - | `822d3cac` | 2026-12-04 |
 | `mem.failure_learning_bridge` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_RETRIEVAL_TUNING` | `52009d5f` | 2026-12-04 |
-| `mem.injection_contract` | PRODUCTION WIRED | ON | - | `36986aae` | 2026-12-04 |
-| `mem.contract_view` | PRODUCTION WIRED | ON | - | `49f1b543` | 2026-12-05 |
+| `mem.injection_contract` | PRODUCTION WIRED | ON | - | `822d3cac` | 2026-12-04 |
+| `mem.contract_view` | PRODUCTION WIRED | ON | - | `822d3cac` | 2026-12-05 |
 | `mem.shadow_swap` | PRODUCTION WIRED | OFF | - | `05759be1` | 2026-12-05 |
 | `sec.output_injection_guard` | PRODUCTION WIRED | ON | - | `6a6c75e6` | 2026-12-05 |
 
