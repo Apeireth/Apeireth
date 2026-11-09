@@ -53,7 +53,7 @@ pub enum InjectionMode {
     /// # 口径（**逐字复用生产那一套**，不复刻一套）
     ///
     /// * **选段** = [`crate::anchor_injection::AnchoredInjectionConfig::PRODUCTION`]
-    ///   （**主体出现处为中心**的 400 字窗口）；
+    ///   （**主体出现处为中心**的窗口，长度 = `AnchoredInjectionConfig::PRODUCTION.span_chars`）；
     /// * **哪几条真的被送出去** = **生产编译器本体**
     ///   [`crate::ClosedWorldContextCompiler::compile_injection_with_selected_access_and_query`]
     ///   （含**总量预算**裁剪 ⇒ ⇒ 不重写预算纪律）。
@@ -209,7 +209,7 @@ fn head_trunc_fragments(records: &[IndexRecord], retrieved: &[MemoryCandidate]) 
 /// # 为什么必须改（**「自欺」的根**）
 ///
 /// 2026-11-08 实测（`docs/04-internal/01-handoffs/memory-delivery-loss-decomposition-2026-11-08.md`）：
-/// 旧闸门**每条证据取正文前 120 字** ⇒ 而生产是**注入 + 锚定选段**（400 字）
+/// 旧闸门**每条证据取正文前 120 字** ⇒ 而生产是**注入 + 锚定选段**（窗口 = 生产跨度）
 /// ⇒ ⇒ 两者**既不是同一段文本，也不是同一份预算口径**
 /// ⇒ ⇒ 「送达率 0.3881 / 0.7218」**描述的不是生产**。
 ///

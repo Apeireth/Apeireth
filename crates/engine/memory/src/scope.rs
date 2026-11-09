@@ -254,7 +254,8 @@ impl Default for RecallPolicy {
                 crate::layers::MemoryLayerKind::Semantic,
                 crate::layers::MemoryLayerKind::Relational,
             ],
-            limit: 8,
+            // ⭐ **默认名额 20**（2026-11-09 联合裁决，与 `MemoryRecallQuery::new` 同口径）。
+            limit: 20,
             max_chars: 4_000,
             proactive_budget: 2,
             min_score: 0.10,
@@ -603,7 +604,9 @@ mod tests {
 
         assert!(policy.visible_scopes.is_empty());
         assert_eq!(policy.layers.len(), 4);
-        assert_eq!(policy.limit, 8);
+        // ⭐ 名额默认 20（2026-11-09 联合裁决：有效名额 = min(k, floor((预算 − 160)/(跨度 + 8)))
+        // ⇒ 跨度 200 时容量 = 20 ⇒ ⇒ k=8/10 会让容量封顶 ⇒ ⇒ 名额给到 20 才吃得到容量）。
+        assert_eq!(policy.limit, 20);
         assert_eq!(policy.max_chars, 4_000);
         assert_eq!(policy.proactive_budget, 2);
         assert_eq!(policy.min_score, 0.10);

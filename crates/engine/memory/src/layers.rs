@@ -95,7 +95,10 @@ impl MemoryRecallQuery {
                 MemoryLayerKind::Semantic,
                 MemoryLayerKind::Relational,
             ],
-            limit: 8,
+            // ⭐ **默认名额 20**（2026-11-09 联合裁决）：有效名额 =
+            // `min(k, floor((4000 − 160) / (单条跨度 + 8)))` ⇒ ⇒ 跨度 200 时容量 = 20
+            // ⇒ ⇒ k=10 会让容量封顶在 9 ⇒ ⇒ 名额给到 20 才吃得到容量。
+            limit: 20,
             max_chars: 4000,
             recency_decay_lambda: 0.05,
             min_score: 0.10,

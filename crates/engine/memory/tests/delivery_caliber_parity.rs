@@ -108,14 +108,18 @@ fn anchored_path_delivers_what_head_truncation_loses() {
     );
 }
 
-/// ⭐ **候选名额被长候选吃光**（钉住现状 ⇒ 改成「按选后长度计费」时必红一次）。
+/// ⭐ **长候选不再吃光名额**（钉住**修复后**的行为 ⇒ 反证臂保留**旧口径**）。
 ///
-/// 生产管线给候选的字符预算按**原始正文**计费 ⇒ ⇒ 一条 1,000 字的候选占掉 1,000 字
-/// ⇒ ⇒ 同样的 4,000 字预算只装得下 **4 条** ⇒ ⇒ **排在第 5～10 位的候选根本没机会进注入**。
+/// **修复前**：候选的字符预算按**原始正文**计费 ⇒ 一条 1,000 字的候选占掉 1,000 字
+/// ⇒ ⇒ 同样的 4,000 字预算只装得下 **4 条** ⇒ ⇒ **排在第 5～10 位的候选根本没机会进注入**
+/// ⇒ ⇒ 而生产注入端**每条只送 200 字**（锚定选段）⇒ ⇒ 这 3,800 字预算**被浪费了**。
 ///
-/// ⭐ 而生产注入端**每条只送 400 字**（锚定选段）⇒ ⇒ 这 3,600 字预算**被浪费了**。
+/// **修复后**：计费 = `min(正文长度, 单条上限)` ⇒ ⇒ 1,000 字的候选只按 **200** 计
+/// ⇒ ⇒ 名额不再被长记录吃光。
+///
+/// ⭐ **反证臂**：`candidate_span_chars = 0`（= 旧口径的逃生阀）⇒ ⇒ 旧行为**必须**复现。
 #[test]
-fn long_candidates_eat_the_candidate_slots() {
+fn long_candidates_no_longer_eat_the_candidate_slots() {
     let documents: Vec<apeireth_memory::MemoryCandidate> = (0..10)
         .map(|index| apeireth_memory::MemoryCandidate {
             id: format!("doc-{index:02}"),
@@ -128,8 +132,9 @@ fn long_candidates_eat_the_candidate_slots() {
         })
         .collect();
     let source = Bm25LexicalCandidateSource::new(documents);
-    let pipeline = HybridRetrievalPipeline::new(MemoryRankingConfig::default());
 
+    // —— 修复后（默认：计费 = min(正文长度, 单条上限)）⇒ ⇒ 名额用满 ——
+    let pipeline = HybridRetrievalPipeline::new(MemoryRankingConfig::default());
     let admitted = pipeline
         .retrieve(
             SUBJECT,
@@ -139,40 +144,50 @@ fn long_candidates_eat_the_candidate_slots() {
             MAX_CHARS,
         )
         .expect("检索应成功");
-    assert!(
-        admitted.len() < 10,
-        "按**原始正文**计费 ⇒ ⇒ 1,000 字/条 ⇒ ⇒ 4,000 字预算只装得下 {} 条 ⇒ ⇒ 名额被吃光",
-        admitted.len()
+    assert_eq!(
+        admitted.len(),
+        10,
+        "按**选后长度**计费 ⇒ ⇒ 1,000 字/条只按 200 计 ⇒ ⇒ 4,000 字预算装得下 10 条 ⇒ ⇒ \
+         名额不再被长记录吃光（修复前只装得下 4 条）"
     );
 
-    let relaxed = pipeline
+    // —— ⭐ **反证臂**：旧口径（`candidate_span_chars = 0`）⇒ ⇒ 旧行为必须复现 ——
+    let old_pipeline = HybridRetrievalPipeline::new(MemoryRankingConfig {
+        candidate_span_chars: 0,
+        ..MemoryRankingConfig::default()
+    });
+    let old_admitted = old_pipeline
         .retrieve(
             SUBJECT,
             &[apeireth_memory::MemoryScope::Global],
             &[&source],
             10,
-            100_000,
+            MAX_CHARS,
         )
         .expect("检索应成功");
-    assert_eq!(
-        relaxed.len(),
-        10,
-        "放宽字符预算 ⇒ ⇒ 名额应当用满（这说明被吃光的不是候选本身，是**计费口径**）"
+    assert!(
+        old_admitted.len() < 10,
+        "旧口径（按原始正文计费）⇒ ⇒ 1,000 字/条 ⇒ ⇒ 4,000 字预算只装得下 {} 条 ⇒ ⇒ \
+         名额被吃光（这是修复前的行为 ⇒ 反证必须能复现它）",
+        old_admitted.len()
     );
 }
 
-/// ⭐ **两把尺子结论相反** ⇒ 单条跨度**不许单边改**。
+/// ⭐ **两把尺子现在同向** ⇒ 单条跨度 = **200**（2026-11-09 联合裁决）。
 ///
-/// * 内部卷（模板题，章节长）偏好 **300**（红楼梦 281 → 291 题）；
-/// * 真实查询卷（真人问句，段落长）偏好 **400**（329 → 325 题，改 300 会掉）。
+/// * 此前（k=10 的容量下）内部卷偏 300、真人卷偏 400 ⇒ **看起来冲突**
+///   ⇒ ⇒ 真相是：**容量封顶**（有效名额 = `min(k, floor((预算 − 160)/(跨度 + 8)))`
+///   ⇒ k=10 时容量 = 9）⇒ ⇒ 那个「冲突」只是**容量太小**的副作用；
+/// * 召回名额放宽到 **k=20** 后 ⇒ 容量 18~20 ⇒ ⇒ **三把尺子在跨度 200 上同时更好**
+///   （内部卷送达 0.7059 / 0.9839、真人卷 0.8448；recall +0.1229 / +0.1048 / +0.1302）。
 ///
-/// ⇒ ⇒ 冲突 ⇒ ⇒ **保持现值 400** ⇒ ⇒ 改它必须**两把尺子一起重跑**。
+/// ⇒ ⇒ 生产跨度 = **200**；⚠️ **耦合**：跨度 < 300 ⇒ 调用方应给 **k ≥ 15**。
 #[test]
-fn production_span_stays_400_until_both_rulers_agree() {
+fn production_span_is_200_and_the_two_rulers_now_agree() {
     assert_eq!(
         AnchoredInjectionConfig::PRODUCTION.span_chars,
-        400,
-        "单条跨度 = 400：内部卷偏 300、真实查询卷偏 400 ⇒ 冲突 ⇒ 保持现值 ⇒ 改它要两把尺子一起重跑"
+        200,
+        "生产单条跨度 = 200：k=20 + 预算 4000 ⇒ 容量 20 ⇒ 两把尺子同向 ⇒ 改它要两把尺子一起重跑"
     );
     assert!(
         AnchoredInjectionConfig::PRODUCTION.enabled,
