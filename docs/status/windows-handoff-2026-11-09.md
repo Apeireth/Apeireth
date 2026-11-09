@@ -80,12 +80,12 @@
 >
 > ```powershell
 > # ① 传输前/后在**源机**与**目标机**各算一次哈希，自己比对（防截断，不写死期望值）
-> Get-FileHash D:\apeireth-20261109-1822.bundle -Algorithm SHA256
+> Get-FileHash D:\apeireth-latest.bundle -Algorithm SHA256
 >
 > # ② 直接从 bundle 克隆（一次拿到全部 296 个引用 + 完整历史）
-> git clone D:\apeireth-20261109-1822.bundle Apeireth-rust
+> git clone D:\apeireth-latest.bundle Apeireth-rust
 > cd Apeireth-rust
-> git bundle verify ..\apeireth-20261109-1822.bundle   # 应报「记录完整历史」
+> git bundle verify ..\apeireth-latest.bundle   # 应报「记录完整历史」
 >
 > # ③ 接回远端，把远端那 284 个提交拉下来
 > git remote set-url origin git@github.com:Apeireth/Apeireth.git
