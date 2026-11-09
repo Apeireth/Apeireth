@@ -155,7 +155,10 @@ fn broken_config_is_an_error_not_a_silent_skip() {
     let text = format!("{stdout}\n{stderr}");
     assert_ne!(0, code, "坏配置必须失败（退出码非 0）：\n{text}");
     assert!(
-        text.contains("拒开") || text.contains("影子配置") || text.contains("失败") || text.contains("错"),
+        text.contains("拒开")
+            || text.contains("影子配置")
+            || text.contains("失败")
+            || text.contains("错"),
         "必须给出**真因**（不是「没配置」）：\n{text}"
     );
 }

@@ -316,6 +316,22 @@ fn knobs_line(knobs: &ChallengerKnobs) -> String {
     format!("first_pos_alpha = {alpha} · diversity_lambda = {lambda}")
 }
 
+/// 分数的一行文字（**没度量到**就是没度量到 ⇒ 写成「未度量到」，不许显示成 0）。
+fn score_text(value: Option<f64>) -> String {
+    match value {
+        Some(score) => format!("{score:.4}"),
+        None => "未度量到".to_string(),
+    }
+}
+
+/// token 的一行文字（**没度量到**就是没度量到 ⇒ 写成「未度量到」，不许显示成 0）。
+fn token_text(value: Option<usize>) -> String {
+    match value {
+        Some(tokens) => format!("{tokens}"),
+        None => "未度量到".to_string(),
+    }
+}
+
 /// 三道闸的逐条判定（**判据与数字都来自库级口径**）。
 fn gate_lines(cost: &SwapCost, verdict: &SwapVerdict) -> Vec<GateLine> {
     let decision_ok = matches!(
@@ -328,13 +344,13 @@ fn gate_lines(cost: &SwapCost, verdict: &SwapVerdict) -> Vec<GateLine> {
             name: "① 裁决闸",
             passed: decision_ok,
             detail: format!(
-                "{} —— {}（现役分数 {:?} · 候选分数 {:?} · 现役 token {:?} · 候选 token {:?}）",
+                "{} —— {}（现役分数 {} · 候选分数 {} · 现役 token {} · 候选 token {}）",
                 decision_label(verdict.decision),
                 verdict.reason,
-                verdict.champion_score,
-                verdict.challenger_score,
-                verdict.champion_tokens,
-                verdict.challenger_tokens
+                score_text(verdict.champion_score),
+                score_text(verdict.challenger_score),
+                token_text(verdict.champion_tokens),
+                token_text(verdict.challenger_tokens)
             ),
         },
         GateLine {
@@ -371,6 +387,39 @@ fn print_gates(lines: &[GateLine]) {
 /// 第一道没过的闸（`None` = 全过）。
 fn first_blocking_gate(lines: &[GateLine]) -> Option<&GateLine> {
     lines.iter().find(|line| !line.passed)
+}
+
+/// **两侧都没量到东西**时的**观测提示**（**只提示、不改裁决**）。
+///
+/// # 为什么要有这一行
+///
+/// 库级裁决判的是「**有没有变差**」⇒ 两边都是 0 分时它判「未劣化 ⇒ 允许换」。
+/// 但「**没量到东西**」≠「量到的东西没变差」⇒ ⇒ 人看到的必须包含
+/// 「**这一轮没有有效证据**」（库级自己的口径：**没证据 ≠ 没变差**）
+/// ⇒ ⇒ 不许让读者把 `0 vs 0` 当成「实测通过」。
+///
+/// ⚠️ **不改裁决、不改退出码**（裁决的权威是库级）⇒ 只是把**证据强度**说清楚。
+fn no_evidence_note(verdict: &SwapVerdict) -> Option<String> {
+    let empty = |value: Option<f64>| value.map(|score| score <= 0.0).unwrap_or(true);
+    if !(empty(verdict.champion_score) && empty(verdict.challenger_score)) {
+        return None;
+    }
+    Some(
+        "⚠ 观测：两侧**都没量到**召回（分数都是 0 / 未度量到）\n\
+         ⇒ 这一轮**没有有效证据**\n\
+         ⇒ 裁决闸此刻判「未劣化 ⇒ 允许换」只是**没有反证**，不是「实测通过」\n\
+         （库级口径：没证据 ≠ 没变差 ⇒ 真要换之前请先确认库里真的有可召回的记录）"
+            .to_string(),
+    )
+}
+
+/// 打印「两侧都没量到」的观测提示（**有则打**）。
+fn print_no_evidence_note(verdict: &SwapVerdict) {
+    if let Some(note) = no_evidence_note(verdict) {
+        for line in note.lines() {
+            println!("  {line}");
+        }
+    }
 }
 
 /// 归档目录里的报告名（**目录不存在 = 还没有报告**，不是错）。
@@ -470,6 +519,7 @@ fn run_shadow_status(args: &[String]) -> u8 {
     }
     println!("  三道闸当前判定：");
     print_gates(&gates);
+    print_no_evidence_note(&verdict);
     match first_blocking_gate(&gates) {
         None => println!("  结论：三道闸全过 ⇒ 库级流程**允许换**（仍需治理面放行）"),
         Some(blocked) => println!("  结论：**不许换** —— 卡在 {}", blocked.name),
@@ -542,6 +592,7 @@ fn run_shadow_run(args: &[String]) -> u8 {
     println!("    {}", verdict.reason);
     println!("  三道闸当前判定：");
     print_gates(&gates);
+    print_no_evidence_note(&verdict);
     match first_blocking_gate(&gates) {
         None => println!("  结论：三道闸全过 ⇒ 库级流程**允许换**（仍需治理面放行）"),
         Some(blocked) => println!("  结论：**不许换** —— 卡在 {}", blocked.name),
@@ -594,6 +645,7 @@ fn run_swap_status(args: &[String]) -> u8 {
     );
     println!("  三道闸：");
     print_gates(&gates);
+    print_no_evidence_note(&verdict);
     let blocked = first_blocking_gate(&gates);
     match (allowed, blocked) {
         (true, None) => {
@@ -670,7 +722,7 @@ fn run_swap_rollback(args: &[String]) -> u8 {
     let Prepared::Ready { service, .. } = prepared else {
         eprintln!(
             "未配置 / 未启用：数据根 {} 下没有 shadow.json ⇒ 换算法流程**没有开**\
-             （默认态是刻制的：不构造、不读盘、不写盘）",
+             （默认态是刻意的：不构造、不读盘、不写盘）",
             options.data_root.display()
         );
         return EXIT_CANNOT;
