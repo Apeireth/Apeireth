@@ -1285,7 +1285,7 @@ docs/status/README.md,L1,5,docs/status — 文档事实体系的机器真源,202
 docs/status/STATUS.md,L1,4,文档状态仪表盘（STATUS）,2026-11-01,现行,19,保留,
 docs/status/anti-drift-audit-2026-10-28.md,L1,7,抗漂移审计（2026-10-28）—— 仓库自身的约束够不够好？**8 个漏洞 + 修法**,2026-10-28,现行,3,保留,
 docs/status/capability-creation-line-progress.md,L1,4,能力创造线 · 进度页（做到哪了）,2026-11-08,现行,9,保留,
-docs/status/capability-line-windows-handoff-2026-11-09.md,L1,8,Windows 接手须知 —— 能力创造线（插件 / 组件 / 能力开发）· 2026-11-09 交接,2026-11-09,现行,2,保留,
+docs/status/capability-line-windows-handoff-2026-11-09.md,L1,8,Windows 接手须知 —— 能力创造线（插件 / 组件 / 能力开发）· 2026-11-09 交接,2026-11-09,现行,3,保留,
 docs/status/chapter-anchor-value-2026-10-27.md,L1,4,章节锚点值多少？—— **「定位」这半有解，「送达」那半仍无解**（2026-10-27）,2026-10-27,现行,5,保留,
 docs/status/corpora-split-robustness-2026-10-27.md,L1,4,语料切半检验：**结论稳不稳** + 一个**新杠杆**（2026-10-27）,2026-10-27,现行,1,保留,
 docs/status/credential-tripwire-coverage-2026-11-07.md,L1,4,结果面凭据绊线 · 覆盖盘点（2026-11-07）,2026-11-07,现行,6,保留,
