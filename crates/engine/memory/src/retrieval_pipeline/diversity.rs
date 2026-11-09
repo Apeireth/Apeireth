@@ -15,6 +15,41 @@ use std::collections::HashSet;
 use super::scoring::{jaccard_similarity, token_set};
 use crate::{MemoryCandidate, MemoryRankingConfig};
 
+/// 一条候选的**计费长度**（= 交付侧实际会裁到的长度）。
+///
+/// # 口径（与**交付侧**同一口径）
+/// * `span == 0` ⇒ **不限**（按原始正文计费 = 旧口径，留作逃生阀）；
+/// * 否则 ⇒ `min(正文长度, span)`。
+///
+/// # 为什么抽成函数（2026-11-08）
+/// **同一个错误在两处**：选候选（[`select`]）与协同器的召回循环
+/// ⇒ ⇒ 只修一处 = **假修**（选得进来，但协同器仍按原始长度 `break`）
+/// ⇒ ⇒ ⇒ **两处必须用同一个函数算**，否则口径会再次漂移。
+pub(crate) fn billed_chars(content: &str, span: usize) -> usize {
+    let content_chars = content.chars().count();
+    if span == 0 {
+        content_chars
+    } else {
+        content_chars.min(span)
+    }
+}
+
+/// 预算还能不能装下这条候选，以及装下之后的**累计计费量**。
+///
+/// # 口径
+/// * **计费按送达量**（[`billed_chars`]），不是按原始正文长度；
+/// * `spent == 0` ⇒ **还没装过任何东西** ⇒ 即使这条超预算也**先装一条**
+///   （**保底**：任何时候都不返回空集）
+///   —— 与修复前的「第一条总是装得下」语义**逐字一致**。
+pub(crate) fn fit(spent: usize, content: &str, budget: usize, span: usize) -> Option<usize> {
+    let cost = billed_chars(content, span);
+    if spent == 0 || spent + cost <= budget {
+        Some(spent + cost)
+    } else {
+        None
+    }
+}
+
 /// 贪心、确定性的多样性选择：按 MMR（相关性-多样性折中）挑，再受 `max_chars` 预算约束。
 ///
 /// # 预算的**计费口径**（2026-11-08 修「静默全失」）
@@ -86,14 +121,15 @@ pub(super) fn select(
         // [`MemoryRankingConfig::candidate_span_chars`]（默认 = 生产注入的单条跨度
         // ⇒ **单一真源**，见 [`crate::anchor_injection::AnchoredInjectionConfig::PRODUCTION`]）
         // ⇒ ⇒ `0` = 不限（按原始正文计费 = 旧口径，逃生阀）。
-        let content_chars = candidate.content.chars().count();
-        let billed_chars = match ranking.candidate_span_chars {
-            0 => content_chars,
-            span => content_chars.min(span),
-        };
+        let billed_chars = billed_chars(&candidate.content, ranking.candidate_span_chars);
         if chars + billed_chars > max_chars {
             // Skip oversized candidates and continue looking for a bounded item.
-            continue;
+            // ⚠️ **保底**（2026-11-08 补）：一条都还没装下时，**先装这一条**
+            // ⇒ ⇒ **绝不返回空集**（与协同器原有的「第一条总是装得下」语义一致）。
+            // ⇒ ⇒ ⇒ 否则预算小到装不下任何一条时，整批候选仍会被**静默丢掉**。
+            if !result.is_empty() {
+                continue;
+            }
         }
         let normalized: String = candidate
             .content

@@ -14,7 +14,7 @@ use crate::{
 };
 use apeireth_orchestration::untrusted_envelope::{EnvelopeCompleteness, UntrustedEnvelope};
 
-mod diversity;
+pub(crate) mod diversity;
 mod first_pos;
 mod fusion;
 mod scoring;
