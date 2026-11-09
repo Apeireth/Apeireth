@@ -52,7 +52,47 @@
   ⇒ ⇒ **上一记是最后一次通过的门禁** ⇒ ⇒ 接手修好后**再跑一次并刷新**。
 * ⇒ ⇒ **README 徽章**（`ef2dd5a3`，10933 / 2026-11-08）**保持不动** ⇒ ⇒ 理由同上。
 
-## 2.6 ⚠️ **代码怎么带过去**（最要紧的一节 —— 别重新 clone）
+## 2.6 ✅ **代码怎么带过去**（**已推到 GitHub ⇒ 直接拉即可**）
+
+> **结论先行**：成果**已推到 GitHub 的新分支** ⇒ ⇒ **Windows 上直接 `fetch` + `switch` 即可**，
+> 不需要 bundle。
+>
+> | 项 | 值（**已实测核过 SHA**） |
+> |---|---|
+> | **远端新分支** | **`credential-tripwire-2026-11-09`** |
+> | 该分支 HEAD | `0ef26d48`（**与本地 HEAD 逐字相同** ⇒ 一致） |
+> | 推送方式 | `git push origin HEAD:refs/heads/credential-tripwire-2026-11-09` ⇒ `* [new branch]` ⇒ **exit 0** |
+> | **未碰既有分支** | ✅ `ui-engine` / `ui-engine-p0-2026-10-24` / `main` **一个字都没改**（按「**只推新分支名**」铁律） |
+>
+> **在 Windows 上就三步**：
+> ```powershell
+> git clone git@github.com:Apeireth/Apeireth.git      # 或复用已有克隆
+> cd Apeireth
+> git fetch origin
+> git switch -c credential-tripwire-2026-11-09 origin/credential-tripwire-2026-11-09
+> git log -1 --oneline        # 应看到 0ef26d48
+> ```
+> ⇒ ⇒ **然后**才是「合并到既有分支」那件事（**merge，不 rebase**；**绝不 `--force`**）：
+> ⇒ ⇒ 合并前**先**把 `origin/ui-engine-p0-2026-10-24` 那 **284 个**提交拉进来 ⇒ ⇒
+> ⚠️ 前端私有仓按**精确 SHA** 依赖 `origin/ui-engine`（`658cd192`）⇒ ⇒ **动它之前先核对**。
+>
+> **离线备份（仍是必需的）**：`/home/bai/apeireth-backup/apeireth-latest.bundle`
+> （191M，`git bundle verify` 报「记录完整历史」，本地 HEAD 在内）
+> ⇒ ⇒ **用途有二**：① 网络再断时的离线搬运；② **防「工作树被清 ⇒ 成果全丢」**
+> （本工作线历史上真丢过一次 ⇒ 所以这个备份**不因为已 push 就删**）。
+> ⇒ ⇒ 用它克隆：`git clone D:\apeireth-latest.bundle Apeireth-rust` ⇒ ⇒ 一次拿到 296 个引用。
+
+### 2.6.1 网络诊断（**为什么之前说推不了**，留作排障参考）
+
+> 2026-11-09 早些时候实测：`github.com` 被 DNS 解析到 **`198.18.0.6`**（RFC 保留测试段）
+> ＋ HTTPS `TLS connect error: unexpected eof while reading` ＋ SSH `Connection closed`
+> ⇒ ⇒ 当时判断「网络不通」。
+> ⇒ ⇒ **后来复测 ⇒ HTTPS `code=200` 可通**（该地址实为可达的代理/镜像）⇒ ⇒ **SSH 仍不通**
+> （`Permission denied (publickey)` ⇒ **认证问题，不是网络**）。
+> ⇒ ⇒ **实际可用的通道 = HTTPS + token**（`credential.helper` 从
+> `~/.config/apeireth/github-token` 取）⇒ ⇒ **所以 `git push` 走 HTTPS 能成**。
+
+## 2.6.9 （保留）改用 bundle 兜底时的步骤
 
 > **现状**：本地分支 `ui-engine-p0-2026-10-24` @ `53cdbd66` **从未 push**（当前网络被阻断：
 > `github.com` 被 DNS 劫持到 `198.18.0.6` 保留测试段 + HTTPS TLS 被断）⇒ ⇒
