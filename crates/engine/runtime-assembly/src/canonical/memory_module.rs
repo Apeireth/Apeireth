@@ -263,7 +263,20 @@ impl Plugin for MemoryModule {
             .collect()
     }
     async fn on_hook(&self, ctx: &HookContextV1) -> PluginResult<Vec<HookToolRequest>> {
-        if !self.automatic_retrieval || ctx.hook != ModuleHookV1::BeforeModelCall {
+        // The fixed hook speaks **for** the memory tool face: it issues that face's
+        // own `memory_retrieve` call. Without a Host namespace binding there is
+        // nothing it could authorize, and the call it would make is refused at the
+        // dispatcher's scope gate — one failing frame per turn. Same rule as the
+        // face itself: never do what cannot be honored.
+        if !self.automatic_retrieval
+            || ctx.hook != ModuleHookV1::BeforeModelCall
+            || self
+                .state
+                .mappings
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .is_none()
+        {
             return Ok(vec![]);
         }
         let query = ctx

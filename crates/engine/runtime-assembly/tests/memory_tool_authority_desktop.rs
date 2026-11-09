@@ -156,7 +156,10 @@ async fn desktop_main_offers_no_namespace_scoped_tool() {
 async fn an_out_of_scope_memory_call_never_reaches_the_module() {
     let db = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
     let provider = Provider::new(vec![
-        vec![call("memory_retrieve", serde_json::json!({"query":"probe"}))],
+        vec![call(
+            "memory_retrieve",
+            serde_json::json!({"query":"probe"}),
+        )],
         vec![],
     ]);
     let modules = production(db);
@@ -217,7 +220,11 @@ async fn the_desktop_memory_behavior_path_still_works() {
         .await
         .unwrap();
 
-    let text = provider.requests().first().map(tool_text).unwrap_or_default();
+    let text = provider
+        .requests()
+        .first()
+        .map(tool_text)
+        .unwrap_or_default();
     assert!(
         text.contains("desktop_recall_marker"),
         "the governed memory recall path must still inject the episode; tool text = {text:?}"

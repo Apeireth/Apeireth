@@ -47,14 +47,64 @@ pub(super) fn wire(
     // ⇒ 每回合转录多两条（tool call + tool result）、上下文每回合被改写；而生产另有
     // `ProactiveRecallPolicy` 这条**显式选择**的召回入口 ⇒ 默认再开一条属于「无声行为变化」。
     // 实证：开它会让既有不变量测试 `learning_does_not_pollute_the_primary_transcript`
-    // 由 2 条变 4 条（转录被工具回合污染）。固定 Hook 的能力仍在（Host 可显式开）。
+    // 由 2 条变 4 条（转录被工具回合污染）。
+    // ⭐ **默认关 ≠ 没有打开路径**（2026-11-09）：开关在数据根的 `memory-hook.json`
+    // （见 [`automatic_retrieval_enabled`]）⇒ ⇒ Host 想开就写文件，不必改代码。
     let module = Arc::new(
         MemoryModule::new(Arc::clone(&coordinator), Arc::clone(clock))
-            .with_automatic_retrieval(false),
+            .with_automatic_retrieval(automatic_retrieval_enabled()),
     );
     capabilities.extend(module.tools());
     tool_modules.push(Arc::clone(&module) as Arc<dyn Plugin>);
     (module, coordinator)
+}
+
+/// 固定检索 Hook 的**显式开关**文件（数据根下）。
+const MEMORY_HOOK_FILE: &str = "memory-hook.json";
+/// 开关文件的文档身份（防串档：别的 JSON 不会被当成开关打开）。
+const MEMORY_HOOK_DOC_NAME: &str = "apeireth.memory.hook";
+/// 开关文件的格式版本。
+const MEMORY_HOOK_DOC_VERSION: u32 = 1;
+
+/// 开关文件主体（未知字段拒开 ⇒ 拼错字段不会静默生效）。
+#[derive(Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct MemoryHookBody {
+    /// 固定检索 Hook 是否开启（**默认关** ⇒ 只有 Host 写了这个文件才开）。
+    automatic_retrieval: bool,
+}
+
+/// 固定检索 Hook 的显式开关（默认关 ⇒ Host 写数据根下的 `memory-hook.json` 才开）。
+///
+/// # 三种结果（失败闭合）
+///
+/// * 文件缺失 ⇒ **关**（默认态 ⇒ 逐字节零行为变化）；
+/// * 文件存在但坏（畸形 / 串档 / 未来版本 / 字段拼错）⇒ **关**
+///   （失败闭合到默认态：坏配置不许变成「无声的行为变化」）；
+/// * 文件存在且合法 ⇒ 取文件里写的值。
+///
+/// ⚠️ **坏配置只「按关处理」而不报错**：本装配面**没有错误通道**
+/// （[`wire`] 不返回 `Result`）⇒ ⇒ 要改成「坏配置拒开」需要动棘轮文件
+/// `production.rs`（本笔不动）⇒ ⇒ 缺口如实登记，不假装。
+///
+/// ⚠️ 开关本身**不保证** Hook 能兑现：Hook 发的是记忆工具面自己的调用，
+/// 没有 Host 命名空间绑定时那个调用会被分发器范围闸拒 ⇒ ⇒ 模块侧另有闸
+/// （`memory_module.rs` 的 `on_hook`）⇒ ⇒ 「开了但兑现不了」的状态不存在。
+fn automatic_retrieval_enabled() -> bool {
+    automatic_retrieval_at(&crate::paths::default_data_root())
+}
+
+/// 同上，但**数据根显式给出**（测试用；生产走 [`automatic_retrieval_enabled`]）。
+fn automatic_retrieval_at(data_root: &std::path::Path) -> bool {
+    let path = data_root.join(MEMORY_HOOK_FILE);
+    if !path.exists() {
+        return false;
+    }
+    let compat =
+        apeireth_core::stored_doc::DocCompat::exact(MEMORY_HOOK_DOC_NAME, MEMORY_HOOK_DOC_VERSION);
+    apeireth_core::stored_doc::open_single::<MemoryHookBody>(&path, &compat)
+        .map(|doc| doc.body.automatic_retrieval)
+        .unwrap_or(false)
 }
 
 /// 注册期迟绑定 Host 映射表（未武装 = `None` = 零改动）。
@@ -167,6 +217,52 @@ mod tests {
         match apply_retrieval_knobs_at(coordinator(), &dir) {
             Ok(_) => panic!("坏配置必须报错（不许被当成「没配置」）"),
             Err(error) => assert!(!error.is_empty(), "必须带真因"),
+        }
+    }
+
+    /// ⭐ **默认关**（没有开关文件 ⇒ Hook 关 ⇒ 逐字节零行为变化）。
+    #[test]
+    fn the_fixed_hook_is_off_without_its_switch_file() {
+        let dir = std::env::temp_dir().join(format!("apeireth-hook-none-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("mkdir");
+        assert!(
+            !automatic_retrieval_at(&dir),
+            "没有开关文件 ⇒ 固定检索 Hook 必须关（默认态）"
+        );
+    }
+
+    /// ⭐ **默认关 ≠ 没有打开路径**：Host 写开关文件 ⇒ Hook 开。
+    #[test]
+    fn the_fixed_hook_switch_file_opens_the_path() {
+        let dir = std::env::temp_dir().join(format!("apeireth-hook-on-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("mkdir");
+        std::fs::write(
+            dir.join(MEMORY_HOOK_FILE),
+            br#"{"name":"apeireth.memory.hook","version":1,"compatible_versions":[1],"body":{"automatic_retrieval":true}}"#,
+        )
+        .expect("write");
+        assert!(
+            automatic_retrieval_at(&dir),
+            "Host 写开关文件 ⇒ 固定检索 Hook 必须开（「默认关」不等于「没有打开路径」）"
+        );
+    }
+
+    /// ⭐ **坏开关文件 ⇒ 按关处理**（失败闭合：坏配置不许变成「无声的行为变化」）。
+    #[test]
+    fn a_broken_hook_switch_file_leaves_the_hook_off() {
+        let dir = std::env::temp_dir().join(format!("apeireth-hook-bad-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("mkdir");
+        for body in [
+            &b"{ not json"[..],
+            br#"{"name":"apeireth.memory.hook","version":1,"compatible_versions":[1],"body":{"automatic_retrieval":true,"typo":1}}"#,
+            br#"{"name":"apeireth.memory.hook","version":1,"compatible_versions":[1],"body":{"automatic_retrieval":"yes"}}"#,
+            br#"{"name":"other.doc","version":1,"compatible_versions":[1],"body":{"automatic_retrieval":true}}"#,
+        ] {
+            std::fs::write(dir.join(MEMORY_HOOK_FILE), body).expect("write");
+            assert!(
+                !automatic_retrieval_at(&dir),
+                "坏开关文件必须按关处理；body = {body:?}"
+            );
         }
     }
 }
