@@ -52,6 +52,44 @@
   ⇒ ⇒ **上一记是最后一次通过的门禁** ⇒ ⇒ 接手修好后**再跑一次并刷新**。
 * ⇒ ⇒ **README 徽章**（`ef2dd5a3`，10933 / 2026-11-08）**保持不动** ⇒ ⇒ 理由同上。
 
+## 2.6 ⚠️ **代码怎么带过去**（最要紧的一节 —— 别重新 clone）
+
+> **现状**：本地分支 `ui-engine-p0-2026-10-24` **从未 push**（当前网络被阻断：`github.com`
+> 被 DNS 劫持到 `198.18.0.6` 保留测试段 + HTTPS TLS 被断）⇒ ⇒ 且**本地与远端已分叉**：
+> * 本地领先 `origin/ui-engine-p0-2026-10-24`（`b72ac26e`，2026-11-06 12:50）**715 个提交**
+>   （**含本工作线全部成果**）
+> * 远端领先本地 **284 个提交**（别人 11-06 之后 push 的，本地**没有**）
+>
+> ⇒ ⇒ ⚠️ **所以绝对不要「在 Windows 上重新 clone 然后继续」** —— clone 拿到的是**远端那个版本**
+> （含 284 个提交、**没有**这 715 个）⇒ ⇒ **本轮全部成果会丢**。
+>
+> **正确做法：用 git bundle 把本地历史整体带过去**
+>
+> ```powershell
+> # ① 传输前/后校验（防截断；sha256 必须一致）
+> Get-FileHash D:\apeireth-20261109-1817.bundle -Algorithm SHA256
+> # 期望: bdc8b62eefcb32f37515e2211a58595ddf1d1e84151402acd3fb4198b9390105
+>
+> # ② 直接从 bundle 克隆（一次拿到全部 296 个引用 + 完整历史）
+> git clone D:\apeireth-20261109-1817.bundle Apeireth-rust
+> cd Apeireth-rust
+> git bundle verify ..\apeireth-20261109-1817.bundle   # 应报「记录完整历史」
+>
+> # ③ 接回远端，把远端那 284 个提交拉下来
+> git remote set-url origin git@github.com:Apeireth/Apeireth.git
+> git fetch origin
+>
+> # ④ 切换到本工作线并**合并**（⚠️ **不要** rebase —— 那会改写 715 个提交的历史）
+> git switch ui-engine-p0-2026-10-24
+> git merge origin/ui-engine-p0-2026-10-24
+> #    解冲突后提交 ⇒ ⇒ **此时才 push**（普通 push，**绝不 --force**：
+> #    --force 会毁掉远端那 284 个提交）
+> git push origin ui-engine-p0-2026-10-24
+> ```
+>
+> **bundle 基本信息**（实测）：`191M`｜`296` 个引用｜`refs/heads/ui-engine-p0-2026-10-24`
+> = `e642c8d5`｜`git bundle verify` 报「**记录完整历史**」｜sha256 见上。
+
 ## 3. **接到 Windows 后第一件事**：跑一次收口门禁
 
 ```powershell
