@@ -2,7 +2,7 @@
   "crates": {
     "crates/adapters/cli": {
       "files": 39,
-      "loc": 18582
+      "loc": 18634
     },
     "crates/adapters/gateway": {
       "files": 36,
@@ -70,7 +70,7 @@
     },
     "crates/engine/memory": {
       "files": 190,
-      "loc": 86411
+      "loc": 86521
     },
     "crates/engine/organ": {
       "files": 33,
@@ -86,7 +86,7 @@
     },
     "crates/engine/runtime-assembly": {
       "files": 88,
-      "loc": 47348
+      "loc": 47508
     },
     "crates/engine/storage": {
       "files": 27,
