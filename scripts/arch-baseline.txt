@@ -284,7 +284,7 @@ env APEIRETH_VOICE_SPEAK_SCOPE
 size crates/adapters/cli/src/care_heartbeat.rs 1621
 size crates/adapters/cli/src/gateway_panels.rs 1526
 size crates/adapters/cli/src/lib.rs 3774
-size crates/adapters/cli/src/main.rs 1465
+size crates/adapters/cli/src/main.rs 1464
 size crates/adapters/cli/src/onboarding.rs 1332
 size crates/adapters/gateway/src/canonical_entry.rs 2291
 size crates/adapters/gateway/src/events.rs 1623

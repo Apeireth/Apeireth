@@ -286,6 +286,23 @@ pub fn judge_swap(
         };
     }
 
+    // --- 2.5 ⭐ **两侧都没量到任何候选** ⇒ **没有证据可比** ⇒ 不许换 ---
+    // （2026-11-09 实测发现：库里没有可召回的记录 ⇒ 两侧分数都是 0.0 ⇒
+    //   准确度闸「掉 0」⇒ 放行 ⇒ **换了一个什么都没量到的算法**。）
+    if champion_token_median == 0 && challenger_token_median == 0 {
+        return SwapVerdict {
+            decision: SwapDecision::Rejected,
+            champion_score: Some(champion_score),
+            challenger_score: Some(challenger_score),
+            champion_tokens: Some(champion_token_median),
+            challenger_tokens: Some(challenger_token_median),
+            reason:
+                "两侧都**没量到任何候选**（注入 token 中位数都是 0）⇒ 准确度**没有可比的对象** ⇒ \
+                     不许换（量到 0 分 ≠ 有证据）"
+                    .to_string(),
+        };
+    }
+
     // --- 3. 准确度闸：劣化 > 1% ⇒ 不许换 ---
     let allowed_drop = champion_score * TOLERANCE_RATIO + TOLERANCE_FLOOR;
     let drop = champion_score - challenger_score;

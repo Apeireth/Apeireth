@@ -358,10 +358,11 @@ impl ShadowSwapService {
         let dir = self.archive_dir();
         std::fs::create_dir_all(&dir)
             .map_err(|error| format!("{} 建目录失败: {error}", dir.display()))?;
-        let now_ms = report
-            .pairs
-            .first()
-            .map(|pair| pair.case_id.len() as i64)
+        // ⭐ **真实时间戳**（此前误用 `case_id.len()` ⇒ 每次影子跑覆盖同一份文件 ⇒
+        // 「最近报告列表」永远只有一份）⇒ ⇒ 用**毫秒 + 同毫秒内的序号**保证唯一。
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|delta| delta.as_millis() as i64)
             .unwrap_or(0);
         let file_name = format!("shadow-{now_ms:020}-g0.json");
         let path = dir.join(&file_name);
