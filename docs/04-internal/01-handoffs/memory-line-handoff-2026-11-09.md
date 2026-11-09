@@ -131,3 +131,57 @@ cargo test -p apeireth-memory --test delivery_caliber_parity
 * **(aa)** **绊线要有人收**：写明「改口径时必红一次」的用例，红过之后**必须翻转**成守护新不变量，
   否则它会一直红在闸门里，最后所有人学会**无视那条红**，这比没有闸门更糟。
   （本批实例：`delivery_caliber_parity::long_candidates_eat_the_candidate_slots` 已翻转。）
+
+---
+
+## 七、搬机器专属的**四个坑**（并行线交接页 §六 没提的，本机今天全踩过）
+
+并行线那封的 §六 已列：语料位置 / `--offline` 预热 / `RUSTC_WRAPPER` / 中文路径 / 别用 `git add -A`。
+**下面是它没提、但今天实打实浪费了时间的四条**：
+
+### 7.1 🚨 **推送只有一条通道：`apipush2.py`；绝对不要用 `apialign.py`**
+
+```bash
+python3 apipush2.py debt-round8 <仓库路径> \
+  --remote-base <远端完整40位sha> --local-base <本地基点完整40位sha>
+```
+
+* 两个 base 都必须**完整 40 位**（短 sha 会挂）；
+* 脚本会校验**两个基点的 tree 逐字相同**，才能保证推出去的 diff **只含自己的改动**；
+* 一个提交一次 ref 更新，**一次 CI**。
+
+**`apialign.py` 是 HARD align，会丢掉未推的本地提交**（本线已经因此丢过东西）。
+
+⚠️ 今天还踩了一次**半截操作**：`--local-base` 我错传成了**远端**基点的 sha（本地其实还没 rebase 到那），
+脚本照样建了提交，最后 tree 校验失败。**正确顺序永远是：先 `git rebase origin/debt-round8`，
+再用 `git rev-parse origin/debt-round8` 取 base，**本地 HEAD 必须真的以它为父**。
+
+### 7.2 🚨 **`gates.sh` 必须把 worktree 路径作为第 1 个参数传进去**
+
+```bash
+bash gates.sh <你的仓库路径>
+```
+
+不传的话它默认跑 `/home/bai/Projects/apeireth-consolidate-wt`（**另一个 worktree**）
+，于是 **9 个步骤报 `can't open file .../scripts/xxx.py`**，看起来像「脚本全没了」，
+其实**全是假红**。
+
+**分辨方法**：报错里出现**别的仓库路径**，就是路径错了，不是代码坏了。
+
+### 7.3 **`cargo test --workspace` 要单放后台**
+
+全门禁 40–60 分钟，其中这一步就 **30 分钟以上**；本机两次都是在它上面被关机打断的。
+，建议：**先跑其余 32 步**（大多几秒到几十秒），把它单独丢后台。
+
+### 7.4 **`redchamber.txt` 必须用 UTF-8 那一份**
+
+* `/home/bai/.apeireth/novels/redchamber.txt` => **UTF-8**（约 2,601KB / 954,114 字）**用这份**
+* `/root/.apeireth/novels/redchamber.txt` => **不是 UTF-8**，别拷错
+
+`watershed.txt` 约 1,593KB / 581,003 字；MIRACL 考试缓存是
+`miracl-exam/corpus.jsonl`（22,862 docs）+ `miracl-exam/exam.jsonl`（393 问，字段 `id` / `query` / `gold[]`）。
+
+### 7.5 一条**我今天违反了**的纪律
+我用了 `git add -A`，把**并行线在途的 fmt 改动**一起暂存了（发现后已 `git checkout --` 还原）
+，它只是 rustfmt 折行，但**这正说明并行线那句「别用 `git add -A`」是对的**。
+，搬到 Windows 后：**一律按文件白名单暂存**。
