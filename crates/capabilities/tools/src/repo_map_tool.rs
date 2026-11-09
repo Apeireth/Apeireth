@@ -41,7 +41,10 @@ use apeireth_core::kernel::CapabilityId;
 use apeireth_plugin::ToolCapability;
 use apeireth_protocol::canonical::{NormalizedTool, ToolCall, ToolParameters, ToolResult};
 
-use crate::guardrail::{attach_credential_tripwire, scan_json_string_leaves};
+use crate::guardrail::{
+    append_credential_tripwire, attach_credential_tripwire, scan_json_string_leaves,
+    scan_result_face,
+};
 use crate::repo_map::{RepoDependencyGraph, RepoMapGenerator, SymbolParser, SymbolTag};
 
 /// 能力 id（注册用命名空间）。
@@ -489,27 +492,55 @@ impl ToolCapability for RepoMapTool {
             Ok(outcome) => match serde_json::to_value(&outcome) {
                 Ok(value) => {
                     // 结果面凭据形状绊线 (M1)：本族回显**紧凑代码大纲**（排名后的符号签名，
-                    // 函数体省略成 `...`) ⇒ ⇒ 签名里的**默认值**可能带硬编码凭据 ⇒ ⇒
-                    // 结果面是**混合面**（一个大文本字段 `map` + 可选文本 `note` + 计数）
-                    // ⇒ ⇒ 走 **JSON 字符串叶子扫描**：只换字符串叶子的内容（键名 / 数字 /
-                    // 布尔 / null / 结构一律不动 ⇒ 落库结构仍合法）⇒ ⇒ 计数与键名不受影响。
+                    // 函数体省略成 `...`）⇒ ⇒ 结果面是**结构化 JSON**（一个大文本叶子 `map`
+                    // + 可选文本叶子 `note` + 计数/布尔）⇒ ⇒ 走 **JSON 字符串叶子扫描**：
+                    // 只换字符串叶子的内容（键名 / 数字 / 布尔 / null / 结构一律不动 ⇒
+                    // 落库结构仍合法）⇒ ⇒ 计数与键名不受影响。
                     // 零命中 ⇒ 逐字节不变（共享助手原样回传 + 侧车仅命中才挂）。
+                    //
+                    // ⚠️ **摘要面 vs 原文片段面（本族最容易做错的地方，实测 2026-11-09）**：
+                    // 大纲**只到符号签名** —— 生成器只保留**符号名 + 行号 + 路径**，
+                    // 函数体一律省略成 `...` ⇒ ⇒ **源码正文（函数体里的字面量）根本不
+                    // 进结果面** ⇒ ⇒ 本族**没有**「原文片段面」可遮 ⇒ ⇒ 真正可能带
+                    // 凭据形状的仓库派生文本是**路径行**（`## <路径>`）与**符号名**
+                    // ⇒ ⇒ 形状层（只认凭据形状）照扫即可 ⇒ ⇒ 普通标识符不会被遮。
                     let (masked, leaked_kinds) = scan_json_string_leaves(&value);
                     let mut value = masked;
                     attach_credential_tripwire(&mut value, &leaked_kinds);
                     ToolResult::ok(&call.id, value).with_name(REPO_MAP_TOOL_NAME)
                 }
                 Err(error) => {
+                    // 序列化失败面：本族的结果结构是**自产的固定形状**（字符串 + 计数 +
+                    // 布尔）⇒ ⇒ 这条错误文案**不带仓库文本** ⇒ ⇒ 不接（避免无谓变形）。
                     ToolResult::permanent_error(&call.id, format!("结果序列化失败: {error}"))
                         .with_name(REPO_MAP_TOOL_NAME)
                 }
             },
             Err(error) => {
-                ToolResult::permanent_error(&call.id, error.message()).with_name(REPO_MAP_TOOL_NAME)
+                // 结果面凭据形状绊线 (M1) · **失败面**：本族的失败帧是**裸文本**
+                // （协议定的错误帧）⇒ ⇒ 结构化侧车挂不住 ⇒ ⇒ 命中只能以**末尾一行
+                // JSON 注解**显形（与 `repo` 族失败面同口径）。
+                // ⚠️ **为什么失败面也要扫**：本族的错误文案**回显路径**
+                // （「路径不可用: <path>」/「路径越出工作区: <请求路径>」）⇒ ⇒ 那条路径
+                // 可能是调用方（模型）刚看见的、**带凭据形状的路径**（如凭据形状的文件名）
+                // ⇒ ⇒ 不扫就是明文出境 ⇒ ⇒ **成功面 + 失败面两面都扫**（别只扫一半）。
+                // 这一面**没有字段值层**（接线前也没有）⇒ ⇒ 只过形状层 ⇒ ⇒
+                // 零命中 ⇒ 错误文案**逐字节不变**（不挂任何注解）。
+                let scan = scan_result_face(&error.message());
+                let message = append_credential_tripwire(&scan.text, &scan.leaked_kinds);
+                ToolResult::permanent_error(&call.id, message).with_name(REPO_MAP_TOOL_NAME)
             }
         }
     }
 }
+
+/// 本族凭据形状绊线（M1）的**验收测试**（单独一个文件，见该文件头的说明）。
+///
+/// ⚠️ 该文件**不得**写出内核扫描助手的名字面量 ⇒ ⇒ 接线守卫的族枚举才不会
+/// 多出一族 `repo_map_tripwire`（详见该文件头的说明）。
+#[cfg(test)]
+#[path = "repo_map_tripwire.rs"]
+mod tripwire_tests;
 
 #[cfg(test)]
 mod tests {
