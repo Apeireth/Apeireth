@@ -34,8 +34,8 @@ use crate::memory_governance::{
 };
 use crate::proactive_recall::{ProactiveRecallPolicy, ProactiveRecallService};
 use crate::retrieval_pipeline::{
-    Bm25LexicalCandidateSource, HybridRetrievalPipeline, MemoryCandidateSource, RetrievalStatus,
-    StaticVectorCandidateSource,
+    diversity, Bm25LexicalCandidateSource, HybridRetrievalPipeline, MemoryCandidateSource,
+    RetrievalStatus, StaticVectorCandidateSource,
 };
 use crate::scope::{
     EmbeddingProvider, MemoryCandidate, MemoryCandidateQuery, MemoryProvenance,
@@ -968,9 +968,7 @@ impl MemoryCoordinator {
         )?;
 
         // 查询扩展（`query_expand`）：**召回增强**，不是替换查询。
-        //
         // # 为什么不是「直接用 rewritten 查询」
-        //
         // 检索打分是**各项之和**（BM25 逐词累加，无查询长度归一化）——
         // 若把扩展后的查询整句送进去，「匹配到的同义/聚类词多」的文档会累出
         // 更高分，反而压过精确匹配那一篇。加词本意是提召回，不该降精度。
@@ -1011,7 +1009,8 @@ impl MemoryCoordinator {
         }
 
         let mut final_items = Vec::new();
-        let mut total_chars = 0;
+        // ⭐ 计费口径与选择侧**同一口径**（2026-11-08）：按交付侧实际裁到的长度计
+        let (mut total_chars, span) = (0, self.ranking.candidate_span_chars);
         for cand in ranked_candidates {
             if cand.score < query.min_score {
                 continue;
@@ -1019,10 +1018,11 @@ impl MemoryCoordinator {
             if final_items.len() >= query.limit {
                 break;
             }
-            if total_chars + cand.content.len() > query.max_chars && !final_items.is_empty() {
+            let Some(spent) = diversity::fit(total_chars, &cand.content, query.max_chars, span)
+            else {
                 break;
-            }
-            total_chars += cand.content.len();
+            };
+            total_chars = spent;
             let (layer, timestamp_ms, source_ref) = candidate_meta
                 .get(&cand.id)
                 .cloned()
