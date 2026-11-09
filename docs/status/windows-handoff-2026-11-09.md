@@ -34,9 +34,29 @@
 | 裁决 B | MCP **http** 传输补 `Accept` 头（修「必 406」） | `86419253` |
 | 守卫 | 接线守卫期望集扩为**十六族** | `713529e4` |
 
+## 2.5 ⚠️ **收口门禁最后一次未通过（2026-11-09 17:09）—— 接手第一件事**
+
+> **不是环境问题、不是磁盘问题、也不是本工作线的问题** ⇒ ⇒ **是并行线 W3 的一个真缺陷**。
+
+| 项 | 实测 |
+|---|---|
+| 门禁 | `main.cargo-test` **exit=101** ⇒ `GATE FULL FAILED`（**其余阶段未跑**） |
+| 脚本给的归因 | `FAILURE_CLASS=oom` ⇒ ⚠️ **第四次证明它不是真因**（真因在 `logs/gate-full.log`） |
+| **真因** | `the_model_face_cannot_probe_someone_elses_visibility_matrix` **FAILED**（`crates/engine/runtime-assembly/tests/w2_unit_d_depth_and_routing_policy.rs:344`）⇒ ⇒ **稳定红**（单独复跑同一条 ⇒ 同红 ⇒ 非偶发） |
+| 根因（已定位到行） | panic = `授权请求: UnknownObject("ep-1")` ⇒ ⇒ 失败在 **`request_grant` 这一步** ⇒ ⇒ `object_exists("ep-1")` 为假 ⇒ ⇒ `object_exists` 是**外部注入的 resolver trait**（`crates/engine/memory/src/object_grant.rs:526`）⇒ ⇒ **测试夹具 `grant_harness::harness()` 提供的 resolver 里没有 `ep-1` 这个对象** ⇒ ⇒ **夹具与 W3 新机制的接口不匹配**（不是授权流程的逻辑错） |
+| 接手怎么修 | 二选一：① 在夹具的 resolver 里**注册 `ep-1`**；② 把测试里的对象 id 换成**夹具中已注册**的那个 ⇒ ⇒ **两处都在并行线的写域内** ⇒ ⇒ **本工作线未代改**（改它要理解 W3 新机制，且会动他的写域） |
+
+⚠️ **由此产生的两个口径**：
+* ⇒ ⇒ **基线**（519 套件 / 10933 passed / 0 failed / 47 ignored，2026-11-08 11:03）**保持不动**
+  ⇒ ⇒ **本次未刷新** ⇒ ⇒ **不写未经实测的数字**（门禁没过就没有新数字）⇒ ⇒
+  ⇒ ⇒ **上一记是最后一次通过的门禁** ⇒ ⇒ 接手修好后**再跑一次并刷新**。
+* ⇒ ⇒ **README 徽章**（`ef2dd5a3`，10933 / 2026-11-08）**保持不动** ⇒ ⇒ 理由同上。
+
 ## 3. **接到 Windows 后第一件事**：跑一次收口门禁
 
 ```powershell
+# ⓪ **先修 §2.5 那个缺陷**（并行线 W3 的夹具/接口不匹配 ⇒ 否则门禁必然红在同一处）
+
 # ① 前置检查（三条硬规则，缺一条就别跑）
 Get-Process cargo -ErrorAction SilentlyContinue   # 必须为空 ⇒ 无并行编译
 Get-PSDrive C | Select-Object Used,Free          # 空闲 < 30% ⇒ 先清 target
