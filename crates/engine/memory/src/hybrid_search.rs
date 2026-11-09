@@ -254,6 +254,39 @@ pub fn strip_cn_interrogatives(text: &str) -> String {
 }
 
 pub fn tokenize(text: &str) -> Vec<String> {
+    tokenize_impl(text, false)
+}
+
+/// ⭐⭐ **分词 + 中文单字**（2026-11-09 实测补「词在文里却查不到」的盲区）。
+///
+/// # 为什么要有（**实测数字**，不是理论）
+///
+/// 旧口径（只 bigram）里，一个中文字**只有落在「连续汉字段」的开头**才会独立成词
+/// ⇒ ⇒ 正文里的「第二次世界大战」只产出 `第二次`/`二次`，**不产出** `二`
+/// ⇒ ⇒ 而查询「二战是什么时候开始的？」的查询侧**会**产出单字 `二`
+/// ⇒ ⇒ **「二」这个字明明在正文里，索引却查不到** ⇒ ⇒ 标准答案拿���任何词法分。
+///
+/// 实测（真实查询卷，393 题 / 994 条金标；唯一变量 = 是否索引中文单字）：
+/// | 口径 | recall@10 | 全部命中 | 可达率 | 「查不到」的金标 |
+/// |---|---|---|---|---|
+/// | 只 bigram（旧） | 0.7233 | 0.5674 | 0.9644 | **20 / 994** |
+/// | bigram + 单字（新） | **0.7676** | **0.6158** | **1.0000** | **0 / 994** |
+///
+/// ⇒ ⇒ 「词在文里却查不到」这类盲区被**消掉**（20 条 ⇒ 0 条），recall@10 **+0.0444**。
+///
+/// # 口径
+///
+/// * 与 [`tokenize`] **同源**（同 bigram、同 ASCII 词规则）⇒ ⇒ 只多出「中文字单独成词」；
+/// * **查询侧与索引侧共用**（对称）⇒ ⇒ 否则会出现「索引有、查询没有」的反向盲区；
+/// * ⚠️ **代价**：索引 token 数约 **2.3 倍**、文档长度归一的分母同步变大
+///   ⇒ ⇒ 内存与打分成本上升 ⇒ ⇒ 这是**用内存换召回**的显式取舍（不是免费午餐）。
+#[must_use]
+pub fn tokenize_with_unigrams(text: &str) -> Vec<String> {
+    tokenize_impl(text, true)
+}
+
+/// 分词器本体（`with_unigrams` = 是否额外把每个中文字单独立词）。
+fn tokenize_impl(text: &str, with_unigrams: bool) -> Vec<String> {
     let mut tokens = Vec::new();
     let mut current_ascii = String::new();
     let mut last_cjk: Option<char> = None;
@@ -266,7 +299,13 @@ pub fn tokenize(text: &str) -> Vec<String> {
             if !current_ascii.is_empty() {
                 tokens.push(std::mem::take(&mut current_ascii));
             }
-            if let Some(prev) = last_cjk {
+            if with_unigrams {
+                // ⭐ 单字（每个中文字都独立成词）+ bigram（相邻两字）
+                tokens.push(c.to_string());
+                if let Some(prev) = last_cjk {
+                    tokens.push(format!("{prev}{c}"));
+                }
+            } else if let Some(prev) = last_cjk {
                 tokens.push(format!("{prev}{c}"));
             } else {
                 tokens.push(c.to_string());
