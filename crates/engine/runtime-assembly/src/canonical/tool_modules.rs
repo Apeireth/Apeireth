@@ -318,6 +318,49 @@ impl CapabilityProvider for ProcessTreeModule {
     }
 }
 
+/// 记忆对象级授权面 (`tool.object_grant`, C-D1): 把**一条**记忆以**只读**授予
+/// 某主体; 被授方可读不可写; 撤销**即时生效**; 授予 / 撤销 / 人批 / 拒绝**全部
+/// 留审计行**。
+///
+/// 语义 = **叠加 ≠ 替代**（域级可见性一个字都不改）。治理档位在治理链上
+/// ([`ObjectGrantApprovalHook`]): 读面 (list/check) 零审批 / 写面 (grant/revoke)
+/// 逐次人批 / 词表外 fail-closed 拒绝即帧。
+///
+/// ⚠️ **存在性即开关**（0 新 env 名）：账本落位存在才装 ⇒ 默认关 (opt-in)。
+///
+/// ⚠️ 模型面**只能登记请求**（`pending`）⇒ 从 pending 变 active **只能**经宿主
+/// 人批 ([`crate::canonical::object_grant::ObjectGrantActivation`] 端口) ⇒ 模型
+/// 永远不能自批。
+pub struct ObjectGrantModule {
+    tool: Arc<crate::canonical::object_grant::ObjectGrantTool>,
+}
+
+impl ObjectGrantModule {
+    /// 造一个对象级授权面模块 (注入宿主服务面)。
+    pub fn new(service: Arc<crate::canonical::object_grant::ObjectGrantService>) -> Self {
+        Self {
+            tool: Arc::new(crate::canonical::object_grant::ObjectGrantTool::new(
+                service,
+            )),
+        }
+    }
+
+    /// 底层对象级授权面工具。
+    pub fn tool(&self) -> &Arc<crate::canonical::object_grant::ObjectGrantTool> {
+        &self.tool
+    }
+}
+
+impl CapabilityProvider for ObjectGrantModule {
+    fn id(&self) -> &str {
+        "module.tool.object_grant"
+    }
+
+    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
+        vec![self.tool.clone()]
+    }
+}
+
 /// Module providing the life-integration content feed (`tool.content_feed`, J1).
 ///
 /// 内容流接入: 订阅源管理 + 受控拉取 + 结构化摘要 + 入记忆流 (L2 封套披露,

@@ -18,7 +18,7 @@ use crate::principal_forget::{MemoryGovernanceCommand, PrincipalForgetDto};
 use std::sync::{Arc, RwLock};
 
 use apeireth_core::kernel::SessionId;
-use apeireth_runtime::canonical::{Runtime, Session};
+use apeireth_runtime::canonical::{ObjectGrantActivation, Runtime, Session};
 use async_trait::async_trait;
 use axum::extract::{Extension, Path, Query, State};
 use axum::http::StatusCode;
@@ -30,6 +30,7 @@ use serde::{Deserialize, Serialize};
 use crate::domain_context::{
     audit_detail_domain, audit_detail_session, request_scope, DomainContext, DomainScope,
 };
+use crate::error_frame::{ErrorCode, ErrorFrame};
 
 /// Shared router state: the runtime, optional panel backends, and the
 /// gateway-level SSE event bus.
@@ -572,6 +573,14 @@ pub struct GatewayServices {
     /// 的四滑杆现值/锁定态/最近移动投影 (与 `tool.trait_report` 同账同源)。
     /// 适配实现在组合根; 未注入 = `501`。
     pub traits: Option<Arc<dyn crate::trait_panel::TraitPanelQuery>>,
+    /// C-D1 对象授权的**宿主激活口** (`POST /v1/panel/grants/approve` /
+    /// `POST /v1/panel/grants/deny`): 账本语义在引擎侧
+    /// ([`ObjectGrantActivation`] 端口), 网关只做 HTTP 面 + 鉴权 + 审计。
+    ///
+    /// 模型面词表只有 `grant`/`revoke`/`list`/`check` ⇒ **approve/deny 只能宿主调**
+    /// ⇒ 审批人身份只来自令牌绑定链 (请求体不得自带)。
+    /// 未注入 = 该面 `501 unsupported` (不假装有激活口)。
+    pub grant_activation: Option<Arc<dyn ObjectGrantActivation>>,
 }
 
 impl GatewayServices {
@@ -611,6 +620,9 @@ impl GatewayServices {
             tasks: None,
             care: None,
             traits: None,
+            // C-D1 宿主激活口: 账本在引擎侧 (组合根显式注入), 旧 PanelData 适配
+            // 不承载它 ⇒ 此处恒 `None` (未注入 = 501 unsupported)。
+            grant_activation: None,
         }
     }
 }
@@ -728,7 +740,11 @@ impl ModuleQuery for PanelDataAdapter {
 pub fn panel_admin_face(endpoint: &str) -> bool {
     matches!(
         endpoint,
-        "/v1/panel/grants/revoke" | "/v1/panel/users" | "/v1/panel/domains"
+        "/v1/panel/grants/revoke"
+            | "/v1/panel/grants/approve"
+            | "/v1/panel/grants/deny"
+            | "/v1/panel/users"
+            | "/v1/panel/domains"
     )
 }
 
@@ -781,6 +797,14 @@ pub fn panel_routes() -> Router<GatewayState> {
         .route("/v1/panel/graph", get(memory_graph))
         .route("/v1/panel/grants", get(list_grants))
         .route("/v1/panel/grants/revoke", axum::routing::post(revoke_grant))
+        // C-D1 对象授权**宿主激活口** (owner 档, 见 [`panel_admin_face`]):
+        // approve / deny **只能宿主调** (模型面词表只有 grant/revoke/list/check)
+        // ⇒ 审批人身份来自令牌绑定链, 请求体**不得**自带 approver/decided_by。
+        .route(
+            "/v1/panel/grants/approve",
+            axum::routing::post(approve_grant),
+        )
+        .route("/v1/panel/grants/deny", axum::routing::post(deny_grant))
         .route("/v1/organs", get(list_organs))
         .route("/v1/modules", get(list_modules))
         .route("/v1/safety/guard/status", get(guard_status))
@@ -1416,6 +1440,147 @@ async fn revoke_grant(
     match commands.revoke_grant(&request.capability).await {
         Ok(mutation) => (StatusCode::OK, Json(mutation)).into_response(),
         Err(e) => panel_error(e),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// C-D1 宿主激活口 (approve / deny) —— owner 档 + 审批人身份只来自令牌绑定链
+// ---------------------------------------------------------------------------
+
+/// `approve` 请求体。
+///
+/// ⚠️ **未知字段一律拒** (`deny_unknown_fields`) ⇒ 请求体**不得**自带
+/// `approver` / `decided_by` (审批人身份只来自令牌绑定链) ⇒ 自带即拒,
+/// **绝不采信**。`reason` **只给 deny** ⇒ approve 带 `reason` 也拒。
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ApproveGrantRequest {
+    /// 待裁决的授权 id。
+    grant_id: String,
+}
+
+/// `deny` 请求体 (未知字段一律拒, 同 [`ApproveGrantRequest`])。
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DenyGrantRequest {
+    /// 待裁决的授权 id。
+    grant_id: String,
+    /// 否决理由 (可选)。
+    reason: Option<String>,
+}
+
+/// 审批人身份: **只**来自令牌绑定链 (`Extension<UserContext>`) ⇒ 未绑定 = 403
+/// fail-closed (绝不取请求体里的自称身份)。
+fn approver_identity(user: &crate::client_tokens::UserContext) -> Option<&str> {
+    user.user_id()
+}
+
+/// 403 帧 (与角色门同一形状: `permission_denied`)。
+fn approver_required(endpoint: &str) -> Response {
+    ErrorFrame::response(
+        StatusCode::FORBIDDEN,
+        ErrorCode::PermissionDenied,
+        format!(
+            "object grant activation refused {endpoint}: the calling client is not bound to any user \
+             (the approver identity only comes from the token binding chain)"
+        ),
+    )
+    .into_response()
+}
+
+/// `POST /v1/panel/grants/approve` —— 人批**通过** (owner 档)。
+///
+/// * 审批人身份: `Extension<UserContext>::user_id()` ⇒ **`None` ⇒ 403**;
+/// * 请求体只带 `grant_id` (未知字段拒 ⇒ 自带 `approver` 必被拒, 绝不采信);
+/// * 审计: allow 与 deny **都**落一行 `gateway.user_action`
+///   (动作名 `object_grant_approve` / `object_grant_deny`)。
+async fn approve_grant(
+    State(state): State<GatewayState>,
+    Extension(user): Extension<crate::client_tokens::UserContext>,
+    Json(request): Json<ApproveGrantRequest>,
+) -> Response {
+    const ENDPOINT: &str = "/v1/panel/grants/approve";
+    if let Some(response) = permissions_unavailable(&state) {
+        return response;
+    }
+    let Some(activation) = &state.services.grant_activation else {
+        return unsupported("permissions.approve");
+    };
+    let Some(approver) = approver_identity(&user) else {
+        return approver_required(ENDPOINT);
+    };
+    match activation.approve(&request.grant_id, approver) {
+        Ok(()) => {
+            crate::client_tokens::record_user_action(
+                Some(state.observations.as_ref()),
+                user.user_id(),
+                user.role(),
+                "object_grant_approve",
+                ENDPOINT,
+                true,
+                None,
+            );
+            (StatusCode::OK, Json(GrantMutationDto { ok: true })).into_response()
+        }
+        Err(e) => {
+            crate::client_tokens::record_user_action(
+                Some(state.observations.as_ref()),
+                user.user_id(),
+                user.role(),
+                "object_grant_approve",
+                ENDPOINT,
+                false,
+                None,
+            );
+            panel_error(e)
+        }
+    }
+}
+
+/// `POST /v1/panel/grants/deny` —— 人批**否决** (owner 档)。
+///
+/// 口径与 [`approve_grant`] 同 (身份只来自令牌绑定链 / 未知字段拒 / 两层审计),
+/// 差别只在**否决理由** (`reason`, 可选)。
+async fn deny_grant(
+    State(state): State<GatewayState>,
+    Extension(user): Extension<crate::client_tokens::UserContext>,
+    Json(request): Json<DenyGrantRequest>,
+) -> Response {
+    const ENDPOINT: &str = "/v1/panel/grants/deny";
+    if let Some(response) = permissions_unavailable(&state) {
+        return response;
+    }
+    let Some(activation) = &state.services.grant_activation else {
+        return unsupported("permissions.deny");
+    };
+    let Some(approver) = approver_identity(&user) else {
+        return approver_required(ENDPOINT);
+    };
+    match activation.deny(&request.grant_id, approver, request.reason.as_deref()) {
+        Ok(()) => {
+            crate::client_tokens::record_user_action(
+                Some(state.observations.as_ref()),
+                user.user_id(),
+                user.role(),
+                "object_grant_deny",
+                ENDPOINT,
+                true,
+                None,
+            );
+            (StatusCode::OK, Json(GrantMutationDto { ok: true })).into_response()
+        }
+        Err(e) => {
+            crate::client_tokens::record_user_action(
+                Some(state.observations.as_ref()),
+                user.user_id(),
+                user.role(),
+                "object_grant_deny",
+                ENDPOINT,
+                false,
+                None,
+            );
+            panel_error(e)
+        }
     }
 }
 

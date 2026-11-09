@@ -23,8 +23,12 @@ use apeireth_cli::flags;
 // ---------------------------------------------------------------------------
 
 /// `apeireth chat` 的旗标白名单 (元旗标当正文: 正文不被帮助吞掉)。
+///
+/// ⚠️ `--privacy` = **本回合的隐私档声明** (取值域 `ordinary|restricted|
+/// confidential`; 不传 = 不声明 ⇒ 缺省兜底 ⇒ 隐私闸不过滤 ⇒ 零行为变化)。
+/// 它只进**本地**选路输入, **绝不**进规范请求 `metadata` (那一整包外发给厂商)。
 pub(crate) const CHAT_FLAGS: flags::FlagSpec = flags::FlagSpec {
-    value: &["--model", "--session"],
+    value: &["--model", "--session", "--privacy"],
     boolean: &[],
     meta_as_positional: true,
 };

@@ -61,6 +61,10 @@ pub mod metrics;
 pub mod module;
 mod module_host;
 pub mod module_messages;
+/// 记忆对象级授权的**宿主激活口**（C-D1）：模型面只能登记请求 ⇒ 从 `pending`
+/// 变 `active` **只能**经宿主人批 ⇒ 端口定义在本层（引擎不依赖适配器 ⇒ 端口
+/// 必须在两边都能看见的低层 crate）。
+pub mod object_grant_activation;
 pub mod principal_authority;
 pub mod profiles;
 pub mod registered_hooks;
@@ -132,6 +136,7 @@ pub use module::{
     ModuleInvocationResponse, ModuleInvoker, ModuleManifest, ModuleOutcome, PromptOverlay,
     DEFAULT_MAX_INVOCATION_DEPTH, DEFAULT_MAX_MODULE_INVOCATIONS,
 };
+pub use object_grant_activation::ObjectGrantActivation;
 pub use plan_mode_control::PlanModeExitControl;
 pub use provider::{ProviderHealth, ProviderRouter, RoutedCompletion};
 pub use quota::{

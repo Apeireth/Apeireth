@@ -10,11 +10,13 @@
 //!   [`super::super::module::DEFAULT_MAX_INVOCATION_DEPTH`] = 1 ⇒ 运行时自己在
 //!   depth 2 就拒 ⇒ **上限 > 1 不可达** (配了也不触发)。⚠️ **本维不是有效的
 //!   深度防护**: 它报的是运行时调用树读数, 不是"思考深度"本身。
-//! * **只留一套机制** —— 喂深度只走**绝对**深度
-//!   ([`DepthQuota::observe_depth`]); 相对进/出层 ([`DepthQuota::enter`] /
-//!   [`DepthQuota::exit`]) **禁止**与绝对深度混用: 两套口径可脱钩 (相对口径
-//!   只抬自己的计数, 绝对口径只抬峰值) ⇒ 上限可被"分摊到多条路径"绕过。
-//!   生产接线只用绝对深度。
+//! * **只留一套机制** —— 喂深度只走**嵌套作用域**
+//!   ([`DepthQuotaHandle::scope`]): 作用域观测**绝对**深度
+//!   ([`DepthQuota::observe_depth`], 模块内私有) + 占住当前层, 守卫 drop 即回落
+//!   ⇒ 当前层**只在作用域内**移动, 出作用域必回落 (早退 / `?` / panic 也不漂)。
+//!   相对进/出层 ([`DepthQuota::enter`] / [`DepthQuota::exit`]) **禁止**与绝对
+//!   深度混用: 两套口径可脱钩 (相对口径只抬自己的计数, 绝对口径只抬峰值)
+//!   ⇒ 上限可被"分摊到多条路径"绕过。生产接线只用绝对深度。
 //! * **峰值单调不降** (只由绝对深度观测抬升, 出栈不洗白); **当前层随嵌套
 //!   作用域回落** —— 作用域守卫 [`DepthScope`] 是 RAII ⇒ 早退 / `?` / panic
 //!   都不抬高当前层 (不必靠自觉配对)。
@@ -36,9 +38,16 @@ pub const MAX_QUOTA_DEPTH: u64 = u32::MAX as u64;
 
 /// 深度维上限的**宽松**解析 (配额家族同纪律: 非法值 = 不设限)。
 ///
-/// ⚠️ **非生产路径**: 深度维打错的代价是"思考深度无上限" (fail-open), 故生产
-/// 走 [`parse_quota_max_depth_strict`] (非法值明确报错, 绝不静默放行)。
-/// 保留本函数只为与配额家族同形 (其余三维同口径)。
+/// ⚠️⚠️ **非生产路径 · 误用会 fail-open**: 非法值 (0 / 负数 / 非数字 / 小数)
+/// 在本函数里被**静默读成"不设限"** ⇒ 深度维打错 = **思考深度无上限**, 且
+/// 外部看不出任何异常。**生产解析一律走 [`parse_quota_max_depth_strict`]**
+/// (非法值**明确报错**, 绝不静默放行)。
+///
+/// 保留本函数只为与配额家族同形 (其余三维同口径); 它**仍可被外部 crate 调到**
+/// (全仓外部调用: `crates/engine/runtime/tests/quota_depth.rs`; 且
+/// `canonical/quota.rs` 把它 re-export 出去 ⇒ 无法降可见性而不动那两个文件)
+/// ⇒ 故此处**逐字**写明它的 fail-open 性质, 并由
+/// `tests/quota_depth_wiring.rs` 的用例钉住「生产解析走 strict」。
 pub fn parse_quota_max_depth(raw: Option<&str>) -> Option<u64> {
     raw.map(str::trim)
         .filter(|value| !value.is_empty())
@@ -46,6 +55,19 @@ pub fn parse_quota_max_depth(raw: Option<&str>) -> Option<u64> {
         .and_then(|value| u64::try_from(value).ok())
         .filter(|value| *value > 0)
         .map(|value| value.min(MAX_QUOTA_DEPTH))
+}
+
+/// 上限钳制 (家族同口径): 越界值钳到 [`MAX_QUOTA_DEPTH`], **不**发明更高的
+/// 上限 (否则 `Some(u64::MAX)` 会让 `check()` 永不触发 ⇒ 超深**静默饱和**)。
+const fn clamp_depth_ceiling(max_depth: Option<u64>) -> Option<u64> {
+    match max_depth {
+        Some(value) => Some(if value > MAX_QUOTA_DEPTH {
+            MAX_QUOTA_DEPTH
+        } else {
+            value
+        }),
+        None => None,
+    }
 }
 
 /// 深度维上限的**严格**解析 (生产路径)。
@@ -95,12 +117,16 @@ impl DepthQuota {
 
     /// 带上限的深度计量器 (`None` = 不设限)。
     ///
+    /// 上限**钳到 [`MAX_QUOTA_DEPTH`]** (家族同口径): 越界值钳到锚点, 不发明
+    /// 更高的上限 (否则 `Some(u64::MAX)` 会让 `check()` 永不触发 ⇒ 超深**静默
+    /// 饱和**)。
+    ///
     /// 注: 上限 `0` 只可能由直接构造得到 (配置解析把 0 读成"不设限" 或
     /// **报错**, 见 [`parse_quota_max_depth_strict`]), 语义是"不容许任何嵌套
     /// 层" —— 顶层回合即到顶。
     pub const fn with_max_depth(max_depth: Option<u64>) -> Self {
         Self {
-            max_depth,
+            max_depth: clamp_depth_ceiling(max_depth),
             current_depth: 0,
             peak_depth: 0,
         }
@@ -157,7 +183,11 @@ impl DepthQuota {
     /// 绝对 = 既有调用树读数给出的层数 (顶层 0 / 侧车 1), 不是"又深了几层"。
     /// 峰值单调不降; 当前层取"当前占用的最深一层" (嵌套作用域的守卫负责回落)。
     /// 返回抬升后的峰值。
-    pub fn observe_depth(&mut self, depth: u32) -> u32 {
+    ///
+    /// ⚠️ **模块内私有**: 裸调没有配对的回落 ⇒ 会把当前层**永久**抬上去 (显示
+    /// 口径永久漂)。对外唯一的喂入口是 [`DepthQuotaHandle::scope`] (带 RAII
+    /// 守卫 ⇒ 出作用域必回落)。
+    fn observe_depth(&mut self, depth: u32) -> u32 {
         self.peak_depth = self.peak_depth.max(depth);
         self.current_depth = self.current_depth.max(depth);
         self.peak_depth
@@ -264,7 +294,7 @@ impl DepthQuotaHandle {
         }
     }
 
-    /// 带上限的账本句柄 (`None` = 不设限)。
+    /// 带上限的账本句柄 (`None` = 不设限); 上限**钳到 [`MAX_QUOTA_DEPTH`]**。
     pub fn with_max_depth(max_depth: Option<u64>) -> Self {
         Self::new(DepthQuota::with_max_depth(max_depth))
     }
@@ -278,15 +308,12 @@ impl DepthQuotaHandle {
         *self.lock()
     }
 
-    /// 绝对深度观测 (生产接线唯一的喂入口; 见模块头契约)。
-    pub fn observe_depth(&self, depth: u32) -> u32 {
-        self.lock().observe_depth(depth)
-    }
-
     /// 进入一个嵌套作用域: 观测**绝对**深度 + 占住当前层。
     ///
-    /// 到顶 ⇒ `Err` = 既有配额拒绝语义的事实 (调用方据此拒这次嵌套);
-    /// 放行 ⇒ 返回守卫, 守卫 drop 即回落当前层 (RAII ⇒ 早退也不抬高)。
+    /// **对外唯一的喂入口** (裸调观测没有配对的回落 ⇒ 当前层会永久漂 ⇒ 已收
+    /// 起来, 见 [`DepthQuota::observe_depth`]): 到顶 ⇒ `Err` = 既有配额拒绝
+    /// 语义的事实 (调用方据此拒这次嵌套); 放行 ⇒ 返回守卫, 守卫 drop 即回落
+    /// 当前层 (RAII ⇒ 早退也不抬高)。
     pub fn scope(&self, level: u32) -> Result<DepthScope, QuotaExceeded> {
         let mut quota = self.lock();
         if let Some(exceeded) = quota.check() {
@@ -331,8 +358,12 @@ impl DepthQuotaHandle {
     }
 
     /// 绑上限 (上限随计量器: 账本自己带上限)。
+    ///
+    /// 上限**钳到 [`MAX_QUOTA_DEPTH`]** (与构造器同口径): 越界值钳到锚点, 不
+    /// 发明更高的上限 (否则 `Some(u64::MAX)` ⇒ `check()` 永不触发 ⇒ 超深
+    /// **静默饱和**)。
     pub fn set_max_depth(&self, max_depth: Option<u64>) {
-        self.lock().max_depth = max_depth;
+        self.lock().max_depth = clamp_depth_ceiling(max_depth);
     }
 
     /// 回落当前层 (作用域守卫专用)。
@@ -366,5 +397,44 @@ pub struct DepthScope {
 impl Drop for DepthScope {
     fn drop(&mut self) {
         self.handle.restore_current(self.previous);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_ceiling_is_clamped_so_the_check_never_silently_saturates() {
+        // 越界上限钳到家族锚点 (不发明更高的上限)。
+        let clamped = DepthQuota::with_max_depth(Some(u64::MAX));
+        assert_eq!(clamped.max_depth(), Some(MAX_QUOTA_DEPTH));
+
+        // 钳制后 `check()` 的读数是**锚点**而不是 u64::MAX: 峰值恰到锚点即耗尽
+        // (不静默饱和 —— 钳制只堵"无上限", 不把上限变成有效防护)。
+        let mut quota = DepthQuota::with_max_depth(Some(u64::MAX));
+        quota.peak_depth = u32::MAX;
+        assert_eq!(
+            quota.check(),
+            Some(QuotaExceeded {
+                dimension: QuotaDimension::Depth,
+                limit: MAX_QUOTA_DEPTH,
+                consumed: u64::from(u32::MAX),
+            }),
+            "峰值恰到锚点即出事实 (未钳制时 u64::MAX 会让 check() 永不触发)"
+        );
+    }
+
+    #[test]
+    fn the_bare_feed_is_module_private_and_the_scope_always_falls_back() {
+        // 裸调观测没有配对的回落 ⇒ 当前层会永久漂 ⇒ 只在模块内可见;
+        // 对外唯一的喂入口是 scope() (RAII ⇒ 出作用域必回落)。
+        let handle = DepthQuotaHandle::with_max_depth(None);
+        {
+            let _scope = handle.scope(3).expect("不设限 ⇒ 放行");
+            assert_eq!(handle.current_depth(), 3);
+        }
+        assert_eq!(handle.current_depth(), 0, "出作用域必回落");
+        assert_eq!(handle.peak_depth(), 3, "峰值不回落");
     }
 }

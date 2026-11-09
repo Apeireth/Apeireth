@@ -137,7 +137,16 @@ fn the_routing_policy_probe_reports_the_last_decision_and_its_exclusions() {
         decision.privacy_source, "defaulted",
         "缺省必须看起来像缺省（declared / defaulted）"
     );
-    assert_eq!(decision.privacy, "ordinary");
+    // ⚠️ 2026-11-09：隐私档**字面量已从自述面移除**（自述节是工具结果 ⇒ 会进模型上下文
+    // ⇒ 密级标注不能由自述面转述给模型）⇒ 旧的 `decision.privacy` 断言**必须删**，
+    // 换成**更强的不变量**：决策的 JSON 里**不得出现任何档位字面量**。
+    let decision_json = serde_json::to_string(&decision).expect("决策可序列化");
+    for level in ["ordinary", "restricted", "confidential"] {
+        assert!(
+            !decision_json.contains(level),
+            "自述面不得回显隐私档字面量 ({level}): {decision_json}"
+        );
+    }
     assert!(
         !decision.comparisons.is_empty(),
         "候选逐行比较要露出来（含排除理由）"

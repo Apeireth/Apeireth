@@ -94,6 +94,22 @@ pub struct ProductionModulesConfig {
     /// (opt-in)。审批: 快照读面零审批 / 取消面逐次人批**绝对**（列入人工审批
     /// 地板 ⇒ 任何预设下都停人批）。
     pub process_tree: bool,
+    /// Register the memory object-level authorization face (`tool.object_grant`,
+    /// C-D1) when the ledger placement is supplied.
+    ///
+    /// 记忆对象级授权面: 把**一条**记忆（episode / fact）以**只读**授予某主体;
+    /// 被授方可读不可写; 撤销**即时生效**; 授予 / 撤销 / 人批 / 拒绝**全部留
+    /// 审计行**。语义 = **叠加 ≠ 替代**（域级可见性一个字都不改）。
+    ///
+    /// ⚠️ **开关口径 = 存在性即开关**（**0 新 env 名**）：宿主给了账本落位 ⇒ 装;
+    /// 宿主没给 ⇒ 装配根按**默认账本路径是否存在**决定（存在才装 ⇒ 默认关 ⇒
+    /// 逐字节零变化）。
+    ///
+    /// ⚠️ **模型面没有 approve/deny**：从 `pending` 变 `active` **只能**经宿主
+    /// 人批（[`ObjectGrantActivation`] 端口）⇒ 模型永远不能自批。
+    ///
+    /// [`ObjectGrantActivation`]: apeireth_runtime::canonical::ObjectGrantActivation
+    pub object_grant: Option<ObjectGrantConfig>,
     /// Register the life-integration content feed (`tool.content_feed`, J1) when
     /// config is supplied.
     ///
@@ -388,6 +404,28 @@ pub struct ProductionModulesConfig {
     pub guard_watch: Option<apeireth_tools_canonical::device::guard_watch::GuardWatchConfig>,
 }
 
+/// 记忆对象级授权面（`tool.object_grant`, C-D1）的**装配面**。
+///
+/// ⚠️ **账本文件 = 信任锚**：可写这份账本 = 具备授权能力本身 ⇒ 落位必须是
+/// **宿主独占目录**（本面默认落 `<data_root>/object-grant/ledger.jsonl` ⇒ 独占
+/// 子目录，不与记忆库 / 日程账混放）。
+///
+/// 账本文件 = 账本行 + 审计行的 JSONL（append-only）；坏行按不存在处理。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ObjectGrantConfig {
+    /// 授权账本文件（账本行 + 审计行）。
+    pub ledger_path: PathBuf,
+}
+
+impl ObjectGrantConfig {
+    /// 造一份装配面（账本落位）。
+    pub fn new(ledger_path: impl Into<PathBuf>) -> Self {
+        Self {
+            ledger_path: ledger_path.into(),
+        }
+    }
+}
+
 impl Default for ProductionModulesConfig {
     fn default() -> Self {
         Self {
@@ -408,6 +446,7 @@ impl Default for ProductionModulesConfig {
             web_search: None,
             calendar: None,
             process_tree: false,
+            object_grant: None,
             content_feed: None,
             care_schedule: None,
             voice_speak: None,

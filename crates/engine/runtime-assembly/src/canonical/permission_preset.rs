@@ -110,6 +110,13 @@ pub fn is_write_or_execute_capability(capability: &CapabilityId) -> bool {
         // (取消一棵树 = 动进程 ⇒ 执行面) ⇒ 与 `tool.shell` 同档, 只读会话应
         // 整体拒绝; 快照读面本身零审批。
         "tool.process_tree",
+        // 能力创造线 W1 · 记忆对象级授权面 (`tool.object_grant`): 授予 / 撤销改的
+        // 是**可见性** (域可见叠加一条对象级只读授权) ⇒ 写面 ⇒ 只读会话应**整体
+        // 拒绝** (同 `tool.filesystem` 口径: 含写权的面整个算写)。
+        //
+        // ⚠️ 读面 (`list` / `check`) 也**在本名单内** ⇒ 授权元数据本身是**跨分区
+        // 敏感面** ⇒ 只读会话不该看见 (R4 硬门: 跨分区披露只经人批, 不经只读面)。
+        "tool.object_grant",
         // ⚠️ `tool.web_search` **不在**本名单: 它是出网**只读**面（检索 + 来源
         // 标注）**且不落记忆流** ⇒ 只读会话可出网读。
         // ⚠️ 而 `tool.fetch` **在**本名单（上面的「出口 / 远端副作用」段）⇒

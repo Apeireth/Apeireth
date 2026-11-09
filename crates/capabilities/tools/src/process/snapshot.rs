@@ -29,7 +29,15 @@
 //! ⇒ 取消面**不会**动到别的会话 / 别的账号起的进程。
 //!
 //! 判定失败一律**保守拒绝**（fail-closed）：父进程已退出而被重新挂靠的孤儿进程、
-//! 命名空间外的 pid、pid 复用等情形，一律当作「不可取消」。
+//! 命名空间外的 pid 一律当作「不可取消」。
+//!
+//! ⚠️ **pid 复用的残余风险（如实，不夸大）**：链上某个 pid 若已被系统**复用**给
+//! 别人的进程，则它的子进程会被误并入本会话的树。
+//! - **Linux 可闭环**：后端给出进程启动时刻 ⇒ 归属判定**逐跳**校验「父进程的启动
+//!   时刻不晚于子进程」⇒ 被复用的 pid（父比子还新）⇒ 链不可信 ⇒ **拒绝**。
+//! - **Windows 无解**：系统进程枚举**不提供**进程启动时刻 ⇒ 同一校验**无法**成立
+//!   ⇒ 残余误并入风险**存在**（本面拿不到别的判据：收容容器句柄不对外暴露）⇒
+//!   记为**已知残余风险**，**不**再宣称「一律不可取消」。
 //!
 //! # 幂等口径
 //!
@@ -53,6 +61,14 @@ const MAX_ANCESTOR_HOPS: usize = 256;
 
 /// 取消台账的容量上限（只保留最近若干条，避免无界增长）。
 const LEDGER_CAPACITY: usize = 64;
+
+/// 取消台账记录的**有效期**（毫秒）：过期后同一 pid 视为**新树**。
+///
+/// **为什么需要**：平台**不提供**进程启动时刻时（Windows），台账只能按 pid 记 ⇒
+/// 命中即回放、绝不发终止 ⇒ 该 pid 之后**取消不掉**（漏杀，且**永不过期**）。
+/// ⇒ 过期兜底把「漏杀」限制在有效期内（到期后按新树处理 ⇒ 宁可多杀一次，也不
+/// 永久漏杀）。
+const LEDGER_TTL_MS: u64 = 300_000;
 
 // ===========================================================================
 // 公共契约（平台无关）
@@ -337,12 +353,18 @@ pub fn cancel_process_tree(root_pid: u32) -> Result<ProcessTreeCancel, ProcessTr
     // 逐个终止（深层优先：逆序遍历 ⇒ 子进程先于父进程）。
     let mut terminated = Vec::new();
     let mut already_exited = Vec::new();
-    let mut failed = Vec::new();
+    let mut failed: Vec<u32> = Vec::new();
+    let mut failure_reasons: Vec<String> = Vec::new();
     for process in tree.iter().rev() {
         match backend::terminate(process.pid) {
             Ok(true) => terminated.push(process.pid),
+            // `Ok(false)` = 目标**真·不存在**（已退出）⇒ 如实归入「已退出」。
             Ok(false) => already_exited.push(process.pid),
-            Err(_) => failed.push(process.pid),
+            // 失败（如权限不足）⇒ **绝不**并入「已退出」（那是谎报）⇒ 记 pid + 原因。
+            Err(error) => {
+                failed.push(process.pid);
+                failure_reasons.push(format!("pid {}: {error}", process.pid));
+            }
         }
     }
 
@@ -353,6 +375,22 @@ pub fn cancel_process_tree(root_pid: u32) -> Result<ProcessTreeCancel, ProcessTr
         if group == root_pid && Some(group) != backend::own_group() && group > 1 {
             let _ = backend::terminate_group(group);
         }
+    }
+
+    // 失败成员 ⇒ 走**错误面**（原因必须**可辨**：模型分得出「权限不足」与「已退出」）。
+    // 错误文案里**如实**带上已终止 / 已退出清单 ⇒ 不丢信息。
+    // ⚠️ 此时**不**记台账：取消未完全成功 ⇒ 重复调用会重新尝试并重新报出原因。
+    // ⚠️ 公共类型的 `failed` 桶因此**恒空**（失败不再并入成功帧）；保留该字段是
+    // 为了**不破坏既有公共契约**（工具面按它解构）⇒ 后续如要逐 pid 带原因，需由
+    // 工具面 owner 一起改（新增字段 ⇒ 两边同步）。
+    if !failed.is_empty() {
+        return Err(ProcessTreeError::Io {
+            message: format!(
+                "cancel failed for {} member(s) [{}]; terminated={terminated:?}; already_exited={already_exited:?}",
+                failed.len(),
+                failure_reasons.join("; "),
+            ),
+        });
     }
 
     ledger_record(root_pid, root.start_time, terminated.clone());
@@ -398,6 +436,11 @@ fn index_by_pid(processes: &[RawProcess]) -> BTreeMap<u32, &RawProcess> {
 ///
 /// 沿父进程链上溯，链上出现当前进程 pid 即命中；一路上溯到会话初始进程仍未命中
 /// ⇒ 不属于本会话 ⇒ 拒绝（fail-closed）。
+///
+/// **逐跳启动时刻校验**（平台提供启动时刻时）：父进程的启动时刻必须**不晚于**子
+/// 进程 ⇒ 若某个 pid 已被系统**复用**给别人的进程（父比子还新），链即不可信 ⇒
+/// **拒绝**（fail-closed）⇒ 复用导致的误并入路径在可判定的平台上被闭环。
+/// 平台不提供启动时刻时（Windows）⇒ 该校验**不成立** ⇒ 残余风险如实记在模块头。
 fn owned_by_session(index: &BTreeMap<u32, &RawProcess>, root_pid: u32) -> bool {
     let self_pid = std::process::id();
     let mut cursor = root_pid;
@@ -415,9 +458,26 @@ fn owned_by_session(index: &BTreeMap<u32, &RawProcess>, root_pid: u32) -> bool {
         if process.parent_pid == 0 {
             return false;
         }
+        if !parent_started_before_child(index, process) {
+            // 父进程比子进程还新 ⇒ 该 pid 被系统复用 ⇒ 链不可信 ⇒ 拒绝。
+            return false;
+        }
         cursor = process.parent_pid;
     }
     false
+}
+
+/// 父进程的启动时刻是否**不晚于**子进程（平台不提供启动时刻 ⇒ 无法校验 ⇒ 放行该跳）。
+fn parent_started_before_child(index: &BTreeMap<u32, &RawProcess>, child: &RawProcess) -> bool {
+    let Some(parent) = index.get(&child.parent_pid) else {
+        // 父不在表内 ⇒ 下一跳的 `index.get` 会判否 ⇒ 这里放行不改变结论。
+        return true;
+    };
+    match (child.start_time, parent.start_time) {
+        (Some(child_start), Some(parent_start)) => parent_start <= child_start,
+        // 平台不提供启动时刻 ⇒ 该校验不成立（残余风险如实记在模块头）。
+        _ => true,
+    }
 }
 
 /// 收集以 `root_pid` 为根的整棵树（根在前，breadth-first）。
@@ -472,16 +532,29 @@ struct CancelRecord {
     root_pid: u32,
     start_time: Option<u64>,
     terminated: Vec<u32>,
+    /// 入账时刻 (epoch 毫秒)：用于**过期兜底**（平台不提供启动时刻时，pid 级台账
+    /// 会**永久**挡住该 pid ⇒ 漏杀永不过期 ⇒ 到期按新树处理）。
+    recorded_at_ms: u64,
+}
+
+/// 当前时刻 (epoch 毫秒；时钟回拨不编造, 如实取系统读数)。
+fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|value| value.as_millis() as u64)
+        .unwrap_or(0)
 }
 
 /// 取消台账（会话内）。
 static CANCEL_LEDGER: LazyLock<Mutex<Vec<CancelRecord>>> = LazyLock::new(|| Mutex::new(Vec::new()));
 
-/// 查台账里该 pid 的记录（并校验 pid 是否已被复用）。
+/// 查台账里该 pid 的记录（并校验 pid 是否已被复用 / 记录是否过期）。
 ///
-/// * 记录存在且 pid 未被复用 ⇒ 返回记录（调用方回放幂等结果），**记录保留**
+/// * 记录存在、未过期、pid 未被复用 ⇒ 返回记录（调用方回放幂等结果），**记录保留**
 ///   ⇒ 第 N 次重复取消依旧是幂等回放（零副作用）。
 /// * pid 已被系统复用（启动时刻不同）⇒ 记录作废并删除，返回 `None`（按新树处理）。
+/// * 记录**过期**（超过 [`LEDGER_TTL_MS`]）⇒ 记录作废并删除，返回 `None`
+///   （按新树处理）⇒ 平台不给启动时刻时，pid 不会**永久**挡住取消（漏杀兜底）。
 fn ledger_peek(root_pid: u32, current_start_time: Option<u64>) -> Option<CancelRecord> {
     let mut ledger = CANCEL_LEDGER
         .lock()
@@ -495,7 +568,8 @@ fn ledger_peek(root_pid: u32, current_start_time: Option<u64>) -> Option<CancelR
         // 平台不提供启动时刻 ⇒ 无法区分复用 ⇒ 保守按「同一棵树」处理（不重复动它）。
         _ => true,
     };
-    if same_tree {
+    let expired = now_ms().saturating_sub(record.recorded_at_ms) > LEDGER_TTL_MS;
+    if same_tree && !expired {
         Some(record)
     } else {
         ledger.remove(position);
@@ -513,6 +587,7 @@ fn ledger_record(root_pid: u32, start_time: Option<u64>, terminated: Vec<u32>) {
         root_pid,
         start_time,
         terminated,
+        recorded_at_ms: now_ms(),
     });
     if ledger.len() > LEDGER_CAPACITY {
         ledger.remove(0);
@@ -595,7 +670,12 @@ mod backend {
         }
         let error = std::io::Error::last_os_error();
         match error.raw_os_error() {
+            // 目标**真·不存在** ⇒ 「已退出」。
             Some(libc::ESRCH) => Ok(false),
+            // 权限不足 ⇒ **失败**（原因可辨），绝不并入「已退出」。
+            Some(libc::EPERM) => Err(ProcessTreeError::Io {
+                message: format!("terminate pid {pid} failed: permission denied"),
+            }),
             _ => Err(ProcessTreeError::Io {
                 message: format!("terminate pid {pid} failed: {error}"),
             }),
@@ -702,8 +782,15 @@ mod backend {
     //!
     //! ⚠️ **收容组归属不可判定**：执行侧的收容容器句柄不对外暴露 ⇒ 本后端拿不到
     //! 「某个进程是否仍在该容器内」的判据 ⇒ 组归属一律记 `Undetermined`（**不谎报**）。
+    //!
+    //! ⚠️ **平台不提供进程启动时刻**：系统进程枚举只给父子关系与映像名 ⇒ 取消台账
+    //! 的「(pid + 启动时刻)」在 Windows 上**退化为 pid 级** ⇒ 命中即回放、绝不发
+    //! 终止（**宁可不动也不误杀**）⇒ 代价是「漏杀」⇒ 由台账过期兜底收口。
 
-    use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
+    use windows_sys::Win32::Foundation::{
+        CloseHandle, GetLastError, ERROR_ACCESS_DENIED, ERROR_INVALID_PARAMETER,
+        ERROR_NO_MORE_FILES, HANDLE, INVALID_HANDLE_VALUE,
+    };
     use windows_sys::Win32::System::Diagnostics::ToolHelp::{
         CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
         TH32CS_SNAPPROCESS,
@@ -718,58 +805,111 @@ mod backend {
     /// 进程仍在运行时 `GetExitCodeProcess` 返回的退出码。
     const STILL_ACTIVE: u32 = 259;
 
+    /// 进程句柄（**RAII**：`Drop` 里关句柄 ⇒ 任何提前返回 / 分配失败 panic 都不漏句柄）。
+    struct OwnedHandle(HANDLE);
+
+    impl OwnedHandle {
+        /// 接管一个已打开的句柄（调用方保证有效）。
+        fn new(handle: HANDLE) -> Self {
+            Self(handle)
+        }
+
+        /// 开一个进程句柄；`Err(错误码)` = 开不出来（**错误码当场取**，不留到后面读）。
+        fn open(access: u32, pid: u32) -> Result<Self, u32> {
+            let handle = unsafe { OpenProcess(access, 0, pid) };
+            if handle.is_null() {
+                Err(unsafe { GetLastError() })
+            } else {
+                Ok(Self(handle))
+            }
+        }
+
+        /// 裸句柄。
+        fn raw(&self) -> HANDLE {
+            self.0
+        }
+    }
+
+    impl Drop for OwnedHandle {
+        fn drop(&mut self) {
+            unsafe {
+                CloseHandle(self.0);
+            }
+        }
+    }
+
     pub(super) fn support() -> ProcessTreeSupport {
         ProcessTreeSupport::Enumerable
     }
 
     pub(super) fn enumerate() -> Result<Vec<RawProcess>, ProcessTreeError> {
         unsafe {
-            let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-            if snapshot == INVALID_HANDLE_VALUE {
+            let raw_snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+            if raw_snapshot == INVALID_HANDLE_VALUE {
                 return Err(ProcessTreeError::Io {
-                    message: "cannot open a process enumeration snapshot".into(),
+                    message: format!(
+                        "cannot open a process enumeration snapshot (windows error {})",
+                        GetLastError()
+                    ),
                 });
             }
+            // RAII：任何提前返回 / panic 都会关掉快照句柄。
+            let snapshot = OwnedHandle::new(raw_snapshot);
             let mut entry: PROCESSENTRY32W = std::mem::zeroed();
             entry.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
             let mut processes = Vec::new();
-            if Process32FirstW(snapshot, &mut entry) != 0 {
-                loop {
-                    processes.push(RawProcess {
-                        pid: entry.th32ProcessID,
-                        parent_pid: entry.th32ParentProcessID,
-                        command_line: image_name(&entry),
-                        status: None,
-                        group_id: None,
-                        start_time: None,
+            if Process32FirstW(snapshot.raw(), &mut entry) == 0 {
+                let code = GetLastError();
+                // 空表**只在枚举确实为空**时成立；其它错误码 ⇒ **报错**
+                // （否则空表会冒充「没有该进程」⇒ 模型误判目标已消失）。
+                if code != ERROR_NO_MORE_FILES {
+                    return Err(ProcessTreeError::Io {
+                        message: format!(
+                            "cannot read the first process entry (windows error {code})"
+                        ),
                     });
-                    if Process32NextW(snapshot, &mut entry) == 0 {
-                        break;
+                }
+                return Ok(processes);
+            }
+            loop {
+                processes.push(RawProcess {
+                    pid: entry.th32ProcessID,
+                    parent_pid: entry.th32ParentProcessID,
+                    command_line: image_name(&entry),
+                    status: None,
+                    group_id: None,
+                    start_time: None,
+                });
+                if Process32NextW(snapshot.raw(), &mut entry) == 0 {
+                    let code = GetLastError();
+                    if code != ERROR_NO_MORE_FILES {
+                        // 半张表 ⇒ **整表作废**（不把半张表当成功交出去）。
+                        return Err(ProcessTreeError::Io {
+                            message: format!(
+                                "process enumeration failed midway (windows error {code})"
+                            ),
+                        });
                     }
+                    break;
                 }
             }
-            CloseHandle(snapshot);
             Ok(processes)
         }
     }
 
     pub(super) fn status_of(pid: u32) -> ProcessTreeStatus {
-        unsafe {
-            let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
-            if handle.is_null() {
-                return ProcessTreeStatus::Unknown;
-            }
-            let mut code: u32 = 0;
-            let queried = GetExitCodeProcess(handle, &mut code);
-            CloseHandle(handle);
-            if queried == 0 {
-                return ProcessTreeStatus::Unknown;
-            }
-            if code == STILL_ACTIVE {
-                ProcessTreeStatus::Running
-            } else {
-                ProcessTreeStatus::Exited
-            }
+        let Ok(handle) = OwnedHandle::open(PROCESS_QUERY_LIMITED_INFORMATION, pid) else {
+            return ProcessTreeStatus::Unknown;
+        };
+        let mut code: u32 = 0;
+        let queried = unsafe { GetExitCodeProcess(handle.raw(), &mut code) };
+        if queried == 0 {
+            return ProcessTreeStatus::Unknown;
+        }
+        if code == STILL_ACTIVE {
+            ProcessTreeStatus::Running
+        } else {
+            ProcessTreeStatus::Exited
         }
     }
 
@@ -785,15 +925,38 @@ mod backend {
                 reason: "refuse to signal a protected pid".into(),
             });
         }
-        unsafe {
-            let handle = OpenProcess(PROCESS_TERMINATE, 0, pid);
-            if handle.is_null() {
-                // 打不开 ⇒ 目标已不存在或无权限 ⇒ 记为「未能终止」，由调用方归入失败集。
-                return Ok(false);
+        let handle = match OwnedHandle::open(PROCESS_TERMINATE, pid) {
+            Ok(handle) => handle,
+            Err(code) => {
+                // 开不出句柄 ⇒ **区分**「权限不足」与「真·不存在」：
+                // 前者是**失败**（落失败集, 原因可辨）, 后者才是「已退出」。
+                return match code {
+                    ERROR_ACCESS_DENIED => Err(ProcessTreeError::Io {
+                        message: format!(
+                            "terminate pid {pid} failed: access denied \
+                             (the target is protected or owned by another account)"
+                        ),
+                    }),
+                    ERROR_INVALID_PARAMETER => Ok(false),
+                    other => Err(ProcessTreeError::Io {
+                        message: format!("terminate pid {pid} failed: windows error {other}"),
+                    }),
+                };
             }
-            let terminated = TerminateProcess(handle, 1);
-            CloseHandle(handle);
-            Ok(terminated != 0)
+        };
+        let terminated = unsafe { TerminateProcess(handle.raw(), 1) };
+        if terminated != 0 {
+            return Ok(true);
+        }
+        let code = unsafe { GetLastError() };
+        match code {
+            ERROR_ACCESS_DENIED => Err(ProcessTreeError::Io {
+                message: format!("terminate pid {pid} failed: access denied"),
+            }),
+            ERROR_INVALID_PARAMETER => Ok(false),
+            other => Err(ProcessTreeError::Io {
+                message: format!("terminate pid {pid} failed: windows error {other}"),
+            }),
         }
     }
 

@@ -1,0 +1,32 @@
+name: C-B1 Windows process-tree validation
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: short
+
+permissions:
+  contents: read
+
+jobs:
+  process-tree-windows:
+    name: process tree snapshot (windows-latest)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@1.97.1
+
+      - name: cargo check -p apeireth-tools-canonical --locked
+        run: cargo check -p apeireth-tools-canonical --locked
+
+      - name: Process tree snapshot integration tests
+        run: cargo test -p apeireth-tools-canonical --test process_tree_snapshot --locked -- --nocapture
+
+      - name: Process tree Windows real-machine tests
+        run: cargo test -p apeireth-tools-canonical --test process_tree_windows --locked -- --nocapture

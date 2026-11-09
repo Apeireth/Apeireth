@@ -38,7 +38,7 @@
 #![forbid(unsafe_code)]
 
 use std::collections::BTreeMap;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
 
 use apeireth_core::kernel::{system_clock, CapabilityId, Clock};
@@ -53,6 +53,7 @@ use apeireth_plugin::{
     ToolPermissionPolicy,
 };
 use apeireth_protocol::canonical::{NormalizedTool, ToolCall, ToolParameters, ToolResult};
+use apeireth_runtime::canonical::ObjectGrantActivation;
 use async_trait::async_trait;
 use serde_json::{json, Value};
 
@@ -138,8 +139,17 @@ impl GovernanceHook for ObjectGrantApprovalHook {
 ///
 /// 域级可见口径与既有记忆读路径**同源**：主体的可见域 = 宿主注入的额外可见域
 /// ∪ 主体自己的私有会话域（`MemoryScope::Session { session_id: 主体键 }`）。
+///
+/// # 为什么只持**弱**引用（不是强 `Arc`）
+///
+/// 生产接线里有一条**天然回路**：协调器持有授权登记处（读路径并联）⇒ 登记处
+/// 持有解析面 ⇒ 解析面若**强**持有协调器 ⇒ `Arc` 环 ⇒ 协调器**永不析构**
+/// （泄漏）。
+/// ⇒ 解析面只持 `Weak` ⇒ 环断开；协调器没了 ⇒ 解析面**查不出** ⇒ 一律
+/// **fail-closed**（对象不存在 / 分区查不到 / 域不可见）⇒ 授权永不生效。
 pub struct MemoryGrantResolver {
-    coordinator: Arc<MemoryCoordinator>,
+    /// 协调器句柄（**弱**引用槽；`None` = 还没绑定 ⇒ 查不出 ⇒ fail-closed）。
+    coordinator: Arc<Mutex<Option<Weak<MemoryCoordinator>>>>,
     /// 宿主注入的**额外**域可见范围（主体 → 可见域）。
     extra_scopes: Mutex<BTreeMap<String, Vec<MemoryScope>>>,
 }
@@ -152,12 +162,47 @@ impl std::fmt::Debug for MemoryGrantResolver {
 
 impl MemoryGrantResolver {
     /// 造一个解析面（记忆协调器为真源）。
+    ///
+    /// ⚠️ 协调器只被**弱**持有 ⇒ 调用方若把协调器丢了，解析面即**查不出**
+    /// （fail-closed：授权永不生效）。
     #[must_use]
     pub fn new(coordinator: Arc<MemoryCoordinator>) -> Self {
         Self {
-            coordinator,
+            coordinator: Arc::new(Mutex::new(Some(Arc::downgrade(&coordinator)))),
             extra_scopes: Mutex::new(BTreeMap::new()),
         }
+    }
+
+    /// 造一个**晚绑定**的解析面（装配根用：协调器还没造出来 ⇒ 槽先空）。
+    ///
+    /// 装配根的构造顺序是「先造登记处（要解析面）→ 再造协调器（要登记处）」
+    /// ⇒ 解析面必须能**后补**协调器 ⇒ [`Self::bind`]。
+    #[must_use]
+    pub fn deferred() -> Self {
+        Self {
+            coordinator: Arc::new(Mutex::new(None)),
+            extra_scopes: Mutex::new(BTreeMap::new()),
+        }
+    }
+
+    /// 绑定协调器（**弱**引用 ⇒ 不构成 `Arc` 环）。
+    ///
+    /// 幂等：后绑覆盖前绑（装配根只绑一次）。
+    pub fn bind(&self, coordinator: &Arc<MemoryCoordinator>) {
+        let mut slot = self
+            .coordinator
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        *slot = Some(Arc::downgrade(coordinator));
+    }
+
+    /// 协调器句柄（`None` = 没绑 / 协调器已析构 ⇒ **查不出** ⇒ fail-closed）。
+    fn coordinator(&self) -> Option<Arc<MemoryCoordinator>> {
+        let slot = self
+            .coordinator
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        slot.as_ref().and_then(Weak::upgrade)
     }
 
     /// 追加某主体的域可见范围（宿主装配面注入）。
@@ -199,7 +244,11 @@ impl MemoryGrantResolver {
 
 impl MemoryObjectResolver for MemoryGrantResolver {
     fn object_exists(&self, object_id: &str) -> bool {
-        self.coordinator
+        // ⚠️ 协调器缺席（没绑 / 已析构）⇒ **查不出** ⇒ fail-closed（不是「存在」）。
+        let Some(coordinator) = self.coordinator() else {
+            return false;
+        };
+        coordinator
             .backend()
             .get_episode(object_id)
             .ok()
@@ -208,18 +257,13 @@ impl MemoryObjectResolver for MemoryGrantResolver {
     }
 
     fn object_partition(&self, object_id: &str) -> Option<String> {
-        let episode = self
-            .coordinator
+        let coordinator = self.coordinator()?;
+        let episode = coordinator
             .backend()
             .get_episode(object_id)
             .ok()
             .flatten()?;
-        Some(
-            self.coordinator
-                .episode_scope_metadata(&episode)
-                .0
-                .to_string(),
-        )
+        Some(coordinator.episode_scope_metadata(&episode).0.to_string())
     }
 
     fn subject_partition(&self, subject: &str) -> Option<String> {
@@ -236,16 +280,13 @@ impl MemoryObjectResolver for MemoryGrantResolver {
     }
 
     fn domain_visible(&self, subject: &str, object_id: &str) -> bool {
-        let Some(episode) = self
-            .coordinator
-            .backend()
-            .get_episode(object_id)
-            .ok()
-            .flatten()
-        else {
+        let Some(coordinator) = self.coordinator() else {
             return false;
         };
-        let (scope, _) = self.coordinator.episode_scope_metadata(&episode);
+        let Some(episode) = coordinator.backend().get_episode(object_id).ok().flatten() else {
+            return false;
+        };
+        let (scope, _) = coordinator.episode_scope_metadata(&episode);
         scope.is_visible_in(&self.scopes_for(subject))
     }
 }
@@ -352,14 +393,23 @@ impl ObjectGrantService {
     }
 
     /// 人批否决。
+    ///
+    /// ⚠️ **审计守卫与 approve / revoke 同款**（2026-11-09 补）：否决路径原先
+    /// **没有** `ensure_audit_written` ⇒ 「否决」这条审计行写失败会被**静默吞**
+    /// ⇒ ⇒ 「全部留审计行」的承诺在否决路径上是破的 ⇒ 现在审计未落 ⇒ **Err**
+    /// （不静默放行：否决已发生但审计丢了 = 结果不可信）。
     pub fn deny_grant(
         &self,
         approver: &str,
         grant_id: &str,
         reason: Option<&str>,
     ) -> Result<GrantLedgerEntry, GrantError> {
-        self.registry
-            .deny_grant(approver, grant_id, reason, self.now_ms())
+        let audits_before = self.registry.audit_rows().len();
+        let entry = self
+            .registry
+            .deny_grant(approver, grant_id, reason, self.now_ms())?;
+        self.ensure_audit_written(audits_before, "授权人批否决")?;
+        Ok(entry)
     }
 
     /// 撤销（**即时生效**：落账后下一次判定立刻读不到）。
@@ -478,6 +528,29 @@ impl ObjectGrantService {
                 .filter(|row| row.subject == subject || row.actor == subject)
                 .collect(),
         }
+    }
+}
+
+/// **宿主激活口**（C-D1）：把「人批落章」这一步实现成引擎层的端口。
+///
+/// ⚠️ **身份口径**：`approver` 由**宿主**给（网关的审批路由），**绝不**来自模型
+/// 入参 ⇒ 模型面**没有** approve/deny 动作 ⇒ 模型无法自批。
+impl ObjectGrantActivation for ObjectGrantService {
+    /// 人批通过 ⇒ 授权生效（只读）。
+    ///
+    /// ⚠️ 参数顺序**刻意**与端口一致（`grant_id` 在前、`approver` 在后）⇒ 与
+    /// 服务内的 `approve_grant(approver, grant_id)` 相反 ⇒ 转换处显式换位。
+    fn approve(&self, grant_id: &str, approver: &str) -> Result<(), String> {
+        self.approve_grant(approver, grant_id)
+            .map(|_entry| ())
+            .map_err(|error| error.to_string())
+    }
+
+    /// 人批否决 ⇒ 授权永不生效（审计未落 ⇒ Err，不静默放行）。
+    fn deny(&self, grant_id: &str, approver: &str, reason: Option<&str>) -> Result<(), String> {
+        self.deny_grant(approver, grant_id, reason)
+            .map(|_entry| ())
+            .map_err(|error| error.to_string())
     }
 }
 

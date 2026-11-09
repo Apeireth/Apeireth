@@ -11,6 +11,7 @@ use std::sync::Mutex;
 
 use apeireth_core::kernel::Clock;
 use apeireth_guard::hook::SharedImmuneMemory;
+use apeireth_memory::object_grant::MemoryObjectResolver;
 use apeireth_memory::{
     AccessHistoryActivationSource, ConsolidationPolicy, ConsolidationTrigger, ContextWindowManager,
     EmbeddingProvider, FileConsolidationWatermark, MemoryCoordinator, MemoryExtractor,
@@ -44,6 +45,9 @@ use super::module::Module;
 use super::nervous_bridge::NervousBridgeModule;
 use super::nervous_bus::NervousBus;
 use super::nervous_switchboard::{BioSwitch, NervousSwitchboard};
+use super::object_grant::{
+    object_grant_registry, MemoryGrantResolver, ObjectGrantService, OBJECT_GRANT_CAPABILITY_ID,
+};
 use super::organ_module::OrganModule;
 use super::preference_learning::PreferenceLearningModule;
 use super::prompt_injection_guard::{self, PromptInjectionReport};
@@ -55,11 +59,11 @@ use super::self_status_source::{
 use super::tool_modules::{
     ApplyPatchModule, BackupExportModule, CalendarModule, CareScheduleModule, ContentFeedModule,
     DocOpsModule, EducationModule, ExposureAuditModule, ExternalToolsModule, FetchModule,
-    FilesystemModule, GitWriteModule, HttpWriteModule, ImageOpsModule, McpModule, ProcessModule,
-    ProcessTreeModule, ProposalModule, ReconModule, RepoMapModule, RepoModule, SearchModule,
-    SelfStatusModule, SheetOpsModule, ShellModule, SkillDistillModule, SkillSearchModule,
-    TaskBoardModule, TraitReportModule, VoiceSpeakModule, WebSearchModule, WorktreeApplyModule,
-    WorktreePlanModule,
+    FilesystemModule, GitWriteModule, HttpWriteModule, ImageOpsModule, McpModule,
+    ObjectGrantModule, ProcessModule, ProcessTreeModule, ProposalModule, ReconModule,
+    RepoMapModule, RepoModule, SearchModule, SelfStatusModule, SheetOpsModule, ShellModule,
+    SkillDistillModule, SkillSearchModule, TaskBoardModule, TraitReportModule, VoiceSpeakModule,
+    WebSearchModule, WorktreeApplyModule, WorktreePlanModule,
 };
 use super::trait_growth::{trait_growth_probe, trait_status_probe};
 use crate::consequence_backfill::{default_data_root, ConsequenceBackfillModule};
@@ -76,7 +80,7 @@ pub use bio_production_wiring::BioProbeSlots;
 // ⇒ 外部调用点零改动。
 #[path = "production_config.rs"]
 mod production_config;
-pub use production_config::{CognitiveModuleConfig, ProductionModulesConfig};
+pub use production_config::{CognitiveModuleConfig, ObjectGrantConfig, ProductionModulesConfig};
 
 /// Adapter that exposes memory's context-window implementation through the
 /// runtime-owned projection port. It is kept in assembly so the runtime kernel
@@ -272,6 +276,31 @@ fn collect_tool_module(
     Ok(())
 }
 
+/// 记忆对象级授权面的**默认账本落位**（C-D1）。
+///
+/// `<data_root>/object-grant/ledger.jsonl` ⇒ **独占目录**（不与记忆库 / 日程账
+/// 混放）⇒ 账本文件 = **信任锚**（能写这份账本 = 具备授权能力本身）。
+#[must_use]
+pub fn default_object_grant_ledger_path() -> PathBuf {
+    default_data_root()
+        .join("object-grant")
+        .join("ledger.jsonl")
+}
+
+/// **存在性即开关**（C-D1 · **0 新 env 名**）。
+///
+/// * 宿主给了落位 ⇒ 装（宿主显式要这个面）。
+/// * 宿主没给 ⇒ 按**默认落位是否存在**决定：存在才装 ⇒ 默认关 ⇒ 逐字节零变化。
+fn resolve_object_grant_config(host: Option<&ObjectGrantConfig>) -> Option<ObjectGrantConfig> {
+    match host {
+        Some(config) => Some(config.clone()),
+        None => {
+            let path = default_object_grant_ledger_path();
+            path.exists().then(|| ObjectGrantConfig::new(path))
+        }
+    }
+}
+
 /// The validated, ordered module set to pass to [`RuntimeBuilder::with_module`].
 pub struct ProductionModules {
     modules: Vec<Arc<dyn Module>>,
@@ -282,6 +311,12 @@ pub struct ProductionModules {
     mcp_module: Option<Arc<McpModule>>,
     /// 器官模块句柄 (`config.organs` 开才 `Some`), 供组合根迟绑定 guard 免疫记忆.
     organ_module: Option<Arc<OrganModule>>,
+    /// 记忆对象级授权服务句柄 (`tool.object_grant`, C-D1): **宿主激活口**
+    /// (`approve`/`deny`) 的唯一入口; 本面没装 = `None`.
+    ///
+    /// ⚠️ 模型面**没有** approve/deny ⇒ 授权从 `pending` 变 `active` **只能**经
+    /// 本句柄 (组合根 → 网关审批路由) ⇒ 模型永远不能自批.
+    object_grant_service: Option<Arc<ObjectGrantService>>,
     /// 生物机制族 W3.3: 调质状态句柄 (开关开才 `Some`, 与注册模块共享同一 `Arc`)。
     bio_tone_state: Option<Arc<ToneState>>,
     /// 生物机制族 W3.5 (SG-18): 生命周期状态句柄 (开关开才 `Some`, 与注册模块同一 `Arc`)。
@@ -485,6 +520,34 @@ impl ProductionModules {
         let mcp_tool_bag = mcp_server_config
             .as_ref()
             .map(|_| Arc::new(McpModule::new()));
+
+        // C-D1 记忆对象级授权面 (`tool.object_grant`): **存在性即开关**
+        // (0 新 env 名) —— 宿主给了落位 ⇒ 装; 没给 ⇒ 按默认账本路径的**存在性**
+        // 决定 (存在才装 ⇒ 默认关 ⇒ 逐字节零变化)。
+        //
+        // 构造顺序有一处**天然回路**: 登记处要解析面, 协调器要登记处 (读路径
+        // 并联), 解析面又要协调器 (对象真源) ⇒ ⇒ 解析面**晚绑定** (`deferred()`
+        // ⇒ 槽先空) + **弱**引用 ⇒ 装配顺序解开 ⇒ 且**无 `Arc` 环**。
+        config.object_grant = resolve_object_grant_config(config.object_grant.as_ref());
+        let object_grant_resolver = Arc::new(MemoryGrantResolver::deferred());
+        let grant_registry = match config.object_grant.as_ref() {
+            Some(grant_config) => {
+                let ledger_path = grant_config.ledger_path.clone();
+                let resolver: Arc<dyn MemoryObjectResolver> = object_grant_resolver.clone();
+                Some(
+                    object_grant_registry(Some(&ledger_path), resolver).map_err(|error| {
+                        RuntimeError::misconfigured(format!(
+                            "object grant ledger refused to open: {error}"
+                        ))
+                    })?,
+                )
+            }
+            None => None,
+        };
+        // 宿主激活口的服务句柄（人批落章的唯一入口；未装 = None）。
+        let object_grant_service: Option<Arc<ObjectGrantService>> = grant_registry
+            .as_ref()
+            .map(|registry| Arc::new(ObjectGrantService::with_default_clock(Arc::clone(registry))));
 
         // 自省通道: 能力名册在任何字段移动之前投影 —— 名册即**实际用于装配的**
         // config 生效值; 注入槽级的注册条件 (图谱槽 / 外部工具桥面) 先折进
@@ -702,6 +765,20 @@ impl ProductionModules {
         if config.process_tree {
             instrument.constructed(ModuleFamily::ProcessTree);
             let provider = ProcessTreeModule::new();
+            collect_tool_module(&mut tool_modules, &mut capabilities, &provider)?;
+        }
+
+        // 记忆对象级授权面 (`tool.object_grant`, C-D1, opt-in): 把**一条**记忆以
+        // **只读**授予某主体 (撤销即时生效; 授予/撤销/人批/拒绝全部留审计行)。
+        // ⚠️ **存在性即开关** (0 新 env 名): 账本落位存在才装 ⇒ 默认关 ⇒
+        // 逐字节零变化。
+        //
+        // ⚠️ 模型面**只能登记请求** (`pending`) ⇒ 从 pending 变 active **只能**
+        // 经宿主人批 (`ObjectGrantActivation` 端口 ⇒ 组合根经
+        // `ProductionModules::object_grant_service()` 交出) ⇒ 模型永远不能自批。
+        if let Some(service) = &object_grant_service {
+            instrument.constructed(ModuleFamily::ObjectGrant);
+            let provider = ObjectGrantModule::new(Arc::clone(service));
             collect_tool_module(&mut tool_modules, &mut capabilities, &provider)?;
         }
 
@@ -1101,6 +1178,13 @@ impl ProductionModules {
             )?;
             let mut coordinator =
                 MemoryCoordinator::new(Arc::clone(&memory), Arc::clone(&governance));
+            // C-D1 读路径**并联**（W2 已实现该注入面）：装上之后，读路径的可见性
+            // 判定从「域可见」变成「**域可见 ∨ 有效对象 grant**」（叠加 ≠ 替代）
+            // ⇒ ⇒ 被授对象**真进候选集**（生产里此前没人注入 ⇒ 授权授了也读不到）。
+            // ⚠️ 没装（本面默认关）⇒ 判定退化 ⇒ 行为**逐字节不变**。
+            if let Some(registry) = &grant_registry {
+                coordinator = coordinator.with_object_grants(Arc::clone(registry));
+            }
             if let Some(scoped) = &backends.scoped_memory {
                 coordinator = coordinator.with_scoped_backend(Arc::clone(scoped));
             }
@@ -1158,6 +1242,12 @@ impl ProductionModules {
                 coordinator = coordinator.with_typed_recall(Arc::clone(source), identity.clone());
             }
             shared_coordinator = Some(Arc::new(coordinator));
+            // C-D1: 协调器造好了 ⇒ 回填解析面（**弱**引用 ⇒ 无 `Arc` 环）⇒
+            // 解析面这才真能回答「对象存在吗 / 在哪个分区 / 域级可见吗」。
+            // ⚠️ 没绑 ⇒ 解析面查不出 ⇒ fail-closed（授权永不生效）。
+            if let Some(coordinator) = &shared_coordinator {
+                object_grant_resolver.bind(coordinator);
+            }
         }
 
         // Register cognitive modules
@@ -1445,6 +1535,7 @@ impl ProductionModules {
             mcp_definition,
             mcp_module,
             organ_module,
+            object_grant_service,
             bio_tone_state: bio_wiring.tone_state,
             bio_lifecycle_state: bio_wiring.lifecycle_state,
             bio_probe_slots,
@@ -1463,6 +1554,20 @@ impl ProductionModules {
     /// 本次装配生效的开关快照 (`NervousSwitchboard::from_env` 一次解析)。
     pub fn nervous_switchboard(&self) -> &NervousSwitchboard {
         &self.nervous_switchboard
+    }
+
+    /// 记忆对象级授权服务句柄 (C-D1 · **宿主激活口** 的唯一入口).
+    ///
+    /// 组合根拿到它 ⇒ 把它交给网关的审批路由 ⇒ 人批 `approve` / `deny` 时调用
+    /// [`ObjectGrantActivation`] 端口 ⇒ 授权从 `pending` 变 `active`（或**永不**
+    /// 生效）。
+    ///
+    /// ⚠️ 本面没装（账本不存在 ⇒ 默认关）⇒ `None` ⇒ 宿主路由**无路可走**
+    /// （不是「默认放行」）。
+    ///
+    /// [`ObjectGrantActivation`]: apeireth_runtime::canonical::ObjectGrantActivation
+    pub fn object_grant_service(&self) -> Option<Arc<ObjectGrantService>> {
+        self.object_grant_service.clone()
     }
 
     /// Wave 4 / ADR-0009 R1b-2c: 审批社交信号源句柄。

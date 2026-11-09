@@ -34,7 +34,7 @@ Author: lead（插件/组件/能力开发线 总指挥）
 | **W1** | 7 | 🟡 **4 族已落地 / 3 族未接线** | C-B1 · C-B2 · C-H4 · C-H5 ⇒ **PRODUCTION WIRED + 默认关**（注册根 + 治理档 + 策展表 + 名册 + env 登记齐） | ❌ C-D1（读路径并联待 W2）· C-H1（缺隐私信号源）· C-H2（缺运行时喂深度点）未接线 |
 | **W2** | 3 | 🟡 **2 族已接线 / 1 族仍不注册** | C-H1（CLI 接入 + 自述探针 + `privacy_source` 格）· C-H2（深度接线 + `APEIRETH_QUOTA_MAX_DEPTH` 旋钮 + 自述真值） | ❌ C-D1：账本读端加固 + 读路径并联**已完成**，但 `approve_grant`/`deny_grant` **全仓只有测试调用点** ⇒ 生产里授权永远停在 pending ⇒ **不注册**（激活口属宿主面） |
 | **W2** | 1 | ❌ **未开工** | — | ❌ C-E1 未落地（技能/插件包 + 运行时验签） |
-| **W3** | 2 | ❌ **未开工** | — | ❌ C-A1 · C-B4 未落地（平台依赖；引擎选型待定） |
+| **W3** | 5 | ✅ **已落地** | ① C-H1 **真实隐私声明载体**（会话设置级本地声明 + **CLI `--privacy`** ⇒ 闸从 dormant 变 **live**）· ② C-D1 **宿主激活口 + 生产注册**（面板 approve/deny ⇒ 授权可从 pending 变 active ⇒ C-D1 升 **PRODUCTION WIRED**）· ③ C-B1 **Windows 真机验证布线**（`windows-process-tree.yml` + 9 条真机断言 + 后端 **4 个真 bug** 修复）· ④ C-H2 深度维**三处加固**（上限钳制 / 裸调收进 RAII / 宽松档写明 fail-open）· ⑤ C-B4 **重复审计 + 范围裁定**（收窄版 + **改名 `tool.web_flow`**） | ⚠️ 残余：C-B1 Windows 侧**已布线未实测**（口径**仍不是** HARDWARE VALIDATED）· C-D1 **审批前置读面缺失**（审批人暂凭 `grant_id` 盲批）· C-H1 的**真实声明来源**只有 CLI 参数与本地 PATCH（面板 UI 未做） |
 | **W4** | 3 | ❌ **未开工** | — | ❌ C-B3 · C-D2 · C-G2 未落地 |
 | **W5** | 1 | ❌ **未开工** | — | ❌ C-L1 端侧推理未落地（**新立项 · 开工前须先做重复审计**） |
 | **W6** | 2 | ⛔ **未排期**（需 owner 逐项重拍） | — | ❌ C-D3 跨设备漫游 · C-F1 真多签 **待 owner 拍板**（D2 已裁「T0 不做」⇒ 本线不擅自推翻） |
@@ -145,6 +145,35 @@ python3 scripts/docs_truth.py --verify --check     # ⇒ claims=N fail=0 stale=0
 | 新 env 名 | **+1**（`APEIRETH_QUOTA_MAX_DEPTH`，严格解析）⇒ 契约上限 164 → **165**（授权 +16 内） |
 | 额度 | crate **+0** · 依赖边 **+0** · env **+1** · 尺寸：7 个既有文件真增长 ⇒ 波次收口由 lead 重生成基线（**未抬 `max_file_loc`**，仍 6300） |
 | 0 装诚实 | ① C-H1 闸门**未注入信号时不生效**（漏接 = 静默失效 ⇒ 自述面用 `privacy_source` 暴露）；② C-H2 **上限 > 1 不可达** ⇒ 不是有效防护；③ C-D1 **未注册**（无生产激活口）；④ `runtime/src/canonical/runtime.rs` 现 **1199 行**（**距棘轮阈值 1200 只差 1 行**）⇒ 下一波动它即进逐文件棘轮 |
+
+## 3.7 W3 波次落地记录（2026-11-09）
+
+| 项 | 值 |
+|---|---|
+| 落地 | **5 项**：C-H1 隐私声明载体（**live**）· C-D1 生产注册 + 宿主激活口（升 **PRODUCTION WIRED**）· C-B1 Windows 真机**布线** + 后端 4 洞修复 · C-H2 深度三加固 · C-B4 审计裁定（改名 `tool.web_flow`） |
+| 对抗复核产出 | 4 路只读复核 ⇒ **挖出 3 个真洞 + 4 条治理/口径洞**：① C-D1 账本**撤销不是终局**（更高 version 的 active 行可复活授权）⇒ 已补终局闸；② C-D1 账本**信任边界**（能写账本者成对伪造可生效）⇒ 已把「**账本文件 = 信任锚，其可写性 = 授权能力本身**」逐字写进族规格（HMAC 待 owner 拍板）；③ C-B1 **权限不足被报成「已退出」** + 枚举失败静默空表 + **公共契约扫描漏了 `snapshot.rs`** + 模块头宣称与代码冲突 ⇒ 四项已修；④ 治理：`full` 预设改写审批 ⇒ 已把高风险面入**人工审批地板**（存量零影响） |
+| 架构决策 | C-D1 的**宿主激活口** ⇒ 端口 trait **由提供方定义**（`apeireth-runtime::canonical::object_grant_activation::ObjectGrantActivation`）⇒ 网关**不依赖** runtime-assembly（引擎不得依赖适配器 ⇒ 方向不能倒）⇒ **0 新依赖边**（edges 118 → 118） |
+| 额度 | crate **+0** · edge **+0** · env **+0**（C-D1 = 存在性即开关；C-H1 = 本地声明载体 + CLI 参数；C-B1 = 复用 shell 开关）· 尺寸：9 个既有文件真增长 ⇒ 波次收口由 lead 重生成基线（**未抬 `max_file_loc`**，仍 6300） |
+| 0 装诚实 | ① C-B1 Windows 侧「**已布线，未实测**」⇒ 本仓 **HARDWARE VALIDATED 仍为 0 条**；② C-H1 的声明**目前只有 CLI 参数与本地 PATCH**（面板 UI 未做）⇒ 闸虽已 live，但**生产里几乎无人声明**；③ C-D1 **审批前置读面缺失**（盲批）；④ C-H2 深度维**可达深度 ≤ 1 ⇒ 不是有效防护**（沿用 W2 口径） |
+
+## 3.8 后续搬到 Windows 开发（owner 2026-11-09 指示）—— 交接清单
+
+**为什么搬到 Windows 是划算的**：本线剩下的验证缺口**大半是 Windows 侧**（进程树真机、桌面宿主面、面板 UI）⇒ 在 Windows 上开发 ⇒ **验证与施工同机** ⇒ 不再靠 CI 往返。
+
+**Windows 侧可直接用的既有条件（已核实）**
+- **CI runner**：仓内已有 `windows-latest`（`m2b-xv-isolation.yml` / `m3a-canonical-fetch.yml` / `m2c-xv-shell-validation.yml` / `ui-engine-webview2.yml` / `image-family.yml`）⇒ **不必新建机器**；
+- **本波新增**：`windows-process-tree.yml`（windows-latest + 真机 9 条断言，**无** `--no-run` / `continue-on-error` / `|| true`）⇒ **首次绿灯即可给 C-B1 按维度升格**；
+- **交叉编译口径**：本机 Linux 已 `cargo check --target x86_64-pc-windows-gnu --all-targets` 通过 ⇒ **Windows 上可直接 `cargo test`**，不必先修编译；
+- **工具链**：rustc/cargo 1.97.1（仓内 CI 已固定 `dtolnay/rust-toolchain@1.97.1`）。
+
+**Windows 上要做的（按优先级）**
+1. **C-B1 Windows 真机绿灯** ⇒ 跑 `windows-process-tree.yml` ⇒ 留档 run 链接 + 日期 ⇒ 按**维度分列**升格 claim（Windows 后端可升；**macOS 仍显式未实现** ⇒ 不得整族一句 HARDWARE VALIDATED）。
+2. **C-B1 残余风险收口**：Windows 无进程启动时刻 ⇒ 台账命中即回放（最多漏 5 分钟）⇒ 根治需取**进程创建时间**（`windows-sys` 有该 API）⇒ **Windows 上做最合适**。
+3. **C-D1 审批前置读面**（pending 读端口：让审批人看到**对象分区 + 目标主体**）⇒ 属宿主面 ⇒ 与 Windows 上的面板 UI 同批做。
+4. **C-H1 的声明入口补面板 UI**（当前只有 CLI `--privacy` 与本地 PATCH）⇒ 面板在 Windows 上开发。
+5. **C-H2 深度维的有效性**：要让它成为**有效防护**，得改运行时调用树读数（`DEFAULT_MAX_INVOCATION_DEPTH=1` + 子循环「平链」的 `-1`）⇒ 属**存量运行时语义** ⇒ 需 owner 拍板后再动。
+
+**交接时的仓状态（干净点）**：W3 落地后 `arch_guard --strict` ⇒ **0 违规**（`crates=31 edges=118 env=165 max_src_loc=6250 exceptions=0`）；`docs_truth` ⇒ **58 条 fail=0 stale=0**；族级守卫 ⇒ PASS；汇总表 ⇒ 与真源一致。
 
 ## 4. 额度台账（**每波收口回填**）
 

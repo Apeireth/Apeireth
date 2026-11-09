@@ -60,6 +60,12 @@ impl ChildGuard {
         self.0.id()
     }
 
+    /// 进程是否**仍在跑**（可移植探针：只用 `std`，**不依赖** libc / windows-sys）⇒
+    /// Windows 与 macOS 都能编过（`try_wait` 返回 `Ok(None)` = 仍在跑）。
+    fn is_alive(&mut self) -> bool {
+        self.0.try_wait().ok().flatten().is_none()
+    }
+
     /// 等子进程**真的**退出（终止动作送达 ⇒ 进程被内核收掉需要一点时间）。
     fn wait_for_exit(&mut self, timeout_ms: u64) -> bool {
         let deadline = Instant::now() + Duration::from_millis(timeout_ms);
@@ -141,7 +147,17 @@ fn dispatch<'a>(capability: &'a CapabilityId, arguments: &'a Value) -> Governanc
 }
 
 /// 进程是否还活着（探针）。
-#[cfg(unix)]
+///
+/// **只给 linux 用**：本仓的 `libc` 依赖是 **linux target-scoped**
+/// （`Cargo.toml` 的 `[target.'cfg(target_os = "linux")'.dependencies]`）⇒
+///
+/// - **Windows**（`windows-latest` CI 会编译本文件）：**不得**用 `libc` ⇒ 改用
+///   仓内已有的 `windows-sys` 探针（`process_tree_windows.rs` 里的强信号做法）；
+/// - **macOS**：同理无 `libc` ⇒ 也不该编这段。
+///
+/// ⇒ 故本 helper **收窄到 linux**，其余平台的存活断言改用
+/// **测试自持的 `Child` 句柄**（`std::process::Child::try_wait`，**可移植、无依赖**）。
+#[cfg(target_os = "linux")]
 fn process_alive(pid: u32) -> bool {
     // SAFETY: 信号 0 只做存在性探测，不投递任何信号。
     let result = unsafe { libc::kill(pid as libc::pid_t, 0) };
@@ -439,7 +455,7 @@ async fn cancel_requires_human_approval_and_snapshot_does_not() {
 /// 不存在的 pid（伪 pid）⇒ 拒绝即帧，**且不得误杀**任何进程。
 #[tokio::test]
 async fn cancel_of_a_fake_pid_is_refused_without_killing_anything() {
-    let child = spawn_child(&["sleep", "30"]);
+    let mut child = spawn_child(&["sleep", "30"]);
     let fake_pid = u32::MAX;
 
     let result = refused_result(&tool(), json!({ "action": ACTION_CANCEL, "pid": fake_pid })).await;
@@ -458,7 +474,9 @@ async fn cancel_of_a_fake_pid_is_refused_without_killing_anything() {
     );
 
     // 不误杀：另一个真实子进程必须照旧活着。
-    assert!(process_alive(child.pid()), "伪 pid 的取消不得误杀任何进程");
+    // 用**测试自持的 Child 句柄**判定存活（`try_wait` 返回 `Ok(None)` = 仍在跑）⇒
+    // **可移植**（不依赖 libc / windows-sys）⇒ Windows 与 macOS 都能编过。
+    assert!(child.is_alive(), "伪 pid 的取消不得误杀任何进程");
 }
 
 // ---------------------------------------------------------------------------

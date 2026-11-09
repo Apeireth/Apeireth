@@ -60,7 +60,7 @@
 | `tool.web_search` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_WEB_SEARCH` | `d24dad53ef03` | 2026-12-08 |
 | `tool.calendar` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_CALENDAR` | `d24dad53ef03` | 2026-12-08 |
 | `tool.process_tree` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_SHELL` | `d24dad53ef03` | 2026-12-08 |
-| `tool.object_grant` | IMPLEMENTED | OFF | - | `d24dad53ef03` | 2026-12-08 |
+| `tool.object_grant` | PRODUCTION WIRED | OFF | - | `d24dad53ef03` | 2026-12-08 |
 | `core.routing_policy` | PRODUCTION WIRED | OFF | `APEIRETH_COST_ROUTING` | `d24dad53ef03` | 2026-12-08 |
 | `budget.quota.depth` | PRODUCTION WIRED | OFF | `APEIRETH_QUOTA_MAX_DEPTH` | `d24dad53ef03` | 2026-12-08 |
 

@@ -288,10 +288,20 @@ pub use preference_learning::{
     PREFERENCE_LEARNING_MODULE_ID,
 };
 // 生物机制族 W3.7 · 仪式完成面 (默认关): 装配门 + 两件套 + 种类词表。
+pub use production::ObjectGrantConfig;
 pub use production::{
     with_memory_context_projection, BuildInstrumentation, CognitiveBackends, CognitiveModuleConfig,
     CountingBuildProbe, MemoryContextProjector, ModuleBuildProbe, ProductionBackends,
     ProductionCognitiveModules, ProductionModules, ProductionModulesConfig,
+};
+// W1 C-D1 记忆对象级授权面: 宿主激活口 (approve/deny) 的**服务面** + 治理钩子 +
+// 工具面。⚠️ 端口 trait 定义在 `apeireth_runtime`（引擎不依赖适配器 ⇒ 端口必须
+// 在低层 crate）⇒ 这里再导出一次，宿主只依赖本 crate 也能拿到端口类型。
+pub use apeireth_runtime::canonical::ObjectGrantActivation;
+pub use object_grant::{
+    object_grant_approval_reason, object_grant_registry, MemoryGrantResolver,
+    ObjectGrantApprovalHook, ObjectGrantService, ObjectGrantTool, OBJECT_GRANT_ACTIONS,
+    OBJECT_GRANT_CAPABILITY_ID, OBJECT_GRANT_TOOL_NAME,
 };
 pub use retrieval_tuning_wire::{
     memory_ledger_tuning_fields, read_retrieval_tuning_log, retrieval_tuning_doc_compat,
@@ -483,4 +493,8 @@ pub enum ModuleFamily {
     /// 状态) + 按 pid 幂等取消一棵树。**零配置** ⇒ 开关口径 = 复用
     /// `APEIRETH_ENABLE_SHELL` (注册即闸) ⇒ 0 新 env 名。
     ProcessTree,
+    /// 能力创造线 W1 · 记忆对象级授权面族 (`object_grant`): 把**一条**记忆以
+    /// **只读**授予某主体 (叠加 ≠ 替代); 撤销即时生效; 全程留审计行。
+    /// 开关口径 = **存在性即开关** (账本存在才装) ⇒ 0 新 env 名。
+    ObjectGrant,
 }

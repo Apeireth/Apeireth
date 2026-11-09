@@ -649,14 +649,65 @@ pub fn capability_requirement_for_prompt(
 ///
 /// # 当前生产取值
 ///
-/// ⚠️ 会话设置（`SessionSettings` / 网关侧 `SessionSettingsBody`）**当前尚无**
-/// 隐私档字段 ⇒ 组合根拿到的声明恒为缺位 ⇒ 信号 = `Defaulted`（普通档兜底）
-/// ⇒ **隐私闸恒不过滤** ⇒ 选路结果与「直接调 `CostRouter`」**逐条相同**
-/// （零变化）。字段落地后, 本函数是那条字段的**唯一**读点。
+/// 会话隐私档的**真载体** = 网关侧的**会话隐私档表** (本地持久, 数据目录
+/// `session-privacy.json`) ⇒ 面板/CLI PATCH 一次, 声明即刻生效 (现读磁盘)。
+/// 本函数是那条声明的**唯一**读点 (`session_privacy_level_for` 取值 ⇒ 本函数解析)。
+///
+/// 未声明 ⇒ 信号 = `Defaulted`（普通档兜底）⇒ **隐私闸不过滤** ⇒ 选路结果与
+/// 「直接调 `CostRouter`」**逐条相同**（零变化）。
 pub fn turn_privacy_signal_from_value(
     raw: Option<&str>,
 ) -> Result<PrivacySignal, PrivacySignalError> {
     privacy_signal_from_str(raw)
+}
+
+/// 会话声明的隐私档 (原始值); `None` = 未声明 ⇒ 信号缺省兜底。
+///
+/// **真载体**: 网关侧的**会话隐私档表** (本地持久) ⇒ 面板/CLI PATCH 一次, 所有
+/// 进程即刻可见。
+///
+/// - 现读磁盘 (跨进程: 网关写、CLI 读) ⇒ 声明**即刻生效**, 无需重启;
+/// - 坏表 ⇒ **报错** (不静默当成「未声明」—— 那等于隐私闸静默失效);
+/// - 无会话 ⇒ 无声明 (缺省兜底 ⇒ 闸不过滤 ⇒ 逐字节零变化)。
+///
+/// ⚠️ **绝不**把声明值塞进规范请求的 `metadata` (整包外发 ⇒ 声明变泄漏面)。
+pub fn session_privacy_level_for(session: Option<&SessionId>) -> Result<Option<String>, String> {
+    let Some(session_id) = session else {
+        return Ok(None);
+    };
+    apeireth_gateway::session_settings::session_privacy_level(session_id)
+        .map_err(|error| format!("session privacy declaration refused to load: {error}"))
+}
+
+/// 本回合的隐私档 = **命令行声明** ∪ **会话声明**, **取更严的一档**。
+///
+/// - 命令行 `--privacy` 与会话声明**并存**时取**更严**的一档 (安全优先:
+///   一个脚本传 `--privacy ordinary` **不能**放宽会话的机密声明);
+/// - 两边都没有 ⇒ [`PrivacySignal::Defaulted`] (缺省兜底 ⇒ 闸不过滤 ⇒ 零变化);
+/// - 任一边**不认识的值 ⇒ 明确报错** (不降级、不当未声明)。
+///
+/// ⚠️ 命令行声明**只作用于本回合** (不落盘): 持久声明走会话设置 PATCH。
+pub fn turn_privacy_signal(
+    flag_value: Option<&str>,
+    session_value: Option<&str>,
+) -> Result<PrivacySignal, PrivacySignalError> {
+    let flag = turn_privacy_signal_from_value(flag_value)?;
+    let session = turn_privacy_signal_from_value(session_value)?;
+    Ok(strictest_privacy_signal(flag, session))
+}
+
+/// 两个隐私信号取**更严**的一档 (安全 > 功能)。
+fn strictest_privacy_signal(left: PrivacySignal, right: PrivacySignal) -> PrivacySignal {
+    match (left, right) {
+        (PrivacySignal::Declared(a), PrivacySignal::Declared(b)) => {
+            PrivacySignal::Declared(if a >= b { a } else { b })
+        }
+        (PrivacySignal::Declared(level), PrivacySignal::Defaulted)
+        | (PrivacySignal::Defaulted, PrivacySignal::Declared(level)) => {
+            PrivacySignal::Declared(level)
+        }
+        (PrivacySignal::Defaulted, PrivacySignal::Defaulted) => PrivacySignal::Defaulted,
+    }
 }
 
 /// **路由策略层**装配 (W2 · C-H1): 候选表 (从画像表派生) + 画像表 + 生效模型
@@ -702,42 +753,73 @@ pub fn routing_policy_from_env() -> Result<Arc<RoutingPolicy>, String> {
 /// 回合模型解析 (W2 · C-H1: **并联**策略层, **不替换** [`CostRouter`])。
 ///
 /// 口径:
-/// * 显式 `--model` 直接胜出 (显式 > 自动);
+/// * 显式 `--model` 直接胜出 (显式 > 自动) —— ⚠️ **但声明了隐私档时, 显式模型
+///   也要过隐私闸** (否则 `--model` 就是越闸后门 ⇒ 拒绝该模型, 不静默换模型);
 /// * 策略层**开** ⇒ 用策略层的决策 (层内复用成本档层 ⇒ 成本档口径不变, 只
 ///   多一道隐私硬闸 + 可解释比较);
 /// * 策略层**关** (`APEIRETH_COST_ROUTING` 未开) ⇒ 回既有成本档层口径 ⇒
 ///   **逐字节零行为变化**;
-/// * 策略层判定**失败** (零候选 / 候选被隐私闸全排掉) ⇒ **不路由**
-///   ⇒ **不回退**成本档层 (回退 = 绕过隐私硬闸 ⇒ 安全 > 功能)。
+/// * 策略层判定**失败** (零候选 / 候选被隐私闸全排掉) ⇒ **拒绝本回合**
+///   ⇒ **不回退**成本档层、**不回退**默认模型 (回退 = 绕过隐私硬闸 ⇒
+///   安全 > 功能)。缺省兜底 (`Defaulted`) 路径**不受影响** (闸恒不过滤 ⇒
+///   结果与直接调 `CostRouter` 逐条相同)。
+///
+/// 返回 `Err` = 本回合**拒绝执行** (隐私硬闸或档位无候选); `Ok(None)` = 没有
+/// 选出模型 (开关关时的既有语义: 回合走默认模型)。
 pub fn resolve_turn_model_with_policy(
     user_model: Option<String>,
     policy: &RoutingPolicy,
     router: &apeireth_core::cost_router::CostRouter,
     prompt: &str,
     privacy_signal: PrivacySignal,
-) -> Option<String> {
+) -> Result<Option<String>, String> {
+    // ⚠️ 显式模型**也**要过隐私闸 (声明了档位时): 声明了机密档却用 `--model`
+    // 指一个只承接普通档的模型 = 越闸 ⇒ 拒绝 (不静默换模型, 不静默放行)。
     if let Some(model) = user_model {
-        return Some(model);
-    }
-    // ⚠️ **信号缺省 (Defaulted)** ⇒ 隐私闸**恒不过滤** ⇒ 直接走成本档层:
-    // 选路结果与「直接调 `CostRouter`」**逐条相同** (零变化), 且成本档层的
-    // 「最近决策」仍落在自述路由节 (不为空, 不说假话)。
-    if matches!(privacy_signal, PrivacySignal::Defaulted) {
-        return router
-            .route(&routing_request_for_prompt(prompt))
-            .and_then(|decision| decision.selected_model);
+        if let PrivacySignal::Declared(level) = privacy_signal {
+            let key = apeireth_core::model_profile::normalize_model_id(&model);
+            let allowed = policy
+                .candidate_table()
+                .iter()
+                .any(|candidate| candidate.key() == key && candidate.max_privacy >= level);
+            if !allowed {
+                return Err(format!(
+                    "the explicitly requested model does not cover the declared privacy level ({level}); \
+                     pick a model whose privacy ceiling covers it, or clear the session privacy declaration"
+                ));
+            }
+        }
+        return Ok(Some(model));
     }
     let profile = apeireth_core::routing_policy::TaskProfile::from_signal(
         capability_requirement_for_prompt(prompt),
         None,
         privacy_signal,
     );
-    match policy.decide(&profile) {
-        Ok(decision) => Some(decision.selected_model),
-        Err(RoutingPolicyError::Disabled) => router
+    // ⚠️ **信号缺省 (Defaulted)** ⇒ 隐私闸**恒不过滤** ⇒ 走成本档层:
+    // 选路结果与「直接调 `CostRouter`」**逐条相同** (零变化), 且成本档层的
+    // 「最近决策」仍落在自述路由节 (不为空, 不说假话)。
+    if matches!(privacy_signal, PrivacySignal::Defaulted) {
+        let cost_model = router
             .route(&routing_request_for_prompt(prompt))
-            .and_then(|decision| decision.selected_model),
-        Err(_) => None,
+            .and_then(|decision| decision.selected_model);
+        // 顺带跑一次策略层 (**best-effort**: 结果不用, 只为让自述面能区分
+        // 「策略层跑过但闸未生效」与「策略层从没跑过」—— 前者 privacy_source
+        // = defaulted, 后者 = 无决策)。失败不改变本回合 (零变化保证)。
+        let _ = policy.decide(&profile);
+        return Ok(cost_model);
+    }
+    match policy.decide(&profile) {
+        Ok(decision) => Ok(Some(decision.selected_model)),
+        Err(RoutingPolicyError::Disabled) => Ok(router
+            .route(&routing_request_for_prompt(prompt))
+            .and_then(|decision| decision.selected_model)),
+        // 隐私闸 / 档位闸把候选全排掉 ⇒ **拒绝本回合** (不回退默认模型:
+        // 默认模型自己可能就过不了隐私闸 —— 回退 = 绕过硬闸)。
+        Err(error @ RoutingPolicyError::NoEligibleCandidate { .. })
+        | Err(error @ RoutingPolicyError::NoCostCandidate { .. }) => {
+            Err(format!("routing refused by the routing policy: {error}"))
+        }
     }
 }
 
@@ -3279,6 +3361,7 @@ pub async fn dispatch_canonical_chat(
     prompt: impl Into<String>,
     model: Option<String>,
     session: Option<String>,
+    privacy: Option<String>,
 ) -> Result<CanonicalCliTurn, String> {
     // 引导档案激活（普通用户预设值 + 自动调参补位; 只补未设 env, 显式 env 最高,
     // 无档案 = 0 行为变化）。gateway / 桌面侧车路径不激活, 互不干扰。
@@ -3296,14 +3379,12 @@ pub async fn dispatch_canonical_chat(
     // `--model` > 策略层/成本档层选定 > 默认模型; 策略层关 = 回既有成本档层
     // 口径 (fail-closed 零行为变化)。路由决策即自述路由节真值 (同一台路由器)。
     //
-    // ⚠️ 隐私档: 插件请求层**尚未**落地隐私档字段 ⇒ 组合根取默认档
-    // `ordinary` ⇒ **隐私闸常态不生效** (零候选被排除) ⇒ 行为零变化。
-    // 隐私信号 (W2 · C-H1): **显式声明**才有值; 会话设置当前尚无该字段 ⇒
-    // 缺省兜底 (`Defaulted`) ⇒ 隐私闸恒不过滤 ⇒ 选路结果与直接调
-    // `CostRouter` 逐条相同 (零变化)。
-    // ⚠️ 不认识的值 ⇒ **拒路由** (不降级为普通档): 回合直接失败, 不把
-    // 「声明了但看不懂」当成「没人声明」。
-    let privacy_signal = turn_privacy_signal_from_value(None)
+    // 隐私档 (W3 · 单元 2): **真载体** = 网关侧的会话隐私档表 (本地持久) ⇒
+    // 现读该会话的声明 ⇒ 喂**唯一**读点 `turn_privacy_signal_from_value`。
+    // 未声明 ⇒ `Defaulted` ⇒ 隐私闸不过滤 ⇒ 选路与直接调 `CostRouter` 逐条相同
+    // (零变化); 声明了但值不认识 ⇒ **拒路由** (不降级为普通档: 降级 = 静默放宽)。
+    let session_privacy = session_privacy_level_for(session.as_ref())?;
+    let privacy_signal = turn_privacy_signal(privacy.as_deref(), session_privacy.as_deref())
         .map_err(|error| format!("privacy signal refused: {error}"))?;
     let model = resolve_turn_model_with_policy(
         model,
@@ -3311,7 +3392,7 @@ pub async fn dispatch_canonical_chat(
         &cost_router,
         &prompt,
         privacy_signal,
-    );
+    )?;
     let result = execute_canonical_cli_turn(&runtime, prompt.as_str(), model, session).await;
     observer.flush().await;
     // 普通用户自动调参: 回合一结束回写用量（best-effort, 不影响回合结果;
@@ -3741,6 +3822,23 @@ pub async fn dispatch_gateway_serve_with(
     } else {
         None
     };
+    // C-D1 宿主激活口 (`POST /v1/panel/grants/approve` / `.../deny`, owner 档):
+    // 端口实现归**引擎侧** (runtime-assembly 的 `ObjectGrantService` ⇒ 实现
+    // `apeireth_runtime::canonical::ObjectGrantActivation`), 网关只做 HTTP 面 +
+    // 鉴权 + 审计。
+    // ⚠️ **待接 (等 7a 暴露句柄)**: 端口 trait 已落地
+    // (`apeireth_runtime::canonical::ObjectGrantActivation`) + 实现已落地
+    // (`ProductionModules::object_grant_service()`), 但**本装配根拿不到它** ——
+    // CLI 的装配走 `build_cognitive_modules_at` ⇒ 产出
+    // `ProductionCognitiveModules` (**不是** `ProductionModules`) ⇒
+    // `object_grant_service()` 不可达。
+    // ⇒ **需要 7a 暴露**: 把 `Option<Arc<ObjectGrantService>>` 句柄从 CLI 装配
+    // 实际走的路径 (`ProductionCognitiveModules` / `build_cognitive_modules_at`
+    // 的返回面) 交出来; 交出后此处改为:
+    //   `services.grant_activation = object_grant_service
+    //        .map(|service| service as Arc<dyn ObjectGrantActivation>);`
+    // 在此之前保持 `None` ⇒ 该面 = `501 unsupported` (**不假装**有激活口)。
+    services.grant_activation = None;
     // W2-②: 客户端令牌表 (令牌族第二面) 显式注入; 远程绑定闸与 TLS 接口桩的
     // 清场事实随装配进审计面 (逃生阀可裸奔, 但必须留痕)。
     let mut state =
@@ -4349,10 +4447,9 @@ mod creation_line_w1_wiring_tests {
             Ok(PrivacySignal::Defaulted),
             "缺位 ⇒ 缺省兜底 (普通档) ⇒ 隐私闸不过滤"
         );
-        assert_eq!(
-            turn_privacy_signal_from_value(Some("  ")),
-            Ok(PrivacySignal::Defaulted),
-            "空白 = 缺位 ⇒ 缺省兜底"
+        assert!(
+            turn_privacy_signal_from_value(Some("  ")).is_err(),
+            "显式传空白 ⇒ 报错 (显式传了空 ≠ 没人声明; 当缺位处理 = 静默放宽)"
         );
         assert_eq!(
             turn_privacy_signal_from_value(Some("restricted")),
@@ -4400,7 +4497,8 @@ mod creation_line_w1_wiring_tests {
         )
         .expect("策略层装配");
         let signal = turn_privacy_signal_from_value(None).expect("缺省信号");
-        let via_policy = resolve_turn_model_with_policy(None, &policy, &router, "短提示", signal);
+        let via_policy = resolve_turn_model_with_policy(None, &policy, &router, "短提示", signal)
+            .expect("缺省信号 ⇒ 选路成立");
         let via_router = resolve_turn_model(None, &router, "短提示");
         assert_eq!(
             via_policy, via_router,
@@ -4411,7 +4509,8 @@ mod creation_line_w1_wiring_tests {
         // 隐私上限够 ⇒ 隐私闸不排除它）⇒ 隐私闸是**硬闸**但不误伤普通档。
         let declared = turn_privacy_signal_from_value(Some("ordinary")).expect("显式声明");
         let via_declared =
-            resolve_turn_model_with_policy(None, &policy, &router, "短提示", declared);
+            resolve_turn_model_with_policy(None, &policy, &router, "短提示", declared)
+                .expect("显式普通档 ⇒ 选路成立");
         assert_eq!(
             via_declared, via_router,
             "显式普通档 ⇒ 候选够格 ⇒ 结果与成本档层相同"
@@ -4419,6 +4518,115 @@ mod creation_line_w1_wiring_tests {
         assert!(
             policy.last_decision().is_some(),
             "策略层本体确实决策过 (自述面探针读的是同一台)"
+        );
+    }
+
+    /// **显式 `--model` 也要过隐私闸** (W3 · 单元 2): 声明了机密档却指一个
+    /// 只承接普通档的模型 ⇒ **拒绝** (不静默换模型, 不静默放行)。
+    #[test]
+    fn an_explicit_model_must_also_pass_the_privacy_gate() {
+        let profiles = apeireth_core::model_profile::ModelProfileTable::new(vec![
+            apeireth_core::model_profile::ModelProfile {
+                model_id: "model-a".to_string(),
+                context_window: Some(32_768),
+                max_output: Some(4_096),
+                supports_tools: Some(true),
+                supports_streaming: Some(true),
+                input_price_micros: Some(1_000),
+                output_price_micros: Some(2_000),
+                cache_read_price_micros: None,
+                capabilities_flags: Vec::new(),
+            },
+        ]);
+        let router = apeireth_core::cost_router::CostRouter::new(
+            profiles.clone(),
+            Some("model-a".to_string()),
+            apeireth_core::cost_router::CostRoutingConfig::from_env_values(Some("1"), None)
+                .expect("成本档层配置"),
+        );
+        // 候选表: 该模型只承接**普通档**。
+        let policy = RoutingPolicy::from_env_values(
+            vec![PolicyCandidate::new(
+                "model-a",
+                apeireth_core::routing_policy::PrivacyLevel::Ordinary,
+            )],
+            profiles,
+            Some("model-a".to_string()),
+            Some("1"),
+            None,
+        )
+        .expect("策略层装配");
+
+        // 声明机密档 + 显式指它 ⇒ 拒绝 (越闸后门被堵)。
+        let confidential = turn_privacy_signal_from_value(Some("confidential")).expect("声明");
+        let error = resolve_turn_model_with_policy(
+            Some("model-a".to_string()),
+            &policy,
+            &router,
+            "短提示",
+            confidential,
+        )
+        .expect_err("显式模型也必须过隐私闸");
+        assert!(
+            error.contains("privacy level"),
+            "错误帧要说清是隐私档拦的: {error}"
+        );
+
+        // 未声明 (缺省兜底) ⇒ 显式模型照旧直接胜出 (零变化)。
+        let defaulted = turn_privacy_signal_from_value(None).expect("缺省信号");
+        assert_eq!(
+            resolve_turn_model_with_policy(
+                Some("model-a".to_string()),
+                &policy,
+                &router,
+                "短提示",
+                defaulted,
+            )
+            .expect("缺省 ⇒ 显式模型直接胜出"),
+            Some("model-a".to_string())
+        );
+    }
+
+    /// **隐私闸把候选全排掉 ⇒ 拒绝本回合** (不回退默认模型: 默认模型自己
+    /// 可能就过不了隐私闸 —— 回退 = 绕过硬闸)。
+    #[test]
+    fn a_privacy_rejection_refuses_the_turn_instead_of_falling_back() {
+        let profiles = apeireth_core::model_profile::ModelProfileTable::new(vec![
+            apeireth_core::model_profile::ModelProfile {
+                model_id: "model-a".to_string(),
+                context_window: Some(32_768),
+                max_output: Some(4_096),
+                supports_tools: Some(true),
+                supports_streaming: Some(true),
+                input_price_micros: Some(1_000),
+                output_price_micros: Some(2_000),
+                cache_read_price_micros: None,
+                capabilities_flags: Vec::new(),
+            },
+        ]);
+        let router = apeireth_core::cost_router::CostRouter::new(
+            profiles.clone(),
+            Some("model-a".to_string()),
+            apeireth_core::cost_router::CostRoutingConfig::from_env_values(Some("1"), None)
+                .expect("成本档层配置"),
+        );
+        let policy = RoutingPolicy::from_env_values(
+            vec![PolicyCandidate::new(
+                "model-a",
+                apeireth_core::routing_policy::PrivacyLevel::Ordinary,
+            )],
+            profiles,
+            Some("model-a".to_string()),
+            Some("1"),
+            None,
+        )
+        .expect("策略层装配");
+        let confidential = turn_privacy_signal_from_value(Some("confidential")).expect("声明");
+        let error = resolve_turn_model_with_policy(None, &policy, &router, "短提示", confidential)
+            .expect_err("隐私闸全排 ⇒ 拒绝本回合");
+        assert!(
+            error.contains("routing refused"),
+            "错误帧要说清是路由策略拒的: {error}"
         );
     }
 

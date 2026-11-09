@@ -263,6 +263,37 @@ fn revoke_hides_the_object_immediately() {
 }
 
 #[test]
+fn a_grant_on_an_already_domain_visible_object_does_not_change_the_visibility_source() {
+    let (coordinator, registry) = wired();
+
+    // 被授方对自己**域内**的对象也有一条授权（冗余授权）。
+    let entry = registry
+        .request_grant(BOB, "ep-bob-1", BOB, None, 1)
+        .expect("grant request");
+    registry
+        .approve_grant("owner", &entry.grant_id, 2)
+        .expect("approval");
+    assert!(
+        registry.read_grant_allows(BOB, "ep-bob-1"),
+        "这条授权本身有效"
+    );
+
+    // 域级**本来就可见** ⇒ 可见性来源仍是**域级**（授权面不改写域级路径）。
+    let bob_scope = MemoryScope::Session {
+        session_id: BOB.to_string(),
+    };
+    assert!(
+        bob_scope.is_visible_in(&[bob_scope.clone()]),
+        "域级判定独立成立（不依赖授权面）"
+    );
+    let ids = recall_bob(&coordinator);
+    assert!(
+        ids.contains(&"ep-bob-1".to_string()),
+        "域可见 + 有效 grant ⇒ 仍可见（两路都真 ⇒ 可见）"
+    );
+}
+
+#[test]
 fn a_pending_grant_discloses_nothing() {
     let (coordinator, registry) = wired();
     let entry = registry
@@ -467,6 +498,17 @@ fn grant_line(version: u64, grant_id: &str, status: &str, decided_by: Option<&st
     .to_string()
 }
 
+/// 把账本行拼成文件内容（**每行都以 '\n' 结尾** ⇒ 行间不会黏成一行；
+/// 少一个换行 ⇒ 后面几行整行解析失败 ⇒ 按不存在处理）。
+fn ledger_text(rows: &[String]) -> String {
+    let mut text = String::new();
+    for row in rows {
+        text.push_str(row);
+        text.push('\n');
+    }
+    text
+}
+
 fn registry_over(path: &std::path::Path) -> Arc<ObjectGrantRegistry> {
     let ledger = ObjectGrantLedger::open(path).expect("open ledger");
     let resolver = FixtureResolver {
@@ -482,16 +524,13 @@ fn registry_over(path: &std::path::Path) -> Arc<ObjectGrantRegistry> {
 fn a_replayed_old_active_row_does_not_revive_a_revoked_grant() {
     let dir = tempfile::tempdir().expect("temp dir");
     let path = dir.path().join("ledger.jsonl");
-    let mut text = String::new();
-    text.push_str(&grant_line(1, "g-1", "pending", None));
-    text.push('\n');
-    text.push_str(&grant_line(2, "g-1", "active", Some("owner")));
-    text.push('\n');
-    text.push_str(&grant_line(3, "g-1", "revoked", Some("owner")));
-    text.push('\n');
-    // 攻击：把**旧的 active 行**追加到文件末尾。
-    text.push_str(&grant_line(2, "g-1", "active", Some("owner")));
-    text.push('\n');
+    let text = ledger_text(&[
+        grant_line(1, "g-1", "pending", None),
+        grant_line(2, "g-1", "active", Some("owner")),
+        grant_line(3, "g-1", "revoked", Some("owner")),
+        // 攻击：把**旧的 active 行**追加到文件末尾。
+        grant_line(2, "g-1", "active", Some("owner")),
+    ]);
     std::fs::write(&path, text).expect("write ledger");
 
     let registry = registry_over(&path);
@@ -532,8 +571,10 @@ fn a_forged_active_row_without_a_pending_predecessor_is_absent() {
 fn a_forged_active_row_without_a_decider_is_absent() {
     let dir = tempfile::tempdir().expect("temp dir");
     let path = dir.path().join("ledger.jsonl");
-    let mut text = format!("{}\n", grant_line(1, "g-1", "pending", None));
-    text.push_str(&grant_line(2, "g-1", "active", None));
+    let text = ledger_text(&[
+        grant_line(1, "g-1", "pending", None),
+        grant_line(2, "g-1", "active", None),
+    ]);
     std::fs::write(&path, text).expect("write ledger");
 
     let registry = registry_over(&path);
@@ -548,8 +589,10 @@ fn a_forged_active_row_without_a_decider_is_absent() {
 fn a_non_increasing_version_is_rejected_and_audited() {
     let dir = tempfile::tempdir().expect("temp dir");
     let path = dir.path().join("ledger.jsonl");
-    let mut text = format!("{}\n", grant_line(2, "g-1", "pending", None));
-    text.push_str(&grant_line(1, "g-1", "active", Some("owner")));
+    let text = ledger_text(&[
+        grant_line(2, "g-1", "pending", None),
+        grant_line(1, "g-1", "active", Some("owner")),
+    ]);
     std::fs::write(&path, text).expect("write ledger");
 
     let registry = registry_over(&path);
@@ -572,8 +615,10 @@ fn a_non_increasing_version_is_rejected_and_audited() {
 fn invalid_versions_are_rejected() {
     let dir = tempfile::tempdir().expect("temp dir");
     let path = dir.path().join("ledger.jsonl");
-    let mut text = format!("{}\n", grant_line(0, "g-zero", "active", Some("owner")));
-    text.push_str(&grant_line(u64::MAX, "g-max", "active", Some("owner")));
+    let text = ledger_text(&[
+        grant_line(0, "g-zero", "active", Some("owner")),
+        grant_line(u64::MAX, "g-max", "active", Some("owner")),
+    ]);
     std::fs::write(&path, text).expect("write ledger");
 
     let registry = registry_over(&path);
@@ -592,11 +637,62 @@ fn invalid_versions_are_rejected() {
 }
 
 #[test]
+fn a_higher_version_active_row_cannot_revive_a_revoked_grant() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    let path = dir.path().join("ledger.jsonl");
+    let text = ledger_text(&[
+        grant_line(1, "g-1", "pending", None),
+        grant_line(2, "g-1", "active", Some("owner")),
+        grant_line(3, "g-1", "revoked", Some("owner")),
+        // 攻击：追加一条 **version 更高** 的 active 行（复活尝试）。
+        grant_line(4, "g-1", "active", Some("owner")),
+    ]);
+    std::fs::write(&path, text).expect("write ledger");
+
+    let registry = registry_over(&path);
+
+    assert!(
+        !registry.read_grant_allows(BOB, "ep-alice-1"),
+        "撤销是**终局** ⇒ 更高 version 的 active 行**复活不了**"
+    );
+    let ledger = ObjectGrantLedger::open(&path).expect("reopen");
+    assert!(
+        ledger
+            .audits()
+            .iter()
+            .any(|row| row.kind == GrantAuditKind::GrantRefused && row.detail.contains("终局")),
+        "终局复活尝试留审计"
+    );
+}
+
+#[test]
+fn a_higher_version_active_row_cannot_revive_a_denied_grant() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    let path = dir.path().join("ledger.jsonl");
+    let text = ledger_text(&[
+        grant_line(1, "g-1", "pending", None),
+        grant_line(2, "g-1", "denied", Some("owner")),
+        // 攻击：否决之后再补一条更高 version 的 active 行。
+        grant_line(3, "g-1", "active", Some("owner")),
+    ]);
+    std::fs::write(&path, text).expect("write ledger");
+
+    let registry = registry_over(&path);
+
+    assert!(
+        !registry.read_grant_allows(BOB, "ep-alice-1"),
+        "否决也是终局 ⇒ 复活不了"
+    );
+}
+
+#[test]
 fn a_well_formed_active_row_still_takes_effect() {
     let dir = tempfile::tempdir().expect("temp dir");
     let path = dir.path().join("ledger.jsonl");
-    let mut text = format!("{}\n", grant_line(1, "g-1", "pending", None));
-    text.push_str(&grant_line(2, "g-1", "active", Some("owner")));
+    let text = ledger_text(&[
+        grant_line(1, "g-1", "pending", None),
+        grant_line(2, "g-1", "active", Some("owner")),
+    ]);
     std::fs::write(&path, text).expect("write ledger");
 
     let registry = registry_over(&path);
@@ -629,8 +725,10 @@ fn pending_rows_still_disclose_nothing() {
 fn a_cross_process_revoke_is_picked_up_on_the_next_decision() {
     let dir = tempfile::tempdir().expect("temp dir");
     let path = dir.path().join("ledger.jsonl");
-    let mut text = format!("{}\n", grant_line(1, "g-1", "pending", None));
-    text.push_str(&grant_line(2, "g-1", "active", Some("owner")));
+    let text = ledger_text(&[
+        grant_line(1, "g-1", "pending", None),
+        grant_line(2, "g-1", "active", Some("owner")),
+    ]);
     std::fs::write(&path, text).expect("write ledger");
 
     let registry = registry_over(&path);

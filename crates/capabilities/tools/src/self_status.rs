@@ -372,6 +372,24 @@ pub struct RoutingPolicyStatus {
     pub enabled: bool,
     /// 最近一次决策 (尚无任务被路由 = `None`, 不编造)。
     pub last_decision: Option<RoutingPolicyDecision>,
+    /// 最近一次**尝试** (成功**或**被拒) —— 「因隐私被拒」这类事件在这里看得见。
+    ///
+    /// ⚠️ 与 `last_decision` **两个口分开**: 决策口只记成功 (口径不被拒绝污染),
+    /// 尝试口被拒也记 (否则最该被看见的事件不可见)。
+    pub last_attempt: Option<RoutingPolicyAttempt>,
+}
+
+/// 一次路由尝试的自述形态 (成功或被拒)。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RoutingPolicyAttempt {
+    /// 结论 (`selected` / `rejected`)。
+    pub outcome: String,
+    /// 被拒的**维度** (`privacy` / `candidate_table` / `cost_tier`); 选定 = `None`.
+    pub rejected_by: Option<String>,
+    /// 理由 (被拒 = 为什么; 选定 = 选定理由; 档位字面量已脱敏)。
+    pub reason: String,
+    /// 参与评估的候选数。
+    pub candidate_count: usize,
 }
 
 /// 策略层的一次决策 (自述形态)。
@@ -379,12 +397,16 @@ pub struct RoutingPolicyStatus {
 pub struct RoutingPolicyDecision {
     /// 定下的成本档。
     pub tier: String,
-    /// 生效的隐私等级 (任务画像声明)。
-    pub privacy: String,
     /// 隐私档的**来源** (`declared` = 调用方显式声明; `defaulted` = 缺省兜底)。
     ///
     /// ⚠️ 缺省必须**看起来像缺省** ⇒ 否则「漏接 = 隐私闸静默失效」没人看得见。
     pub privacy_source: String,
+    /// 隐私闸**是否真的过滤掉过候选** (本决策里被隐私闸排除掉的候选 > 0)。
+    ///
+    /// ⚠️ **不回显隐私档字面量** (`ordinary`/`restricted`/`confidential`):
+    /// 自述节是**工具结果** ⇒ 会进模型上下文 ⇒ 密级标注不能由自述面转述给模型。
+    /// 运维看两格就够: 来源 (`declared`/`defaulted`) + 闸有没有真的拦过。
+    pub privacy_gate_filtered: bool,
     /// 选中的模型 id。
     pub selected_model: String,
     /// 选定理由。

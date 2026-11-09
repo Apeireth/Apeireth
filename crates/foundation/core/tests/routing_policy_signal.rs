@@ -20,9 +20,9 @@ use std::collections::BTreeMap;
 use apeireth_core::cost_router::{CostRouter, CostRoutingConfig, CostTier};
 use apeireth_core::model_profile::{ModelProfile, ModelProfileTable};
 use apeireth_core::routing_policy::{
-    privacy_signal_from_metadata, privacy_signal_from_str, CandidateOutcome, CapabilityRequirement,
-    PolicyCandidate, PrivacyLevel, PrivacySignal, PrivacySignalError, PrivacySource, RoutingPolicy,
-    RoutingPolicyError, TaskProfile, PRIVACY_SIGNAL_KEY,
+    privacy_signal_from_str, AttemptDimension, AttemptOutcome, CandidateOutcome,
+    CapabilityRequirement, PolicyCandidate, PrivacyLevel, PrivacySignal, PrivacySignalError,
+    PrivacySource, RoutingPolicy, RoutingPolicyError, TaskProfile, PRIVACY_SIGNAL_KEY,
 };
 
 fn profile(
@@ -281,10 +281,15 @@ fn an_unknown_declared_value_is_refused_instead_of_downgraded() {
         }
     }
 
-    // 空白 ⇒ 缺位 ⇒ 兜底 (不是「声明了但看不懂」)。
-    assert_eq!(
-        privacy_signal_from_str(Some("   ")).expect("空白 = 缺位"),
-        PrivacySignal::Defaulted
+    // ⚠️ **空白 ≠ 缺位**: 显式传了空白 ⇒ **报错** (当缺位处理 = 静默放宽)。
+    // 只有**缺位 (`None`)** 才走普通档兜底。
+    assert!(
+        privacy_signal_from_str(Some("   ")).is_err(),
+        "显式传空白 ⇒ 报错 (不静默降级为普通档)"
+    );
+    assert!(
+        privacy_signal_from_str(Some("")).is_err(),
+        "显式传空串 ⇒ 报错 (不静默降级为普通档)"
     );
     assert_eq!(
         privacy_signal_from_str(None).expect("缺位 = 兜底"),
@@ -308,29 +313,25 @@ fn the_adversarial_case_a_confidential_declaration_cannot_reach_an_ordinary_cand
 }
 
 #[test]
-fn the_signal_port_reads_the_reserved_metadata_key() {
-    // 端口: 保留键 + 大小写不敏感 + 去首尾空白 + 缺位兜底。
-    let mut metadata = BTreeMap::new();
-    metadata.insert(PRIVACY_SIGNAL_KEY.to_string(), " Restricted ".to_string());
+fn the_signal_port_reads_the_local_carrier_field_name() {
+    // 端口: **字符串**端口 (本地载体字段名 = `PRIVACY_SIGNAL_KEY`):
+    // 大小写不敏感 + 去首尾空白; 缺位 ⇒ 兜底; 其它 ⇒ 报错。
+    assert_eq!(PRIVACY_SIGNAL_KEY, "privacy_level");
     assert_eq!(
-        privacy_signal_from_metadata(&metadata).expect("受限档"),
+        privacy_signal_from_str(Some(" Restricted ")).expect("受限档"),
         PrivacySignal::Declared(PrivacyLevel::Restricted)
     );
-
-    let mut upper = BTreeMap::new();
-    upper.insert(PRIVACY_SIGNAL_KEY.to_string(), "CONFIDENTIAL".to_string());
     assert_eq!(
-        privacy_signal_from_metadata(&upper).expect("机密档"),
+        privacy_signal_from_str(Some("CONFIDENTIAL")).expect("机密档"),
         PrivacySignal::Declared(PrivacyLevel::Confidential)
     );
-
     assert_eq!(
-        privacy_signal_from_metadata(&BTreeMap::new()).expect("缺位"),
+        privacy_signal_from_str(None).expect("缺位"),
         PrivacySignal::Defaulted
     );
 
     // 信号口的等级与闸门读的是同一个等级 (接线一致性)。
-    let signal = privacy_signal_from_metadata(&metadata).expect("受限档");
+    let signal = privacy_signal_from_str(Some("restricted")).expect("受限档");
     assert_eq!(signal.level(), PrivacyLevel::Restricted);
     assert!(signal.is_declared());
     assert_eq!(signal.source(), PrivacySource::Declared);
@@ -434,5 +435,82 @@ fn the_fallback_order_is_explicitly_not_the_selection_ladder() {
     assert!(
         fallback_reason.contains("单价升序"),
         "退路说明要写明自己的排序口径: {fallback_reason}"
+    );
+}
+
+#[test]
+fn a_privacy_rejection_is_recorded_as_an_attempt_while_the_decision_slot_stays_clean() {
+    // 「因隐私被拒」必须**看得见** ⇒ 尝试口记被拒; 决策口**只**记成功
+    // (两个口分开 ⇒ 「最近一次决策」的口径不被拒绝污染)。
+    // 候选表里**没有**能承接机密档的模型 ⇒ 机密档任务被隐私闸全排掉。
+    let policy = policy(
+        vec![
+            PolicyCandidate::new("cheap-model", PrivacyLevel::Ordinary),
+            PolicyCandidate::new("work-model", PrivacyLevel::Restricted),
+        ],
+        table(),
+        Some("work-model"),
+    );
+
+    // 先跑一次成功 ⇒ 两个口都有记录。
+    policy
+        .decide(&task(PrivacySignal::Declared(PrivacyLevel::Ordinary)))
+        .expect("选路成立");
+    let attempt = policy.last_attempt().expect("尝试已记录");
+    assert_eq!(attempt.outcome, AttemptOutcome::Selected);
+    assert_eq!(attempt.rejected_by, None);
+    assert_eq!(attempt.tier, CostTier::Standard);
+    assert_eq!(attempt.privacy, PrivacyLevel::Ordinary);
+    assert_eq!(attempt.privacy_source, PrivacySource::Declared);
+    assert!(attempt.candidate_count > 0, "候选数如实");
+    assert!(policy.last_decision().is_some(), "成功 ⇒ 决策口也有");
+
+    // 再跑一次被隐私闸全拒 ⇒ 尝试口记「被隐私闸拒」; 决策口**不变**。
+    let error = policy
+        .decide(&task(PrivacySignal::Declared(PrivacyLevel::Confidential)))
+        .expect_err("机密档 ⇒ 候选全被排掉");
+    assert!(matches!(
+        error,
+        RoutingPolicyError::NoEligibleCandidate { .. }
+    ));
+    let attempt = policy.last_attempt().expect("被拒也要记");
+    assert_eq!(attempt.outcome, AttemptOutcome::Rejected);
+    assert_eq!(
+        attempt.rejected_by,
+        Some(AttemptDimension::Privacy),
+        "被拒的维度必须说清是隐私闸"
+    );
+    assert_eq!(attempt.privacy, PrivacyLevel::Confidential);
+    assert!(!attempt.reason.is_empty(), "被拒理由不得为空");
+    assert!(
+        policy.last_decision().is_some(),
+        "决策口只记成功 ⇒ 上一条成功决策仍在 (不被拒绝污染)"
+    );
+}
+
+#[test]
+fn an_attempt_is_recorded_even_when_no_candidate_passes_the_cost_tier() {
+    let profiles = ModelProfileTable::new(vec![profile(
+        "chore-model",
+        Some(false),
+        Some(32_768),
+        Some(1_000),
+        Some(1_000),
+    )]);
+    let policy = policy(
+        vec![PolicyCandidate::new("chore-model", PrivacyLevel::Ordinary)],
+        profiles,
+        Some("chore-model"),
+    );
+    policy
+        .decide(&task(PrivacySignal::Declared(PrivacyLevel::Ordinary)))
+        .expect_err("标准档需工具 ⇒ 零候选");
+    let attempt = policy.last_attempt().expect("被拒也要记");
+    assert_eq!(attempt.outcome, AttemptOutcome::Rejected);
+    assert_eq!(attempt.rejected_by, Some(AttemptDimension::CostTier));
+    assert_eq!(attempt.candidate_count, 0);
+    assert!(
+        policy.last_decision().is_none(),
+        "决策口只记成功 ⇒ 零候选时决策口为空"
     );
 }

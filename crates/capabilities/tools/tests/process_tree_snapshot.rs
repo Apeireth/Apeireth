@@ -491,6 +491,25 @@ fn platform_support_is_reported_explicitly() {
     }
 }
 
+/// 平台支持矩阵必须与实现矩阵**逐格一致** (不许某一格偷偷变)。
+///
+/// 实现的矩阵: Linux / Windows = 真实现; macOS 与其它平台 = **显式未实现**
+/// (`Unsupported`, 绝不返回空快照冒充成功)。本用例在本仓的三 OS 工作流里
+/// **真机**跑 (含 macOS runner) ⇒ macOS 那条不许回归。
+#[test]
+fn the_platform_support_matrix_matches_the_implementation() {
+    let expected = if cfg!(any(windows, target_os = "linux")) {
+        ProcessTreeSupport::Enumerable
+    } else {
+        ProcessTreeSupport::Unsupported
+    };
+    assert_eq!(
+        process_tree_support(),
+        expected,
+        "the platform support level must match the implementation matrix"
+    );
+}
+
 // ===========================================================================
 // 快照面零审批 + 不反向依赖
 // ===========================================================================
@@ -529,6 +548,12 @@ fn snapshot_face_is_read_only_and_carries_no_approval_gate() {
         "JobObject",
         "RestrictedToken",
         "CreateProcessW",
+        "OpenProcess",
+        "TerminateProcess",
+        "CreateToolhelp32Snapshot",
+        "Process32FirstW",
+        "Process32NextW",
+        "GetExitCodeProcess",
         "cgroup",
         "seccomp",
         "Landlock",
@@ -542,4 +567,76 @@ fn snapshot_face_is_read_only_and_carries_no_approval_gate() {
             "the public contract must not expose {forbidden}"
         );
     }
+
+    // 对外导出的公共契约面 (process/mod.rs) 同样不得出现进程 API 名。
+    let public_contract = include_str!("../src/process/mod.rs");
+    for forbidden in [
+        "CreateProcessW",
+        "OpenProcess",
+        "TerminateProcess",
+        "CreateToolhelp32Snapshot",
+        "Process32FirstW",
+        "Process32NextW",
+        "GetExitCodeProcess",
+    ] {
+        assert!(
+            !public_contract.contains(forbidden),
+            "the exported public contract must not expose {forbidden}"
+        );
+    }
+
+    // 平台机制名**只**允许出现在对应平台的后端块里（不外溢到别的后端）。
+    for (marker, owned) in [
+        ("#[cfg(target_os = \"linux\")]", &["getpgid", "kill"][..]),
+        (
+            "#[cfg(windows)]",
+            &[
+                "OpenProcess",
+                "TerminateProcess",
+                "CreateToolhelp32Snapshot",
+                "Process32FirstW",
+                "Process32NextW",
+            ][..],
+        ),
+    ] {
+        let block = backend_block(&source, marker);
+        for name in owned {
+            assert!(
+                block.contains(name),
+                "{marker}: the backend block must own its platform mechanism {name}"
+            );
+        }
+    }
+    // Windows 的机制名不得出现在别的后端块里（机制名只落本平台后端）。
+    let windows_only = [
+        "OpenProcess",
+        "TerminateProcess",
+        "CreateToolhelp32Snapshot",
+        "Process32FirstW",
+        "Process32NextW",
+    ];
+    for marker in [
+        "#[cfg(target_os = \"linux\")]",
+        "#[cfg(target_os = \"macos\")]",
+        "#[cfg(not(any(windows, target_os = \"linux\", target_os = \"macos\")))]",
+    ] {
+        let block = backend_block(&source, marker);
+        for name in windows_only {
+            assert!(
+                !block.contains(name),
+                "{marker}: the windows platform mechanism {name} must not leak into another backend"
+            );
+        }
+    }
+}
+
+/// 取源码里某个平台后端块（`#[cfg(...)]` 标记之后、下一个 `#[cfg(` 之前）。
+fn backend_block<'a>(source: &'a str, marker: &str) -> &'a str {
+    let start = source.find(marker).expect("the backend marker must exist");
+    let rest = &source[start..];
+    let end = rest[marker.len()..]
+        .find("#[cfg(")
+        .map(|offset| marker.len() + offset)
+        .unwrap_or(rest.len());
+    &rest[..end]
 }

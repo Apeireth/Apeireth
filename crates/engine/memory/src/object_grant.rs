@@ -45,6 +45,20 @@
 //! ⇒ 域可见为 true 时**行为逐字节不变**；为 false 时才去看对象授权。候选生成侧另需
 //! 并入 [`ObjectGrantRegistry::granted_object_ids`]（否则被授对象进不了候选集）。
 //!
+//! # 信任边界（0 装诚实 · 逐字写明）
+//!
+//! > **账本文件 = 信任锚；其可写性 = 授权能力本身**
+//!
+//! 读端三道闸（版本递增 / `active` 须有 pending 前身 / `decided_by` 非空）
+//! 与终局闸（`revoked`/`denied` 后不得再出现 `active`）是
+//! **抗误伤 / 抗朴素重放**的闸，**不是**「防有写权者」的闸：
+//! **能写账本文件的人，成对伪造 `pending` + `active` 即可让授权生效**
+//! （跳过真实人批、无异常审计）。
+//!
+//! ⇒ ⇒ **宿主必须把账本放在独占目录**（仅宿主可写 ⇒ 可写性 = 授权能力本身）；
+//! ⇒ ⇒ 若要更强的真实性 ⇒ 需**行级签名（HMAC + 宿主密钥库）** ⇒ 那是**新增密钥面**，
+//! **超出本线**（已记待办，**本波不加**）。
+//!
 //! # 依赖边界
 //!
 //! 本 crate **不依赖** `apeireth-governance`（依赖边预算）⇒ 审批链不落在这里：
@@ -90,6 +104,11 @@ impl GrantStatus {
     /// 该状态是否**生效**（**只有 `Active` 生效**）。
     pub const fn is_effective(self) -> bool {
         matches!(self, Self::Active)
+    }
+
+    /// 该状态是否**终局**（`revoked` / `denied` ⇒ **一票终局，不可复活**）。
+    pub const fn is_terminal(self) -> bool {
+        matches!(self, Self::Revoked | Self::Denied)
     }
 }
 
@@ -420,6 +439,23 @@ impl ObjectGrantLedger {
         Ok(row)
     }
 
+    /// 追加一行到账本文件。
+    ///
+    /// # 并发写的**实际保护**（0 装诚实）
+    ///
+    /// ⚠️ **没有 OS 文件锁**（Unix `flock` / Win `LockFileEx` 需新增依赖 ⇒ 本波
+    /// **0 新外部 dep** ⇒ 不引）⇒ 实际保护是**三层**：
+    ///
+    /// ① **单次 write**：`O_APPEND` 下整行一次写 syscall 落盘 ⇒ 本行的字节
+    ///    **不与别的进程的写交错**（撕裂只可能来自别的进程自己的多次写）；
+    /// ② **写不完整即报错**：单次 write 返回字节数不足 ⇒ 该行可能撕裂 ⇒
+    ///    **报错并拒绝入内存**（读端按不存在处理 ⇒ fail-closed）；
+    /// ③ **追加前后长度自检**：写后长度必须正好增长「补换行 + 行长」⇒
+    ///    被并发追加 ⇒ 长度多涨 ⇒ **报错**（不静默）。
+    ///
+    /// ⇒ **残余风险**：两个进程同时追加时，各自的行仍可能**互相黏行** ⇒
+    /// 那两行整行不可解析 ⇒ **授权丢失（可用性）**，但**不会越权**
+    /// （读端把坏行按不存在处理）。
     fn write_line(&self, line: &LedgerLine) -> Result<(), GrantError> {
         let Some(path) = self.path.as_ref() else {
             return Ok(());
@@ -429,21 +465,55 @@ impl ObjectGrantLedger {
             .append(true)
             .open(path)
             .map_err(|error| GrantError::LedgerWrite(error.to_string()))?;
+        let before = Self::file_len(path).unwrap_or(0);
         // ⚠️ **追加前先补换行**：文件最后一行若没有 '\n' 结尾 ⇒ 新行会与
         // **最后一行黏成一行** ⇒ 那一行整行解析失败 ⇒ **按不存在处理**
         // ⇒ **最后一条授权会静默消失**（对抗复核实测到的真坑）。
+        let mut prefix: Vec<u8> = Vec::new();
         if !Self::ends_with_newline(path)? {
-            file.write_all(b"\n")
+            prefix.push(b'\n');
+        }
+        if !prefix.is_empty() {
+            let written = file
+                .write(&prefix)
                 .map_err(|error| GrantError::LedgerWrite(error.to_string()))?;
+            if written != prefix.len() {
+                return Err(GrantError::LedgerWrite(format!(
+                    "账本补换行写入不完整（{written}/{} 字节）",
+                    prefix.len()
+                )));
+            }
         }
         let mut text = serde_json::to_string(line)
             .map_err(|error| GrantError::LedgerWrite(error.to_string()))?;
         text.push('\n');
-        file.write_all(text.as_bytes())
+        let bytes = text.as_bytes();
+        // **单次 write**（不循环 ⇒ 不与并发追加交错 ⇒ 行不撕裂）。
+        let written = file
+            .write(bytes)
             .map_err(|error| GrantError::LedgerWrite(error.to_string()))?;
+        if written != bytes.len() {
+            return Err(GrantError::LedgerWrite(format!(
+                "账本写入不完整（{written}/{} 字节）⇒ 该行可能撕裂",
+                bytes.len()
+            )));
+        }
         file.flush()
             .map_err(|error| GrantError::LedgerWrite(error.to_string()))?;
+        // 追加后自检：长度必须正好增长（被并发追加 ⇒ 多涨 ⇒ 报错，不静默）。
+        let expected = before + prefix.len() as u64 + bytes.len() as u64;
+        let after = Self::file_len(path).unwrap_or(0);
+        if after != expected {
+            return Err(GrantError::LedgerWrite(format!(
+                "账本长度异常（期望 {expected} 实得 {after}）⇒ 可能被并发写入交错"
+            )));
+        }
         Ok(())
+    }
+
+    /// 账本文件长度（字节）。
+    fn file_len(path: &Path) -> Option<u64> {
+        std::fs::metadata(path).ok().map(|meta| meta.len())
     }
 }
 
@@ -901,7 +971,14 @@ fn validate_ledger_rows(rows: &[GrantLedgerEntry]) -> (Vec<GrantLedgerEntry>, Ve
     let mut highest: BTreeMap<String, u64> = BTreeMap::new();
     // 见过 pending 前身的 grant_id。
     let mut pending_seen: BTreeSet<String> = BTreeSet::new();
+    // **终局**的 grant_id（见过 revoked / denied）⇒ 此后任何 active 行按不存在处理。
+    let mut terminated: BTreeSet<String> = BTreeSet::new();
     for row in rows {
+        // ⚠️ 终局**先记**（哪怕这行自己因版本问题被拒）⇒ fail-closed：
+        // 任何「撤销」的痕迹都算终局证据 ⇒ 授权不可被更高 version 的 active 复活。
+        if row.status.is_terminal() {
+            terminated.insert(row.grant_id.clone());
+        }
         if row.version < 1 || row.version > MAX_LEDGER_VERSION {
             anomalies.push(anomaly_audit(
                 row,
@@ -939,6 +1016,15 @@ fn validate_ledger_rows(rows: &[GrantLedgerEntry]) -> (Vec<GrantLedgerEntry>, Ve
                 ));
                 continue;
             }
+            // **终局闸**：该授权单已 revoked / denied ⇒ 一票终局 ⇒
+            // 追加更高 version 的 active 行**也复活不了**（撤销不是可逆的）。
+            if terminated.contains(&row.grant_id) {
+                anomalies.push(anomaly_audit(
+                    row,
+                    "该授权单已终局（revoked/denied）⇒ 终局不可复活，该行按不存在处理",
+                ));
+                continue;
+            }
         }
         highest.insert(row.grant_id.clone(), row.version);
         if row.status == GrantStatus::Pending {
@@ -963,15 +1049,23 @@ fn anomaly_audit(row: &GrantLedgerEntry, reason: &str) -> GrantAuditRow {
     }
 }
 
-/// 折算：取 **version 最大者**（相同取文件后者）⇒ 旧行追加到末尾也复活不了。
+/// 折算：取 **version 最大者**（相同取文件后者）⇒ 旧行追加到末尾也复活不了；
+/// **且终局态（revoked / denied）一票终局** ⇒ 更高 version 的 active 行压不过它。
 fn latest_of<'a, I: Iterator<Item = &'a GrantLedgerEntry>>(
     rows: I,
 ) -> Option<&'a GrantLedgerEntry> {
     let mut best: Option<&GrantLedgerEntry> = None;
     for row in rows {
-        match best {
-            Some(current) if current.version > row.version => {}
-            _ => best = Some(row),
+        let take = match best {
+            None => true,
+            // 已是终局 ⇒ 只有**更新的终局行**能替换（active 永不许）。
+            Some(current) if current.status.is_terminal() => {
+                row.status.is_terminal() && row.version >= current.version
+            }
+            Some(current) => row.version >= current.version,
+        };
+        if take {
+            best = Some(row);
         }
     }
     best
@@ -993,12 +1087,17 @@ fn latest_rows<'a>(
                 continue;
             }
         }
-        // 折算：**version 最大者**（相同取文件后者）。
-        match latest.get(entry.grant_id.as_str()) {
-            Some(current) if current.version > entry.version => {}
-            _ => {
-                latest.insert(entry.grant_id.as_str(), entry);
+        // 折算：**version 最大者**（相同取文件后者）+ **终局态优先**。
+        let take = match latest.get(entry.grant_id.as_str()) {
+            None => true,
+            // 已是终局 ⇒ 只有**更新的终局行**能替换（active 永不许）。
+            Some(current) if current.status.is_terminal() => {
+                entry.status.is_terminal() && entry.version >= current.version
             }
+            Some(current) => entry.version >= current.version,
+        };
+        if take {
+            latest.insert(entry.grant_id.as_str(), entry);
         }
     }
     latest.into_values().collect()

@@ -225,6 +225,11 @@ pub mod principal_forget;
 
 pub use principal_forget::{MemoryGovernanceCommand, PrincipalForgetDto};
 
+/// C-D1 对象授权的**宿主激活口端口** (approve / deny): 模型面词表只有
+/// `grant`/`revoke`/`list`/`check` ⇒ approve/deny **只能宿主调** ⇒ 审批人身份
+/// 来自令牌绑定链, 请求体不得自带。
+pub use apeireth_runtime::canonical::ObjectGrantActivation;
+
 pub use panels::{
     AuditCommand, AuditDto, AuditQuery, EpisodeDto, EpisodeMutationDto, GatewayServices,
     GatewayState, GrantCommand, GrantDto, GrantMutationDto, GrantQuery, GraphEdgeDto, GraphNodeDto,

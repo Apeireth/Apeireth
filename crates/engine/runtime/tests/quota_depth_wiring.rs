@@ -27,7 +27,8 @@ use apeireth_protocol::canonical::{
     NormalizedUsage,
 };
 use apeireth_runtime::canonical::quota::{
-    parse_quota_max_depth_strict, DepthQuota, DepthQuotaHandle, MAX_QUOTA_DEPTH,
+    parse_quota_max_depth, parse_quota_max_depth_strict, DepthQuota, DepthQuotaHandle,
+    MAX_QUOTA_DEPTH,
 };
 use apeireth_runtime::canonical::{
     InvocationContext, Runtime, RuntimeError, Session, SessionStore, TurnRequest,
@@ -445,7 +446,10 @@ fn the_four_dimensions_stay_independent_once_depth_is_enabled() {
         max_cost_micros: Some(1_000),
     };
     let mut depth = DepthQuotaHandle::with_max_depth(Some(1));
-    depth.observe_depth(1);
+    {
+        // 对外唯一的喂入口 = 嵌套作用域 (裸调观测已收进模块内)。
+        let _scope = depth.scope(1).expect("限内放行");
+    }
     assert_eq!(depth.max_depth(), Some(1));
 
     // 只有深度维到顶 ⇒ 只报深度维。
@@ -588,4 +592,80 @@ async fn the_depth_ceiling_knob_is_off_by_default_and_binds_when_set() {
         Some(1),
         "自述读数里的上限 = Some(N)"
     );
+}
+
+/// ⑫ 上限超锚点 ⇒ 被钳制 (不静默饱和): `Some(u64::MAX)` 不许变成"无上限"。
+#[test]
+fn an_oversized_depth_ceiling_is_clamped_to_the_family_anchor() {
+    assert_eq!(
+        DepthQuota::with_max_depth(Some(u64::MAX)).max_depth(),
+        Some(MAX_QUOTA_DEPTH),
+        "值形态: 越界上限钳到家族锚点 (不发明更高的上限)"
+    );
+    assert_eq!(
+        DepthQuotaHandle::with_max_depth(Some(u64::MAX)).max_depth(),
+        Some(MAX_QUOTA_DEPTH),
+        "句柄形态: 同样钳到锚点"
+    );
+    let handle = DepthQuotaHandle::with_max_depth(None);
+    handle.set_max_depth(Some(u64::MAX));
+    assert_eq!(
+        handle.max_depth(),
+        Some(MAX_QUOTA_DEPTH),
+        "绑定口: 越界上限同样钳到锚点 (否则 check() 永不触发 ⇒ 静默饱和)"
+    );
+    // 钳制后的上限仍是**有限**的: 事实里带的是锚点, 不是 u64::MAX。
+    let clamped = DepthQuota::with_max_depth(Some(u64::MAX));
+    assert!(clamped.max_depth().is_some(), "钳制后仍是一个声明过的上限");
+}
+
+/// ⑬ 裸调观测已不可达 ⇒ 当前层只在作用域内移动, 出作用域必回落 (显示不漂)。
+#[test]
+fn the_current_depth_cannot_drift_outside_a_scope() {
+    let handle = DepthQuotaHandle::with_max_depth(None);
+    {
+        let _scope = handle.scope(2).expect("不设限 ⇒ 放行");
+        assert_eq!(handle.current_depth(), 2);
+    }
+    assert_eq!(
+        handle.current_depth(),
+        0,
+        "作用域结束 ⇒ 当前层回落 (无裸调路径可把它永久抬上去)"
+    );
+    // 作用域嵌套时回落的是**上一层**, 不是清零。
+    let outer = handle.scope(1).expect("外层");
+    assert_eq!(handle.current_depth(), 1);
+    {
+        let _inner = handle.scope(2).expect("内层");
+        assert_eq!(handle.current_depth(), 2);
+    }
+    assert_eq!(handle.current_depth(), 1, "内层结束 ⇒ 回到外层");
+    drop(outer);
+    assert_eq!(handle.current_depth(), 0);
+    assert_eq!(handle.peak_depth(), 2, "峰值不回落");
+}
+
+/// ⑭ 宽松解析 (非生产路径) 的 fail-open 性质被钉住 ⇒ 生产解析走 strict。
+#[test]
+fn the_lenient_parser_is_pinned_as_non_production() {
+    // 宽松档: 非法值**静默**读成"不设限" (fail-open) —— 这就是它不能上生产的
+    // 原因, 用例把它钉住, 免得日后误当成生产路径。
+    assert_eq!(parse_quota_max_depth(Some("0")), None, "宽松档: 0 = 不设限");
+    assert_eq!(
+        parse_quota_max_depth(Some("-1")),
+        None,
+        "宽松档: 负数 = 不设限"
+    );
+    assert_eq!(
+        parse_quota_max_depth(Some("abc")),
+        None,
+        "宽松档: 非法 = 不设限"
+    );
+    // 生产档: 同样的非法值**明确报错** (绝不静默放行)。
+    assert!(
+        parse_quota_max_depth_strict(Some("0")).is_err(),
+        "生产解析走 strict: 非法值必须报错"
+    );
+    assert!(parse_quota_max_depth_strict(Some("-1")).is_err());
+    assert!(parse_quota_max_depth_strict(Some("abc")).is_err());
 }

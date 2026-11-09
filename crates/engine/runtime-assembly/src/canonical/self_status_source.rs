@@ -33,10 +33,10 @@ use apeireth_core::model_profile::ModelProfile;
 use apeireth_core::routing_policy::RoutingPolicy;
 use apeireth_orchestration::self_tuning::TunableParam;
 use apeireth_tools_canonical::self_status::{
-    BioMechanismKind, BioMechanismProbe, BioMechanismReading, RoutingPolicyCandidateRow,
-    RoutingPolicyDecision, RoutingPolicyStatus, BIO_MECHANISM_NOT_WIRED_REASON,
-    BIO_SELF_STATUS_ENABLE_ENV, BIO_STAGE_WIRED, QUOTA_DEPTH_NOT_ENABLED,
-    QUOTA_DEPTH_READING_MISSING,
+    BioMechanismKind, BioMechanismProbe, BioMechanismReading, RoutingPolicyAttempt,
+    RoutingPolicyCandidateRow, RoutingPolicyDecision, RoutingPolicyStatus,
+    BIO_MECHANISM_NOT_WIRED_REASON, BIO_SELF_STATUS_ENABLE_ENV, BIO_STAGE_WIRED,
+    QUOTA_DEPTH_NOT_ENABLED, QUOTA_DEPTH_READING_MISSING,
 };
 use apeireth_tools_canonical::{
     derive_tuning_preset, BackupStatus, BudgetStatus, CapabilitySwitch, CareStatus,
@@ -215,34 +215,74 @@ pub fn cost_routing_probe(router: Arc<CostRouter>) -> StatusProbe<CostRoutingSta
 ///
 /// 与任务选路**同一台** [`RoutingPolicy`] (同源) ⇒ 自述面看到的决策就是选路
 /// 真正做过的那次。尚无任务被路由 ⇒ `last_decision = None` (不编造档位/选定)。
+///
+/// ⚠️ **不回显隐私档字面量** (W3 · 单元 2): 自述节是**工具结果** ⇒ 会进模型
+/// 上下文 ⇒ 密级标注不能由自述面转述给模型 ⇒ 只回**来源**
+/// (`declared`/`defaulted`) + **闸有没有真的过滤过候选**; 理由文本里的档位
+/// 字面量在此**脱敏** (见 [`redact_privacy_levels`])。
 pub fn routing_policy_probe(policy: Arc<RoutingPolicy>) -> StatusProbe<RoutingPolicyStatus> {
     Arc::new(move || {
         let enabled = policy.is_enabled();
-        let last_decision = policy
-            .last_decision()
-            .map(|decision| RoutingPolicyDecision {
+        let last_decision = policy.last_decision().map(|decision| {
+            let privacy_gate_filtered = decision.comparisons.iter().any(|row| {
+                row.exclusion_reason
+                    .as_deref()
+                    .is_some_and(|reason| reason.contains("隐私闸"))
+            });
+            RoutingPolicyDecision {
                 tier: decision.tier.as_str().to_string(),
-                privacy: decision.privacy.as_str().to_string(),
                 privacy_source: decision.privacy_source.as_str().to_string(),
+                privacy_gate_filtered,
                 selected_model: decision.selected_model.clone(),
-                selection_reason: decision.selection_reason.clone(),
+                selection_reason: redact_privacy_levels(&decision.selection_reason),
                 fallback_chain: decision.fallback_chain.clone(),
-                fallback_reason: decision.fallback_reason.clone(),
+                fallback_reason: decision
+                    .fallback_reason
+                    .as_deref()
+                    .map(redact_privacy_levels),
                 comparisons: decision
                     .comparisons
                     .iter()
                     .map(|row| RoutingPolicyCandidateRow {
                         model_id: row.model_id.clone(),
                         outcome: row.outcome.as_str().to_string(),
-                        exclusion_reason: row.exclusion_reason.clone(),
+                        exclusion_reason: row
+                            .exclusion_reason
+                            .as_deref()
+                            .map(redact_privacy_levels),
                     })
                     .collect(),
-            });
+            }
+        });
+        // 最近一次**尝试** (成功或被拒) ⇒ 「因隐私被拒」在自述面看得见。
+        let last_attempt = policy.last_attempt().map(|attempt| RoutingPolicyAttempt {
+            outcome: attempt.outcome.as_str().to_string(),
+            rejected_by: attempt
+                .rejected_by
+                .map(|dimension| dimension.as_str().to_string()),
+            reason: redact_privacy_levels(&attempt.reason),
+            candidate_count: attempt.candidate_count,
+        });
         Ok(RoutingPolicyStatus {
             enabled,
             last_decision,
+            last_attempt,
         })
     })
+}
+
+/// 自述面文本里的**隐私档字面量脱敏** (W3 · 单元 2)。
+///
+/// 只替换**紧贴隐私语汇**的档位名 (`隐私等级 {档}` / `上限 {档}`) ⇒ 不会误伤
+/// 模型 id 或别的说明文字; 脱敏后语义不变 (「隐私等级 [档位] 超过该候选允许的
+/// 上限 [档位]」) ⇒ 运维仍看得出「是隐私闸排的」, 但**档位名不外泄**。
+fn redact_privacy_levels(text: &str) -> String {
+    let mut out = text.to_string();
+    for level in apeireth_core::routing_policy::PrivacyLevel::ALL {
+        out = out.replace(&format!("隐私等级 {} ", level.as_str()), "隐私等级 [档位] ");
+        out = out.replace(&format!("上限 {}", level.as_str()), "上限 [档位]");
+    }
+    out
 }
 
 /// 自省通道: 用户域节探测口 (W3-①) —— 现探测当前域的域文档真值与域内计数。

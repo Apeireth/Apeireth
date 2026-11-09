@@ -1123,6 +1123,12 @@ pub fn gateway_services(panel: Arc<CliPanelData>) -> GatewayServices {
         // `services.care` / `services.traits`), 与工具面同表同账。
         care: None,
         traits: None,
+        // C-D1 宿主激活口 (`POST /v1/panel/grants/approve` / `.../deny`):
+        // 端口由**引擎侧**实现 (`apeireth_runtime::canonical::ObjectGrantActivation`),
+        // 组合根在装配点注入 (见 cli::lib 的 `services.grant_activation`)。
+        // ⚠️ **待接**: 引擎侧句柄尚未从 CLI 装配根暴露出来 ⇒ 此处先 `None`
+        // (该面 = `501 unsupported`, 不假装有激活口)。
+        grant_activation: None,
     }
 }
 

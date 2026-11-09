@@ -103,9 +103,9 @@
 //!
 //! **信号口** (装配批接这三个函数即可, 0 新 env 名):
 //!
-//! - [`privacy_signal_from_str`] —— 从**原始值**读信号 (`None`/空白 ⇒ 缺位兜底);
-//! - [`privacy_signal_from_metadata`] —— 从**元数据载体**读信号 (保留键
-//!   [`PRIVACY_SIGNAL_KEY`]);
+//! - [`privacy_signal_from_str`] —— 从**原始值**读信号 (`None` ⇒ 缺位兜底;
+//!   空白/不认识 ⇒ **报错**, 不静默降级); 载体字段名 = [`PRIVACY_SIGNAL_KEY`]
+//!   (本地载体: 会话设置 / CLI 参数 ⇒ **绝不**进会外发的请求元数据);
 //! - [`TaskProfile::from_signal`] —— 把信号接进任务画像 (⇒ [`TaskProfile::privacy`]
 //!   读生效等级, [`RoutingDecision::privacy_source`] 读来源)。
 //!
@@ -121,7 +121,9 @@
 //! - 隐私事实的落点: 画像行的能力标记 ([`PRIVACY_FLAG_RESTRICTED`] /
 //!   [`PRIVACY_FLAG_CONFIDENTIAL`]) 或调用方自建的候选表
 //!   ([`PolicyCandidate::table_from_profiles`]) —— **不新设 env 名**;
-//! - 自述面: [`RoutingPolicy::last_decision`] (最近一次决策真值, 供自述路由节读取)。
+//! - 自述面: **两个口分开** —— [`RoutingPolicy::last_decision`] (最近一次**成功**
+//!   决策) + [`RoutingPolicy::last_attempt`] (最近一次**尝试**: 成功**或**被拒 ⇒
+//!   「因隐私被拒」这种最该被看见的事件不会因为「没选出模型」而消失)。
 
 use std::fmt;
 use std::sync::Mutex;
@@ -277,11 +279,11 @@ impl PrivacySignal {
     }
 }
 
-/// 隐私信号在**元数据载体**里的保留键 (`privacy_level`)。
+/// 隐私档在本族**本地载体**里的字段名 (`privacy_level`)。
 ///
-/// 载体由调用方选 (会话设置 / 入站请求字段 / CLI 参数 …) ⇒ **0 新 env 名**;
-/// 本层只认这一个键。⚠️ **不要**把它放进**会外发到厂商**的请求元数据通道
-/// (那会把声明本身送出去)。
+/// ⚠️ **只用于本地载体** (会话设置 / 本地表 / CLI 参数) ⇒ **绝不**放进会外发到
+/// 厂商的请求元数据通道 (`NormalizedRequest.metadata` 会被整包写进出网 body ⇒
+/// 声明本身会外泄)。
 pub const PRIVACY_SIGNAL_KEY: &str = "privacy_level";
 
 /// 隐私信号解析失败。**值自由报错**: 只报键名与期望词表, 从不回显被解析的值。
@@ -311,13 +313,14 @@ impl std::error::Error for PrivacySignalError {}
 
 /// 隐私信号端口 (纯函数): 从**原始值**读一条信号。
 ///
-/// - `None` / 空白 ⇒ [`PrivacySignal::Defaulted`] (信号缺位 ⇒ 普通档兜底,
+/// - `None` (**缺位**) ⇒ [`PrivacySignal::Defaulted`] (信号缺位 ⇒ 普通档兜底,
 ///   **由调用方在决策里显式标注**, 不静默);
 /// - 认识的词 ⇒ [`PrivacySignal::Declared`] (ASCII 大小写不敏感, 去首尾空白);
-/// - 不认识的词 ⇒ [`PrivacySignalError::InvalidValue`] (值自由报错 ⇒ **拒路由**,
-///   不静默降级)。
+/// - **其它一切** (不认识 / 空白 / 空串) ⇒ [`PrivacySignalError::InvalidValue`]
+///   ⇒ **拒路由**, 不静默降级 —— 「显式传了空」与「没人声明」必须可区分
+///   (当缺位处理 = 静默放宽)。
 pub fn privacy_signal_from_str(value: Option<&str>) -> Result<PrivacySignal, PrivacySignalError> {
-    let Some(raw) = value.map(str::trim).filter(|text| !text.is_empty()) else {
+    let Some(raw) = value else {
         return Ok(PrivacySignal::Defaulted);
     };
     match PrivacyLevel::parse(raw) {
@@ -334,16 +337,6 @@ pub fn privacy_signal_from_str(value: Option<&str>) -> Result<PrivacySignal, Pri
             ),
         }),
     }
-}
-
-/// 隐私信号端口 (纯函数): 从**元数据载体**读一条信号 (保留键 [`PRIVACY_SIGNAL_KEY`])。
-///
-/// 载体形状 = 规范请求元数据的形状 (`BTreeMap<String, String>`); 调用方也可直接用
-/// [`privacy_signal_from_str`] 读自己那儿的字段。
-pub fn privacy_signal_from_metadata(
-    metadata: &std::collections::BTreeMap<String, String>,
-) -> Result<PrivacySignal, PrivacySignalError> {
-    privacy_signal_from_str(metadata.get(PRIVACY_SIGNAL_KEY).map(String::as_str))
 }
 
 /// 任务的能力需求 (投影成成本档层的路由信号)。
@@ -671,10 +664,96 @@ impl fmt::Display for RoutingPolicyError {
 
 impl std::error::Error for RoutingPolicyError {}
 
+/// 一次路由**尝试**的结论。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AttemptOutcome {
+    /// 选出了模型。
+    Selected,
+    /// 被拒 (哪道闸拒的见 [`RoutingAttempt::rejected_by`]).
+    Rejected,
+}
+
+impl AttemptOutcome {
+    /// 结论拼写 (`selected|rejected`)。
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            AttemptOutcome::Selected => "selected",
+            AttemptOutcome::Rejected => "rejected",
+        }
+    }
+}
+
+impl fmt::Display for AttemptOutcome {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// 被拒的**维度** (哪一道闸拒的) —— 自述面要能说清「因隐私被拒」而不是
+/// 「路由失败」。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AttemptDimension {
+    /// **隐私闸**: 候选可承接的上限低于任务的隐私等级。
+    Privacy,
+    /// **候选表闸**: 候选未登记在策略候选表 (或画像行事实全缺)。
+    CandidateTable,
+    /// **成本档闸**: 画像表里没有模型通过该档过滤。
+    CostTier,
+}
+
+impl AttemptDimension {
+    /// 维度拼写 (`privacy|candidate_table|cost_tier`)。
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            AttemptDimension::Privacy => "privacy",
+            AttemptDimension::CandidateTable => "candidate_table",
+            AttemptDimension::CostTier => "cost_tier",
+        }
+    }
+}
+
+impl fmt::Display for AttemptDimension {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// 一次路由尝试的事实 (成功**或**被拒)。
+///
+/// ⚠️ 与 [`RoutingDecision`] 是**两个口**: 决策口只记**成功**
+/// ([`RoutingPolicy::last_decision`]), 尝试口**成功与被拒都记**
+/// ([`RoutingPolicy::last_attempt`]) ⇒ 「因隐私被拒」这种最该被看见的事件
+/// 不会因为「没选出模型」而消失。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RoutingAttempt {
+    /// 结论 (选定 / 被拒)。
+    pub outcome: AttemptOutcome,
+    /// 被拒的维度; 选定 = `None`.
+    pub rejected_by: Option<AttemptDimension>,
+    /// 理由 (被拒 = 为什么; 选定 = 选定理由)。
+    pub reason: String,
+    /// 参与评估的候选数 (成本档候选数; 被拒时 = 被评估后全被排掉的那些)。
+    pub candidate_count: usize,
+    /// 生效的成本档。
+    pub tier: CostTier,
+    /// 生效的隐私等级。
+    pub privacy: PrivacyLevel,
+    /// 隐私信号来源 (显式声明 / 缺省兜底)。
+    pub privacy_source: PrivacySource,
+}
+
+impl RoutingAttempt {
+    /// 这次尝试是不是**被拒**了。
+    pub fn is_rejected(&self) -> bool {
+        self.outcome == AttemptOutcome::Rejected
+    }
+}
+
 /// 统一路由策略层: 候选表 + 成本档层复用 + 可解释决策。
 ///
 /// 生命周期: 策略层**不持锁状态**以外的东西 —— 成本档层实例 + 候选表 + 配置面。
-/// 最近一次决策记在内部 ([`RoutingPolicy::last_decision`]), 供自述路由节读取。
+/// 最近一次决策记在内部 ([`RoutingPolicy::last_decision`]), 供自述路由节读取;
+/// 最近一次**尝试** (含被拒) 记在 [`RoutingPolicy::last_attempt`]。
 #[derive(Debug)]
 pub struct RoutingPolicy {
     /// 策略候选表 (可路由模型 + 隐私上限; 同 id 重复登记取更严的一档)。
@@ -689,6 +768,8 @@ pub struct RoutingPolicy {
     config: CostRoutingConfig,
     /// 最近一次**成功**的决策 (失败不记 —— 照实)。
     last_decision: Mutex<Option<RoutingDecision>>,
+    /// 最近一次**尝试** (成功或被拒都记 —— 被拒的事实也必须看得见)。
+    last_attempt: Mutex<Option<RoutingAttempt>>,
 }
 
 impl RoutingPolicy {
@@ -714,6 +795,7 @@ impl RoutingPolicy {
             default_model,
             config,
             last_decision: Mutex::new(None),
+            last_attempt: Mutex::new(None),
         }
     }
 
@@ -763,6 +845,28 @@ impl RoutingPolicy {
         last.clone()
     }
 
+    /// 最近一次**尝试** (成功**或**被拒); 本策略层尚未尝试过 = `None` (照实)。
+    ///
+    /// ⚠️ 与 [`RoutingPolicy::last_decision`] **两个口分开**: 决策口只记成功
+    /// (「最近一次决策」的口径不被拒绝污染), 尝试口**被拒也记** ⇒ 自述面能显示
+    /// 「最近一次被隐私闸拒绝」(否则最该被看见的事件不可见)。
+    pub fn last_attempt(&self) -> Option<RoutingAttempt> {
+        let last = self
+            .last_attempt
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        last.clone()
+    }
+
+    /// 记一次尝试 (成功与被拒都记)。
+    fn record_attempt(&self, attempt: RoutingAttempt) {
+        let mut last = self
+            .last_attempt
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        *last = Some(attempt);
+    }
+
     /// 决策: 任务画像 ⇒ 候选 ⇒ 选定 (含逐行比较与退路链)。
     ///
     /// 失败形态 (见 [`RoutingPolicyError`]): 开关关 ⇒ `Disabled`; 成本档零候选 ⇒
@@ -782,28 +886,48 @@ impl RoutingPolicy {
         let cost_candidates = self.cost_router.candidates(tier, &request);
         if cost_candidates.is_empty() {
             let spec = tier.spec();
+            let reason = format!(
+                "画像表里没有模型通过 {tier} 档过滤 (能力需求 × 窗口下限 {} token × 比较单价上限 {} 微元/千 token); 策略层不替成本档层造候选",
+                spec.min_context_window, spec.price_ceiling_micros
+            );
+            self.record_attempt(RoutingAttempt {
+                outcome: AttemptOutcome::Rejected,
+                rejected_by: Some(AttemptDimension::CostTier),
+                reason: reason.clone(),
+                candidate_count: 0,
+                tier,
+                privacy: privacy_level,
+                privacy_source,
+            });
             return Err(RoutingPolicyError::NoCostCandidate {
                 tier,
                 tier_source,
-                reason: format!(
-                    "画像表里没有模型通过 {tier} 档过滤 (能力需求 × 窗口下限 {} token × 比较单价上限 {} 微元/千 token); 策略层不替成本档层造候选",
-                    spec.min_context_window, spec.price_ceiling_micros
-                ),
+                reason,
             });
         }
 
         // ③ 逐行评估: 隐私闸 (硬闸) → 候选表闸 → 成本档闸。
         let evaluation = self.evaluate_candidates(profile, tier, &cost_candidates);
         if evaluation.survivors.is_empty() {
+            let reason = format!(
+                "{tier} 档的 {} 个候选全部被策略层排除 (隐私等级 {privacy} 闸 / 候选表闸 / 档位过滤); 宁可不选也不越闸",
+                cost_candidates.len(),
+                privacy = privacy_level
+            );
+            self.record_attempt(RoutingAttempt {
+                outcome: AttemptOutcome::Rejected,
+                rejected_by: Some(evaluation.dominant_rejection_dimension()),
+                reason: reason.clone(),
+                candidate_count: cost_candidates.len(),
+                tier,
+                privacy: privacy_level,
+                privacy_source,
+            });
             return Err(RoutingPolicyError::NoEligibleCandidate {
                 tier,
                 tier_source,
                 privacy: privacy_level,
-                reason: format!(
-                    "{tier} 档的 {} 个候选全部被策略层排除 (隐私等级 {privacy} 闸 / 候选表闸 / 档位过滤); 宁可不选也不越闸",
-                    cost_candidates.len(),
-                    privacy = privacy_level
-                ),
+                reason,
                 privacy_source,
                 comparisons: evaluation.comparisons,
             });
@@ -846,13 +970,23 @@ impl RoutingPolicy {
                     row.price_compared = false;
                 }
             }
+            let reason =
+                "存活集非空但成本档层未选出模型 (默认模型缺席); 如实选不出, 不硬凑".to_string();
+            self.record_attempt(RoutingAttempt {
+                outcome: AttemptOutcome::Rejected,
+                rejected_by: Some(AttemptDimension::CostTier),
+                reason: reason.clone(),
+                candidate_count: evaluation.survivors.len(),
+                tier,
+                privacy: privacy_level,
+                privacy_source,
+            });
             return Err(RoutingPolicyError::NoEligibleCandidate {
                 tier,
                 tier_source,
                 privacy: privacy_level,
                 privacy_source,
-                reason: "存活集非空但成本档层未选出模型 (默认模型缺席); 如实选不出, 不硬凑"
-                    .to_string(),
+                reason,
                 comparisons,
             });
         };
@@ -913,6 +1047,16 @@ impl RoutingPolicy {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         *last = Some(decision.clone());
+        // 尝试口: 成功也记 (与决策口**两个口分开**; 被拒的事实见上面的拒绝分支)。
+        self.record_attempt(RoutingAttempt {
+            outcome: AttemptOutcome::Selected,
+            rejected_by: None,
+            reason: decision.selection_reason.clone(),
+            candidate_count: evaluation.survivors.len(),
+            tier,
+            privacy: privacy_level,
+            privacy_source,
+        });
         Ok(decision)
     }
 
@@ -930,6 +1074,10 @@ impl RoutingPolicy {
         let mut comparisons: Vec<CandidateComparison> = Vec::new();
         let mut survivors: Vec<ModelProfile> = Vec::new();
         let mut registered: Vec<String> = Vec::new();
+        // 各闸的排除计数 (「被哪道闸拒的」的事实来源, 不靠解析理由文本)。
+        let mut privacy_excluded = 0usize;
+        let mut table_excluded = 0usize;
+        let mut tier_excluded = 0usize;
 
         for candidate in self.candidate_table() {
             let key = candidate.key();
@@ -940,6 +1088,7 @@ impl RoutingPolicy {
 
             // 隐私闸 (硬闸): 候选可承接的上限低于任务等级 ⇒ 排除 (安全 > 功能 > 性能)。
             if candidate.max_privacy < profile.privacy() {
+                privacy_excluded += 1;
                 reasons.push(format!(
                     "隐私等级 {} 超过该候选允许的上限 {} (隐私闸硬排除; 宁可无候选也不越闸)",
                     profile.privacy(),
@@ -948,10 +1097,13 @@ impl RoutingPolicy {
             }
             // 候选表闸: 未登记 / 事实缺位 / 没过档位过滤 ⇒ 排除 (理由可见)。
             if self.profiles.get(&candidate.model_id).is_none() {
+                table_excluded += 1;
                 reasons.push("画像表无该模型行 (模型事实未提供, 不编造)".to_string());
             } else if model_profile.is_unknown() {
+                table_excluded += 1;
                 reasons.push("画像表的该模型行事实全缺 (能力事实未提供, 不编造)".to_string());
             } else if !cost_keys.contains(&key) {
+                tier_excluded += 1;
                 reasons.push(format!(
                     "未通过 {tier} 档过滤 (工具支持 / 上下文窗口 / 比较单价 三条件之一未满足)"
                 ));
@@ -997,6 +1149,9 @@ impl RoutingPolicy {
         Evaluation {
             survivors,
             comparisons,
+            privacy_excluded,
+            table_excluded,
+            tier_excluded,
         }
     }
 
@@ -1041,6 +1196,28 @@ struct Evaluation {
     survivors: Vec<ModelProfile>,
     /// 逐行比较 (含被排除者的理由)。
     comparisons: Vec<CandidateComparison>,
+    /// 被隐私闸排除的行数。
+    privacy_excluded: usize,
+    /// 被候选表闸排除的行数。
+    table_excluded: usize,
+    /// 被成本档闸排除的行数。
+    tier_excluded: usize,
+}
+
+impl Evaluation {
+    /// 排掉候选最多的那道闸 (平手取**更严**的一档: 隐私 → 候选表 → 成本档)。
+    fn dominant_rejection_dimension(&self) -> AttemptDimension {
+        if self.privacy_excluded > 0
+            && self.privacy_excluded >= self.table_excluded
+            && self.privacy_excluded >= self.tier_excluded
+        {
+            AttemptDimension::Privacy
+        } else if self.table_excluded > 0 && self.table_excluded >= self.tier_excluded {
+            AttemptDimension::CandidateTable
+        } else {
+            AttemptDimension::CostTier
+        }
+    }
 }
 
 /// 退路排序口径: 比较单价升序 (有价候选优先, 平手取画像表顺序), 缺价候选

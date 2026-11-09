@@ -61,6 +61,9 @@ pub fn roster_from_config(
         // 能力创造线 W1 · 进程树快照面 (`tool.process_tree`): 开关口径 = 复用
         // `APEIRETH_ENABLE_SHELL` (shell 关 = 无进程可看 ⇒ 本面也不注册)。
         CapabilitySwitch::new("process_tree", config.process_tree),
+        // 能力创造线 W1 · 记忆对象级授权面 (`tool.object_grant`): 开关口径 =
+        // **存在性即开关** (账本落位存在才装 ⇒ 默认关 ⇒ 逐字节零变化)。
+        CapabilitySwitch::new("object_grant", config.object_grant.is_some()),
         // 内容流接入 (`tool.content_feed`, J1): 配置注入即注册; 治理 RequireApproval 级。
         CapabilitySwitch::new("content_feed", config.content_feed.is_some()),
         // V3-a 主动关怀规则面: 数据目录已注入即注册。

@@ -111,7 +111,15 @@ fn egress_infrastructure_does_not_depend_on_runtime_gateway_or_provider() {
 
 #[test]
 fn public_contract_does_not_name_platform_sandbox_mechanisms() {
-    let public_contract = strip_comments(include_str!("../src/process/mod.rs"));
+    // 扫描面 = **进程层的两个公共契约文件**：`process/mod.rs`（层门面）
+    // + `process/snapshot.rs`（**快照面自己的公共半边**：导出的类型/函数/文档）。
+    // ⚠️ 2026-11-09 补：此前**只扫 mod.rs** ⇒ snapshot.rs 的公共半边**没被钉死**
+    // （对抗复核在 Windows 后端查出这条缺口）⇒ 平台机制名只许落在 backend 段。
+    let public_contract = format!(
+        "{}\n{}",
+        strip_comments(include_str!("../src/process/mod.rs")),
+        strip_comments(include_str!("../src/process/snapshot.rs"))
+    );
 
     // The public canonical contract only names platform-agnostic capabilities.
     // Platform mechanism names belong to backend modules.

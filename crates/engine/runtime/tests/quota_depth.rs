@@ -15,8 +15,8 @@
 
 use apeireth_orchestration::CognitiveQuota;
 use apeireth_runtime::canonical::quota::{
-    parse_quota_max_depth, DepthQuota, DepthQuotaReading, QuotaDimension, QuotaExceeded,
-    SessionQuotaLimits, MAX_QUOTA_DEPTH,
+    parse_quota_max_depth, DepthQuota, DepthQuotaHandle, DepthQuotaReading, QuotaDimension,
+    QuotaExceeded, SessionQuotaLimits, MAX_QUOTA_DEPTH,
 };
 use apeireth_runtime::canonical::RuntimeError;
 
@@ -122,7 +122,14 @@ fn unwinding_or_reporting_a_smaller_depth_cannot_launder_the_overrun() {
         "已经到顶的调用树仍然到顶 (不能靠回卷绕过上限)"
     );
     // 观测口报一个更小的深度同样洗不白 (峰值只升不降)。
-    assert_eq!(depth.observe_depth(0), 2);
+    // 注: 裸调观测已收进模块内 (对外只剩带守卫的 `scope()`), 故这里用作用域
+    // 口径验证: 更小的层**抬不高也降不下**峰值。
+    let handle = DepthQuotaHandle::with_max_depth(Some(2));
+    {
+        let _scope = handle.scope(1).expect("限内放行");
+    }
+    assert_eq!(handle.peak_depth(), 1, "峰值只升不降");
+    assert_eq!(handle.current_depth(), 0, "作用域结束 ⇒ 当前层回落");
     assert_eq!(depth.peak_depth(), 2);
     assert!(depth.check().is_some());
     // 越限后再进一层仍然被拒。
@@ -167,12 +174,21 @@ fn nested_calls_accumulate_the_depth() {
 /// ⑧ 既有调用树的深度读数喂进计量器 (不新造第二棵调用树)。
 #[test]
 fn the_existing_call_tree_readout_feeds_the_meter() {
-    let mut depth = capped(2);
-    assert_eq!(depth.observe_depth(1), 1, "侧车调用 = 第一层");
-    assert_eq!(depth.check(), None);
-    assert_eq!(depth.observe_depth(2), 2, "第二层 = 到顶");
+    // 对外唯一的喂入口 = 嵌套作用域 (裸调观测已收进模块内): 作用域观测既有
+    // 调用树给出的**绝对**层数, 守卫 drop 即回落当前层。
+    let handle = DepthQuotaHandle::with_max_depth(Some(2));
+    {
+        let _scope = handle.scope(1).expect("侧车调用 = 第一层");
+        assert_eq!(handle.current_depth(), 1, "作用域内 = 当前层");
+    }
+    assert_eq!(handle.peak_depth(), 1);
+    assert_eq!(handle.check(), None);
+    {
+        let _scope = handle.scope(2).expect("第二层 = 到顶");
+    }
+    assert_eq!(handle.peak_depth(), 2);
     assert_eq!(
-        depth.check(),
+        handle.check(),
         Some(QuotaExceeded {
             dimension: QuotaDimension::Depth,
             limit: 2,

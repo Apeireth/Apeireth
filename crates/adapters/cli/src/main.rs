@@ -49,7 +49,12 @@ fn run_session() -> ExitCode {
     }
 }
 
-fn run_chat(prompt: String, model: Option<String>, session: Option<String>) -> ExitCode {
+fn run_chat(
+    prompt: String,
+    model: Option<String>,
+    session: Option<String>,
+    privacy: Option<String>,
+) -> ExitCode {
     // **续行中断检测**（`orchestration::continuation` 的安全子集）：
     // 回合开始前落快照、正常收尾即删；下次同会话启动时快照还在 ⇒ 上次没跑完。
     // 只报不重放（自动续跑会重放副作用，属产品语义决策）；快照**不存正文**。
@@ -78,7 +83,7 @@ fn run_chat(prompt: String, model: Option<String>, session: Option<String>) -> E
             return ExitCode::FAILURE;
         }
     };
-    let outcome = runtime.block_on(dispatch_canonical_chat(prompt, model, session));
+    let outcome = runtime.block_on(dispatch_canonical_chat(prompt, model, session, privacy));
     // 正常收尾（含业务错误 / 待审批挂起）= 「没崩」⇒ 删快照。
     // 只有进程真的在回合中途消失（崩溃/强杀），快照才会留到下次启动被报出来。
     if let Some(open) = open_turn {
@@ -188,15 +193,20 @@ fn run_gateway(bind: String, port: u16, pid_file: Option<std::path::PathBuf>) ->
     }
 }
 
-fn parse_chat(args: &[String]) -> Result<(String, Option<String>, Option<String>), String> {
+fn parse_chat(
+    args: &[String],
+) -> Result<(String, Option<String>, Option<String>, Option<String>), String> {
     let scanned = scan(args, &CHAT_FLAGS, "chat")?;
     let model = scanned.value("--model").map(str::to_string);
     let session = scanned.value("--session").map(str::to_string);
+    // `--privacy` = 本回合的隐私档声明 (取值域校验在组合根的**唯一**读点
+    // `turn_privacy_signal_from_value` ⇒ 不认识的值 ⇒ 明确报错, 不降级)。
+    let privacy = scanned.value("--privacy").map(str::to_string);
     let prompt = scanned.positionals.join(" ");
     if prompt.is_empty() {
         return Err("chat requires a prompt".into());
     }
-    Ok((prompt, model, session))
+    Ok((prompt, model, session, privacy))
 }
 
 fn parse_approval(
@@ -821,7 +831,7 @@ fn run_cli() -> ExitCode {
 
     match args[0].as_str() {
         "chat" => match parse_chat(&args[1..]) {
-            Ok((prompt, model, session)) => run_chat(prompt, model, session),
+            Ok((prompt, model, session, privacy)) => run_chat(prompt, model, session, privacy),
             Err(error) => {
                 eprintln!("{error}");
                 print_help();
@@ -1100,7 +1110,7 @@ mod tests {
     #[test]
     fn test_parse_chat_simple() {
         let args = vec!["hello".into(), "world".into()];
-        let (prompt, model, session) = parse_chat(&args).unwrap();
+        let (prompt, model, session, _privacy) = parse_chat(&args).unwrap();
         assert_eq!(prompt, "hello world");
         assert_eq!(model, None);
         assert_eq!(session, None);
@@ -1116,10 +1126,27 @@ mod tests {
             "do".into(),
             "something".into(),
         ];
-        let (prompt, model, session) = parse_chat(&args).unwrap();
+        let (prompt, model, session, _privacy) = parse_chat(&args).unwrap();
         assert_eq!(prompt, "do something");
         assert_eq!(model.as_deref(), Some("gpt-4o"));
         assert_eq!(session.as_deref(), Some("sess-123"));
+    }
+
+    #[test]
+    fn test_parse_chat_with_privacy_flag() {
+        // `--privacy` = 本回合的隐私档声明 (取值域校验在组合根的唯一读点 ⇒
+        // 这里只负责**取到值**, 不在这里另造一套解析)。
+        let args = vec![
+            "--privacy".into(),
+            "restricted".into(),
+            "--session".into(),
+            "sess-123".into(),
+            "hello".into(),
+        ];
+        let (prompt, _model, session, privacy) = parse_chat(&args).unwrap();
+        assert_eq!(prompt, "hello");
+        assert_eq!(session.as_deref(), Some("sess-123"));
+        assert_eq!(privacy.as_deref(), Some("restricted"));
     }
 
     #[test]
@@ -1189,10 +1216,10 @@ mod tests {
     #[test]
     fn test_flag_discipline_is_uniform() {
         // D1: 元旗标只在首参数位生效; 出现在正文之后 = 正文 (不吞正文)。
-        let (prompt, _, _) = parse_chat(&["how".into(), "--help".into()]).unwrap();
+        let (prompt, _, _, _) = parse_chat(&["how".into(), "--help".into()]).unwrap();
         assert_eq!(prompt, "how --help");
         // D1b: `--` 之后的词一律当位置参数。
-        let (prompt, _, _) = parse_chat(&["--".into(), "-h".into()]).unwrap();
+        let (prompt, _, _, _) = parse_chat(&["--".into(), "-h".into()]).unwrap();
         assert_eq!(prompt, "-h");
         // D8 / D12: 未知旗标拒绝即帧 (不静默吞成正文 / 议题)。
         let chat_error =
