@@ -926,7 +926,7 @@ claims:
       - crates/engine/runtime-assembly/tests/managed_main.rs
       - crates/adapters/cli/tests/canonical_cli_bootstrap.rs
       - crates/adapters/cli/tests/care_heartbeat_host.rs
-    verified_at: 49f1b543
+    verified_at: 67ffc277
     verify_cmd: "cargo test -p apeireth-runtime --test cognitive_module_abi --locked -j 2 && cargo test -p apeireth-runtime --test canonical_subloop --locked -j 2 && cargo test -p apeireth-runtime-assembly --test convergence_agents --locked -j 2 && cargo test -p apeireth-runtime-assembly --test memory_namespace_production --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
@@ -956,11 +956,11 @@ claims:
       - crates/engine/runtime-assembly/tests/convergence_memory.rs
       - crates/engine/runtime-assembly/tests/profile_memory_authorization.rs
       - crates/engine/runtime-assembly/tests/memory_namespace_production.rs
-    verified_at: 6a6c75e6
+    verified_at: 67ffc277
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test profile_memory_authorization --locked -j 2 && cargo test -p apeireth-runtime-assembly --test convergence_memory --locked -j 2 && cargo test -p apeireth-runtime-assembly --test memory_namespace_production --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
-    notes: "新 Host 组合中的 9 项真实 Runtime 测试通过；七工具、合法 V1 检索、后台 Agent、审批 CAS、持久化与 fork Scope 隔离。默认 ProductionCognitiveModules 的旧 Memory/Persona/Organ 尚未替换，旧数据不自动归属新 Namespace。；2026-10-28 生产收敛复核：源码变更及回归证据见 kernel-convergence-final-acceptance-2026-10-28.md；不将 Legacy SubLoop 或旧数据 Profile 映射宣称已迁移。；2026-10-29 S1 复核：父范围约束仅由 SubLoop 适配显式绑定，原模块整理 Agent 独立 Host grant 与 Namespace 语义保持；convergence_memory 原断言复跑通过，旧数据 Profile 映射仍待 S4。证据见 kernel-convergence-s1-2026-10-29.md。；2026-10-29 S4：IMPLEMENTED（可选 Host 组合）的 ProfileMemoryMappings 显式绑定完整 Profile/Namespace 与旧 scope、Preference 来源会话、专属认知 store；共享来源只读，写回归目标私有分区，未映射与过期授权默认拒绝且无全局回退。精确 scope 在原排序前过滤并在工具边界复核，治理/protected/CAS/typed sink/真实来源保持；带回执或调优的 recall 不允许只读共享。撤销、审批、后台整理、fork/reload 与切换由真实 Runtime 对抗测试覆盖。旧数据库不自动迁移，映射未默认启用；整体 Convergence 仍 Partial，S5 未实施，无外部 API/硬件实测。证据见 kernel-convergence-s4-2026-10-29.md。；2026-10-29 P1：显式 Host 选择的 ModuleToolContract 与任务句柄/状态查询经真实 Runtime 回归；既有目录/生命周期/默认权限不变，完整五段门禁通过。监督门禁仍待 P2，无新默认启用或硬件声明。；2026-10-30 P2：新增可选 Host 监督服务与执行回执；原能力默认、Provider 路由与确定性权限机制保持，定向及原 MainOnly 测试/clippy/fmt 回归通过。未将兼容入口声明为已受 System One 保护，无 live model/硬件声明。；2026-10-30 P3：可选 owner-bound 消息复用 Registry/Dispatcher，委托交集与独立后台授权分离；真实 Runtime 定向及原 MainOnly test/clippy/fmt 回归通过。默认与既有等级保持，本地幂等非持久 exactly-once，新消息变体需新 reader；无 live model/硬件声明。；2026-11-07 抬级（同一处装配改动）：`production.rs:1484 memory_assembly::wire(...)` 让生产装配真的注册 `module.memory` 工具面 ⇒ 7 个 `memory_*` 工具不再「requested tool is not registered」；Host 映射经 `production.rs:1846 bind_profile_mappings(...)` → `MemoryModule::attach_profile_mappings` **迟绑定到同一实例**（不是另建第二个模块，否则会重复 `module.memory`）。真跑 `memory_namespace_production` 3 passed：① 真发 `memory_write` 得 `{id:ep-…, replayed:false, revision:0}`；② 有 Host 映射写得进、**没映射被拒** `no current Host mapping`（迟绑定真生效）；③ 命名空间权威仍只来自执行上下文 `namespace_key(principal)`。⚠️ 边界：生产默认**兼容 ABI**（不调 `with_module_contract()` ⇒ `requires_system_one` 为假 ⇒ 不会「接上但每次 permanent_error」，契约仍 Host opt-in）；**自动检索 Hook 默认关**（`with_automatic_retrieval(false)`，开它污染每回合转录）；无跨重启 organizer 恢复、无多主体并发压测。"
+    notes: "新 Host 组合中的 9 项真实 Runtime 测试通过；七工具、合法 V1 检索、后台 Agent、审批 CAS、持久化与 fork Scope 隔离。默认 ProductionCognitiveModules 的旧 Memory/Persona/Organ 尚未替换，旧数据不自动归属新 Namespace。；2026-10-28 生产收敛复核：源码变更及回归证据见 kernel-convergence-final-acceptance-2026-10-28.md；不将 Legacy SubLoop 或旧数据 Profile 映射宣称已迁移。；2026-10-29 S1 复核：父范围约束仅由 SubLoop 适配显式绑定，原模块整理 Agent 独立 Host grant 与 Namespace 语义保持；convergence_memory 原断言复跑通过，旧数据 Profile 映射仍待 S4。证据见 kernel-convergence-s1-2026-10-29.md。；2026-10-29 S4：IMPLEMENTED（可选 Host 组合）的 ProfileMemoryMappings 显式绑定完整 Profile/Namespace 与旧 scope、Preference 来源会话、专属认知 store；共享来源只读，写回归目标私有分区，未映射与过期授权默认拒绝且无全局回退。精确 scope 在原排序前过滤并在工具边界复核，治理/protected/CAS/typed sink/真实来源保持；带回执或调优的 recall 不允许只读共享。撤销、审批、后台整理、fork/reload 与切换由真实 Runtime 对抗测试覆盖。旧数据库不自动迁移，映射未默认启用；整体 Convergence 仍 Partial，S5 未实施，无外部 API/硬件实测。证据见 kernel-convergence-s4-2026-10-29.md。；2026-10-29 P1：显式 Host 选择的 ModuleToolContract 与任务句柄/状态查询经真实 Runtime 回归；既有目录/生命周期/默认权限不变，完整五段门禁通过。监督门禁仍待 P2，无新默认启用或硬件声明。；2026-10-30 P2：新增可选 Host 监督服务与执行回执；原能力默认、Provider 路由与确定性权限机制保持，定向及原 MainOnly 测试/clippy/fmt 回归通过。未将兼容入口声明为已受 System One 保护，无 live model/硬件声明。；2026-10-30 P3：可选 owner-bound 消息复用 Registry/Dispatcher，委托交集与独立后台授权分离；真实 Runtime 定向及原 MainOnly test/clippy/fmt 回归通过。默认与既有等级保持，本地幂等非持久 exactly-once，新消息变体需新 reader；无 live model/硬件声明。；2026-11-07 抬级（同一处装配改动）：`production.rs:1484 memory_assembly::wire(...)` 让生产装配真的注册 `module.memory` 工具面 ⇒ 7 个 `memory_*` 工具不再「requested tool is not registered」；Host 映射经 `production.rs:1846 bind_profile_mappings(...)` → `MemoryModule::attach_profile_mappings` **迟绑定到同一实例**（不是另建第二个模块，否则会重复 `module.memory`）。真跑 `memory_namespace_production` 3 passed：① 真发 `memory_write` 得 `{id:ep-…, replayed:false, revision:0}`；② 有 Host 映射写得进、**没映射被拒** `no current Host mapping`（迟绑定真生效）；③ 命名空间权威仍只来自执行上下文 `namespace_key(principal)`。⚠️ 边界：生产默认**兼容 ABI**（不调 `with_module_contract()` ⇒ `requires_system_one` 为假 ⇒ 不会「接上但每次 permanent_error」，契约仍 Host opt-in）；**自动检索 Hook 默认关**（`with_automatic_retrieval(false)`，开它污染每回合转录）；无跨重启 organizer 恢复、无多主体并发压测。；⭐ **2026-11-09 默认桌面路径的 P1 修掉**：默认桌面组合**不绑 Host 身份**（`AgentConfig::default()` ⇒ `principal: None`）⇒ ⇒ 记忆工具面（命名空间受限）**7 个工具被发布给模型但每次调用都是 `namespace_denied`** ⇒ ⇒ 「接上了但永远报错」＝与「没接」同类 ⇒ ⇒ **改法 = 最小权限**：默认桌面 main **不再发布命名空间受限的能力**（`memory_module::is_namespace_scoped` 按能力前缀判定 ⇒ 单一真源）⇒ 没有身份 ⇒ 这张脸**根本不出现**；**刻意不给默认桌面凭空分配身份**（那等于扩权）⇒ ⇒ 默认桌面上记忆工具面现在是「**不可用**」而不是「可用」（**如实边界**：真要用需给桌面绑 Host 身份 = 产品决策）；`memory_organize` 仍起不了子 Agent（缺 `module.memory` grant）；**受治理**的记忆路径（行为模块召回/写回）不受影响；「固定 Hook」在生产仍**没有打开路径**（默认关 ≠ 可开）。证据页 `docs/04-internal/01-handoffs/memory-desktop-tool-authority-2026-11-08.md` + 测试 `crates/engine/runtime-assembly/tests/memory_tool_authority_desktop.rs`（4 例，反证实测红过）。"
 
   - id: rt.desktop_managed_main
     title: "默认桌面 main：同一受管 Host 的 CLI、gateway、审批、流式与心跳"
@@ -982,7 +982,7 @@ claims:
       - crates/engine/runtime-assembly/tests/managed_main.rs
       - crates/engine/runtime-assembly/tests/production_cognitive_v1.rs
       - crates/engine/runtime-assembly/tests/portable_host.rs
-    verified_at: 49f1b543
+    verified_at: 67ffc277
     verify_cmd: "cargo test -p apeireth-cli --test canonical_cli_bootstrap --test care_heartbeat_host --locked -j 2 && cargo test -p apeireth-runtime-assembly --test managed_main --test production_cognitive_v1 --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
@@ -1009,7 +1009,7 @@ claims:
       - crates/engine/runtime-assembly/tests/modular_ale.rs
       - crates/engine/runtime-assembly/tests/module_contract_wiring.rs
       - crates/adapters/cli/tests/module_contract_production.rs
-    verified_at: 52009d5f
+    verified_at: 67ffc277
     verify_cmd: "cargo test -p apeireth-plugin --test module_contract --locked -j 2 && cargo test -p apeireth-runtime-assembly --test modular_ale --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
@@ -1037,7 +1037,7 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/system_one_execution.rs
       - crates/engine/runtime-assembly/tests/modular_ale.rs
-    verified_at: 49f1b543
+    verified_at: 67ffc277
     # ⚠️ **2026-11-07 收窄 + 修缺陷**（声明核验批）：
     # ① 原命令只跑 **CLI 旋钮**那一个测试目标（5 条）⇒ ⇒ 而本条自己列的
     #    `crates/engine/runtime-assembly/tests/system_one_execution.rs`（11 条）**没跑**
@@ -1071,7 +1071,7 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/module_message_pipeline.rs
       - crates/engine/runtime-assembly/tests/desktop_message_policy.rs
-    verified_at: 52009d5f
+    verified_at: 67ffc277
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test module_message_pipeline --locked -j 2 && cargo test -p apeireth-runtime-assembly --test desktop_message_policy --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
@@ -1092,7 +1092,7 @@ claims:
       - crates/engine/runtime-assembly/tests/mesh_execution.rs
       - crates/engine/runtime-assembly/tests/module_message_pipeline.rs
       - crates/engine/runtime-assembly/tests/mesh_production_host.rs
-    verified_at: 6a6c75e6
+    verified_at: 67ffc277
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test mesh_execution --test module_message_pipeline --locked -j 2 && cargo test -p apeireth-runtime-assembly --test mesh_production_host --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
