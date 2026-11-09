@@ -223,6 +223,33 @@ pub async fn build_desktop_main_runtime_at(
     policy: AgentHostPolicy,
     data_root: &std::path::Path,
 ) -> Result<Runtime, apeireth_runtime::RuntimeError> {
+    // ⛔ **固定检索 Hook 在本组合里兑现不了 ⇒ ⇒ 装配期拒开**（fail-closed + 可执行提示）。
+    //
+    // 机制：开关在数据根的 `memory-hook.json`（`memory_assembly::automatic_retrieval_at`
+    // ⇒ **单一真源**）。Hook 每回合发出**记忆工具面自己**的 `memory_retrieve` 调用
+    // ⇒ ⇒ 能不能兑现由**分发器的范围闸**判 ⇒ ⇒ 需要**两个**前提同时成立：
+    // ① 本组合**绑了 Host 身份**（`AgentConfig::default()` ⇒ `principal: None` ⇒ 没有）；
+    // ② 本组合**发布了**记忆工具面（上方过滤器 ⇒ **没有**）。
+    // ⇒ ⇒ 两个都不满足 ⇒ ⇒ Hook 的调用**必然**被范围闸拒
+    // ⇒ ⇒ 每回合一条 `scope_denied` 失败帧（实测）⇒ ⇒ 「**开了但兑现不了**」
+    // ⇒ ⇒ 与「没接」同一类缺陷（模型拿到一张兑现不了的承诺）。
+    //
+    // ⇒ ⇒ **处置 = ①不发布**（最小权限：这个 Hook 在默认组合里**根本不出现**）
+    // ⇒ ⇒ 且 **③说清楚**（拒开并给出可执行提示 ⇒ 不让 Host 每回合看一条失败帧）。
+    // ⇒ ⇒ **刻意不做**：不给默认桌面分配身份、不发布记忆工具面（那会凭空扩权）。
+    //
+    // ⚠️ **查的就是开关真正读的那个根**：开关的读取处用进程级默认数据根
+    // （`memory_assembly::automatic_retrieval_enabled`），而**生产入口**
+    // （`build_desktop_main_runtime`）把**同一个根**注入本函数 ⇒ ⇒ 生产上两者
+    // **同一个文件** ⇒ ⇒ 这里查注入根 = 查开关读的那个文件（不漏）。
+    if super::memory_assembly::automatic_retrieval_at(data_root) {
+        return Err(apeireth_runtime::RuntimeError::misconfigured(concat!(
+            "固定检索 Hook 已开（数据根的 memory-hook.json），但**默认桌面组合兑现不了它**：",
+            "该组合不绑 Host 身份、也不发布记忆工具面 ⇒ ⇒ Hook 每回合发出的 memory_retrieve ",
+            "会被分发器范围闸拒（每回合一条 scope_denied 失败帧）⇒ ⇒ 请删掉该开关文件，",
+            "或改用绑了身份、且发布了记忆工具面的组合。",
+        )));
+    }
     // 监督者是否已绑定必须在装配前定案：mesh 的 Internal 面没有监督者就永远起不来。
     let mesh = local_mesh_module_at(data_root, builder.system_one_configured())
         .map_err(apeireth_runtime::RuntimeError::misconfigured)?;

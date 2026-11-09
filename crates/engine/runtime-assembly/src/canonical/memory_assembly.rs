@@ -87,15 +87,26 @@ struct MemoryHookBody {
 /// （[`wire`] 不返回 `Result`）⇒ ⇒ 要改成「坏配置拒开」需要动棘轮文件
 /// `production.rs`（本笔不动）⇒ ⇒ 缺口如实登记，不假装。
 ///
-/// ⚠️ 开关本身**不保证** Hook 能兑现：Hook 发的是记忆工具面自己的调用，
-/// 没有 Host 命名空间绑定时那个调用会被分发器范围闸拒 ⇒ ⇒ 模块侧另有闸
-/// （`memory_module.rs` 的 `on_hook`）⇒ ⇒ 「开了但兑现不了」的状态不存在。
+/// ⚠️⚠️ **开关本身**不**保证 Hook 能兑现**（2026-11-09 实测更正）：
+/// Hook 发的是**记忆工具面自己**的调用 ⇒ ⇒ 能不能兑现由**分发器的范围闸**判
+/// ⇒ ⇒ 需要**两个**前提**同时**成立：
+/// ① 该组合**绑了 Host 身份**（授权来自执行上下文的 `AgentPrincipal`）；
+/// ② 该组合**发布了**记忆工具面（否则那个调用**不在会话范围**里 ⇒ 范围闸拒）。
+/// ⇒ ⇒ **默认桌面组合两个都不满足**（不绑身份 + 默认组合不发布记忆工具面）
+/// ⇒ ⇒ 「开了但兑现不了」是**真实存在**的状态
+/// （实测：每回合一条 `scope_denied` 失败帧）⇒ ⇒ 默认组合**在装配期拒开**
+/// （见 [`crate::canonical::desktop_host`]）⇒ ⇒ 不让 Host 每回合看一条失败帧。
+/// ⚠️ **旧注释曾写「模块侧另有闸 ⇒ 该状态不存在」** ⇒ ⇒ **已撤回**
+/// （那道闸用的是「有无映射」，与分发器的「身份」**不是同一把尺子** ⇒ 已删）。
 fn automatic_retrieval_enabled() -> bool {
     automatic_retrieval_at(&crate::paths::default_data_root())
 }
 
 /// 同上，但**数据根显式给出**（测试用；生产走 [`automatic_retrieval_enabled`]）。
-fn automatic_retrieval_at(data_root: &std::path::Path) -> bool {
+///
+/// ⭐ **装配期拒开也读它**（`canonical::desktop_host`）⇒ ⇒ **单一真源**
+/// ⇒ ⇒ 「开关开了吗」这件事**只有这一处**判。
+pub(crate) fn automatic_retrieval_at(data_root: &std::path::Path) -> bool {
     let path = data_root.join(MEMORY_HOOK_FILE);
     if !path.exists() {
         return false;
