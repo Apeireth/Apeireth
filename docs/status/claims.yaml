@@ -926,7 +926,7 @@ claims:
       - crates/engine/runtime-assembly/tests/managed_main.rs
       - crates/adapters/cli/tests/canonical_cli_bootstrap.rs
       - crates/adapters/cli/tests/care_heartbeat_host.rs
-    verified_at: 67ffc277
+    verified_at: 587aad88
     verify_cmd: "cargo test -p apeireth-runtime --test cognitive_module_abi --locked -j 2 && cargo test -p apeireth-runtime --test canonical_subloop --locked -j 2 && cargo test -p apeireth-runtime-assembly --test convergence_agents --locked -j 2 && cargo test -p apeireth-runtime-assembly --test memory_namespace_production --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
@@ -956,7 +956,7 @@ claims:
       - crates/engine/runtime-assembly/tests/convergence_memory.rs
       - crates/engine/runtime-assembly/tests/profile_memory_authorization.rs
       - crates/engine/runtime-assembly/tests/memory_namespace_production.rs
-    verified_at: 05759be1
+    verified_at: 587aad88
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test profile_memory_authorization --locked -j 2 && cargo test -p apeireth-runtime-assembly --test convergence_memory --locked -j 2 && cargo test -p apeireth-runtime-assembly --test memory_namespace_production --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
@@ -982,7 +982,7 @@ claims:
       - crates/engine/runtime-assembly/tests/managed_main.rs
       - crates/engine/runtime-assembly/tests/production_cognitive_v1.rs
       - crates/engine/runtime-assembly/tests/portable_host.rs
-    verified_at: 67ffc277
+    verified_at: 587aad88
     verify_cmd: "cargo test -p apeireth-cli --test canonical_cli_bootstrap --test care_heartbeat_host --locked -j 2 && cargo test -p apeireth-runtime-assembly --test managed_main --test production_cognitive_v1 --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
@@ -1071,7 +1071,7 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/module_message_pipeline.rs
       - crates/engine/runtime-assembly/tests/desktop_message_policy.rs
-    verified_at: 67ffc277
+    verified_at: 587aad88
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test module_message_pipeline --locked -j 2 && cargo test -p apeireth-runtime-assembly --test desktop_message_policy --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
@@ -1092,7 +1092,7 @@ claims:
       - crates/engine/runtime-assembly/tests/mesh_execution.rs
       - crates/engine/runtime-assembly/tests/module_message_pipeline.rs
       - crates/engine/runtime-assembly/tests/mesh_production_host.rs
-    verified_at: 67ffc277
+    verified_at: 587aad88
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test mesh_execution --test module_message_pipeline --locked -j 2 && cargo test -p apeireth-runtime-assembly --test mesh_production_host --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
@@ -1110,7 +1110,7 @@ claims:
     tests:
       - crates/engine/memory/src/retrieval_pipeline.rs
       - crates/engine/memory/src/coordinator.rs
-    verified_at: f993653f
+    verified_at: 587aad88
     # ⚠️ **2026-11-07 收窄**（声明核验批，与兄弟声明同形）：原命令跑的是
     # **apeireth-memory 整个 lib 单测**（944 条 + 1 ignored）⇒ ⇒ 而本条真正相关的
     # 只有 `retrieval_pipeline.rs` 的 33 条 + `coordinator.rs` 的 17 条
@@ -1150,7 +1150,7 @@ claims:
       - crates/engine/memory/tests/golden_injection2.rs
     tests:
       - crates/engine/memory/tests/golden_injection2.rs
-    verified_at: e1127c32d57ba8444264d1f207e9213c612ac8f7
+    verified_at: 587aad88
     verify_cmd: "cargo test -p apeireth-memory --test golden_injection2"
     owner: memory
     next_review: "2026-12-04"
@@ -1167,7 +1167,7 @@ claims:
     tests:
       - crates/engine/memory/tests/memory_contract_production.rs
       - crates/engine/runtime-assembly/tests/memory_contract_production.rs
-    verified_at: 49f1b543
+    verified_at: 587aad88
     verify_cmd: "cargo test -p apeireth-memory --test memory_contract_production && cargo test -p apeireth-runtime-assembly --test memory_contract_production"
     owner: memory
     next_review: "2026-12-05"
