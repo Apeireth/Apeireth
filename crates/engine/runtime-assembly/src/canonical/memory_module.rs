@@ -53,8 +53,19 @@ pub fn namespace_key(principal: &AgentPrincipal) -> String {
         principal.profile, principal.namespace
     )
 }
+/// Capability prefix of the memory tool face (every id is derived from it).
+const MEMORY_CAPABILITY_PREFIX: &str = "tool.memory.";
 fn capability(op: &str) -> CapabilityId {
-    CapabilityId::new(format!("tool.memory.{op}")).expect("constant capability")
+    CapabilityId::new(format!("{MEMORY_CAPABILITY_PREFIX}{op}")).expect("constant capability")
+}
+/// The memory tool face is **namespace-scoped**: its only authority is a
+/// Host-bound identity carried by the execution context.
+///
+/// A composition that binds no identity must therefore **not offer** these
+/// capabilities: exposing them leaves the model with tools that can only ever
+/// answer `namespace_denied` (a promise the model cannot keep).
+pub fn is_namespace_scoped(capability: &CapabilityId) -> bool {
+    capability.as_str().starts_with(MEMORY_CAPABILITY_PREFIX)
 }
 fn memory_contract(op: &str) -> apeireth_plugin::module_contract::ModuleToolContract {
     use apeireth_plugin::module_contract::{EffectClass, ExecutionMode, ModuleToolContract};

@@ -247,6 +247,12 @@ pub async fn build_desktop_main_runtime_at(
                     .iter()
                     .map(|tool| tool.id().clone()),
             )
+            // Namespaced tools are **not offered** to the desktop main: this
+            // composition binds no Host identity (`principal: None` below), and
+            // the memory tool face's only authority is that identity. Offering
+            // it would publish tools whose every answer is `namespace_denied`.
+            // The governed memory path (behavior modules) is untouched.
+            .filter(|id| !super::memory_module::is_namespace_scoped(id))
             .collect()
     };
     host.into_main_runtime_with_session_quotas(AgentConfig {
