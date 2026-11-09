@@ -4,6 +4,7 @@ Title: 默认桌面路径上的记忆工具面授权 —— 「接上了但永�
 Date: 2026-11-09
 Owner: memory
 Scope: crates/engine/runtime-assembly/src/canonical/{desktop_host.rs,memory_module.rs}
+Caliber: PRODUCTION WIRED
 
 # 一句话
 
