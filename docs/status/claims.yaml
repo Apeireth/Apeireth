@@ -926,7 +926,7 @@ claims:
       - crates/engine/runtime-assembly/tests/managed_main.rs
       - crates/adapters/cli/tests/canonical_cli_bootstrap.rs
       - crates/adapters/cli/tests/care_heartbeat_host.rs
-    verified_at: 587aad88
+    verified_at: 67ffc277
     verify_cmd: "cargo test -p apeireth-runtime --test cognitive_module_abi --locked -j 2 && cargo test -p apeireth-runtime --test canonical_subloop --locked -j 2 && cargo test -p apeireth-runtime-assembly --test convergence_agents --locked -j 2 && cargo test -p apeireth-runtime-assembly --test memory_namespace_production --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
@@ -956,7 +956,7 @@ claims:
       - crates/engine/runtime-assembly/tests/convergence_memory.rs
       - crates/engine/runtime-assembly/tests/profile_memory_authorization.rs
       - crates/engine/runtime-assembly/tests/memory_namespace_production.rs
-    verified_at: 587aad88
+    verified_at: 36986aae
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test profile_memory_authorization --locked -j 2 && cargo test -p apeireth-runtime-assembly --test convergence_memory --locked -j 2 && cargo test -p apeireth-runtime-assembly --test memory_namespace_production --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
@@ -982,7 +982,7 @@ claims:
       - crates/engine/runtime-assembly/tests/managed_main.rs
       - crates/engine/runtime-assembly/tests/production_cognitive_v1.rs
       - crates/engine/runtime-assembly/tests/portable_host.rs
-    verified_at: 587aad88
+    verified_at: 67ffc277
     verify_cmd: "cargo test -p apeireth-cli --test canonical_cli_bootstrap --test care_heartbeat_host --locked -j 2 && cargo test -p apeireth-runtime-assembly --test managed_main --test production_cognitive_v1 --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
@@ -1071,7 +1071,7 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/module_message_pipeline.rs
       - crates/engine/runtime-assembly/tests/desktop_message_policy.rs
-    verified_at: 587aad88
+    verified_at: 67ffc277
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test module_message_pipeline --locked -j 2 && cargo test -p apeireth-runtime-assembly --test desktop_message_policy --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
@@ -1092,7 +1092,7 @@ claims:
       - crates/engine/runtime-assembly/tests/mesh_execution.rs
       - crates/engine/runtime-assembly/tests/module_message_pipeline.rs
       - crates/engine/runtime-assembly/tests/mesh_production_host.rs
-    verified_at: 587aad88
+    verified_at: 67ffc277
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test mesh_execution --test module_message_pipeline --locked -j 2 && cargo test -p apeireth-runtime-assembly --test mesh_production_host --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
@@ -1110,7 +1110,7 @@ claims:
     tests:
       - crates/engine/memory/src/retrieval_pipeline.rs
       - crates/engine/memory/src/coordinator.rs
-    verified_at: 587aad88
+    verified_at: 36986aae
     # ⚠️ **2026-11-07 收窄**（声明核验批，与兄弟声明同形）：原命令跑的是
     # **apeireth-memory 整个 lib 单测**（944 条 + 1 ignored）⇒ ⇒ 而本条真正相关的
     # 只有 `retrieval_pipeline.rs` 的 33 条 + `coordinator.rs` 的 17 条
@@ -1121,7 +1121,7 @@ claims:
     verify_cmd: "cargo test -p apeireth-memory --lib retrieval && cargo test -p apeireth-memory --lib coordinator"
     owner: memory
     next_review: "2026-12-04"
-    notes: "总指挥 2026-11-04 登记（记忆线收口清单 §6 报备的口径缺位）。生产路径：tool.memory.retrieve → MemoryCoordinator::recall（coordinator.rs:742）→ HybridRetrievalPipeline；coverage 以固定权重 0.5 参与打分（retrieval_pipeline.rs:154，COVERAGE_WEIGHT 常量在 :729），与 BM25 词面分、向量源共同构成混合排序。⚠️ 此前该契约在真源里无记录 ⇒ 「coverage 接进生产排序」这条成果查不到。；2026-11-07 声明核验（stale 批）：窄口径真跑 **33 + 17 = 50 条全绿 / exit 0**（原 944 条宽命令亦全绿：944 passed / 1 ignored / exit 0）；⚠️ **原 notes 的证据行号已过期**（原写 :137 / :469 / coordinator.rs:685 ⇒ 现值 = :154 使用点 / :729 常量定义 / coordinator.rs:742 `MemoryCoordinator::recall`，因 339f57ad + c0ba1262 两笔改了这两文件）⇒ **结论不变，仅行号订正**；生产调用点 = `crates/engine/runtime-assembly/src/canonical/production.rs:1431`（`MemoryCoordinator::new`）→ `crates/engine/runtime-assembly/src/canonical/memory_module.rs:57`（`tool.memory.{op}`）→ `coordinator.rs:742` → `retrieval_pipeline.rs:154` ⇒ **等级与默认不变**（无 live 模型/硬件证据 ⇒ 不抬 HARDWARE VALIDATED）。；2026-11-08 口径修复（总指挥）：**发现并修掉一个「闸门量的 ≠ 生产做的」缺陷** —— 词法源自己排序用 lexical + 0.5×coverage，而生产的多路管线为对齐量纲会**重算**分数（score_components.weighted(...)）⇒ 那次重算**只带分量、不带 coverage** ⇒ coverage 被丢掉 ⇒ ⇒ 后果：内部卷基线闸门与真人卷闸门量的是**源自己的分数**（含 coverage），生产用的是**不含 coverage** 的分量分 ⇒ ⇒ 2026-10-28 实测到的 coverage 正收益（recall +0.0125 / +0.0266）**从未到达生产排序**；实测（真人卷 393 题）管线臂比单路词面臂低 **0.0013** recall（0.7233 vs 0.7246）。**修法**：retrieval_pipeline/scoring.rs::route_relevance 补回同一项并按**管线分量口径**缩放（COVERAGE_WEIGHT × lexical_weight × coverage，且**只在 lexical 大于 0 时加**，与源里同一条件）⇒ ⇒ **单词法通道时管线排序与源排序逐条同序** ⇒ 「闸门量的就是生产做的」。**证据**：新增 crates/engine/memory/tests/retrieval_caliber_parity.rs（同序断言 + 反证：把两处调用点退回 weighted() ⇒ 顺序分岔 all,two,repeat,… vs all,repeat,two,… ⇒ 变红）；内部卷基线闸门 Δ **+0.0000**、融合通道闸门 Δ **+0.0000**、真人卷闸门 Δ **+0.0000%**（三门禁数字**逐字不变**）；修后管线臂 = 0.7246 / nDCG 0.4804，与单路词面臂（0.7246 / 0.4803）**同到小数点后 4 位**。⚠️ 内部卷两卷数字**完全不变**（0.4010 / 0.2702 与 0.7240 / 0.5291）⇒ 本修复**不牺牲内部卷**。⭐ 本条标题里的「coverage 权重 0.5」在修复前**只对源自己的排序成立**、对生产排序**不成立** ⇒ 现在才真正成立。；⭐ **2026-11-09 生产默认召回参数改了**（联合裁决：`k × 单条跨度 × 总预算` 三者一起量，三把尺子）：**有效名额 = min(k, floor((总预算 − 160) / (单条跨度 + 8)))** ⇒ ⇒ **k 只是候选池上限；容量封顶时 k↑ 的收益 100% 被吃掉**（旧配置 k=10/跨度400 ⇒ 容量 9 ⇒ ⇒ 「内部卷偏 300、真人卷偏 400」的「冲突」只是**容量太小**的副作用）。⇒ ⇒ 新默认：**召回名额 8 → 20**（`MemoryRecallQuery::new` / `RecallPolicy::default`）· **生产单条跨度 400 → 200**（`AnchoredInjectionConfig::PRODUCTION.span_chars`）· 总预算 4000 **不变**；**召回侧计费（`MemoryRankingConfig.candidate_span_chars`）自动跟随**（同一常量 ⇒ 不写第二份 200）。⇒ 实测（三把尺子）：红楼梦 recall **0.5305 → 0.6534**、送达 **0.5903 → 0.7059**；水浒传 **0.7319 → 0.8367**、送达 **0.8952 → 0.9839**；真人卷 **0.7246 → 0.8548**、送达 **0.8372 → 0.8448** ⇒ ⇒ **两把尺子同向、不再冲突**；代价 = 真人卷注入字数 ×1.62（1692 → 2733 字/题）。⚠️ **诚实边界**：两把闸门**各自按自己的 k=10 量**（基线是「k=10 的尺子」）⇒ ⇒ **基线数字不变、闸门仍绿**（阻塞项 recall/nDCG 逐字不变；送达观察项**上升**：groundedness 0.5903 → 0.5987、0.8952 → 0.9073）⇒ ⇒ **「生产默认 k=20」这件事本身没有被现有闸门覆盖**（缺口已登记）；⚠️ **耦合**：跨度 < 300 ⇒ 调用方应给 **k ≥ 15**（否则送达率会掉）。证据页 `docs/04-internal/01-handoffs/memory-k-span-budget-joint-2026-11-08.md`。"
+    notes: "总指挥 2026-11-04 登记（记忆线收口清单 §6 报备的口径缺位）。生产路径：tool.memory.retrieve → MemoryCoordinator::recall（coordinator.rs:742）→ HybridRetrievalPipeline；coverage 以固定权重 0.5 参与打分（retrieval_pipeline.rs:154，COVERAGE_WEIGHT 常量在 :729），与 BM25 词面分、向量源共同构成混合排序。⚠️ 此前该契约在真源里无记录 ⇒ 「coverage 接进生产排序」这条成果查不到。；2026-11-07 声明核验（stale 批）：窄口径真跑 **33 + 17 = 50 条全绿 / exit 0**（原 944 条宽命令亦全绿：944 passed / 1 ignored / exit 0）；⚠️ **原 notes 的证据行号已过期**（原写 :137 / :469 / coordinator.rs:685 ⇒ 现值 = :154 使用点 / :729 常量定义 / coordinator.rs:742 `MemoryCoordinator::recall`，因 339f57ad + c0ba1262 两笔改了这两文件）⇒ **结论不变，仅行号订正**；生产调用点 = `crates/engine/runtime-assembly/src/canonical/production.rs:1431`（`MemoryCoordinator::new`）→ `crates/engine/runtime-assembly/src/canonical/memory_module.rs:57`（`tool.memory.{op}`）→ `coordinator.rs:742` → `retrieval_pipeline.rs:154` ⇒ **等级与默认不变**（无 live 模型/硬件证据 ⇒ 不抬 HARDWARE VALIDATED）。；2026-11-08 口径修复（总指挥）：**发现并修掉一个「闸门量的 ≠ 生产做的」缺陷** —— 词法源自己排序用 lexical + 0.5×coverage，而生产的多路管线为对齐量纲会**重算**分数（score_components.weighted(...)）⇒ 那次重算**只带分量、不带 coverage** ⇒ coverage 被丢掉 ⇒ ⇒ 后果：内部卷基线闸门与真人卷闸门量的是**源自己的分数**（含 coverage），生产用的是**不含 coverage** 的分量分 ⇒ ⇒ 2026-10-28 实测到的 coverage 正收益（recall +0.0125 / +0.0266）**从未到达生产排序**；实测（真人卷 393 题）管线臂比单路词面臂低 **0.0013** recall（0.7233 vs 0.7246）。**修法**：retrieval_pipeline/scoring.rs::route_relevance 补回同一项并按**管线分量口径**缩放（COVERAGE_WEIGHT × lexical_weight × coverage，且**只在 lexical 大于 0 时加**，与源里同一条件）⇒ ⇒ **单词法通道时管线排序与源排序逐条同序** ⇒ 「闸门量的就是生产做的」。**证据**：新增 crates/engine/memory/tests/retrieval_caliber_parity.rs（同序断言 + 反证：把两处调用点退回 weighted() ⇒ 顺序分岔 all,two,repeat,… vs all,repeat,two,… ⇒ 变红）；内部卷基线闸门 Δ **+0.0000**、融合通道闸门 Δ **+0.0000**、真人卷闸门 Δ **+0.0000%**（三门禁数字**逐字不变**）；修后管线臂 = 0.7246 / nDCG 0.4804，与单路词面臂（0.7246 / 0.4803）**同到小数点后 4 位**。⚠️ 内部卷两卷数字**完全不变**（0.4010 / 0.2702 与 0.7240 / 0.5291）⇒ 本修复**不牺牲内部卷**。⭐ 本条标题里的「coverage 权重 0.5」在修复前**只对源自己的排序成立**、对生产排序**不成立** ⇒ 现在才真正成立。；⭐ **2026-11-09 生产默认召回参数改了**（联合裁决：`k × 单条跨度 × 总预算` 三者一起量，三把尺子）：**有效名额 = min(k, floor((总预算 − 160) / (单条跨度 + 8)))** ⇒ ⇒ **k 只是候选池上限；容量封顶时 k↑ 的收益 100% 被吃掉**（旧配置 k=10/跨度400 ⇒ 容量 9 ⇒ 「内部卷偏 300、真人卷偏 400」的「冲突」只是**容量太小**的副作用）。⇒ ⇒ 新默认：**召回名额 8 → 20**（`MemoryRecallQuery::new` / `RecallPolicy::default`）· **生产单条跨度 400 → 200**（`AnchoredInjectionConfig::PRODUCTION.span_chars`）· 总预算 4000 **不变**；**召回侧计费（`MemoryRankingConfig::candidate_span_chars`）自动跟随**（同一常量 ⇒ 不写第二份 200）。⇒ 实测（三把尺子）：红楼梦 recall **0.5305 → 0.6534**、送达 **0.5903 → 0.7059**；水浒传 **0.7319 → 0.8367**、送达 **0.8952 → 0.9839**；真人卷 **0.7246 → 0.8548**、送达 **0.8372 → 0.8448** ⇒ ⇒ **两把尺子同向、不再冲突**；代价 = 真人卷注入字数 ×1.62（1692 → 2733 字/题）。⚠️ **诚实边界**：两把闸门**各自按自己的 k=10 量** ⇒ 阻塞项（recall / nDCG）**逐字不变**、闸门**仍绿**、基线**不需要重盖**；送达观察项**上升**（groundedness 0.5903 → 0.5987、0.8952 → 0.9073）⇒ ⇒ **「生产默认 k=20」没有被现有闸门覆盖**（缺口登记在此）；⚠️ **耦合**：跨度 < 300 ⇒ 调用方应给 **k ≥ 15**（否则送达率会掉）。证据页 `docs/04-internal/01-handoffs/memory-k-span-budget-joint-2026-11-08.md`。"
   - id: mem.failure_learning_bridge
     title: "失败 → 学习桥（失败带归因 ⇒ 负证据 ⇒ 检索权重退；会话键真落盘）"
     level: PRODUCTION WIRED
@@ -1150,7 +1150,7 @@ claims:
       - crates/engine/memory/tests/golden_injection2.rs
     tests:
       - crates/engine/memory/tests/golden_injection2.rs
-    verified_at: 587aad88
+    verified_at: 36986aae
     verify_cmd: "cargo test -p apeireth-memory --test golden_injection2"
     owner: memory
     next_review: "2026-12-04"
@@ -1167,7 +1167,7 @@ claims:
     tests:
       - crates/engine/memory/tests/memory_contract_production.rs
       - crates/engine/runtime-assembly/tests/memory_contract_production.rs
-    verified_at: 587aad88
+    verified_at: 49f1b543
     verify_cmd: "cargo test -p apeireth-memory --test memory_contract_production && cargo test -p apeireth-runtime-assembly --test memory_contract_production"
     owner: memory
     next_review: "2026-12-05"

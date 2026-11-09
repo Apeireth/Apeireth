@@ -165,7 +165,11 @@ fn long_records_are_no_longer_silently_dropped() {
     assert!(billed <= MAX_CHARS, "计费总量必须不超预算：{billed}");
 }
 
-/// **修前口径（原始正文）在同一场景下必然一条都装不下** —— 钉住「这就是那个缺陷」。
+/// **修前口径（原始正文）在同一场景下几乎一条都装不下** —— 钉住「这就是那个缺陷」。
+///
+/// ⭐ **口径更正（2026-11-09）**：修好的实现保留了「**第一条总是装得下**」的保底语义
+/// （与修复前逐字一致 ⇒ 不许顺带改掉它）⇒ ⇒ 旧口径下的准确表述是
+/// 「**只装得下第一条，其余全被挤掉**」⇒ ⇒ 名额被长记录吃光 ⇒ ⇒ 批量召回被掏空。
 #[test]
 fn the_old_raw_length_billing_drops_every_long_record() {
     let scope = MemoryScope::Global;

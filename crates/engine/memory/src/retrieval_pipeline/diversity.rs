@@ -125,9 +125,14 @@ pub(super) fn select(
         if chars + billed_chars > max_chars {
             // Skip oversized candidates and continue looking for a bounded item.
             // ⚠️ **保底**（2026-11-08 补）：一条都还没装下时，**先装这一条**
-            // ⇒ ⇒ **绝不返回空集**（与协同器原有的「第一条总是装得下」语义一致）。
-            // ⇒ ⇒ ⇒ 否则预算小到装不下任何一条时，整批候选仍会被**静默丢掉**。
-            if !result.is_empty() {
+            // ⇒ ⇒ **绝不返回空集** ⇒ ⇒ 否则预算小于单条跨度时（`max_chars < span`），
+            // 整批候选会被**静默丢掉**（这是计费改成「选后长度」后**新出现**的洞）。
+            //
+            // ⚠️ **但 `span == 0` 例外**：该值是文档承诺的「**旧口径 / 逃生阀**」
+            // ⇒ ⇒ 必须与改造前**逐字一致**（含「全丢」这个病理）
+            // ⇒ ⇒ 否则 `tests/candidate_budget_billing.rs` 那条**反证**（钉住旧口径全丢）
+            // 就失去意义 ⇒ ⇒ 反证失效比少一条保底更糟。
+            if !result.is_empty() || ranking.candidate_span_chars == 0 {
                 continue;
             }
         }
