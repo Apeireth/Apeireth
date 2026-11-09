@@ -263,20 +263,15 @@ impl Plugin for MemoryModule {
             .collect()
     }
     async fn on_hook(&self, ctx: &HookContextV1) -> PluginResult<Vec<HookToolRequest>> {
-        // The fixed hook speaks **for** the memory tool face: it issues that face's
-        // own `memory_retrieve` call. Without a Host namespace binding there is
-        // nothing it could authorize, and the call it would make is refused at the
-        // dispatcher's scope gate — one failing frame per turn. Same rule as the
-        // face itself: never do what cannot be honored.
-        if !self.automatic_retrieval
-            || ctx.hook != ModuleHookV1::BeforeModelCall
-            || self
-                .state
-                .mappings
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .is_none()
-        {
+        // ⭐ **授权判据 = 执行上下文里的身份**（分发器的范围闸就按它判）：
+        //   Hook 发的是记忆工具面自己的 `memory_retrieve` 调用 ⇒ ⇒ 能不能兑现，
+        //   由**发起方的主体**决定（`AgentPrincipal`），**不是**由「有没有映射」决定
+        //   ⇒ ⇒ 这里**不做额外的门**（2026-11-09 实测：曾用「有无映射」当闸，
+        //   结果把「有身份、无映射」的合法组合也一并沉默 ⇒ 既有不变量测试被打破）。
+        // ⚠️ **开这个开关的前提**（写在配置面文档里）：该组合里记忆工具面要能兑现
+        //   （有 Host 身份）；**桌面默认组合没有身份** ⇒ ⇒ 在那里开它会让
+        //   分发器范围闸拒掉每回合那次调用（一条 `scope_denied` 失败帧）。
+        if !self.automatic_retrieval || ctx.hook != ModuleHookV1::BeforeModelCall {
             return Ok(vec![]);
         }
         let query = ctx

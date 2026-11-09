@@ -11,20 +11,20 @@
 //! Measured on the default desktop path with the hook armed, the hook's own
 //! `memory_retrieve` call was refused by the dispatcher's scope gate
 //! (`scope_denied / tool is outside this session's tool scope`) — **one failing
-//! frame per turn**. So the module side carries a second gate: the hook speaks
-//! only when the Host bound a namespace mapping, i.e. when the memory tool face
-//! has an authority to speak with.
+//! frame per turn** ⇒ ⇒ **前提：开这个开关的组合里要有身份**（授权来自执行上下文的
+//! `AgentPrincipal`，**不是**「有没有映射」—— 2026-11-09 实测纠正：曾用「有无映射」
+//! 当闸，把「有身份、无映射」的合法组合也一并沉默 ⇒ 既有不变量测试被打破 ⇒ 已撤回）。
 //!
 //! * `the_fixed_hook_switch_opens_a_working_path` — switch on + Host identity +
 //!   mapping ⇒ the hook fires and the recall lands in the transcript.
-//! * `the_fixed_hook_switch_never_opens_a_failing_path` — switch on, **no**
-//!   mapping ⇒ the hook stays **silent**: no failing frame, no transcript noise.
+//! * `the_fixed_hook_switch_works_with_identity_even_without_a_mapping` —
+//!   switch on + identity, **no** mapping ⇒ the hook still works ⇒ ⇒ 钉住
+//!   「**授权来自身份**」这条判据。
 //!
 //! # Counter-evidence
 //!
-//! Removing the mapping gate in `memory_module.rs` turns the second case red
-//! (the hook fires and is refused); removing the switch reader in
-//! `memory_assembly.rs` turns the first case red (the hook never fires).
+//! Removing the switch reader in `memory_assembly.rs` turns the first case red
+//! (the hook never fires); hard-coding the flag to `false` does the same.
 //!
 //! # Why this file is alone
 //!
@@ -163,13 +163,10 @@ async fn the_fixed_hook_switch_opens_a_working_path() {
     );
 }
 
-/// ② **反证**: 开关打开但**没有** Host 命名空间映射 ⇒ Hook **保持沉默**
-/// （既不跑、也不留失败帧 ⇒ 「开了但兑现不了」的状态不存在）。
-///
-/// 反证口径：去掉 `memory_module.rs` 的映射闸 ⇒ 本例红（Hook 会发一次
-/// `memory_retrieve` 并被分发器范围闸拒 ⇒ 每回合一条失败帧）。
+/// ② **授权来自身份，不是映射**：开关打开 + **有身份** + **没有**命名空间映射
+/// ⇒ ⇒ Hook **照常工作** ⇒ ⇒ 钉住这条判据（防又一次把「有无映射」当闸）。
 #[tokio::test]
-async fn the_fixed_hook_switch_never_opens_a_failing_path() {
+async fn the_fixed_hook_switch_works_with_identity_even_without_a_mapping() {
     arm_switch();
     let (_coordinator, db) = memory();
     let owner = principal();
@@ -192,11 +189,6 @@ async fn the_fixed_hook_switch_never_opens_a_failing_path() {
         .unwrap();
     agent.run("what do you remember".into()).await.unwrap();
 
-    let frames = hook_frames(&provider);
-    assert!(
-        frames.is_empty(),
-        "没有 Host 命名空间绑定 ⇒ 固定检索 Hook 必须沉默；frames = {frames:?}"
-    );
     let failures: Vec<String> = provider
         .requests()
         .iter()
@@ -207,6 +199,6 @@ async fn the_fixed_hook_switch_never_opens_a_failing_path() {
         .collect();
     assert!(
         failures.is_empty(),
-        "沉默 = 一条失败帧都不留；failures = {failures:?}"
+        "有身份 ⇒ Hook 的调用必须被兑现（不许出现失败帧）；failures = {failures:?}"
     );
 }

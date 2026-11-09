@@ -102,7 +102,8 @@ PROBE tool_results=["error: {\"code\":\"namespace_denied\",\"message\":\"Host pr
 ```
 
 ⇒ ⇒ **光加开关会把同一个 P1 换个面再犯一次**（每回合一条失败帧）
-⇒ ⇒ 因此 `memory_module.rs` 的 `on_hook` 另加一道闸：**没有 Host 命名空间绑定 ⇒ Hook 保持沉默**
+⇒ ⇒ **前提**：开这个开关的组合里**要有身份**（授权来自执行上下文的 `AgentPrincipal`）。
+⇒ ⇒ ⚠️ **2026-11-09 纠错**：曾用「**有无命名空间映射**」当闸 ⇒ ⇒ **错**（实测把「有身份、无映射」的合法组合也一并沉默 ⇒ 既有不变量测试 `convergence_memory` 被打断）⇒ ⇒ **该闸已撤回**；现在**授权判据 = 身份**（与分发器范围闸同一判据）。
 （同一把尺子：不做兑现不了的事）⇒ ⇒ 「开了但兑现不了」的状态不存在。
 
 ⇒ ⚠️ **诚实边界**：坏开关文件只「按关处理」而**不报错** —— 装配面没有错误通道
@@ -133,10 +134,10 @@ PROBE tool_results=["error: {\"code\":\"namespace_denied\",\"message\":\"Host pr
 | 用例 | 钉住什么 |
 |---|---|
 | `the_fixed_hook_switch_opens_a_working_path` | 开关打开 + Host 身份 + 命名空间映射 ⇒ Hook **真的跑**，召回进转录 |
-| `the_fixed_hook_switch_never_opens_a_failing_path` | 开关打开但**无**映射 ⇒ Hook **沉默**（一条失败帧都不留） |
+| `the_fixed_hook_switch_works_with_identity_even_without_a_mapping` | 开关打开 + **有身份** + **无映射** ⇒ Hook **照常工作** ⇒ 钉住「授权来自身份，不是映射」 |
 
 **反证（实测红过）**：
-- 去掉 `memory_module.rs` 的映射闸 ⇒ 第 2 例 **红**（Hook 照样发帧）；
+- 把开关读成常量 `false` ⇒ 第 1 例 **红**（Hook 永远不跑）；
 - 把开关读成常量 `false` ⇒ 第 1 例 **红**（Hook 永不触发 ⇒ 「默认关 = 没有打开路径」回来了）。
 
 ## 4.3 单元测试（`memory_assembly.rs` 内，**3 例**）
@@ -172,7 +173,7 @@ PROBE tool_results=["error: {\"code\":\"namespace_denied\",\"message\":\"Host pr
    棘轮文件 `production.rs` ⇒ 未做。
 5. ⭐ **行数变化**（如实登记）：
    `memory_assembly.rs` 172 → 268（**+96**：开关读取 + 文档 + 3 例单元测试）·
-   `memory_module.rs` 436 → 449（**+13**：映射闸 + 能力前缀常量 + 单一真源判定）·
+   `memory_module.rs` 436 → 447（**+11**：能力前缀常量 + 单一真源判定；**映射闸已撤回**）·
    `desktop_host.rs` 264（**+0**，本轮未再动）。
    ⇒ ⚠️ **更正**：这三个文件**都不受尺寸棘轮约束** ——
    `scripts/arch_guard.py` 的 `MIN_SIZE_TRACK = 1200`（只追踪 ≥1200 行的 `src` 文件），
