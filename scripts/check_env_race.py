@@ -75,7 +75,7 @@ def main() -> int:
         for match in GLOBAL_STATE_RE.finditer(text):
             name = match.group(1) or match.group(2)
             if name:
-                global_states.append((str(path.relative_to(ROOT)), name))
+                global_states.append((path.relative_to(ROOT).as_posix(), name))
 
         if not ENV_WRITE_RE.search(text):
             continue
@@ -105,7 +105,7 @@ def main() -> int:
                 continue
             has_lock = bool(LOCK_RE.search(body))
             findings.append({
-                "file": str(path.relative_to(ROOT)),
+                "file": path.relative_to(ROOT).as_posix(),
                 "line": block["start"] + 1,
                 "test": block["name"] or "(?)",
                 "has_lock": has_lock,
