@@ -46,6 +46,13 @@ if str(HERE) not in sys.path:
 
 import gen_guard_inventory as gi  # noqa: E402  （同目录模块：复用同一套发现规则）
 
+# ⭐ **控制台可能不是 UTF-8**（Windows：`cp1252` / `cp936`）⇒ ⇒ `print` 会抛
+# `UnicodeEncodeError` ⇒ ⇒ 门禁 exit 1 ⇒ ⇒ **把本来通过的 CI job 判成红**
+# ⇒ ⇒ 这里在**任何打印之前**把 stdout/stderr 重配成 UTF-8（守卫见 `scripts/utf8_stdout.py`）。
+from utf8_stdout import force_utf8_stdout  # noqa: E402
+
+force_utf8_stdout()
+
 INVENTORY_PATH = HERE / "guard-inventory.json"
 
 REQUIRED_TOP_KEYS = ("schema", "generated_from", "guards")
