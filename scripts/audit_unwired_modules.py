@@ -95,7 +95,7 @@ def collect() -> tuple[dict[str, dict], dict[str, str], dict[str, int]]:
                 text = path.read_text(encoding="utf-8")
             except (OSError, UnicodeDecodeError):
                 continue
-            rel = str(path.relative_to(ROOT))
+            rel = path.relative_to(ROOT).as_posix()
             if au.is_test_file(path):
                 continue
             code, _ = au.split_code_test(text)

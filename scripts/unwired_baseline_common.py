@@ -51,7 +51,7 @@ BASELINE = ROOT / "scripts" / "unwired-baseline.txt"
 # ⇒ ⇒ ⇒ ⚠️ **不扫** `legacy/`（归档捐赠代码 ⇒ ⇒ 不是本仓活跃面 ⇒ ⇒ 扫它会淹出上千条历史符号）
 # ⇒ ⇒ ⇒ ⚠️ 方向纪律：多扫面 ⇒ ⇒ 只可能**多报**（更保守）⇒ ⇒ 不会漏报 ⇒ ⇒ 方向安全。
 SCAN_ROOTS = sorted(
-    str(path.relative_to(ROOT))
+    path.relative_to(ROOT).as_posix()
     for pattern in (
         "crates/*/*/src",
         "crates/*/*/tests",
@@ -273,7 +273,7 @@ def find_file(symbol: str) -> str:
     """定位符号的定义所在文件（优先 src/ 下的定义）。"""
     for pattern in (f"fn {symbol}\\b", f"struct {symbol}\\b", f"trait {symbol}\\b"):
         out = subprocess.run(
-            ["grep", "-rln", pattern, "crates/", "--include=*.rs"],
+            ["git", "grep", "-rln", "-e", pattern, "--", ":(glob)crates/**/*.rs"],
             capture_output=True,
             text=True,
             cwd=ROOT,
