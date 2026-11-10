@@ -52,6 +52,24 @@ from pathlib import Path
 SAMPLE_THRESHOLD = int("0100", 16)
 
 
+def resolve_annotated(source: Path, long_name: str, short_name: str) -> Path | None:
+    """在语料目录里找标注文件：**官方全名优先**，其次**短名**。
+
+    # 为什么两种名都认
+    本脚本文件头的用法示例写的是**短名**（`curl -o topics.tsv`），CI workflow
+    也照着短名下载 ⇒ ⇒ 若只认官方全名，CI 的语料**永远建不出来**
+    ⇒ ⇒ 闸门恒红，而红的**不是质量、是命名**（2026-11-10 实测：CI 的
+    「真实查询方向闸门」自建起那天起就一直在报「缺 topics/qrels」）。
+    ⇒ ⇒ ⇒ 两边都认，是把「命名差异」从闸门的失败原因里摘出去，
+    让它**只在质量真的变差时才红**。
+    """
+    for name in (long_name, short_name):
+        candidate = source / name
+        if candidate.exists():
+            return candidate
+    return None
+
+
 def load_qrels(path: Path) -> dict[str, dict[str, int]]:
     qrels: dict[str, dict[str, int]] = {}
     for line in path.read_text(encoding="utf-8").splitlines():
@@ -87,10 +105,13 @@ def main() -> int:
         out = Path.home() / ".apeireth" / "miracl-exam"
     out.mkdir(parents=True, exist_ok=True)
 
-    topics = source / "topics.miracl-v1.0-zh-dev.tsv"
-    qrels_path = source / "qrels.miracl-v1.0-zh-dev.tsv"
-    if not topics.exists() or not qrels_path.exists():
-        print(f"· 缺 topics/qrels（期望 {topics} 与 {qrels_path}）⇒ **没建成**")
+    topics = resolve_annotated(source, "topics.miracl-v1.0-zh-dev.tsv", "topics.tsv")
+    qrels_path = resolve_annotated(source, "qrels.miracl-v1.0-zh-dev.tsv", "qrels.tsv")
+    if topics is None or qrels_path is None:
+        print(
+            f"· 缺 topics/qrels（期望 {source}/topics.miracl-v1.0-zh-dev.tsv 或 topics.tsv，"
+            f"与 {source}/qrels.miracl-v1.0-zh-dev.tsv 或 qrels.tsv）⇒ **没建成**"
+        )
         return 1
     shards = sorted(source.glob("docs-*.jsonl.gz"))
     if not shards:
