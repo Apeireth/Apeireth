@@ -1,7 +1,7 @@
 //! Canonical resolve/validate/governance/frozen-approval admission and invocation.
 //! Extracted from execute without changing the approval state machine.
-use super::*;
 use super::super::tool_route::ToolRouteError;
+use super::*;
 use std::future::Future;
 use std::pin::Pin;
 
@@ -76,8 +76,8 @@ pub(super) struct WindowRunner {
     pub(super) entries: Vec<WindowEntry>,
     /// The capability port, captured per window: remote slots in the same
     /// window execute through exactly the runtime view admission saw.
-    remote_port: Option<Arc<dyn apeireth_mesh::RemoteCapabilityPort>>,
-    remote_ctx: apeireth_mesh::RemoteInvokeContext,
+    pub(super) remote_port: Option<Arc<dyn apeireth_mesh::RemoteCapabilityPort>>,
+    pub(super) remote_ctx: apeireth_mesh::RemoteInvokeContext,
 }
 
 impl CallRunner<ToolResult> for WindowRunner {
@@ -101,8 +101,14 @@ impl CallRunner<ToolResult> for WindowRunner {
                             tool.invoke_in_session(&call, None, Some(session)).await
                         }
                         AdmittedTarget::Remote(route) => {
-                            invoke_remote_target(route, &call, &capability, remote_port, &remote_ctx)
-                                .await
+                            invoke_remote_target(
+                                route,
+                                &call,
+                                &capability,
+                                remote_port,
+                                &remote_ctx,
+                            )
+                            .await
                         }
                     }
                 })
@@ -240,7 +246,10 @@ impl Runtime {
                     }
                 }
             }
-            Err(ToolRouteError::Ambiguous { tool_name, candidates }) => {
+            Err(ToolRouteError::Ambiguous {
+                tool_name,
+                candidates,
+            }) => {
                 return Ok(Self::dispatch_unavailable(
                     trace,
                     session,

@@ -2995,17 +2995,32 @@ impl Runtime {
         let Some(port) = self.remote_port().clone() else {
             return self
                 .providers
-                .complete_for_session_gated(session_id, request_id, request, Some(tools), stream_sink, gate)
+                .complete_for_session_gated(
+                    session_id,
+                    request_id,
+                    request,
+                    Some(tools),
+                    stream_sink,
+                    gate,
+                )
                 .await;
         };
 
         let local_supporting = self.providers.providers_supporting(&request.model);
         let remote = port.remote_providers();
         match resolve_model_route(&request.model, &local_supporting, &remote) {
-            ModelRouteResolution::LocalGroup { .. } => self
-                .providers
-                .complete_for_session_gated(session_id, request_id, request, Some(tools), stream_sink, gate)
-                .await,
+            ModelRouteResolution::LocalGroup { .. } => {
+                self.providers
+                    .complete_for_session_gated(
+                        session_id,
+                        request_id,
+                        request,
+                        Some(tools),
+                        stream_sink,
+                        gate,
+                    )
+                    .await
+            }
             ModelRouteResolution::Remote(desc) => {
                 // Per-provider tool attachment, same rule as the local router:
                 // declarations travel only where the selected model can.
