@@ -2,11 +2,11 @@
   "crates": {
     "crates/adapters/cli": {
       "files": 39,
-      "loc": 18634
+      "loc": 18498
     },
     "crates/adapters/gateway": {
       "files": 36,
-      "loc": 19459
+      "loc": 19431
     },
     "crates/adapters/sdk": {
       "files": 22,
@@ -16,13 +16,17 @@
       "files": 16,
       "loc": 7925
     },
+    "crates/apeireth": {
+      "files": 1,
+      "loc": 77
+    },
     "crates/capabilities/tools": {
       "files": 131,
-      "loc": 88419
+      "loc": 88341
     },
     "crates/engine/guard": {
       "files": 28,
-      "loc": 14962
+      "loc": 14862
     },
     "crates/engine/image/algo": {
       "files": 128,
@@ -70,11 +74,11 @@
     },
     "crates/engine/memory": {
       "files": 190,
-      "loc": 86526
+      "loc": 86549
     },
     "crates/engine/organ": {
       "files": 33,
-      "loc": 27834
+      "loc": 27840
     },
     "crates/engine/provider": {
       "files": 14,
@@ -82,19 +86,19 @@
     },
     "crates/engine/runtime": {
       "files": 52,
-      "loc": 25036
+      "loc": 25067
     },
     "crates/engine/runtime-assembly": {
       "files": 88,
-      "loc": 47508
+      "loc": 47512
     },
     "crates/engine/storage": {
       "files": 27,
-      "loc": 8605
+      "loc": 8629
     },
     "crates/foundation/core": {
       "files": 28,
-      "loc": 14551
+      "loc": 14535
     },
     "crates/foundation/credentials": {
       "files": 10,
@@ -102,11 +106,11 @@
     },
     "crates/foundation/governance": {
       "files": 24,
-      "loc": 15129
+      "loc": 14995
     },
     "crates/foundation/orchestration": {
       "files": 54,
-      "loc": 30266
+      "loc": 30306
     },
     "crates/foundation/plugin": {
       "files": 47,
