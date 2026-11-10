@@ -206,6 +206,8 @@ impl StdioChannel {
     /// Spawn `command` with `args` and wrap its standard streams.
     pub async fn open(command: &str, args: &[String]) -> Result<Arc<dyn McpChannel>, McpError> {
         let mut process = Command::new(command);
+        // Unix：子进程归独立进程组 ⇒ 终止时能整组 kill（非 Unix 侧由 Job Object 收敛）。
+        #[cfg(unix)]
         super::process_owner::ProcessOwner::configure(&mut process);
         let mut child = process
             .args(args)

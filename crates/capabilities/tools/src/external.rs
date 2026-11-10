@@ -1801,7 +1801,8 @@ pub fn external_tool_set(config: &ExternalToolsConfig) -> Vec<Arc<dyn ToolCapabi
     ]
 }
 
-#[cfg(test)]
+// 本模块的用例全部依赖 unix 专有能力（fake shell 脚本、可执行位）⇒ 只在 unix 侧编译（Windows 上是死码）。
+#[cfg(all(test, unix))]
 mod tests {
     use super::*;
     use apeireth_protocol::canonical::ToolOutcome;
@@ -1879,7 +1880,8 @@ mod tests {
         }
     }
 
-    fn ok_value(result: ToolResult) -> Value {
+    /// 断言辅助：把成功结果拆成值 —— `pub(super)` 供同级的 unix 侧用例共用。
+    pub(super) fn ok_value(result: ToolResult) -> Value {
         match result.outcome {
             ToolOutcome::Ok { value } => value,
             other => panic!("expected ok, got {other:?}"),
@@ -2103,7 +2105,7 @@ mod real_tool_tests {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod yara_cli_tests {
     use super::*;
     use apeireth_protocol::canonical::ToolOutcome;
@@ -2184,7 +2186,7 @@ mod yara_cli_tests {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod binwalk_radare_tests {
     use super::*;
     use apeireth_protocol::canonical::ToolOutcome;
@@ -2301,7 +2303,7 @@ mod binwalk_radare_tests {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod android_adapter_tests {
     use super::*;
     use apeireth_protocol::canonical::ToolOutcome;
@@ -2400,8 +2402,10 @@ mod android_adapter_tests {
 #[cfg(test)]
 mod ghidra_adapter_tests {
     use super::*;
-    use apeireth_protocol::canonical::ToolOutcome;
     use std::io::Write;
+    // 断言辅助只在 unix 侧用例里用得上 ⇒ 只在 unix 侧引入（Windows 上是死码）。
+    #[cfg(unix)]
+    use super::tests::ok_value;
 
     fn dir(tag: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
@@ -2414,13 +2418,6 @@ mod ghidra_adapter_tests {
         ));
         std::fs::create_dir_all(&dir).expect("dir");
         dir
-    }
-
-    fn ok_value(result: ToolResult) -> Value {
-        match result.outcome {
-            ToolOutcome::Ok { value } => value,
-            other => panic!("expected ok, got {other:?}"),
-        }
     }
 
     #[cfg(unix)]
@@ -2468,7 +2465,7 @@ mod ghidra_adapter_tests {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod openssl_syn_tests {
     use super::*;
     use apeireth_protocol::canonical::ToolOutcome;
