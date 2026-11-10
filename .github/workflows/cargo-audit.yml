@@ -119,18 +119,17 @@ jobs:
         # 家族 EXR 链 / zbus 5.x 家族经 xcap → apeireth-perception), 全 transitive、
         # 0 直接业务依赖、0 known vulnerability、无安全升级路径; 三处同步 ignore。
         # 复核日 2026-10-18; 条目变 unmatched 即删。
+        # 2026-11-10 依赖升级批 (rusqlite 0.32 → 0.41) 复审: 删掉 8 条已失效 ignore ——
+        # zbus 5.x 三条 (RUSTSEC-2026-0370/0371/0372): 依赖树里已无 zbus;
+        # quinn-proto 五条 (RUSTSEC-2026-0338..0342): 依赖树里已是 0.11.19 (已修)。
+        # 两组皆 unmatched ⇒ 按本文件既有规则「条目变 unmatched 即删」处理;
+        # 与 deny.toml 同批同删 (三处同步口径: deny.toml / audit.toml / 本文件 --ignore)。
+        # 留档复审条件: 这两条链若再进依赖树, 因为 ignore 已删, advisory 会直接报出来。
+        # 复核日 2026-11-10。
         run: |
           set +e
           cargo audit --json --deny warnings \
             --ignore RUSTSEC-2024-0436 \
-            --ignore RUSTSEC-2026-0370 \
-            --ignore RUSTSEC-2026-0371 \
-            --ignore RUSTSEC-2026-0372 \
-            --ignore RUSTSEC-2026-0338 \
-            --ignore RUSTSEC-2026-0339 \
-            --ignore RUSTSEC-2026-0340 \
-            --ignore RUSTSEC-2026-0341 \
-            --ignore RUSTSEC-2026-0342 \
             > audit-report.json
           audit_status=$?
           set -e
