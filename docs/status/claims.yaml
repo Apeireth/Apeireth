@@ -1167,7 +1167,7 @@ claims:
     tests:
       - crates/engine/memory/tests/memory_contract_production.rs
       - crates/engine/runtime-assembly/tests/memory_contract_production.rs
-    verified_at: 822d3cac
+    verified_at: 2a807e63f
     verify_cmd: "cargo test -p apeireth-memory --test memory_contract_production && cargo test -p apeireth-runtime-assembly --test memory_contract_production"
     owner: memory
     next_review: "2026-12-05"
