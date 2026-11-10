@@ -456,7 +456,8 @@ impl MeshNode {
             ..
         } = update
         {
-            self.punch.invalidate_incarnation(&peer, previous_session_id);
+            self.punch
+                .invalidate_incarnation(&peer, previous_session_id);
         }
         Ok(update)
     }
@@ -846,13 +847,12 @@ impl MeshNode {
         // 4. Both halves over the one dual-role socket.
         let dialer: Arc<dyn MeshTransport> = endpoint.clone();
         let listener: Arc<dyn MeshListener> = endpoint.clone();
-        let outcome =
-            punch(&session, dialer, listener, remote_presence, now)
-                .await
-                .map_err(|error| MeshError::PunchFailed {
-                    peer: peer.to_string(),
-                    reason: error.to_string(),
-                })?;
+        let outcome = punch(&session, dialer, listener, remote_presence, now)
+            .await
+            .map_err(|error| MeshError::PunchFailed {
+                peer: peer.to_string(),
+                reason: error.to_string(),
+            })?;
 
         // 5. The survivor goes through the ordinary handshake — the dial side
         // through `connect`, the accept side through `accept`, exactly as if

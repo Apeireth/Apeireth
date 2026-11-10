@@ -149,8 +149,11 @@ async fn node_with_echo(id: &str, trust: TrustPolicy) -> (Arc<MeshNode>, Arc<Hol
         echo_runs: runs,
     });
     let node = MeshNode::new(
-        MeshNodeConfig::new(apeireth_mesh::NodeId::new(id).unwrap(), format!("node {id}"))
-            .with_trust(trust),
+        MeshNodeConfig::new(
+            apeireth_mesh::NodeId::new(id).unwrap(),
+            format!("node {id}"),
+        )
+        .with_trust(trust),
         Arc::new(ManagerExecutor::new(Arc::clone(&holder))),
         system_clock(),
     );
@@ -267,8 +270,20 @@ async fn two_punched_peers_authenticate_and_run_one_remote_call() {
     );
 
     // Each side holds the other's current, verified reachability.
-    let a_presence = presence_for(&identity_a, &node_a_id, 11, 600_000, a_peer.local_addr().unwrap());
-    let b_presence = presence_for(&identity_b, &node_b_id, 22, 600_000, b_peer.local_addr().unwrap());
+    let a_presence = presence_for(
+        &identity_a,
+        &node_a_id,
+        11,
+        600_000,
+        a_peer.local_addr().unwrap(),
+    );
+    let b_presence = presence_for(
+        &identity_b,
+        &node_b_id,
+        22,
+        600_000,
+        b_peer.local_addr().unwrap(),
+    );
 
     // The one high-level act, from both sides: each asks for the other over
     // its own verified presence, on its own one socket.
@@ -338,9 +353,14 @@ async fn two_punched_peers_authenticate_and_run_one_remote_call() {
     );
 
     // The coordination state is spent: no attempt outlives its window.
-    assert!(node_a.punch_coordinator().is_empty() || {
-        node_a.punch_coordinator().prune_expired(now_ms() + WINDOW_MS + 1) > 0
-    });
+    assert!(
+        node_a.punch_coordinator().is_empty() || {
+            node_a
+                .punch_coordinator()
+                .prune_expired(now_ms() + WINDOW_MS + 1)
+                > 0
+        }
+    );
 
     a_peer.close();
     b_peer.close();
@@ -642,7 +662,10 @@ async fn a_replaced_incarnation_invalidates_the_punch_bound_to_the_old_one() {
         .punch_coordinator()
         .request(&node_a_id, &node_b_id, 11, 22, now_ms(), WINDOW_MS)
         .unwrap();
-    assert!(node_a.punch_coordinator().session_for(&node_a_id, &node_b_id).is_some());
+    assert!(node_a
+        .punch_coordinator()
+        .session_for(&node_a_id, &node_b_id)
+        .is_some());
 
     // B's incarnation 22 is what A currently holds.
     let first = presence_for(
@@ -667,7 +690,13 @@ async fn a_replaced_incarnation_invalidates_the_punch_bound_to_the_old_one() {
     );
     let update = node_a.note_presence(replaced).unwrap();
     assert!(
-        matches!(update, apeireth_mesh::PresenceUpdate::Replaced { previous_session_id: 22, .. }),
+        matches!(
+            update,
+            apeireth_mesh::PresenceUpdate::Replaced {
+                previous_session_id: 22,
+                ..
+            }
+        ),
         "got {update:?}"
     );
     assert!(

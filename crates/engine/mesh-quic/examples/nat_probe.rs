@@ -73,7 +73,9 @@ async fn main() {
         _ => {
             eprintln!("usage: nat_probe observer <bind-addr>");
             eprintln!("       nat_probe peer <bind-addr> <observer-addr>");
-            eprintln!("       nat_probe punch <bind-addr> <observer-addr> <workdir> <role> <peer-role>");
+            eprintln!(
+                "       nat_probe punch <bind-addr> <observer-addr> <workdir> <role> <peer-role>"
+            );
             std::process::exit(2);
         }
     }
@@ -203,7 +205,11 @@ impl Plugin for EchoModule {
     }
 }
 
-async fn node_with_echo(id: &str, peer_pin: KeyFingerprint, peer: &str) -> (Arc<MeshNode>, Arc<Holder>) {
+async fn node_with_echo(
+    id: &str,
+    peer_pin: KeyFingerprint,
+    peer: &str,
+) -> (Arc<MeshNode>, Arc<Holder>) {
     let runs = Arc::new(AtomicUsize::new(0));
     let manifest = PluginManifest::new(
         PluginId::new(TEST_MODULE).unwrap(),
@@ -273,8 +279,8 @@ fn wait_peer_presence(workdir: &str, peer_role: &str) -> Result<VerifiedPresence
     while std::time::Instant::now() < deadline {
         if path.exists() {
             let text = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
-            let record: PresenceRecord =
-                serde_json::from_str(&text).map_err(|e| format!("peer presence is not a valid record: {e}"))?;
+            let record: PresenceRecord = serde_json::from_str(&text)
+                .map_err(|e| format!("peer presence is not a valid record: {e}"))?;
             return VerifiedPresence::verify(record, now_ms(), AUDIENCE)
                 .map_err(|e| format!("peer presence failed verification: {e}"));
         }
@@ -324,7 +330,8 @@ async fn punch(bind: &str, observer: &str, workdir: &str, role: &str, peer_role:
         EndpointCandidateKind::ServerReflexive,
         observed,
     )
-    .unwrap()]) {
+    .unwrap()])
+    {
         Ok(candidates) => candidates,
         Err(error) => {
             println!("PUNCH_RESULT=fail:candidate:{error}");
@@ -409,7 +416,10 @@ async fn punch(bind: &str, observer: &str, workdir: &str, role: &str, peer_role:
     println!("LINK_COUNT={}", links.len());
     println!(
         "PEER_STATE={:?}",
-        links.first().map(|(_, state, _)| state).unwrap_or(&apeireth_mesh::PeerState::Closed)
+        links
+            .first()
+            .map(|(_, state, _)| state)
+            .unwrap_or(&apeireth_mesh::PeerState::Closed)
     );
 
     // One side drives a real remote invocation; the other side simply stays
