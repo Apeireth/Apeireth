@@ -97,9 +97,8 @@ struct DeviceSenseParams {
     /// 取这个模型参数当授权人 ⇒ 模型可自称「已获授权」读摄像头, 且审计账里的
     /// 授权人不可信)。保留解析只为旧提示词不硬失败; 真授权只认宿主决定账。
     ///
-    /// 2026-11-10: 撤除单调边界 Guard 后**没有任何一处读它** ⇒ 显式标注
-    /// 「只解析不作数」(编译器不替我们记账, 这里写清楚)。
-    #[allow(dead_code)]
+    /// 2026-11-10: 撤除单调边界 Guard 后只剩**解析**; 下面 `sense()` 里有一处
+    /// 显式读 (只读不采信), 让「解析了也不作数」这件事落在代码里而不是注释里。
     authorized_by: Option<String>,
 }
 
@@ -294,6 +293,10 @@ impl DeviceSenseTool {
     }
 
     fn sense(&self, call: &ToolCall, params: &DeviceSenseParams) -> ToolResult {
+        // 模型自称的授权人: **只解析不采信** (旧提示词兼容, 声明面已无该字段)。
+        // 这里显式读一次 —— 既让「解析到了也不作数」落在代码里, 也让该字段不是死代码
+        // (不新增 `#[allow(dead_code)]` 豁免, 死代码棘轮只减不增)。
+        let _model_claimed_authorizer = params.authorized_by.as_deref();
         let body = match self.registry.load() {
             Ok(body) => body,
             Err(error) => return self.refuse(call, format!("设备表拒开 (不回退默认表): {error}")),
