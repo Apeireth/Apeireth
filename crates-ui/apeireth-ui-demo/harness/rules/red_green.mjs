@@ -33,6 +33,7 @@
 import {spawnSync} from 'node:child_process';
 import {readFileSync, writeFileSync, copyFileSync, rmSync} from 'node:fs';
 import {createHash} from 'node:crypto';
+import {tmpdir} from 'node:os';
 import {dirname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 
@@ -40,9 +41,13 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 // crates-ui/apeireth-ui-demo/harness/rules ⇒ 仓库根（4 级）。
 const REPO = resolve(HERE, '..', '..', '..', '..');
 const CASES = join(HERE, 'cases.json');
-const BACKUP = '/tmp/cases.red_green.backup.json';
+const BACKUP = join(tmpdir(), 'cases.red_green.backup.json');
 const CARGO_DIR = join(REPO, 'crates-ui');
-const TARGET_DIR = process.env.RULES_TARGET_DIR ?? '/home/bai/Projects/apeireth-ui-target';
+// 默认目标目录按平台取：Linux 沿用原路径；Windows 用 crates-ui 工作区内的 target
+// （原值是 Linux 绝对路径 ⇒ 在 Windows 上会落到 C:\home\... ⇒ 不可用）。
+const TARGET_DIR =
+  process.env.RULES_TARGET_DIR ??
+  (process.platform === 'win32' ? join(CARGO_DIR, 'target') : '/home/bai/Projects/apeireth-ui-target');
 
 const md5 = (path) => createHash('md5').update(readFileSync(path)).digest('hex');
 
@@ -92,6 +97,19 @@ copyFileSync(CASES, BACKUP);
 const originalMd5 = md5(CASES);
 let failures = 0;
 
+/**
+ * 恢复真源（**逐字节**等价于备份）。
+ *
+ * ⚠️ 不能用 `copyFileSync(BACKUP, CASES)`：Windows 的 `CopyFileW` **保留源文件的
+ * 最后写入时间** ⇒ 恢复后 cases.json 的 mtime 会退回篡改**之前** ⇒
+ * cargo 的指纹新鲜度判定（按 mtime 比较）认为依赖没变 ⇒ **不重新编译**
+ * ⇒ 测试二进制里仍嵌着**篡改版**真源 ⇒ 「绿」那一腿假红（退出码 101）。
+ * ⇒ 改用「读出字节再写回」⇒ mtime = 当前时刻 ⇒ 必定触发重编译。
+ */
+function restoreCases() {
+  writeFileSync(CASES, readFileSync(BACKUP));
+}
+
 if (driftMode) {
   for (const {rule, id} of DRIFT_CASES) {
     const doc = JSON.parse(readFileSync(CASES, 'utf8'));
@@ -108,7 +126,7 @@ if (driftMode) {
     const testName = `${rule}_matches_production_typescript`;
     const red = runCargo(testName);
     const redOk = red.code === 101 && red.out.includes('已知漂移已被修好');
-    copyFileSync(BACKUP, CASES);
+    restoreCases();
     const green = runCargo(testName);
     const greenOk = green.code === 0;
     if (!redOk || !greenOk) failures += 1;
@@ -142,7 +160,7 @@ if (driftMode) {
       red.code === 101 &&
       red.out.includes('TS 侧（expected）') &&
       red.out.includes('Rust 侧（实际）');
-    copyFileSync(BACKUP, CASES);
+    restoreCases();
     const green = runCargo(testName);
     const greenOk = green.code === 0;
     if (!redOk || !greenOk) failures += 1;

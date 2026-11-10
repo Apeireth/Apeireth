@@ -26,6 +26,7 @@ import signal
 import socketserver
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import urllib.request
@@ -458,20 +459,44 @@ def main():
     httpd, page_port = serve(web_dir)
     base = f"http://127.0.0.1:{page_port}"
 
+    # ⚠️⚠️ **Windows 分支（2026-11-10 实测）**：**软件 ANGLE 会掐死 WebGPU 腿**。
+    #
+    # 实测（Windows 11 + Edge 157 headless）：`--use-angle=swiftshader`
+    # ⇒ ⇒ Dawn **找不到任何适配器**（`navigator.gpu.requestAdapter()` → null）
+    # ⇒ ⇒ 每条腿的 `webgpu` 段都带 error ⇒ ⇒ **整条腿被判为 invalid**
+    # ⇒ ⇒ 强制判据「引擎双后端逐像素一致」**无法评估** ⇒ ⇒ 结论恒为 fail。
+    # ⇒ ⇒ Windows 走 **ANGLE(D3D11) + Dawn(D3D12)** 硬件路径（实测拿到 nvidia 适配器）；
+    # ⇒ ⇒ Linux 侧保持**软件渲染**（可复现基线）不变。
+    if sys.platform == "win32":
+        gpu_flags = [
+            "--use-gl=angle",
+            "--use-angle=d3d11",
+            "--enable-unsafe-webgpu",
+            "--use-webgpu-adapter=d3d12",
+        ]
+    else:
+        gpu_flags = [
+            "--use-gl=angle",
+            "--use-angle=swiftshader",
+            "--enable-features=Vulkan",
+            "--enable-unsafe-webgpu",
+            "--use-webgpu-adapter=swiftshader",
+        ]
+
     chrome_args = [
         CHROME,
         "--headless=new",
         "--no-sandbox",
         "--disable-dev-shm-usage",
         "--enable-unsafe-swiftshader",
-        "--use-gl=angle",
-        "--use-angle=swiftshader",
-        "--enable-features=Vulkan",
-        "--enable-unsafe-webgpu",
-        "--use-webgpu-adapter=swiftshader",
+        *gpu_flags,
         "--disable-dbus",
         "--no-first-run",
         "--no-default-browser-check",
+        # ⭐⭐ **独立 profile**（与 P5-b compare.py 同一口径）：Windows Edge headless
+        # ⇒ ⇒ 若机器上**已有** Edge 实例 ⇒ ⇒ 新进程把请求转交给它 ⇒ ⇒ **调试端口不监听**
+        # ⇒ ⇒ 探针拿不到 DevTools 端口 ⇒ ⇒ 所有腿无效。
+        f"--user-data-dir={tempfile.mkdtemp(prefix='apeireth-intro-')}",
         "--remote-allow-origins=*",
         "--remote-debugging-port=0",
         "--window-size=1200,1200",

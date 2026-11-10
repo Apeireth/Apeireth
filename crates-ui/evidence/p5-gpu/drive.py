@@ -27,6 +27,7 @@ import socketserver
 import struct
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import urllib.request
@@ -35,7 +36,10 @@ import zlib
 import websocket  # websocket-client
 
 HERE = pathlib.Path(__file__).resolve().parent
-CHROME = "/usr/bin/chromium"
+# ⚠️ **浏览器路径**（2026-11-10 补）：原来写死 Linux 路径 ⇒ Windows 上这条腿
+# ⇒ ⇒ 根本起不来。改成「环境变量优先」：`CHROME_PATH`（与 `scene/drive.py` 同口径）
+# ⇒ ⇒ `CHROME`（与 `harness/tools/compare.py` 同口径）⇒ ⇒ 最后才回落 Linux 默认。
+CHROME = os.environ.get("CHROME_PATH") or os.environ.get("CHROME") or "/usr/bin/chromium"
 
 
 # ---------------------------------------------------------------------------
@@ -262,24 +266,44 @@ def main():
     httpd, page_port = serve(HERE)
     url = f"http://127.0.0.1:{page_port}/index.html"
 
+    # ⚠️ **GPU 旗标分平台**（2026-11-10 实测）：
+    # - Linux：软件渲染（这台没有真 GPU 的机器）⇒ swiftshader + Vulkan。
+    # - Windows：swiftshader 那套**拿不到 WebGPU adapter**（实测
+    #   `navigator.gpu.requestAdapter()` ⇒ null）⇒ ⇒ WebGPU 分支**根本建不起来**
+    #   ⇒ ⇒ 换 D3D11/D3D12（真实硬件，实测 adapter = PRESENT）。
+    if sys.platform == "win32":
+        gpu_flags = [
+            "--use-gl=angle",
+            "--use-angle=d3d11",
+            "--enable-unsafe-webgpu",
+            "--use-webgpu-adapter=d3d12",
+        ]
+    else:
+        gpu_flags = [
+            "--use-gl=angle",
+            "--use-angle=swiftshader",
+            "--enable-features=Vulkan",
+            # 让这台没有真 GPU 的机器给出**软件** WebGPU adapter，
+            # 这样 WebGPU 分支才真的能被跑到。
+            "--enable-unsafe-webgpu",
+            "--use-webgpu-adapter=swiftshader",
+        ]
+
     chrome_args = [
         CHROME,
         "--headless=new",
         "--no-sandbox",
         "--disable-dev-shm-usage",
         "--enable-unsafe-swiftshader",
-        "--use-gl=angle",
-        "--use-angle=swiftshader",
-        "--enable-features=Vulkan",
-        # 让这台没有真 GPU 的机器给出**软件** WebGPU adapter，
-        # 这样 WebGPU 分支才真的能被跑到。
-        "--enable-unsafe-webgpu",
-        "--use-webgpu-adapter=swiftshader",
+        *gpu_flags,
         "--disable-dbus",
         "--no-first-run",
         "--no-default-browser-check",
         "--remote-allow-origins=*",
         "--remote-debugging-port=0",
+        # ⚠️ **独立 profile**（Windows 硬需求）：复用默认 profile 时 Edge headless
+        # ⇒ ⇒ **不监听**调试端口 ⇒ ⇒ CDP 连不上 ⇒ ⇒ 这条腿直接跑不起来。
+        f"--user-data-dir={tempfile.mkdtemp(prefix='apeireth-p5gpu-')}",
         "--window-size=1100,760",
         "about:blank",
     ]

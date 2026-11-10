@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { runtimeMockPlugin } from './scripts/runtime-mock-plugin.mjs';
 
 // 生产前端在**仓库内**（只读引入）⇒ vite 必须放行该路径。
@@ -9,10 +9,16 @@ import { runtimeMockPlugin } from './scripts/runtime-mock-plugin.mjs';
 //
 // ⚠️ 相对层数：`governance/` → `harness/` → `apeireth-ui-demo/` → `crates-ui/`
 // → **仓库根** ⇒ 四层。
+// ⚠️ Windows：`new URL(...).pathname` 给的是 `/C:/...` 这种 POSIX 形态（空格还会
+// 被编码成 %20）⇒ 仓库根一律走 `fileURLToPath`（Windows 下是 `C:\...`）。
+// 判错的后果：仓库根算偏 ⇒ 生产 `src/lib` 目录算不对 ⇒ 替身**永远不被解析**
+// ⇒ 参考侧跑生产真模块 ⇒ 真去请求后端 ⇒ 对照基准失真。
 const repoRoot = process.env.APEIRETH_REPO
-  ? new URL(process.env.APEIRETH_REPO, 'file:///').pathname
-  : new URL('../../../../', import.meta.url).pathname.replace(/\/$/, '');
-const frontendDir = `${repoRoot}/frontend/companion-desktop`;
+  ? (process.env.APEIRETH_REPO.startsWith('file:')
+      ? fileURLToPath(new URL(process.env.APEIRETH_REPO))
+      : resolve(process.env.APEIRETH_REPO))
+  : fileURLToPath(new URL('../../../../', import.meta.url)).replace(/[\\/]+$/, '');
+const frontendDir = join(repoRoot, 'frontend', 'companion-desktop');
 
 // harness 根（`vite.config.mjs` 所在目录）。
 const harnessDir = dirname(fileURLToPath(import.meta.url));

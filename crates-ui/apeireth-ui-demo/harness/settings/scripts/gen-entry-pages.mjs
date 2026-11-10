@@ -23,7 +23,7 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SETTINGS = resolve(HERE, "..");
@@ -37,7 +37,7 @@ const checkOnly = process.argv.includes("--check");
  * ⚠️ 该文件是 ES module ⇒ 这里用**动态 import** 读它（不重复维护一份表）。
  */
 async function loadPanels() {
-  const module = await import(join(WEB, "shared", "panels.js"));
+  const module = await import(pathToFileURL(join(WEB, "shared", "panels.js")).href);
   return module.PANELS;
 }
 

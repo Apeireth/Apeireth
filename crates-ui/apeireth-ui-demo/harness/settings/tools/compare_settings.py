@@ -113,8 +113,12 @@ def load_panels() -> list[dict]:
     if node is None:
         print("找不到 node（读取子面注册表需要 node 22）", file=sys.stderr)
         raise SystemExit(2)
+    # ⚠️ 用 `as_uri()` 而不是字符串拼 `file://<路径>`：Windows 上路径里有
+    # 反斜杠（`C:\...`）⇒ 进了 JS 字符串字面量就是转义序列（`\u` 报
+    # "Invalid Unicode escape sequence"）⇒ 必须让 pathlib 产出正斜杠的
+    # `file:///C:/...` URL（Linux 上与原来的拼法逐字节相同）。
     script = (
-        f"import('file://{PANELS_JS}').then(m => "
+        f"import('{PANELS_JS.as_uri()}').then(m => "
         "console.log(JSON.stringify(m.PANELS.map(p => ({"
         "id: p.id, title: p.title, scope: p.scope, crop: p.crop, "
         "sections: p.sections.map(s => ({id: s.id, ref: s.ref, engine: s.engine, crop: s.crop ?? p.crop})), "

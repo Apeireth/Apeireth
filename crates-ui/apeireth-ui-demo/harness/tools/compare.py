@@ -210,6 +210,33 @@ class Cdp:
 
 
 def launch_chrome() -> tuple[subprocess.Popen, int]:
+    # ⚠️⚠️ **Windows 必须换一套 GPU 旗标**（2026-11-10 实测）。
+    #
+    # Linux 那套（`--use-angle=vulkan`）在 Windows 上**不是**"能用就行"：
+    # 实测（同一台机器、同一个 `http://127.0.0.1` 页面、同一块真实硬件）：
+    #   vulkan 套旗标 ⇒ WebGL 走真实硬件（ANGLE Vulkan 1.4.351），
+    #                   但 `navigator.gpu.requestAdapter()` **解析出 null**
+    #                   ⇒ ⇒ **WebGPU 后端永远建不起来**
+    #                   ⇒ ⇒ 设备丢失这类腿（`drive_device.py`）**无法观测**。
+    #   d3d11 + d3d12 ⇒ `requestAdapter()` **PRESENT**（vendor=nvidia / blackwell）
+    #                   ⇒ ⇒ WebGPU 可用，WebGL 也仍是真实硬件（D3D11）。
+    #
+    # ⇒ ⇒ 所以 Windows 走 D3D11/D3D12，Linux 原样保留（不碰已通过的基线）。
+    if sys.platform == "win32":
+        gpu_flags = [
+            "--use-gl=angle",
+            "--use-angle=d3d11",
+            "--use-webgpu-adapter=d3d12",
+            "--ignore-gpu-blocklist",
+            "--enable-unsafe-swiftshader",
+        ]
+    else:
+        gpu_flags = [
+            "--use-angle=vulkan",
+            "--enable-features=Vulkan",
+            "--ignore-gpu-blocklist",
+            "--enable-unsafe-swiftshader",
+        ]
     args = [
         CHROME,
         "--headless=new",
@@ -248,10 +275,8 @@ def launch_chrome() -> tuple[subprocess.Popen, int]:
         # ⇒ ⇒ `--enable-features=Vulkan` ⇒ 显式启用 Vulkan。
         # ⇒ ⇒ **可回退**：环境变量 `APEIRETH_CHROME_SWIFTSHADER=1` ⇒ ⇒ 退回软件渲染
         #    （软件后端仍需保留 ⇒ 因为它是**可复现**的基线，而硬件后端会随驱动变）。
-        "--use-angle=vulkan",
-        "--enable-features=Vulkan",
-        "--ignore-gpu-blocklist",
-        "--enable-unsafe-swiftshader",
+        # ⇒ ⇒ **Windows 上换成 D3D11/D3D12**（见上面 `gpu_flags` 的实测对照）。
+        *gpu_flags,
         f"--window-size={VIEWPORT_WIDTH},{VIEWPORT_HEIGHT}",
         "about:blank",
     ]

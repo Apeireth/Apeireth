@@ -9,15 +9,17 @@ import { PANELS } from './web/shared/panels.js';
 // 生产前端在**仓库内**（只读引入）⇒ vite 必须放行该路径。
 // 路径由 `APEIRETH_REPO` 覆盖（默认按相对位置推算）。
 const repoRoot = process.env.APEIRETH_REPO
-  ? new URL(process.env.APEIRETH_REPO, 'file:///').pathname
+  ? (process.env.APEIRETH_REPO.startsWith('file:')
+      ? fileURLToPath(new URL(process.env.APEIRETH_REPO))
+      : resolve(process.env.APEIRETH_REPO))
   // ⚠️ **层数是 4 级，不是 5**（并行面 M5 实测发现，2026-10-24）：
   // `harness/settings/` ⇒ `..`=harness/ ⇒ `../..`=apeireth-ui-demo/ ⇒ `../../..`=crates-ui/
   // ⇒ `../../../..`=**仓库根**。写成 5 级会落到**仓库根的上一级**
   // ⇒ `frontendDir` 指向**不存在的目录** ⇒ 替身**永远不被解析**
   // ⇒ 参考侧一直跑**生产真模块**（浏览器里 ⇒ 读数恒为「读不到」）
   // ⇒ 「有读数」态在共享构建里**不可达**。
-  : new URL('../../../..', import.meta.url).pathname.replace(/\/$/, '');
-const frontendDir = `${repoRoot}/frontend/companion-desktop`;
+  : fileURLToPath(new URL('../../../..', import.meta.url)).replace(/[\\/]+$/, '');
+const frontendDir = join(repoRoot, 'frontend', 'companion-desktop');
 
 // 本目录（`harness/settings/`）根。
 const settingsDir = dirname(fileURLToPath(import.meta.url));

@@ -8,8 +8,8 @@
 //! 逐帧一致）。
 
 use apeireth_ui_gpu::{
-    BackendPreference, Engine, EngineOptions, SceneDescriptor, SurfaceTargetInput, UniformValues,
-    SCENE_FRAGMENT_GLSL, SCENE_VERTEX_GLSL,
+    BackendPreference, CanvasSizeSource, Engine, EngineOptions, SceneDescriptor,
+    SurfaceTargetInput, UniformValues, SCENE_FRAGMENT_GLSL, SCENE_VERTEX_GLSL,
 };
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
@@ -40,10 +40,16 @@ pub async fn run(
 
     let width = canvas.width().max(1);
     let height = canvas.height().max(1);
+    // ⭐ 尺寸来源：读**画布当前**的 `width/height` ⇒ 引擎**自侦测**尺寸变化
+    // （与 P5-b 宿主同一口径）。
+    let size_canvas = canvas.clone();
     let options = EngineOptions {
         backend: preference,
         width,
         height,
+        canvas_size: Some(CanvasSizeSource::new(move || {
+            (size_canvas.width(), size_canvas.height())
+        })),
     };
 
     trace(&format!("create engine: backend={backend}"));

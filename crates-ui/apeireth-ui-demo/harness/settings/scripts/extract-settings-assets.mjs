@@ -49,7 +49,7 @@
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SETTINGS = resolve(HERE, "..");
@@ -266,7 +266,7 @@ async function main() {
   console.log(`仓库根：${REPO}`);
   console.log(`生产前端（只读）：${FRONTEND}`);
 
-  const { PANELS, SHARED_MARKUP_RANGES } = await import(join(SETTINGS, "web/shared/panels.js"));
+  const { PANELS, SHARED_MARKUP_RANGES } = await import(pathToFileURL(join(SETTINGS, "web/shared/panels.js")).href);
 
   // 每个面一份 CSS 产物。
   //

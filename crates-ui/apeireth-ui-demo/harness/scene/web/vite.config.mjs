@@ -1,9 +1,10 @@
 import { defineConfig } from 'vite';
+import { fileURLToPath } from 'node:url';
 
 // 生产前端在**仓库内**（只读引入）⇒ vite 必须放行该路径。
 // 路径按本文件位置推算仓库根
 // （crates-ui/apeireth-ui-demo/harness/scene/web → 仓库根 = 6 级）。
-const repoRoot = new URL('../../../../../../', import.meta.url).pathname.replace(/\/$/, '');
+const repoRoot = fileURLToPath(new URL('../../../../../../', import.meta.url)).replace(/[\\/]+$/, '');
 
 export default defineConfig({
   root: '.',

@@ -22,17 +22,7 @@ REPO="$(cd "${HERE}/../../.." && pwd)"
 
 # wasm-bindgen CLI 的版本必须与 crates-ui 的 wasm-bindgen 依赖**精确一致**（0.2.129）。
 WASM_BINDGEN="${WASM_BINDGEN:-}"
-if [ -z # ⚠️ **产物路径必须跟随 `CARGO_TARGET_DIR`**（仓库脚本纪律）：
-# 否则外部设了 `CARGO_TARGET_DIR` 时 cargo 把产物写到别处，
-# 而本脚本仍去读硬编码的 `…/target/…` ⇒ ⇒ **拿到旧 wasm**
-# ⇒ ⇒ 实测踩过：注入的修复**没进浏览器** ⇒ ⇒ **假绿/假红**。
-TARGET_DIR="${CARGO_TARGET_DIR:-${HERE}/harness/target}"
-WASM_ARTIFACT="${TARGET_DIR}/wasm32-unknown-unknown/release/p5_gpu_harness.wasm"
-if [ ! -f "${WASM_ARTIFACT}" ]; then
-  echo "找不到 wasm 产物：${WASM_ARTIFACT}" >&2
-  exit 1
-fi
-"${WASM_BINDGEN}" ]; then
+if [ -z "${WASM_BINDGEN}" ]; then
   for candidate in \
     "$(command -v wasm-bindgen || true)" \
     "${REPO}/target/ui-probe-scratch/bin/bin/wasm-bindgen"; do
@@ -50,6 +40,19 @@ echo "   wasm-bindgen: ${WASM_BINDGEN} ($("${WASM_BINDGEN}" --version))"
 
 echo "── 1/3 构建 wasm 宿主 ──"
 (cd "${HERE}/harness" && cargo build --release --target wasm32-unknown-unknown --locked)
+
+# ⚠️ **产物路径必须跟随 `CARGO_TARGET_DIR`**（仓库脚本纪律）：
+# 否则外部设了 `CARGO_TARGET_DIR` 时 cargo 把产物写到别处，
+# 而本脚本仍去读硬编码的 `…/target/…` ⇒ ⇒ **拿到旧 wasm**
+# ⇒ ⇒ 实测踩过：注入的修复**没进浏览器** ⇒ ⇒ **假绿/假红**。
+# ⚠️ 产物检查放在**构建之后**：干净检出时产物本来就不存在
+# （放在构建之前 ⇒ 脚本**永远**在第 1 步就退出 ⇒ 一键复跑根本跑不起来）。
+TARGET_DIR="${CARGO_TARGET_DIR:-${HERE}/harness/target}"
+WASM_ARTIFACT="${TARGET_DIR}/wasm32-unknown-unknown/release/p5_gpu_harness.wasm"
+if [ ! -f "${WASM_ARTIFACT}" ]; then
+  echo "找不到 wasm 产物：${WASM_ARTIFACT}" >&2
+  exit 1
+fi
 
 echo "── 2/3 wasm-bindgen（产物落在本目录） ──"
 rm -f "${HERE}/p5_gpu_harness.js" "${HERE}/p5_gpu_harness_bg.wasm"
