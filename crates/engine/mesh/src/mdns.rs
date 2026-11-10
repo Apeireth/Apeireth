@@ -83,12 +83,6 @@ impl MdnsDiscovery {
     pub fn set_sink(&self, sink: DiscoverySink) {
         *self.sink.lock().unwrap_or_else(|p| p.into_inner()) = Some(sink);
     }
-
-    fn publish(&self, peer: DiscoveredPeer) {
-        if let Some(sink) = self.sink.lock().unwrap_or_else(|p| p.into_inner()).as_ref() {
-            sink(peer);
-        }
-    }
 }
 
 #[async_trait::async_trait]

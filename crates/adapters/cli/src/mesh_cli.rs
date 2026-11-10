@@ -16,8 +16,8 @@ use std::sync::Arc;
 use apeireth_core::kernel::NodeId;
 use apeireth_mesh::identity::NodeIdentity;
 use apeireth_mesh::{
-    pair_outbound, ConfirmDecision, DiscoveryBackend, FakeDiscoveryBackend, MdnsDiscovery,
-    MeshDiscoveryService, PairingOptions, TrustStore,
+    pair_outbound, ConfirmDecision, DiscoveryBackend, MdnsDiscovery, MeshDiscoveryService,
+    PairingOptions, TrustStore,
 };
 use apeireth_mesh_quic::{QuicMeshTransport, QuicTransportConfig};
 
@@ -212,11 +212,4 @@ fn confirm_on_stdin(sas: &str) -> ConfirmDecision {
             }
         }
     }
-}
-
-// Keep the fake backend name referenced so the discovery test surface and the
-// CLI build against one module set.
-#[allow(dead_code)]
-fn _fake_backend_available() -> FakeDiscoveryBackend {
-    FakeDiscoveryBackend::default()
 }
