@@ -62,11 +62,11 @@ const MAX_CASES_PER_RECORD: usize = 6;
 const MAX_CHARS: usize = 4_000;
 /// **闸门口径**的单条上限（每条证据取正文前 N 字）。
 const GATE_HEAD_CHARS: usize = 120;
-/// 锚定选段的单条上限（与 `AnchoredInjectionConfig::PRODUCTION.span_chars` 同口径）。
+/// 锚定选段的单条上限（**2026-11-08 时的生产值** 400；现生产值 = 200 ⇒ 本例按 400 复现当时的分解口径）。
 const ANCHOR_SPAN_CHARS: usize = 400;
 /// 扫的多锚点数（`1` = 与生产现行实现**逐字同**）。
 const ANCHOR_VARIANTS: [usize; 4] = [1, 2, 3, 4];
-/// 扫的单条跨度（`400` = 生产现行值）。
+/// 扫的单条跨度（**400 = 2026-11-08 时的生产值**；现生产值 = 200）。
 const SPAN_VARIANTS: [usize; 7] = [100, 200, 300, 400, 600, 800, 1200];
 const CORPORA: [(&str, &str); 2] = [
     ("redchamber", "redchamber.txt"),

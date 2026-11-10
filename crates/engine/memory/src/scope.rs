@@ -220,7 +220,7 @@ impl Default for MemoryRankingConfig {
             novelty_weight: 0.05,
             diversity_lambda: 0.0,
             first_pos_alpha: 0.0,
-            // 单条上限取**单一真源**（注入侧的生产跨度）⇒ ⇒ 不写第二份 400。
+            // 单条上限取**单一真源**（注入侧的生产跨度）⇒ ⇒ 不写第二份 200。
             candidate_span_chars: crate::anchor_injection::AnchoredInjectionConfig::PRODUCTION
                 .span_chars,
         }

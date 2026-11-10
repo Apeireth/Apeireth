@@ -16,7 +16,7 @@
 //! # 修法
 //!
 //! 计费改成**选后长度**：`min(正文长度, 单条上限)`；单条上限的**单一真源** =
-//! [`AnchoredInjectionConfig::PRODUCTION`] 的 `span_chars`（**不写第二份 400**）。
+//! [`AnchoredInjectionConfig::PRODUCTION`] 的 `span_chars`（**不写第二份 200**）。
 //!
 //! # 这份测试钉住什么（四条护栏）
 //!
@@ -155,9 +155,9 @@ fn long_records_are_no_longer_silently_dropped() {
     assert_eq!(
         items.len(),
         3,
-        "三条长记录按「选后长度」（各 400 字）计费 ⇒ 4,000 字预算下**三条都装得下**"
+        "三条长记录按「选后长度」（各 200 字）计费 ⇒ 4,000 字预算下**三条都装得下**"
     );
-    // 计费口径 = 选后长度 ⇒ 总量 = 3 × 400 = 1,200 ≤ 4,000。
+    // 计费口径 = 选后长度 ⇒ 总量 = 3 × 200 = 600 ≤ 4,000。
     let billed: usize = items
         .iter()
         .map(|item| item.content.chars().count().min(SPAN))
@@ -336,7 +336,7 @@ fn the_single_item_span_has_one_source_of_truth() {
         AnchoredInjectionConfig::PRODUCTION.span_chars,
         "候选计费用的单条上限必须取注入侧的生产跨度（单一真源）"
     );
-    assert_eq!(SPAN, 400, "生产注入的单条跨度当前是 400 字");
+    assert_eq!(SPAN, 200, "生产注入的单条跨度当前是 200 字");
 }
 
 /// **逃生阀**：`0` = 不限 = 旧口径。

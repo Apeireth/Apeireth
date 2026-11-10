@@ -75,7 +75,7 @@ pub enum InjectionMode {
 impl InjectionMode {
     /// ⚠️ **历史名**：它是**旧闸门口径**（每条正文**前 N 字**）的单条上限
     /// （= 生产 XML 形态的单条上限），**不是**生产**锚定选段**的上限
-    /// （后者 = [`crate::anchor_injection::AnchoredInjectionConfig::PRODUCTION`] 的 `span_chars` = 400）。
+    /// （后者 = [`crate::anchor_injection::AnchoredInjectionConfig::PRODUCTION`] 的 `span_chars` = 200）。
     ///
     /// （**保留原名** ⇒ 外部调用方逐字兼容；新口径请用
     /// [`crate::anchor_injection::AnchoredInjectionConfig::PRODUCTION`]。）

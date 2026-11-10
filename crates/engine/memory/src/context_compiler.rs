@@ -204,7 +204,7 @@ impl ClosedWorldContextCompiler {
     /// **选后长度**给字符预算计费 ⇒ ⇒ 交付侧必须**同一口径**裁剪 ⇒ ⇒ 否则整条
     /// 正文会进上下文、**突破总预算**（且交付 ≠ 计费 ⇒ 预算承诺失效）。
     /// 单条上限的**单一真源** = [`crate::anchor_injection::AnchoredInjectionConfig::PRODUCTION`]
-    /// 的 `span_chars`（**不写第二份 400**）。
+    /// 的 `span_chars`（**不写第二份 200**）。
     pub fn compile_with_selected_access(
         &self,
         recalled: &MemoryRecallResult,
