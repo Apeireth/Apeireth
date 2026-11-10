@@ -46,6 +46,33 @@ use apeireth_memory::{MemoryCandidate, MemoryScope};
 const K: usize = 10;
 const POOL: usize = 50;
 
+/// `--k` 的取值：正整数（评测口径）或 `production`（**生产默认名额**）。
+///
+/// ⚠️ `production` = [`apeireth_memory::layers::PRODUCTION_RECALL_LIMIT`]
+/// ⇒ ⇒ 闸门能同时量「历史臂（k=10）」与「**生产臂**（k=生产默认）」。
+fn parse_k() -> Result<usize, Box<dyn Error>> {
+    let mut args = std::env::args().skip(1);
+    while let Some(arg) = args.next() {
+        if arg != "--k" {
+            continue;
+        }
+        let value = args
+            .next()
+            .ok_or_else(|| std::io::Error::other("--k 缺值"))?;
+        return match value.as_str() {
+            "production" => Ok(apeireth_memory::layers::PRODUCTION_RECALL_LIMIT),
+            other => match other.parse::<usize>() {
+                Ok(parsed) if parsed > 0 => Ok(parsed),
+                _ => Err(std::io::Error::other(format!(
+                    "--k 取值不合法：{other}（要正整数或 production）"
+                ))
+                .into()),
+            },
+        };
+    }
+    Ok(K)
+}
+
 /// α 扫描档位。
 const ALPHAS: [f64; 6] = [0.05, 0.10, 0.20, 0.50, 1.00, 2.00];
 
@@ -82,6 +109,7 @@ fn main() -> ExitCode {
 }
 
 fn run() -> Result<(), Box<dyn Error>> {
+    let k = parse_k()?;
     let root = exam_root();
     let corpus_path = root.join("corpus.jsonl");
     let exam_path = root.join("exam.jsonl");
@@ -138,7 +166,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         });
     }
     eprintln!(
-        "· MIRACL 中文考卷：语料 {} 段 · 题 {} 道 · k={K} · 候选上限 {POOL}",
+        "· MIRACL 中文考卷：语料 {} 段 · 题 {} 道 · k={k} · 候选上限 {POOL}",
         index.len(),
         cases.len()
     );
@@ -152,7 +180,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     let production = run_with_extra_sources_and_config(
         &index,
         &set,
-        K,
+        k,
         apeireth_memory::golden_run::InjectionMode::Production,
         &[],
         None,
@@ -164,7 +192,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     let raw = run_with_extra_sources_and_config(
         &index,
         &set,
-        K,
+        k,
         apeireth_memory::golden_run::InjectionMode::Production,
         &[],
         Some(Bm25Config {
@@ -267,7 +295,7 @@ fn run() -> Result<(), Box<dyn Error>> {
                     .unwrap_or(std::cmp::Ordering::Equal)
                     .then_with(|| a.0.cmp(b.0))
             });
-            let ids: Vec<&str> = ranked.iter().take(K).map(|item| item.0).collect();
+            let ids: Vec<&str> = ranked.iter().take(k).map(|item| item.0).collect();
             let found = gold.iter().filter(|id| ids.contains(id)).count() as f64;
             base_frac += found / gold.len() as f64;
             if gold.iter().any(|id| ids.contains(id)) {
@@ -285,7 +313,7 @@ fn run() -> Result<(), Box<dyn Error>> {
                     .unwrap_or(std::cmp::Ordering::Equal)
                     .then_with(|| a.0.cmp(b.0))
             });
-            let ids: Vec<&str> = ranked.iter().take(K).map(|item| item.0).collect();
+            let ids: Vec<&str> = ranked.iter().take(k).map(|item| item.0).collect();
             if gold.iter().any(|id| ids.contains(id)) {
                 first_pos_hits[alpha_index] += 1;
             }
@@ -339,6 +367,8 @@ fn run() -> Result<(), Box<dyn Error>> {
         "{}",
         serde_json::to_string(&serde_json::json!({
             "考卷": "miracl-zh-dev-sampled",
+            "k": k,
+            "span_chars": apeireth_memory::anchor_injection::AnchoredInjectionConfig::PRODUCTION.span_chars,
             "语料段数": index.len(),
             "题数": cases.len(),
             "有效题数": scored,

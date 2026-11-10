@@ -54,6 +54,29 @@ use serde_json::json;
 /// 评测的 top-k（**必须与基线文件的 `k` 一致** ⇒ 改了 k 就换基线版本）。
 const K: usize = 10;
 
+/// `--k` 的取值：正整数（评测口径）或 `production`（**生产默认名额**）。
+///
+/// ⚠️ `production` = [`apeireth_memory::layers::PRODUCTION_RECALL_LIMIT`]
+/// ⇒ ⇒ 闸门能同时量「历史臂（k=10）」与「**生产臂**（k=生产默认）」。
+fn parse_k() -> Result<usize, String> {
+    let mut args = std::env::args().skip(1);
+    while let Some(arg) = args.next() {
+        if arg != "--k" {
+            continue;
+        }
+        let value = args.next().ok_or_else(|| "--k 缺值".to_string())?;
+        return match value.as_str() {
+            "production" => Ok(apeireth_memory::layers::PRODUCTION_RECALL_LIMIT),
+            other => other
+                .parse::<usize>()
+                .ok()
+                .filter(|k| *k > 0)
+                .ok_or_else(|| format!("--k 取值不合法：{other}（要正整数或 production）")),
+        };
+    }
+    Ok(K)
+}
+
 /// 挖题预算（每条记录最多几道题）—— 「放宽配置」⇒ 题量翻倍 ⇒ 统计功效更好。
 ///
 /// ⚠️ 与 2026-10-26 内部卷首跑**逐项一致**（《紅樓夢》476 题 / 《水滸傳》248 题）
@@ -83,6 +106,13 @@ fn novels_dir() -> PathBuf {
 }
 
 fn main() -> ExitCode {
+    let k = match parse_k() {
+        Ok(value) => value,
+        Err(error) => {
+            eprintln!("· 参数错误：{error}");
+            return ExitCode::FAILURE;
+        }
+    };
     let dir = novels_dir();
     let mut corpora = Vec::new();
     let mut loaded = 0usize;
@@ -97,7 +127,7 @@ fn main() -> ExitCode {
             );
             continue;
         }
-        match report_one(name, &path) {
+        match report_one(name, &path, k) {
             Ok(entry) => {
                 loaded += 1;
                 corpora.push(entry);
@@ -119,7 +149,8 @@ fn main() -> ExitCode {
 
     // **一行 JSON**（机器读）⇒ 脚本解析它。
     let payload = json!({
-        "k": K,
+        "k": k,
+        "span_chars": apeireth_memory::anchor_injection::AnchoredInjectionConfig::PRODUCTION.span_chars,
         "corpora": corpora,
     });
     println!("{payload}");
@@ -130,6 +161,7 @@ fn main() -> ExitCode {
 fn report_one(
     name: &str,
     path: &std::path::Path,
+    k: usize,
 ) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
     let chapters = novel_corpus::load_chapters(path)?;
     let records = novel_corpus::to_mine_records(&chapters);
@@ -152,13 +184,13 @@ fn report_one(
         })
         .collect();
 
-    let report = run(&index, &golden, K, InjectionMode::Production)?;
+    let report = run(&index, &golden, k, InjectionMode::Production)?;
     // ⚠️ **送达率**（2026-10-27 加）：把「检索到了却没送到模型面前」变成**常驻数字**。
     // ⇒ 它**不参与**基线闸门（闸门只管 recall/ndcg ⇒ 那是「检索准不准」）
     // ⇒ 但**每次跑批都要看见它**（否则 L2 的恶化会**静默**发生）。
     let delivery = apeireth_memory::delivery_metrics::measure_delivery(&report.metrics);
     eprintln!(
-        "· {name}：{} 回 · {} 题 · recall@{K}={:.4} · nDCG@{K}={:.4} · groundedness={:.4} · **送达率={}**",
+        "· {name}：{} 回 · {} 题 · recall@{k}={:.4} · nDCG@{k}={:.4} · groundedness={:.4} · **送达率={}**",
         report.corpus_size,
         report.cases,
         report.metrics.recall_at_k,

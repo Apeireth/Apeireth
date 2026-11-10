@@ -143,8 +143,11 @@ def missing_corpora(baseline: dict[str, Any]) -> list[str]:
     return missing
 
 
-def run_current_scores() -> dict[str, Any]:
-    """跑当前真实分数（Rust 侧跑检索 ⇒ 这里只解析它输出的一行 JSON）。"""
+def run_current_scores(k_spec: str = "10") -> dict[str, Any]:
+    """跑当前真实分数（Rust 侧跑检索 ⇒ 这里只解析它输出的一行 JSON）。
+
+    ⚠️ `k_spec` = `"production"` ⇒ 跑**生产臂**（k = 生产默认召回名额）。
+    """
     command = [
         "cargo",
         "run",
@@ -154,6 +157,9 @@ def run_current_scores() -> dict[str, Any]:
         "apeireth-memory",
         "--example",
         "golden_baseline_report",
+        "--",
+        "--k",
+        k_spec,
     ]
     try:
         proc = subprocess.run(
@@ -194,8 +200,51 @@ def parse_payload(stdout: str) -> dict[str, Any] | None:
     return None
 
 
+def compare_corpora(
+    baseline_corpora: dict[str, Any],
+    current_corpora: dict[str, Any],
+    prefix: str = "",
+) -> list[str]:
+    """逐语料比检索指标 ⇒ 返回**问题清单**（空 = 全绿）。"""
+    problems: list[str] = []
+
+    for name, item in baseline_corpora.items():
+        if name not in current_corpora:
+            problems.append(f"{prefix}语料「{name}」这轮**没跑到** ⇒ **不可比**（不许当没掉）")
+            continue
+        got = current_corpora[name]
+        base_cases = item.get("cases")
+        got_cases = got.get("cases")
+        if base_cases != got_cases:
+            problems.append(
+                f"{prefix}语料「{name}」题数不同（基线 {base_cases} 题 ⇒ 当前 {got_cases} 题）"
+                "⇒ **不可比** ⇒ 不判掉"
+            )
+            continue
+        for label in ("recall_at_k", "ndcg_at_k"):
+            base_value = float(item.get(label, 0.0))
+            got_value = float(got.get(label, 0.0))
+            allowed = base_value * TOLERANCE_RATIO + TOLERANCE_FLOOR
+            drop = base_value - got_value
+            if drop > allowed:
+                relative = (drop / base_value * 100.0) if base_value > 0 else 0.0
+                problems.append(
+                    f"{prefix}语料「{name}」的 {label} **掉了** {drop:.6}"
+                    f"（基线 {base_value:.6} → 当前 {got_value:.6}；"
+                    f"相对劣化 {relative:.2}%；允许上限 {allowed:.6}）"
+                )
+
+    for name in current_corpora:
+        if name not in baseline_corpora:
+            problems.append(
+                f"{prefix}语料「{name}」**不在基线里** ⇒ **不可比**（不许当没掉）"
+            )
+
+    return problems
+
+
 def compare(baseline: dict[str, Any], current: dict[str, Any]) -> list[str]:
-    """比一遍 ⇒ 返回**问题清单**（空 = 全绿）。"""
+    """比一遍（历史臂：基线文件里的 k）⇒ 返回**问题清单**（空 = 全绿）。"""
     problems: list[str] = []
 
     baseline_k = baseline.get("k")
@@ -208,49 +257,53 @@ def compare(baseline: dict[str, Any], current: dict[str, Any]) -> list[str]:
     baseline_corpora = {item.get("name"): item for item in baseline.get("corpora", [])}
     current_corpora = {item.get("name"): item for item in current.get("corpora", [])}
 
-    for name, item in baseline_corpora.items():
-        if name not in current_corpora:
-            problems.append(f"语料「{name}」这轮**没跑到** ⇒ **不可比**（不许当没掉）")
-            continue
-        got = current_corpora[name]
-        base_cases = item.get("cases")
-        got_cases = got.get("cases")
-        if base_cases != got_cases:
-            problems.append(
-                f"语料「{name}」题数不同（基线 {base_cases} 题 ⇒ 当前 {got_cases} 题）"
-                "⇒ **不可比** ⇒ 不判掉"
-            )
-            continue
-        for label in ("recall_at_k", "ndcg_at_k"):
-            base_value = float(item.get(label, 0.0))
-            got_value = float(got.get(label, 0.0))
-            allowed = base_value * TOLERANCE_RATIO + TOLERANCE_FLOOR
-            drop = base_value - got_value
-            if drop > allowed:
-                relative = (drop / base_value * 100.0) if base_value > 0 else 0.0
-                problems.append(
-                    f"语料「{name}」的 {label} **掉了** {drop:.6}"
-                    f"（基线 {base_value:.6} → 当前 {got_value:.6}；"
-                    f"相对劣化 {relative:.2}%；允许上限 {allowed:.6}）"
-                )
-
-    for name in current_corpora:
-        if name not in baseline_corpora:
-            problems.append(f"语料「{name}」**不在基线里** ⇒ **不可比**（不许当没掉）")
-
+    problems.extend(compare_corpora(baseline_corpora, current_corpora))
     return problems
 
 
-def write_baseline(
-    baseline: dict[str, Any], current: dict[str, Any], note: str
-) -> str:
-    """用当前实测分数**重盖基线**（版本串追加口径变更说明）⇒ 返回新版本串。
+def compare_production_arm(arm: dict[str, Any], current: dict[str, Any]) -> list[str]:
+    """比**生产臂**（k = 生产默认召回名额）⇒ 既是回归线，也是**生产口径的棘轮**。
 
-    ⚠️ **只改基线文件** ⇒ **绝不碰容忍度**（`TOLERANCE_*` 只由人改）。
+    ⚠️ **为什么生产臂也要有棘轮**（2026-11-10）：生产默认的名额/跨度是**代码里的常量**
+    ⇒ 改它**不会**自动惊动任何门禁 ⇒ ⇒ 评测面（k=10）与生产面（k=20）会**各测各的**
+    ⇒ ⇒ 两条线的数字**互不可比**。⇒ 这里把「生产臂的 k / 单条跨度」写进基线
+    ⇒ ⇒ 改了生产默认而没重盖基线 ⇒ ⇒ **判红**。
     """
-    version = str(baseline.get("version", "")).strip()
-    if note:
-        version = f"{version}+{note}" if version else note
+    problems: list[str] = []
+
+    if not arm:
+        return [
+            f"基线里**没有生产臂**（`production_arm`）⇒ ⇒ 生产默认口径**无覆盖**"
+            f"（实测 k={current.get('k')} · 跨度 {current.get('span_chars')} 字）"
+            " ⇒ ⇒ 需 `--update --version-note …` 显式重盖基线（一次性）"
+        ]
+
+    base_k = arm.get("k")
+    current_k = current.get("k")
+    if base_k != current_k:
+        problems.append(
+            f"生产臂的 k 不一致（基线 {base_k} ⇒ 当前 {current_k}）⇒ **不可比**"
+            " ⇒ ⇒ 生产默认召回名额改了 ⇒ ⇒ 需显式重盖基线"
+            "（`--update --version-note …`）"
+        )
+
+    base_span = arm.get("span_chars")
+    current_span = current.get("span_chars")
+    if base_span is not None and base_span != current_span:
+        problems.append(
+            f"生产臂的单条跨度变了（基线 {base_span} 字 ⇒ 当前 {current_span} 字）"
+            " ⇒ ⇒ 生产注入口径改了 ⇒ ⇒ 需显式重盖基线（`--update --version-note …`）"
+        )
+
+    base_corpora = {item.get("name"): item for item in arm.get("corpora", [])}
+    current_corpora = {item.get("name"): item for item in current.get("corpora", [])}
+
+    problems.extend(compare_corpora(base_corpora, current_corpora, "生产臂："))
+    return problems
+
+
+def _arm_corpora(baseline: dict[str, Any], current: dict[str, Any]) -> list[dict[str, Any]]:
+    """按**基线里的语料清单**取当前实测值（保持语料顺序与字段口径一致）。"""
     by_name = {item.get("name"): item for item in current.get("corpora", [])}
     corpora: list[dict[str, Any]] = []
     for item in baseline.get("corpora", []):
@@ -270,7 +323,34 @@ def write_baseline(
                 "case_fingerprint": got.get("case_fingerprint"),
             }
         )
-    document = {"version": version, "k": current.get("k"), "corpora": corpora}
+    return corpora
+
+
+def write_baseline(
+    baseline: dict[str, Any],
+    current: dict[str, Any],
+    production_current: dict[str, Any],
+    note: str,
+) -> str:
+    """用当前实测分数**重盖基线**（版本串追加口径变更说明）⇒ 返回新版本串。
+
+    ⚠️ **只改基线文件** ⇒ **绝不碰容忍度**（`TOLERANCE_*` 只由人改）。
+    """
+    version = str(baseline.get("version", "")).strip()
+    if note:
+        version = f"{version}+{note}" if version else note
+    corpora = _arm_corpora(baseline, current)
+    production_arm = {
+        "k": production_current.get("k"),
+        "span_chars": production_current.get("span_chars"),
+        "corpora": _arm_corpora(baseline, production_current),
+    }
+    document = {
+        "version": version,
+        "k": current.get("k"),
+        "corpora": corpora,
+        "production_arm": production_arm,
+    }
     BASELINE_PATH.write_text(
         json.dumps(document, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
@@ -345,17 +425,29 @@ def main() -> int:
         print(f"GATE_SKIP: 语料目录不存在（{novels_dir()}）⇒ 本门禁未执行可比测量")
         return 0
 
-    current = run_current_scores()
+    current = run_current_scores(str(baseline.get("k", 10)))
+    production_current = run_current_scores("production")
     for item in current.get("corpora", []):
         print(
             f"· 当前：{item.get('name')} · {item.get('cases')} 题 · "
             f"recall@{current.get('k')}={float(item.get('recall_at_k', 0.0)):.4f} · "
             f"nDCG@{current.get('k')}={float(item.get('ndcg_at_k', 0.0)):.4f}"
         )
+    for item in production_current.get("corpora", []):
+        print(
+            f"· 生产臂：{item.get('name')} · {item.get('cases')} 题 · "
+            f"recall@{production_current.get('k')}"
+            f"={float(item.get('recall_at_k', 0.0)):.4f} · "
+            f"nDCG@{production_current.get('k')}"
+            f"={float(item.get('ndcg_at_k', 0.0)):.4f}"
+            f" · 跨度 {production_current.get('span_chars')} 字"
+        )
 
     # ---------- `--update`：用当前实测分数**重盖基线** ----------
     if args.update:
-        version = write_baseline(baseline, current, args.version_note.strip())
+        version = write_baseline(
+            baseline, current, production_current, args.version_note.strip()
+        )
         print("-" * 72)
         print(f"✅ **已重盖基线**：{BASELINE_PATH}")
         print(f"   · 新版本串：{version}")
@@ -416,6 +508,9 @@ def main() -> int:
             print(f"     基线 {base_fp[:16]}… → 当前 {str(got_fp)[:16]}…")
 
     problems = compare(baseline, current)
+    problems += compare_production_arm(
+        baseline.get("production_arm", {}), production_current
+    )
     print("-" * 72)
     if problems:
         print("检索分数**未达标**：", file=sys.stderr)

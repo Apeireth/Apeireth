@@ -83,6 +83,9 @@ pub struct MemoryRecallQuery {
     pub exact_scope_authorization: bool,
 }
 
+/// ⭐ **生产默认召回名额**（2026-11-09 联合裁决）：有效名额 = `min(k, floor((4000 − 160) / (单条跨度 + 8)))` ⇒ 跨度 200 ⇒ 容量 20 ⇒ 名额给到 20 才吃得到容量。
+pub const PRODUCTION_RECALL_LIMIT: usize = 20;
+
 impl MemoryRecallQuery {
     pub fn new(session_id: impl Into<String>, query_text: impl Into<String>) -> Self {
         let session_id = session_id.into();
@@ -95,10 +98,7 @@ impl MemoryRecallQuery {
                 MemoryLayerKind::Semantic,
                 MemoryLayerKind::Relational,
             ],
-            // ⭐ **默认名额 20**（2026-11-09 联合裁决）：有效名额 =
-            // `min(k, floor((4000 − 160) / (单条跨度 + 8)))` ⇒ ⇒ 跨度 200 时容量 = 20
-            // ⇒ ⇒ k=10 会让容量封顶在 9 ⇒ ⇒ 名额给到 20 才吃得到容量。
-            limit: 20,
+            limit: PRODUCTION_RECALL_LIMIT,
             max_chars: 4000,
             recency_decay_lambda: 0.05,
             min_score: 0.10,

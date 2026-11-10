@@ -1,10 +1,19 @@
 {
-  "version": "miracl-zh-dev-sampled-2026-11-07",
+  "version": "miracl-zh-dev-sampled-2026-11-07+production-arm-k20-2026-11-10",
   "k": 10,
   "recall_at_k": 0.724636495819702,
   "cases": 393,
   "corpus_docs": 22862,
   "raw_recall_at_k": 0.7254392342178603,
   "oracle_recall_at_k": 0.9389312977099237,
-  "note": "采样池（MIRACL 中文 dev 的被标注段落 + 确定性采样的未标注段落）⇒ 召回偏乐观 ⇒ 绝对值不可与 MIRACL 官方榜对比；只看相对变化"
+  "note": "采样池（MIRACL 中文 dev 的被标注段落 + 确定性采样的未标注段落）⇒ 召回偏乐观 ⇒ 绝对值不可与 MIRACL 官方榜对比；只看相对变化",
+  "production_arm": {
+    "k": 20,
+    "span_chars": 200,
+    "recall_at_k": 0.8548285471949594,
+    "cases": 393,
+    "corpus_docs": 22862,
+    "raw_recall_at_k": 0.8316006300739126,
+    "oracle_recall_at_k": 0.9389312977099237
+  }
 }

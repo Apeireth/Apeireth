@@ -255,7 +255,7 @@ impl Default for RecallPolicy {
                 crate::layers::MemoryLayerKind::Relational,
             ],
             // ⭐ **默认名额 20**（2026-11-09 联合裁决，与 `MemoryRecallQuery::new` 同口径）。
-            limit: 20,
+            limit: crate::layers::PRODUCTION_RECALL_LIMIT,
             max_chars: 4_000,
             proactive_budget: 2,
             min_score: 0.10,

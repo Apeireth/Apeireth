@@ -1,5 +1,5 @@
 {
-  "version": "internal-2026-10-26b+delivery+cn-stopwords20+interrogatives+anchored-injection-2026-11-08",
+  "version": "internal-2026-10-26b+delivery+cn-stopwords20+interrogatives+anchored-injection-2026-11-08+production-arm-k20-2026-11-10",
   "k": 10,
   "corpora": [
     {
@@ -7,9 +7,9 @@
       "recall_at_k": 0.5304621848739496,
       "ndcg_at_k": 0.32516979992085837,
       "cases": 476,
-      "groundedness": 0.5903361344537815,
-      "evidence_precision": 0.07402544351073762,
-      "delivery_rate": 1.112871287128713,
+      "groundedness": 0.5987394957983193,
+      "evidence_precision": 0.06846988795518238,
+      "delivery_rate": 1.1287128712871286,
       "case_fingerprint": "1d969ee2afe65edf5a27360223809ae9dfd866110453dc41bf7271eb5fbb1e7e"
     },
     {
@@ -17,10 +17,36 @@
       "recall_at_k": 0.7318548387096774,
       "ndcg_at_k": 0.5348424396025295,
       "cases": 248,
-      "groundedness": 0.8951612903225806,
-      "evidence_precision": 0.13241487455197098,
-      "delivery_rate": 1.2231404958677687,
+      "groundedness": 0.907258064516129,
+      "evidence_precision": 0.12327508960573512,
+      "delivery_rate": 1.2396694214876034,
       "case_fingerprint": "3f7ee87e9c88bb8b22c40c36d60a5d27c7502b24172ffc3783759ddc3c7b14c4"
     }
-  ]
+  ],
+  "production_arm": {
+    "k": 20,
+    "span_chars": 200,
+    "corpora": [
+      {
+        "name": "redchamber",
+        "recall_at_k": 0.6523109243697479,
+        "ndcg_at_k": 0.3594619176241211,
+        "cases": 476,
+        "groundedness": 0.7058823529411765,
+        "evidence_precision": 0.04808118760324667,
+        "delivery_rate": 1.0821256038647344,
+        "case_fingerprint": "1d969ee2afe65edf5a27360223809ae9dfd866110453dc41bf7271eb5fbb1e7e"
+      },
+      {
+        "name": "watershed",
+        "recall_at_k": 0.8366935483870968,
+        "ndcg_at_k": 0.5658616902640975,
+        "cases": 248,
+        "groundedness": 0.9838709677419355,
+        "evidence_precision": 0.08258010339070596,
+        "delivery_rate": 1.1759036144578314,
+        "case_fingerprint": "3f7ee87e9c88bb8b22c40c36d60a5d27c7502b24172ffc3783759ddc3c7b14c4"
+      }
+    ]
+  }
 }
