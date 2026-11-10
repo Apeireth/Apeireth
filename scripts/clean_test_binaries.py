@@ -37,6 +37,17 @@ import shutil
 import sys
 from collections import defaultdict
 
+# ⚠️ **Windows 控制台不是 UTF-8** ⇒ ⇒ 本脚本打印的中文 / `⇒` 会炸：
+#   CI 实测（2026-11-10，windows-latest，run 42769798792）：
+#   `UnicodeEncodeError: 'charmap' codec can't encode character '\u21d2'`
+#   ⇒ ⇒ 抛在 `print(...)` 里 ⇒ ⇒ 整个步骤 exit 1 ⇒ ⇒ **把通过的测试判成红**。
+#   ⇒ ⇒ ⇒ 这里把 stdout/stderr 固定成 UTF-8（写不出就替换，不抛）。
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:  # pragma: no cover - 老解释器 / 非标准流
+        pass
+
 # 候选 target 根目录（**按存在性过滤** ⇒ ⇒ 不假设布局）
 CANDIDATE_ROOTS = [
     pathlib.Path("/home/bai"),

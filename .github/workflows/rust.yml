@@ -43,6 +43,12 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  # ⚠️ **Windows 控制台不是 UTF-8**（cp1252 / cp936）⇒ ⇒ 本仓脚本打印的中文与 `⇒`
+  #   会 `UnicodeEncodeError` ⇒ ⇒ 步骤 exit 1 ⇒ ⇒ **把本来通过的测试判成红**
+  #   （2026-11-10 实测：windows-latest run 42769798792 的「回收测试二进制（腾磁盘）」步骤）。
+  #   ⇒ ⇒ 与 `scripts/harness.py` 跑门禁子进程时的做法同口径。
+  PYTHONIOENCODING: utf-8
+  PYTHONUTF8: '1'
 
 # ⚠️ **CI 磁盘瘦身**（2026-11-01 实测，见 commit body 的 0 装真账）
 # 同一命令 `cargo build --workspace --tests --locked` 的 target 体积：
