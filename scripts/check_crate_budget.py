@@ -45,7 +45,7 @@ def crate_stats() -> dict[str, dict[str, int]]:
         src = crate_dir / "src"
         if not src.is_dir():
             continue
-        rel = str(crate_dir.relative_to(ROOT))
+        rel = crate_dir.relative_to(ROOT).as_posix()
         loc = 0
         files = 0
         for path in src.rglob("*.rs"):

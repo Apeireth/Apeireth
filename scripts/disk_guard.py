@@ -35,6 +35,7 @@ from __future__ import annotations
 import argparse
 import os
 import pathlib
+import shutil
 import subprocess
 import sys
 
@@ -48,17 +49,54 @@ MEM_WARN_MB = int(os.environ.get("APEIRETH_MEM_WARN_MB", "4000"))
 
 
 def disk_stats() -> tuple[int, int, int, int]:
-    """⇒ ⇒ (总 MB, 已用 MB, 可用 MB, 使用百分比)。"""
-    st = os.statvfs("/")
-    total = st.f_blocks * st.f_frsize // (1024 * 1024)
-    free = st.f_bavail * st.f_frsize // (1024 * 1024)
+    """⇒ ⇒ (总 MB, 已用 MB, 可用 MB, 使用百分比)。
+
+    ⭐ 跨平台（2026-11-10）：原实现用 `os.statvfs("/")` ⇒ **只在 POSIX 存在**
+    ⇒ Windows 上直接 `AttributeError` ⇒ ⇒ 门禁守卫（harness 每条门禁前都跑它）
+    **在 Windows 上必然崩** ⇒ ⇒ 全部门禁被记 `UNVERIFIED` ⇒ 裁决恒为 `BLOCKED`。
+
+    ⇒ 改用 `shutil.disk_usage`（标准库，POSIX 与 Windows 同义：
+    `total = f_blocks*f_frsize`、`free = f_bavail*f_frsize` ⇒ 与原 Linux 数字逐字一致）。
+    """
+    total_b, _used_b, free_b = shutil.disk_usage("/")
+    total = total_b // (1024 * 1024)
+    free = free_b // (1024 * 1024)
     used = total - free
     pct = int(used * 100 / total) if total else 0
     return total, used, free, pct
 
 
+def _mem_stats_windows() -> tuple[int, int]:
+    """Windows 可用/总物理内存（MB）⇒ `GlobalMemoryStatusEx`（不用第三方库）。"""
+    try:
+        import ctypes
+
+        class _MemoryStatusEx(ctypes.Structure):
+            _fields_ = [
+                ("dwLength", ctypes.c_ulong),
+                ("dwMemoryLoad", ctypes.c_ulong),
+                ("ullTotalPhys", ctypes.c_ulonglong),
+                ("ullAvailPhys", ctypes.c_ulonglong),
+                ("ullTotalPageFile", ctypes.c_ulonglong),
+                ("ullAvailPageFile", ctypes.c_ulonglong),
+                ("ullTotalVirtual", ctypes.c_ulonglong),
+                ("ullAvailVirtual", ctypes.c_ulonglong),
+                ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
+            ]
+
+        stat = _MemoryStatusEx()
+        stat.dwLength = ctypes.sizeof(stat)
+        if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(stat)):
+            return stat.ullAvailPhys // (1024 * 1024), stat.ullTotalPhys // (1024 * 1024)
+    except Exception:  # noqa: BLE001 —— 取不到就当「未知」
+        return 0, 0
+    return 0, 0
+
+
 def mem_stats() -> tuple[int, int]:
-    """⇒ ⇒ (可用 MB, 总 MB)（读 /proc/meminfo ⇒ ⇒ 不用第三方库）。"""
+    """⇒ ⇒ (可用 MB, 总 MB)（Linux 读 /proc/meminfo；Windows 读 GlobalMemoryStatusEx ⇒ 不用第三方库）。"""
+    if os.name == "nt":
+        return _mem_stats_windows()
     info: dict[str, int] = {}
     try:
         for line in pathlib.Path("/proc/meminfo").read_text(encoding="utf-8").splitlines():

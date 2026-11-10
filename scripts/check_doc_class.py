@@ -233,7 +233,7 @@ def collect() -> tuple[dict[str, dict], list[str]]:
     infos: dict[str, dict] = {}
     unclassified: list[str] = []
     for path in active_docs():
-        rel = str(path.relative_to(ROOT))
+        rel = path.relative_to(ROOT).as_posix()
         try:
             text = path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):

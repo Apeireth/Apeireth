@@ -33,6 +33,7 @@ from __future__ import annotations
 import argparse
 import os
 import pathlib
+import shutil
 import sys
 from collections import defaultdict
 
@@ -51,7 +52,12 @@ def running_executables() -> set[str]:
     ⇒ ⇒ ⇒ 绝不能删它（会让那个进程崩）。
     """
     out: set[str] = set()
-    for entry in pathlib.Path("/proc").iterdir():
+    proc_root = pathlib.Path("/proc")
+    if not proc_root.is_dir():
+        # 非 POSIX（Windows）⇒ 没有 /proc ⇒ ⇒ 「正在跑的可执行文件」这个集合拿不到
+        # ⇒ ⇒ 返回空集（⇒ 清理器不知道谁在跑 ⇒ ⇒ 只在**显式指定**的 target 上动手）。
+        return out
+    for entry in proc_root.iterdir():
         if not entry.name.isdigit():
             continue
         try:
@@ -124,9 +130,13 @@ def main() -> int:
 
 
 def _free_mb() -> int:
-    """根分区可用空间（MB）。"""
-    st = os.statvfs("/")
-    return (st.f_bavail * st.f_frsize) // (1024 * 1024)
+    """根分区可用空间（MB）。
+
+    ⭐ 跨平台（2026-11-10）：原实现用 `os.statvfs("/")` ⇒ **只在 POSIX 存在**
+    ⇒ Windows 上直接 `AttributeError` ⇒ ⇒ 「写文件前自检」在 Windows 上必然崩
+    ⇒ ⇒ 改用标准库 `shutil.disk_usage`（POSIX 数字与原实现逐字一致）。
+    """
+    return shutil.disk_usage("/")[2] // (1024 * 1024)
 
 
 def ensure_free(mb: int, extra: list[str] | None = None) -> int:

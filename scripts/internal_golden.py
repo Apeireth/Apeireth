@@ -84,7 +84,7 @@ def all_records(min_chars: int = 80) -> dict[str, dict[str, str]]:
     """全部活跃文档的章节级记录：`id → {path, heading, text}`。"""
     records: dict[str, dict[str, str]] = {}
     for path in sorted(DOCS.rglob("*.md")):
-        rel = str(path.relative_to(ROOT))
+        rel = path.relative_to(ROOT).as_posix()
         if SKIP_PARTS & set(path.relative_to(DOCS).parts):
             continue
         for heading, body in sections(path):
