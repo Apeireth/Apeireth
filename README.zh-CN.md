@@ -9,7 +9,7 @@
 
 **它记得你随口说的话、在你忙时闭嘴、有自己不肯丢的底线。**
 
-[![Tests](https://img.shields.io/badge/tests-8570%20passed%20%7C%200%20failed%20(2026--10--21)-success.svg?logo=checkmarx)](docs/03-reference/test-baseline.md)
+[![Tests](https://img.shields.io/badge/tests-8846%20passed%20%7C%201%20failed%20(2026--10--31)-critical.svg?logo=checkmarx)](docs/03-reference/test-baseline.md)
 [![Workspace](https://img.shields.io/badge/workspace-30%20members-blue.svg?logo=rust)](Cargo.toml)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%2B%20Linux-lightgrey.svg)](INSTALL.md)
 [![Status](https://img.shields.io/badge/status-rc%20%E5%86%85%E6%B5%8B-orange.svg)](ROADMAP.md)
@@ -18,7 +18,8 @@
 [![Honest gaps](https://img.shields.io/badge/honest%20gaps-4-orange.svg?logo=shield)](#boundaries)
 
 > 口径注记：**workspace = 30 members（29 个产品 crate + 1 个 bench harness，含图像核心 vendored 族 11）**（foundation 6 / engine 7 / capabilities 1 / adapters 4 = cli/gateway/sdk/tui）；`apeireth-perception` 已归档（2026-10-20，ADR-0005 R4b）。
-> Tests 徽章数字取单一真源 [test-baseline.md](docs/03-reference/test-baseline.md) §1（2026-10-18 口径）；证据面见 [capabilities-matrix §0.1](docs/03-reference/capabilities-matrix.md)。
+> **独立 workspace**：`crates-ui/` 是**独立** Cargo workspace——**不计入**上面 30 members、与根 workspace 无任何依赖边——含 **1 个 crate** `apeireth-ui-core`（纯响应式内核：signal / derived / effect / 调度）。范围 = IMPLEMENTED，**尚无生产前端消费点**（ADR-0021，owner 2026-10-29；自带独立 CI `ui-core-ci.yml`）。
+> Tests 徽章数字取单一真源 [test-baseline.md](docs/03-reference/test-baseline.md) §1（2026-10-21 口径）；证据面见 [capabilities-matrix §0.1](docs/03-reference/capabilities-matrix.md)。
 > `honest gaps` 徽章 = 静态快照——手维护、不做动态计数（残余增删时手工改数）。数字取[诚实边界](#boundaries)「已定义、未接线」点名的接线残余：`/v1/ws` 服务端路由未接 · 无 Noise 握手 · 无洋葱路由 · SDK WS 传输层是桩 = 4 处。
 
 **[English](README.md) | [简体中文](README.zh-CN.md)**
@@ -178,7 +179,7 @@ cd frontend/companion-desktop && pnpm install && pnpm tauri build   # 它的"脸
 |---|---|
 | **默认 ON** | 记忆召回/写回、偏好召回、自评、自述、只读工具（filesystem / search / repo）；偏好学习、主动召回、记忆注入（默认开族——`APEIRETH_DISABLE_*=1` 可关） |
 | **默认 OFF（显式 env）** | shell（`APEIRETH_ENABLE_SHELL=1`）、fetch（`APEIRETH_ENABLE_FETCH=1`）、content feed、MCP；Judge（`APEIRETH_COGNITIVE_JUDGE=1`）、Council（`APEIRETH_COGNITIVE_COUNCIL=1`）、9 器官（`APEIRETH_ENABLE_ORGANS=1`）、consolidation、reflexion；写族 `file_write` / `git_write` / `worktree_*` / `skill_*`（由写总闸 `APEIRETH_ENABLE_FILE_WRITE=1` 把关） |
-| **未接线（不是开关问题）** | 第三 DSL 洋葱层、`memory.update`、WebSocket 服务端、全双工语音 |
+| **未接线（不是开关问题）** | 第三 DSL 洋葱层、WebSocket 服务端、全双工语音 —— 记忆「更新」**已接线**（四级口径：PRODUCTION WIRED；治理面 `memory.update` + `PUT /v1/apeireth/memory/episodes/:id/content`，claim `gap.memory_update`） |
 
 ---
 

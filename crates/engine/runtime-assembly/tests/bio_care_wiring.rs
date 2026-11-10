@@ -10,6 +10,7 @@
 //! 也不产候选。本文件用 fake 供给证明「有数据 → 候选 → 过 care 管道」,
 //! 不声称生产数据面已接。
 
+#![allow(dead_code)] // D-1（owner 裁定 2026-10-25）：测试夹具字段/方法（供用例构造完整对象，部分字段本文件内未被读取）
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};

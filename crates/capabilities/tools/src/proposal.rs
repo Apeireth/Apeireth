@@ -322,6 +322,11 @@ pub enum ProposalLedgerEntry {
 /// **append-only**: 逐行一个 [`StoredDoc`] 信封, 追加写 + 落盘, 不重写、不删
 /// 行 (与语句账本 / 技能卡版本审计同一姿势); 坏行读作不存在 (跳过并计入
 /// `skipped`), 不砖化整本。
+///
+/// **行完整性**由 [`append_jsonl_row`] 统一保证 (提案账与推送账同一套手续):
+/// 行体与行尾换行**同在一次写** ⇒ 并发追加不会把两行挤成一行 (那两行都读作
+/// 不存在 ⇒ 等于删行); 末行缺换行 (撕裂写) 时先补一个换行 ⇒ 撕裂的半行不会把
+/// 下一行吞掉。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProposalLedger {
     path: PathBuf,
@@ -347,7 +352,6 @@ impl ProposalLedger {
 
     /// 追加一行 (JSONL 单行 + 落盘; append-only, 不重写不删行)。
     pub fn append(&self, entry: &ProposalLedgerEntry) -> Result<(), String> {
-        use std::io::Write;
         if let Some(parent) = self.path.parent() {
             if !parent.as_os_str().is_empty() {
                 std::fs::create_dir_all(parent)
@@ -360,17 +364,7 @@ impl ProposalLedger {
             vec![PROPOSAL_DOC_VERSION],
             entry,
         );
-        let line =
-            serde_json::to_vec(&doc).map_err(|error| format!("提案账序列化失败: {error}"))?;
-        let mut file = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&self.path)
-            .map_err(|error| format!("提案账打开失败 {}: {error}", self.path.display()))?;
-        file.write_all(&line)
-            .and_then(|()| file.write_all(b"\n"))
-            .and_then(|()| file.sync_all())
-            .map_err(|error| format!("提案账写入失败 {}: {error}", self.path.display()))
+        append_jsonl_row(&self.path, "提案账", &doc)
     }
 
     /// 追加草稿行。
@@ -505,6 +499,76 @@ pub const PROPOSAL_RECENT_LIMIT: usize = 5;
 /// 账本读端契约 (仅当前格式版本可读)。
 fn ledger_compat() -> DocCompat {
     DocCompat::exact(PROPOSAL_DOC_NAME, PROPOSAL_DOC_VERSION)
+}
+
+// ---------------------------------------------------------------------------
+// 账本追加手续 (提案账 / 推送账同姿势 —— 单一真源)
+// ---------------------------------------------------------------------------
+
+/// 账本追加一行的公共手续 (提案账 / 推送账共用, **口径不许分叉**)。
+///
+/// **两处必须同口径** (仓内已栽过「同一面内两条路径口径不一致」的坑):
+///
+/// ① **行体与行尾换行同在一次写里**: 分两次写时, 两个并发写者会把两行挤成一行
+///    (那两行都读作不存在 ⇒ 等于**删行**), 撕裂写留下的半行也会把下一行吞掉
+///    ⇒ 「逐行一个 [`StoredDoc`] 信封」被破坏。修法参照仓内同族修法
+///    (`crates/adapters/gateway/src/chain_audit.rs` 的记录分隔符修复)。
+/// ② **末行缺换行时先补一个换行**: 撕裂写 (上个进程死在「写行体」与「写换行」
+///    之间) 的半行必须先封口, 否则新行会粘在旧行尾 ⇒ 旧行被毁 + 新行被吞。
+///    分隔符与行体**同在一次写** ⇒ 只**追加**字节 (append-only 不变), 且并发
+///    写者之间不会把两行挤成一行 (O_APPEND 的追加是原子的)。
+///
+/// `label` 只用于错误文案 (「提案账」/「推送账」), 不参与行为。
+pub(crate) fn append_jsonl_row<T: Serialize>(
+    path: &Path,
+    label: &str,
+    doc: &StoredDoc<T>,
+) -> Result<(), String> {
+    use std::io::{Read, Seek, SeekFrom, Write};
+    // ⚠️ **2026-10-26 共用原语**（原先本仓有**四个**逐记录追加器，其中两个仍是
+    // 「行体与换行分两次写」的旧形态 ⇒ **并发写会把两行挤成一行 ⇒ 丢记录**）。
+    // ⇒ 这里做成**单一实现**，四个追加器（提案账 / 推送账 / 语句账本 / 技能卡审计）
+    // **全部**用它 ⇒ **一个实现，不分叉**。
+    //
+    // ⚠️ **为什么落在 tools crate 而不是 core**：本仓的**尺寸棘轮是只减的**
+    // （`scripts/arch-baseline.txt` 里 `crates/foundation/core/src/stored_doc.rs`
+    //  与 `.../core/src/lib.rs` 都已被钉住）⇒ ⇒ **往 core 加任何东西都会破棘轮**
+    // ⇒ ⇒ 而 `crates/capabilities/tools/src/lib.rs` 是**总指挥的文件**（我不能加模块）
+    // ⇒ ⇒ **本模块（tools crate 内未被棘轮钉住的既有模块）**是合规的落点。
+    // ⇒ 两条保证：① **行体与行尾换行同在一次写**（`O_APPEND` 原子 ⇒ 并发不挤行）；
+    // ② **末行缺换行**（撕裂写半行）时先补一个换行（只追加字节 ⇒ append-only 不变）。
+    let mut line =
+        serde_json::to_vec(doc).map_err(|error| format!("{label}序列化失败: {error}"))?;
+    line.push(b'\n');
+    let mut file = std::fs::OpenOptions::new()
+        .read(true)
+        .create(true)
+        .append(true)
+        .open(path)
+        .map_err(|error| format!("{label}打开失败 {}: {error}", path.display()))?;
+    let mut buffer = Vec::with_capacity(line.len() + 1);
+    if tail_needs_separator(&mut file)
+        .map_err(|error| format!("{label}读取失败 {}: {error}", path.display()))?
+    {
+        // 撕裂写半行封口 (只追加一个换行; append-only 不变)。
+        buffer.push(b'\n');
+    }
+    buffer.extend_from_slice(&line);
+    file.write_all(&buffer)
+        .and_then(|()| file.sync_all())
+        .map_err(|error| format!("{label}写入失败 {}: {error}", path.display()))
+}
+
+/// 账本末字节不是换行 (撕裂写半行) ⇒ 需要先补一个分隔符。
+fn tail_needs_separator(file: &mut std::fs::File) -> std::io::Result<bool> {
+    use std::io::{Read, Seek, SeekFrom};
+    if file.metadata()?.len() == 0 {
+        return Ok(false);
+    }
+    file.seek(SeekFrom::End(-1))?;
+    let mut last = [0u8; 1];
+    file.read_exact(&mut last)?;
+    Ok(last[0] != b'\n')
 }
 
 // ---------------------------------------------------------------------------
@@ -655,6 +719,17 @@ pub struct ProposalTool {
     ledger: ProposalLedger,
 }
 
+/// 提案面**进程内**互斥锁 (一提案一决定 = 「查状态」与「落决定」必须是一个原子步骤)。
+///
+/// **为什么需要它** (2026-10-25 提案面 fuzz 实测, 库层面已复现): `decide` 原来
+/// 是「读状态 → 落决定」两步, 两步之间没有互斥 ⇒ 两个并发点头 (IM 卡回调与代理
+/// 工具调用可以落在同一进程里) 都能读到 `Pending` ⇒ 同一提案落**两条**决定行
+/// (「一提案一决定」被破), 且其中一条还会被行合并吞掉 ⇒ 帧说「点头了」而账上没有。
+///
+/// **口径**: 进程内互斥 (本进程的工具面/IM 桥共用一把)。**跨进程**并发写同一本
+/// 提案账仍是「单写者假设」(提案账落在单个进程的数据目录里, 生产装配单进程写)。
+static PROPOSAL_DECIDE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 impl ProposalTool {
     /// 绑定提案账落位 (数据目录 `proposals.jsonl`)。
     pub fn new(ledger: ProposalLedger) -> Self {
@@ -757,6 +832,10 @@ impl ProposalTool {
         if let Some(refusal) = proposal_review_refusal(&review) {
             return self.refuse(call, refusal);
         }
+        // 一提案一决定 = 「查状态」与「落决定」必须是一个原子步骤 (进程内互斥)。
+        let _guard = PROPOSAL_DECIDE_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let state = match self.ledger.state_of(&review.proposal_id) {
             Ok(state) => state,
             Err(error) => return self.refuse(call, format!("提案账读取失败: {error}")),
@@ -1143,27 +1222,11 @@ mod tests {
 
     #[test]
     fn the_switch_is_fail_closed_except_the_exact_opt_in() {
-        // 串行护住 env 读写 (进程级全局量)。
-        static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-        let _guard = ENV_LOCK
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        std::env::remove_var(PROPOSALS_ENABLE_ENV);
-        assert!(!proposals_enabled_from_env());
-        assert!(ProposalConfig::from_env(".").is_none());
-        for value in ["0", "true", "on", " 1 0 ", ""] {
-            std::env::set_var(PROPOSALS_ENABLE_ENV, value);
-            assert!(!proposals_enabled_from_env(), "must refuse {value:?}");
-            assert!(
-                ProposalConfig::from_env(".").is_none(),
-                "must refuse {value:?}"
-            );
-        }
-        std::env::set_var(PROPOSALS_ENABLE_ENV, "1");
-        assert!(proposals_enabled_from_env());
-        assert!(ProposalConfig::from_env(".").is_some());
-        std::env::set_var(PROPOSALS_ENABLE_ENV, " 1 ");
-        assert!(proposals_enabled_from_env(), "前后空白容忍");
-        std::env::remove_var(PROPOSALS_ENABLE_ENV);
+        crate::test_support::assert_switch_fails_closed_except_exact_one(
+            PROPOSALS_ENABLE_ENV,
+            &["0", "true", "on", " 1 0 ", ""],
+            proposals_enabled_from_env,
+            Some(|| ProposalConfig::from_env(".").is_some()),
+        );
     }
 }

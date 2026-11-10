@@ -258,18 +258,6 @@ fn summarize(mechanisms: &[NervousMechanism], observed: usize) -> NervousSummary
     }
 }
 
-/// 从一份已渲染的自述帧派生 `capabilities.nervous_system` 子对象。
-///
-/// 口径（0 装诚实）：
-/// - `capabilities.bio_mechanisms` 不在场（观测面未挂）→ `None`（旧帧形状）；
-/// - `bio_mechanisms.enabled = false`（开关关）→ `None`，**不读 env**；
-/// - 开关开 → `observed` = `mechanisms` 里 `wired: true` 的格数（注册事实），
-///   其余字段由 [`snapshot_from_env`] 按既有解析函数现采。
-#[must_use]
-pub fn nervous_system_from_frame(frame: &Value) -> Option<Value> {
-    nervous_system_from_frame_with(frame, |name| std::env::var(name).ok(), None)
-}
-
 /// 把总线快照折成 `nervous_system.bus` 子对象（纯函数，不采进程 env）。
 #[must_use]
 fn bus_status(snapshot: &NervousBusSnapshot) -> NervousBusStatus {
@@ -527,7 +515,7 @@ const MECHANISMS: [MechanismSpec; NERVOUS_MECHANISM_TOTAL] = [
         level: MechanismLevel::ProductionWired,
         enabled_env: Some(BIO_PAIN_ENABLE_ENV),
         parser: bio_switch_enabled_from_env_value,
-        wiring: "cli-assembly::Runtime::with_bio_pain",
+        wiring: "cli-assembly::NociceptionObserver → Runtime::with_tool_completion_observer",
         signals: &[
             SignalSpec {
                 id: "pain_ledger",
@@ -547,7 +535,7 @@ const MECHANISMS: [MechanismSpec; NERVOUS_MECHANISM_TOTAL] = [
         level: MechanismLevel::ProductionWired,
         enabled_env: Some(BIO_PAIN_ENABLE_ENV),
         parser: bio_switch_enabled_from_env_value,
-        wiring: "cli-assembly::Runtime::with_bio_pain（与痛觉同开关）",
+        wiring: "cli-assembly::NociceptionObserver（与痛觉同开关，通用观察端口）",
         signals: &[
             SignalSpec {
                 id: "recovery_state_machine",

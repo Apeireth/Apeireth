@@ -14,7 +14,7 @@
 | 6 | `docs/04-internal/capability-knob-audit-2026-09-12.md` | 2026-09-12 | 60 行 |
 | 7 | `docs/04-internal/sub-agent-audit-round-4-2026-08-28.md` | 2026-08-28（含 2026-09-05 对账批标注） | 203 行 |
 
-> **审计方法**：读源码实证 + 逐份规格与台账逐行对账，按四级口径（`IMPLEMENTED` / `PRODUCTION WIRED` / `DEFAULT ENABLED` / `HARDWARE VALIDATED`，定义见 [system-capabilities.md](../../01-architecture/system-capabilities.md) 头部）定级，不以历史文档自述为证据。
+> **审计方法**：读源码实证 + 逐份规格与台账逐行对账，按口径阶梯（`NOT IMPLEMENTED` / `IMPLEMENTED` / `PRODUCTION WIRED` / `HARDWARE VALIDATED`；**`DEFAULT ENABLED` 不是一级，是横切属性**——默认开/关，定义见 [system-capabilities.md](../../01-architecture/system-capabilities.md) 头部）定级，不以历史文档自述为证据。
 > **复核基线**：2026-10-23，仓内事实核验（工作树 HEAD `b4aabfc2`）；复核只查「结论今天是否成立」，不重跑全量门禁；测试数字一律引用 [test-baseline.md](../../03-reference/test-baseline.md)，能力声明一律引用 [claims.yaml](../../status/claims.yaml)。
 >
 > **结论摘要**

@@ -10,7 +10,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
+use super::council_ballot_log::CouncilBallotLog;
 use apeireth_core::kernel::{Clock, Episode, SessionId};
+use apeireth_memory::dedup::{episode_fingerprint, DedupIndex};
 use apeireth_memory::{
     build_constant_injection, consolidate_persona, BoundedMemoryInput, MemoryCoordinator,
     MemoryExtractor, MemoryGovernanceStatus, MemoryGovernanceStore, MemoryMaterializer,
@@ -19,8 +21,8 @@ use apeireth_memory::{
     SelectedMemoryAccess, SqliteAccessHistoryStore,
 };
 use apeireth_orchestration::{
-    Advisor, AdvisorDecision, AdvisorVerdict, Council, CouncilCallError, CouncilDecision,
-    CouncilInvoker, Proposal,
+    Advisor, AdvisorDecision, AdvisorEvaluation, AdvisorVerdict, Council, CouncilCallError,
+    CouncilDecision, CouncilInvoker, Proposal,
 };
 use apeireth_organ::context_assembly::{
     AssemblyPolicy, ContextAssembler, ContextAssemblerPolicyExt, ContextBlock,
@@ -285,6 +287,26 @@ fn session_text(session_id: &SessionId) -> String {
     session_id.to_string()
 }
 
+/// ⭐ **去重门的命名空间**（**按来源分桶** ⇒ ⇒ **不许跨来源误杀**）。
+///
+/// # 为什么按「归属锚点」分桶
+///
+/// 去重门拦的是「**同一段内容被重复落库**」⇒ ⇒ 判重必须问一句：
+/// 「这两条**是不是同一个主人**的同一件事？」
+/// ⇒ ⇒ 主人不同 ⇒ ⇒ **各存各的**（哪怕文字一模一样）
+/// ⇒ ⇒ 否则 A 会话里的一句客套话会把 B 会话里的真事实**误杀**。
+///
+/// # 两个来源桶
+///
+/// * `profile:<partition>` —— 私有 Profile 分区（**跨会话共享**的私有命名空间）；
+/// * `session:<session>` —— 普通会话锚点。
+fn dedup_namespace(profile_partition: Option<&str>, session: &str) -> String {
+    match profile_partition {
+        Some(partition) if !partition.trim().is_empty() => format!("profile:{partition}"),
+        _ => format!("session:{session}"),
+    }
+}
+
 fn hash_id(prefix: &str, parts: &[&str]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(prefix.as_bytes());
@@ -354,18 +376,33 @@ pub const BOND_DEPTH_INCREMENT_PER_TURN: f64 = 0.02;
 /// **身份口径**: partner id = `subject_id` (`APEIRETH_SUBJECT_ID`, W2 首批身份
 /// 旋钮) —— 跨会话稳定, 与 typed 身份体系同源 (羁绊本义即跨 Session 连续)。
 ///
-/// **0 假装边界**: 存储现为 `InMemoryPartnerStore` (进程内, 重启即散) —— 持久
-/// partner 后端落点 = `PartnerStore` trait, 后续接 sqlite 实现即可, 本模块不动。
+/// **存储**: 默认生产装配走 `SqlitePartnerStore`（2026-10-24 接上，
+/// 此前是 `InMemoryPartnerStore` = 进程内、重启即散 —— 羁绊本义是**跨会话**的，
+/// 那种存法等于每次重启都要重新「认识」一遍）。
+/// `SqlitePartnerStore` 自带幂等建表（`partner_records`），与认知库同一份
+/// `cognitive.sqlite3` ⇒ 羁绊与记忆同生共死。
+/// 本模块只依赖 `PartnerStore` trait，具体后端由装配层决定。
 pub struct PartnerBondModule {
     manifest: ModuleManifest,
+    read_only: bool,
     partner_store: Arc<dyn apeireth_memory::partner::PartnerStore>,
     subject_id: String,
     clock: Arc<dyn Clock>,
     depth_increment: f64,
     metrics: ModuleMetrics,
+    /// 关系里程碑记录面（初见 / 阶段跃迁 —— 两件**确定性**事件）。
+    ///
+    /// 缺省 `None` = 不记（未注入里程碑存储时零行为变化）。
+    milestones: Option<std::sync::Arc<apeireth_memory::milestone::MilestoneRecorder>>,
 }
 
 impl PartnerBondModule {
+    /// A shared snapshot never creates a Partner or records private interactions.
+    pub fn with_read_only_snapshot(mut self) -> Self {
+        self.read_only = true;
+        self
+    }
+
     /// 构造 (subject_id = 跨会话伙伴身份)。
     pub fn new(
         partner_store: Arc<dyn apeireth_memory::partner::PartnerStore>,
@@ -374,12 +411,27 @@ impl PartnerBondModule {
     ) -> Self {
         Self {
             manifest: ModuleManifest::new(PARTNER_BOND_MODULE_ID, "Partner bond"),
+            read_only: false,
             partner_store,
             subject_id: subject_id.into(),
             clock,
             depth_increment: BOND_DEPTH_INCREMENT_PER_TURN,
             metrics: ModuleMetrics::default(),
+            milestones: None,
         }
+    }
+
+    /// 注入关系里程碑记录面（初见 / 阶段跃迁）。
+    ///
+    /// 不注入 = 不记里程碑（零行为变化）；注入后只在**确定性**事件上落一条：
+    /// 主体第一次建立伙伴记录（初见）、羁绊阶段真的变了（跃迁）。
+    #[must_use]
+    pub fn with_milestones(
+        mut self,
+        recorder: std::sync::Arc<apeireth_memory::milestone::MilestoneRecorder>,
+    ) -> Self {
+        self.milestones = Some(recorder);
+        self
     }
 
     /// 覆盖每回合深度增量 (测试/调参用)。
@@ -407,6 +459,7 @@ impl PartnerBondModule {
         let now = self.clock.now().timestamp_millis();
         match self.partner_store.get_partner(&id) {
             Ok(Some(partner)) => Some(partner),
+            Ok(None) if self.read_only => None,
             Ok(None) => {
                 let partner = Partner::new(
                     id,
@@ -453,6 +506,10 @@ fn bond_stage_cn(stage: &apeireth_memory::partner::BondStage) -> &'static str {
 
 #[async_trait::async_trait]
 impl BehaviorModule for PartnerBondModule {
+    fn read_only_profile_projection(&self) -> bool {
+        self.read_only
+    }
+
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
     }
@@ -460,24 +517,55 @@ impl BehaviorModule for PartnerBondModule {
     async fn on_hook(
         &self,
         hook: HookPoint,
-        _ctx: &ModuleContext<'_>,
+        ctx: &ModuleContext<'_>,
     ) -> Result<ModuleOutcome, ModuleError> {
         let result = match hook {
             HookPoint::TurnStart => match self.get_or_create_partner() {
                 Some(partner) => {
+                    // 初见：本会话第一次跑羁绊模块就是「第一次相遇」。
+                    // 记录面自带幂等闸（`has_milestone` 直查 EXISTS），
+                    // 所以每回合都调也不会写重复条目。
+                    if let Some(recorder) = &self.milestones {
+                        let now = self.clock.now().timestamp_millis();
+                        if recorder.record_first_meeting(ctx.session_id, now).is_err() {
+                            self.metrics.warning();
+                        }
+                    }
                     let text = bond_overlay_text(&partner);
                     ModuleOutcome::continue_().with_prompt_overlay(PromptOverlay::system(text))
                 }
                 None => ModuleOutcome::continue_(),
             },
-            HookPoint::AfterTurn => {
+            HookPoint::AfterTurn if !self.read_only => {
                 // 羁绊演化: 纯确定性状态机 (touch + evolve), 0 LLM 调用。
                 if let Some(mut partner) = self.get_or_create_partner() {
                     let now = self.clock.now().timestamp_millis();
                     partner.touch(now);
+                    // 演化前后比阶段：**只有真的跃迁了**才落里程碑
+                    // （`Bond::evolve` 的阶段推进是纯确定性阈值，没有歧义）。
+                    let stage_before = partner.bond.stage;
                     partner.bond.evolve(self.depth_increment.max(0.0), now);
+                    let stage_after = partner.bond.stage;
                     if self.partner_store.save_partner(&partner).is_err() {
                         self.metrics.warning();
+                    }
+                    if let Some(recorder) = &self.milestones {
+                        if stage_before != stage_after {
+                            // 记在**跃迁发生的这一次会话**下（羁绊本身跨会话，
+                            // 但「哪次会话里发生的」是有意义的真值；
+                            // `SessionId` 是随机生成 id，无法从伙伴 id 派生稳定键）。
+                            if recorder
+                                .record_stage_transition(
+                                    ctx.session_id,
+                                    &format!("{stage_before:?}"),
+                                    &format!("{stage_after:?}"),
+                                    now,
+                                )
+                                .is_err()
+                            {
+                                self.metrics.warning();
+                            }
+                        }
                     }
                 }
                 ModuleOutcome::continue_()
@@ -530,6 +618,9 @@ impl PersonaConstantInjectionModule {
 
 #[async_trait::async_trait]
 impl BehaviorModule for PersonaConstantInjectionModule {
+    fn read_only_profile_projection(&self) -> bool {
+        true
+    }
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
     }
@@ -567,6 +658,41 @@ mod absorption_insight_tests {
     use super::*;
 
     #[test]
+    fn semantic_axis_section_is_deterministic_and_reports_real_quantities() {
+        // 第 5 段（semantic_axis）专项：确定性 + 数值在 [0,1] + 主轴数受样本数约束。
+        let messages = vec![
+            "记忆系统的检索层有 ACT-R 激活与混合检索。".to_string(),
+            "治理层的取舍我们还没聊过。".to_string(),
+            "检索层与治理层都需要可回放的审计链。".to_string(),
+        ];
+        let first = absorption_insight_text(&messages);
+        let second = absorption_insight_text(&messages);
+        assert_eq!(first, second, "同输入恒同输出");
+        assert!(first.contains("语义主轴"), "{first}");
+
+        // 主轴数 = min(消息数, SEMANTIC_AXIS_COMPONENTS) ⇒ 3 条消息 ⇒ 最多 3 维。
+        let expected = SEMANTIC_AXIS_COMPONENTS.min(messages.len());
+        assert!(
+            first.contains(&format!("主轴 {expected} 维")),
+            "主轴数应受样本数约束: {first}"
+        );
+
+        // 逻辑深度与跨域共振都在 [0,1]（不是 NaN / 不是负数）。
+        for label in ["逻辑深度", "跨域共振"] {
+            let value = first
+                .split(label)
+                .nth(1)
+                .and_then(|rest| rest.split_whitespace().next())
+                .and_then(|token| token.parse::<f32>().ok())
+                .unwrap_or_else(|| panic!("{label} 段应带可解析的数值: {first}"));
+            assert!(
+                (0.0..=1.0).contains(&value),
+                "{label} 应在 [0,1]，实得 {value}: {first}"
+            );
+        }
+    }
+
+    #[test]
     fn config_defaults_to_absorption_insight_off() {
         // W2 五件验收门②: 默认关 = 行为不变。
         let config = crate::canonical::production::CognitiveModuleConfig::default();
@@ -574,8 +700,9 @@ mod absorption_insight_tests {
     }
 
     #[test]
-    fn absorption_insight_reports_four_algorithm_sections_and_is_deterministic() {
-        // W2 五件验收门③: 效果可见 = 四算法各出一节 + 同输入恒同输出 (可重放)。
+    fn absorption_insight_reports_algorithm_sections_and_is_deterministic() {
+        // W2 五件验收门③: 效果可见 = 各算法各出一节 + 同输入恒同输出 (可重放)。
+        // （2026-10-25 owner 裁定：semantic_axis 并入 ⇒ 段数 4 → 5。）
         let messages = vec![
             "帮我梳理一下记忆系统的架构，特别是检索那一层。".to_string(),
             "检索层有 ACT-R 激活与混合检索；但治理层的取舍我们还没聊过。".to_string(),
@@ -588,6 +715,10 @@ mod absorption_insight_tests {
         assert!(first.contains("语义新颖度"), "{first}");
         assert!(first.contains("关联传导"), "{first}");
         assert!(first.contains("顿悟涌现"), "{first}");
+        // 第 5 段（owner 裁定 2026-10-25：semantic_axis 并入 absorption_insight）。
+        assert!(first.contains("语义主轴"), "{first}");
+        assert!(first.contains("逻辑深度"), "{first}");
+        assert!(first.contains("跨域共振"), "{first}");
         // 空输入 = 空报告 (0 装: 不凭空造洞察)。
         assert_eq!(absorption_insight_text(&[]), "");
     }
@@ -765,6 +896,12 @@ pub const ABSORPTION_INSIGHT_MODULE_ID: &str = "cognitive.absorption_insight";
 /// 吸收批特征维度 (确定性字节直方图, 与 OrthogonalResidualPyramid 对齐)。
 pub const ABSORPTION_FEATURE_DIM: usize = 32;
 
+/// 语义主轴的成分数（加权中心化 PCA 抽几个正交方向）。
+///
+/// 口径：主轴数 = min(消息数, 该上限) ⇒ 消息少时不硬凑维度
+/// （样本数少于成分数时 Gram 空间没有那么多正交方向）。
+pub const SEMANTIC_AXIS_COMPONENTS: usize = 3;
+
 /// 确定性文本特征 (字节直方图归一化)。
 ///
 /// **0 假装**: 这是浅层确定性特征 (与 morphology 手调启发式同口径), **不是**语义
@@ -790,6 +927,7 @@ fn absorption_insight_text(messages: &[String]) -> String {
     use apeireth_memory::kuramoto_resonance::{KuramotoOscillator, KuramotoResonanceEngine};
     use apeireth_memory::residual_pyramid::{FieldActivationGate, OrthogonalResidualPyramid};
     use apeireth_memory::river_topology::{RiverDynamicsEngine, TagNode};
+    use apeireth_memory::semantic_axis::SemanticAxisBridge;
 
     if messages.is_empty() {
         return String::new();
@@ -850,12 +988,40 @@ fn absorption_insight_text(messages: &[String]) -> String {
         .collect();
     let epiphanies = KuramotoResonanceEngine::new(1.0, 0.65).step(&mut oscillators, 1.0);
 
+    // ⑤ semantic_axis: 加权中心化 PCA 语义主轴 + 逻辑深度 + 跨域共振桥
+    // （owner 裁定 2026-10-25：semantic_axis 并入 absorption_insight 补第 5 段）。
+    //
+    // **口径**：把每条消息的浅特征向量当作一个**带权样本**（权重 = 该消息的
+    // 激活能量），拟合正交主轴，再把**末条消息**（本轮输入）投影上去：
+    // * 主轴能量分布 ⇒ 这一轮输入落在「已沉淀结构的哪一维」；
+    // * 逻辑深度（1 − 归一化熵）⇒ 聚焦还是发散；
+    // * 跨域共振桥 ⇒ 哪两个主轴被同时激活（跨域联结的证据）。
+    // 纯确定性（0 LLM / 0 IO），与前四段同口径：研究吸收批的**实验性洞察**，
+    // 不参与生产语义召回与决策。
+    let axis_samples: Vec<(Vec<f32>, f32)> = nodes
+        .iter()
+        .map(|node| (node.embedding.clone(), node.activation_energy.max(0.0)))
+        .collect();
+    let mut axis_bridge = SemanticAxisBridge::new(ABSORPTION_FEATURE_DIM);
+    axis_bridge.fit(
+        &axis_samples,
+        SEMANTIC_AXIS_COMPONENTS.min(axis_samples.len()),
+    );
+    let axis_projection = axis_bridge.project(&query_vec);
+    let dominant_axis = axis_projection
+        .probabilities
+        .iter()
+        .enumerate()
+        .max_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal))
+        .map(|(index, _)| index);
+
     format!(
         "【认知体操】(研究吸收批实验性洞察, 非生产语义)\n\
          - 认知空洞: β0 岛屿 {} 个 / β1 空洞 {} 处 / 内聚 {:.2}{}\n\
          - 语义新颖度: {:.2} (激活门控 {:.2})\n\
          - 关联传导: {} 个节点受激\n\
-         - 顿悟涌现: {} 起",
+         - 顿悟涌现: {} 起\n\
+         - 语义主轴: 主轴 {} 维 / 逻辑深度 {:.2} / 跨域共振 {:.2}{}",
         betti.betti_0_islands,
         betti.betti_1_voids.len(),
         betti.cohesion_score,
@@ -868,6 +1034,13 @@ fn absorption_insight_text(messages: &[String]) -> String {
         activation,
         spread.len(),
         epiphanies.len(),
+        axis_projection.probabilities.len(),
+        axis_projection.logic_depth,
+        axis_projection.resonance_score,
+        match dominant_axis {
+            Some(index) => format!(" (主导主轴 A{index})"),
+            None => String::new(),
+        },
     )
 }
 
@@ -947,6 +1120,8 @@ impl BehaviorModule for AbsorptionInsightModule {
 
 pub struct MemoryRecallModule {
     manifest: ModuleManifest,
+    profile_partition: Option<String>,
+    authorized_scopes: Option<Vec<MemoryScope>>,
     memory: Arc<dyn MemoryBackend>,
     coordinator: Option<Arc<MemoryCoordinator>>,
     wiki: Option<Arc<dyn WikiEntryStore>>,
@@ -1041,8 +1216,16 @@ fn community_overlay_text(
 }
 
 impl MemoryRecallModule {
+    /// Exact source scope grants. Unscoped auxiliary stores need their own mapping.
+    pub fn with_authorized_scopes(mut self, scopes: Vec<MemoryScope>) -> Self {
+        self.authorized_scopes = Some(scopes);
+        self
+    }
     /// W3 community 分诊 overlay (读 store → 转换 → 分诊; 0 装降级 = None)。
     fn community_overlay(&self, topic: &str) -> Option<String> {
+        if self.authorized_scopes.is_some() {
+            return None;
+        }
         let store = self.community_triage.as_ref()?;
         let facts = store.all_facts(COMMUNITY_FACT_LIMIT).ok()?;
         if facts.is_empty() {
@@ -1074,6 +1257,8 @@ impl MemoryRecallModule {
     pub fn new(memory: Arc<dyn MemoryBackend>) -> Self {
         Self {
             manifest: ModuleManifest::new(MEMORY_RECALL_MODULE_ID, "Memory recall"),
+            profile_partition: None,
+            authorized_scopes: None,
             memory,
             coordinator: None,
             wiki: None,
@@ -1138,9 +1323,38 @@ impl MemoryRecallModule {
 
     /// V4-c 真接信号面: 把一轮召回的**注入回执**喂给自进化接线层 (回执 =
     /// 后续使用证据的唯一真值面; 无接线层 = 调权关, 什么都不做)。
-    fn feed_retrieval_tuning(&self, selected: &apeireth_memory::SelectedMemoryAccess) {
+    ///
+    /// ⚠️ **会话维度**（多会话串扰修复）：生效检索权重按**会话**分桶 ⇒ ⇒
+    /// 调权落地必须装进**本会话的桶** ⇒ ⇒ 这里进**会话作用域**（作用域内
+    /// `install_effective` 落进当前会话的桶）⇒ ⇒ A 会话调权不会改 B 的排序。
+    fn feed_retrieval_tuning(
+        &self,
+        session_id: &str,
+        session_key: &str,
+        selected: &apeireth_memory::SelectedMemoryAccess,
+    ) {
         if let Some(wire) = &self.retrieval_tuning {
+            wire.register_session_bucket(session_id, session_key);
+            let _scope = apeireth_memory::retrieval_tuning::enter_session_scope(session_key);
             wire.record_injection_round(&selected.selected_attribution, self.now_epoch_ms());
+        }
+    }
+
+    /// V4-c 空轮 (无选中回执) 如实报到接线层: **按会话**报 ⇒ ⇒
+    /// 「这一轮什么都没注入」这件事落进**本会话**的账。
+    ///
+    /// ⚠️ **为什么必须带会话作用域**: 接线层靠会话作用域定桶
+    /// ⇒ ⇒ 不进作用域 ⇒ 空轮会记到**默认桶** ⇒ ⇒ 本会话的
+    /// 「那一轮注入回执」不会被清空 ⇒ ⇒ 失败归因会拿到**上一轮**的回执
+    /// （= 瞎归因）。
+    ///
+    /// ⚠️ **桶键口径只有这一处**: 召回侧把「会话 id ⇒ 桶键」登记给接线层
+    /// ⇒ ⇒ 失败面**按会话 id 问桶**（不用各算各的 ⇒ 键对不上就学不到）。
+    fn feed_retrieval_tuning_empty(&self, session_id: &str, session_key: &str) {
+        if let Some(wire) = &self.retrieval_tuning {
+            wire.register_session_bucket(session_id, session_key);
+            let _scope = apeireth_memory::retrieval_tuning::enter_session_scope(session_key);
+            wire.record_empty_round(self.now_epoch_ms());
         }
     }
 
@@ -1172,6 +1386,12 @@ impl MemoryRecallModule {
     #[must_use]
     pub fn with_coordinator(mut self, coordinator: Arc<MemoryCoordinator>) -> Self {
         self.coordinator = Some(coordinator);
+        self
+    }
+
+    /// Host-selected private partition. Real execution identity remains in context.
+    pub fn with_profile_partition(mut self, partition: String) -> Self {
+        self.profile_partition = Some(partition);
         self
     }
 
@@ -1236,8 +1456,34 @@ impl MemoryRecallModule {
 
 #[async_trait::async_trait]
 impl BehaviorModule for MemoryRecallModule {
+    fn read_only_profile_projection(&self) -> bool {
+        self.access_recorder.is_none()
+            && self.access_store.is_none()
+            && self.self_tuning.is_none()
+            && self.retrieval_tuning.is_none()
+    }
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
+    }
+
+    async fn on_hook_authenticated(
+        &self,
+        hook: HookPoint,
+        ctx: &ModuleContext<'_>,
+        execution: &apeireth_plugin::ToolExecutionContext,
+    ) -> Result<ModuleOutcome, ModuleError> {
+        if let Some(principal) = &execution.principal {
+            if self.profile_partition.as_deref()
+                != Some(super::memory_module::namespace_key(principal).as_str())
+                || self.authorized_scopes.is_none()
+                || self.coordinator.is_none()
+            {
+                return Err(ModuleError::Message(
+                    "memory recall has no exact Profile scope mapping".into(),
+                ));
+            }
+        }
+        self.on_hook(hook, ctx).await
     }
 
     async fn on_hook(
@@ -1247,13 +1493,21 @@ impl BehaviorModule for MemoryRecallModule {
     ) -> Result<ModuleOutcome, ModuleError> {
         let started = Instant::now();
         let result = if hook == HookPoint::TurnStart {
-            let session = session_text(ctx.session_id);
+            let source_session = session_text(ctx.session_id);
+            let session = self
+                .profile_partition
+                .clone()
+                .unwrap_or_else(|| source_session.clone());
             if let Some(coord) = &self.coordinator {
                 let topic = topic_from_messages(ctx.messages);
                 let limit = morphology_recall_limit(&topic, self.limit, self.morphology_recall);
-                let query = MemoryRecallQuery::new(session.clone(), topic.clone())
+                let mut query = MemoryRecallQuery::new(session.clone(), topic.clone())
                     .with_limit(limit)
                     .with_max_chars(self.max_context_chars);
+                if let Some(scopes) = &self.authorized_scopes {
+                    query.visible_scopes = scopes.clone();
+                    query.exact_scope_authorization = true;
+                }
                 let result = if let Some(proactive) = &self.proactive_recall {
                     let cue = apeireth_memory::TopicCue {
                         recent_user_messages: ctx
@@ -1283,15 +1537,15 @@ impl BehaviorModule for MemoryRecallModule {
                         // 真接信号: 本轮召回选中了候选 = 命中, 全空 = 未命中。
                         self.feed_retrieval_signal(!selected.selected_candidate_ids.is_empty());
                         // V4-c: 注入回执喂证据账 (选中集为空的轮按空轮报)。
-                        self.feed_retrieval_tuning(&selected);
+                        self.feed_retrieval_tuning(&source_session, &session, &selected);
                         if let Some(recorder) = &self.access_recorder {
-                            recorder.record_selected(&session, &selected);
+                            recorder.record_selected(&source_session, &selected);
                         }
                         if !selected.selected_candidate_ids.is_empty() {
                             if let (Some(store), Some(clock)) = (&self.access_store, &self.clock) {
                                 if store
                                     .record_selected(
-                                        &session,
+                                        &source_session,
                                         clock.now().timestamp_millis(),
                                         &selected.selected_candidate_ids,
                                     )
@@ -1318,11 +1572,9 @@ impl BehaviorModule for MemoryRecallModule {
                         // 真接信号: 无候选可召回 = 未命中轮。
                         self.feed_retrieval_signal(false);
                         // V4-c: 空轮如实报给接线层 (非机会轮, 不裁决证据)。
-                        if let Some(wire) = &self.retrieval_tuning {
-                            wire.record_empty_round(self.now_epoch_ms());
-                        }
+                        self.feed_retrieval_tuning_empty(&source_session, &session);
                         if let Some(recorder) = &self.access_recorder {
-                            recorder.clear(&session);
+                            recorder.clear(&source_session);
                         }
                         ModuleOutcome::continue_()
                     }
@@ -1332,6 +1584,8 @@ impl BehaviorModule for MemoryRecallModule {
                         ModuleOutcome::continue_()
                     }
                 }
+            } else if self.authorized_scopes.is_some() {
+                ModuleOutcome::continue_()
             } else {
                 let mut context = match self.memory.recent_episodes(&session, self.limit) {
                     Ok(episodes) => {
@@ -1344,6 +1598,10 @@ impl BehaviorModule for MemoryRecallModule {
                         String::new()
                     }
                 };
+                // ⚠️ **旧召回路径没有注入归因**（近期片段没有维度归因面）
+                // ⇒ ⇒ 如实报「这一轮没有可归因的注入」
+                // ⇒ ⇒ 失败归因**不会**拿到**上一轮**的回执（不瞎归因）。
+                self.feed_retrieval_tuning_empty(&source_session, &session);
                 let topic = topic_from_messages(ctx.messages);
                 if let Some(wiki) = &self.wiki {
                     match wiki.list_wiki(&session, &topic, self.limit as u32) {
@@ -1419,6 +1677,7 @@ impl BehaviorModule for MemoryRecallModule {
 /// Persist the current successful turn after the canonical transcript commit.
 pub struct MemoryWritebackModule {
     manifest: ModuleManifest,
+    profile_partition: Option<String>,
     memory: Arc<dyn MemoryBackend>,
     coordinator: Option<Arc<MemoryCoordinator>>,
     wiki: Option<Arc<dyn WikiEntryStore>>,
@@ -1427,6 +1686,16 @@ pub struct MemoryWritebackModule {
     materializer: Arc<dyn MemoryMaterializerPort>,
     typed_sink: Option<Arc<dyn MemoryTypedMaterializationSink>>,
     consolidation: bool,
+    /// ⭐ **写侧去重门**（P1 接线 · 2026-11-07）：materializer 产物落库**之前**过门。
+    ///
+    /// * **命名空间 = 归属锚点**（profile 私有分区 / 会话锚点）⇒ ⇒ **不跨来源误杀**；
+    /// * **指纹** = `dedup::episode_fingerprint(role, content)`（角色 + 归一化正文）；
+    /// * **窗口** = `dedup::DEFAULT_DEDUP_WINDOW_MS`（24h）⇒ ⇒ 窗口内相同内容**只落一次**；
+    /// * ⚠️ **进程内**窗口（LRU）⇒ ⇒ **重启后清空**（持久化门 `accept_persisted` 需要
+    ///   `&SqliteMemoryStore`，而本模块只持 `Arc<dyn MemoryBackend>` ⇒ 拿不到库句柄）。
+    dedup: DedupIndex,
+    /// 去重门拦下的条数（**可观测** ⇒ 不许「静默少写」）。
+    dedup_skipped: AtomicU64,
     /// V4-a 人格记忆层: 人格提取步的落库面 (未配置 = 显式不跑, 默认未接线).
     persona: Option<Arc<dyn PersonaMemoryStore>>,
     /// V4-b 保鲜回路: 散列增量门 (整编素材同源同散列 = 跳过重复整编, 省算力防
@@ -1444,6 +1713,7 @@ impl MemoryWritebackModule {
     pub fn new(memory: Arc<dyn MemoryBackend>, clock: Arc<dyn Clock>) -> Self {
         Self {
             manifest: ModuleManifest::new(MEMORY_WRITEBACK_MODULE_ID, "Memory writeback"),
+            profile_partition: None,
             memory,
             coordinator: None,
             wiki: None,
@@ -1452,6 +1722,8 @@ impl MemoryWritebackModule {
             materializer: Arc::new(MemoryMaterializer::default()),
             typed_sink: None,
             consolidation: false,
+            dedup: DedupIndex::new(),
+            dedup_skipped: AtomicU64::new(0),
             persona: None,
             ingest_gate: None,
             consolidation_turns: Mutex::new(std::collections::BTreeMap::new()),
@@ -1464,6 +1736,12 @@ impl MemoryWritebackModule {
     #[must_use]
     pub fn with_coordinator(mut self, coordinator: Arc<MemoryCoordinator>) -> Self {
         self.coordinator = Some(coordinator);
+        self
+    }
+
+    /// Host-selected private partition. Real execution identity remains in context.
+    pub fn with_profile_partition(mut self, partition: String) -> Self {
+        self.profile_partition = Some(partition);
         self
     }
 
@@ -1533,6 +1811,39 @@ impl MemoryWritebackModule {
         self.metrics.snapshot()
     }
 
+    /// ⭐ **写侧去重门**：同一归属锚点下，窗口内的**相同内容**不再重复落库。
+    ///
+    /// # 口径
+    ///
+    /// * **指纹** = `dedup::episode_fingerprint(role, content)`（角色 + 归一化正文
+    ///   ⇒ 空白/大小写差异不算不同内容）；
+    /// * **窗口** = `dedup::DEFAULT_DEDUP_WINDOW_MS`（24h）；
+    /// * **空指纹放行**（不拿空串当去重键 ⇒ 不许「空内容把整桶误杀」）。
+    ///
+    /// # 命名空间（**不许跨来源误杀**）
+    ///
+    /// 命名空间由调用方给（[`dedup_namespace`]）⇒ ⇒ **按归属锚点分桶**
+    /// ⇒ ⇒ 不同来源的同一段文字**各存各的**。
+    fn dedup_accept(&self, namespace: &str, episode: &Episode) -> bool {
+        let fingerprint = episode_fingerprint(&episode.role, &episode.content);
+        if fingerprint.trim().is_empty() {
+            return true;
+        }
+        let now_ms = self.clock.now().timestamp_millis();
+        if self.dedup.accept(namespace, &fingerprint, now_ms) {
+            true
+        } else {
+            // ⚠️ **可观测**：拦下的条数记进计数器 ⇒ 不许「静默少写」。
+            self.dedup_skipped.fetch_add(1, Ordering::Relaxed);
+            false
+        }
+    }
+
+    /// 去重门拦下的条数（**可观测** ⇒ 「少写了」有账可查）。
+    pub fn dedup_skipped_count(&self) -> u64 {
+        self.dedup_skipped.load(Ordering::Relaxed)
+    }
+
     /// Attach the shared non-sensitive telemetry sink.
     #[must_use]
     pub fn with_telemetry(self, telemetry: Arc<CognitiveTelemetry>) -> Self {
@@ -1597,17 +1908,69 @@ impl BehaviorModule for MemoryWritebackModule {
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
     }
-
     async fn on_hook(
         &self,
         hook: HookPoint,
         ctx: &ModuleContext<'_>,
     ) -> Result<ModuleOutcome, ModuleError> {
+        self.writeback(hook, ctx, None).await
+    }
+    async fn on_hook_authenticated(
+        &self,
+        hook: HookPoint,
+        ctx: &ModuleContext<'_>,
+        execution: &apeireth_plugin::ToolExecutionContext,
+    ) -> Result<ModuleOutcome, ModuleError> {
+        if let Some(principal) = &execution.principal {
+            if self.profile_partition.as_deref()
+                != Some(super::memory_module::namespace_key(principal).as_str())
+                || self.coordinator.is_none()
+            {
+                return Err(ModuleError::Message(
+                    "memory writeback has no private Profile partition".into(),
+                ));
+            }
+        }
+        self.writeback(hook, ctx, Some(execution)).await
+    }
+}
+impl MemoryWritebackModule {
+    async fn writeback(
+        &self,
+        hook: HookPoint,
+        ctx: &ModuleContext<'_>,
+        execution: Option<&apeireth_plugin::ToolExecutionContext>,
+    ) -> Result<ModuleOutcome, ModuleError> {
         let started = Instant::now();
         let result = if hook == HookPoint::AfterTurn {
             if let Some(candidate) = ctx.candidate {
-                let session = session_text(ctx.session_id);
+                let session = self
+                    .profile_partition
+                    .clone()
+                    .unwrap_or_else(|| session_text(ctx.session_id));
+                let provenance = apeireth_memory::MemoryProvenance {
+                    source: "cognitive.memory_writeback".into(),
+                    source_session: Some(session_text(ctx.session_id)),
+                    source_trace: execution.and_then(|e| e.trace).map(|id| id.to_string()),
+                    source_request: execution
+                        .and_then(|e| e.turn)
+                        .map(|id| id.to_string())
+                        .or_else(|| Some(candidate.id.clone())),
+                };
                 let now = self.clock.now().timestamp();
+                // ⭐ **去重门的命名空间**（**按来源分桶** ⇒ 不许跨来源误杀）：
+                // 私有 Profile 分区与普通会话是两个**不同的来源桶**。
+                let dedup_ns = dedup_namespace(self.profile_partition.as_deref(), &session);
+                // Private namespaces span sessions; provider response IDs are
+                // not an execution identity. Keep legacy IDs unchanged.
+                let response_key = if self.profile_partition.is_some() {
+                    provenance
+                        .source_request
+                        .as_deref()
+                        .unwrap_or(&candidate.id)
+                } else {
+                    &candidate.id
+                };
                 let mut episodes = Vec::new();
                 if let Some(user) = ctx
                     .messages
@@ -1618,7 +1981,7 @@ impl BehaviorModule for MemoryWritebackModule {
                     let content = ContentPart::join_text(&user.content);
                     if !content.is_empty() {
                         episodes.push(Episode {
-                            id: hash_id("ep-user", &[&session, &candidate.id]),
+                            id: hash_id("ep-user", &[&session, response_key]),
                             timestamp: now,
                             role: "user".into(),
                             content,
@@ -1627,7 +1990,7 @@ impl BehaviorModule for MemoryWritebackModule {
                     }
                 }
                 episodes.push(Episode {
-                    id: hash_id("ep-assistant", &[&session, &candidate.id]),
+                    id: hash_id("ep-assistant", &[&session, response_key]),
                     timestamp: now,
                     role: "assistant".into(),
                     content: candidate.content.clone(),
@@ -1641,9 +2004,9 @@ impl BehaviorModule for MemoryWritebackModule {
                     scope: MemoryScope::Session {
                         session_id: episodes[0].session_id.clone(),
                     },
-                    source_session: Some(episodes[0].session_id.clone()),
-                    source_trace: None,
-                    source_request: Some(candidate.id.clone()),
+                    source_session: provenance.source_session.clone(),
+                    source_trace: provenance.source_trace.clone(),
+                    source_request: provenance.source_request.clone(),
                     messages: episodes
                         .iter()
                         .map(|episode| apeireth_memory::MemoryExtractionMessage {
@@ -1659,9 +2022,9 @@ impl BehaviorModule for MemoryWritebackModule {
                         scope: MemoryScope::Session {
                             session_id: episodes[0].session_id.clone(),
                         },
-                        source_session: Some(episodes[0].session_id.clone()),
-                        source_trace: None,
-                        source_request: Some(candidate.id.clone()),
+                        source_session: provenance.source_session.clone(),
+                        source_trace: provenance.source_trace.clone(),
+                        source_request: provenance.source_request.clone(),
                         messages: episodes
                             .iter()
                             .map(|episode| apeireth_memory::MemoryExtractionMessage {
@@ -1672,9 +2035,23 @@ impl BehaviorModule for MemoryWritebackModule {
                         max_messages: 2,
                         max_message_chars: 4_096,
                     };
+                    let guarded_sink = super::memory_typed_sink::ProfileTypedSink {
+                        inner: sink.as_ref(),
+                        scope: MemoryScope::session(&session),
+                        provenance: provenance.clone(),
+                        cancellation: execution
+                            .map(|e| e.cancellation.clone())
+                            .unwrap_or_default(),
+                    };
+                    let target_sink: &dyn MemoryTypedMaterializationSink =
+                        if self.profile_partition.is_some() {
+                            &guarded_sink
+                        } else {
+                            sink.as_ref()
+                        };
                     if self
                         .materializer
-                        .materialize_typed(typed_input, now, sink.as_ref())
+                        .materialize_typed(typed_input, now, target_sink)
                         .await
                         .is_err()
                     {
@@ -1684,9 +2061,35 @@ impl BehaviorModule for MemoryWritebackModule {
 
                 match self.materializer.materialize_episodes(input, now).await {
                     Ok(materialized) => {
-                        for item in materialized {
+                        for mut item in materialized {
+                            if self.profile_partition.is_some() {
+                                if item.candidate.scope != MemoryScope::session(&session) {
+                                    self.metrics.warning();
+                                    continue;
+                                }
+                                item.episode.session_id = session.clone();
+                                item.candidate.provenance = provenance.clone();
+                            }
+                            if execution.is_some_and(|e| e.cancellation.is_cancelled()) {
+                                break;
+                            }
+                            // ⭐ **写侧去重门**（P1 接线 · 2026-11-07）：materializer 产物
+                            // **落库前**过门 ⇒ ⇒ 同一归属锚点下、窗口内的**相同内容**
+                            // **不再重复落库**（重复内容 ⇒ 检索里也是重复行 ⇒ 白占预算）。
+                            //
+                            // ⚠️ **行为变化**（接线前 ⇒ 接线后）：重复内容**不再重复落库**。
+                            // ⚠️ 门只拦**内容完全相同**（角色 + 归一化正文指纹相同）的条目。
+                            if !self.dedup_accept(&dedup_ns, &item.episode) {
+                                continue;
+                            }
                             let result = if let Some(coord) = &self.coordinator {
-                                coord.writeback_episode(&item.episode).map(|_| ())
+                                coord
+                                    .writeback_scoped_episode(
+                                        &item.episode,
+                                        &MemoryScope::session(&item.episode.session_id),
+                                        &provenance,
+                                    )
+                                    .map(|_| ())
                             } else {
                                 self.memory.put_episode(&item.episode).map_err(|e| {
                                     apeireth_memory::MemoryError::Invalid(e.to_string())
@@ -1701,11 +2104,18 @@ impl BehaviorModule for MemoryWritebackModule {
                 }
 
                 for episode in episodes {
+                    if execution.is_some_and(|e| e.cancellation.is_cancelled()) {
+                        break;
+                    }
                     // Post-commit persistence is fail-open for the current
                     // answer, but the warning counter makes the loss visible.
                     let write_res = if let Some(coord) = &self.coordinator {
                         coord
-                            .writeback_episode(&episode)
+                            .writeback_scoped_episode(
+                                &episode,
+                                &MemoryScope::session(&session),
+                                &provenance,
+                            )
                             .map(|_| ())
                             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
                     } else {
@@ -1785,17 +2195,31 @@ impl BehaviorModule for MemoryWritebackModule {
                     if !skip_round {
                         if let Some(coord) = &self.coordinator {
                             ran_any = true;
-                            match coord.run_consolidation(&session) {
+                            // ⚠️ 2026-11-03 记忆线：改走**统一入口** ⇒
+                            // 装了整编驱动 ⇒ 走「只整新料 + 同窗口只整一次」的增量语义；
+                            // 没装 ⇒ 走**一字未改**的旧路径 ⇒ ⇒ 装配方不升级 = 行为不变。
+                            match coord.run_consolidation_at(&session, now) {
                                 Ok(report) => {
                                     for insight in report.extracted_insights {
                                         let episode = Episode {
-                                            id: hash_id("ep-consolidation", &[&insight]),
+                                            id: if self.profile_partition.is_some() {
+                                                hash_id("ep-consolidation", &[&session, &insight])
+                                            } else {
+                                                hash_id("ep-consolidation", &[&insight])
+                                            },
                                             timestamp: now,
                                             role: "consolidation".into(),
                                             content: format!("[记忆整理洞察] {insight}"),
                                             session_id: session.clone(),
                                         };
-                                        if coord.writeback_episode(&episode).is_err() {
+                                        if coord
+                                            .writeback_scoped_episode(
+                                                &episode,
+                                                &MemoryScope::session(&session),
+                                                &provenance,
+                                            )
+                                            .is_err()
+                                        {
                                             self.metrics.warning();
                                             round_ok = false;
                                         }
@@ -1891,6 +2315,9 @@ impl PreferenceRecallModule {
 
 #[async_trait::async_trait]
 impl BehaviorModule for PreferenceRecallModule {
+    fn read_only_profile_projection(&self) -> bool {
+        true
+    }
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
     }
@@ -2007,6 +2434,11 @@ pub const REFLEXION_MODULE_ID: &str = "cognitive.reflexion";
 /// **0 装信号边界**: 只认 Judge 的显式判定 —— Judge 未开 = 无信号 = 不记录,
 /// 绝不从文本启发式猜"失败". `ValidationFailed` / `ExperienceFailed` 两类
 /// 失败信号生产暂无诚实来源 (store API 就绪, 留待信号接入).
+///
+/// ⭐ **失败 → 学习桥** (2026-11-06 接线): 失败登记时**带上归因**
+/// (归因 = **那一轮注入回执**, 由检索调权接线层给出), 结算时把失败
+/// 变成**负证据**喂进检索权重 ⇒ ⇒ 权重**往「被选中却失败」的方向退**。
+/// ⚠️ 没有归因 = **零证据** (学不到, 但**不污染**)。
 pub struct ReflexionModule {
     manifest: ModuleManifest,
     store: Arc<dyn apeireth_memory::reflexion::ReflexionStore>,
@@ -2015,6 +2447,11 @@ pub struct ReflexionModule {
     budget_chars: usize,
     clock: Arc<dyn Clock>,
     metrics: ModuleMetrics,
+    /// ⭐ 检索调权接线层 (失败 → 学习桥的**学习侧**)。
+    ///
+    /// ⚠️ **缺 = 失败不带归因** ⇒ ⇒ 学不到 (退回「只登记失败」的旧行为,
+    /// 零行为变化 ⇒ 默认关的调权能力**不会**偷跑)。
+    retrieval_tuning: Option<Arc<crate::canonical::retrieval_tuning_wire::RetrievalTuningWire>>,
 }
 
 impl ReflexionModule {
@@ -2032,7 +2469,67 @@ impl ReflexionModule {
             budget_chars: 600,
             clock,
             metrics: ModuleMetrics::default(),
+            retrieval_tuning: None,
         }
+    }
+
+    /// ⭐ 接上「失败 → 学习桥」的**学习侧** (检索调权接线层)。
+    ///
+    /// ⚠️ **显式注入优先**: 没显式接时, 本模块退到**进程级当前接线层**
+    /// ([`crate::canonical::retrieval_tuning_wire::RetrievalTuningWire::active`])
+    /// ⇒ ⇒ 生产装配层不注入时也能**接得上** (两侧共用**同一个**接线层
+    /// ⇒ ⇒ 同一份按会话分桶的引擎与注入回执 ⇒ 不串扰)。
+    #[must_use]
+    pub fn with_retrieval_tuning(
+        mut self,
+        wire: Arc<crate::canonical::retrieval_tuning_wire::RetrievalTuningWire>,
+    ) -> Self {
+        self.retrieval_tuning = Some(wire);
+        self
+    }
+
+    /// 取本模块用的调权接线层 (显式注入优先; 否则进程级当前接线层)。
+    fn tuning_wire(
+        &self,
+    ) -> Option<Arc<crate::canonical::retrieval_tuning_wire::RetrievalTuningWire>> {
+        self.retrieval_tuning
+            .clone()
+            .or_else(crate::canonical::retrieval_tuning_wire::RetrievalTuningWire::active)
+    }
+
+    /// ⭐ **轮次边界结算**: 本会话累计的失败 ⇒ **负证据** ⇒ 权重**退**。
+    ///
+    /// # 口径（为什么在**轮次边界**结算, 不在失败发生的瞬间）
+    /// * **不在失败发生的瞬间调权**: 失败刚发生时**立刻**调权 = 每条失败
+    ///   单独挪一步 ⇒ ⇒ 权重**抖**（且很快撞走廊地板）;
+    /// * **轮次边界**: 一轮结束时把**这一轮及更早**累计的失败**一批**喂进去
+    ///   ⇒ ⇒ `observe_batch` 每个目标**只动一步**（批量 ⇒ 不抖）;
+    /// * **结算发生在下一次检索之前** ⇒ ⇒ 退下来的权重**下一轮就生效**;
+    /// * **幂等**: 结算走游标 ⇒ ⇒ 同一批失败**只结算一次**。
+    fn settle_failures(&self, session_key: &str) {
+        let Some(wire) = self.tuning_wire() else {
+            return;
+        };
+        if wire
+            .settle_failures(self.store.as_ref(), session_key)
+            .is_err()
+        {
+            self.metrics.warning();
+        }
+    }
+
+    /// ⭐ **本会话的调权桶键** (记忆召回模块登记的那套口径)。
+    ///
+    /// ⚠️ **桶键不一定等于会话 id**（画像分区路径: 桶键 = 分区键）
+    /// ⇒ ⇒ 由**记忆召回模块**登记映射、失败面**按会话 id 问桶**
+    /// ⇒ ⇒ 桶键口径**只有一处**（各算各的 ⇒ 键对不上 ⇒ 学不到）。
+    /// ⚠️ **没登记过** ⇒ 回落会话 id 本身 ⇒ ⇒ 查不到回执 ⇒ **零归因**
+    /// （学不到, 但**不瞎归因**）。
+    fn session_bucket_key(&self, session_id: &SessionId) -> String {
+        let raw = session_text(session_id);
+        self.tuning_wire()
+            .and_then(|wire| wire.bucket_key_for_session(&raw))
+            .unwrap_or(raw)
     }
 
     /// Set the task label used for record/retrieve matching.
@@ -2091,6 +2588,11 @@ impl BehaviorModule for ReflexionModule {
             }
         } else if hook == HookPoint::AfterTurn {
             let now = self.clock.now().timestamp_millis();
+            // ⭐ **桶键口径 = 记忆召回模块登记的那套** (画像分区路径也一致)。
+            let session_key = self.session_bucket_key(ctx.session_id);
+            // ⭐ **轮次边界结算**: **先**结算**上一轮及更早**累计的失败
+            // (本轮刚发生的失败**不进这一批** ⇒ ⇒ 不在失败发生的瞬间调权)。
+            self.settle_failures(&session_key);
             if let Some(observation) = self.observations.get(ctx.session_id) {
                 if observation.verdict != JudgeVerdict::Pass {
                     let summary = if observation.critique.trim().is_empty() {
@@ -2098,16 +2600,27 @@ impl BehaviorModule for ReflexionModule {
                     } else {
                         observation.critique.clone()
                     };
-                    if self
-                        .store
-                        .record_failure(
+                    // ⭐ **失败 → 学习桥（登记侧）**: 归因 = **那一轮的注入回执**。
+                    //
+                    // ⚠️ **没有接线层 = 没有归因** ⇒ ⇒ 退回「只登记失败」的旧口径
+                    // (零行为变化 ⇒ 默认关的调权能力不会偷跑)。
+                    let recorded = match self.tuning_wire() {
+                        Some(wire) => wire.record_failure_with_injection_attribution(
+                            self.store.as_ref(),
                             FailureKind::DecisionRejected,
                             &self.task_type,
                             &summary,
                             now,
-                        )
-                        .is_err()
-                    {
+                            &session_key,
+                        ),
+                        None => self.store.record_failure(
+                            FailureKind::DecisionRejected,
+                            &self.task_type,
+                            &summary,
+                            now,
+                        ),
+                    };
+                    if recorded.is_err() {
                         self.metrics.warning();
                     }
                 }
@@ -2129,30 +2642,43 @@ impl BehaviorModule for ReflexionModule {
 #[derive(Debug, Default)]
 pub struct JudgeObservations {
     by_session: Mutex<BTreeMap<SessionId, JudgeResult>>,
+    /// 锁**中毒**次数（**明确记录**：中毒 ≠ 静默恢复 ⇒ 面板/自述可读）。
+    ///
+    /// ⚠️ 旧实现是 `.lock().expect("judge observations mutex")` ⇒ ⇒ **一次中毒
+    /// ⇒ 此后每个回合都 panic**（一个模块的失误升级成整轮的崩溃）。
+    /// ⇒ ⇒ 现在与同文件其它锁一致：**中毒即恢复**（取回内部数据继续跑），
+    /// 但**明确计数** ⇒ 不静默、也不每回合 panic。
+    poisoned_locks: AtomicU64,
 }
 
 impl JudgeObservations {
+    /// 取锁：**中毒即恢复 + 明确记录中毒**（与同文件 [`lock_or_recover`] 同策略）。
+    fn lock(&self) -> std::sync::MutexGuard<'_, BTreeMap<SessionId, JudgeResult>> {
+        match self.by_session.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => {
+                self.poisoned_locks.fetch_add(1, Ordering::Relaxed);
+                poisoned.into_inner()
+            }
+        }
+    }
+
+    /// 锁中毒恢复次数（**明确记录**，不静默）。
+    pub fn poisoned_locks(&self) -> u64 {
+        self.poisoned_locks.load(Ordering::Relaxed)
+    }
+
     fn clear(&self, session: &SessionId) {
-        self.by_session
-            .lock()
-            .expect("judge observations mutex")
-            .remove(session);
+        self.lock().remove(session);
     }
 
     fn record(&self, session: SessionId, result: JudgeResult) {
-        self.by_session
-            .lock()
-            .expect("judge observations mutex")
-            .insert(session, result);
+        self.lock().insert(session, result);
     }
 
     /// Read the current-turn result, if Judge ran successfully.
     pub fn get(&self, session: &SessionId) -> Option<JudgeResult> {
-        self.by_session
-            .lock()
-            .expect("judge observations mutex")
-            .get(session)
-            .cloned()
+        self.lock().get(session).cloned()
     }
 }
 
@@ -2478,6 +3004,10 @@ pub struct CouncilModule {
     council: Arc<Council>,
     clock: Arc<dyn Clock>,
     metrics: ModuleMetrics,
+    /// D-2：council ballot 的 append-only 落盘账（**可选**：不挂 = 不落盘）。
+    ///
+    /// 守夜人的「立场平衡复盘」段要吃的就是这张账（此前永远空转）。
+    ballot_log: Option<Arc<CouncilBallotLog>>,
 }
 
 impl CouncilModule {
@@ -2488,6 +3018,39 @@ impl CouncilModule {
             council,
             clock,
             metrics: ModuleMetrics::default(),
+            ballot_log: None,
+        }
+    }
+
+    /// 挂上 council ballot 的 append-only 落盘账（D-2）。
+    ///
+    /// 落盘是**旁路**：失败只留痕（stderr），**不阻断**本轮决策 ——
+    /// 「记录能力缺失」≠「功能不可用」。
+    #[must_use]
+    pub fn with_ballot_log(self, log: Arc<CouncilBallotLog>) -> Self {
+        Self {
+            ballot_log: Some(log),
+            ..self
+        }
+    }
+
+    /// D-2：把本次顾问评价折算成票并落盘（append-only）。
+    ///
+    /// * 折算口径（owner 裁定）：置信度显式优先、缺省用顾问自评质量分并标注兜底、
+    ///   权重用现有顾问注册权重、域一一对应 —— **不编造**顾问没给的信息。
+    /// * 失败**如实报告、不阻断**（stderr 留痕），也不伪造任何票。
+    fn persist_ballots(&self, evaluations: &[AdvisorEvaluation]) {
+        let Some(log) = self.ballot_log.as_ref() else {
+            return;
+        };
+        let at_ms = self.clock.now().timestamp_millis();
+        for evaluation in evaluations {
+            let record = super::council_ballots::record_from_evaluation(evaluation, at_ms);
+            if let Err(error) = log.append(&record) {
+                eprintln!(
+                    "[cognitive.council] ballot 落盘失败（如实报告，不影响本轮决策）: {error}"
+                );
+            }
         }
     }
 
@@ -2532,6 +3095,7 @@ impl BehaviorModule for CouncilModule {
                     invoker: ctx.invoker(),
                 };
                 let result = self.council.decide_with_invoker(&proposal, &adapter).await;
+                self.persist_ballots(&result.evaluations);
                 let side_calls = result.side_call_count;
                 let outcome = match result.decision {
                     CouncilDecision::Continue => ModuleOutcome::continue_(),
@@ -4180,6 +4744,196 @@ mod tests {
         assert!(text.contains("历史失败反思备忘"), "{text}");
     }
 
+    /// ⭐ **失败 → 学习桥（生产模块侧）**: 失败登记**带归因** ⇒ ⇒ 轮次边界
+    /// 结算 ⇒ ⇒ 权重**真的退**。
+    ///
+    /// # 为什么在**模块**里验（而不是只验接线层）
+    /// 「接线层能被调」≠「**生产模块真的调它**」⇒ ⇒ 这里驱动**真模块**
+    /// ([`ReflexionModule`]) ⇒ ⇒ 钉住三件事:
+    /// ① 失败**真的带归因**落进 store（归因 = 那一轮的注入回执）;
+    /// ② **不在失败发生的瞬间调权**（结算口径 = 轮次边界 ⇒ 不抖）;
+    /// ③ 下一轮结算 ⇒ 权重**真的退**（不是「函数被调用了」）。
+    #[tokio::test]
+    async fn reflexion_failure_carries_injection_attribution_and_recedes_the_weight() {
+        use apeireth_memory::reflexion::ReflexionStore;
+        use apeireth_memory::retrieval_tuning::{
+            enter_session_scope, RetrievalDimension, SelectedAttribution,
+        };
+
+        let session = SessionId::new();
+        let store = Arc::new(apeireth_memory::reflexion::InMemoryReflexionStore::new());
+        let observations = Arc::new(JudgeObservations::default());
+        let clock: Arc<dyn Clock> = Arc::new(VirtualClock::new(
+            apeireth_core::kernel::Timestamp::from_epoch_millis(1_700_000_000_000)
+                .unwrap()
+                .as_datetime(),
+        ));
+        let _dir = tempfile::tempdir().expect("临时目录");
+        let wire = Arc::new(
+            crate::canonical::retrieval_tuning_wire::RetrievalTuningWire::new(
+                _dir.path().join("retrieval_tuning.jsonl"),
+            ),
+        );
+        let module = ReflexionModule::new(store.clone(), Arc::clone(&observations), clock)
+            .with_retrieval_tuning(Arc::clone(&wire));
+        let invoker: Arc<dyn super::super::module::ModuleInvoker> = Arc::new(FixedInvoker {
+            response: NormalizedResponse::text("x", "fake", "ok"),
+            calls: AtomicU64::new(0),
+        });
+        let messages = vec![NormalizedMessage::user("hi")];
+        let session_key = session_text(&session);
+        let baseline = apeireth_memory::MemoryRankingConfig::default();
+
+        // ① 那一轮的注入回执 (生产同款: 召回选中集 ⇒ 回执面).
+        {
+            let _scope = enter_session_scope(&session_key);
+            wire.record_injection_round(
+                &[SelectedAttribution::new(
+                    "mem-1",
+                    Some(RetrievalDimension::Semantic),
+                )],
+                1_000,
+            );
+        }
+
+        // ② Judge 显式非 Pass 判定 ⇒ 失败登记 (带归因).
+        observations.record(
+            session,
+            JudgeResult {
+                score: 0.3,
+                verdict: JudgeVerdict::Retry,
+                critique: "answer too terse".into(),
+            },
+        );
+        module
+            .on_hook(
+                HookPoint::AfterTurn,
+                &context(&session, &messages, None, &invoker, REFLEXION_MODULE_ID),
+            )
+            .await
+            .unwrap();
+
+        // ⚠️ 断言**真 store 里读回来的**归因 (不是返回值).
+        let failures = store.list_failures().expect("读失败轨迹");
+        assert_eq!(failures.len(), 1, "失败必须真的落进 store");
+        assert_eq!(
+            failures[0].attributions.len(),
+            1,
+            "失败必须**带归因**落盘 (归因 = 那一轮的注入回执)"
+        );
+        assert_eq!(failures[0].attributions[0].memory_id, "mem-1");
+        assert_eq!(
+            failures[0].attributions[0].dimension,
+            Some(RetrievalDimension::Semantic)
+        );
+
+        // ⚠️ **失败刚发生时不调权** (结算口径 = 轮次边界 ⇒ 不抖).
+        //
+        // ⚠️ 读**接线层自己**的会话桶 (不走生效值全局槽的默认桶回落:
+        // 那个槽是**进程级**的 ⇒ 同二进制里别的用例装过默认桶 ⇒ 读它会串)。
+        let right_after = {
+            let _scope = enter_session_scope(&session_key);
+            wire.effective_ranking()
+        };
+        assert!(
+            (right_after.semantic_weight - baseline.semantic_weight).abs() < 1e-12,
+            "**失败发生的瞬间不许调权** (实得 {})",
+            right_after.semantic_weight
+        );
+
+        // ③ 下一轮 (轮次边界) ⇒ 结算 ⇒ 权重**真的退**.
+        module
+            .on_hook(
+                HookPoint::AfterTurn,
+                &context(&session, &messages, None, &invoker, REFLEXION_MODULE_ID),
+            )
+            .await
+            .unwrap();
+        let settled = {
+            let _scope = enter_session_scope(&session_key);
+            wire.effective_ranking()
+        };
+        assert!(
+            settled.semantic_weight < baseline.semantic_weight,
+            "轮次边界结算后, 权重必须**真的退** (基线 {} ⇒ 实得 {})",
+            baseline.semantic_weight,
+            settled.semantic_weight
+        );
+    }
+
+    /// ⭐ **桶键口径只有一处**: 会话 id ≠ 桶键 (画像分区路径) 时,
+    /// 失败面**按会话 id 问桶** ⇒ ⇒ 归因仍接得上（不用各算各的）。
+    #[tokio::test]
+    async fn reflexion_failure_uses_the_registered_bucket_key() {
+        use apeireth_memory::reflexion::ReflexionStore;
+        use apeireth_memory::retrieval_tuning::{
+            enter_session_scope, RetrievalDimension, SelectedAttribution,
+        };
+
+        let session = SessionId::new();
+        let raw_session = session_text(&session);
+        const BUCKET: &str = "profile-partition-bucket";
+        let store = Arc::new(apeireth_memory::reflexion::InMemoryReflexionStore::new());
+        let observations = Arc::new(JudgeObservations::default());
+        let clock: Arc<dyn Clock> = Arc::new(VirtualClock::new(
+            apeireth_core::kernel::Timestamp::from_epoch_millis(1_700_000_000_000)
+                .unwrap()
+                .as_datetime(),
+        ));
+        let _dir = tempfile::tempdir().expect("临时目录");
+        let wire = Arc::new(
+            crate::canonical::retrieval_tuning_wire::RetrievalTuningWire::new(
+                _dir.path().join("retrieval_tuning.jsonl"),
+            ),
+        );
+        let module = ReflexionModule::new(store.clone(), Arc::clone(&observations), clock)
+            .with_retrieval_tuning(Arc::clone(&wire));
+        let invoker: Arc<dyn super::super::module::ModuleInvoker> = Arc::new(FixedInvoker {
+            response: NormalizedResponse::text("x", "fake", "ok"),
+            calls: AtomicU64::new(0),
+        });
+        let messages = vec![NormalizedMessage::user("hi")];
+
+        // ① 记忆召回侧登记映射 (会话 id ⇒ 桶键) + 在**桶**里注入回执。
+        wire.register_session_bucket(&raw_session, BUCKET);
+        {
+            let _scope = enter_session_scope(BUCKET);
+            wire.record_injection_round(
+                &[SelectedAttribution::new(
+                    "mem-partition",
+                    Some(RetrievalDimension::Semantic),
+                )],
+                1_000,
+            );
+        }
+
+        // ② 失败发生 ⇒ 归因必须落到**那个桶**的回执上。
+        observations.record(
+            session,
+            JudgeResult {
+                score: 0.3,
+                verdict: JudgeVerdict::Retry,
+                critique: "answer too terse".into(),
+            },
+        );
+        module
+            .on_hook(
+                HookPoint::AfterTurn,
+                &context(&session, &messages, None, &invoker, REFLEXION_MODULE_ID),
+            )
+            .await
+            .unwrap();
+
+        let failures = store.list_failures().expect("读失败轨迹");
+        assert_eq!(failures.len(), 1);
+        assert_eq!(
+            failures[0].attributions.len(),
+            1,
+            "会话 id ≠ 桶键时, 失败面必须**按登记的桶**找回归因"
+        );
+        assert_eq!(failures[0].attributions[0].memory_id, "mem-partition");
+    }
+
     #[tokio::test]
     async fn proactive_recall_is_opt_in_and_budgeted() {
         let memory = Arc::new(FakeMemory::default());
@@ -4315,6 +5069,149 @@ mod tests {
             .iter()
             .all(|fact| !fact.source_episode_id.is_empty()));
         assert_eq!(writeback.metrics().warnings, 0);
+    }
+
+    /// ⭐ **写侧去重门 · 行为差异**：接线前，**同一段内容**每回合都重复落库；
+    /// 接线后，**窗口内只落一次**。
+    ///
+    /// # 为什么两回合的 episode id **必须不同**
+    ///
+    /// `stable_episode_id` 把**时刻**算进 id ⇒ 两回合时刻不同 ⇒ id 不同
+    /// ⇒ ⇒ 真库里这是**两条不同的行**（`INSERT OR IGNORE` 也拦不住）
+    /// ⇒ ⇒ 去重门拦的正是这种「**内容相同、id 不同**」的重复。
+    #[tokio::test]
+    async fn writeback_dedup_gate_drops_duplicate_materialized_content() {
+        let session = SessionId::new();
+        let memory = Arc::new(FakeMemory::default());
+        let clock = Arc::new(VirtualClock::new(
+            apeireth_core::kernel::Timestamp::from_epoch_millis(1_700_000_000_000)
+                .unwrap()
+                .as_datetime(),
+        ));
+        let writeback = MemoryWritebackModule::new(memory.clone(), clock.clone());
+        let invoker: Arc<dyn super::super::module::ModuleInvoker> = Arc::new(FixedInvoker {
+            response: NormalizedResponse::text("unused", "fake", "unused"),
+            calls: AtomicU64::new(0),
+        });
+        // 用户说了**一句会被抽成记忆**的话（`RuleMemoryExtractor` 只抽 user 侧）。
+        let messages = vec![NormalizedMessage::user("I prefer concise answers")];
+
+        for round in 0..2 {
+            // 两回合的候选 id 不同 ⇒ 原始回合 episode 的 id 不同（那是另一条路径）。
+            let candidate = NormalizedResponse::text(
+                if round == 0 { "answer-1" } else { "answer-2" },
+                "fake",
+                "好的，简洁优先",
+            );
+            writeback
+                .on_hook(
+                    HookPoint::AfterTurn,
+                    &context(
+                        &session,
+                        &messages,
+                        Some(&candidate),
+                        &invoker,
+                        MEMORY_WRITEBACK_MODULE_ID,
+                    ),
+                )
+                .await
+                .unwrap();
+            // 时刻推进 ⇒ 物化 episode 的 id 变化（否则真库会按 id 直接忽略）。
+            clock.advance(chrono::Duration::seconds(60));
+        }
+
+        let materialized = memory
+            .episodes
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|episode| episode.role == "memory")
+            .count();
+        assert_eq!(
+            materialized, 1,
+            "**接线前**这里是 2（同一段内容重复落库）⇒ ⇒ 接线后只落 1 条"
+        );
+        assert_eq!(
+            writeback.dedup_skipped_count(),
+            1,
+            "被门拦下的条数必须**可观测**（不许静默少写）"
+        );
+    }
+
+    /// ⭐ **不许跨来源误杀**：同一段内容落在**两个不同来源**（两个会话）
+    /// ⇒ ⇒ **各存各的**（门只看「同一个来源桶内有没有重复」）。
+    #[tokio::test]
+    async fn writeback_dedup_gate_does_not_kill_across_sources() {
+        let memory = Arc::new(FakeMemory::default());
+        let clock = Arc::new(VirtualClock::new(
+            apeireth_core::kernel::Timestamp::from_epoch_millis(1_700_000_000_000)
+                .unwrap()
+                .as_datetime(),
+        ));
+        let writeback = MemoryWritebackModule::new(memory.clone(), clock.clone());
+        let invoker: Arc<dyn super::super::module::ModuleInvoker> = Arc::new(FixedInvoker {
+            response: NormalizedResponse::text("unused", "fake", "unused"),
+            calls: AtomicU64::new(0),
+        });
+        let messages = vec![NormalizedMessage::user("I prefer concise answers")];
+
+        for index in 0..2 {
+            // **两个不同会话** ⇒ 两个不同来源桶 ⇒ 同内容不许互相误杀。
+            let session = SessionId::new();
+            let candidate = NormalizedResponse::text(
+                if index == 0 { "answer-1" } else { "answer-2" },
+                "fake",
+                "好的，简洁优先",
+            );
+            writeback
+                .on_hook(
+                    HookPoint::AfterTurn,
+                    &context(
+                        &session,
+                        &messages,
+                        Some(&candidate),
+                        &invoker,
+                        MEMORY_WRITEBACK_MODULE_ID,
+                    ),
+                )
+                .await
+                .unwrap();
+            clock.advance(chrono::Duration::seconds(60));
+        }
+
+        let materialized = memory
+            .episodes
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|episode| episode.role == "memory")
+            .count();
+        assert_eq!(
+            materialized, 2,
+            "不同来源的同一段内容**各存各的**（不许跨来源误杀）"
+        );
+        assert_eq!(writeback.dedup_skipped_count(), 0, "跨来源不该触发门");
+    }
+
+    /// **命名空间按来源分桶**（纯函数口径）：私有 Profile 分区与普通会话
+    /// ⇒ ⇒ 两个**不同的桶** ⇒ ⇒ 门不会互相误杀。
+    #[test]
+    fn dedup_namespace_buckets_by_source() {
+        assert_eq!(
+            dedup_namespace(Some("partition-a"), "session-x"),
+            "profile:partition-a"
+        );
+        assert_eq!(dedup_namespace(None, "session-x"), "session:session-x");
+        assert_ne!(
+            dedup_namespace(Some("partition-a"), "session-x"),
+            dedup_namespace(None, "session-x"),
+            "私有分区与普通会话必须是**不同的桶**"
+        );
+        // 空分区 ⇒ 回落普通会话桶（不许造出第三种桶）。
+        assert_eq!(
+            dedup_namespace(Some("   "), "session-x"),
+            "session:session-x"
+        );
     }
 
     #[tokio::test]
@@ -4477,19 +5374,22 @@ mod tests {
         let modules =
             super::super::production::ProductionCognitiveModules::build(config, backends, clock)
                 .unwrap();
-        assert_eq!(
-            modules.ids(),
-            vec![
-                MEMORY_RECALL_MODULE_ID,
-                PREFERENCE_RECALL_MODULE_ID,
-                SELF_ASSESSMENT_MODULE_ID,
-                // 生物机制族 W3.2: BioAssemblyModule 为懒注册（两个 env 全关 =
-                // 不构造 = 不注册，见 startup_instrumentation 的懒加载语义）；
-                // 因此默认配置下不占槽位，开关开时注册在 self_assessment 与
-                // memory_writeback 之间（顺序由 production 注册点固定）。
-                MEMORY_WRITEBACK_MODULE_ID,
-            ]
-        );
+        let mut expected = vec![
+            MEMORY_RECALL_MODULE_ID,
+            PREFERENCE_RECALL_MODULE_ID,
+            SELF_ASSESSMENT_MODULE_ID,
+            // 生物机制族 W3.2: BioAssemblyModule 为懒注册（两个 env 全关 =
+            // 不构造 = 不注册，见 startup_instrumentation 的懒加载语义）；
+            // 因此默认配置下不占槽位，开关开时注册在 self_assessment 与
+            // memory_writeback 之间（顺序由 production 注册点固定）。
+            MEMORY_WRITEBACK_MODULE_ID,
+        ];
+        // 问责闭环第 ③ 步 · 自动回填面：**默认关**（与问责面同一个开关）——
+        // 开关开时它在模块表**首位**。
+        if crate::egress_gate::egress_gate_enabled_from_env() {
+            expected.insert(0, "accountability.backfill");
+        }
+        assert_eq!(modules.ids(), expected);
         let telemetry = modules.telemetry();
         let _runtime = modules
             .register_into(Runtime::builder())
@@ -4759,5 +5659,45 @@ mod tests {
             summary.last_move()
         );
         let _ = std::fs::remove_file(&log);
+    }
+
+    /// **锁中毒后仍可继续**（Judge 观察面）。
+    ///
+    /// 旧实现是 `.lock().expect("judge observations mutex")` ⇒ ⇒ 一次中毒
+    /// ⇒ 此后**每个回合**都 panic ⇒ ⇒ 一个模块的失误升级成整轮崩溃。
+    /// ⇒ ⇒ 现在：中毒即恢复（继续跑）+ **明确记录**中毒次数。
+    #[test]
+    fn a_poisoned_judge_observations_lock_keeps_the_turn_going() {
+        let observations = Arc::new(JudgeObservations::default());
+        let session = SessionId::new();
+
+        // 制造中毒: 持锁线程 panic（锁被 poison）。
+        {
+            let poisoned = Arc::clone(&observations);
+            let outcome = std::thread::spawn(move || {
+                let _guard = poisoned.by_session.lock().expect("lock before poisoning");
+                panic!("poison the judge observations mutex");
+            })
+            .join();
+            assert!(outcome.is_err(), "持锁线程确实 panic 了（制造中毒）");
+        }
+
+        // 中毒后: **不 panic** + 仍能读写。
+        let result = JudgeResult {
+            score: 0.5,
+            verdict: JudgeVerdict::Pass,
+            critique: String::new(),
+        };
+        observations.record(session, result.clone());
+        assert_eq!(observations.get(&session), Some(result));
+        observations.clear(&session);
+        assert_eq!(observations.get(&session), None);
+
+        // 中毒被**明确记录**（不静默恢复）。
+        assert!(
+            observations.poisoned_locks() >= 1,
+            "锁中毒必须被计数（明确记录）: {}",
+            observations.poisoned_locks()
+        );
     }
 }

@@ -230,11 +230,6 @@ impl EmotionMemoryEngine {
         Some(last - first)
     }
 
-    /// 情绪趋势 (便捷: 用 `system_time_ms()` 派生 now).
-    pub fn mood_trend(&self, window_ms: i64) -> Option<f64> {
-        self.mood_trend_at(system_time_ms(), window_ms)
-    }
-
     /// 情绪上下文检索: 找与目标情绪相似的记录 (valence 差 ≤ tolerance) (per v1).
     ///
     /// "记得你上次烦的时候" — 伙伴行为的机制, 非拟人.

@@ -1,0 +1,92 @@
+schema: apeireth.failure-patterns.v1
+patterns:
+  - id: as-i64-truncates-recency
+    trigger: "`as i64`"
+    failure: 把 f64 直接 `as i64` ⇒ 分数被截断 ⇒ recency 信号恒为 0 ⇒ 实测出「Δ 精确为 0」的假无差异
+    prevention: 分数一律用 `f64`，需要整数时用 `.round() as i64`
+    guard: python3 scripts/d4_ledger.py --check
+    first_seen: "2026-10-28"
+    occurrences: 1
+    category: harness-bug
+    source: docs/status/spec-batch-status.md
+  - id: hardcoded-now-vs-corpus-year
+    trigger: hardcoded 当前年份
+    failure: 把「现在」写死成 2027 而语料是 2023 ⇒ recency_score 恒为 0 ⇒ 又一次假无差异
+    prevention: 「现在」必须取**样本自身**的时间基准
+    guard: python3 scripts/d4_ledger.py --check
+    first_seen: "2026-10-28"
+    occurrences: 1
+    category: harness-bug
+    source: crates/engine/memory/examples/d4_fusion_probe.rs
+  - id: char-jaccard-overuse-for-duplicate
+    trigger: 字符集 Jaccard
+    failure: 用字符集 Jaccard 判重 ⇒ 短英文句子字符集高度重叠 ⇒ 把大量轮次判成重复 ⇒ 实测 −0.2558 的假掉分
+    prevention: 判重用**词/句**级相似度；字符集只作粗筛
+    guard: python3 scripts/d4_ledger.py --check
+    first_seen: "2026-10-28"
+    occurrences: 1
+    category: false-positive
+    source: docs/status/spec-batch-status.md
+  - id: o2-squared-characters-vs-dedup
+    trigger: 按 query 挑最相关段
+    failure: 题面只有主体词 ⇒ 按 query 挑出的段恰好不是答案段 ⇒ 两本书上都是负收益
+    prevention: 别按 query 挑段；用**结构化锚点**（时间/位置/链）
+    guard: python3 scripts/check_golden_baseline.py
+    first_seen: "2026-10-28"
+    occurrences: 1
+    category: harness-bug
+    source: docs/status/injection-oracle-bound-2026-10-27.md
+  - id: diff-of-index-order-no-effect-on-bm25
+    trigger: 只改索引顺序
+    failure: 重排索引对 BM25 完全无效 ⇒ 换索引顺序等于没做 ⇒ 实测 Δ 精确为 0.0000
+    prevention: 要测排序 ⇒ 必须测**分数融合**（不是换索引顺序）
+    guard: python3 scripts/d4_ledger.py --check
+    first_seen: "2026-10-28"
+    occurrences: 1
+    category: false-positive
+    source: docs/status/spec-batch-status.md
+  - id: quadratic-jaccard-times-cases
+    trigger: 全库两两比较
+    failure: 对全库记录两两算 Jaccard ⇒ O(n²)×题数 ⇒ 跑 10 分钟没结果
+    prevention: 只比**头部候选** + 加长度剪枝
+    guard: ""
+    first_seen: "2026-10-28"
+    occurrences: 1
+    category: environment-failure
+    source: crates/engine/memory/examples/d4_fusion_probe.rs
+  - id: subset-index-mismatch
+    trigger: 压缩子集传给全局索引函数
+    failure: 把压缩后的子集传给按全局索引取值的函数 ⇒ 索引错位 ⇒ 一度得出 0.3043 的荒谬「最优」
+    prevention: 传索引子集时，**索引基准必须一致**（全量 or 局部）
+    guard: python3 scripts/internal_golden.py --check
+    first_seen: "2026-10-28"
+    occurrences: 1
+    category: contract-drift
+    source: crates/engine/memory/examples/feature_blend_ab.rs
+  - id: stale-verified-at-sha-too-long
+    trigger: "`verified_at` 写成 64 位"
+    failure: 把 40 位 sha 拼成 64 位 ⇒ git 报 `bad revision` ⇒ claim 永远判 STALE
+    prevention: "`verified_at` 用**缩写 sha**（与文件既有风格一致）"
+    guard: python3 scripts/verify_ledger.py --quiet
+    first_seen: "2026-10-28"
+    occurrences: 1
+    category: stale-base
+    source: docs/status/claims.yaml
+  - id: generator-emits-stale-path
+    trigger: 生成器输出手写路径
+    failure: 生成器自身输出了已不存在的路径 ⇒ 人改副本后守卫立刻变红（真源本身错了）
+    prevention: 生成器输出**必须先验证路径存在**
+    guard: python3 scripts/check_doc_paths.py --check
+    first_seen: "2026-10-28"
+    occurrences: 1
+    category: harness-bug
+    source: docs/status/harness-audit-2026-10-30.md
+  - id: docs-only-return-zero-in-verifier
+    trigger: 变更集只含文档
+    failure: 校验器对 docs-only 变更直接 `return 0` ⇒ 文档类门禁被整体跳过（『SKIPPED 当 PASS』）
+    prevention: docs-only 也必须跑**文档类**门禁
+    guard: python3 scripts/harness.py check
+    first_seen: "2026-10-28"
+    occurrences: 1
+    category: false-positive
+    source: docs/status/harness-convergence-decision-2026-10-30.md

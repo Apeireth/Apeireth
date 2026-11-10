@@ -22,11 +22,48 @@ on:
   push:
     branches: [main, feature/cognitive-infrastructure-vnext, feature/memory-v2.2-production-completion]
   pull_request:
+    # ⭐ **paths 过滤**（2026-11-04 加）：CI 积压的根因是**PR 侧无过滤**
+    # ⇒ ⇒ 每个 push 都触发全部 34 个 workflow（含 Kani / Miri / Coverage / OS matrix）
+    # ⇒ ⇒ GitHub runner 排队 ⇒ ⇒ 积压 32 个。
+    # ⇒ ⇒ 纯文档/台账改动**不触发**本 workflow（它守的是代码）
+    # ⇒ ⇒ 代码 / 依赖 / 工具链 / 本 workflow 自身的改动**照跑**。
+    paths:
+      - 'crates/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'rust-toolchain.toml'
+      - '.cargo/**'
+      - 'fuzz/**'
+      - 'frontend/**/src-tauri/**'
+      - 'frontend/**/package.json'
+      - 'frontend/**/pnpm-lock.yaml'
+      - '.github/workflows/rust.yml'
     branches: ['**']
   workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
+  # ⚠️ **Windows 控制台不是 UTF-8**（cp1252 / cp936）⇒ ⇒ 本仓脚本打印的中文与 `⇒`
+  #   会 `UnicodeEncodeError` ⇒ ⇒ 步骤 exit 1 ⇒ ⇒ **把本来通过的测试判成红**
+  #   （2026-11-10 实测：windows-latest run 42769798792 的「回收测试二进制（腾磁盘）」步骤）。
+  #   ⇒ ⇒ 与 `scripts/harness.py` 跑门禁子进程时的做法同口径。
+  PYTHONIOENCODING: utf-8
+  PYTHONUTF8: '1'
+
+# ⚠️ **CI 磁盘瘦身**（2026-11-01 实测，见 commit body 的 0 装真账）
+# 同一命令 `cargo build --workspace --tests --locked` 的 target 体积：
+#   默认          ⇒ 101 GB / 10m14s
+#   debug=0+inc=0 ⇒  14 GB /  3m21s
+#   **+ strip=symbols ⇒  7.5 GB / 3m20s**（runner 磁盘 14 GB ⇒ 只有这个装得下）
+# 原因：每个测试二进制的 `STRTAB`（panic 消息/类型名）**73.6 MiB** + `SYMTAB` 9.5 MiB
+#   ⇒ `strip=debuginfo` **不去符号表** ⇒ 必须 `strip=symbols`。
+# ⇒ **不删任何测试、不改任何口径**，只改构建环境。
+# ⚠️ **coverage.yml 故意不改**（tarpaulin 需要调试信息）。
+  CARGO_INCREMENTAL: 0
+  CARGO_PROFILE_DEV_DEBUG: 0
+  CARGO_PROFILE_TEST_DEBUG: 0
+  CARGO_PROFILE_DEV_STRIP: symbols
+  CARGO_PROFILE_TEST_STRIP: symbols
   RUST_BACKTRACE: short
 
 permissions:
@@ -47,7 +84,7 @@ jobs:
         run: python scripts/check_no_legacy_deps.py
 
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.97.1
 
       # keyring/dbus/wayland/pipewire/egl 需要系统库 (仅 Linux)
       - name: "Install system deps (Linux: libdbus + libwayland + libpipewire + libegl)"
@@ -70,16 +107,33 @@ jobs:
       - name: cargo build --workspace --tests --locked
         run: cargo build --workspace --tests --locked
 
+      # R8-D: 治理链六段串联 + 三路径演练必须进 CI（ADR-0010 §4）
+      #
+      # ⚠️ **位置 = nextest 之前**（2026-11-07 修 · 「治理链演练入 CI」接线）：
+      # 原位置排在 `cargo nextest run --workspace` **之后**
+      # ⇒ ⇒ 三平台 nextest 常红（基座既有）⇒ ⇒ **job 早停** ⇒ ⇒ **本步骤被 skip**
+      # ⇒ ⇒ 远端 0 次执行 ⇒ ⇒ 声明 `gov.chain_drill_ci` / `sec.governance_chain_drill` 升不了级
+      # （2026-10-22 复核 rust.yml 运行实况）。
+      #
+      # ⇒ ⇒ **前置依赖核查（决定「甲 / 乙」的依据）**：
+      #   本步骤只跑 `cargo test -p apeireth-governance --test governance_chain_drill`，
+      #   所需产物由**上面**的 `cargo build --workspace --tests --locked` 提供
+      #   （`--tests` 已构建本集成测试目标）⇒ ⇒ **对 nextest 无任何前置依赖**
+      #   （不读 nextest 的 JUnit、不消费 nextest 产物）
+      #   ⇒ ⇒ ⇒ 故选**甲**（提前到 nextest 之前）⇒ ⇒ 「早停」根除：nextest 红不再 skip 本步骤。
+      #
+      # ⚠️ **失败语义**：本步骤**失败即 job 红**
+      #   （**无** `if: always()`、**无** `|| true`、**无** 失败吞掉）
+      #   ⇒ ⇒ 治理链六段演练在 CI 里是**真门禁**，不是装饰步骤。
+      - name: Governance chain drill (R8-D)
+        run: cargo test -p apeireth-governance --test governance_chain_drill --locked -- --nocapture
+
       - name: cargo nextest run --workspace --profile ci --locked
         # profile "ci" 在 .config/nextest.toml 定义 (fail-fast + retries 2)
         run: cargo nextest run --workspace --profile ci --locked
 
       - name: Canonical process isolation integration tests
         run: cargo test -p apeireth-tools-canonical --test process_executor --locked -- --nocapture
-
-      # R8-D: 治理链六段串联 + 三路径演练必须进 CI（ADR-0010 §4）
-      - name: Governance chain drill (R8-D)
-        run: cargo test -p apeireth-governance --test governance_chain_drill --locked -- --nocapture
 
       - name: Upload JUnit report
         if: always()
@@ -89,8 +143,41 @@ jobs:
           path: target/nextest/ci/junit.xml
           retention-days: 14
 
-  # === 8 硬墙守门 (per CONTRIBUTING.md §0 触碰实查) ===
+      # ── ⭐ 回收测试二进制（治 runner 磁盘爆 / ENOSPC）────────────────
+      # 2026-11-05 实测过的失败形态：CI 报 **exit 101** + `failed to build archive`
+      # + `could not compile rustls` + `##[warning]You are running out of disk space.
+      # Free space left: 76 MB` ⇒ ⇒ **长得像编译错误，其实是 ENOSPC**
+      # ⇒ ⇒ 本地全绿、CI 却红 ⇒ ⇒ 极易误判成「代码问题」。
+      #
+      # ⇒ ⇒ 本仓 cargo 的磁盘占用 **90% 来自测试二进制**（每个测试 = 一个可执行文件）
+      # ⇒ ⇒ ⇒ 跑完整套 nextest 后不回收 ⇒ ⇒ runner 很快见底。
+      #
+      # ⚠️ 位置 = **所有 cargo 步骤之后**（JUnit 上传之后）：
+      #   · nextest 之后只剩一个 `cargo test`（canonical；治理链演练已于 2026-11-07 前置到 nextest 之前）
+      #     ⇒ ⇒ 提前删 ⇒ ⇒ 它要**重编**；
+      #   · JUnit 在 `target/nextest/` ⇒ ⇒ **不在** `debug/deps` ⇒ ⇒ 清理**不伤 artifact**。
+      # ⚠️ `if: always()` ⇒ ⇒ 否则**测试失败时不清理** ⇒ ⇒ 而失败时磁盘压力最大
+      # ⇒ ⇒ ⇒ （ENOSPC 恰好发生在「快跑完、还要写 artifact」的时候）。
+      - name: 回收测试二进制（腾磁盘）
+        if: always()
+        run: python3 scripts/clean_test_binaries.py --target target
+
+  # === 硬墙守门 (per CONTRIBUTING.md §0 触碰实查) ===
+  # ⚠️ job 名里的「8 硬墙」是**历史叫法**，实际跑 **6 条**守门（见下方各 step）。
+  #    ⇒ **有意不改 job 名**：job 名 = GitHub check 名 ⇒ 改名会影响分支保护的
+  #    required check（远端真值本机**不可读**）⇒ 只在注释里写明实际条数。
+  #    （审计 R16，2026-10-30）
   # 跟 companion-desktop-ci.yml 平行, 但只盯根 workspace
+  # 工具链钉版一致性（2026-10-30）：CI 装的 rustc 必须 == `rust-toolchain.toml` 声明的版本
+  # ⇒ 否则「可重现构建」在 CI 里不成立（本地钉、CI 浮动）。
+  toolchain-pin:
+    name: 工具链钉版一致 (CI == rust-toolchain.toml)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 钉版核对
+        run: python3 scripts/check_toolchain_pin.py
+
   hard-walls:
     name: 8 硬墙守门 (LOCKED / version / baseline / 14 键 / V1136)
     runs-on: ubuntu-latest
@@ -308,6 +395,40 @@ jobs:
             fi
           fi
 
+  # === CI 逐步门禁覆盖检查（2026-10-27 加；**只在本地跑，不进 CI**）===
+  #
+  # **为什么要有**：CI 的 `Secret scan` job 有**两步**（`scan-all` + `scan-history`）
+  # ⇒ 而我此前的本地门禁**只按 workflow 文件清单提取** ⇒ **漏了同一个 job 里的第二步**
+  # ⇒ ⇒ CI 红而本地绿（「门禁全绿」不等于「CI 会绿」）。
+  # ⇒ ⇒ `scripts/check_ci_gate_coverage.py` 把这条教训变成**机制**：CI 的每一步，
+  #    要么本地门禁也跑，要么在该脚本的 `CI_ONLY` 里显式豁免并写明理由。
+  #
+  # ⚠️ **2026-10-28 修正：这个 job 从 CI 移除**。
+  # 我原先把它做成了一个 CI job ⇒ ⇒ **它必然红**：脚本要读**仓外**的本地门禁脚本
+  # (`/root/Documents/.../gates.sh`)，CI 里根本没有那个文件 ⇒ 脚本 `return 1`。
+  # ⇒ ⇒ 而它检查的是「**本地**门禁是否覆盖 CI 的每一步」
+  # ⇒ ⇒ **在 CI 里没有输入 ⇒ 天然不适用** ⇒ ⇒ 做成 CI job 就是**装饰性的红**。
+  # ⇒ ⇒ 正解：**只留在本地门禁**（`gates.sh` 里已有该项）。
+  # （教训与 §一百零五–一百零七 同族：**检查器本身也要被检查** ——
+  #   一个恒红的 job 与一个恒绿的 job 一样没有信息量。）
+
+  # === 跨测试 env 竞态清单（2026-10-27 加；**报告型，不消警**）===
+  #
+  # Rust 的 `env::set_var` 改的是**进程级**状态 ⇒ 同二进制的**另一个测试**可能同时读到
+  # ⇒ ⇒ 表现为「**单跑几十次 0 失败、全量并行时偶发**」。
+  # ⇒ 2026-10-27 实测撞了两次（cli 的 onboarding 竞态 / memory 的 retrieval_pipeline 竞态）
+  # ⇒ ⇒ 本 job 把候选**一次性暴露**（而不是等下一次偶发）。
+  # ⚠️ **为什么不做成判红门禁**：精确判据需要**跨文件**的数据流分析 ⇒
+  #    机械判据必然有假阳性 ⇒ ⇒ 与其做一个会误报的消警器，不如给出**可复核的候选清单**。
+  env-race-inventory:
+    name: Cross-test env race inventory (候选清单, 报告型)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: List env-writing tests that do not hold a lock in the same function
+        run: python3 scripts/check_env_race.py
+
   # === R215 防御层: Secret 扫描 (per docs/04-internal/secret-management-policy.md) ===
   # 4 层防御: pre-commit hook (本地) + CI gate (本 workflow) + GitHub Secret Scanning (平台, 主人启用) + .gitleaks.toml (gitleaks binary 装上时升级)
   # 当前用本地 PowerShell 扫描器 (gitleaks binary 因 release-assets DNS 阻塞装不上, 0 装 PASS 标注)
@@ -320,11 +441,37 @@ jobs:
         with:
           fetch-depth: 0  # scan-history 需要全历史
 
-      - name: Install PowerShell
-        shell: pwsh
+      - name: Ensure PowerShell (runner images preinstall pwsh; apt is a fallback)
+        # ⚠️ **2026-10-31 合并批（两条线独立发现了同一个缺陷）**：原写法是无条件
+        #     `sudo apt-get install -y powershell`，且准备步用 `shell: pwsh`
+        # ⇒ ⇒ Ubuntu 的**默认仓库没有这个包** ⇒ `Unable to locate package` ⇒ exit 100
+        # ⇒ ⇒ 而 `ubuntu-latest` **本来就预装 pwsh** ⇒ ⇒ 那一步既多余又必然失败
+        # ⇒ ⇒ **整个 secret-scan job 一直红在这个准备步上**（而不是红在真扫描上）
+        #   ⇒ ⇒ **两个真扫描步（scan-all / scan-history）从来没跑到过**。
+        # ⇒ 现在改成**幂等守卫**：有 pwsh 就打印版本直接过；没有才尝试装。
+        #   （准备步用 `shell: bash` ⇒ 不依赖 pwsh 本身存在。）
+        shell: bash
         run: |
+          if command -v pwsh >/dev/null 2>&1; then
+            echo "pwsh already present:"; pwsh --version; exit 0
+          fi
           sudo apt-get update
           sudo apt-get install -y powershell
+          if ! command -v pwsh >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y powershell
+          fi
+          pwsh -NoProfile -Command '$PSVersionTable.PSVersion.ToString()'
+
+      - name: Verify secret scanner contracts
+        shell: bash
+        run: python -m unittest discover -s scripts -p test_secret_scan.py
+
+      - name: Verify YAML duplicate-key guard contracts
+        shell: bash
+        # 2026-11-03: 严格 YAML 重复键守卫的自测（**守卫自己坏掉 = 把病放回去**）。
+        # 该病已复发三轮（YAML 同层重复键 ⇒ GitHub 拒解析整个 workflow ⇒ 0 job 秒红）。
+        run: python -m unittest discover -s scripts -p test_yaml_duplicate_keys.py
 
       - name: "Secret scan: working tree (scan-all)"
         shell: pwsh

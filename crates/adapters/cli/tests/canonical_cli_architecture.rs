@@ -41,9 +41,13 @@ fn canonical_cli_chat_path_enters_runtime_execute() {
 
 #[test]
 fn canonical_cli_bootstrap_uses_the_runtime_builder_and_its_entry_adapter() {
+    // 边界标记随 2026-10-25 的**真拆分**更新: 守夜人两个命令已从 `lib.rs`
+    // 搬进 `nightwatch_command` 模块（装配根尺寸零余量），故此处改用拆分后
+    // `dispatch_canonical_chat` 的下一个顶层声明作边界。**断言强度不变**
+    // （仍要求该函数体含 builder + turn 入口两个关键调用）。
     let body = function_body(
         "pub async fn dispatch_canonical_chat",
-        "/// **守夜人 Nightwatch**",
+        "/// **W3 onering 账本消费旋钮**",
     );
 
     assert!(

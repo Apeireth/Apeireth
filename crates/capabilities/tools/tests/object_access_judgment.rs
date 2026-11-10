@@ -11,6 +11,9 @@
 //!    拒绝即拒绝;
 //! 6. **执行前后状态对比**: 只认窗口内对象事实 (含并发安全)。
 
+// D-1（owner 裁定 2026-10-25）：测试夹具 helper（`call_shell` / `invoke_shell`
+// 供对象判定用例构造工具调用，当前无用例调用）—— 夹具不按生产代码标准判「死」。
+#![allow(dead_code)]
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 

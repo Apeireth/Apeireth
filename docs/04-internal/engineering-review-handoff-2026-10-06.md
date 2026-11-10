@@ -4,9 +4,10 @@
 > **交给人做什么**: **先复核我的结论**(第 2 节, 每条带可复现命令与预期输出),
 > **再按第 5 节的工作包推进**(每个包带验收门)。第 4 节明确列出我**没有**验证的东西。
 > **日期**: 2026-10-06。**HEAD**: `909d67e9` (main, 已推 origin; 其父 `e4f2f451` = 台账 #39 那批)。
-> **口径**: 本文件遵守仓库四级诚实口径 (`docs/03-reference/system-capabilities.md:8-10`) ——
-> **IMPLEMENTED ≠ PRODUCTION WIRED ≠ DEFAULT ENABLED ≠ HARDWARE VALIDATED**。
-> 本文件里每一条"已完成/已实现"都必须能落到四条里的一条, 不许含混。
+> **口径**: 本文件遵守仓库四级诚实口径 (`docs/01-architecture/system-capabilities.md:8-10`) ——
+> 口径阶梯 **NOT IMPLEMENTED < IMPLEMENTED < PRODUCTION WIRED < HARDWARE VALIDATED**；
+> **`DEFAULT ENABLED` 不是一级**，是横切属性（默认开/关，与阶梯正交）。
+> 本文件里每一条"已完成/已实现"都必须能落到阶梯的一条 + 说清默认开否, 不许含混。
 
 ---
 

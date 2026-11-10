@@ -21,6 +21,24 @@ pub enum MemoryDimension {
     Persona,
 }
 
+/// 「近期记忆」的滑动窗口长度：24 小时（与 [`MemoryDimension::Recent`] 的文档一致）。
+pub const RECENT_WINDOW_MS: u64 = 24 * 60 * 60 * 1_000;
+
+/// 一条带时间戳的近期记忆。
+///
+/// # 为什么必须带时间戳
+///
+/// `Recent` 维度的语义是「**24 小时**滑动情境窗口」——没有时间戳就无法判断
+/// 「还在窗口内吗」，只能无限堆积或永不产出。此前该维度的后备字段是
+/// `Vec<String>`（无时间戳、且**从未被写入**）⇒ 维度永远为空。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RecentMemory {
+    /// 记忆正文。
+    pub content: String,
+    /// 写入时刻（Unix epoch 毫秒，**调用方注入**，本模块不读时钟）。
+    pub at_ms: u64,
+}
+
 /// 单条事实记忆条目.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FactItem {
@@ -59,8 +77,8 @@ pub struct FiveDimensionalMemory {
     /// 环形工作记忆 (最大容量 K)
     working_capacity: usize,
     working_buffer: VecDeque<String>,
-    /// 近期记忆列表
-    recent_memories: Vec<String>,
+    /// 近期记忆（24h 滑动窗口，带时间戳）
+    recent_memories: Vec<RecentMemory>,
     /// 结构化事实记忆库: entity -> (property -> FactItem)
     facts: HashMap<String, HashMap<String, FactItem>>,
     /// 反思记忆列表
@@ -96,6 +114,39 @@ impl FiveDimensionalMemory {
     /// 获取工作记忆全文.
     pub fn get_working(&self) -> Vec<String> {
         self.working_buffer.iter().cloned().collect()
+    }
+
+    /// 写入一条**近期记忆**（24h 滑动窗口），并顺手剪掉出窗的旧条目。
+    ///
+    /// 时间由调用方注入（本模块不读时钟，与全仓「显式时间戳」口径一致）。
+    /// 出窗判定是 `now_ms - at_ms > RECENT_WINDOW_MS`：
+    /// **恰好 24h 仍在窗内**（边界含等号，有测试钉死）。
+    pub fn push_recent(&mut self, content: &str, now_ms: u64) {
+        self.recent_memories.push(RecentMemory {
+            content: content.to_string(),
+            at_ms: now_ms,
+        });
+        self.prune_recent(now_ms);
+    }
+
+    /// 剪掉已出窗的近期记忆（`now_ms - at_ms > RECENT_WINDOW_MS`）。
+    ///
+    /// 用饱和减法：`at_ms > now_ms`（时钟回拨 / 未来条目）不会被误剪。
+    pub fn prune_recent(&mut self, now_ms: u64) {
+        self.recent_memories
+            .retain(|item| now_ms.saturating_sub(item.at_ms) <= RECENT_WINDOW_MS);
+    }
+
+    /// 取当前仍在 24h 窗口内的近期记忆（按写入顺序，正文）。
+    ///
+    /// **不改状态**：视图层查询不该顺手改数据；出窗条目由 `push_recent` /
+    /// `prune_recent` 清理。
+    pub fn get_recent(&self, now_ms: u64) -> Vec<String> {
+        self.recent_memories
+            .iter()
+            .filter(|item| now_ms.saturating_sub(item.at_ms) <= RECENT_WINDOW_MS)
+            .map(|item| item.content.clone())
+            .collect()
     }
 
     /// 写入/更新事实记忆 (带置信度与自动时间戳更新).
@@ -185,7 +236,22 @@ impl FiveDimensionalMemory {
             });
         }
 
-        // 3. Facts
+        // 3. Recent（24h 滑动窗口）
+        //
+        // 此前这个维度**从不产出**：`recent_memories` 字段声明了却从未被写入，
+        // 于是「5 维时空记忆」对 Memory Browser 而言实际只有 4 维。
+        for (i, item) in self.recent_memories.iter().enumerate() {
+            entries.push(MemoryBrowserEntry {
+                id: format!("recent_{}_{}", item.at_ms, i),
+                dimension: MemoryDimension::Recent,
+                title: "近期记忆".to_string(),
+                content: item.content.clone(),
+                timestamp_ms: item.at_ms,
+                is_editable: false,
+            });
+        }
+
+        // 4. Facts
         for (entity, props) in &self.facts {
             for (prop, item) in props {
                 entries.push(MemoryBrowserEntry {
@@ -199,7 +265,7 @@ impl FiveDimensionalMemory {
             }
         }
 
-        // 4. Reflections
+        // 5. Reflections
         for refl in &self.reflections {
             entries.push(MemoryBrowserEntry {
                 id: refl.id.clone(),
@@ -256,5 +322,91 @@ mod tests {
         assert!(entries
             .iter()
             .any(|e| e.dimension == MemoryDimension::Reflection));
+    }
+
+    /// **五维必须真的都产得出来**：每个 `MemoryDimension` 变体都要有对应条目。
+    ///
+    /// 这条是「维度永不空转」的守卫 —— 接线前 `Recent` 从不产出
+    /// （字段声明了却从未写入），于是矩阵宣称的「5 维」实际只有 4 维。
+    /// 新增维度却忘了覆盖导出时，这条会红。
+    #[test]
+    fn every_declared_dimension_is_exportable() {
+        let mut mem = FiveDimensionalMemory::new("人设", 2);
+        mem.push_working("工作");
+        mem.push_recent("近期", 1_000);
+        mem.upsert_fact("user", "like", "茶", 0.9, 1_000);
+        mem.add_reflection("现象", "感悟", vec!["ep".to_string()], 1_000);
+
+        let entries = mem.export_browser_entries();
+        for dimension in [
+            MemoryDimension::Working,
+            MemoryDimension::Recent,
+            MemoryDimension::Fact,
+            MemoryDimension::Reflection,
+            MemoryDimension::Persona,
+        ] {
+            assert!(
+                entries.iter().any(|entry| entry.dimension == dimension),
+                "维度 {dimension:?} 从未产出（宣称 N 维就必须真 N 维）"
+            );
+        }
+    }
+
+    /// 近期记忆是**24h 滑动窗口**：出窗即不再产出。
+    #[test]
+    fn recent_memory_rolls_with_a_24h_window() {
+        let mut mem = FiveDimensionalMemory::new("人设", 2);
+        let base = 1_700_000_000_000u64;
+        mem.push_recent("两小时前", base);
+        mem.push_recent("很旧的一条", base);
+
+        // 过 2 小时：两条都还在窗内
+        assert_eq!(mem.get_recent(base + 2 * 3_600_000).len(), 2);
+
+        // 过 25 小时：都出窗
+        assert!(
+            mem.get_recent(base + 25 * 3_600_000).is_empty(),
+            "超过 24h 不该再产出"
+        );
+
+        // 从游标上届时刻 push ⇒ 会顺手把出窗条目剪掉
+        mem.push_recent("新的", base + 25 * 3_600_000);
+        let entries = mem.export_browser_entries();
+        let recent: Vec<_> = entries
+            .iter()
+            .filter(|entry| entry.dimension == MemoryDimension::Recent)
+            .collect();
+        assert_eq!(recent.len(), 1, "出窗条目应已被剪掉: {recent:?}");
+        assert_eq!(recent[0].content, "新的");
+        assert_eq!(recent[0].timestamp_ms, base + 25 * 3_600_000);
+    }
+
+    /// 边界：**恰好 24h 仍在窗内**（含等号），多 1ms 即出窗。
+    #[test]
+    fn recent_window_boundary_is_inclusive_at_exactly_24h() {
+        let mut mem = FiveDimensionalMemory::new("人设", 2);
+        let base = 1_000_000u64;
+        mem.push_recent("边界条目", base);
+
+        assert_eq!(
+            mem.get_recent(base + RECENT_WINDOW_MS),
+            vec!["边界条目".to_string()],
+            "恰好 24h 必须仍在窗内"
+        );
+        assert!(
+            mem.get_recent(base + RECENT_WINDOW_MS + 1).is_empty(),
+            "超过 24h 1ms 即出窗"
+        );
+    }
+
+    /// 时钟回拨（`now_ms` 早于条目时间）**不得误剪**已有近期记忆。
+    #[test]
+    fn clock_rollback_does_not_evict_recent_memory() {
+        let mut mem = FiveDimensionalMemory::new("人设", 2);
+        mem.push_recent("未来条目", 5_000);
+        // 回拨到 1_000：饱和减法让差值算作 0，条目仍在
+        assert_eq!(mem.get_recent(1_000), vec!["未来条目".to_string()]);
+        mem.prune_recent(1_000);
+        assert_eq!(mem.get_recent(5_000).len(), 1);
     }
 }

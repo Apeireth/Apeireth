@@ -270,6 +270,60 @@ impl KnowledgeGraphStore for SQLiteExperienceStore {
             .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })
     }
 
+    /// ⭐ **按 as-of 时间取事实**（2026-11-05 覆写 trait 默认实现）。
+    ///
+    /// **为什么必须覆写**：默认实现是在 `facts_from`（=「现在有效」）的结果上过滤
+    /// ⇒ ⇒ **拿不回「当时有效、现已作废」的事实** ⇒ ⇒ 时间旅行查询会漏。
+    /// ⇒ ⇒ 这里**走真 SQL**：valid-time 区间直接落在 WHERE 上。
+    ///
+    /// ⚠️ **与 `facts_from` 的唯一差别** = 多一个 `valid_from_ms <= ?2`
+    /// ⇒ ⇒ **未来才生效的事实不再出现在「现在」的查询里**（原先会漏出来 ⇒ ⇒ 那是 bug）。
+    fn facts_from_as_of(
+        &self,
+        subject_id: &str,
+        limit: u32,
+        as_of_ms: i64,
+    ) -> CapabilityResult<Vec<GraphFact>> {
+        self.pool
+            .read(
+                |conn: &rusqlite::Connection| -> Result<Vec<GraphFact>, apeireth_storage::StorageError> {
+                    let mut stmt = conn.prepare_cached(
+                        "SELECT id, subject_id, subject_kind, predicate, object_id, object_kind, \
+                            valid_from_ms, valid_until_ms, source_episode_id, confidence \
+                         FROM kg_facts \
+                         WHERE subject_id = ?1 \
+                           AND valid_from_ms <= ?2 \
+                           AND (valid_until_ms IS NULL OR valid_until_ms > ?2) \
+                         ORDER BY confidence DESC \
+                         LIMIT ?3",
+                    )?;
+                    let rows = stmt.query_map(
+                        rusqlite::params![subject_id, as_of_ms, i64::from(limit)],
+                        |row| {
+                            Ok(GraphFact {
+                                id: row.get(0)?,
+                                subject_id: row.get(1)?,
+                                subject_kind: row.get(2)?,
+                                predicate: row.get(3)?,
+                                object_id: row.get(4)?,
+                                object_kind: row.get(5)?,
+                                valid_from: row.get(6)?,
+                                valid_until: row.get(7)?,
+                                source_episode_id: row.get(8)?,
+                                confidence: row.get(9)?,
+                            })
+                        },
+                    )?;
+                    let mut out = Vec::new();
+                    for r in rows {
+                        out.push(r?);
+                    }
+                    Ok(out)
+                },
+            )
+            .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })
+    }
+
     fn facts_from(&self, subject_id: &str, limit: u32) -> CapabilityResult<Vec<GraphFact>> {
         self.pool
             .read(

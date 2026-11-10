@@ -161,8 +161,8 @@ impl ScoreComponents {
 
 /// Centralized ranking weights. No retrieval stage should own magic weights.
 ///
-/// `diversity_lambda` is the control for a later MMR selection stage: zero
-/// means relevance-only selection and one means diversity-only selection.
+/// `diversity_lambda` controls the MMR selection stage: zero = relevance-only selection, one = diversity-only.
+/// ⭐ Default 0.0 (2026-11-07, measured): a positive lambda lowered recall/nDCG on internal corpora (see `examples/retrieval_diversity_ab.rs`).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct MemoryRankingConfig {
@@ -176,6 +176,34 @@ pub struct MemoryRankingConfig {
     pub graph_weight: f64,
     pub novelty_weight: f64,
     pub diversity_lambda: f64,
+    /// ⭐⭐ **首命中位置**加成强度（`0` = 关，默认关）。
+    ///
+    /// # 为什么放在**排序配置**里
+    /// 它是**管线的重排强度**（像 `diversity_lambda` 一样）⇒ ⇒ 归一化权重集中在一处
+    /// ⇒ ⇒ 调权引擎算生效权重时也能原样带上（见 `retrieval_tuning::ranking`）。
+    ///
+    /// # 实测（**两把尺子结论相反 ⇒ 默认关**）
+    /// * 真实查询卷（真人问句，同口径）：α=0.10 ⇒ recall **+0.0192**（0.7246 → 0.7438）；
+    /// * 内部卷（模板题，同口径）：α=0.10 ⇒ recall **−0.0431 / −0.0282**。
+    /// * ⚠️ **此前记的「+0.1227」是混口径减法（无效），已撤回**（见
+    ///   `retrieval_pipeline/first_pos.rs` 文件头与 `examples/first_pos_arms.rs`）。
+    ///
+    /// ⇒ ⇒ 打开它的正当理由是「**你在自己的语料上量过**」，不是「文档说它更好」。
+    pub first_pos_alpha: f64,
+    /// ⭐⭐ **候选字符预算的「单条上限」**（计费口径 = **选后长度**）。
+    ///
+    /// # 为什么要有它（2026-11-08：修一个「静默全失」）
+    /// 候选预算过去按**原始正文长度**计费 ⇒ ⇒ 一条 7,400 字的记录在 4,000 字预算下
+    /// **一条都装不下** ⇒ ⇒ 整批候选被跳过 ⇒ ⇒ **不报错、不告警、模型一条也收不到**
+    /// （静默全失）；而**注入侧**按「选段 ≤ 单条上限」交付 ⇒ ⇒ **两侧口径不一致**。
+    ///
+    /// # 口径
+    /// * 计费 = `min(正文长度, 本字段)` ⇒ ⇒ **与交付侧同一口径**（交付侧也按本上限裁）；
+    /// * `0` ⇒ **不限**（按原始正文计费 = 旧口径，留作逃生阀）；
+    /// * 默认值 = **单一真源**
+    ///   [`crate::anchor_injection::AnchoredInjectionConfig::PRODUCTION`] 的 `span_chars`
+    ///   （**不写第二份 400**）。
+    pub candidate_span_chars: usize,
 }
 
 impl Default for MemoryRankingConfig {
@@ -190,7 +218,11 @@ impl Default for MemoryRankingConfig {
             confidence_weight: 0.05,
             graph_weight: 0.05,
             novelty_weight: 0.05,
-            diversity_lambda: 0.20,
+            diversity_lambda: 0.0,
+            first_pos_alpha: 0.0,
+            // 单条上限取**单一真源**（注入侧的生产跨度）⇒ ⇒ 不写第二份 200。
+            candidate_span_chars: crate::anchor_injection::AnchoredInjectionConfig::PRODUCTION
+                .span_chars,
         }
     }
 }
@@ -222,7 +254,8 @@ impl Default for RecallPolicy {
                 crate::layers::MemoryLayerKind::Semantic,
                 crate::layers::MemoryLayerKind::Relational,
             ],
-            limit: 8,
+            // ⭐ **默认名额 20**（2026-11-09 联合裁决，与 `MemoryRecallQuery::new` 同口径）。
+            limit: crate::layers::PRODUCTION_RECALL_LIMIT,
             max_chars: 4_000,
             proactive_budget: 2,
             min_score: 0.10,
@@ -273,13 +306,6 @@ impl RecallPolicy {
         self.max_chars = max_chars.max(128);
         self
     }
-
-    #[must_use]
-    pub fn with_proactive_budget(mut self, proactive_budget: usize) -> Self {
-        self.proactive_budget = proactive_budget;
-        self
-    }
-
     #[must_use]
     pub fn with_min_score(mut self, min_score: f64) -> Self {
         self.min_score = min_score;
@@ -291,22 +317,9 @@ impl RecallPolicy {
         self.as_of_ms = Some(as_of_ms);
         self
     }
-
-    #[must_use]
-    pub fn without_as_of(mut self) -> Self {
-        self.as_of_ms = None;
-        self
-    }
-
     #[must_use]
     pub fn with_token_budget(mut self, token_budget: usize) -> Self {
         self.token_budget = token_budget.max(1);
-        self
-    }
-
-    #[must_use]
-    pub fn with_as_of(mut self, as_of_ms: Option<i64>) -> Self {
-        self.as_of_ms = as_of_ms;
         self
     }
 }
@@ -551,6 +564,24 @@ impl PersonaProfileStore for InMemoryPersonaProfileStore {
 mod tests {
     use super::*;
 
+    /// ⭐⭐ **`diversity_lambda` 的默认值必须保持 0.0**（2026-11-07 实测钉死）。
+    ///
+    /// # 为什么钉
+    /// MMR 折中按设计就是「用相关度换新颖度」。内部两卷的 λ 扫描是**单调下降**：
+    /// redchamber recall@10 `λ=0: 0.4010` → `λ=0.2: 0.3802`（相对 **−5.19%**）；
+    /// watershed `0.7240` → `0.7031`（**−2.89%**）；`λ=1` 灾难性（−59.7% / −72.7%）。
+    /// 本仓产品口径以**相关/送达**为主指标 ⇒ 默认不能自损。
+    /// 需要「去冗余展示」的调用方**显式**给 `λ > 0`（这是产品选择，不是默认）。
+    /// ⇒ ⇒ 复制口径：`examples/retrieval_diversity_ab.rs`（λ 扫描入口）。
+    #[test]
+    fn diversity_lambda_defaults_to_zero() {
+        assert_eq!(
+            MemoryRankingConfig::default().diversity_lambda,
+            0.0,
+            "MMR 折中默认必须关：内部两卷 λ=0.2 相对 recall 掉 5.19% / 2.89%（见 examples/retrieval_diversity_ab.rs）"
+        );
+    }
+
     #[test]
     fn weighted_includes_graph_and_novelty_components() {
         let components = ScoreComponents {
@@ -573,7 +604,9 @@ mod tests {
 
         assert!(policy.visible_scopes.is_empty());
         assert_eq!(policy.layers.len(), 4);
-        assert_eq!(policy.limit, 8);
+        // ⭐ 名额默认 20（2026-11-09 联合裁决：有效名额 = min(k, floor((预算 − 160)/(跨度 + 8)))
+        // ⇒ 跨度 200 时容量 = 20 ⇒ ⇒ k=8/10 会让容量封顶 ⇒ ⇒ 名额给到 20 才吃得到容量）。
+        assert_eq!(policy.limit, 20);
         assert_eq!(policy.max_chars, 4_000);
         assert_eq!(policy.proactive_budget, 2);
         assert_eq!(policy.min_score, 0.10);

@@ -46,6 +46,11 @@ pub struct McpServerConnection {
     session: Mutex<ClientSession>,
     reconnect: Mutex<ReconnectState>,
     reconnects: std::sync::atomic::AtomicUsize,
+    closed: std::sync::atomic::AtomicBool,
+    generation: std::sync::atomic::AtomicU64,
+    generation_scope: Mutex<apeireth_plugin::task_scope::ModuleTaskScope>,
+    lifecycle: tokio::sync::Mutex<()>,
+    discovered: Mutex<Vec<DiscoveredTool>>,
 }
 
 impl McpServerConnection {
@@ -65,6 +70,11 @@ impl McpServerConnection {
             ))),
             reconnect: Mutex::new(ReconnectState::new(options.reconnect.clone())),
             reconnects: std::sync::atomic::AtomicUsize::new(0),
+            closed: std::sync::atomic::AtomicBool::new(false),
+            generation: std::sync::atomic::AtomicU64::new(0),
+            generation_scope: Mutex::new(apeireth_plugin::task_scope::ModuleTaskScope::new()),
+            lifecycle: tokio::sync::Mutex::new(()),
+            discovered: Mutex::new(Vec::new()),
         }
     }
 
@@ -108,7 +118,21 @@ impl McpServerConnection {
     /// Open a fresh link, run the initialize handshake, and discover the
     /// tool list. Used for the first connect and for every reconnect.
     pub async fn connect(&self) -> Result<Vec<DiscoveredTool>, McpError> {
+        let _lifecycle = self.lifecycle.lock().await;
+        if self.closed.load(std::sync::atomic::Ordering::SeqCst) {
+            return Err(McpError::Transport("module stopped".into()));
+        }
+        let previous = self
+            .channel
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take();
+        if let Some(previous) = previous {
+            previous.close().await?;
+        }
         let channel = self.factory.open().await?;
+        // Ownership is recorded before handshake so cancellation still permits cleanup.
+        *self.channel.lock().unwrap_or_else(|e| e.into_inner()) = Some(channel.clone());
         // Fresh link, fresh handshake: close whatever state the previous
         // link left behind before the lifecycle machine starts again.
         {
@@ -132,18 +156,97 @@ impl McpServerConnection {
             }
         }
 
-        self.handshake(&channel).await?;
-        let tools = self.list_tools(&channel).await?;
-
-        *self
-            .channel
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(channel);
+        let discovery = async {
+            self.handshake(&channel).await?;
+            self.list_tools(&channel).await
+        }
+        .await;
+        let tools = match discovery {
+            Ok(tools) if !self.closed.load(std::sync::atomic::Ordering::SeqCst) => tools,
+            result => {
+                self.channel
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .take();
+                let _ = channel.close().await;
+                return result.and_then(|_| {
+                    Err(McpError::Transport("module stopped during connect".into()))
+                });
+            }
+        };
         self.reconnect
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .on_connected();
         Ok(tools)
+    }
+
+    /// Only module initialization may reopen a stopped connection definition.
+    pub(crate) fn reopen(&self) {
+        if self.closed.load(std::sync::atomic::Ordering::SeqCst) {
+            *self
+                .generation_scope
+                .lock()
+                .unwrap_or_else(|e| e.into_inner()) =
+                apeireth_plugin::task_scope::ModuleTaskScope::new();
+        }
+        self.closed
+            .store(false, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    /// Logical revocation does not depend on the number of external references.
+    pub fn revoke(&self) {
+        if !self.closed.swap(true, std::sync::atomic::Ordering::SeqCst) {
+            self.generation
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        }
+        self.generation_scope
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .close();
+        let channel = self
+            .channel
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        if let Some(channel) = channel {
+            channel.revoke();
+        }
+    }
+    pub(crate) fn generation_scope(&self) -> apeireth_plugin::task_scope::ModuleTaskScope {
+        self.generation_scope
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+    pub(crate) fn generation(&self) -> u64 {
+        self.generation.load(std::sync::atomic::Ordering::SeqCst)
+    }
+    pub(crate) fn accepts_generation(&self, generation: u64) -> bool {
+        !self.closed.load(std::sync::atomic::Ordering::SeqCst) && self.generation() == generation
+    }
+    pub async fn close(&self) -> Result<(), McpError> {
+        self.revoke();
+        self.generation_scope().close_and_wait().await;
+        let _lifecycle = self.lifecycle.lock().await;
+        // Retain ownership across cancellation or a failed close so it can be retried.
+        let channel = self
+            .channel
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        self.session
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .close();
+        if let Some(channel) = channel {
+            channel.close().await?;
+        }
+        self.channel
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take();
+        Ok(())
     }
 
     /// Re-discover the tool list on the current link.
@@ -170,15 +273,54 @@ impl McpServerConnection {
         }
     }
 
+    /// Registered tools pin schema and risk declaration across reconnects.
+    pub async fn call_tool_checked(
+        &self,
+        name: &str,
+        arguments: serde_json::Value,
+        schema: &Option<serde_json::Value>,
+        read_only: bool,
+    ) -> Result<ToolCallResult, McpError> {
+        let unchanged = || {
+            self.discovered
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .iter()
+                .any(|tool| {
+                    tool.name == name
+                        && &tool.input_schema == schema
+                        && tool.declared_read_only == read_only
+                })
+        };
+        if !unchanged() {
+            return Err(McpError::Serialization(
+                "tool descriptor changed; registry refresh and new authorization required".into(),
+            ));
+        }
+        match self.call_once(name, arguments.clone()).await {
+            Err(McpError::Transport(reason)) => {
+                self.recover(&reason).await?;
+                if !unchanged() {
+                    return Err(McpError::Serialization(
+                        "tool descriptor changed during reconnect; call was not retried".into(),
+                    ));
+                }
+                self.call_once(name, arguments).await
+            }
+            result => result,
+        }
+    }
+
     async fn recover(&self, reason: &str) -> Result<(), McpError> {
         self.reconnects
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        {
-            let mut channel = self
-                .channel
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
-            *channel = None;
+        let previous = self
+            .channel
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take();
+        if let Some(previous) = previous {
+            previous.close().await?;
         }
         {
             let mut session = self
@@ -227,6 +369,10 @@ impl McpServerConnection {
     }
 
     fn current_channel(&self) -> Result<Arc<dyn McpChannel>, McpError> {
+        if self.closed.load(std::sync::atomic::Ordering::SeqCst) {
+            return Err(McpError::Transport("module stopped".into()));
+        }
+
         self.session
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -315,7 +461,9 @@ impl McpServerConnection {
             code: i64::from(e.code),
             message: e.message,
         })?;
-        parse_tool_list(value)
+        let tools = parse_tool_list(value)?;
+        *self.discovered.lock().unwrap_or_else(|e| e.into_inner()) = tools.clone();
+        Ok(tools)
     }
 }
 

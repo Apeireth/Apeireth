@@ -6,24 +6,28 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
-homepage.workspace = true
-keywords.workspace = true
-categories.workspace = true
-readme = "README.md"
 description = "Production assembly for the Apeireth runtime kernel"
+keywords = ["ai", "agent", "runtime", "assembly"]
+categories = ["asynchronous"]
+
+[features]
+default = ["desktop"]
+desktop = ["memory", "profile-store", "dep:apeireth-guard", "dep:apeireth-organ", "dep:apeireth-tools-canonical"]
+memory = ["dep:apeireth-memory"]
+profile-store = ["dep:apeireth-storage", "dep:rusqlite"]
 
 [dependencies]
-apeireth-core = { workspace = true }
-apeireth-protocol = { workspace = true }
-apeireth-plugin = { workspace = true }
-apeireth-governance = { workspace = true }
-apeireth-orchestration = { workspace = true }
-apeireth-runtime = { workspace = true }
-apeireth-memory = { workspace = true }
-apeireth-guard = { workspace = true }
-apeireth-organ = { workspace = true }
-apeireth-storage = { workspace = true }
-apeireth-tools-canonical = { workspace = true }
+apeireth-core = { path = "../../foundation/core" }
+apeireth-protocol = { path = "../../foundation/protocol" }
+apeireth-plugin = { path = "../../foundation/plugin" }
+apeireth-governance = { path = "../../foundation/governance" }
+apeireth-orchestration = { path = "../../foundation/orchestration" }
+apeireth-runtime = { path = "../runtime" }
+apeireth-memory = { path = "../memory", optional = true }
+apeireth-guard = { path = "../guard", optional = true }
+apeireth-organ = { path = "../organ", optional = true }
+apeireth-storage = { path = "../storage", optional = true }
+apeireth-tools-canonical = { path = "../../capabilities/tools", optional = true }
 tokio = { workspace = true, features = ["full"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -32,7 +36,7 @@ thiserror = { workspace = true }
 async-trait = { workspace = true }
 parking_lot = "0.12"
 chrono = { workspace = true }
-rusqlite = { workspace = true }
+rusqlite = { workspace = true, optional = true }
 
 [dev-dependencies]
 tempfile = "3"

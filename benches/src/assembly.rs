@@ -14,6 +14,7 @@
 //! (默认关闭)、偏好/自评后端 (未注入则对应模块不注册)、异步运行时创建
 //! (tokio 运行时由基准提前建好, 不计入冷启动区间)。
 
+#![allow(dead_code)]
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;

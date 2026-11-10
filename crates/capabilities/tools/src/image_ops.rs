@@ -2111,17 +2111,12 @@ mod tests {
     /// 开关 fail-closed: 只认显式 "1", 其余取值一律关。
     #[test]
     fn image_ops_switch_fails_closed_on_anything_but_one() {
-        std::env::remove_var(IMAGE_OPS_ENABLE_ENV);
-        assert!(!image_ops_enabled_from_env(), "未设 = 关");
-        for value in ["0", "true", "yes", "on", " 2 ", "11", "1x"] {
-            std::env::set_var(IMAGE_OPS_ENABLE_ENV, value);
-            assert!(!image_ops_enabled_from_env(), "must refuse {value:?}");
-        }
-        std::env::set_var(IMAGE_OPS_ENABLE_ENV, "1");
-        assert!(image_ops_enabled_from_env());
-        std::env::set_var(IMAGE_OPS_ENABLE_ENV, " 1 ");
-        assert!(image_ops_enabled_from_env(), "前后空白容忍");
-        std::env::remove_var(IMAGE_OPS_ENABLE_ENV);
+        crate::test_support::assert_switch_fails_closed_except_exact_one(
+            IMAGE_OPS_ENABLE_ENV,
+            &["0", "true", "yes", "on", " 2 ", "11", "1x"],
+            image_ops_enabled_from_env,
+            None,
+        );
     }
 
     /// 词表闭合: 十三名成员逐一可解析 (缺参即拒, 无参者合法), 表外名拒绝即帧。

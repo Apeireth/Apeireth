@@ -1014,11 +1014,42 @@ impl ToolCapability for ReconTlsTool {
             return ToolResult::permanent_error(&call.id, "re.tls requires a string host")
                 .with_name("re.tls");
         };
-        let port = object.get("port").and_then(Value::as_u64).unwrap_or(443);
+        // port / sni：**「没给」与「给了畸形值」必须分开**（2026-10-25 fuzz 发现的真缺陷）。
+        // 原写法 `and_then(as_u64).unwrap_or(443)` 把畸形值静默回落成默认值（fail-open）：
+        // `-1` / `443.5` / `"443"` / `true` / `null` ⇒ 静默用 443 ⇒
+        // **调用方要的端口 ≠ 实际连的端口**（连错服务）。
+        // 同款缺陷已在 `external.rs` 的 `ext.openssl` / `ext.nmap` 修掉（同一根因），
+        // 这里按**同文件已有的正确写法**（`re.net.recon` 的「ports must be integers」）对齐。
+        let port = match object.get("port") {
+            None => 443u64,
+            Some(value) => {
+                let Some(port) = value.as_u64() else {
+                    // 负数是「整数但越界」，其余（浮点/字符串/布尔/null/数组/对象）不是整数。
+                    let message = if value.is_i64() {
+                        "port out of range"
+                    } else {
+                        "re.tls port must be an integer"
+                    };
+                    return ToolResult::permanent_error(&call.id, message).with_name("re.tls");
+                };
+                port
+            }
+        };
         if !(1..=65535).contains(&port) {
             return ToolResult::permanent_error(&call.id, "port out of range").with_name("re.tls");
         }
-        let sni = object.get("sni").and_then(Value::as_str);
+        // sni：非字符串不能被静默当成「没给 sni」—— 那会让 **TLS 身份悄悄变成 host 的**，
+        // 证书链证据与请求不符。
+        let sni = match object.get("sni") {
+            None => None,
+            Some(value) => {
+                let Some(sni) = value.as_str() else {
+                    return ToolResult::permanent_error(&call.id, "re.tls sni must be a string")
+                        .with_name("re.tls");
+                };
+                Some(sni)
+            }
+        };
 
         // scope：IP 走网段，域名走域名校验。
         if let Ok(address) = host.parse::<std::net::IpAddr>() {
@@ -1576,5 +1607,58 @@ mod tls_tool_tests {
             })
             .await;
         assert!(!result.is_ok());
+    }
+
+    /// **回归**：`re.tls` 的 port / sni **畸形值不得被静默回落成默认值**
+    /// （2026-10-25 fuzz 发现的真缺陷，同根因见 `external.rs` 的 `ext.openssl` / `ext.nmap`）。
+    ///
+    /// 原写法 `and_then(as_u64).unwrap_or(443)` 把「给了畸形值」当成「没给」：
+    /// `-1` / `443.5` / `"443"` / `true` / `null` ⇒ 静默用 443 ⇒
+    /// **调用方要的端口 ≠ 实际连的端口**；sni 非字符串 ⇒ 静默丢弃 ⇒
+    /// **TLS 身份悄悄变成 host 的**，证书链证据与请求不符。
+    #[tokio::test]
+    async fn tls_tool_rejects_malformed_port_and_sni() {
+        let scope = std::sync::Arc::new(crate::recon::Scope::empty("empty"));
+        let tool = ReconTlsTool::new(scope);
+        // 畸形 port：整数但越界 ⇒ "port out of range"；其余 ⇒ "port must be an integer"。
+        for (port, expected) in [
+            (json!(-1), "port out of range"),
+            (json!(0), "port out of range"),
+            (json!(65536), "port out of range"),
+            (json!(443.5), "re.tls port must be an integer"),
+            (json!("443"), "re.tls port must be an integer"),
+            (json!(true), "re.tls port must be an integer"),
+            (json!(null), "re.tls port must be an integer"),
+        ] {
+            let result = tool
+                .invoke(&ToolCall {
+                    id: "call_tls".to_string(),
+                    name: "re.tls".to_string(),
+                    arguments: json!({"host": "127.0.0.1", "port": port}),
+                })
+                .await;
+            assert!(!result.is_ok(), "畸形 port 不得放行: {port}");
+            let frame = result.render();
+            assert!(
+                frame.contains(expected),
+                "畸形 port {port} 的拒绝帧应含 {expected:?}，实得: {frame}"
+            );
+        }
+        // 畸形 sni：非字符串 ⇒ 必须拒。
+        for sni in [json!(1), json!(true), json!(null), json!(["a"])] {
+            let result = tool
+                .invoke(&ToolCall {
+                    id: "call_tls".to_string(),
+                    name: "re.tls".to_string(),
+                    arguments: json!({"host": "127.0.0.1", "sni": sni}),
+                })
+                .await;
+            assert!(!result.is_ok(), "畸形 sni 不得放行: {sni}");
+            let frame = result.render();
+            assert!(
+                frame.contains("re.tls sni must be a string"),
+                "畸形 sni {sni} 的拒绝帧应点名类型，实得: {frame}"
+            );
+        }
     }
 }

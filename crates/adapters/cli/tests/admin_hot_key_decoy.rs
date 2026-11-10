@@ -15,10 +15,16 @@
 use std::sync::{Arc, Mutex};
 
 use apeireth_core::kernel::{Clock, Timestamp, VirtualClock};
-use apeireth_governance::AllowAll;
+use apeireth_governance::{AllowAll, UserTable};
 use apeireth_provider::canonical_openai_compatible::OpenAiCompatibleProviderPlugin;
 use apeireth_runtime::canonical::{InMemorySessionStore, Runtime};
 
+mod common;
+
+use common::{owner_record, ENV_CLIENT};
+
+/// 令牌门 env 单令牌面令牌 (非真实秘密)。
+const GATE_TOKEN: &str = "gate-token-0123456789abcdef";
 const OLD_KEY: &str = "sk-real-old-key-1234567890";
 const DECOY_KEY: &str = "sk-decoy-00000000000";
 
@@ -120,6 +126,9 @@ async fn decoy_hot_key_reaches_the_next_provider_request() {
     let _g_backend = EnvGuard::remove("APEIRETH_KEYRING_BACKEND");
     let _g_token = EnvGuard::remove("APEIRETH_GATEWAY_TOKEN");
     let _g_model = EnvGuard::remove("APEIRETH_MODEL");
+    // TLS 面旋钮不在场 (服务面解析 TLS 材料: 设了半套即拒启动) ⇒ 本用例走明文面。
+    let _g_tls_cert = EnvGuard::remove("APEIRETH_TLS_CERT");
+    let _g_tls_key = EnvGuard::remove("APEIRETH_TLS_KEY");
 
     let server = RecordingServer::start(SUCCESS_BODY).await;
 
@@ -151,10 +160,27 @@ async fn decoy_hot_key_reaches_the_next_provider_request() {
 
     let mut services = apeireth_gateway::GatewayServices::default();
     services.credentials = apeireth_cli::keyring_bootstrap::build_keyring_credential_writer();
+
+    // 角色面**激活** + **令牌门** (P0-1 · 2026-11-04 管理面 fail-closed;
+    // F-2 · 2026-11-05 未认证身份不得被用户表命中): 热更入口 `/v1/admin/config`
+    // 属管理面 (要求 `UserCapability::AdminControl`) ⇒ 角色面未激活时一律 403。
+    //
+    // ⭐ 前置条件用**正常部署形态** (令牌门 env 单令牌面 ⇒ 过门署名名 `env`，
+    // **已认证**) ⇒ ⇒ owner 绑定 `env` ⇒ ⇒ 管理面对 owner 可达。
+    // ⇒ ⇒ **不再**用「零认证 + owner 绑 `anonymous`」—— 那条路已被 F-2 堵死
+    // ⇒ ⇒ ⇒ 且它恰是**暴露面本身** ⇒ ⇒ 拿它当测试前置 = 在缺陷面上建测试。
+    let users = UserTable::new(vec![owner_record("owner-1", &[ENV_CLIENT])]);
+    users.validate().expect("valid user table");
+    let mut state = apeireth_gateway::build_gateway_state_with_services(runtime, services);
+    state.token_gate = apeireth_gateway::GatewayTokenGate::Enforced(GATE_TOKEN.to_string());
+    state.user_access = apeireth_gateway::UserAccess::from_table(users);
+
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
-    tokio::spawn(apeireth_gateway::serve_canonical_with_services(
-        listener, runtime, services,
+    tokio::spawn(apeireth_gateway::serve_state_with_shutdown(
+        listener,
+        state,
+        std::future::pending::<()>(),
     ));
     let base = format!("http://{addr}");
     let client = reqwest::Client::new();
@@ -166,6 +192,7 @@ async fn decoy_hot_key_reaches_the_next_provider_request() {
     // 步骤 1: 启动值请求一次, 出站 Authorization = env 里的旧 key。
     let response = client
         .post(format!("{base}/v1/chat/completions"))
+        .bearer_auth(GATE_TOKEN)
         .json(&chat)
         .send()
         .await
@@ -182,6 +209,7 @@ async fn decoy_hot_key_reaches_the_next_provider_request() {
     // 步骤 2: 诱饵序列原样热更 (provider "openai" 是 admin/UI 侧拼写)。
     let response = client
         .post(format!("{base}/v1/admin/config"))
+        .bearer_auth(GATE_TOKEN)
         .json(&serde_json::json!({ "provider": "openai", "api_key": DECOY_KEY }))
         .send()
         .await
@@ -193,6 +221,7 @@ async fn decoy_hot_key_reaches_the_next_provider_request() {
     // 步骤 3: 下一次请求必须现解析出 decoy, 不得再用旧 key。
     let response = client
         .post(format!("{base}/v1/chat/completions"))
+        .bearer_auth(GATE_TOKEN)
         .json(&chat)
         .send()
         .await

@@ -13,8 +13,32 @@ use apeireth_tools_canonical::process::{
     ProcessResult,
 };
 
-fn helper() -> &'static str {
-    env!("CARGO_BIN_EXE_sandbox-test-child")
+/// 子进程测试用的 helper 可执行文件路径。
+///
+/// **为什么不用 `env!("CARGO_BIN_EXE_sandbox-test-child")`**：那个编译期变量只在
+/// cargo 为集成测试**构建了同名 bin** 时才注入。本仓的 `[[bin]] sandbox-test-child`
+/// 标了 `test = false / bench = false / doc = false` ⇒ 在**部分 cargo 版本**
+/// （本地钉的 1.97.1 实测：变量不存在 ⇒ `env!` 直接编译失败，整个
+/// `cargo build --workspace --tests` 步骤红）里不注入 ⇒ 用 `env!` 会让
+/// **整个 workspace 的测试编译**挂掉（CI 跑的是 `--workspace --tests`）。
+///
+/// 改用「`option_env!` + 运行时同目录回退」：两种 cargo 版本都能编过，
+/// 且路径指向同一个真身（cargo 把 bin 与测试可执行文件放在同一个 target 目录）。
+fn helper() -> std::path::PathBuf {
+    if let Some(path) = option_env!("CARGO_BIN_EXE_sandbox-test-child") {
+        return std::path::PathBuf::from(path);
+    }
+    // cargo 的布局：测试可执行文件在 `<target>/<profile>/deps/`，bin 在
+    // `<target>/<profile>/` ⇒ 从 current_exe 往上退**一级**再放 bin 名。
+    let mut dir = std::env::current_exe().expect("current_exe");
+    dir.pop(); // deps/
+    dir.pop(); // <profile>/
+    dir.push(if cfg!(windows) {
+        "sandbox-test-child.exe"
+    } else {
+        "sandbox-test-child"
+    });
+    dir
 }
 
 fn execute(request: &ProcessRequest) -> Result<ProcessResult, ProcessError> {
@@ -299,6 +323,38 @@ fn result_enforcement_reports_platform_capabilities() {
     );
 }
 
+/// P3-9 审计 (2026-10-31): 默认请求是 `EnvironmentSpec::Inherit` ——
+/// `apply_request_to_command` 在 Inherit 分支**不做** `env_clear` ⇒ 子进程继承父
+/// 环境 (含 provider 的 API key)。三平台后端却都无条件宣称
+/// `EnvironmentIsolation=Enforced` ⇒ 执行记录谎报「本次实际生效」的隔离属性。
+#[test]
+fn default_request_does_not_claim_environment_isolation() {
+    let result = execute(&request_for("print-pid", "")).unwrap();
+    assert!(result.success(), "{}", text(&result.stderr));
+    assert!(
+        result.enforcement.capabilities.environment_isolation != EnforcementLevel::Enforced,
+        "an inherited environment must not be reported as isolated; got {:?}",
+        result.enforcement.capabilities.environment_isolation
+    );
+
+    // 对照组: 显式环境 (从空环境起步 = env_clear) 时, 平台能隔离环境 ⇒ 记录才允许
+    // 报 Enforced。
+    if current_platform_capabilities().environment_isolation == EnforcementLevel::Enforced {
+        let explicit = execute(
+            &ProcessRequest::new(helper())
+                .with_args(["print-pid"])
+                .with_explicit_env(Vec::new())
+                .with_limits(ProcessLimits::default()),
+        )
+        .unwrap();
+        assert_eq!(
+            explicit.enforcement.capabilities.environment_isolation,
+            EnforcementLevel::Enforced,
+            "an explicit (env-cleared) environment must report EnvironmentIsolation=Enforced"
+        );
+    }
+}
+
 #[cfg(windows)]
 mod windows_tests {
     use super::*;
@@ -510,6 +566,25 @@ mod windows_tests {
         }
     }
 
+    /// P3-10 审计 (2026-10-31): `StructuredSpawn` 的口径是「可执行文件 + argv 以
+    /// 结构化数组传递, 永不是命令串」。Windows 的 raw_arg 逐字尾 (shell 的
+    /// `cmd /D /S /C "<script>"`) 恰恰是命令串拼接 ⇒ 该次执行的结构化生成只有
+    /// Partial, 不得沿用平台的无条件 Enforced。
+    #[test]
+    fn raw_arg_request_reports_partial_structured_spawn() {
+        let request = ProcessRequest::new("cmd.exe")
+            .with_raw_arg(r#"/D /S /C "echo hi""#)
+            .with_limits(ProcessLimits::default());
+
+        let result = execute(&request).unwrap();
+        assert!(result.success(), "{}", text(&result.stderr));
+        assert_eq!(
+            result.enforcement.capabilities.structured_spawn,
+            EnforcementLevel::Partial,
+            "a verbatim command-line tail must not be reported as a structured spawn"
+        );
+    }
+
     fn assert_process_terminated(pid: u32) {
         unsafe {
             let handle = OpenProcess(PROCESS_SYNCHRONIZE, 0, pid);
@@ -524,6 +599,37 @@ mod windows_tests {
                 "descendant process {pid} should have been terminated by Job Object timeout"
             );
         }
+    }
+
+    /// P3-11 审计 (2026-10-31): AppContainer profile 名原先是**固定常量** ⇒ SID 由
+    /// 名字**确定性**派生 ⇒ 全机全账号同一 SID, 且任何进程都能同名抢占。
+    /// 现在名字掺了用户标签 + 随机后缀 ⇒ SID 不再确定。
+    #[test]
+    fn appcontainer_profile_name_is_not_the_fixed_constant() {
+        use apeireth_tools_canonical::process::appcontainer::AppContainerSandbox;
+
+        let Ok(sandbox) = AppContainerSandbox::acquire() else {
+            eprintln!("SKIP: 本机不支持 AppContainer profile (环境不支持)");
+            return;
+        };
+        let name = sandbox.profile_name();
+        assert!(
+            name.starts_with("Apeireth.Shell.Sandbox."),
+            "profile name must keep the prefix and add scope: {name}"
+        );
+        assert!(
+            name.len() > "Apeireth.Shell.Sandbox".len(),
+            "profile name must not be the bare fixed constant: {name}"
+        );
+        // 同一进程内两次 acquire 必须拿到同一个 profile (幂等) ⇒ 名字稳定。
+        let Ok(second) = AppContainerSandbox::acquire() else {
+            return;
+        };
+        assert_eq!(
+            second.profile_name(),
+            name,
+            "the profile name must be stable within one process"
+        );
     }
 }
 
@@ -599,9 +705,53 @@ mod linux_tests {
     }
 }
 
+/// P3-11 审计 (2026-10-31): AppContainer profile 名原先是**固定常量** ⇒ SID 由名字
+/// **确定性**派生 ⇒ ① 全机全账号同一 SID (共享盘上的跨账号授权互相命中);
+/// ② 任何进程都能**同名抢占** (抢先注册同名 profile ⇒ 我们 acquire 时拿到
+/// `ALREADY_EXISTS` ⇒ 沙箱用的是对方注册的 profile)。
+///
+/// 拼装规则抽成**平台无关**函数 ⇒ 这条规则在 Linux 上就能测 (不必等 CI 矩阵)。
+#[test]
+fn appcontainer_profile_name_is_scoped_and_sanitized() {
+    use apeireth_tools_canonical::process::appcontainer_profile_name;
+
+    let name = appcontainer_profile_name("Apeireth.Shell.Sandbox", "abc123", "0123456789abcdef");
+    assert!(
+        name.starts_with("Apeireth.Shell.Sandbox."),
+        "prefix lost: {name}"
+    );
+    assert!(name.contains(".abc123."), "user tag lost: {name}");
+    assert!(
+        name.ends_with(".0123456789abcdef"),
+        "random tag lost: {name}"
+    );
+
+    // 随机后缀不同 ⇒ 名字不同 ⇒ 派生出的 SID 不同 (SID 不再确定)。
+    let other = appcontainer_profile_name("Apeireth.Shell.Sandbox", "abc123", "fedcba9876543210");
+    assert_ne!(
+        name, other,
+        "a different random tag must yield a different profile name"
+    );
+
+    // 非法字符被剔除 (profile 名只允许安全字符), 每段封顶 24 字符。
+    let hostile =
+        appcontainer_profile_name("Apeireth.Shell.Sandbox", "us er/../\\", &"x".repeat(64));
+    assert!(!hostile.contains('/'), "slash must be stripped: {hostile}");
+    assert!(!hostile.contains(' '), "space must be stripped: {hostile}");
+    for segment in hostile.split('.') {
+        assert!(segment.len() <= 24, "segment too long: {segment}");
+    }
+}
+
 #[cfg(target_os = "macos")]
 mod macos_tests {
     use super::*;
+    use std::process::{Command, Stdio};
+
+    /// 角色进程的环境标记: 重跑本测试二进制时带上它 ⇒ 走「executor 角色」分支。
+    const ROLE_ENV: &str = "APEIRETH_TEST_MACOS_EXECUTOR_ROLE";
+    /// 长睡时长的唯一标记 (避免与并发跑的其它测试撞同一个命令行)。
+    const SLEEP_MARKER: &str = "987654";
 
     #[test]
     fn timeout_terminates_the_whole_process_group_tree() {
@@ -636,6 +786,219 @@ mod macos_tests {
             EnforcementLevel::Unsupported,
             "macOS backend must not invent a Windows RestrictedToken equivalent"
         );
+    }
+
+    /// P3-8 (2026-10-31): macOS 侧必须验证「子进程自任进程组长」—— 父死亡守护
+    /// 靠 `kill(-pgid, SIGKILL)` 杀整个组, 组边界不成立则守护形同虚设。
+    #[test]
+    fn macos_child_leads_its_own_process_group() {
+        let result = execute(&request_for("platform-security-info", "")).unwrap();
+        assert!(result.success(), "{}", text(&result.stderr));
+        let stdout = text(&result.stdout);
+        let pgid = stdout
+            .lines()
+            .find_map(|line| line.strip_prefix("PGRP:"))
+            .map(str::trim)
+            .expect("PGRP line missing");
+        let pid = stdout
+            .lines()
+            .find_map(|line| line.strip_prefix("PID:"))
+            .map(str::trim)
+            .expect("PID line missing");
+        assert_eq!(
+            pgid, pid,
+            "the child must lead its own process group (the macOS guard kills -pgid)"
+        );
+    }
+
+    /// P3-8 (2026-10-31): **executor 被 SIGKILL ⇒ 子进程必须跟着死**。
+    ///
+    /// 这是 macOS 父死亡守护 (`kqueue(EVFILT_PROC/NOTE_EXIT)`) 的端到端证明:
+    /// 角色进程用 ProcessExecutor 起一个长睡子进程, 然后被 SIGKILL (模拟 executor
+    /// 崩溃) ⇒ 守护进程必须把子进程所在的进程组一起带走 (否则子进程逃出
+    /// `max_runtime` 约束 —— 正是 P3-8 的原始后果)。
+    #[test]
+    fn macos_child_dies_when_its_executor_is_killed() {
+        let exe = std::env::current_exe().expect("current_exe");
+        let mut role = Command::new(&exe)
+            .arg("--exact")
+            // ⚠️ **`--exact` 要的是**全路径**（2026-11-10 CI 实测修正）。
+            //
+            // 现象：macOS CI 上本测试红，报 "the executor's child must show up in
+            // the process table"，而**角色进程自己的输出**是
+            // 「running 0 tests / test result: ok. 0 passed」⇒ ⇒ 角色**根本没跑**。
+            //
+            // 机制：角色测试住在 `mod macos_tests` 里 ⇒ 它的全名是
+            // `macos_tests::macos_executor_role_process`；而 `--exact` 是**全名精确匹配**
+            // ⇒ 只给裸名 `macos_executor_role_process` ⇒ **匹配不到任何测试**
+            // ⇒ 角色进程空跑退出 ⇒ 它的子进程（`sleep <marker>`）压根没起
+            // ⇒ 父测试在进程表里等不到 ⇒ 30 s 后超时 panic。
+            //
+            // ⇒ 修法：过滤器写**全路径**（与 `fn` 所在的模块路径一致）。
+            .arg("macos_tests::macos_executor_role_process")
+            .arg("--nocapture")
+            .env(ROLE_ENV, "1")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("spawn the executor-role process");
+
+        // ⚠️ **必须把管道读干**（2026-11-04 CI 实测修）。
+        //
+        // 现象：CI 上「子进程必须出现在进程表里」失败，且角色进程是
+        // **「已退出: exit status: 0」**（正常退出，不是被杀）⇒ ⇒ 它的输出**没被读**。
+        //
+        // 机制：角色进程的 stdout/stderr 是 `Stdio::piped()` 起的，而本测试**从不读**
+        // ⇒ ⇒ 它一旦写入超过**管道缓冲**（默认 64 KiB）⇒ ⇒ **写阻塞**
+        // ⇒ ⇒ 子进程起不来 / 角色进程提前结束 ⇒ ⇒ 「子进程不在进程表里」。
+        //
+        // ⇒ 修法：spawn 后**立刻**起两个后台线程读干它们（永不写阻塞），
+        // 并且失败时把读到的内容带进 panic ⇒ 下次 CI 红不用再猜。
+        let (role_stdout_tx, role_stdout_rx) = std::sync::mpsc::channel::<String>();
+        let (role_stderr_tx, role_stderr_rx) = std::sync::mpsc::channel::<String>();
+        if let Some(stdout) = role.stdout.take() {
+            let tx = role_stdout_tx.clone();
+            std::thread::spawn(move || {
+                use std::io::Read;
+                let mut buffer = Vec::new();
+                let mut stdout = stdout;
+                let _ = stdout.read_to_end(&mut buffer);
+                let _ = tx.send(String::from_utf8_lossy(&buffer).to_string());
+            });
+        }
+        if let Some(stderr) = role.stderr.take() {
+            let tx = role_stderr_tx.clone();
+            std::thread::spawn(move || {
+                use std::io::Read;
+                let mut buffer = Vec::new();
+                let mut stderr = stderr;
+                let _ = stderr.read_to_end(&mut buffer);
+                let _ = tx.send(String::from_utf8_lossy(&buffer).to_string());
+            });
+        }
+
+        // 等 executor 起好的子进程出现在进程表里 (命令行含唯一 sleep 标记)。
+        let child_pid = match wait_for_pid_containing(
+            &format!("sleep {SLEEP_MARKER}"),
+            Duration::from_secs(30),
+        ) {
+            Some(pid) => pid,
+            None => {
+                // **失败时把证据打出来**（进程表快照 + 角色进程是否还活着）
+                // ⇒ 下次 CI 红了不用再猜「是没起来、还是没匹配上」。
+                let role_state = match role.try_wait() {
+                    Ok(Some(status)) => format!("角色进程已退出: {status}"),
+                    Ok(None) => "角色进程仍在跑（⇒ 问题在子进程侧）".to_string(),
+                    Err(error) => format!("角色进程状态取不到: {error}"),
+                };
+                // 把角色进程的输出带出来（读线程可能还没结束 ⇒ 用超时拿）
+                let drain = |rx: std::sync::mpsc::Receiver<String>| {
+                    rx.recv_timeout(Duration::from_millis(500))
+                        .unwrap_or_default()
+                };
+                let role_out = drain(role_stdout_rx);
+                let role_err = drain(role_stderr_rx);
+                panic!(
+                        "the executor's child must show up in the process table\n                         角色进程: {role_state}\n角色 stdout:\n{role_out}\n角色 stderr:\n{role_err}\n进程表快照:\n{}",
+                        process_table_snapshot()
+                    );
+            }
+        };
+
+        // 模拟 executor 崩溃: SIGKILL (不给它任何清理机会)。
+        unsafe { libc::kill(role.id() as i32, libc::SIGKILL) };
+        let _ = role.wait();
+
+        // 守护进程必须把子进程带走。
+        let deadline = Instant::now() + Duration::from_secs(30);
+        loop {
+            if !process_alive(child_pid) {
+                break;
+            }
+            if Instant::now() >= deadline {
+                unsafe { libc::kill(child_pid, libc::SIGKILL) };
+                panic!("the child survived its executor's death (macOS parent-death guard failed)");
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    }
+
+    /// 角色进程: 用 ProcessExecutor 起一个长睡子进程并一直阻塞 (由父测试 SIGKILL)。
+    #[test]
+    fn macos_executor_role_process() {
+        if std::env::var_os(ROLE_ENV).is_none() {
+            return; // 正常跑测试时本测是空转
+        }
+        let mut limits = ProcessLimits::default();
+        // 阻塞到被 SIGKILL 为止 (默认 30s 会先超时 ⇒ 子进程被 executor 自己杀掉,
+        // 那样就测不到「父死亡」这条路径了)。
+        limits.max_runtime = Duration::from_secs(600);
+        let request = ProcessRequest::new(helper())
+            .with_args(["sleep", SLEEP_MARKER])
+            .with_limits(limits);
+        let _ = execute(&request);
+    }
+
+    /// 在进程表里找命令行含 `needle` 的 pid (macOS `ps` 扫描)。
+    fn wait_for_pid_containing(needle: &str, timeout: Duration) -> Option<i32> {
+        let deadline = Instant::now() + timeout;
+        loop {
+            if let Some(pid) = pid_containing(needle) {
+                return Some(pid);
+            }
+            if Instant::now() >= deadline {
+                return None;
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    }
+
+    fn pid_containing(needle: &str) -> Option<i32> {
+        let output = Command::new("ps")
+            // ⚠️ **`-ww` 是必需的**（2026-11-01 CI 实测修正）：BSD/macOS 的 `ps`
+            // **默认把命令行截断到终端宽度** ⇒ 长的命令行尾部被切掉 ⇒ 匹配不到
+            // ⇒ 2026-11-01 macOS CI 上本测试真的红了
+            // （"the executor's child must show up in the process table"）。
+            // Linux 的 `ps` 默认不截断 ⇒ 本地绿 / macOS 红 ⇒ **平台差异被掩盖**。
+            // ⇒ 加 `-ww`（BSD ps 的「不截断」选项，Linux 也支持）。
+            .arg("-Aww")
+            .arg("-o")
+            .arg("pid=,command=")
+            .output()
+            .ok()?;
+        let listing = String::from_utf8_lossy(&output.stdout);
+        for line in listing.lines() {
+            let line = line.trim();
+            let Some((pid, command)) = line.split_once(' ') else {
+                continue;
+            };
+            if command.contains(needle) {
+                if let Ok(pid) = pid.trim().parse::<i32>() {
+                    return Some(pid);
+                }
+            }
+        }
+        None
+    }
+
+    /// 进程表快照（**失败时打印** ⇒ 下次 CI 不用再猜）。
+    fn process_table_snapshot() -> String {
+        Command::new("ps")
+            .arg("-Aww")
+            .arg("-o")
+            .arg("pid=,command=")
+            .output()
+            .map(|output| String::from_utf8_lossy(&output.stdout).to_string())
+            .unwrap_or_else(|error| format!("<ps 取不到: {error}>"))
+    }
+
+    /// 进程是否还活着 (signal 0 探测; EPERM 也算活着 —— 只是没权限发信号)。
+    fn process_alive(pid: i32) -> bool {
+        let ret = unsafe { libc::kill(pid, 0) };
+        if ret == 0 {
+            return true;
+        }
+        std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
     }
 
     fn assert_process_gone(pid: i32) {

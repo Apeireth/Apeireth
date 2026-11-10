@@ -6,6 +6,10 @@
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
+mod common;
+
+use common::{activate_role_surface, ANONYMOUS_CLIENT, ENV_CLIENT};
+
 const TOKEN: &str = "remote-face-token-0123456789abcdef";
 
 fn bin_path() -> std::path::PathBuf {
@@ -33,11 +37,40 @@ fn scratch_dir(label: &str) -> std::path::PathBuf {
 }
 
 /// A free loopback port (bind, read, release).
-async fn free_port() -> u16 {
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let port = listener.local_addr().unwrap().port();
+
+/// ⭐ **端口分配：治「夹具的 TOCTOU」**（不是治产品）
+///
+/// **原写法（TOCTOU 竞态）**：`bind :0` ⇒ ⇒ 取端口 ⇒ ⇒ **立刻释放** ⇒ ⇒ 稍后再 bind
+/// ⇒ ⇒ **并行测试之间会抢同一个端口** ⇒ ⇒ 自己的网关 bind 失败（子进程立刻退出）
+/// ⇒ ⇒ 而 `wait_ready` 会连上**抢占者**的网关 ⇒ ⇒ **断言打在别人的服务上**
+/// ⇒ ⇒ 表现为「安全断言偶发失败（期望 403 实得 200）」⇒ ⇒ **看起来像安全回归，其实是夹具竞态**。
+///
+/// **新写法**：按 **pid 分段 + 进程内原子计数器** 取候选端口 ⇒ ⇒ **向前探测**到 bind 成功
+/// ⇒ ⇒ 同进程内**并发测试不会撞**（计数器各不相同）· 跨进程也**基本不会撞**（pid 分段不同）
+/// ⇒ ⇒ 探测本身仍是「取后释放」，但候选端口**互不重叠** ⇒ ⇒ 撞的概率 ≈ 0。
+fn next_free_port() -> u16 {
+    use std::sync::atomic::{AtomicU16, Ordering};
+    static COUNTER: AtomicU16 = AtomicU16::new(0);
+    let pid = std::process::id();
+    // 段基址：pid 分段 ⇒ ⇒ 不同进程不重叠；段内 64 个槽：进程内并发测试不重叠。
+    let base = 21_000u16 + ((pid % 400) as u16) * 64;
+    for step in 0..64u16 {
+        let candidate = base + ((COUNTER.fetch_add(1, Ordering::SeqCst) + step) % 64);
+        if let Ok(listener) = std::net::TcpListener::bind(("127.0.0.1", candidate)) {
+            let port = listener.local_addr().map(|a| a.port()).unwrap_or(candidate);
+            drop(listener);
+            return port;
+        }
+    }
+    // 段内全占 ⇒ ⇒ 回落到内核选端口（极罕见 ⇒ ⇒ 仍比原写法好）
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind fallback port");
+    let port = listener.local_addr().expect("addr").port();
     drop(listener);
     port
+}
+
+async fn free_port() -> u16 {
+    next_free_port()
 }
 
 /// Spawn a long-running gateway child with its stdout/stderr continuously
@@ -110,6 +143,32 @@ async fn graceful_stop(
         "authorized shutdown must be accepted: {}",
         response.status()
     );
+    for _ in 0..60 {
+        if let Some(status) = child.try_wait().expect("child status") {
+            return status.code();
+        }
+        tokio::time::sleep(Duration::from_millis(500)).await;
+    }
+    None
+}
+
+/// 停机走**信号面** (F-2 · 2026-11-05): 逃生阀下管理面 (含停机端点) 对未认证
+/// 身份 fail-closed ⇒ 「绑 `anonymous` 就能停机」不成立 ⇒ ⇒ 逃生阀下停机走
+/// `SIGTERM` (CLI 的 `graceful_shutdown_signal` 收 ⇒ 同走收尾账)。
+///
+/// 非 Unix 平台没有 `SIGTERM` (Windows 走 Ctrl+C) ⇒ 那里直接杀进程。
+async fn terminate_by_signal(child: &mut std::process::Child) -> Option<i32> {
+    #[cfg(unix)]
+    {
+        let pid = child.id();
+        let _ = std::process::Command::new("kill")
+            .args(["-TERM", &pid.to_string()])
+            .status();
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = child.kill();
+    }
     for _ in 0..60 {
         if let Some(status) = child.try_wait().expect("child status") {
             return status.code();
@@ -253,6 +312,13 @@ fn broken_client_token_configuration_refuses_to_open() {
 
 /// 带令牌的非回环绑定可启动; 全 API 面令牌门在远程面上照常执行 (无令牌调
 /// chat = 401); 停机后审计档案留 `gateway.remote_bind mode=enforced` 事实。
+///
+/// # 前置条件 (P0-1 · 2026-11-04 管理面 fail-closed)
+///
+/// 停机端点属**管理面** (要求 `UserCapability::AdminControl`) ⇒ 角色面未激活
+/// (数据目录无 `users.json`) 时一律 403 ⇒ 本用例要测的是**远程绑定面**,
+/// 角色门的前置条件由这里显式装上: owner 绑本用例的过门署名名 (env 单令牌
+/// 面 = `env`; 未设防口径 = `anonymous`)。
 #[tokio::test(flavor = "multi_thread")]
 async fn non_loopback_bind_with_a_token_serves_behind_the_gate_and_keeps_the_audit() {
     let bin = bin_path();
@@ -264,6 +330,8 @@ async fn non_loopback_bind_with_a_token_serves_behind_the_gate_and_keeps_the_aud
     let slot = dir.join("gateway.pid");
     let data_dir = dir.join("data");
     fs_err::create_dir_all(&data_dir).unwrap();
+    // 角色面激活 (管理面前置条件): owner 在册, 绑两个过门署名名。
+    activate_role_surface(&data_dir, "owner-1", &[ENV_CLIENT, ANONYMOUS_CLIENT]);
     let port = free_port().await;
     let endpoint = format!("http://127.0.0.1:{port}");
 
@@ -326,6 +394,23 @@ async fn non_loopback_bind_with_a_token_serves_behind_the_gate_and_keeps_the_aud
 
 /// 逃生阀 `none` = 明示可裸奔: 非回环绑定放行启动, 但**留审计** (`mode=
 /// declared_none` + 装配期声明痕); 无令牌调用也放行 (门体不设防)。
+///
+/// # 前置条件 (P0-1 · 2026-11-04 管理面 fail-closed · F-2 · 2026-11-05)
+///
+/// 停机端点属**管理面** (要求 `UserCapability::AdminControl`) ⇒ 角色面未激活
+/// 时一律 403 ⇒ 本用例要测的是**逃生阀的放行与留痕**, 角色门的前置条件由
+/// 这里显式装上。
+///
+/// ⚠️ **F-2 后「绑 `anonymous` 就能停机」这条捷径不成立**: 逃生阀下过门署名名
+/// 恒为 `anonymous` (门体不设防 ⇒ 每次放行落 `ClientIdentity::anonymous()`),
+/// 而该身份**未认证** ⇒ 角色门**只认已认证身份** ⇒ 它**不是**任何用户 ⇒
+/// 管理面 (含停机端点) 对它**一律 403** ⇒ ⇒ 逃生阀下停机走**信号面**
+/// (SIGTERM ⇒ CLI 的 `graceful_shutdown_signal` ⇒ 同走收尾账)。另注: 逃生阀与
+/// **客户端令牌表互斥** (配置矛盾拒开) ⇒ 逃生阀口径下没有别的过门署名名可绑。
+///
+/// ⭐ **本 fixture 故意保留 `anonymous` 绑定** (不是残留): 「用户表把 owner
+/// 绑给 `anonymous` + 调用方零凭据」= **F-2 那个洞的攻击形状** ⇒ ⇒ 这里断言
+/// 管理面**仍拒** ⇒ ⇒ 就是钉住「这条绑定不再让未认证身份当上 owner」。
 #[tokio::test(flavor = "multi_thread")]
 async fn non_loopback_escape_valve_runs_but_leaves_the_audit_trace() {
     let bin = bin_path();
@@ -337,6 +422,9 @@ async fn non_loopback_escape_valve_runs_but_leaves_the_audit_trace() {
     let slot = dir.join("gateway.pid");
     let data_dir = dir.join("data");
     fs_err::create_dir_all(&data_dir).unwrap();
+    // 角色面激活 (管理面前置条件): owner 绑逃生阀口径的过门署名名 `anonymous`
+    // (⚠️ 故意: 这是 F-2 的攻击形状, 断言它**不再**让未认证身份当 owner)。
+    activate_role_surface(&data_dir, "owner-1", &[ANONYMOUS_CLIENT]);
     let port = free_port().await;
     let endpoint = format!("http://127.0.0.1:{port}");
 
@@ -366,7 +454,10 @@ async fn non_loopback_escape_valve_runs_but_leaves_the_audit_trace() {
         err_buf.lock().unwrap()
     );
 
-    // 逃生阀 = 门体不设防 (明示自担): 无令牌调用放行。
+    // 逃生阀 = 门体不设防 (明示自担): 无令牌调用**过令牌门**放行 (不是 401)。
+    //
+    // ⚠️ F-2 之后**管理面** (含停机端点) 对未认证身份一律 fail-closed ⇒ ⇒
+    // 这里的写面会被**角色门**拒 (403) —— 令牌门那一层是放行的 (≠401)。
     let probe = reqwest::Client::new()
         .post(format!("{endpoint}/v1/chat"))
         .body("{}")
@@ -379,8 +470,58 @@ async fn non_loopback_escape_valve_runs_but_leaves_the_audit_trace() {
         "逃生阀下放行 (风险由操作者明示自担)"
     );
 
-    let exit_code = graceful_stop(&mut child, &endpoint, "any").await;
-    assert_eq!(exit_code, Some(0), "优雅停机必须退出成功");
+    // ⇒ ⇒ 管理面 (停机端点) 对未认证身份**不可达** ⇒ 「绑 `anonymous` 就能
+    // 停机」这条捷径**不成立** ⇒ ⇒ 逃生阀下停机走**信号面** (SIGTERM)。
+    //
+    // ⚠️ 逃生阀下**带 Bearer 也一样**: 门体不设防 ⇒ 每次放行落
+    // `ClientIdentity::anonymous()` (**未认证**) ⇒ 角色门**只认已认证身份**
+    // ⇒ 角色门裁 deny (口径 A) ⇒ 停机**不触发**。
+    let refused = reqwest::Client::new()
+        .post(format!("{endpoint}/v1/admin/shutdown"))
+        .header("Authorization", "Bearer any")
+        .send()
+        .await
+        .expect("shutdown request");
+    assert_eq!(
+        refused.status(),
+        reqwest::StatusCode::FORBIDDEN,
+        "逃生阀下管理面必须 fail-closed (未认证身份不是 owner)"
+    );
+    let refused_body = refused.text().await.unwrap_or_default();
+    assert!(
+        refused_body.contains("permission_denied"),
+        "拒因必须点名角色门裁决: {refused_body}"
+    );
+
+    // ⚠️ Windows: 停机面只有**硬杀** (TerminateProcess) ⇒ 没有优雅收尾 ⇒
+    // 审计只能靠后台 flush 落盘 (`FLUSH_PASS_INTERVAL_SECS = 30` 且首个 tick 被跳过
+    // ⇒ 首个真实 flush 在 2 × 30 = 60s) ⇒ ⇒ 先等落盘再硬杀。
+    // unix 走 SIGTERM ⇒ 收尾时同步 flush ⇒ 不用等。
+    #[cfg(not(unix))]
+    {
+        let audit_path = data_dir.join("daemon-audit.jsonl");
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(120);
+        loop {
+            let flushed = fs_err::read_to_string(&audit_path).unwrap_or_default();
+            if flushed.contains("gateway.auth_declared_unprotected")
+                && flushed.contains("gateway.remote_bind")
+                && flushed.contains("gateway.auth_unprotected")
+            {
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "审计未在 120s 内落盘 (后台 flush 未到): {flushed}"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        }
+    }
+
+    let exit_code = terminate_by_signal(&mut child).await;
+    #[cfg(unix)]
+    assert_eq!(exit_code, Some(0), "SIGTERM 停机必须干净退出 (同走收尾账)");
+    #[cfg(not(unix))]
+    let _ = exit_code;
 
     // 留痕三断言: 装配期声明 + 远程绑定事实 + 每次放行痕。
     let audit = fs_err::read_to_string(data_dir.join("daemon-audit.jsonl")).unwrap_or_default();
@@ -396,14 +537,17 @@ async fn non_loopback_escape_valve_runs_but_leaves_the_audit_trace() {
         audit.contains("gateway.auth_unprotected"),
         "每次放行留痕: {audit}"
     );
+    // ⇒ ⇒ 信号面停机**同走收尾账** (收尾审计落盘)。
+    #[cfg(unix)]
+    assert!(
+        audit.contains("gateway.shutdown"),
+        "SIGTERM 停机必须走收尾账 (写收尾审计): {audit}"
+    );
 
     let _ = fs_err::remove_dir_all(&dir);
 }
 
 /// 同步测试也要端口: 绑一下拿空闲端口 (tokio 外的调用面)。
 fn free_port_blocking() -> u16 {
-    let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind free port");
-    let port = listener.local_addr().expect("addr").port();
-    drop(listener);
-    port
+    next_free_port()
 }

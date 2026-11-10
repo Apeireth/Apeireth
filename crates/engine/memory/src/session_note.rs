@@ -630,48 +630,6 @@ impl crate::SqliteMemoryStore {
     }
 }
 
-/// 公共 helper: 写入 session (供测试或外部直接使用).
-pub fn upsert_session(conn: &Connection, session: &Session) -> MemoryResult<()> {
-    if session.id.trim().is_empty() {
-        return Err(MemoryError::Invalid("session id is empty".into()));
-    }
-    conn.execute(
-        "INSERT INTO sessions (id, started_at, last_active_at, closed_at)
-         VALUES (?1, ?2, ?3, NULL)
-         ON CONFLICT(id) DO UPDATE SET
-             last_active_at = excluded.last_active_at",
-        params![session.id, session.started_at, session.last_active_at],
-    )?;
-    Ok(())
-}
-
-/// 公共 helper: 写入 note (供测试或外部直接使用).
-pub fn put_note(conn: &Connection, note: &Note) -> MemoryResult<()> {
-    if note.id.trim().is_empty() {
-        return Err(MemoryError::Invalid("note id is empty".into()));
-    }
-    let source_json = serde_json::to_string(&note.source_episode_ids)?;
-    let tags_json = serde_json::to_string(&note.tags)?;
-    conn.execute(
-        "INSERT INTO notes (id, timestamp, content, source_episode_ids_json, confidence, tags_json)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-        params![
-            note.id,
-            note.timestamp,
-            note.content,
-            source_json,
-            note.confidence,
-            tags_json
-        ],
-    )?;
-    Ok(())
-}
-
-/// 公共 helper: 取当前 epoch seconds (供 `created_at` 字段默认值).
-pub fn now() -> i64 {
-    now_unix()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

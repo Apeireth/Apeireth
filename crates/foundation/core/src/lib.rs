@@ -18,16 +18,13 @@ use serde::{Deserialize, Serialize};
 
 // R131 架构债清理: 拆 lib.rs 108KB → 5 submodules
 // P-arch (2026-08-27): 0 触碰公开签名 — `use apeireth_core::Episode` 等不破坏.
-// v2.0 alpha 新代码走 `apeireth_core::kernel::Episode` (kernel 模块已 re-export
-// 全部 legacy 域类型为 alias, 同一类型不同路径). 真实 drain (删 root 的
-// `pub use memory::*` 等) 排 v2.1: 需 12 个 crate 改路径, 1:1
-// aliases 已经在 kernel 准备好, drain 切路径只是改 use 行.
+// v2.0 alpha 新代码走 `apeireth_core::kernel::Episode` (kernel 模块已 re-export 全部 legacy 域类型为 alias,
+// 同一类型不同路径). 真实 drain (删 root 的 `pub use memory::*` 等) 排 v2.1: 需 12 个 crate 改路径,
+// 1:1 aliases 已经在 kernel 准备好, drain 切路径只是改 use 行.
 // 详细: docs/04-internal/v2-unabsorbed-features.md §P1 core drain.
-// (2026-08-27 O-6 锚 #9 兑现 #11: legacy compat shim 删, 12 consumer 已迁
-// `apeireth_core::kernel::memory::*`, 真 drain 完成)
+// (2026-08-27 O-6 锚 #9 兑现 #11: legacy compat shim 删, 12 consumer 已迁 `apeireth_core::kernel::memory::*`, 真 drain 完成)
 // pub mod memory;
-// (legacy compat shim — see Refactor-5 in v2-arch-refactor-batch.md; 真实
-// 域类型定义在 crate::kernel::memory)
+// (legacy compat shim — see Refactor-5 in v2-arch-refactor-batch.md; 真实域类型定义在 crate::kernel::memory)
 // 可注入时钟 (SystemClock / VirtualClock): 时间敏感机制测试与模拟快进
 pub mod clock;
 // reconstruct_v2 canonical convergence: stable primitives shared by every
@@ -39,6 +36,9 @@ pub mod clock;
 // `apeireth_core::kernel::...`, which keeps the two vocabularies distinguishable
 // while the legacy content is moved out. See `ARCHITECTURE.md`.
 pub mod kernel;
+// 哈希链原语 (纯密码学布局, 无策略): 治理审计账本与记忆层共用同一套字节布局。
+pub mod hash_chain;
+pub mod paths;
 // R177: organ invariants (5 tests + 2 Kani)
 mod organ_kani_proofs;
 // P-arch (2026-08-27) Refactor-5: lib.rs 直接 `pub use memory::*` (memory 模块
@@ -77,8 +77,8 @@ pub mod model_profile;
 /// 模型), 依据数据面是 [`model_profile`] 画像表; 无价模型不参与价格比较,
 /// **绝不编价**。
 pub mod cost_router;
-// 统一超时熔合 (第三批·裁决件): 到期只通知 + 取值过闸 + 空闲看门狗 + 超时类独立 code。
-/// 统一超时熔合小库 (`Deadline` / `clamp_timeout` / `IdleWatchdog`)。
+// 统一超时熔合 (第三批·裁决件): 到期只通知 + 取值过闸 + 超时类独立 code。
+/// 统一超时熔合小库 (`Deadline` / `clamp_timeout`)。
 pub mod deadline;
 // 资源租约 + 失败即帧 (第三批·裁决件): 引用计数租约 / pin 保活 / 快照即读 / 失败即帧。
 /// 资源租约注册表 (`ResourceRegistry`): 首持有者开流、末持有者关停。

@@ -183,6 +183,10 @@ fn all_switches_off() -> ProductionModulesConfig {
         filesystem: false,
         search: false,
         repo: false,
+        // 代码地图 (`tool.repo_map`): 只读工具, **Default 里是开的** ——
+        // 「全关」辅助函数必须显式关掉, 否则名字与实况不符
+        // (之前只靠 `backends.workspace_root = None` 兜着, 那是隐式的)。
+        repo_map: false,
         self_status: false,
         ..ProductionModulesConfig::default()
     }
@@ -291,4 +295,55 @@ fn modules_build_segment_is_recorded_by_the_injected_timeline() {
         "脚本计时器读数全等 → 段耗时确定为 0"
     );
     assert_eq!(timeline.duration_ns(StartupPhase::ModulesBuild), 0);
+}
+
+#[test]
+fn repo_map_registers_only_when_the_workspace_root_is_provided() {
+    // 代码地图 (`tool.repo_map`) 的注册条件是**两个**：开关开 + 工作区根在场。
+    // 缺任一个都不注册 —— 不给默认根（没根就没限域，等于读任意目录）。
+    let probe = CountingBuildProbe::new();
+    let instrument = BuildInstrumentation::default().with_probe(probe.clone());
+
+    // 开关开但没有工作区根 ⇒ 不注册
+    let without_root = ProductionModules::build_instrumented(
+        ProductionModulesConfig {
+            repo_map: true,
+            ..all_switches_off()
+        },
+        ProductionBackends::default(),
+        system_clock(),
+        &instrument,
+    )
+    .expect("缺工作区根也必须能装配（只是不注册该工具）");
+    assert!(
+        !without_root
+            .capabilities()
+            .iter()
+            .any(|tool| tool.id().as_str() == "tool.repo_map"),
+        "缺工作区根时不得注册 tool.repo_map（没根 = 没限域）"
+    );
+
+    // 开关开 + 工作区根在场 ⇒ 恰好注册一次
+    let root = std::env::temp_dir();
+    let backends = ProductionBackends {
+        workspace_root: Some(root),
+        ..ProductionBackends::default()
+    };
+    let with_root = ProductionModules::build_instrumented(
+        ProductionModulesConfig {
+            repo_map: true,
+            ..all_switches_off()
+        },
+        backends,
+        system_clock(),
+        &instrument,
+    )
+    .expect("开 + 有根必须装配成功");
+    let registered: Vec<_> = with_root
+        .capabilities()
+        .iter()
+        .filter(|tool| tool.id().as_str() == "tool.repo_map")
+        .collect();
+    assert_eq!(registered.len(), 1, "tool.repo_map 应恰好注册一次");
+    assert_eq!(probe.count(ModuleFamily::Repo), 1, "Repo 族恰好构造一次");
 }

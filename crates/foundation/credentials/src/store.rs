@@ -113,9 +113,19 @@ impl FileCredentialsStore {
             service: "<store>".into(),
             source,
         })?;
+        // ⚠️ **不得**透传 serde 的原始消息：它的类型不匹配描述会**带上出错的值原文**
+        // （`invalid type: integer `9876543210987654321`, expected a string`）——
+        // 而本表承载「服务名 -> 明文」映射 ⇒ 值原文会**原样进错误文本/日志/告警**，
+        // 直接违反 `CredentialsError` 的红线（「Display 只含服务名/路径等元信息,
+        // 绝不携带凭据明文」）。此处只留**错误类别 + 行列位置**：诊断力不丢，值不出门。
         serde_json::from_str(&raw).map_err(|e| CredentialsError::Format {
             service: "<store>".into(),
-            message: e.to_string(),
+            message: format!(
+                "{:?} error at line {} column {}",
+                e.classify(),
+                e.line(),
+                e.column()
+            ),
         })
     }
 
@@ -125,9 +135,15 @@ impl FileCredentialsStore {
     /// 0644 暴露窗口), 且替换原子 — 崩溃不会留下半写 JSON 丢全表, 亦不回退。
     /// 非 unix: 无 unix mode 语义 (权限由 OS 默认 ACL 承载), 原子替换与落盘照常。
     fn save(&self, map: &BTreeMap<String, String>) -> Result<()> {
+        // 同上：序列化错误也不得带上值原文（`to_string_pretty` 的错误可能引用值）。
         let json = serde_json::to_string_pretty(map).map_err(|e| CredentialsError::Format {
             service: "<store>".into(),
-            message: e.to_string(),
+            message: format!(
+                "{:?} error at line {} column {}",
+                e.classify(),
+                e.line(),
+                e.column()
+            ),
         })?;
         storage_atomic::write_atomic_durable(&self.path, json.as_bytes(), OWNER_ONLY_MODE).map_err(
             |source| CredentialsError::Io {
@@ -199,6 +215,28 @@ impl CredentialsStore for FileCredentialsStore {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn format_error_does_not_carry_the_stored_value() {
+        // 凭据表里放一个明文值，再破坏成类型不符 ⇒ serde 错误会引用该值。
+        let dir = std::env::temp_dir().join(format!("cred-format-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("temp dir");
+        let path = dir.join("creds.json");
+        let store = FileCredentialsStore::new(&path).expect("store");
+        std::fs::write(&path, r#"{"svc":9876543210987654321}"#).expect("write");
+        let error = store.get("svc").expect_err("类型不符必须报错");
+        let rendered = format!("{error} | {error:?}");
+        assert!(
+            !rendered.contains("9876543210987654321"),
+            "凭据值原文不得出现在错误文本里: {rendered}"
+        );
+        // 诊断信息仍要保留（类别 + 位置）⇒ 不能只报一个空串。
+        assert!(
+            rendered.contains("error at line"),
+            "错误文本仍须保留行列诊断信息: {rendered}"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
     use super::*;
 
     fn tmp_store(name: &str) -> FileCredentialsStore {

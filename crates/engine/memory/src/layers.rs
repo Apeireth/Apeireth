@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::cross_diary_wiring::DiarySnippet;
 use crate::{MemoryProvenance, MemoryScope};
 
 /// The four canonical memory layers in Apeireth Unified Memory 2.0.
@@ -49,6 +50,13 @@ pub struct RecalledMemoryItem {
     /// Explainable score breakdown from hybrid ranking.
     #[serde(default)]
     pub score_components: Option<crate::ScoreComponents>,
+    /// Related diary excerpts attached to this hit (cross-diary retrieval wiring).
+    ///
+    /// Empty unless a read-only diary store was injected into the retrieval path
+    /// (see [`crate::cross_diary_wiring`]); the default recall therefore stays
+    /// byte-for-byte identical to the pre-wiring behavior.
+    #[serde(default)]
+    pub diary_snippets: Vec<DiarySnippet>,
 }
 
 /// Query specification for unified memory recall.
@@ -66,10 +74,17 @@ pub struct MemoryRecallQuery {
     #[serde(default)]
     pub as_of_ms: Option<i64>,
     /// Explicit closed-world visibility set. Legacy queries default to their
-    /// own session plus Global and therefore cannot see another session.
+    /// own session and therefore cannot see another session or Global.
     #[serde(default)]
     pub visible_scopes: Vec<MemoryScope>,
+    /// Host-authorized scope reads exclude unscoped preference/graph stores and
+    /// implicit typed identity visibility. Those stores require separate grants.
+    #[serde(default)]
+    pub exact_scope_authorization: bool,
 }
+
+/// ⭐ **生产默认召回名额**（2026-11-09 联合裁决）：有效名额 = `min(k, floor((4000 − 160) / (单条跨度 + 8)))` ⇒ 跨度 200 ⇒ 容量 20 ⇒ 名额给到 20 才吃得到容量。
+pub const PRODUCTION_RECALL_LIMIT: usize = 20;
 
 impl MemoryRecallQuery {
     pub fn new(session_id: impl Into<String>, query_text: impl Into<String>) -> Self {
@@ -83,11 +98,12 @@ impl MemoryRecallQuery {
                 MemoryLayerKind::Semantic,
                 MemoryLayerKind::Relational,
             ],
-            limit: 8,
+            limit: PRODUCTION_RECALL_LIMIT,
             max_chars: 4000,
             recency_decay_lambda: 0.05,
             min_score: 0.10,
             as_of_ms: None,
+            exact_scope_authorization: false,
             visible_scopes: vec![MemoryScope::Session {
                 session_id: session_id.clone(),
             }],
@@ -145,6 +161,14 @@ pub struct MemoryRecallResult {
     pub total_chars: usize,
     #[serde(default)]
     pub retrieval_status: Option<crate::RetrievalStatus>,
+    /// 用户知识库命中节（只读附加；无语料 ⇒ 空 vec）。
+    ///
+    /// 只有检索路径**注入**了语料根（`<data>/wiki`）且该目录在场时才有内容；
+    /// 未注入 / 目录不存在 / 无 `.md` ⇒ 恒为空 ⇒ 结果与接线前逐字节一致。
+    ///
+    /// 与日记片段同级：**附加证据**，不参与打分、不参与排序、不改 `total_candidates`。
+    #[serde(default)]
+    pub wiki_sections: Vec<crate::wiki_corpus::WikiSection>,
 }
 
 /// Structured writeback entry to persist after turn completion.

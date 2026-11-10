@@ -88,6 +88,7 @@ impl StdSubSupervisor {
     }
 
     /// 检测 `ExitReason` (per v1: ExitCode → Normal/Abnormal, signal → Signaled on Unix)
+    #[allow(dead_code)]
     fn classify_exit(status: std::process::ExitStatus) -> ExitReason {
         #[cfg(unix)]
         {
@@ -104,6 +105,7 @@ impl StdSubSupervisor {
     }
 
     /// 检查 child handle 是否还活着 (0 装: 不会触发, 因为 start 时没真的启)
+    #[allow(dead_code)]
     fn try_reap(&self, _child_id: &str, child: &mut Child) -> Option<ExitReason> {
         match child.try_wait() {
             Ok(Some(status)) => Some(Self::classify_exit(status)),

@@ -255,15 +255,6 @@ impl FeedLifecycleStore {
         }
     }
 
-    /// 从 `feeds.json` 路径派生同目录生命周期账 (自述探测口同源)。
-    pub fn beside_feeds(feeds_path: &Path) -> Self {
-        let dir = feeds_path
-            .parent()
-            .map(Path::to_path_buf)
-            .unwrap_or_else(|| PathBuf::from("."));
-        Self::for_data_dir(dir)
-    }
-
     /// 账文件路径。
     pub fn path(&self) -> &Path {
         &self.path

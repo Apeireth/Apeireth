@@ -105,17 +105,12 @@ impl DeviceSenseAuditLedger {
             vec![DEVICE_SENSE_AUDIT_DOC_VERSION],
             entry,
         );
-        let line =
-            serde_json::to_vec(&doc).map_err(|error| format!("审计账序列化失败: {error}"))?;
-        let mut file = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&self.path)
-            .map_err(|error| format!("审计账打开失败 {}: {error}", self.path.display()))?;
-        file.write_all(&line)
-            .and_then(|()| file.write_all(b"\n"))
-            .and_then(|()| file.sync_all())
-            .map_err(|error| format!("审计账写入失败 {}: {error}", self.path.display()))
+        // ⚠️ **2026-10-27 修同族缺陷（安全记录丢失）**：原写法是**两次写**
+        // （行体一次、换行一次）⇒ **并发写者**可在两次写之间插进来
+        // ⇒ ⇒ **两行被挤成一行** ⇒ **审计记录丢失**（读回时那行解析失败 ⇒
+        // 计入 `skipped` ⇒ **看着像「坏行」，实则是「丢记录」**）。
+        // ⇒ 改用**共用原语**（行体与行尾换行同在一次写 ⇒ O_APPEND 原子）。
+        crate::proposal::append_jsonl_row(&self.path, "审计账", &doc)
     }
 
     /// 读回整本 (逐记录语义: 坏行读作不存在并计入 `skipped`)。
@@ -144,6 +139,82 @@ mod tests {
             reason: "测试".to_string(),
             at_ms: 1_700_000_000_000,
         }
+    }
+
+    /// 回归（2026-10-27）：**并发追加不许丢审计行**。
+    ///
+    /// 旧实现是**两次写**（行体一次、换行一次）⇒ **并发写者**可在两次写之间插进来
+    /// ⇒ ⇒ **两行被挤成一行** ⇒ ⇒ **审计记录丢失**（读回时那行解析失败 ⇒ 计入
+    /// `skipped` ⇒ **看着像「坏行」，实则是「丢记录」**）。
+    /// ⇒ 审计账是**安全记录**（敏感读面每次尝试都入账）⇒ **丢一行就是丢一次尝试的痕迹**。
+    #[test]
+    fn concurrent_appends_keep_every_audit_row() {
+        let dir = std::env::temp_dir().join(format!(
+            "apeireth-device-audit-{}-{}",
+            "concurrent",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        let ledger = std::sync::Arc::new(DeviceSenseAuditLedger::under_data_dir(&dir));
+        let mut handles = Vec::new();
+        for worker in 0..4u32 {
+            let ledger = ledger.clone();
+            handles.push(std::thread::spawn(move || {
+                for index in 0..8u32 {
+                    let mut record = entry(SensitiveReadOutcome::Granted);
+                    record.device_id = format!("cam-{worker}-{index}");
+                    record.at_ms = 1_700_000_000_000 + i64::from(worker * 100 + index);
+                    ledger.append(&record).expect("append");
+                }
+            }));
+        }
+        for handle in handles {
+            handle.join().expect("join");
+        }
+        let scan = ledger.scan().unwrap();
+        assert_eq!(
+            scan.records.len(),
+            32,
+            "并发追加不许丢审计行（读到 {} 行）",
+            scan.records.len()
+        );
+        assert_eq!(scan.skipped, 0, "并发追加不许产生坏行");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 回归（2026-10-27）：**撕裂写后追加不许把旧行吞掉**。
+    #[test]
+    fn appending_after_a_torn_line_keeps_every_audit_row_readable() {
+        let dir = std::env::temp_dir().join(format!(
+            "apeireth-device-audit-{}-{}",
+            "torn",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        let ledger = DeviceSenseAuditLedger::under_data_dir(&dir);
+        ledger
+            .append(&entry(SensitiveReadOutcome::Granted))
+            .expect("append 1");
+
+        // 制造撕裂写：把末行的换行去掉。
+        let path = ledger.path().to_path_buf();
+        let mut bytes = std::fs::read(&path).expect("read audit");
+        assert!(bytes.ends_with(b"\n"), "正常追加的末行应有换行");
+        bytes.pop();
+        std::fs::write(&path, &bytes).expect("write torn audit");
+
+        ledger
+            .append(&entry(SensitiveReadOutcome::Denied))
+            .expect("append 2");
+        let scan = ledger.scan().unwrap();
+        assert_eq!(
+            scan.records.len(),
+            2,
+            "撕裂写后追加不许把旧行吞掉（读到 {} 行）",
+            scan.records.len()
+        );
+        assert_eq!(scan.skipped, 0, "撕裂写后追加不许产生坏行");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

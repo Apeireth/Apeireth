@@ -26,6 +26,24 @@ pub const PREFERENCE_INJECTION_LIMIT: usize = 8;
 ///
 /// Empty input yields an empty string (no injection).
 pub fn build_memory_injection(entries: &[String]) -> String {
+    build_memory_injection_with_budget(entries, EVIDENCE_MAX_CHARS)
+}
+
+/// 同 [`build_memory_injection`]，但**单条证据的字符上限可配**。
+///
+/// # 为什么需要它（2026-10-27）
+///
+/// 生产里每条证据被**硬截断到 120 字**（`EVIDENCE_MAX_CHARS`）
+/// ⇒ ⇒ 「**按信号选对段**」这件事**没有落点**（选出来的段也会被截回 120 字）。
+///
+/// ⇒ 而真正的预算是**总量**（`context_compiler` 的 `max_chars`）
+/// ⇒ ⇒ **放大单条上限并不增加总消耗** ⇒ ⇒ **零成本**。
+///
+/// # 口径
+///
+/// * `max_chars = 0` ⇒ 每条证据**都为空**（⇒ 只剩规则文案）⇒ ⇒ **如实**（不假装有内容）；
+/// * **总量**仍由调用方的 `max_chars` 控制 ⇒ ⇒ 本函数**只管单条**。
+pub fn build_memory_injection_with_budget(entries: &[String], max_chars: usize) -> String {
     if entries.is_empty() {
         return String::new();
     }
@@ -34,7 +52,7 @@ pub fn build_memory_injection(entries: &[String]) -> String {
         s.push_str(&format!(
             "{}. {}\n",
             i + 1,
-            e.chars().take(EVIDENCE_MAX_CHARS).collect::<String>()
+            e.chars().take(max_chars).collect::<String>()
         ));
     }
     s.push_str(

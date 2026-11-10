@@ -120,6 +120,34 @@ impl CapabilityDescriptor {
         })
     }
 
+    /// Read the typed restriction from this manifest's existing metadata.
+    pub fn module_tool_contract(
+        &self,
+    ) -> Result<Option<crate::module_contract::ModuleToolContract>, String> {
+        self.metadata
+            .get(crate::module_contract::CONTRACT_METADATA_KEY)
+            .map(|serialized| {
+                let contract: crate::module_contract::ModuleToolContract =
+                    serde_json::from_str(serialized)
+                        .map_err(|_| "invalid module tool contract encoding".to_owned())?;
+                contract.validate()?;
+                Ok(contract)
+            })
+            .transpose()
+    }
+
+    pub fn with_module_tool_contract(
+        mut self,
+        contract: &crate::module_contract::ModuleToolContract,
+    ) -> Result<Self, String> {
+        contract.validate()?;
+        self.metadata.insert(
+            crate::module_contract::CONTRACT_METADATA_KEY,
+            serde_json::to_string(contract).map_err(|error| error.to_string())?,
+        );
+        Ok(self)
+    }
+
     /// Builder-style annotation.
     #[must_use]
     pub fn with_metadata(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {

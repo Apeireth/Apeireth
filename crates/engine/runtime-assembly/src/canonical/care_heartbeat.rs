@@ -236,21 +236,6 @@ pub fn bio_care_assembly_from_env_value(
     Some((care_config, BioCarePoll::new(inputs, clock)))
 }
 
-/// 从 env 现值装配 (同 [`bio_care_assembly_from_env_value`] 的 fail-closed 口径)。
-#[must_use]
-pub fn bio_care_assembly_from_env(
-    inputs: Box<dyn BioCareInputs>,
-    clock: BioCareClock,
-) -> Option<(CareConfig, BioCarePoll)> {
-    bio_care_assembly_from_env_value(
-        std::env::var(BIO_CARE_CANDIDATES_ENABLE_ENV)
-            .ok()
-            .as_deref(),
-        inputs,
-        clock,
-    )
-}
-
 /// 装配缺省空供给档 (W3.3 前的诚实默认: 开关开也不产候选)。
 #[must_use]
 pub fn no_bio_care_inputs() -> Box<dyn BioCareInputs> {
@@ -341,11 +326,6 @@ impl CareHeartbeatPoll {
         self.circadian
             .as_ref()
             .and_then(BioCircadianGate::last_decision)
-    }
-
-    /// 内核本体 (喂交互观察等进程内值的入口)。
-    pub fn engine_mut(&mut self) -> &mut CareEngine {
-        &mut self.engine
     }
 }
 

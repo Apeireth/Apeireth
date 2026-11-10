@@ -449,5 +449,33 @@ def main() -> int:
     return 0
 
 
+# ⭐ 写文件前空间自检
+# ⇒ ⇒ 治「磁盘满 ⇒ 文件被静默截断」（实测：生成物变 0 字节 ⇒ ⇒ 下游误判「脚本坏了」）
+# ⇒ ⇒ 空间不足 ⇒ ⇒ **中止且退出码 1** ⇒ ⇒ 宁可「不写」，也不写半截文件。
+# ⚠️ 放在**模块级**（`if __name__` 之前）⇒ ⇒ 缩进 0 ⇒ ⇒ 绝不可能破语法。
+if "--gen" in sys.argv or "--update" in sys.argv:
+    try:
+        import subprocess as _sp
+
+        _rc = _sp.run(
+            [
+                sys.executable,
+                str(Path(__file__).resolve().parent / "clean_test_binaries.py"),
+                "--ensure-free",
+                "300",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=300,
+            check=False,
+        )
+        if _rc.returncode != 0:
+            print("  [空间] 不足 ⇒ ⇒ **中止生成**（避免写出半截文件）", file=sys.stderr)
+            raise SystemExit(_rc.returncode)
+    except SystemExit:
+        raise
+    except Exception:
+        pass  # 自检失败**不阻断**生成（宁可少一道保险，也不要卡住日常流程）
+
 if __name__ == "__main__":
     sys.exit(main())

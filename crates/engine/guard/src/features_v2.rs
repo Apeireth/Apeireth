@@ -7,8 +7,17 @@ use apeireth_governance::{IntentClass, OperationClass};
 use crate::chain::BehaviorChain;
 use crate::features::AgentChainFeatureV1;
 use crate::intent::AlignmentClass;
+use crate::observation::SinkClass;
 
 pub const AGENT_CHAIN_FEATURE_V2: &str = "AgentChainFeatureV2";
+
+/// 动作的 sink class **集合**（去重、与顺序无关）。
+///
+/// ⚠️ 旧实现只取 `sink_classes.first()` ⇒ 动作对的「目的地是否变了」也只按
+/// **首个** sink 判 ⇒ 首个相同但集合不同 ⇒ 判成「没换目的地」⇒ **少计**。
+fn sink_class_set(sinks: &[SinkClass]) -> std::collections::HashSet<SinkClass> {
+    sinks.iter().copied().collect()
+}
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct CrossTurnRiskSummary {
@@ -224,6 +233,21 @@ impl AgentChainFeatureV2 {
             .count();
         let target_switch_available = known_targets >= 2;
         let target_switch_rate = if target_switch_available {
+            // ⚠️ **刻意只看首个资源类**（2026-11-05 口径写清，**不是**遗漏）。
+            //
+            // 同一批里修掉的**同族**问题（`sink_classes.first()` 只取首个）：
+            // `external_sink_count`（特征统计 + `fusion.rs:96` 的**判定闸门**）与
+            // `destination_switch_rate`（跨动作对比较）⇒ ⇒ 都改成**全集 / 集合**语义。
+            //
+            // ⇒ 但**同形 ≠ 同族** ⇒ ⇒ 此处保持「首个」：
+            // * **sink 集合**：一个动作带 2 个 sink（`[WorkspaceFile, ExternalNetwork]`）
+            //   ⇒ ⇒ 真的**多目的地** ⇒ ⇒ 只看首个 = **漏报** ⇒ ⇒ 必须用全集；
+            // * **资源类集合**：一个动作触多个资源类是**常态**（管道动作：读文件 +
+            //   调网络 + 写日志）⇒ ⇒ 首个资源类 = **主资源**（primary）
+            //   ⇒ ⇒ 「目的地是否切换」判的是**主目标**变了没
+            //   ⇒ ⇒ 若用集合比较，「同一组资源、不同顺序」也会被算成切换 ⇒ ⇒ **特征被稀释**。
+            //
+            // ⇒ ⇒ 判据：**改「取首个」之前先问「这里的『首个』是漏报还是本意」**。
             let switches = actions
                 .windows(2)
                 .filter(|pair| pair[0].resource_classes.first() != pair[1].resource_classes.first())
@@ -243,9 +267,13 @@ impl AgentChainFeatureV2 {
             .count();
         let destination_switch_available = known_destinations >= 2;
         let destination_switch_rate = if destination_switch_available {
+            // ⚠️ 比较 sink **集合**（旧实现只比 `sink_classes.first()` ⇒ 首个相同
+            // 但集合不同的动作对被判成「没换目的地」⇒ **少计** ⇒ 同族漏报）。
             let switches = actions
                 .windows(2)
-                .filter(|pair| pair[0].sink_classes.first() != pair[1].sink_classes.first())
+                .filter(|pair| {
+                    sink_class_set(&pair[0].sink_classes) != sink_class_set(&pair[1].sink_classes)
+                })
                 .count();
             switches as f64 / f64::from(action_count - 1)
         } else {
@@ -353,5 +381,98 @@ impl AgentChainFeatureV2 {
 impl From<&BehaviorChain> for AgentChainFeatureV2 {
     fn from(value: &BehaviorChain) -> Self {
         Self::from_chain(value)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use crate::observation::{DataSensitivity, ResourceClass, SafetyObservation, SourceClass};
+    use apeireth_governance::OperationClass;
+
+    fn observation(sink_classes: Vec<SinkClass>) -> SafetyObservation {
+        SafetyObservation {
+            trace_id: "trace-destination-switch".to_string(),
+            request_id: "req-1".to_string(),
+            session_id: "session-1".to_string(),
+            stage: "pre_dispatch".to_string(),
+            capability_id: "net.fetch".to_string(),
+            tool_name: "fetch".to_string(),
+            resource_classes: vec![ResourceClass::NetworkPublic],
+            source_classes: vec![SourceClass::PrivateFile],
+            sink_classes,
+            permission_scope: "workspace".to_string(),
+            approval_state: "not_required".to_string(),
+            argument_shape: "url=<redacted>".to_string(),
+            redacted_argument_features: serde_json::json!({}),
+            result_class: None,
+            result_size_bucket: None,
+            retry_count: 0,
+            denied_before: false,
+            prior_actions: Vec::new(),
+            external_effect: true,
+            operation_class: OperationClass::NetworkSend,
+            operation_classes: vec![OperationClass::NetworkSend],
+            descriptor_source: crate::semantics::DescriptorSource::Canonical,
+            data_sensitivity: DataSensitivity::WorkspacePrivate,
+            persistent_effect: false,
+            destructive_effect: false,
+            requires_network: true,
+            may_access_credentials: false,
+            effect_fingerprint: String::new(),
+        }
+    }
+
+    /// **跨动作对比较用全集**：两个动作的 sink **集合**不同但**首个相同**
+    /// ⇒ 必须判为「换了目的地」（旧口径只比首个 ⇒ 判成没换 ⇒ 少计）。
+    #[test]
+    fn destination_switch_rate_compares_the_whole_sink_set() {
+        let mut chain = BehaviorChain::new("session-1", "trace-destination-switch");
+        chain.add_action(
+            &observation(vec![SinkClass::ExternalNetwork, SinkClass::ShellExecution]),
+            0,
+        );
+        chain.add_action(&observation(vec![SinkClass::ExternalNetwork]), 1);
+
+        let features = AgentChainFeatureV2::from_chain(&chain);
+        assert!(
+            features.destination_switch_available,
+            "两个动作都有已知 sink ⇒ 目的地切换率必须可用"
+        );
+        assert_eq!(
+            features.destination_switch_rate, 1.0,
+            "首个 sink 相同但 sink **集合**不同 ⇒ 必须判为「换了目的地」（首个口径 = 0 ⇒ 少计）"
+        );
+    }
+
+    /// sink 集合相同（顺序不同也算相同）⇒ 不得误判为切换（回归钉住）。
+    #[test]
+    fn destination_switch_rate_is_zero_for_the_same_sink_set() {
+        let mut chain = BehaviorChain::new("session-1", "trace-same-destination");
+        chain.add_action(
+            &observation(vec![SinkClass::ExternalNetwork, SinkClass::ShellExecution]),
+            0,
+        );
+        chain.add_action(
+            &observation(vec![SinkClass::ShellExecution, SinkClass::ExternalNetwork]),
+            1,
+        );
+
+        let features = AgentChainFeatureV2::from_chain(&chain);
+        assert_eq!(
+            features.destination_switch_rate, 0.0,
+            "sink 集合相同 ⇒ 不是目的地切换"
+        );
+    }
+
+    /// 单个动作 ⇒ 没有动作对 ⇒ 切换率必须为 0（不得除零/不得 NaN）。
+    #[test]
+    fn destination_switch_rate_is_zero_for_a_single_action() {
+        let mut chain = BehaviorChain::new("session-1", "trace-single-action");
+        chain.add_action(&observation(vec![SinkClass::ExternalNetwork]), 0);
+
+        let features = AgentChainFeatureV2::from_chain(&chain);
+        assert_eq!(features.destination_switch_rate, 0.0);
     }
 }

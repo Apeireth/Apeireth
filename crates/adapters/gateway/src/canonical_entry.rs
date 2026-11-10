@@ -31,7 +31,7 @@ use tower_http::cors::AllowOrigin;
 use crate::admin::{admin_config_get, admin_config_update, GatewayRuntimeConfig};
 use crate::client_tokens::{
     client_name_binds, record_session_client, record_user_action, ClientIdentity, UserContext,
-    CLIENT_NAME_CLAIM_HEADER,
+    CLIENT_NAME_CLAIM_HEADER, USER_ACTION_AUDIT_EVENT,
 };
 use crate::error_frame::{ErrorCode, ErrorFrame};
 use crate::events::{events_handler, EventBus, GatewayEvent, RuntimeObservationSink};
@@ -382,6 +382,22 @@ pub async fn resolve_approval_attributed(
         "approval.resolve",
         Some(permit.admission()),
     );
+    // **设备面：先把宿主决定落进决定账，再续跑**（2026-11-01 安全审计 P3-1/P3-2 闭环）。
+    //
+    // 原先错在哪：设备面的放行**只认宿主决定账**（模型自称的授权人不作数），
+    // 但决定账原先**只有 IM 审批卡链会写** ⇒ 面板批了却不落账
+    // ⇒ 执行面查无批准 ⇒ **永远拒绝**（人批了也执行不了 = 流程断链）。
+    //
+    // 现在为什么这样：宿主拍板这一步**接上**决定账 ⇒ 闭环。
+    // ⚠️ 顺序：**先落账、后续跑**（续跑会执行工具 ⇒ 决定账必须已就位）。
+    // ⚠️ 落账失败 ⇒ **不续跑**（与 IM 面同口径：「拒绝落账 ⇒ 拒绝即帧」）。
+    crate::device_decision::record_device_host_decision(
+        runtime,
+        request.session,
+        request.approval,
+        &decision,
+    )
+    .await?;
     let resolved = runtime
         .resolve_approval(request.session, request.approval, decision)
         .await;
@@ -641,18 +657,9 @@ pub fn build_gateway_state_with_services(
 
 /// Build the production HTTP router around one long-lived canonical runtime.
 ///
-/// Panel routes answer `501 unsupported` while no [`PanelData`] is attached —
-/// see [`canonical_router_with_panels`].
+/// Panel routes answer `501 unsupported` while no [`PanelData`] is attached.
 pub fn canonical_router(runtime: Arc<Runtime>) -> Router {
     canonical_router_with_services(runtime, GatewayServices::default())
-}
-
-/// Build the production router with optional panel/introspection backends.
-pub fn canonical_router_with_panels(
-    runtime: Arc<Runtime>,
-    panels: Option<Arc<dyn PanelData>>,
-) -> Router {
-    canonical_router_with_state(build_gateway_state(runtime, panels))
 }
 
 /// Build the production router over explicit bounded-context gateway ports.
@@ -672,6 +679,50 @@ pub fn canonical_router_with_services(runtime: Arc<Runtime>, services: GatewaySe
 /// (`/v1/approvals/resolve`)、读取全部会话与记忆 (panel 族路由)、热改
 /// provider base_url (`/v1/admin/config`)。本谓词把可跨源访问本 gateway
 /// 的页面收敛到 Tauri 桌面件与本机回环开发服务器。
+/// **跨源请求闸**：带 `Origin` 且不在本地白名单 ⇒ **拒绝**（403）。
+///
+/// # 为什么需要它（CORS 层不够）
+///
+/// `tower_http::cors::CorsLayer` 只**加响应头**，它**不拒绝**非预检请求 ⇒
+/// ⇒ 跨源的 **simple POST**（无预检）**照样抵达 handler** ⇒
+/// ⇒ 浏览器读不到响应，但**副作用照样发生**（例如 `POST /v1/admin/shutdown`）。
+///
+/// ⇒ 本层补上「**拒绝**」这一半：请求带 `Origin` 时按 [`is_allowed_local_origin`] 判定。
+///
+/// # 口径
+///
+/// * **只拦状态变更方法**（POST / PUT / PATCH / DELETE）
+///   ⇒ 读方法（GET / HEAD）与预检（OPTIONS）**维持既有 CORS 语义**
+///   （跨源读返回 200 但**不带** `access-control-allow-origin` ⇒ 浏览器自己挡）
+///   ⇒ ⇒ **改动面最小**（既有的 `the_gateway_refuses_cors_for_non_local_origins` 语义不变），
+///   而**危险面**（跨源触发的状态变更）被真正堵上；
+/// * **不带 `Origin`** ⇒ **放行**（CLI / 服务端 / 脚本等非浏览器客户端 ⇒ 本来就没有这个头）；
+/// * 带 `Origin` 且不在白名单 ⇒ **403**；
+/// * 层序：**在令牌门之内** ⇒ ⇒ 未通过令牌门时**仍是 401**
+///   ⇒ 不借 403/401 的差别泄露路由存在性（与既有纪律一致）。
+async fn reject_foreign_origin(
+    req: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    let method = req.method().clone();
+    let mutates_state = !matches!(
+        method,
+        axum::http::Method::GET | axum::http::Method::HEAD | axum::http::Method::OPTIONS
+    );
+    if mutates_state {
+        if let Some(origin) = req.headers().get(axum::http::header::ORIGIN) {
+            if !is_allowed_local_origin(origin) {
+                return (
+                    axum::http::StatusCode::FORBIDDEN,
+                    "cross-origin request rejected: origin is not allowed",
+                )
+                    .into_response();
+            }
+        }
+    }
+    next.run(req).await
+}
+
 fn is_allowed_local_origin(origin: &axum::http::HeaderValue) -> bool {
     let Ok(text) = origin.to_str() else {
         return false;
@@ -785,12 +836,6 @@ impl GatewayTokenGate {
             Self::UnprotectedDefault | Self::UnprotectedDeclared => None,
         }
     }
-
-    /// 令牌族是否在场 (env 单令牌或令牌表任一非空) —— 在场即强制校验。
-    pub fn family_enforced(&self, clients: &crate::client_tokens::ClientTokenTable) -> bool {
-        matches!(self, Self::Enforced(_)) || !clients.is_empty()
-    }
-
     /// 过门裁决 (纯函数): `bearer` 是 `Authorization: Bearer ` 后面的裸令牌。
     ///
     /// 口径 (令牌族合并后):
@@ -1047,7 +1092,7 @@ fn required_user_capability(method: &axum::http::Method, path: &str) -> Option<U
 /// 角色门判「你能不能」。
 ///
 /// - **角色面未激活** (未注入用户表) = 兼容路径: W2-② 行为逐字不变,
-///   不新增拒绝面 (零回归口径);
+///   不新增拒绝面 (零回归口径) —— **但管理面例外** (见下);
 /// - **角色面激活**: 过门客户端名 → 令牌→用户→角色链 → 治理层 role 权限矩阵;
 ///   写面/管理面/审批面对**未绑定用户** fail-closed 拒 (403 `permission_denied`);
 ///   每次裁决 (allow/deny) 落一行 `gateway.user_action` 审计 (user/role/action)。
@@ -1055,23 +1100,61 @@ fn required_user_capability(method: &axum::http::Method, path: &str) -> Option<U
 /// 角色只来自令牌绑定的解析链 ([`crate::client_tokens::resolve_user_identity`]),
 /// 请求无法自称角色 —— 成员冒名 owner 在这里无从发生 (自称客户端名另有
 /// name↔token 绑定校验, 在令牌门内已拒)。
+///
+/// # P0-1 管理面 fail-closed (2026-11-04 · 网关管理面零认证 ⇒ 凭据外泄)
+///
+/// **角色面未激活 ≠ 管理面放行。** 角色面未激活时没有「谁」可判, 管理面
+/// 端点 (要求 [`UserCapability::AdminControl`] 者) 一律 **403 拒**。
+///
+/// 理由 (为什么这条不能吃「零回归」豁免): 管理面能热改 provider `base_url`
+/// (见 [`crate::admin`]: 只校验「https 或环回 http」, **无 host allowlist**)
+/// ⇒ 下一次模型调用把**真实 API key** 发往攻击者服务器
+/// (`apeireth_provider::canonical_openai_compatible` 的 `bearer_auth(key.expose())`)。
+/// ⇒ 管理面的风险等级与普通端点**不同** (普通端点最多读/写会话数据,
+/// 管理面能**外泄凭据**) ⇒ 「零回归」口径不适用于**能外泄凭据的面**。
+///
+/// 范围 (刻意最小): 只拒**要求 `AdminControl` 的端点**
+/// (判定复用 [`required_user_capability`])。其余端点逐字不变 ——
+/// GET/HEAD ⇒ 能力 `None` ⇒ 放行; 写面 (`Write`) ⇒ 维持现状 (仍放行)。
 async fn require_user_capability(
     State(state): State<GatewayState>,
     mut request: Request,
     next: Next,
 ) -> Response {
+    let endpoint = request.uri().path().to_string();
     if !state.user_access.is_active() {
+        // 管理面 fail-closed: 角色面未激活 ⇒ 无人可担 `AdminControl` ⇒ 拒。
+        if required_user_capability(request.method(), &endpoint)
+            == Some(UserCapability::AdminControl)
+        {
+            state.observations.buffer_audit(
+                USER_ACTION_AUDIT_EVENT,
+                Some(format!(
+                    "user=unbound role=unbound action={} endpoint={endpoint} decision=deny \
+                     reason=user_role_surface_inactive",
+                    UserCapability::AdminControl.label()
+                )),
+            );
+            return ErrorFrame::response(
+                StatusCode::FORBIDDEN,
+                ErrorCode::PermissionDenied,
+                format!(
+                    "role gate refused {endpoint}: the user role surface is not active \
+                     (admin plane is fail-closed)"
+                ),
+            )
+            .into_response();
+        }
         request.extensions_mut().insert(UserContext::unbound());
         return next.run(request).await;
     }
-    let client = request
-        .extensions()
-        .get::<ClientIdentity>()
-        .map(|identity| identity.client.clone())
-        .unwrap_or_else(|| ClientIdentity::UNATTRIBUTED.to_string());
-    let user = state.user_access.identity(&client, &state.client_tokens);
+    let identity = request.extensions().get::<ClientIdentity>().cloned();
+    let user = identity.as_ref().and_then(|identity| {
+        state
+            .user_access
+            .identity_for(identity, &state.client_tokens)
+    });
     let context = UserContext { user };
-    let endpoint = request.uri().path().to_string();
     if let Some(capability) = required_user_capability(request.method(), &endpoint) {
         let allowed = context.allows(capability);
         // V2-c 域标注: 授权裁决 = 行为域 (行为者所在域)。
@@ -1274,6 +1357,10 @@ pub fn canonical_router_with_state(state: GatewayState) -> Router {
             gate_state.clone(),
             require_user_capability,
         ))
+        // 跨源请求闸 (2026-10-31 · 静态安全审计复核): CORS 层只加头、**不拒绝**
+        // ⇒ 跨源 simple POST 的副作用照样发生 ⇒ 这里补「拒绝」那一半。
+        // 层序: **令牌门之内** ⇒ 未过令牌门仍回 401 (不借 403/401 差别泄露路由存在性)。
+        .layer(middleware::from_fn(reject_foreign_origin))
         // 令牌门包住整个 API 面 (含未匹配路径的 fallback: 强制态下未知路径也
         // 401, 不借 404/401 差别泄露路由存在性)。
         .layer(middleware::from_fn_with_state(
@@ -1301,50 +1388,6 @@ pub fn canonical_router_with_state(state: GatewayState) -> Router {
         )
         .with_state(state)
 }
-
-/// Serve the canonical gateway until the listener closes.
-pub async fn serve_canonical(
-    listener: tokio::net::TcpListener,
-    runtime: Arc<Runtime>,
-    panels: Option<Arc<dyn PanelData>>,
-) -> std::io::Result<()> {
-    serve_canonical_with_services(listener, runtime, GatewayServices::from_panel(panels)).await
-}
-
-/// Serve the canonical gateway over explicit bounded-context gateway ports.
-pub async fn serve_canonical_with_services(
-    listener: tokio::net::TcpListener,
-    runtime: Arc<Runtime>,
-    services: GatewayServices,
-) -> std::io::Result<()> {
-    serve_with_shutdown(listener, runtime, services, std::future::pending::<()>()).await
-}
-
-/// Serve the canonical gateway until the listener closes **or** a shutdown is
-/// requested (W2-① 常驻形态的优雅停机面).
-///
-/// Shutdown sources funnel into one policy:
-///
-/// - `external_shutdown` — the composition root's process-signal face
-///   (`SIGTERM` / console control events);
-/// - [`crate::shutdown::ShutdownTrigger`] — fired by the token-gated
-///   `POST /v1/admin/shutdown` endpoint (the service scripts' stop path).
-///
-/// When either fires, the server stops accepting new work, waits for in-flight
-/// requests to finish, then performs the closing bookkeeping (收尾): one final
-/// `gateway.shutdown` audit fact and a full flush of the observation archive to
-/// its port (the `daemon-audit.jsonl` archive in the production assembly), so
-/// the last facts of the process are on disk before it exits (落盘).
-pub async fn serve_with_shutdown(
-    listener: tokio::net::TcpListener,
-    runtime: Arc<Runtime>,
-    services: GatewayServices,
-    external_shutdown: impl std::future::Future<Output = ()> + Send + 'static,
-) -> std::io::Result<()> {
-    let state = build_gateway_state_with_services(runtime, services);
-    serve_state_with_shutdown(listener, state, external_shutdown).await
-}
-
 /// Serve over an explicit [`GatewayState`] until the listener closes or a
 /// shutdown fires (see [`serve_with_shutdown`] for the shutdown contract).
 ///
@@ -1727,6 +1770,21 @@ async fn native_chat(
     bind_session_owner(&state, session, user.as_ref());
     // W3-③: 会话入域立案 (域事件过滤面)。
     admit_domain_session(&state, &execution, session).await?;
+
+    // **主体 → 会话**归属登记（2026-11-01 安全审计 P1 收口）:
+    // episode 维度的「被遗忘权」要成立, 必须能把 episode 归到主体
+    // ⇒ 靠 memory 侧的 `memory_principal_sessions` 映射连接
+    // ⇒ 生产侧原先**无写入方** ⇒ 那一维的被遗忘权无法生效。
+    // 主体 = 域面 `user_id`（人/账户级）；**无 user_id ⇒ 不登记**
+    //（宁可归属不可判定, 也不要错归属 ⇒ 误删风险）。
+    // ⚠️ **旁路**: 写失败 ⇒ 记审计、**不阻断主流程**。
+    if let Err(error) = crate::principal_attribution::record_principal_attribution(
+        &state,
+        identity.as_ref().map(|Extension(identity)| identity),
+        session,
+    ) {
+        eprintln!("[principal-attribution] 归属登记失败 (旁路, 不阻断请求): {error}");
+    }
     let attribution = attribution_for(&state, identity.as_ref());
     let outcome = execute_chat_attributed(execution.runtime.as_ref(), request, attribution).await;
     state.observations.flush().await;

@@ -66,7 +66,7 @@
 
 ### 4. 现代大模型基础设施与成本优化
 * **Apeireth 2.0 优势**：
-  * **Prompt Cache 字节稳定器（同类工程做法）**：System Prompt + Persona + 历史消息前缀字节严格锁定，动态环境单点注入最新 User 消息，将主流大模型（Anthropic/OpenAI/DeepSeek）Prompt Cache 命中率拉升至 **80%+**，推理成本降低 60%~80%；
+  * ⚠️ **Prompt Cache 字节稳定器**：2026-10-20 裁定归档（ADR-0007 / R7-4a）⇒ **生产不存在**（原设计：System Prompt + Persona + 历史消息前缀字节严格锁定，动态环境单点注入最新 User 消息，将主流大模型（Anthropic/OpenAI/DeepSeek）Prompt Cache 命中率拉升至 **80%+**，推理成本降低 60%~80%；
   * **8 帧 WebSocket 协议与标点分句推流**（2026-10-20 复核修正）：协议类型与 `SentenceDivider` 为库级；**HTTP 服务端路由未接**（README honest gaps「no /v1/ws server route」），TTFAB <300ms 为设计目标非实测。
 
 ---

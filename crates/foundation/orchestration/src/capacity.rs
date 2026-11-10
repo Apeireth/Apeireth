@@ -24,7 +24,10 @@
 //!   [`KeystoneRegistry::register`] / [`KeystoneRegistry::report_health`] 两个显式 API。
 //! - **0 新外部依赖**: 生产仅用 `serde` 派生；`serde_json` 只出现在测试。
 //!
-//! # IMPLEMENTED（未接线）
+//! # IMPLEMENTED；装配面已接（默认关，2026-10-25 核对）
+//!
+//! 生产经 `capacity_bio_probe` 注册进自述 SG-26 格（需 `APEIRETH_ENABLE_BIO_SELF_STATUS=1`
+//! 且配了任务板；两个条件不满足 = 该格不注册，自述如实说原因）。原文「未接线」已过期。
 //! 本模块是机制内核 v0，落 **IMPLEMENTED** 级：
 //! - 未接上下文预算（`context_budget`）、记忆配额（记忆条目上限）、工具注册表与任务队列；
 //! - 无告警出口（不 emit 事件、不推 channel、不写日志）；

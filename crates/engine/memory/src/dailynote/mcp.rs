@@ -58,11 +58,38 @@ impl DailyNoteTool {
 
 pub const DAILYNOTE_MCP_TOOL_COUNT: usize = 4;
 
-pub struct DailyNoteMcp;
+/// **MCP 接线层**（4 个工具：create / get / search / export）。
+///
+/// ⚠️ **2026-11-03 改造**：此前 `tools/call` **只回显参数**
+/// （`format!("create note title={:?}", …)`）⇒ ⇒ **从不真正执行**
+/// ⇒ ⇒ 「零生产消费」的一部分原因是**它本来就是桩**。
+/// ⇒ ⇒ 现在**持有 store** ⇒ ⇒ 四个工具**真的落库 / 真的读回 / 真的导出**。
+pub struct DailyNoteMcp {
+    /// ⚠️ **`Arc`**：`DailyNoteStore` 持 `rusqlite::Connection`（**不可 clone**）
+    /// ⇒ ⇒ 而 MCP 接线层与 `EnhancedDailyNote` **必须共用同一份库**
+    /// ⇒ ⇒ ⇒ 用 `Arc` 共享（否则两套库 ⇒ 数据不通）。
+    store: std::sync::Arc<super::store::DailyNoteStore>,
+}
 
 impl DailyNoteMcp {
+    /// 用给定 store 构造（**真执行**）。
+    #[must_use]
+    pub fn with_store(store: std::sync::Arc<super::store::DailyNoteStore>) -> Self {
+        Self { store }
+    }
+
+    /// 进程内 store（测试与便捷用法）。
+    #[must_use]
     pub fn new() -> Self {
-        Self
+        Self::with_store(std::sync::Arc::new(
+            super::store::DailyNoteStore::open_in_memory().expect("in-memory store"),
+        ))
+    }
+
+    /// 本接线层用的 store（供上层复用同一份数据）。
+    #[must_use]
+    pub fn store(&self) -> &super::store::DailyNoteStore {
+        &self.store.as_ref()
     }
     pub fn handle(&self, req: McpRequest) -> McpResponse {
         match req.method.as_str() {
@@ -105,26 +132,71 @@ impl DailyNoteMcp {
                     .and_then(|v| v.as_str())
                     .unwrap_or("");
                 let args = req.params.get("arguments").cloned().unwrap_or(json!({}));
+                // ⚠️ **2026-11-03**：此前这里是**回显参数**（桩）⇒ ⇒ 现在**真执行**。
+                // ⇒ ⇒ 每个分支都真的动 store；失败**如实报错**（不编成功）。
                 let summary = match tool {
-                    "note_create" => format!(
-                        "create note title={:?}",
-                        args.get("title").and_then(|v| v.as_str()).unwrap_or("")
-                    ),
-                    "note_get" => format!(
-                        "get note id={:?}",
-                        args.get("id").and_then(|v| v.as_str()).unwrap_or("")
-                    ),
-                    "note_search" => format!(
-                        "search query={:?}",
-                        args.get("query").and_then(|v| v.as_str()).unwrap_or("")
-                    ),
-                    "note_export" => format!(
-                        "export note id={:?} format={:?}",
-                        args.get("id").and_then(|v| v.as_str()).unwrap_or(""),
-                        args.get("format")
+                    "note_create" => {
+                        let title = args.get("title").and_then(|v| v.as_str()).unwrap_or("");
+                        let content = args.get("content").and_then(|v| v.as_str()).unwrap_or("");
+                        let tags: Vec<String> = args
+                            .get("tags")
+                            .and_then(|v| v.as_array())
+                            .map(|items| {
+                                items
+                                    .iter()
+                                    .filter_map(|item| item.as_str().map(str::to_string))
+                                    .collect()
+                            })
+                            .unwrap_or_default();
+                        let mut note = super::note::DailyNote::new(title, content);
+                        if !tags.is_empty() {
+                            note = note.with_tags(tags);
+                        }
+                        match self.store.insert(&note) {
+                            Ok(()) => format!("created note {}", note.id.0),
+                            Err(error) => format!("note_create failed: {error}"),
+                        }
+                    }
+                    "note_get" => {
+                        let id = args.get("id").and_then(|v| v.as_str()).unwrap_or("");
+                        match self.store.get(&super::note::NoteId(id.to_string())) {
+                            Ok(note) => format!(
+                                "note {} title={:?} content={:?}",
+                                note.id.0, note.title, note.content
+                            ),
+                            Err(error) => format!("note_get failed: {error}"),
+                        }
+                    }
+                    "note_search" => {
+                        let query = args.get("query").and_then(|v| v.as_str()).unwrap_or("");
+                        let tag = args.get("tag").and_then(|v| v.as_str());
+                        let ids = match tag {
+                            Some(tag) => self.store.list_by_tag(tag).unwrap_or_default(),
+                            None => self.store.list_all().unwrap_or_default(),
+                        };
+                        let mut notes = Vec::new();
+                        for id in &ids {
+                            if let Ok(note) = self.store.get(id) {
+                                notes.push(note);
+                            }
+                        }
+                        let hits = super::search::search_notes(&notes, query, tag);
+                        format!("search query={query:?} hits={}", hits.len())
+                    }
+                    "note_export" => {
+                        let id = args.get("id").and_then(|v| v.as_str()).unwrap_or("");
+                        let format = args
+                            .get("format")
                             .and_then(|v| v.as_str())
-                            .unwrap_or("markdown")
-                    ),
+                            .unwrap_or("markdown");
+                        match self.store.get(&super::note::NoteId(id.to_string())) {
+                            Ok(note) => match format {
+                                "json" => super::export::export_json(&note),
+                                _ => super::export::export_markdown(&note),
+                            },
+                            Err(error) => format!("note_export failed: {error}"),
+                        }
+                    }
                     other => format!("unknown tool: {}", other),
                 };
                 McpResponse {
@@ -204,6 +276,13 @@ mod tests {
         });
         let result = r.result.unwrap();
         let text = result["content"][0]["text"].as_str().unwrap();
-        assert!(text.contains("title"));
+        // ⚠️ **2026-11-03 改口径**：此前断言 `text.contains("title")` ⇒ ⇒ 那是**桩行为**
+        // （回显参数）⇒ ⇒ 现在 `note_create` **真的落库** ⇒ ⇒ 回显是「created note <id>」。
+        // ⇒ ⇒ 断言改为：**真落库**（库里多了一条）+ 回显是创建成功。
+        assert!(
+            text.starts_with("created note "),
+            "note_create 该真落库（实测 {text:?}）"
+        );
+        assert_eq!(m.store().count().unwrap(), 1, "库里该有 1 条");
     }
 }

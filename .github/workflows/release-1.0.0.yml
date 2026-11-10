@@ -98,7 +98,7 @@ jobs:
           fetch-depth: 0  # 需 git tag 信息
 
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.97.1
         with:
           # 装所有可能 target (rustup target add 幂等, ~1s/target)
           # 比嵌套表达式更稳. 覆盖:
@@ -258,7 +258,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.97.1
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
@@ -314,7 +314,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.97.1
 
       # keyring → dbus-secret-service → libdbus-sys 需要系统库 (cargo bench 全编译)
       - name: "Install system deps (Linux: libdbus)"
@@ -354,7 +354,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.97.1
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2

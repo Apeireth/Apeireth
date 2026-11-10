@@ -396,7 +396,6 @@ fn kani_panic_free_async_context_pipeline() {
     );
 }
 
-
 /// 证明: SemanticAxisBridge::fit 对**任意形状**样本集（含长度 != dimension 的
 /// 非法样本）不 panic——形状契约由实现显式校验：出现任一非法形状则空操作返回、
 /// 基底保持为空。边界: dimension <= 3, 样本数 <= 3, 每样本向量长 <= 3, unwind 96。
@@ -447,9 +446,7 @@ fn kani_panic_free_dual_scaled_field_solve_any_shape() {
         ..DualScaledFieldSolver::new()
     };
     let (u_local, u_transfer) = solver.solve(&source, &matrix);
-    let well_formed = n > 0
-        && matrix.len() == n
-        && matrix.iter().all(|r| r.len() == n);
+    let well_formed = n > 0 && matrix.len() == n && matrix.iter().all(|r| r.len() == n);
     if !well_formed {
         assert!(
             u_local.is_empty() && u_transfer.is_empty(),

@@ -101,6 +101,44 @@ impl CapabilitySafetyRegistry {
             .insert(descriptor.capability_id.clone(), descriptor);
     }
 
+    /// 全部已登记描述符（按 capability id 升序）。
+    ///
+    /// 供**派生下游策略**用（例：并行派发的并发安全白名单只认“可证明只读”的能力）。
+    /// 返回借用切片，不克隆 —— 调用方不该改注册表内容。
+    pub fn descriptors(&self) -> impl Iterator<Item = &CapabilitySafetyDescriptor> {
+        self.descriptors.values()
+    }
+
+    /// 「可证明只读」判据：无持久化效果、无破坏性、无外部副作用、不联网、
+    /// 且运行类只有 `Read` / `Compute`（不含任何写/改/删/执行类）。
+    ///
+    /// **保守**：`known == false`（未知能力）一律返回 `false` —— 未知不等于安全。
+    pub fn is_provably_read_only(&self, capability_id: &str) -> bool {
+        let Some(descriptor) = self.descriptors.get(capability_id) else {
+            return false;
+        };
+        if !descriptor.known
+            || descriptor.persistent_effect
+            || descriptor.destructive
+            || descriptor.external_effect
+            || descriptor.requires_network
+        {
+            return false;
+        }
+        !descriptor.operation_classes.iter().any(|operation| {
+            matches!(
+                operation,
+                OperationClass::Write
+                    | OperationClass::Modify
+                    | OperationClass::Delete
+                    | OperationClass::Execute
+                    | OperationClass::CredentialRead
+                    | OperationClass::CredentialWrite
+                    | OperationClass::Unknown
+            )
+        })
+    }
+
     pub fn descriptor_for(
         &self,
         capability_id: &str,
@@ -128,6 +166,23 @@ pub fn descriptor_for_capability(
     arguments: &serde_json::Value,
 ) -> CapabilitySafetyDescriptor {
     CapabilitySafetyRegistry::canonical().descriptor_for(capability_id, arguments)
+}
+
+/// **运行时内部能力面**：`tool.behavior.*`（认知模块 / 探针 / 模块测试面）。
+///
+/// # 为什么需要这条边界（2026-10-31 合并批）
+///
+/// 这些能力**不是模型选的工具**，而是运行时自己发起的进程内认知调用
+/// （记忆召回、偏好学习写回、自述探针…）。而**回合意图**（`RuleIntentInterpreter`
+/// 的 fail-narrow 只读 intent）划的是**用户任务边界**
+/// ⇒ 若把内部认知也按意图对齐，一轮普通对话里运行时的记忆写回就会被判成
+/// 「越界」⇒ 高危拒绝 ⇒ 收容闸撤销会话 ⇒ 整轮被拒（实测：CLI 引导 5 条用例全红）。
+///
+/// ⇒ 这一层只把「意图对齐 / 只读范围」两项**判定豁免**掉；
+///   凭据、破坏性、对外网络、跨回合探测等**判定照旧**（它们看的是描述符，
+///   而描述符对内部写面仍如实标 `persistent_effect = true`）。
+pub fn is_runtime_internal_capability(capability_id: &str) -> bool {
+    capability_id.starts_with("tool.behavior.")
 }
 
 pub const BUILTIN_CANONICAL_CAPABILITY_IDS: &[&str] = &[
@@ -357,6 +412,144 @@ fn canonical_descriptors() -> Vec<CapabilitySafetyDescriptor> {
     vec![
         describe(
             "fs.read",
+            vec![OperationClass::Read],
+            vec![ResourceClass::FilesystemWorkspace],
+            vec![SourceClass::WorkspaceFile],
+            vec![SinkClass::UserDisplay],
+            false,
+            false,
+            false,
+            false,
+            "workspace",
+        ),
+        // === 只读工具面（2026-10-25 补登记）===
+        //
+        // 此前这些**真实在生产的**只读工具在安全注册表里是 `unknown` ——
+        // 后果：①守卫对它们只能走保守兜底；②并行派发无法从元数据派生
+        // 「可证明只读」白名单（只能拍脑袋列名字）。补登记后单一真源成立。
+        describe(
+            "tool.repo",
+            vec![OperationClass::Read],
+            vec![
+                ResourceClass::Repository,
+                ResourceClass::FilesystemWorkspace,
+            ],
+            vec![SourceClass::WorkspaceFile],
+            vec![SinkClass::UserDisplay],
+            false,
+            false,
+            false,
+            false,
+            "workspace",
+        ),
+        describe(
+            "tool.repo_map",
+            vec![OperationClass::Read],
+            vec![
+                ResourceClass::Repository,
+                ResourceClass::FilesystemWorkspace,
+            ],
+            vec![SourceClass::WorkspaceFile],
+            vec![SinkClass::UserDisplay],
+            false,
+            false,
+            false,
+            false,
+            "workspace",
+        ),
+        describe(
+            "tool.self_status",
+            vec![OperationClass::Read],
+            vec![ResourceClass::RuntimePolicy],
+            // 读运行时自述（进程内派生值），非私密原文。
+            vec![SourceClass::ToolOutput],
+            vec![SinkClass::UserDisplay],
+            false,
+            false,
+            false,
+            false,
+            "runtime",
+        ),
+        describe(
+            "tool.trait_report",
+            vec![OperationClass::Read],
+            vec![ResourceClass::MemorySemantic],
+            // 读的是**成长计数器**（派生聚合值），不是私有记忆内容。
+            // 用 PrivateMemory 会让 FastGuard 判到 0.40 风险（RequireApproval）——
+            // 那是「读私密原文」的风险档，与读聚合计数不符（实测见 trait_cli 契约测试）。
+            vec![SourceClass::ToolOutput],
+            vec![SinkClass::UserDisplay],
+            false,
+            false,
+            false,
+            false,
+            "memory",
+        ),
+        // === 进程内模块能力（2026-10-31 合并批补登记）===
+        //
+        // `tool.behavior.cognitive.*` 是**模块内**调用（不落盘、不出网），但此前
+        // 不在注册表里 ⇒ `infer_descriptor` 走「未知 ⇒ 视为有对外效应」的保守兜底
+        // ⇒ 在**只读任务范围**下被 FastGuard 判成
+        // 「scope mismatch: … requested mutation capability」
+        // ⇒ 高危拒绝 ⇒ 收容闸撤销会话 ⇒ 该轮被拒。
+        //
+        // ⇒ 只登记**可证明只读**的两条（记忆召回 / 偏好召回）；
+        //   `memory_writeback` / `persona_injection` 等**有意不登记** ——
+        //   它们确实有变更语义，未知兜底（拒绝）才是正确结果。
+        describe(
+            "tool.behavior.cognitive.memory_recall",
+            vec![OperationClass::Read],
+            vec![ResourceClass::MemorySemantic],
+            vec![SourceClass::ToolOutput],
+            vec![SinkClass::UserDisplay],
+            false,
+            false,
+            false,
+            false,
+            "memory",
+        ),
+        describe(
+            "tool.behavior.cognitive.preference_recall",
+            vec![OperationClass::Read],
+            vec![ResourceClass::MemorySemantic],
+            vec![SourceClass::ToolOutput],
+            vec![SinkClass::UserDisplay],
+            false,
+            false,
+            false,
+            false,
+            "memory",
+        ),
+        // **内部写面也要如实登记**：它们是运行时的**进程内**记忆写（不落外部、
+        // 不出网）⇒ `external_effect = false`（否则 read-only 意图下正常的一轮
+        // 对话都会被判成越界）；但 `persistent_effect = true` 如实标记，
+        // 供需要区分「读」与「写」的层使用。
+        describe(
+            "tool.behavior.cognitive.preference_learning",
+            vec![OperationClass::Modify],
+            vec![ResourceClass::MemorySemantic],
+            vec![SourceClass::ToolOutput],
+            vec![SinkClass::UserDisplay],
+            false,
+            false,
+            true,
+            false,
+            "memory",
+        ),
+        describe(
+            "tool.behavior.cognitive.memory_writeback",
+            vec![OperationClass::Write],
+            vec![ResourceClass::MemorySemantic],
+            vec![SourceClass::ToolOutput],
+            vec![SinkClass::UserDisplay],
+            false,
+            false,
+            true,
+            false,
+            "memory",
+        ),
+        describe(
+            "tool.search",
             vec![OperationClass::Read],
             vec![ResourceClass::FilesystemWorkspace],
             vec![SourceClass::WorkspaceFile],

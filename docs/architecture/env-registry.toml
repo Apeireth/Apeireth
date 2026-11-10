@@ -7,8 +7,19 @@
 # 每条字段: name / default / layer / owner / purpose / level / status
 #   level  : PRODUCTION WIRED | IMPLEMENTED | NOT IMPLEMENTED | UNCLASSIFIED（R3a 起步占位）
 #   status : current | migrated | deprecated
+#   default: 该 env **未设**时、它所控能力的默认状态（"on" / "off"；非布尔旋钮写 "n/a"）。
+#            必须与源码默认值一致（ADR-0004 R3b 验收项 4）⇒ **默认开的能力登记 "on"**
+#            （记忆核心族：偏好学习 / 主动召回 / 记忆注入 / 只读工具面），
+#            `APEIRETH_DISABLE_*` 逃生门登记 "off" = 逃生门本身默认不拉下（能力仍默认开）。
 # 纪律: 新增开关必须先登记（默认关 + 关时零变化测试），否则 arch_guard W3 违规；
 #       deprecated 的开关不得再出现在 src（R3c 守卫收紧）。
+# 预算口径（2026-11-07 修正，主指挥落地）：本表共 162 条，其中 **12 条**是
+#       测试/基准夹具、密钥标记或已裁决「无 direct 读取点」名
+#       （`APEIRETH_IMAGE_UNSHARP_*` 族 / `APEIRETH_REG_*` 族 / `APEIRETH_UNIQ_SECRET_MARKER_*` /
+#        `APEIRETH_IMAGE_REGEN_PROFILES` / `APEIRETH_MASTER_TOKEN`）⇒ ⇒ **不计入 env 预算**；
+#       预算只数**能力开关**（当前 150 / 上限 154，见 `docs/architecture/contract.toml` [env]）。
+#       排除表唯一真源 = `scripts/env_budget_caliber.py`（`arch_guard` 与 `wiring_report` 共用）。
+#       ⚠️ **条目本身一条都不删**：不进预算 ≠ 免登记。
 # 生成/播种: 效率线维护（R3a）；格式由架构线定（ADR-0004），变更需 ADR。
 # ============================================================================
 
@@ -674,7 +685,7 @@ evidence = "direct:crates/adapters/cli/src/lib.rs:77;direct:crates/adapters/cli/
 
 [[entries]]
 name = "APEIRETH_ENABLE_LOCAL_READ_TOOLS"
-default = "off"
+default = "on"
 layer = "adapters"
 owner = "apeireth-cli"
 purpose = "Legacy opt-in for the local filesystem and search tools. Accepted for compatibility; the tools are granted by default no"
@@ -694,7 +705,7 @@ evidence = "direct:crates/adapters/cli/src/lib.rs:183;direct:crates/adapters/cli
 
 [[entries]]
 name = "APEIRETH_ENABLE_MEMORY_INJECTION"
-default = "off"
+default = "on"
 layer = "adapters"
 owner = "apeireth-cli"
 purpose = "2026-10-06 W2 记忆闭环批: 反幻觉注入格式 / 每轮记忆整理 / 失败闭环"
@@ -764,7 +775,7 @@ evidence = "direct:crates/adapters/cli/src/lib.rs:208;direct:crates/adapters/cli
 
 [[entries]]
 name = "APEIRETH_ENABLE_PREFERENCE_LEARNING"
-default = "off"
+default = "on"
 layer = "adapters"
 owner = "apeireth-cli"
 purpose = "偏好学习装配旋钮 (记忆核心族, **默认开**): 开启时 `cognitive.preference_learning`"
@@ -774,7 +785,7 @@ evidence = "direct:crates/adapters/cli/src/lib.rs:185;direct:crates/adapters/cli
 
 [[entries]]
 name = "APEIRETH_ENABLE_PROACTIVE_RECALL"
-default = "off"
+default = "on"
 layer = "adapters"
 owner = "apeireth-cli"
 purpose = "(默认开 + 逃生门)、语义向量阶段 (真实现 + opt-in, 词法回退兜底)"
@@ -1406,8 +1417,8 @@ name = "APEIRETH_REASONING_ENABLED"
 default = "off"
 layer = "engine"
 owner = "apeireth-provider"
-purpose = "从环境变量构造 (对齐 http_dispatch from_env 风格)"
-level = "UNCLASSIFIED"
+purpose = "Canonical non-streaming provider response normalization; enabled only by explicit existing opt-in and model filter. Default OFF; HTTP mock complete-path tested; SSE/live provider not validated."
+level = "PRODUCTION WIRED"
 status = "current"
 evidence = "direct:crates/engine/provider/src/reasoning_adapter.rs:196"
 
@@ -1416,8 +1427,8 @@ name = "APEIRETH_REASONING_MODEL_FILTERS"
 default = "default"
 layer = "engine"
 owner = "apeireth-provider"
-purpose = "从环境变量构造 (对齐 http_dispatch from_env 风格): - `APEIRETH_REASONING_ENABLED` = \"1\"/\"true\" 开启 (默认关)"
-level = "UNCLASSIFIED"
+purpose = "Existing comma-separated model whitelist for opt-in canonical non-streaming response normalization; empty means no model conversion."
+level = "PRODUCTION WIRED"
 status = "current"
 evidence = "direct:crates/engine/provider/src/reasoning_adapter.rs:199"
 
@@ -1426,8 +1437,8 @@ name = "APEIRETH_REASONING_TAG"
 default = "n/a"
 layer = "engine"
 owner = "apeireth-provider"
-purpose = "从环境变量构造 (对齐 http_dispatch from_env 风格): - `APEIRETH_REASONING_ENABLED` = \"1\"/\"true\" 开启 (默认关) - `APEIRETH_REASONING_MODEL"
-level = "UNCLASSIFIED"
+purpose = "Existing normalized think/thinking wrapper tag for opt-in canonical non-streaming responses; default think, not a boolean switch."
+level = "PRODUCTION WIRED"
 status = "current"
 evidence = "direct:crates/engine/provider/src/reasoning_adapter.rs:205"
 
@@ -1638,3 +1649,23 @@ purpose = "通用嗓 TTS 面 (`tool.voice_speak`) —— 让它开口说话 (V3-
 level = "UNCLASSIFIED"
 status = "current"
 evidence = "direct:crates/capabilities/tools/src/lib.rs:314;direct:crates/capabilities/tools/src/voice/mod.rs:88;direct:crates/capabilities/tools/src/voice/speak.rs:105"
+
+[[entries]]
+name = "APEIRETH_ENABLE_SYSTEM_ONE"
+default = "off"
+layer = "adapters"
+owner = "apeireth-cli"
+purpose = "内部执行强制复核 (System One, rt.system_one_internal) 装配开关：默认关 (fail-closed)；开 = 装配复核门 (持久审计账本 system-one-review.jsonl) + 绑定真实 provider 监督 (无真实凭据 ⇒ 不装配 ⇒ 内部执行被拒)"
+level = "PRODUCTION WIRED"
+status = "current"
+evidence = "direct:crates/adapters/cli/src/llm_factory_env.rs:118;direct:crates/adapters/cli/src/lib.rs:1663"
+
+[[entries]]
+name = "APEIRETH_ENABLE_REFLECTION_QUEUE"
+default = "off"
+layer = "adapters"
+owner = "apeireth-cli"
+purpose = "延迟反思队列装配开关（R8-C, gov.reflection_queue）：只认 \"1\"；关 ⇒ ⇒ 不注入反思调度器 ⇒ ⇒ 零反思、零行为变化；开 ⇒ ⇒ 每次成功审计排一个反思项 ⇒ ⇒ 下一轮治理评估补一条 governance.reflection_due 审计记录"
+level = "PRODUCTION WIRED"
+status = "current"
+evidence = "direct:crates/adapters/cli/src/governance_chain.rs:207;direct:crates/adapters/cli/src/governance_chain.rs:291"

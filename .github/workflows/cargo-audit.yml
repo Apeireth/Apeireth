@@ -14,7 +14,7 @@ name: Cargo audit (RUSTSEC advisories)
 
 on:
   push:
-    # ⭐⭐⭐ **把活跃的特性分支列进来**（2026-11-01 实测修正）。
+    # ⭐⭐⭐ 把**活跃的特性分支**列进来（2026-11-01 实测修正）。
     #
     # ## 为什么必须列（**实测**，不是推测）
     #
@@ -25,48 +25,44 @@ on:
     # ① 该 workflow **在默认分支 `main` 上存在** ⇒ ⇒ GitHub 对**任何分支**的 push
     #    都会为它**创建 run**；
     # ② `push.branches` 过滤**只阻止 job 调度** ⇒ ⇒ 分支不在列表里 ⇒ ⇒ **run 里没有 job**
-    #    ⇒ ⇒ **GitHub 把「无 job 的 run」判为 `failure`** ⇒ ⇒ ⇒ **每次一封红邮件**；
-    # ③ ⚠️ **实测**：加否定路径 `'!crates-ui/**'`（2026-11-01 曾试）**不能**阻止它
-    #    ⇒ ⇒ 第 2 次 push（只改台账，**不碰** lock / workflow）**仍然**产生无 job run。
-    #    ⇒ ⇒ ⚠️ **2026-11-06 改名**：引擎线远端分支**新增 `ui-engine`**（旧名
-    #    ⇒ ⇒ `ui-engine-p0-2026-10-24` 冻结在 `b72ac26e`，不再推）
-    #    ⇒ ⇒ ⇒ ⇒ ⇒ 两个名字**都要列进来** ⇒ ⇒ 否则新分支 push ⇒ ⇒ **产生无 job 假失败**
-    #    ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ （机制见台账 **E-150**：无 job 的 run 被 GitHub 判 failure ⇒ ⇒ 发红邮件）。
+    #    ⇒ ⇒ **GitHub 把「无 job 的 run」判为 `failure`** ⇒ ⇒ ⇒ **每次一封红邮件**
+    #    （owner 2026-10-31 报「一直发红邮件 / 空 CI 在跑」的现象）；
+    # ③ ⚠️ **实测否定结果**：加否定路径 `'!crates-ui/**'` **不能**阻止它
+    #    ⇒ ⇒ 只改台账（**不碰** lock / workflow）的 push **仍然**产生无 job run
+    #    ⇒ ⇒ ⇒ ⇒ 路径过滤这条路**已被实测排除**。
     #
     # ⇒ ⇒ **正解**：把活跃分支**列进来** ⇒ ⇒ audit **真跑**（有 job）⇒ ⇒
     # ⇒ ⇒ run 的结论变成**真实的审计结论**（绿 ⇒ 无红邮件；红 ⇒ 是真问题）⇒ ⇒
-    # ⇒ ⇒ **信息量更高**，而不是「制造一个假的失败」。
-    branches: [master, main, feature/cognitive-infrastructure-vnext, feature/memory-v2.2-production-completion, ui-engine, ui-engine-p0-2026-10-24]
-    # ⭐⭐ **只在依赖真的变了才跑**（2026-10-31 owner 报「一直发邮件」时修）：
-    #   依赖没变 ⇒ 不跑（**GitHub 连 run 都不创建** ⇒ 不会有红邮件）；
-    #   依赖变了 ⇒ 照跑。每周 cron 与 workflow_dispatch 仍会跑 ⇒ 新 advisory 仍会被发现。
+    # ⇒ ⇒ **信息量更高**，而不是制造一个**假的失败**。
     #
-    # ⚠️⚠️⚠️ **2026-11-06 真根因更正（台账 E-190 已更正自身）**：
-    #   本文件曾长期**无法被 GitHub 解析** ⇒ ⇒ 每次 push 都产生一个
-    #   **「加载不到 workflow 定义」的空 run**（特征：`run.name` = 文件路径而非
-    #   `name:` 字段、`created_at == updated_at`、**`jobs = 0`**、`conclusion = failure`）
-    #   ⇒ ⇒ **每次 push 一封红邮件**。
-    #
-    #   ⇒ ⇒ **真根因**：两个 step **各有重复的 `if: always()` 键**
-    #   ⇒ ⇒ ⇒ ⇒ GitHub 报 `failed to parse workflow: 'if' is already defined`
-    #   ⇒ ⇒ ⇒ ⇒ 而本地 PyYAML **只取最后一个**（不报错）⇒ ⇒ **本地校验全绿、CI 全红**。
-    #   ⇒ ⇒ ⇒ ⇒ ⇒ **教训：YAML 校验通过 ≠ GitHub 能解析**（重复键必须查）。
-    #
-    #   ⇒ ⇒ ⚠️ **顺带更正 E-150**：它把「无 job 假失败」归因于 `push.branches` 未列分支
-    #   ⇒ ⇒ ⇒ 但**列进来之后仍 0 job**（2026-11-06 实测 9 个 run 全 0 job）
-    #   ⇒ ⇒ ⇒ ⇒ 因为它根本不是过滤问题 ⇒ ⇒ **是文件解析失败**。
+    # ⚠️ 另注（**关键的机制事实**）：`push` 事件用的是**默认分支上**的 workflow 版本
+    #   ⇒ ⇒ 在特性分支上改这个文件**不生效** ⇒ ⇒ ⇒ 本修复**必须进 main**。
+    # ⭐⭐ **改成通配**（2026-11-04）：**任何分支**改依赖都真跑 audit。
+    # 为什么不用「列活跃分支」（main 的 PR #110 那样做）：
+    #   ⇒ 那种做法**每开一条新分支就要再加一次** ⇒ ⇒ 我们这条 `debt-round8`
+    #      与记忆线的分支**又漏了** ⇒ ⇒ 同样的「无 job 的红邮件」会再来。
+    # 与 `paths` 过滤合起来才是完整语义：
+    #   **依赖没变 ⇒ 不创建 run（省资源）；依赖变了 ⇒ 一定真跑（不空跑）**。
+    branches: ['**']
+    # ⭐⭐ **只在依赖真的变了才跑**（2026-10-31 owner 报「一直发邮件、空 CI 在跑」时修）：
+    #   实测：本 workflow 在 PR 分支同步时会生成**无 job 的失败 run**（jobs=0）
+    #   ⇒ ⇒ 每次 push 都发一封红邮件 ⇒ ⇒ 而依赖没变时 RUSTSEC 结论与上次完全相同
+    #   ⇒ ⇒ 跑它**没有信息量** ⇒ ⇒ 只在依赖变动时才跑。
+    #   ⇒ 覆盖不丢：依赖变了照跑 + 每周 cron 仍跑 + cargo-deny 每次 PR 查 advisories。
     paths:
       - '**/Cargo.lock'
       - '.github/workflows/cargo-audit.yml'
-      # ⭐ 排除独立 workspace（`crates-ui/`，ADR-0015）⇒ 它的依赖审计由自己的门禁负责。
-      # ⚠️ 诚实口径：`crates-ui/` 的 RUSTSEC 覆盖**不在**本 workflow（E-148 已登记）。
+      # ⭐ 排除**独立 workspace**（`crates-ui/`，ADR-0015）⇒ ⇒ 主仓的 audit
+      #   **根本不覆盖**它的依赖 ⇒ ⇒ 让主仓 workflow 为它触发**既无信息量、又发邮件**
+      #   ⇒ ⇒ ⇒ **排除掉**（crates-ui 的依赖审计由它自己的门禁负责）。
       - '!crates-ui/**'
   pull_request:
     branches: ['**']
-    # ⚠️ 同上：PR 侧也只在依赖变动时跑（RUSTSEC 覆盖由 cargo-deny 的 advisories 检查兜底）。
+    # ⚠️ 同上：PR 侧也只在依赖变动时跑（RUSTSEC 覆盖由 cargo-deny 的 advisories 兜底）。
     paths:
       - '**/Cargo.lock'
       - '.github/workflows/cargo-audit.yml'
+      # ⭐ 同上：排除独立 workspace（crates-ui）⇒ ⇒ PR 侧也不产生「无 job 的失败 run」。
       - '!crates-ui/**'
   schedule:
     # 每周日凌晨 4 点 (跟 eval-live 错开 1h, 避免 GPU 竞争)
@@ -91,10 +87,10 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Rust toolchain (stable)
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.97.1
 
       - name: Cache cargo registry
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry
@@ -123,23 +119,64 @@ jobs:
         # 家族 EXR 链 / zbus 5.x 家族经 xcap → apeireth-perception), 全 transitive、
         # 0 直接业务依赖、0 known vulnerability、无安全升级路径; 三处同步 ignore。
         # 复核日 2026-10-18; 条目变 unmatched 即删。
+        # 2026-11-10 依赖升级批 (rusqlite 0.32 → 0.41) 复审: 删掉 8 条已失效 ignore ——
+        # zbus 5.x 三条 (RUSTSEC-2026-0370/0371/0372): 依赖树里已无 zbus;
+        # quinn-proto 五条 (RUSTSEC-2026-0338..0342): 依赖树里已是 0.11.19 (已修)。
+        # 两组皆 unmatched ⇒ 按本文件既有规则「条目变 unmatched 即删」处理;
+        # 与 deny.toml 同批同删 (三处同步口径: deny.toml / audit.toml / 本文件 --ignore)。
+        # 留档复审条件: 这两条链若再进依赖树, 因为 ignore 已删, advisory 会直接报出来。
+        # 复核日 2026-11-10。
         run: |
+          set +e
           cargo audit --json --deny warnings \
             --ignore RUSTSEC-2024-0436 \
             > audit-report.json
-          # ⚠️ **ignore 列表的处置口径**（2026-11-06 实测复核，台账 E-191）：
-          # - `RUSTSEC-2024-0436`（`paste` 1.0.15 不再维护）⇒ ⇒ **保留**：
-          #   实测 `paste` **在当前依赖图里**（`cargo metadata` 确认）⇒ ⇒ 它是**真依赖**
-          #   ⇒ ⇒ 且该 advisory 是「unmaintained」类（`patched = []`）⇒ ⇒ **没有可升版本**
-          #   ⇒ ⇒ ⇒ ⇒ ignore 是**唯一可行处置**（除非移除依赖 ⇒ ⇒ 超出本 workflow 范围）。
-          # - 原有的 `RUSTSEC-2026-0370/0371/0372`（`zvariant` / `zbus_names` / `zvariant_derive`）
-          #   ⇒ ⇒ **已删除**：实测这三个包**既不在依赖图、也不在 `Cargo.lock` 里**
-          #   ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ 属于**历史残留的冗余 ignore**
-          #   ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ （cargo audit 只审计 lock 里的包 ⇒ ⇒⇒ ⇒ ⇒ ⇒⇒ ⇒ ⇒ ⇒ 删掉它们
-          #   ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ **不放宽任何真实覆盖**）。
+          audit_status=$?
+          set -e
+          echo "cargo audit 退出码: $audit_status"
+          echo "AUDIT_STATUS=$audit_status" >> "$GITHUB_ENV"
+          # 报告已落盘（下一步转 SARIF + 上传），**判定交给下一步** ⇒ 红灯也必带证据。
+          exit 0
           # 2026-10-23 修「绿灯骗人」: 原 `|| echo ...` 把 cargo audit 的非零退出吞掉,
           # 整条 workflow 恒为绿。审计发现即应让作业失败; 报告已先落盘, 上传步骤
           # 用 if: always() 保证失败时也留证据 (见下两步)。
+          #
+          # 2026-10-25 修「红灯也骗人」（本 workflow 首次真红时暴露）:
+          # 审计失败 ⇒ cargo audit 非零退出 ⇒ **本步直接中止** ⇒ 后续
+          # 「Convert JSON report to SARIF」**根本没跑** ⇒ `audit-report.sarif`
+          # 从未生成 ⇒ 「Upload SARIF to Code Scanning」报
+          # `Path does not exist: audit-report.sarif` ⇒ **真实原因（哪几条 advisory）
+          # 被掩盖**，只看日志会以为是上传问题。
+          # 修法：**捕获退出码但不让本步失败**（报告一定落盘），
+          # 由紧随其后的「审计判定」步骤**显式**按退出码判红。
+          # ⇒ 红灯时必带证据，且证据里就是 advisory 明细。
+
+      - name: 审计判定（按 cargo audit 退出码判红/绿）
+        # 2026-10-25：把「判红」从 cargo audit 步骤挪到这里 ⇒
+        #   ① 报告一定落盘（红灯也带证据）；
+        #   ② 判红理由明确（不是「文件不存在」这种误导性报错）。
+        if: always()
+        run: |
+          if [ "${AUDIT_STATUS:-1}" != "0" ]; then
+            echo "::error::cargo audit 退出码 ${AUDIT_STATUS} —— 详见 audit-report.json / SARIF"
+            python3 - <<'PYEOF'
+          import json, os
+          try:
+              with open("audit-report.json") as f:
+                  data = json.load(f)
+          except Exception as error:  # 报告本身坏掉也要说清
+              print(f"::error::无法读取 audit-report.json: {error}")
+              raise SystemExit(1)
+          vulns = (data.get("vulnerabilities") or {}).get("list") or []
+          print(f"::error::命中 {len(vulns)} 条 advisory:")
+          for item in vulns:
+              advisory = item.get("advisory") or {}
+              package = item.get("package") or {}
+              print(f"::error::  {advisory.get('id')} {package.get('name')} {package.get('version')} — {advisory.get('title','')}")
+          raise SystemExit(1)
+          PYEOF
+          fi
+          echo "cargo audit: 0 未忽略 advisory"
 
       - name: Convert JSON report to SARIF (R66)
         # 语义对齐 GitHub `github/codeql-action` SARIF schema + qdrant-spark audit SARIF 转换模式.
@@ -151,6 +188,21 @@ jobs:
         # run 35835024572 步骤 "Convert JSON report to SARIF" 失败)。
         # 守门机制必须能在"发现漏洞"这一时刻工作, 故改为迭代 list; severity 缺省/为
         # null 时按 1 (warning) 处理, 不因缺字段崩。
+        # 2026-10-24 修「证据链断裂」: 审计失败时本步原本被 skip, 于是 upload-sarif 步
+        # 报 `Path does not exist: audit-report.sarif` 二次失败 (PR #64 run 40058519140 实测),
+        # 与 workflow 注释里「报告已先落盘, 上传步骤用 if: always() 保证失败时也留证据」相悖。
+        # audit-report.json 在审计失败时同样已落盘, 故本步必须 always 跑, 让 SARIF 照常产出并上传。
+        #
+        # ⚠️ 2026-11-03 修「**YAML 重复键** ⇒ 整个文件被 GitHub 拒解析 ⇒ **0 job 秒红**」:
+        # 本 step 之前有**两处** `if: always()`（step 名之后一处、注释块之后一处）
+        # ⇒ YAML 同层重复键 ⇒ GitHub 报
+        #   `Invalid workflow file: ... (Line: 162, Col: 9): 'if' is already defined`
+        # ⇒ ⇒ **一个 job 都创建不出来** ⇒ run 立刻失败（不是审计失败）。
+        # ⇒ 现只保留**下面注释块之后**的那一处（语义等价：同一步两行重复键本就不可能同时生效）。
+        # ⇒ 溯源：这是**第三次复发**（`7146f4ad` 引入 → 两次各修一轮；
+        #   `50576a88` 与 `981e9fe7` 各自加了一行 → `62f33288` 合并时位置不同 ⇒ git 看不见冲突 ⇒ 又生出重复键）
+        # ⇒ ⇒ 已加**严格 YAML 重复键门禁**（`scripts/check_yaml_duplicate_keys.py`）防复发。
+        if: always()
         run: |
           python3 - <<'PYEOF'
           import json, sys, datetime, hashlib

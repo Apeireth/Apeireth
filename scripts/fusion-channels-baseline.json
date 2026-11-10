@@ -1,0 +1,107 @@
+{
+  "corpora": [
+    {
+      "baseline": {
+        "cases": 476,
+        "ndcg_at_k": 0.32516979992085837,
+        "recall_at_k": 0.5304621848739496
+      },
+      "channel_only_recall_at_k": 0.10189075630252101,
+      "delta": 0.0,
+      "exam": "lexical",
+      "name": "redchamber",
+      "with_channel": {
+        "cases": 476,
+        "ndcg_at_k": 0.32516979992085837,
+        "recall_at_k": 0.5304621848739496
+      },
+      "弱底座": {
+        "baseline_recall_at_k": 0.29831932773109243,
+        "delta": 0.0,
+        "with_channel_recall_at_k": 0.29831932773109243
+      },
+      "拆解": {
+        "底座补漏": 0.0,
+        "通道净增益": 0.0
+      }
+    },
+    {
+      "baseline": {
+        "cases": 248,
+        "ndcg_at_k": 0.5348424396025295,
+        "recall_at_k": 0.7318548387096774
+      },
+      "channel_only_recall_at_k": 0.0967741935483871,
+      "delta": 0.0,
+      "exam": "lexical",
+      "name": "watershed",
+      "with_channel": {
+        "cases": 248,
+        "ndcg_at_k": 0.5348424396025295,
+        "recall_at_k": 0.7318548387096774
+      },
+      "弱底座": {
+        "baseline_recall_at_k": 0.6875,
+        "delta": 0.0,
+        "with_channel_recall_at_k": 0.6875
+      },
+      "拆解": {
+        "底座补漏": 0.0,
+        "通道净增益": 0.0
+      }
+    }
+  ],
+  "fair_corpora": [
+    {
+      "baseline": {
+        "cases": 208,
+        "ndcg_at_k": 0.16126931933625716,
+        "recall_at_k": 0.35096153846153844
+      },
+      "channel_only_recall_at_k": 0.47596153846153844,
+      "delta": 0.0,
+      "exam": "fair",
+      "name": "redchamber",
+      "with_channel": {
+        "cases": 208,
+        "ndcg_at_k": 0.16126931933625716,
+        "recall_at_k": 0.35096153846153844
+      },
+      "弱底座": {
+        "baseline_recall_at_k": 0.3269230769230769,
+        "delta": 0.0,
+        "with_channel_recall_at_k": 0.3269230769230769
+      },
+      "拆解": {
+        "底座补漏": 0.0,
+        "通道净增益": 0.0
+      }
+    },
+    {
+      "baseline": {
+        "cases": 124,
+        "ndcg_at_k": 0.13225583870783478,
+        "recall_at_k": 0.2903225806451613
+      },
+      "channel_only_recall_at_k": 0.3629032258064516,
+      "delta": 0.0,
+      "exam": "fair",
+      "name": "watershed",
+      "with_channel": {
+        "cases": 124,
+        "ndcg_at_k": 0.13225583870783478,
+        "recall_at_k": 0.2903225806451613
+      },
+      "弱底座": {
+        "baseline_recall_at_k": 0.2903225806451613,
+        "delta": 0.0,
+        "with_channel_recall_at_k": 0.2903225806451613
+      },
+      "拆解": {
+        "底座补漏": 0.0,
+        "通道净增益": 0.0
+      }
+    }
+  ],
+  "k": 10
+}

@@ -13,8 +13,9 @@ use std::sync::{Arc, Mutex};
 use apeireth_gateway::{
     build_gateway_state_with_services, canonical_router_with_state, claim_slot, read_slot,
     serve_state_with_shutdown, AuditCommand, GatewayServices, GatewayState, GatewayTokenGate,
-    ResidentError, ResidentRecord,
+    ResidentError, ResidentRecord, UserAccess,
 };
+use apeireth_governance::{UserRecord, UserTable};
 use apeireth_runtime::canonical::Runtime;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
@@ -288,7 +289,28 @@ async fn harness_with_gate(gate: GatewayTokenGate) -> Harness {
     };
     let mut state = build_gateway_state_with_services(runtime, services);
     state.token_gate = gate;
+    // 角色面**激活** (P0-1 · 2026-11-04): 停机端点属管理面 (`AdminControl`
+    // 档), 角色面未激活 ⇒ 管理面 fail-closed 403 ⇒ 本文件要测的是**令牌门**
+    // 三态语义, 角色门的前置条件由这里显式装上 (owner 绑定 env 面单令牌的
+    // 过门署名名 `env`)。
+    //
+    // ⚠️ **未设防口径的 `anonymous` 不再是 owner** (F-2 · 2026-11-05): 角色门
+    // **只认已认证身份** ⇒ 未设防/逃生阀下的过门身份不是任何用户 ⇒ 管理面对
+    // 它一律 fail-closed (⇒ 停机端点亦然 ⇒ 逃生阀下停机走 SIGTERM)。
+    state.user_access = UserAccess::from_table(owner_table());
     Harness { state, audit }
+}
+
+/// 一名 owner, 绑定 env 单令牌面的过门署名名。
+fn owner_table() -> UserTable {
+    let users = UserTable::new(vec![UserRecord {
+        user_id: "user-owner".to_string(),
+        role: "owner".to_string(),
+        client_names: vec![GatewayTokenGate::ENV_FACE_CLIENT_NAME.to_string()],
+        domain: None,
+    }]);
+    users.validate().expect("valid user table");
+    users
 }
 
 fn shutdown_post(token: Option<&str>) -> Request<Body> {
@@ -364,15 +386,45 @@ async fn shutdown_endpoint_is_behind_the_token_gate_and_only_the_matching_token_
 
 /// 三态门口径照旧: 无令牌 (env 未设) = 放行 + 警告帧 + 审计; 逃生阀
 /// (`none`) = 放行不逐次告警但留痕。新端点不引入第四种口径。
+///
+/// # 层级归属 (F-2 · 2026-11-05 · 口径 A: 未认证 ⇒ 管理面 + 写面都拒)
+///
+/// 停机端点属**管理面** (`AdminControl` 档) ⇒ 未设防/逃生阀口径下的过门
+/// 身份是 `ClientIdentity::anonymous()` (**未认证**) ⇒ 角色门**只认已认证
+/// 身份** ⇒ 它**不是**任何用户 ⇒ 管理面对它一律 fail-closed
+/// (403 `permission_denied`) ⇒ ⇒ 停机**不触发**。
+///
+/// ⇒ ⇒ 本用例断言的**放行**是**令牌门那一层**的放行, 一字未改: 请求确实
+/// **过了令牌门** (警告帧 + `gateway.auth_unprotected` 审计都点名
+/// `/v1/admin/shutdown`) ⇒ ⇒ 它才会**到达角色门** ⇒ ⇒ 角色门那一行
+/// `gateway.user_action … decision=deny` 正是「过了令牌门」的**层级证据**。
+/// ⇒ ⇒ 变的是**角色门那一层**的裁决 (口径 A), 不是令牌门的语义。
+///
+/// ⇒ ⇒ 「停机端点真的会停机」这条能力**没被删**: 同文件的
+/// `shutdown_endpoint_is_behind_the_token_gate_and_only_the_matching_token_trips_it`
+/// 用**已认证**身份 (env 单令牌面 + owner 绑 `env`) 钉住 200 + 停机触发
+/// (幂等 first/repeat)。
+///
+/// ⇒ ⇒ 逃生阀下要停机走**信号面** (SIGTERM ⇒ CLI 的 `graceful_shutdown_signal`
+/// ⇒ 同走收尾账) —— 「绑 `anonymous` 就能停机」这条捷径不成立 (它正是 F-2
+/// 堵掉的那个洞: 零凭据打管理面)。
 #[tokio::test]
 async fn shutdown_endpoint_keeps_the_three_state_gate_semantics() {
-    // 未设态: 放行 + 警告帧 + 审计。
+    // 未设态: 令牌门放行 (警告帧 + 审计) ⇒ 角色门 fail-closed ⇒ 不停机。
     let harness = harness_with_gate(GatewayTokenGate::UnprotectedDefault).await;
     let router = canonical_router_with_state(harness.state.clone());
     let mut frames = harness.state.events.subscribe();
-    let (status, _) = json_body(router.oneshot(shutdown_post(None)).await.unwrap()).await;
-    assert_eq!(status, StatusCode::OK, "未设态放行 (兼容路径零断)");
-    assert!(harness.state.shutdown.is_triggered());
+    let (status, text) = json_body(router.oneshot(shutdown_post(None)).await.unwrap()).await;
+    assert_eq!(
+        status,
+        StatusCode::FORBIDDEN,
+        "未设态下停机端点 (管理面) 必须 fail-closed: {text}"
+    );
+    assert!(text.contains("permission_denied"), "{text}");
+    assert!(
+        !harness.state.shutdown.is_triggered(),
+        "未认证身份不得触发停机"
+    );
     let frame = frames.try_recv().expect("warning frame");
     assert_eq!(frame.event, "gateway_auth_unprotected");
     assert_eq!(frame.data["endpoint"], "/v1/admin/shutdown");
@@ -385,14 +437,29 @@ async fn shutdown_endpoint_keeps_the_three_state_gate_semantics() {
             .as_deref(),
         Some("endpoint=/v1/admin/shutdown mode=env_unset")
     );
+    // 层级归属: 角色门裁了 deny ⇒ 请求**过了令牌门** (令牌门在角色门之内)。
+    let decision = harness
+        .audit
+        .detail_of("gateway.user_action")
+        .unwrap_or_default();
+    assert!(
+        decision.contains("endpoint=/v1/admin/shutdown"),
+        "角色门裁决必须点名端点: {decision}"
+    );
+    assert!(decision.contains("decision=deny"), "{decision}");
+    assert!(decision.contains("user=unbound"), "{decision}");
 
-    // 逃生阀: 放行不逐次告警, 但留审计痕。
+    // 逃生阀: 放行不逐次告警, 但留审计痕 (管理面同样 fail-closed ⇒ 不停机)。
     let harness = harness_with_gate(GatewayTokenGate::UnprotectedDeclared).await;
     let router = canonical_router_with_state(harness.state.clone());
     let mut frames = harness.state.events.subscribe();
-    let (status, _) = json_body(router.oneshot(shutdown_post(None)).await.unwrap()).await;
-    assert_eq!(status, StatusCode::OK);
-    assert!(harness.state.shutdown.is_triggered());
+    let (status, text) = json_body(router.oneshot(shutdown_post(None)).await.unwrap()).await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "{text}");
+    assert!(text.contains("permission_denied"), "{text}");
+    assert!(
+        !harness.state.shutdown.is_triggered(),
+        "逃生阀下未认证身份不得触发停机 (停机走 SIGTERM)"
+    );
     assert!(frames.try_recv().is_err(), "明示不设防不逐次发警告帧");
     harness.state.observations.flush().await;
     assert_eq!(
@@ -402,4 +469,15 @@ async fn shutdown_endpoint_keeps_the_three_state_gate_semantics() {
             .as_deref(),
         Some("endpoint=/v1/admin/shutdown mode=declared_none")
     );
+    // 层级归属同上: 角色门裁 deny ⇒ 令牌门那一层是放行的。
+    let decision = harness
+        .audit
+        .detail_of("gateway.user_action")
+        .unwrap_or_default();
+    assert!(
+        decision.contains("endpoint=/v1/admin/shutdown"),
+        "角色门裁决必须点名端点: {decision}"
+    );
+    assert!(decision.contains("decision=deny"), "{decision}");
+    assert!(decision.contains("user=unbound"), "{decision}");
 }

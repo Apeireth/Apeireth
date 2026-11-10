@@ -31,6 +31,7 @@ use std::sync::{Arc, Mutex};
 use apeireth_core::kernel::Clock;
 use apeireth_guard::hook::SharedImmuneMemory;
 use apeireth_orchestration::task_queue::TaskQueue;
+use apeireth_organ::social_repair::RepairPlan;
 use apeireth_plugin::ToolCapability;
 use apeireth_tools_canonical::self_status::{
     BioMechanismKind, BioMechanismProbe, BioMechanismReading,
@@ -40,7 +41,9 @@ use crate::canonical::bio_extra_probes::{
     circadian_probe, homeostasis_bio_probe, neuromodulation_probe, ritual_state_probe,
     CircadianProbeConfig, HomeostasisObservationSource,
 };
-use crate::canonical::bio_social_repair::{social_repair_bio_probe, SocialRepairObservationSource};
+use crate::canonical::bio_social_repair::{
+    repair_plan_slot, social_repair_bio_probe, RepairPlanSlot, SocialRepairObservationSource,
+};
 use crate::canonical::capability::CapabilityProvider;
 use crate::canonical::care_heartbeat::bio_lifecycle::{
     bio_lifecycle_probe, bio_lifecycle_wiring_from_enabled_with_store_dir, BioLifecycleState,
@@ -51,7 +54,9 @@ use crate::canonical::care_heartbeat::bio_tone::{
 };
 use crate::canonical::care_heartbeat::CareHeartbeatStatus;
 use crate::canonical::care_reminder::RitualStateStore;
-use crate::canonical::cognitive::{BioAssemblyModule, BioAssemblySwitches};
+use crate::canonical::cognitive::{
+    assemble_bio_turn, BioAssemblyModule, BioAssemblySwitches, BioTurnInput,
+};
 use crate::canonical::module::{
     BehaviorModule, HookPoint, Module, ModuleContext, ModuleError, ModuleManifest, ModuleOutcome,
 };
@@ -104,11 +109,17 @@ pub(super) fn install_bio_modules(
         switchboard.switch_enabled(BioSwitch::ContextPolicy),
     );
     let mut homeostasis_source = None;
+    // ⭐ SG-20 行为面共享槽（2026-11-08）：事件侧（社会修复订阅者）写、回合侧
+    // （装配面模块装饰器）读 —— 两侧同一个 `Arc`。`BioAssemblyModule` 是装配期
+    // 构造一次的长寿模块，而 `RepairPlan` 是回合间事件的产物 ⇒ 必须经槽传递，
+    // 否则计划永远停在装配快照（恒 `None`）。开关关 = 槽建了也没人写没人读。
+    let sg20_plan_slot = repair_plan_slot();
     if !bio_switches.is_disabled() {
         // Wave 4 (SG-14): 组装器同一预算注入装配面模块 —— 上下文策略开关开时该预算
         // 参与本回合「压力 → 调节 → 策略」链路（开关关 = 不注册 = 零变化）。
         let mut module = BioAssemblyModule::new(bio_switches);
-        if let Some(budget) = context_budget_chars.filter(|budget| *budget > 0) {
+        let context_budget = context_budget_chars.filter(|budget| *budget > 0);
+        if let Some(budget) = context_budget {
             module = module.with_context_budget(budget);
         }
         let homeostasis = Arc::new(HomeostasisObservationSource::new(
@@ -118,14 +129,20 @@ pub(super) fn install_bio_modules(
         modules.push(Arc::new(ObservedBioAssemblyModule::new(
             Arc::new(module),
             Arc::clone(&homeostasis),
+            Arc::clone(&sg20_plan_slot),
+            context_budget,
         )));
         homeostasis_source = Some(homeostasis);
     }
     // Wave 4 (SG-20): 社会修复观测源 —— 事件源 = 人工拒绝审批（ApprovalSocial=Rejected）。
     // 只在修复指引族开关开时构造；总线订阅由装配根在总线就绪后注册（关 = None = 零订阅）。
-    let social_repair_source = bio_switches
-        .repair_guidance()
-        .then(|| Arc::new(SocialRepairObservationSource::new(bio_switches)));
+    // ⭐ 与上面同一个槽 ⇒ 拒绝事件写进去的正是装配面下一回合要读的计划。
+    let social_repair_source = bio_switches.repair_guidance().then(|| {
+        Arc::new(SocialRepairObservationSource::with_slot(
+            bio_switches,
+            Arc::clone(&sg20_plan_slot),
+        ))
+    });
 
     // W3.3: 调质→tone 的 TurnStart 尾部 overlay 装配点。开关值来自
     // `NervousSwitchboard`（R1b-1b）—— **关 = 不构造不注册**。开时构造共享
@@ -191,11 +208,39 @@ pub(super) fn install_bio_modules(
 struct ObservedBioAssemblyModule {
     inner: Arc<BioAssemblyModule>,
     source: Arc<HomeostasisObservationSource>,
+    /// SG-20 行为面：社会修复订阅者写的计划槽（读侧就在本装饰器）。
+    plan_slot: RepairPlanSlot,
+    /// 装配根注入的上下文预算（与 `inner` 同值；有计划时按同一输入重放装配）。
+    context_budget_chars: Option<usize>,
 }
 
 impl ObservedBioAssemblyModule {
-    fn new(inner: Arc<BioAssemblyModule>, source: Arc<HomeostasisObservationSource>) -> Self {
-        Self { inner, source }
+    fn new(
+        inner: Arc<BioAssemblyModule>,
+        source: Arc<HomeostasisObservationSource>,
+        plan_slot: RepairPlanSlot,
+        context_budget_chars: Option<usize>,
+    ) -> Self {
+        Self {
+            inner,
+            source,
+            plan_slot,
+            context_budget_chars,
+        }
+    }
+
+    /// 本回合待生效的修复计划（**开关关 ⇒ 连锁都不拿**）。
+    ///
+    /// 开关判断放在这里（而不是只靠 `assemble_bio_turn` 内部的那道）是为了让
+    /// 「默认关 = 零读取」可被测试断言：关档下槽即使被人为填了也不会被读。
+    fn latest_repair_plan(&self) -> Option<RepairPlan> {
+        if !self.inner.switches().repair_guidance() {
+            return None;
+        }
+        self.plan_slot
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone()
     }
 }
 
@@ -230,7 +275,28 @@ impl BehaviorModule for ObservedBioAssemblyModule {
             .switches()
             .context_policy()
             .then(|| visible_transcript_chars(ctx.messages));
-        let assembly = self.inner.assemble(used_chars);
+        // ⭐ SG-20 行为面（2026-11-08）：每回合从共享槽读「上一次人工拒绝算出的修复
+        // 计划」。无计划（从未被拒 / 开关关）= 走原路径（逐字段零变化）；有计划 =
+        // 用同一组输入重放装配，**唯一差别**是 `repair_plan` ⇒ 多出一块独立 system
+        // 修复指令段（`[交互修复指令] … [/交互修复指令]`）。
+        //
+        // ⚠️ **不变量**：本装饰器在装配期只给 `inner` 注入过「上下文预算」一种输入
+        // （`install_bio_modules` 未注入 `context_blocks` / 未注入计划）⇒ 重放时
+        // `context_blocks = Vec::new()` 与 `inner` 的现状等价。若将来有装配根在
+        // 构造期注入上下文块，必须改为「从 inner 取块」（或在 `BioAssemblyModule`
+        // 上开一个 `assemble_with_repair_plan` 端口），否则计划存在时那批块会被漏掉。
+        let assembly = match self.latest_repair_plan() {
+            Some(plan) => assemble_bio_turn(
+                self.inner.switches(),
+                &BioTurnInput {
+                    repair_plan: Some(plan),
+                    context_blocks: Vec::new(),
+                    context_budget_chars: self.context_budget_chars,
+                    context_used_chars: used_chars,
+                },
+            ),
+            None => self.inner.assemble(used_chars),
+        };
         self.source.record(used_chars, assembly.clone());
         let mut outcome = ModuleOutcome::continue_();
         for overlay in assembly.overlays {
@@ -742,497 +808,5 @@ impl ProductionModules {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use std::sync::atomic::AtomicUsize;
-
-    use apeireth_guard::immune_memory::{ImmuneMemory, IncidentKind, SeverityTier};
-    use apeireth_orchestration::nociception::{FailureClass, Habituation, Recommendation};
-    use apeireth_orchestration::quorum::QuorumDecision;
-    use apeireth_orchestration::task_queue::{TaskQueueConfig, TaskStore};
-    use apeireth_runtime::canonical::{
-        BioPainObservation, BioPainSnapshot, BioRecoveryPhaseCounts, BioRecoverySnapshot,
-    };
-    use apeireth_tools_canonical::self_status::{
-        render_snapshot, BioMechanismsStatus, BIO_STAGE_WIRED,
-    };
-    use apeireth_tools_canonical::SelfStatusSource;
-
-    use crate::canonical::self_status_source::BioMechanismRegistry;
-
-    use apeireth_core::kernel::CapabilityId;
-    use apeireth_protocol::canonical::{NormalizedTool, ToolCall, ToolResult};
-    use async_trait::async_trait;
-
-    struct StubTool {
-        id: CapabilityId,
-        name: &'static str,
-    }
-
-    #[async_trait]
-    impl ToolCapability for StubTool {
-        fn id(&self) -> &CapabilityId {
-            &self.id
-        }
-
-        fn declaration(&self) -> NormalizedTool {
-            NormalizedTool::new(self.name)
-        }
-
-        async fn invoke(&self, call: &ToolCall) -> ToolResult {
-            ToolResult::ok(&call.id, serde_json::json!({}))
-        }
-    }
-
-    fn stub_tool(id: &'static str, name: &'static str) -> Arc<dyn ToolCapability> {
-        Arc::new(StubTool {
-            id: CapabilityId::new(id).expect("static capability id is valid"),
-            name,
-        })
-    }
-
-    /// 与生产同款的最小自述来源（空名册，无其它探测口）。
-    fn source() -> ProductionSelfStatusSource {
-        ProductionSelfStatusSource::new(Vec::new(), false, None)
-    }
-
-    fn lifecycle_state() -> Arc<BioLifecycleState> {
-        let clock: LifecycleClock = Arc::new(|| 1_000_u64);
-        let wiring = bio_lifecycle_wiring_from_enabled_with_store_dir(
-            true,
-            clock,
-            &["filesystem".to_string()],
-            None,
-        )
-        .expect("lifecycle wiring");
-        Arc::clone(wiring.state())
-    }
-
-    fn armed_slots() -> BioProbeSlots {
-        let slots = BioProbeSlots::new();
-        slots.arm(true);
-        slots
-    }
-
-    fn tone_state() -> Arc<ToneState> {
-        let clock: crate::canonical::care_heartbeat::bio_tone::ToneClock = Arc::new(|| 1_000_u64);
-        Arc::new(ToneState::new(clock))
-    }
-
-    fn ritual_store() -> Arc<RitualStateStore> {
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        let seq = NEXT.fetch_add(1, Ordering::Relaxed);
-        let path = std::env::temp_dir().join(format!(
-            "apeireth-bio-ritual-probe-{}-{seq}.json",
-            std::process::id()
-        ));
-        Arc::new(RitualStateStore::at(path))
-    }
-    fn social_repair_source() -> Arc<SocialRepairObservationSource> {
-        Arc::new(SocialRepairObservationSource::new(
-            BioAssemblySwitches::from_flags(true, false),
-        ))
-    }
-
-    fn homeostasis_source() -> Arc<HomeostasisObservationSource> {
-        Arc::new(HomeostasisObservationSource::new(
-            BioAssemblySwitches::from_flags(true, true),
-            Some(24_000),
-        ))
-    }
-
-    fn bio_status(source: &ProductionSelfStatusSource) -> BioMechanismsStatus {
-        source.snapshot().bio_mechanisms.expect("bio face mounted")
-    }
-
-    /// 一份有真实记录的共享免疫账（同一签名观察 2 次 = 适应记忆）。
-    fn immune_memory() -> SharedImmuneMemory {
-        let memory: SharedImmuneMemory =
-            Arc::new(parking_lot::Mutex::new(ImmuneMemory::with_capacity(8)));
-        {
-            let mut guard = memory.lock();
-            guard.observe(
-                IncidentKind::ToolPoison,
-                "tool descriptor",
-                SeverityTier::Tier1Note,
-                false,
-                1_000,
-            );
-            guard.observe(
-                IncidentKind::ToolPoison,
-                "tool descriptor",
-                SeverityTier::Tier1Note,
-                false,
-                2_000,
-            );
-        }
-        memory
-    }
-
-    fn pain_snapshot() -> BioPainSnapshot {
-        BioPainSnapshot {
-            enabled: true,
-            assessed: 3,
-            repaired: 1,
-            observations: vec![BioPainObservation {
-                capability: "tool.web_fetch".to_string(),
-                cause_key: "transient:0123456789abcdef".to_string(),
-                class: FailureClass::Transient,
-                at_ms: 700,
-                habituation: Habituation::Sensitized,
-                chronic: true,
-                recommended: Recommendation::Diagnose,
-                rationale: "chronic same cause".to_string(),
-            }],
-            groups: Vec::new(),
-            recovery: BioRecoverySnapshot {
-                active_cases: 3,
-                closed_cases: 2,
-                rejected_transitions: 1,
-                phases: BioRecoveryPhaseCounts {
-                    hemostasis: 1,
-                    inflammation: 1,
-                    proliferation: 1,
-                    remodeling: 0,
-                    resolved: 0,
-                },
-                cases: Vec::new(),
-            },
-        }
-    }
-
-    fn pain_reader(snapshot: BioPainSnapshot) -> PainSnapshotReader {
-        Arc::new(move || Ok(snapshot.clone()))
-    }
-
-    fn task_queue() -> Arc<TaskQueue> {
-        let store: Arc<dyn TaskStore> =
-            Arc::new(crate::SqliteTaskStore::in_memory().expect("in-memory task store"));
-        Arc::new(TaskQueue::open(store, TaskQueueConfig::default()).expect("queue opens"))
-    }
-
-    fn play_state() -> Arc<BioPlayState> {
-        Arc::new(BioPlayState::new(
-            std::env::temp_dir(),
-            apeireth_core::kernel::system_clock(),
-        ))
-    }
-
-    /// ⑪ 开关关时安装点不武装槽：所有 fill 都是 no-op，槽保持全空。
-    #[test]
-    fn install_point_disarms_the_slots_when_the_switch_is_off() {
-        let slots = BioProbeSlots::new();
-        let queue = task_queue();
-        let play = play_state();
-        let _source =
-            install_bio_self_status_with(source(), Some(&queue), Some(&play), &slots, false);
-        assert!(!slots.is_armed(), "开关关 = 槽不武装");
-        assert!(slots.is_empty(), "开关关 = 槽全空");
-        assert!(!slots.fill_immune_memory(Some(immune_memory())));
-        assert!(!slots.fill_care_status(Arc::new(CareHeartbeatStatus::default)));
-        assert!(!slots.fill_quorum_trace(Arc::new(|| None)));
-        assert!(!slots.fill_pain_reader(pain_reader(pain_snapshot())));
-        assert!(slots.is_empty(), "未武装 = fill 一律 no-op");
-    }
-
-    /// ⑫ 默认关：开关关时自述帧与「只挂观测面、不注册任何 probe」逐字节一致，
-    /// 且迟绑定读取口一次都不被调用（槽没被 fill，registry 也没启用）。
-    #[test]
-    fn bio_switch_off_keeps_the_frame_identical_and_never_reads() {
-        let reads = Arc::new(AtomicUsize::new(0));
-        let counting = {
-            let reads = Arc::clone(&reads);
-            Arc::new(move || {
-                reads.fetch_add(1, Ordering::SeqCst);
-                CareHeartbeatStatus::default()
-            })
-        };
-        let slots = BioProbeSlots::new();
-        assert!(!slots.fill_care_status(counting), "未武装 = 不收句柄");
-
-        let baseline = source().with_bio_self_status(false).snapshot();
-        let installed = install_bio_self_status_with(source(), None, None, &slots, false);
-        assert_eq!(
-            render_snapshot(&baseline),
-            render_snapshot(&installed.snapshot()),
-            "默认关 = 自述帧逐字节不变"
-        );
-        assert_eq!(reads.load(Ordering::SeqCst), 0, "关时零读取");
-        let status = bio_status(&installed);
-        assert!(!status.enabled);
-        assert!(status.mechanisms.is_none(), "关时整节 null, 一格也不采");
-    }
-
-    /// ① 免疫记忆槽：安装后迟绑定填入 guard 同一份共享账 → 该格真值。
-    #[test]
-    fn late_bound_immune_memory_slot_feeds_the_probe_after_install() {
-        let slots = armed_slots();
-        let source = install_bio_self_status_with(source(), None, None, &slots, true);
-        assert!(slots.fill_immune_memory(Some(immune_memory())));
-        let status = bio_status(&source);
-        let row = status
-            .reading(BioMechanismKind::ImmuneMemory)
-            .expect("immune row");
-        assert!(row.wired);
-        assert_eq!(row.stage, BIO_STAGE_WIRED);
-        let value = row.value.as_ref().expect("immune value");
-        assert_eq!(value["records"], 1);
-        assert_eq!(value["open"], 1);
-        assert_eq!(value["known_patterns"], 1, "同签名观察 >= 2 = 适应记忆");
-        assert_eq!(value["kinds"]["tool_poison"], 1);
-        assert!(row.reason.is_none());
-    }
-
-    /// ② 关怀心跳槽：迟绑定 care 生产者同一状态闭包 → 该格真值。
-    #[test]
-    fn late_bound_care_status_slot_feeds_the_probe_after_install() {
-        let slots = armed_slots();
-        let source = install_bio_self_status_with(source(), None, None, &slots, true);
-        assert!(slots.fill_care_status(Arc::new(|| CareHeartbeatStatus {
-            next_poll_at_ms: Some(9_000),
-            last_hit_at_ms: Some(8_000),
-            polls: 7,
-            hits: 2,
-        })));
-        let status = bio_status(&source);
-        let row = status
-            .reading(BioMechanismKind::Attachment)
-            .expect("attachment row");
-        assert!(row.wired);
-        let value = row.value.as_ref().expect("care value");
-        assert_eq!(value["polls"], 7);
-        assert_eq!(value["hits"], 2);
-        assert_eq!(value["next_poll_at_ms"], 9_000);
-        assert_eq!(value["last_hit_at_ms"], 8_000);
-    }
-
-    /// ③ 审议门槽：迟绑定 organ 模块同一门账读取口 → 该格真值（不含理由原文）。
-    #[test]
-    fn late_bound_quorum_trace_slot_feeds_the_probe_after_install() {
-        let slots = armed_slots();
-        let source = install_bio_self_status_with(source(), None, None, &slots, true);
-        assert!(slots.fill_quorum_trace(Arc::new(|| {
-            Some(QuorumTrace {
-                at_ms: 4_200,
-                convened: false,
-                escalation: None,
-                denial: Some(QuorumDecision::Hold {
-                    score: 0.25,
-                    need: 0.75,
-                }),
-            })
-        })));
-        let status = bio_status(&source);
-        let row = status
-            .reading(BioMechanismKind::Quorum)
-            .expect("quorum row");
-        assert!(row.wired);
-        let value = row.value.as_ref().expect("quorum value");
-        assert_eq!(value["traces"], 1);
-        assert_eq!(value["denial"], "hold");
-        assert_eq!(value["denial_score"], 0.25);
-        assert_eq!(value["denial_need"], 0.75);
-    }
-
-    /// ④ 痛觉/再生槽：同一 runtime 读取口同时喂两格（痛觉格 + 再生四期格）。
-    #[test]
-    fn late_bound_pain_reader_feeds_both_pain_and_recovery_cells() {
-        let slots = armed_slots();
-        let source = install_bio_self_status_with(source(), None, None, &slots, true);
-        assert!(slots.fill_pain_reader(pain_reader(pain_snapshot())));
-        let status = bio_status(&source);
-
-        let pain = status
-            .reading(BioMechanismKind::Nociception)
-            .expect("pain row");
-        assert!(pain.wired);
-        let value = pain.value.as_ref().expect("pain value");
-        assert_eq!(value["enabled"], true);
-        assert_eq!(value["assessed"], 3);
-        assert_eq!(value["repaired"], 1);
-        assert_eq!(value["observations"], 1);
-        assert_eq!(value["chronic_observations"], 1);
-
-        let recovery = status
-            .reading(BioMechanismKind::Recovery)
-            .expect("recovery row");
-        assert!(recovery.wired);
-        let value = recovery.value.as_ref().expect("recovery value");
-        assert_eq!(value["active_cases"], 3);
-        assert_eq!(value["closed_cases"], 2);
-        assert_eq!(value["hemostasis"], 1);
-        assert_eq!(value["inflammation"], 1);
-        assert_eq!(value["proliferation"], 1);
-    }
-
-    /// ⑤ 空槽：7 条迟绑定 probe 注册即接线（`wired:true`），但值显式 `null`
-    /// + 真因「未接线」，整帧仍成功（不撒谎成 0，也不整帧失败）。
-    #[test]
-    fn empty_slots_render_a_null_cell_with_the_not_wired_reason() {
-        let slots = armed_slots();
-        let source = install_bio_self_status_with(source(), None, None, &slots, true);
-        let status = bio_status(&source);
-        assert!(status.enabled);
-        for kind in [
-            BioMechanismKind::ImmuneMemory,
-            BioMechanismKind::Attachment,
-            BioMechanismKind::Quorum,
-            BioMechanismKind::Nociception,
-            BioMechanismKind::Recovery,
-            BioMechanismKind::EcosystemHealth,
-            BioMechanismKind::Lifecycle,
-            BioMechanismKind::Neuromodulation,
-            BioMechanismKind::Circadian,
-            BioMechanismKind::Ritual,
-            BioMechanismKind::Homeostasis,
-            BioMechanismKind::SocialRepair,
-        ] {
-            let row = status.reading(kind).expect("late-bound row");
-            assert!(row.wired, "注册 = 接线事实成立: {kind:?}");
-            assert_eq!(row.stage, BIO_STAGE_WIRED, "{kind:?}");
-            assert!(row.value.is_none(), "空槽绝不编值: {kind:?}");
-            assert!(
-                row.reason.as_deref().unwrap_or("").contains("未接线"),
-                "{kind:?} 必须带真因: {:?}",
-                row.reason
-            );
-        }
-        let rows = status.mechanisms.as_ref().expect("14 格在场");
-        assert_eq!(rows.len(), 14);
-        let unwired = rows.values().filter(|row| !row.wired).count();
-        assert_eq!(unwired, 2, "未注册的 2 格如实未接线 (14 - 12 注册)");
-    }
-
-    /// ⑥ 全填 + 任务队列 + 练习账 + 工具生态观测 + 生命周期账 + 调质/昼夜/仪式/上下文装配/社会修复观测：
-    /// wired 计数 = 14/14，且 14 格值全为真值（不是 null）。
-    #[test]
-    fn filled_slots_raise_the_wired_count_to_fourteen() {
-        let slots = armed_slots();
-        let queue = task_queue();
-        let play = play_state();
-        let source =
-            install_bio_self_status_with(source(), Some(&queue), Some(&play), &slots, true);
-        assert!(slots.fill_immune_memory(Some(immune_memory())));
-        assert!(slots.fill_care_status(Arc::new(CareHeartbeatStatus::default)));
-        assert!(slots.fill_quorum_trace(Arc::new(|| None)));
-        assert!(slots.fill_pain_reader(pain_reader(pain_snapshot())));
-        assert!(slots.fill_ecosystem_profiles(&[stub_tool("tool.filesystem", "filesystem")]));
-        assert!(slots.fill_lifecycle_state(Some(&lifecycle_state())));
-        assert!(slots.fill_tone_state(Some(&tone_state())));
-        assert!(slots.fill_circadian_config(CircadianProbeConfig::new(0, true)));
-        assert!(slots.fill_ritual_store(Some(&ritual_store())));
-        assert!(slots.fill_homeostasis(Some(&homeostasis_source())));
-        assert!(slots.fill_social_repair(Some(&social_repair_source())));
-        let status = bio_status(&source);
-        let rows = status.mechanisms.as_ref().expect("14 格在场");
-        let wired: Vec<&BioMechanismKind> = BioMechanismKind::ALL
-            .iter()
-            .filter(|kind| rows.get(kind).is_some_and(|row| row.wired))
-            .collect();
-        assert_eq!(
-            wired.len(),
-            14,
-            "2 (capacity/play) + 12 迟绑定 (含工具生态/生命周期/调质/昼夜/仪式/上下文装配/社会修复) = 14/14"
-        );
-        for kind in [
-            BioMechanismKind::Capacity,
-            BioMechanismKind::Play,
-            BioMechanismKind::ImmuneMemory,
-            BioMechanismKind::Attachment,
-            BioMechanismKind::Quorum,
-            BioMechanismKind::Nociception,
-            BioMechanismKind::Recovery,
-            BioMechanismKind::EcosystemHealth,
-            BioMechanismKind::Lifecycle,
-            BioMechanismKind::Neuromodulation,
-            BioMechanismKind::Circadian,
-            BioMechanismKind::Ritual,
-            BioMechanismKind::Homeostasis,
-            BioMechanismKind::SocialRepair,
-        ] {
-            let row = rows.get(&kind).expect("wired row");
-            assert!(row.wired, "{kind:?}");
-            assert!(row.value.is_some(), "已填句柄 = 真值: {kind:?}");
-        }
-    }
-
-    /// ⑦ 武装前 fill 是 no-op；武装后同一句柄才真正落槽（迟绑定顺序契约）。
-    #[test]
-    fn fills_are_noops_until_the_install_point_arms_the_slots() {
-        let slots = BioProbeSlots::new();
-        assert!(!slots.is_armed());
-        assert!(!slots.fill_pain_reader(pain_reader(pain_snapshot())));
-        assert!(!slots.fill_quorum_trace(Arc::new(|| None)));
-        assert!(slots.is_empty(), "安装点之前槽恒空");
-        slots.arm(true);
-        assert!(slots.fill_pain_reader(pain_reader(pain_snapshot())));
-        assert!(slots.fill_quorum_trace(Arc::new(|| None)));
-        assert!(!slots.is_empty());
-    }
-
-    /// ⑧ 槽是 `Arc` 共享的：安装点拿的是 clone，组合根用另一句柄 fill 后
-    /// probe 仍读到同一状态（迟绑定 = 同一组槽，不是复制）。
-    #[test]
-    fn slot_clones_share_the_same_handles_with_the_registered_probes() {
-        let slots = armed_slots();
-        let captured = slots.clone();
-        let source = install_bio_self_status_with(source(), None, None, &captured, true);
-        assert!(
-            slots.fill_immune_memory(Some(immune_memory())),
-            "用原句柄填"
-        );
-        let status = bio_status(&source);
-        let row = status
-            .reading(BioMechanismKind::ImmuneMemory)
-            .expect("immune row");
-        assert_eq!(
-            row.value.as_ref().expect("value")["records"],
-            1,
-            "clone 与原句柄共享同一槽"
-        );
-    }
-
-    /// ⑨ 已填状态序列化稳定：同输入同输出（时钟注入固定值，零系统时钟）。
-    #[test]
-    fn filled_bio_mechanisms_status_serializes_stably() {
-        let slots = armed_slots();
-        assert!(slots.fill_immune_memory(Some(immune_memory())));
-        assert!(slots.fill_care_status(Arc::new(|| CareHeartbeatStatus {
-            next_poll_at_ms: None,
-            last_hit_at_ms: Some(5),
-            polls: 1,
-            hits: 1,
-        })));
-        assert!(slots.fill_pain_reader(pain_reader(pain_snapshot())));
-        let mut registry = BioMechanismRegistry::new(true).with_now_ms(Arc::new(|| 42));
-        registry.register_bio_probe(BioMechanismKind::ImmuneMemory, slots.immune_probe());
-        registry.register_bio_probe(BioMechanismKind::Attachment, slots.care_probe());
-        registry.register_bio_probe(BioMechanismKind::Nociception, slots.pain_probe());
-        registry.register_bio_probe(BioMechanismKind::Recovery, slots.recovery_probe());
-        let first = serde_json::to_value(registry.snapshot()).expect("serialize");
-        let second = serde_json::to_value(registry.snapshot()).expect("serialize");
-        assert_eq!(first, second, "同输入同输出");
-        assert_eq!(
-            first["mechanisms"]["immune_memory"]["value"]["observed_at_ms"],
-            42
-        );
-    }
-
-    /// ⑩ 槽空/槽填切换是同一格的状态变化，不新增机制格（14 格闭合词表）。
-    #[test]
-    fn late_binding_never_adds_or_removes_mechanism_rows() {
-        let slots = armed_slots();
-        let source = install_bio_self_status_with(source(), None, None, &slots, true);
-        let before = bio_status(&source);
-        assert_eq!(before.mechanisms.as_ref().expect("rows").len(), 14);
-        assert!(slots.fill_pain_reader(pain_reader(pain_snapshot())));
-        let after = bio_status(&source);
-        let rows = after.mechanisms.as_ref().expect("rows");
-        assert_eq!(rows.len(), 14, "填入句柄不新增机制格");
-        assert_eq!(
-            rows[&BioMechanismKind::Nociception].wired,
-            true,
-            "同一格从 null 转真值"
-        );
-    }
-}
+#[path = "bio_production_wiring/tests.rs"]
+mod tests;

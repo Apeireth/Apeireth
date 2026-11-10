@@ -7,6 +7,7 @@
 //! only, real session ids, transient W1/W2, fail-open governance refusals,
 //! untouched primary transcripts, and cross-session isolation.
 
+#![allow(dead_code)] // D-1（owner 裁定 2026-10-25）：测试夹具字段/方法（供用例构造完整对象，部分字段本文件内未被读取）
 use apeireth_runtime_assembly as apeireth_runtime;
 
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -103,7 +104,13 @@ impl ProviderCapability for ScriptedProvider {
                     .unwrap_or_default()
             ),
             finish_reason: Some(NormalizedFinishReason::Stop),
-            usage: NormalizedUsage::default(),
+            // Scripted normal calls report usage so owner budgets remain usable.
+            usage: NormalizedUsage {
+                prompt_tokens: 1,
+                completion_tokens: 1,
+                total_tokens: 2,
+                prompt_cache_hit_tokens: None,
+            },
             tool_calls: Vec::new(),
             raw_metadata: serde_json::Map::new(),
         })
@@ -184,6 +191,13 @@ impl GovernanceHook for SequenceHook {
     }
 
     async fn evaluate(&self, request: &GovernanceRequest<'_>) -> Decision {
+        if let apeireth_governance::Action::CapabilityDispatch { capability, .. } = request.action {
+            return if capability.as_str() == "tool.behavior.cognitive.organs" {
+                Decision::Allow
+            } else {
+                Decision::deny("fixture has no grant for this capability")
+            };
+        }
         self.captures
             .lock()
             .unwrap()
@@ -225,6 +239,13 @@ impl GovernanceHook for SideCallHook {
     }
 
     async fn evaluate(&self, request: &GovernanceRequest<'_>) -> Decision {
+        if let apeireth_governance::Action::CapabilityDispatch { capability, .. } = request.action {
+            return if capability.as_str() == "tool.behavior.cognitive.organs" {
+                Decision::Allow
+            } else {
+                Decision::deny("fixture has no grant for this capability")
+            };
+        }
         self.captures
             .lock()
             .unwrap()
@@ -793,15 +814,65 @@ async fn concurrent_sessions_isolate_organ_cognition() {
         std::collections::BTreeSet::from([session_a.to_string(), session_b.to_string()]),
         "each observation carries its own session, no contamination"
     );
-    let captured_sessions: std::collections::BTreeSet<String> = governance
+    let captured_sessions: std::collections::BTreeSet<SessionId> = governance
         .captures()
         .into_iter()
-        .map(|(sid, _)| sid.to_string())
+        .map(|(sid, _)| sid)
         .collect();
+    // S2 replaces parent-identity side requests with real child instances.
+    // Every additional governed session must have an auditable parent origin.
+    let mut expected_sessions = std::collections::BTreeSet::from([session_a, session_b]);
+    let mut origins = std::collections::BTreeSet::new();
+    for child in runtime.agent_instances() {
+        assert!(expected_sessions.insert(child.session));
+        let private = runtime
+            .sessions()
+            .load(&child.session)
+            .await
+            .unwrap()
+            .unwrap();
+        let event = private
+            .events
+            .iter()
+            .find(|e| {
+                matches!(
+                    e.event,
+                    apeireth_runtime::canonical::SessionEventKind::AgentTaskStarted { .. }
+                )
+            })
+            .unwrap();
+        match &event.event {
+            apeireth_runtime::canonical::SessionEventKind::AgentTaskStarted {
+                parent_session,
+                parent_request,
+                parent_trace,
+                ..
+            } => {
+                assert!([session_a, session_b].contains(parent_session));
+                origins.insert(*parent_session);
+                let public = runtime
+                    .sessions()
+                    .load(parent_session)
+                    .await
+                    .unwrap()
+                    .unwrap();
+                assert!(public
+                    .events
+                    .iter()
+                    .any(|e| e.request == *parent_request && e.trace == *parent_trace));
+                assert_ne!(event.request, *parent_request);
+                assert_ne!(event.trace, *parent_trace);
+            }
+            _ => unreachable!(),
+        }
+    }
     assert_eq!(
-        captured_sessions,
-        std::collections::BTreeSet::from([session_a.to_string(), session_b.to_string()]),
-        "side-calls only fired under their own sessions"
+        captured_sessions, expected_sessions,
+        "all governed calls belong to the parents or their actual child instances"
+    );
+    assert_eq!(
+        origins,
+        std::collections::BTreeSet::from([session_a, session_b])
     );
     assert!(
         governance.captures().len() >= 4,

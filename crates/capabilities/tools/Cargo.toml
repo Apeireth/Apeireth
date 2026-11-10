@@ -54,7 +54,7 @@ url = "2.5.8"
 # ZIP deflate 条目解压/压缩; `quick-xml` = DOCX (OOXML) XML 解析。ZIP 容器读写端
 # 是 `doc_ops.rs` 内纯 Rust 最小实现 (读写同一 stored/deflate 子集对称, 不引 zip
 # 容器包)。
-flate2 = "=1.1.10"
+flate2 = "=1.1.11"
 quick-xml = "=0.41.0"
 
 # Windows process containment uses the same windows-sys convention as the

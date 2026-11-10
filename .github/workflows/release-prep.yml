@@ -34,7 +34,7 @@ jobs:
           fetch-depth: 0  # git diff --name-only $BASE...HEAD 需要历史
 
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.97.1
 
       # hard-walls 守门 #1: 24 LOCKED crate 不触碰
       # (在 scripts/release-prep.sh A.2 跑, 此处独立再跑做镜像)

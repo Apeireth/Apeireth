@@ -42,6 +42,7 @@ chrono = { workspace = true }
 # (仅移面, 0 新外部依赖)。
 fs-err = { workspace = true }
 
+rusqlite = { workspace = true }
 [dev-dependencies]
 tokio = { workspace = true, features = ["full", "test-util"] }
 reqwest = { workspace = true }

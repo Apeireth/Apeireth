@@ -29,6 +29,8 @@ Apeireth 团队承诺漏洞披露过程透明，通过以下渠道公告：
 
 以下组件被认为是"安全边界"，其漏洞属于本政策范围（当前 workspace = 30 members：29 crates + bench harness；2026-10-20 R4b 归档 `apeireth-perception` 后口径；历史 31 members 见 CHANGELOG）：
 
+> **独立 workspace 备案（如实）**：另有**独立** Cargo workspace `crates-ui/`（**不计入**上面 30 members、与根 workspace 无依赖边），含 **1 个 crate** `apeireth-ui-core`（纯响应式内核，0 外部依赖）；范围 = IMPLEMENTED、**尚无生产前端消费点**（ADR-0021，owner 2026-10-29；自带独立 CI `ui-core-ci.yml`）⇒ **不在本政策上述安全边界范围内**（不随主产品构建/分发），此处仅作范围备案。
+
 - `apeireth-core`（`crates/foundation/core`）— 稳定域原语 + kernel（IDs/时间/生命周期/事件）；键集（现行 14 键）verdict cache 与洋葱/守门语义（v1 脊椎，接线状态见 ROADMAP P0/P2）
 - `apeireth-protocol`（`crates/foundation/protocol`）— 规范化协议 DTO 与 vendor wire 翻译（不含 HTTP client）
 - `apeireth-plugin`（`crates/foundation/plugin`）— Plugin/Capability 契约、凭据解析契约、capability 注册唯一权威
@@ -72,4 +74,9 @@ v1 时代的安全组件（`apeireth-sovereignty`、`apeireth-tool-approval`、`
 
 ---
 
-_Last updated_: 2026-10-18 (文档审计批：crate 口径更新为 workspace 31 members（30 crates + bench harness；image 家族 +11）；测试基线只引单一真源 [docs/03-reference/test-baseline.md](docs/03-reference/test-baseline.md) 不抄写数字；`apeireth-guard` 安全边界 2026-10-06 已核验；workspace.version 2.0.0-rc.5、仓库 URL `Apeireth/Apeireth` 不变)
+_Last updated_: 2026-10-18 (文档审计批：crate 口径更新为 workspace 31 members（30 crates + bench harness；image 家族 +11）；测试基线只引单一真源 [docs/03-reference/test-baseline.md](docs/03-reference/test-baseline.md) 不抄写数字；`apeireth-guard` 安全边界 2026-10-06 已核验；workspace.version 2.0.0-rc.4、仓库 URL `Apeireth/Apeireth` 不变)
+
+> **2026-11-04 口径更正（文档真源批）**：上一行的「31 members（30 crates + bench harness）」是
+> 2026-10-18 当时的**历史口径**（R4b 归档 `apeireth-perception` 之前），已过期 ⇒
+> **现行 = 30 members（29 crates + bench harness）**，与本文「适用范围」段一致；
+> 历史口径不改写、只在此标注。实测：`cargo metadata --no-deps` = 30 包（29 产品 crate + `apeireth-bench-harness`）。

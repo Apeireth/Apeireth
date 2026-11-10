@@ -546,7 +546,8 @@ pub struct PresenceService {
     bus: EventBus,
     synthesizer: Mutex<PresenceSynthesizer>,
     frames: Arc<ResourceRegistry<PresenceState>>,
-    heartbeat: Arc<HeartbeatDriver>,
+    #[allow(dead_code)]
+    heartbeat: Arc<HeartbeatDriver>, // D-1（owner 裁定 2026-10-25）：心跳驱动器句柄**仅测试读**（断言开流即起心跳产出）⇒ 非测试构建下是死字段。
 }
 
 impl PresenceService {

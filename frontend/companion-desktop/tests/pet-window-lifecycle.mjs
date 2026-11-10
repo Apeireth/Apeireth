@@ -21,7 +21,9 @@ const rustLib = join(testsDir, '..', 'src-tauri', 'src', 'lib.rs');
 
 console.log('--- Starting Pet Window Lifecycle Check ---');
 
-const rustSrc = readFileSync(rustLib, 'utf8');
+// Windows 检出（core.autocrlf）是 CRLF：按 LF 归一后再做源码镜像断言，避免行尾
+// 把字符窗口类断言（CloseRequested → apply_pet_leeway 的 200 字符窗）挤爆。
+const rustSrc = readFileSync(rustLib, 'utf8').replace(/\r\n/g, '\n');
 
 // ---------------------------------------------------------------------------
 // 1. 开关决策表 + 销毁纪律（与快捷窗同一条幽灵窗教训）

@@ -16,7 +16,7 @@
 > | 8 | `reports/s1-sandbox-hardening-self-audit.md` | 未标日期（v1.0 时代，crate `apeireth-companion` 已在 `legacy/`） | 156 行 |
 > | 9 | `reports/v2-rc1-backend-security-audit-2026-09-24.md` | 2026-09-24 | 443 行 |
 >
-> **审计方法**：只读取证（`git grep` 查生产装配路径真实调用 / 注册 → 检查测试证据 → 必要时单 crate 只读复跑）＋ 逐行读码判定，按四级口径（`IMPLEMENTED` / `PRODUCTION WIRED` / `DEFAULT ENABLED` / `HARDWARE VALIDATED`，见 [system-capabilities.md](../../01-architecture/system-capabilities.md) 头部）定级。
+> **审计方法**：只读取证（`git grep` 查生产装配路径真实调用 / 注册 → 检查测试证据 → 必要时单 crate 只读复跑）＋ 逐行读码判定，按口径阶梯（`NOT IMPLEMENTED` / `IMPLEMENTED` / `PRODUCTION WIRED` / `HARDWARE VALIDATED`；**`DEFAULT ENABLED` 不是一级，是横切属性**——默认开/关，见 [system-capabilities.md](../../01-architecture/system-capabilities.md) 头部）定级。
 > **复核基线**：2026-10-23，仓内事实核验（工作树 HEAD `b4aabfc2`）。能力声明一律引用 [claims.yaml](../../status/claims.yaml)（含逐条 `level` 与 `verified_at`），架构契约引用 [contract.toml](../../architecture/contract.toml)，测试数字引用 [test-baseline.md](../../03-reference/test-baseline.md)（本册不抄写数字）。
 >
 > **结论摘要**

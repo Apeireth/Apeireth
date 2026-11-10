@@ -4,10 +4,11 @@
 //! **不修改承诺 (LOCKED)**: 不改 workspace 版本、锁定 StreamKind 或锁定文档。
 
 use crate::{
-    context_ledger, EpisodeQuery, EpisodeStore, IdentityCardStore, MemoryError, MemoryResult,
-    SqliteMemoryStore,
+    context_ledger,
+    memory_chain::{put_chained_episode, ChainEntry},
+    EpisodeQuery, EpisodeStore, IdentityCardStore, MemoryError, MemoryResult, SqliteMemoryStore,
 };
-use apeireth_core::kernel::memory::{IdentityCard, Migration};
+use apeireth_core::kernel::memory::{Episode, IdentityCard, Migration};
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 
@@ -194,9 +195,9 @@ pub fn ensure_identity(
 pub struct MigrationReport {
     pub from: String,
     pub to: String,
-    /// Episodes copied forward (originals kept).
+    /// Episodes copied forward (originals kept). **每条副本都带链字段**（入链）。
     pub episodes_copied: usize,
-    /// Already-migrated rows skipped (idempotent INSERT OR IGNORE).
+    /// Already-migrated rows skipped (idempotent: 同 id 已在库 ⇒ 不重复入链、链头不推进).
     pub episodes_skipped: usize,
     /// Context ledger rows re-keyed (0 = table missing or no matching rows).
     pub ledger_rekeyed: usize,
@@ -208,6 +209,32 @@ pub struct MigrationReport {
 /// Append-only safety: originals stay. Copies get id `mig-{original}`,
 /// `continuity_id = to`, `session_id = to`, preserved timestamp/role/content.
 /// Context ledger (non-append-only sidecar) is UPDATE-rekeyed when present.
+///
+/// # D0 哈希链（W-13）：副本**入链**
+///
+/// 此前这条路径是**裸 SQL INSERT**（只写 6 列）⇒ 产出的记录**没有链字段**
+/// ⇒ 体检报告（`memory_chain::summarize`）把它们算成「未纳管」⇒ 链覆盖率有缺口。
+/// 现在副本走 [`crate::memory_chain::put_chained_episode`]（**单一真源**，不自己
+/// 写链逻辑 ⇒ 摘要口径与其它写路径一致）。
+///
+/// - **链键 = 副本的 `continuity_id`（= `to`）**：链按主体分链 ⇒ 副本落在**新主体**
+///   那条链上；原记录留在旧主体那条链上（append-only，不动原链）。
+/// - **链序**：批量迁移**逐条调用** ⇒ `put_chained_episode` 每次按 `continuity_id`
+///   取当前链头 ⇒ 链头逐条推进 ⇒ 多条副本首尾相连。
+/// - **失败语义 = 硬失败**：链写不进去 ⇒ 返回 `Err`（宁可迁移失败，不可留下
+///   **无链记录** —— 无链记录 = 缺口原地不动，而调用方会以为数据受保护）。
+///   **如实标注**：链写是**逐条独立事务**（`put_chained_episode` 内部自带
+///   IMMEDIATE 事务，链的单一真源不许被绕开）⇒ 第 k 条失败时，前 k-1 条副本
+///   **已提交**；但它们都带链字段 ⇒ **不会留下「未纳管」残留**。
+/// - **元数据口径**：副本的 4 个 V4 元数据列（`valid_from_ms` /
+///   `valid_until_ms` / `created_ms` / `provenance`）按 **NULL 口径**参与摘要
+///   —— 与旧实现「只写 6 列」一致（副本不继承源记录的双时间/出处），且写入侧
+///   与校验侧同一口径 ⇒ 重算得到同一摘要。
+///
+/// # 口径
+///
+/// - 库级能力（迁移副本入链）：**IMPLEMENTED**（本函数 + 集成测试覆盖）。
+/// - 生产接线：**未接线** —— 全仓无生产调用点（只有 `pub` API 与测试调用）。
 pub fn migrate_subject(
     store: &SqliteMemoryStore,
     from: &str,
@@ -234,19 +261,21 @@ pub fn migrate_subject(
     let mut copied = 0usize;
     let mut skipped = 0usize;
     for ep in &olds {
-        let n = conn.execute(
-            "INSERT OR IGNORE INTO episodes (id, continuity_id, session_id, timestamp, role, content)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            params![
-                format!("{MIGRATED_ID_PREFIX}{}", ep.id),
-                to,
-                to,
-                ep.timestamp,
-                ep.role,
-                ep.content,
-            ],
-        )?;
-        if n > 0 {
+        // 副本身份：id 加 lineage 前缀（幂等键），continuity_id / session_id 换到新锚点。
+        let copy = Episode {
+            id: format!("{MIGRATED_ID_PREFIX}{}", ep.id),
+            timestamp: ep.timestamp,
+            role: ep.role.clone(),
+            content: ep.content.clone(),
+            session_id: to.clone(),
+        };
+        // 链键 = 副本的 continuity_id（= to）—— 副本落在新主体那条链上。
+        let entry = ChainEntry::from_episode(&copy, None);
+        // 硬失败语义：链写不进去 ⇒ 整个迁移返回 Err（不落无链副本）。
+        // `chained == false` = 该 id 早已存在（幂等重跑）⇒ 不重复入链、链头不推进
+        // （与旧实现 `INSERT OR IGNORE` 的 skipped 口径一致）。
+        let outcome = put_chained_episode(&conn, &to, &entry)?;
+        if outcome.chained {
             copied += 1;
         } else {
             skipped += 1;
@@ -348,7 +377,19 @@ mod tests {
     fn episodes_are_counted() {
         let (db, id) = setup();
         record_session(&db, &id, "s1", 20).unwrap();
-        db.conn().unwrap().execute("INSERT INTO episodes (id, continuity_id, session_id, timestamp, role, content) VALUES ('e1', ?1, 's1', 21, 'user', 'hello')", [&id]).unwrap();
+        // 用**入链**的公开写路径（此前这里是裸 INSERT ⇒ 产出「未纳管」记录 ⇒
+        // 库内夹具自己就会给链覆盖率挖坑）。
+        db.put_episode_for_subject(
+            &Episode {
+                id: "e1".into(),
+                timestamp: 21,
+                role: "user".into(),
+                content: "hello".into(),
+                session_id: "s1".into(),
+            },
+            &id,
+        )
+        .unwrap();
         assert_eq!(resolve_continuity(&db, &id).unwrap().total_episodes, 1);
         assert_eq!(recall_recent(&db, &id, 1).unwrap()[0].episode_count, 1);
     }
@@ -406,6 +447,37 @@ mod tests {
             .query(&EpisodeQuery::new().for_continuity("c-main"))
             .unwrap();
         assert_eq!(by_cont.len(), 2, "迁移副本应写入真实 continuity_id");
+    }
+
+    #[test]
+    fn migrate_copies_are_chained_under_the_new_subject() {
+        // 迁移副本必须**入链**（此前裸 INSERT ⇒ 副本是「未纳管」记录 ⇒ 链覆盖率缺口）。
+        let db = SqliteMemoryStore::open_in_memory().unwrap();
+        db.put_episode(&apeireth_core::kernel::memory::Episode {
+            id: "ep-0".into(),
+            timestamp: 100,
+            role: "user".into(),
+            content: "事实一".into(),
+            session_id: "me".into(),
+        })
+        .unwrap();
+        db.put_episode(&apeireth_core::kernel::memory::Episode {
+            id: "ep-1".into(),
+            timestamp: 101,
+            role: "assistant".into(),
+            content: "事实二".into(),
+            session_id: "me".into(),
+        })
+        .unwrap();
+
+        let r = migrate_subject(&db, "me", "c-main", 200).unwrap();
+        assert_eq!(r.episodes_copied, 2);
+
+        let conn = db.conn().unwrap();
+        let report = crate::memory_chain::verify_subject_chain(&conn, "c-main").unwrap();
+        assert!(report.ok, "迁移副本必须落在完整链上: {report:?}");
+        assert_eq!(report.entry_count, 2, "两条副本都应入链");
+        assert_eq!(report.unmanaged_entries, 0, "不得留下未纳管副本");
     }
 
     #[test]

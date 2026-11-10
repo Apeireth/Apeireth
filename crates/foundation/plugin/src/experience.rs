@@ -116,6 +116,23 @@ pub struct GraphLink {
     pub created_at: i64,
 }
 
+/// **valid-time 区间判据**（2026-11-05）：事实在时刻 `t_ms` 是否**有效**。
+///
+/// 规则：`valid_from <= t_ms` **且**（`valid_until` 为空 **或** `t_ms < valid_until`）
+/// ⇒ ⇒ 与 `apeireth-memory::bitemporal_graph` 的 **valid-time** 口径一致。
+///
+/// ⚠️ **只管「有效时间」不管「相信时间」**（belief-time 是 bitemporal_graph 的另一半）
+/// ⇒ ⇒ 本函数是**区间过滤**（不是「当时是否已经知道」）⇒ ⇒ 两者不要混用。
+pub fn fact_valid_at(fact: &GraphFact, t_ms: i64) -> bool {
+    if fact.valid_from > t_ms {
+        return false;
+    }
+    match fact.valid_until {
+        None => true,
+        Some(until) => t_ms < until,
+    }
+}
+
 /// KG 存储 trait
 pub trait KnowledgeGraphStore: Send + Sync {
     /// 写一条 fact
@@ -126,6 +143,37 @@ pub trait KnowledgeGraphStore: Send + Sync {
 
     /// 从 subject 出发一跳 fact
     fn facts_from(&self, subject_id: &str, limit: u32) -> CapabilityResult<Vec<GraphFact>>;
+
+    /// 从 subject 出发一跳 fact, **按 as-of 时间** (valid-time 区间过滤)。
+    ///
+    /// # 为什么要有它 (2026-11-05)
+    /// [`Self::facts_from`] 的语义是「**现在**有效的事实」⇒ ⇒ 召回链带
+    /// **时间锚点** (`as_of_ms`, 例:「3年前」) 时 ⇒ ⇒ 拿到的仍是**现在**的事实
+    /// ⇒ ⇒ ⇒ **答非所问**（问过去、答现在）。
+    ///
+    /// # 默认实现 (诚实标注盲区)
+    /// 在 [`Self::facts_from`] 的结果上按 **valid-time 区间**过滤:
+    /// `valid_from <= t < valid_until`（`valid_until = None` ⇒ ⇒ 至今仍有效）。
+    ///
+    /// ⚠️ **盲区**：默认实现**拿不回「已被作废、但当时有效」的事实**
+    /// ⇒ ⇒ 因为 [`Self::facts_from`] 只给「现在有效」的 ⇒ ⇒
+    /// ⇒ ⇒ **有完整历史的实现应当覆写本方法**（sqlite 实现已覆写 ⇒ ⇒ 走真 SQL）。
+    ///
+    /// # 语义来源
+    /// 与 `apeireth-memory::bitemporal_graph` 的 **valid-time 区间**口径一致
+    /// ⇒ ⇒ 「**当时知道什么**」在 store 边界就有同一个判据。
+    fn facts_from_as_of(
+        &self,
+        subject_id: &str,
+        limit: u32,
+        as_of_ms: i64,
+    ) -> CapabilityResult<Vec<GraphFact>> {
+        let facts = self.facts_from(subject_id, limit)?;
+        Ok(facts
+            .into_iter()
+            .filter(|fact| fact_valid_at(fact, as_of_ms))
+            .collect())
+    }
 
     /// 全量 fact 列举 (W3 community 消费契约扩展, 2026-10-10): 供社区检测/双级
     /// 分诊 (`apeireth-memory::community`) 的被动分析。**默认空** —— 不能/不便

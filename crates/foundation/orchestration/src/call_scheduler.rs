@@ -48,8 +48,13 @@ use apeireth_core::deadline::Deadline;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
+use crate::job_board::{JobBoard, JobHandle, JobId, JobStatus, OwnerId, SegmentIndex};
+
 /// 滚动池的缺省并发上限。
 pub const DEFAULT_MAX_PARALLEL: usize = 4;
+
+/// **并行派发批次在任务板上的归属方**（批次 = 板上的一个长任务）。
+pub const PARALLEL_DISPATCH_OWNER: &str = "parallel_dispatch";
 
 /// 取消后给已启动调用的缺省收场窗口 ([`CallBatch::abort`] 语义 5)。
 pub const DEFAULT_WIND_DOWN: Duration = Duration::from_millis(1_000);
@@ -269,9 +274,16 @@ impl std::error::Error for SchedulerConfigError {}
 ///
 /// 判定来自注入的 [`ConcurrencySafety`]; 批次执行 ([`CallBatch`]) 实现互斥
 /// 屏障、有界滚动池、模型序提交与取消补果。
+///
+/// **任务板接线** (可选): 装上板之后, **每一批并行派发**在板上登记为一个
+/// 长任务 (身份 + 归属方 + 逐调用进展) ⇒ ⇒ 批次**取消**或**全部交付**时
+/// 结算并**释放**记录 ⇒ ⇒ 板上不留死记录。**未装板 ⇒ 行为与接线前逐字节一致**
+/// (板只是记账, 不参与判定, 不影响派发与交付顺序)。
+#[derive(Clone)]
 pub struct CallScheduler {
     safety: Arc<dyn ConcurrencySafety>,
     config: SchedulerConfig,
+    job_board: Option<Arc<JobBoard>>,
 }
 
 impl CallScheduler {
@@ -283,7 +295,23 @@ impl CallScheduler {
         if config.max_parallel == 0 {
             return Err(SchedulerConfigError::NonPositiveParallelism);
         }
-        Ok(Self { safety, config })
+        Ok(Self {
+            safety,
+            config,
+            job_board: None,
+        })
+    }
+
+    /// 装上任务板 (并行派发批次的长任务身份 + 终局释放)。
+    #[must_use]
+    pub fn with_job_board(mut self, board: Arc<JobBoard>) -> Self {
+        self.job_board = Some(board);
+        self
+    }
+
+    /// 已装的任务板 (未装 = `None` ⇒ 批次不在板上登记)。
+    pub fn job_board(&self) -> Option<&Arc<JobBoard>> {
+        self.job_board.as_ref()
     }
 
     /// 判定器。
@@ -315,7 +343,76 @@ impl CallScheduler {
             .iter()
             .map(|call| self.safety.classify(&call.tool, &call.args))
             .collect();
-        CallBatch::spawn(calls, classes, runner, self.config)
+        let board_job = self.job_board.as_ref().map(|board| {
+            let owner = OwnerId::new(PARALLEL_DISPATCH_OWNER);
+            let handle = board.open_job(owner.clone(), batch_segment_count(calls.len()));
+            BatchJob {
+                board: Arc::clone(board),
+                handle,
+                owner,
+                segments: vec![None; calls.len()],
+                released: false,
+            }
+        });
+        CallBatch::spawn(calls, classes, runner, self.config, board_job)
+    }
+}
+
+/// 批内调用数 → 板上段数 (段 = 一次调用; 溢出按上限截断, 不 panic)。
+fn batch_segment_count(calls: usize) -> SegmentIndex {
+    u32::try_from(calls).unwrap_or(SegmentIndex::MAX)
+}
+
+/// **批次在任务板上的登记** (并行派发批次 = 板上的一个长任务)。
+///
+/// - **段 = 批内一次调用**: 启动时置「已启动」, 完成时收口 ⇒ 取消时未启动的段
+///   天然是「已跳过」⇒ 板上看得见这批跑到哪儿了;
+/// - **进展**: 每次调用完成都记一次真实进展 (清空闲 owner 的连续唤醒计数);
+/// - **终局**: 取消 ⇒ 取消结算; 全部交付 ⇒ 完成结算; 结算后**释放记录**
+///   ⇒ ⇒ 板上不留死记录 (`remove_job` 要求先结算, 顺序不可反)。
+struct BatchJob {
+    board: Arc<JobBoard>,
+    handle: JobHandle,
+    owner: OwnerId,
+    /// 调用下标 → 段序号 (启动时登记, 完成时收口)。
+    segments: Vec<Option<SegmentIndex>>,
+    /// 记录是否已释放 (终局只释放一次)。
+    released: bool,
+}
+
+impl BatchJob {
+    /// 一次调用启动: 板上对应段置「已启动」。
+    fn on_launch(&mut self, call_index: usize) {
+        if let Ok(Some(segment)) = self.board.start_next_segment(&self.handle) {
+            if let Some(slot) = self.segments.get_mut(call_index) {
+                *slot = Some(segment);
+            }
+        }
+    }
+
+    /// 一次调用完成: 段收口 + 记真实进展。
+    fn on_completed(&self, call_index: usize) {
+        if let Some(Some(segment)) = self.segments.get(call_index) {
+            let _ = self.board.finish_segment(&self.handle, *segment);
+        }
+        self.board.record_progress(&self.owner);
+    }
+
+    /// 终局: 结算 + **释放板上记录**。
+    fn release(&mut self, status: JobStatus) {
+        if self.released {
+            return;
+        }
+        let settled = match status {
+            JobStatus::Completed => self.board.settle(&self.handle),
+            JobStatus::Cancelled => self.board.cancel(&self.handle),
+            JobStatus::Running => return,
+        };
+        self.released = true;
+        if settled.is_ok() {
+            // 释放失败 (板要求先结算) 不静默吞: 记录留在板上, 如实可查。
+            let _ = self.board.remove_job(self.handle.id);
+        }
     }
 }
 
@@ -351,6 +448,8 @@ pub struct CallBatch<R: Send + 'static> {
     wind_down_timer: Option<(Deadline, apeireth_core::deadline::DeadlineNotice)>,
     completed_tx: mpsc::UnboundedSender<(usize, R)>,
     completed_rx: mpsc::UnboundedReceiver<(usize, R)>,
+    /// 批次在任务板上的登记 (未装板 = `None`)。
+    board_job: Option<BatchJob>,
 }
 
 impl<R: Send + 'static> CallBatch<R> {
@@ -359,6 +458,7 @@ impl<R: Send + 'static> CallBatch<R> {
         classes: Vec<ConcurrencyClass>,
         runner: Arc<dyn CallRunner<R>>,
         config: SchedulerConfig,
+        board_job: Option<BatchJob>,
     ) -> Self {
         let (completed_tx, completed_rx) = mpsc::unbounded_channel();
         let slots = calls.iter().map(|_| SlotState::Queued).collect();
@@ -377,6 +477,7 @@ impl<R: Send + 'static> CallBatch<R> {
             wind_down_timer: None,
             completed_tx,
             completed_rx,
+            board_job,
         };
         batch.launch_ready();
         batch
@@ -397,6 +498,14 @@ impl<R: Send + 'static> CallBatch<R> {
         self.aborted
     }
 
+    /// 本批次在任务板上的任务 id (未装板 = `None`)。
+    ///
+    /// 观察用: 批次在飞时板上记录存在, 终局 (取消 / 全部交付) 后被释放 ⇒
+    /// `None` ⇒ 板上无此记录。
+    pub fn board_job_id(&self) -> Option<JobId> {
+        self.board_job.as_ref().map(|job| job.handle.id)
+    }
+
     /// 按模型序交付下一个槽位的定局结果; 全部交付后返回 `None`。
     ///
     /// 严格按下标递增交付: 即使后位调用先完成, 也等前位定局后才交付。
@@ -404,6 +513,8 @@ impl<R: Send + 'static> CallBatch<R> {
         loop {
             self.launch_ready();
             if self.commit_cursor >= self.slots.len() {
+                // 全部交付 = 批次终局 ⇒ 板上结算并释放记录。
+                self.release_board_job(JobStatus::Completed);
                 return None;
             }
             let index = self.commit_cursor;
@@ -431,11 +542,20 @@ impl<R: Send + 'static> CallBatch<R> {
                 *slot = SlotState::Settled(Some(SlotOutcome::Cancelled(CancelKind::NotStarted)));
             }
         }
+        // **取消终局**: 板上取消结算并释放记录 (未启动的段如实记为「已跳过」)。
+        self.release_board_job(JobStatus::Cancelled);
         self.wind_down_timer = Deadline::after(self.wind_down)
             .ok()
             .map(|(deadline, notice)| (deadline, notice));
         if self.wind_down_timer.is_none() {
             self.settle_in_flight_after_wind_down();
+        }
+    }
+
+    /// 批次终局时结算并释放板上记录 (未装板 = 无操作)。
+    fn release_board_job(&mut self, status: JobStatus) {
+        if let Some(job) = self.board_job.as_mut() {
+            job.release(status);
         }
     }
 
@@ -484,6 +604,10 @@ impl<R: Send + 'static> CallBatch<R> {
         if let SlotState::InFlight(handle) = previous {
             drop(handle);
             self.release_slot(index);
+        }
+        // 一次调用完成 = 一次真实进展 (板上段收口 + 进展计数)。
+        if let Some(job) = self.board_job.as_ref() {
+            job.on_completed(index);
         }
     }
 
@@ -553,6 +677,10 @@ impl<R: Send + 'static> CallBatch<R> {
         });
         self.slots[index] = SlotState::InFlight(handle);
         self.in_flight += 1;
+        // 一次调用启动 = 板上对应段置「已启动」。
+        if let Some(job) = self.board_job.as_mut() {
+            job.on_launch(index);
+        }
         if self.classes[index] == ConcurrencyClass::Exclusive {
             self.exclusive_in_flight = true;
         }
@@ -562,11 +690,14 @@ impl<R: Send + 'static> CallBatch<R> {
 
 impl<R: Send + 'static> Drop for CallBatch<R> {
     /// 句柄被弃 = 调用方不再收结果: 在飞执行体立即取消, 不留孤儿任务。
+    ///
+    /// 板上同步收口: 批次被弃 = 取消 ⇒ 取消结算 + 释放记录 (板上不留死记录)。
     fn drop(&mut self) {
         for slot in &self.slots {
             if let SlotState::InFlight(handle) = slot {
                 handle.abort();
             }
         }
+        self.release_board_job(JobStatus::Cancelled);
     }
 }

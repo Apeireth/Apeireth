@@ -48,6 +48,8 @@ impl ProtocolAdapter for OpenAiResponsesAdapter {
     }
 
     fn adapt_request(&self, req: &NormalizedRequest) -> Result<Value, ProtocolError> {
+        crate::canonical::validate_closed_tool_context(&req.messages)
+            .map_err(|error| ProtocolError::invalid("messages", error.to_string()))?;
         if req.model.is_empty() {
             return Err(ProtocolError::missing("model"));
         }
@@ -80,11 +82,11 @@ impl ProtocolAdapter for OpenAiResponsesAdapter {
             body.insert("instructions".into(), Value::String(ins));
         }
 
-        // 映射设计参考 buildImmediateResponsesPayload:
-        // output 是结构化数组; input 归一化为 OpenAI Responses 的 input item 数组
+        // One assistant message may yield text plus several independent call
+        // items. Keep all of them before the matching result items.
         let input_items: Vec<Value> = non_system
             .iter()
-            .map(|m| {
+            .flat_map(|m| {
                 let mut item = Map::new();
                 match m.role {
                     MessageRole::User => {
@@ -109,27 +111,26 @@ impl ProtocolAdapter for OpenAiResponsesAdapter {
                         item.insert("content".into(), Value::Array(parts));
                     }
                     MessageRole::Assistant => {
-                        // assistant → output_text + function_call items
+                        let mut items = Vec::new();
                         let text = ContentPart::join_text(&m.content);
                         if !text.is_empty() {
-                            // 注: 简单实现只输出 1 个 message item
-                            let mut inner = Map::new();
-                            inner.insert("type".into(), Value::String("output_text".into()));
-                            inner.insert("text".into(), Value::String(text));
-                            inner.insert("role".into(), Value::String("assistant".into()));
-                            // 直接作为 input item 即可 (Responses API 接受 history)
-                            return Value::Object({
-                                let mut outer = Map::new();
-                                outer.insert("role".into(), Value::String("assistant".into()));
-                                outer.insert(
-                                    "content".into(),
-                                    Value::Array(vec![Value::Object(inner)]),
-                                );
-                                outer
-                            });
+                            items.push(json!({
+                                "role": "assistant",
+                                "content": text,
+                            }));
                         }
-                        item.insert("role".into(), Value::String("assistant".into()));
-                        item.insert("content".into(), Value::Array(Vec::new()));
+                        for call in &m.tool_calls {
+                            items.push(json!({
+                                "type": "function_call",
+                                "call_id": call.id,
+                                "name": call.name,
+                                "arguments": call.arguments.to_string(),
+                            }));
+                        }
+                        if items.is_empty() {
+                            items.push(json!({"role": "assistant", "content": ""}));
+                        }
+                        return items;
                     }
                     MessageRole::Tool => {
                         // tool → function_call_output
@@ -144,7 +145,7 @@ impl ProtocolAdapter for OpenAiResponsesAdapter {
                         // 已经在外层 instructions 处理过, 不应到这里
                     }
                 }
-                Value::Object(item)
+                vec![Value::Object(item)]
             })
             .collect();
 
@@ -184,7 +185,8 @@ impl ProtocolAdapter for OpenAiResponsesAdapter {
                     if t.strict {
                         func.insert("strict".into(), Value::Bool(true));
                     }
-                    json!({"type": "function", "function": Value::Object(func)})
+                    func.insert("type".into(), Value::String("function".into()));
+                    Value::Object(func)
                 })
                 .collect();
             body.insert("tools".into(), Value::Array(tools));
@@ -196,7 +198,7 @@ impl ProtocolAdapter for OpenAiResponsesAdapter {
                 NormalizedToolChoice::None => Value::String("none".into()),
                 NormalizedToolChoice::Required => Value::String("required".into()),
                 NormalizedToolChoice::Specific { name } => {
-                    json!({"type": "function", "function": {"name": name}})
+                    json!({"type": "function", "name": name})
                 }
             };
             body.insert("tool_choice".into(), v);
@@ -263,23 +265,31 @@ impl ProtocolAdapter for OpenAiResponsesAdapter {
                             .and_then(|v| v.as_str())
                             .unwrap_or("")
                             .to_string();
-                        // OpenAI Responses 的 arguments 是 JSON string, 跟 OpenAI Chat 一致
-                        let arguments = item
-                            .get("arguments")
-                            .map(|v| {
-                                if let Some(s) = v.as_str() {
-                                    match serde_json::from_str(s) {
-                                        Ok(value) => value,
-                                        Err(_) => {
-                                            malformed_tool_arguments.push(s.to_string());
-                                            Value::Null
-                                        }
-                                    }
-                                } else {
-                                    v.clone()
+                        // OpenAI Responses 的 arguments 是 JSON string, 跟 OpenAI Chat 一致。
+                        // 归一口径（**规范形态 = JSON object**，见 `normalized.rs:340`；
+                        // 与 `openai_chat.rs` **同口径**）：
+                        //   · 缺 `arguments` / `null` ⇒ `Null` —— **不得**回落成 `{}`：
+                        //     那会让工具侧拿到一个**看起来像「无参数」**的调用，掩盖「参数没了」
+                        //     （provider 层 `parse_response_absent_tool_arguments_stay_null`
+                        //     已把「缺失 ⇒ Null」钉成契约）。
+                        //   · JSON 字符串 ⇒ 解析它；解析失败 ⇒ `Null` + 原文记入排障面（L4 口径）。
+                        //   · **对象** ⇒ **原样保留**（就是规范形态）。
+                        //   · 数组 / 数字 / 布尔 ⇒ 非 object 的非规范形态 ⇒ `Null` + 记入排障面。
+                        let arguments = match item.get("arguments") {
+                            None | Some(Value::Null) => Value::Null,
+                            Some(Value::String(text)) => match serde_json::from_str(text) {
+                                Ok(value) => value,
+                                Err(_) => {
+                                    malformed_tool_arguments.push(text.clone());
+                                    Value::Null
                                 }
-                            })
-                            .unwrap_or_else(|| Value::Object(Map::new()));
+                            },
+                            Some(value @ Value::Object(_)) => value.clone(),
+                            Some(other) => {
+                                malformed_tool_arguments.push(other.to_string());
+                                Value::Null
+                            }
+                        };
                         tool_calls.push(ToolCall {
                             id,
                             name,
@@ -353,6 +363,65 @@ impl ProtocolAdapter for OpenAiResponsesAdapter {
 }
 
 #[cfg(test)]
+
+/// 工具调用参数归一**绝不静默吞掉真参数**（回归测试，与 `openai_chat.rs` 同口径）。
+///
+/// 缺字段 / 非 object 的非规范形态**都不得**回落成 `{}`
+/// （那会让工具侧拿到一个**看起来像「无参数」**的调用，掩盖「参数没了」）。
+#[test]
+fn response_tool_arguments_never_silently_become_an_empty_object() {
+    let adapter = OpenAiResponsesAdapter::new();
+    let raw_with = |arguments: serde_json::Value| {
+        serde_json::json!({
+            "id": "resp_x", "model": "gpt-4o",
+            "output": [{"type": "function_call", "call_id": "call_1",
+                "name": "tool.shell", "arguments": arguments}]
+        })
+    };
+    // ① 对象 ⇒ 原样保留。
+    let response = adapter
+        .adapt_response(&raw_with(serde_json::json!({"command": "rm -rf /"})))
+        .expect("合法响应可归一");
+    assert_eq!(
+        response.tool_calls[0].arguments,
+        serde_json::json!({"command": "rm -rf /"}),
+        "对象形态必须原样保留（真参数不能丢）"
+    );
+    // ② 数组 / 数字 / 布尔 ⇒ Null + 记入排障面。
+    for malformed in [
+        serde_json::json!([1, 2]),
+        serde_json::json!(42),
+        serde_json::json!(true),
+    ] {
+        let response = adapter
+            .adapt_response(&raw_with(malformed.clone()))
+            .expect("响应可归一");
+        assert_eq!(
+            response.tool_calls[0].arguments,
+            serde_json::Value::Null,
+            "非 object 的非规范形态必须 Null（不得静默成 {{}}）: {malformed}"
+        );
+        let recorded = response
+            .raw_metadata
+            .get("malformed_tool_arguments")
+            .and_then(|v| v.as_array())
+            .map(|v| !v.is_empty())
+            .unwrap_or(false);
+        assert!(recorded, "非规范形态必须记入排障面: {malformed}");
+    }
+    // ③ 缺 `arguments` ⇒ Null，不得是 `{}`。
+    let raw_without = serde_json::json!({
+        "id": "resp_x", "model": "gpt-4o",
+        "output": [{"type": "function_call", "call_id": "call_1", "name": "tool.shell"}]
+    });
+    let response = adapter.adapt_response(&raw_without).expect("响应可归一");
+    assert_eq!(
+        response.tool_calls[0].arguments,
+        serde_json::Value::Null,
+        "缺 arguments 必须是 Null，不得回落成 {{}}"
+    );
+}
+
 mod tests {
     use super::*;
     use crate::normalized::{NormalizedMessage, NormalizedTool};
@@ -407,14 +476,24 @@ mod tests {
             "gpt-4o",
             vec![
                 NormalizedMessage::user("weather?"),
+                NormalizedMessage::assistant_with_tool_calls(
+                    "",
+                    vec![ToolCall {
+                        id: "call_1".into(),
+                        name: "get_weather".into(),
+                        arguments: json!({}),
+                    }],
+                ),
                 NormalizedMessage::tool_result("call_1", Some("get_weather".into()), "sunny"),
             ],
         );
         let v = OpenAiResponsesAdapter::new().adapt_request(&req).unwrap();
         let input = v["input"].as_array().unwrap();
-        assert_eq!(input[1]["type"], "function_call_output");
+        assert_eq!(input[1]["type"], "function_call");
         assert_eq!(input[1]["call_id"], "call_1");
-        assert_eq!(input[1]["output"], "sunny");
+        assert_eq!(input[2]["type"], "function_call_output");
+        assert_eq!(input[2]["call_id"], "call_1");
+        assert_eq!(input[2]["output"], "sunny");
     }
 
     #[test]
@@ -438,7 +517,8 @@ mod tests {
         req.tool_choice = Some(NormalizedToolChoice::Required);
         let v = OpenAiResponsesAdapter::new().adapt_request(&req).unwrap();
         assert_eq!(v["tools"][0]["type"], "function");
-        assert_eq!(v["tools"][0]["function"]["name"], "fn");
+        assert_eq!(v["tools"][0]["name"], "fn");
+        assert!(v["tools"][0].get("function").is_none());
         assert_eq!(v["tool_choice"], "required");
     }
 

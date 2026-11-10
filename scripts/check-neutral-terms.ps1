@@ -3,10 +3,6 @@
 # 产品/项目标识或"移植/借鉴/参照实现"类来源措辞。只扫 git diff 的新增行
 # （'+' 开头）与未跟踪新文件全文，历史存量行不误伤；产物与归档目录不参与。
 # 用法：pwsh -File scripts/check-neutral-terms.ps1 （powershell 5.1 需文件带 BOM）
-# 跨平台（2026-11-01 修）: 原用 `cmd /c "git ... 2>nul"` 调 git —— `cmd` 是 Windows 专有，
-# 在 Linux/macOS 上必报 "The term 'cmd' is not recognized" ⇒ commit.ps1 的中性表述门禁
-# 在非 Windows 上无法通过。改用 PowerShell 原生调用 + `2>$null` 重定向：**Windows 与
-# Linux 行为一致**（检查逻辑未变，仅换命令调用方式）。
 # 退出码：0 = 干净；1 = 有命中（命中行会打印出来）。
 
 $ErrorActionPreference = 'Stop'
@@ -42,11 +38,7 @@ $licensed = 0
 
 # 结构性豁免：命中若仅来自这些**真实字符串**（真实路径/真实文件名/本表自身）
 # 则按"路径保持准确"规则保留、不计违规；豁免计数随输出给出便于审计。
-# ⚠️ `legacy/donor` 后面跟 `(/|\b)` 而不是只跟 `/`：真实路径**整目录提及**时
-# 常不带尾斜杠（如 `ls -d legacy/donor`、`legacy/donor exists: yes`）⇒ 旧式只匹配
-# `legacy/donor/` 会把这些**真实路径**误报为违规（2026-10-24 合并 main 时实测）。
-# `\b` 不会匹配 `legacy/donorXYZ`（`r` 与 `X` 之间无词边界）⇒ 豁免仍然精确。
-$exemptRe = 'legacy/donor(/|\b)|donor/apeireth-|donor/\.\.\.|governance-donor-primitives\.md'
+$exemptRe = 'legacy/donor/|donor/apeireth-|donor/\.\.\.|governance-donor-primitives\.md'
 # 文件级豁免 = 事实引注特权（研究的天职是引注，同真实路径豁免原则）：
 #   - 扫描器与搬运工具自身：替换规则必须含源标识字面量；
 #   - 设计调研文档：事实引注；
@@ -70,10 +62,19 @@ $exemptFiles = @(
 )
 $exempted = 0
 
+function Invoke-ScanGit {
+  param([string[]]$GitArgs)
+  $lines = @(& git @GitArgs 2>$null)
+  if ($LASTEXITCODE -ne 0) {
+    throw "git $($GitArgs -join ' ') failed with exit $LASTEXITCODE; scan incomplete"
+  }
+  return $lines
+}
+
 $changed = @()
-$changed += (git diff --name-only HEAD 2>$null)
-$changed += (git diff --cached --name-only 2>$null)
-$changed += (git ls-files --others --exclude-standard 2>$null)
+$changed += @(Invoke-ScanGit -GitArgs @('diff', '--name-only', 'HEAD'))
+$changed += @(Invoke-ScanGit -GitArgs @('diff', '--cached', '--name-only'))
+$changed += @(Invoke-ScanGit -GitArgs @('ls-files', '--others', '--exclude-standard'))
 $changed = $changed | Where-Object { $_ } | Sort-Object -Unique
 
 $targets = $changed | Where-Object {
@@ -88,7 +89,7 @@ if (-not $targets) {
 }
 
 $untracked = @{}
-foreach ($f in (git ls-files --others --exclude-standard 2>$null)) { if ($f) { $untracked[$f] = $true } }
+foreach ($f in (Invoke-ScanGit -GitArgs @('ls-files', '--others', '--exclude-standard'))) { if ($f) { $untracked[$f] = $true } }
 
 $hits = 0
 foreach ($file in $targets) {
@@ -109,7 +110,7 @@ foreach ($file in $targets) {
     }
     continue
   }
-  $diff = @(git diff -U0 HEAD -- "$file" 2>$null)
+  $diff = @(Invoke-ScanGit -GitArgs @('diff', '-U0', 'HEAD', '--', $file))
   $lineNo = 0
   foreach ($row in $diff) {
     if ($row -match '^@@ -\d+(?:,\d+)? \+(\d+)') { $lineNo = [int]$matches[1]; continue }

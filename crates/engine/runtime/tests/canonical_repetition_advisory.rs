@@ -12,6 +12,7 @@
 //! - streaks are consecutive and cleared by a user message;
 //! - the exclusion list is transparent to counting and clearing.
 
+#![allow(dead_code)] // D-1（owner 裁定 2026-10-25）：测试夹具字段/方法（供用例构造完整对象，部分字段本文件内未被读取）
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 

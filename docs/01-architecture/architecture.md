@@ -3,6 +3,10 @@
 > 当前基线：默认分支 `main`，workspace.version `v2.0.0-rc.5`（2026-10-18 文档审计批核对；历史 tag `v2.0.0-rc.1`）；测试基线见单一真源 [test-baseline.md](../03-reference/test-baseline.md)。
 > 根 Cargo workspace（**30 members = 29 crates + bench harness**；历史口径 18/20/31 members；`apeireth-perception` 于 2026-10-20 归档，ADR-0005 R4b）+ 独立的
 > `frontend/companion-desktop` workspace。历史遗留实现不属于生产依赖。
+> 另有**独立** Cargo workspace `crates-ui/`（**不计入** 30 members、与根 workspace 无依赖边）：**1 个 crate**
+> `apeireth-ui-core`（纯响应式内核，0 外部依赖），范围 = IMPLEMENTED、**尚无生产前端消费点**
+> （ADR-0021，owner 2026-10-29；独立 CI `ui-core-ci.yml`；契约登记见
+> [contract.toml](../architecture/contract.toml) `[[workspace.independent_workspaces]]`）。
 
 ## Layer view
 

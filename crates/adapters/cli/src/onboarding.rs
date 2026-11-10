@@ -538,12 +538,6 @@ pub fn active_profile_at(paths: &OnboardingPaths) -> Option<OnboardingProfile> {
     }
     try_load_profile_at(paths).ok().flatten()
 }
-
-/// [`active_profile_at`] 的默认路径版本。
-pub fn active_profile() -> Option<OnboardingProfile> {
-    active_profile_at(&OnboardingPaths::discover())
-}
-
 fn onboarding_disabled() -> bool {
     std::env::var(DISABLE_ONBOARDING_ENV)
         .ok()

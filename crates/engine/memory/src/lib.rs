@@ -52,9 +52,17 @@ pub mod arbitration;
 pub mod betti_hole_detector;
 pub mod bitemporal_graph;
 pub mod chronicle_crystallizer;
+// 语料的段落级切分（内部卷召回缺口「切分粒度」假设的验证器: 一回一条 7401 字 ⇒ 同主体竞争者 88/120）;
+// 状态 NOT IMPLEMENTED (新增未接线; 库级实现, 生产 0 调用点); 2026-10-27 实测: 段落化不升 recall 反降.
+pub mod chunking;
+pub mod cold_archive;
 /// 图社区分层聚合 + 双级检索分诊 (W3 实现批, v1 community, 2026-10-10)。
 pub mod community;
 pub mod continuity_link;
+pub use consolidation_trigger::{
+    ConsolidationOutcome, ConsolidationPolicy, ConsolidationTrigger, ConsolidationWatermark,
+    FileConsolidationWatermark, InMemoryConsolidationWatermark, SkipReason,
+};
 pub use continuity_link::{
     continuity_id_from_env, current_continuity_id, ensure_identity, migrate_subject,
     normalize_continuity, recall_recent, record_carrier_migration, record_session,
@@ -63,36 +71,85 @@ pub use continuity_link::{
 };
 pub mod calibration;
 pub mod calibration_critic;
+// 能力接线审计（只读；由 `apeireth memory handover` 触发 ⇒ 交接包自带真值）
+pub mod capability_audit;
 pub mod cluster_store;
 pub mod confidence;
 pub mod cross_diary;
+pub mod cross_diary_wiring;
 pub mod daily_summary;
 pub mod diary;
 pub mod dream_wiring;
 pub mod dreaming;
 pub mod ensemble;
 pub mod five_dimensional;
+// D4 模式层离线评估器 (设计稿 §3.5 / §8 B0-c): 不接线也能量「某算法开启的增量价值」。
+// 状态 NOT IMPLEMENTED (新增未接线; 只做评估与判定, 不实现任何 D4 算法)。
+pub mod d4_eval;
+// 内部卷「挖题」工序 (设计稿 §7.1 内部卷 / §8 B0-b); 状态 NOT IMPLEMENTED (新增未接线)。
+pub mod git_corpus;
+pub mod golden_baseline;
+pub mod golden_diag; // 召回缺口诊断 (内部卷): Hit / RankedOut / NotInPool 分类; 状态 NOT IMPLEMENTED (新增未接线).
+                     // 注入策略 x 评测的实验台 (内部卷): 让「注入形态」成为可比较的变量; 状态 NOT IMPLEMENTED (新增未接线).
+pub mod golden_injection;
+pub mod golden_injection2; // 注入形态对照第二轮 (消偏置 + 总预算固定); 状态 NOT IMPLEMENTED (新增未接线).
+pub mod golden_mining;
+pub mod quality_metrics; // 设计稿 §6.1 剩余指标 (时间正确率/矛盾检出率/Token 效率/Citation coverage/影子胜率/回退时间); 状态 NOT IMPLEMENTED (新增未接线).
+
+pub mod golden_fair; // 通道公平考卷 (零人工标注): 同一套题面模板, 只把主体换成「内部卷不会问的次级实体」+ 跨记录桥; 状态 NOT IMPLEMENTED (新增未接线).
+pub mod golden_run;
+pub mod golden_set;
 pub mod graph_algo;
+pub mod handover;
 pub mod hybrid_search;
 pub mod intent_brier;
 pub mod kuramoto_resonance;
+pub mod memory_chain;
+// 记忆纵深体系读侧契约 (设计稿 §5 ①②: MemoryView 读契约 + MemoryAnnotation 标注契约);
+// 状态 NOT IMPLEMENTED (新增未接线; 生产 0 调用点).
+pub mod injection_renderer;
+pub mod locomo_corpus;
+pub mod memory_view;
 pub mod meta_thinking;
 pub mod metadata_filter;
+pub mod migrate_rollback;
 pub mod milestone;
+pub mod milestone_store_sqlite;
+pub mod novel_corpus;
+// 记忆数据的脱机归档 (设计稿 §8 B4): 保原文 + 自说明 + 可独立校验; 状态 NOT IMPLEMENTED (新增未接线).
+pub mod offline_archive;
+pub mod offline_embed; // 纯本地 embedder (无 API key/无网络): 让语义召回在离线环境可跑; 状态 NOT IMPLEMENTED (新增未接线).
+                       // 纯本地 embedder → `scope::EmbeddingProvider` 的**适配器**（生产检索要的是异步那个口）;
+                       // 状态 NOT IMPLEMENTED (新增未接线): 生产注入点在 cli/lib.rs 与 runtime-assembly/production.rs。
+pub mod offline_embedding_provider;
+pub use offline_embedding_provider::{OfflineEmbeddingProvider, OFFLINE_EMBEDDING_MODEL_ID};
 pub mod online_calibration;
 pub mod partner;
+pub mod perltqa_adapter;
 pub mod persistent_vector;
 pub mod principles;
 pub mod proactive_recall;
 pub mod procedural;
 pub mod query_expand;
+pub mod query_signals; // 题面「信号增强」的量化 (查询判别力体检): 状态 NOT IMPLEMENTED (新增未接线).
 pub mod reflexion;
+pub mod reflexion_tuning;
 pub mod residual_pyramid;
 pub mod river_topology;
 pub mod semantic_axis;
+// 影子双跑 (设计稿 §8 B3): 让「换算法」可零风险上线/回退; 状态 NOT IMPLEMENTED (新增未接线).
+pub mod shadow_run;
+// 非答案侧的题面信号来源（「信号从哪来」的那一半）: 状态 NOT IMPLEMENTED (新增未接线).
+pub mod signal_sources;
+// 算法切换流程 (设计稿 §8 B3): 影子→裁决→切换/回退 + Swap cost 度量 + 评测报告归档; 状态 NOT IMPLEMENTED (新增未接线).
+pub mod swap_flow;
 pub mod three_tier_vault;
 pub mod topic_predictor;
 pub mod vector_distance;
+pub mod vector_rebuild; // 派生索引重建 + 换代检测 (B2): 本模块 + 其集成测试在 HEAD 里已入库, 但 `pub mod` 声明只在工作区未提交改动里 ⇒ 缺失会让 `cargo build --tests` 直接失败; 状态 NOT IMPLEMENTED (新增未接线).
+pub mod wiki_corpus;
+// 真实语料 → 内部卷挖题器的接线 (设计稿 §7.1 内部卷 / §8 B0-b); 状态 NOT IMPLEMENTED (新增未接线)。
+pub mod wiki_corpus_real;
 pub mod wiki_fs;
 // Salvage-03 (memory-advanced): closed-world injection + A-MEM residual CRAWL.
 // Default-off; not production-wired.
@@ -201,11 +258,16 @@ pub use online_calibration::{
 };
 
 pub use reflexion::{
-    Critic, FailureKind, FailureRecord, FileReflexionStore, InMemoryReflexionStore, ReflectionText,
-    ReflexionError, ReflexionStore, RuleCritic,
+    Critic, FailureAttribution, FailureKind, FailureRecord, FileReflexionStore,
+    InMemoryReflexionStore, ReflectionText, ReflexionError, ReflexionStore, RuleCritic,
 };
 
 pub use cross_diary::{link_core, CrossDiaryIndex, CrossLink, SNIPPET_MAX_CHARS};
+pub use cross_diary_wiring::{
+    attach_diary_snippets, build_cross_diary_context, CrossDiaryContext, CrossDiaryLimits,
+    DiarySnippet, DIARY_MIN_SHARED_TOKENS, DIARY_SCAN_MAX_DAYS, DIARY_SNIPPETS_PER_FACT_MAX,
+    DIARY_SNIPPET_MAX_CHARS,
+};
 pub use daily_summary::{build_daily_summary, DailySummary};
 pub use diary::{
     valid_date, DayPage, DiaryEntry, DiaryError, DiaryHit, DiaryInjector, DiaryStore,
@@ -223,6 +285,7 @@ pub use metadata_filter::{MetadataFilter, PropertyPredicate};
 pub use milestone::{
     InMemoryMilestoneStore, Milestone, MilestoneKind, MilestonePayload, MilestoneStore,
 };
+pub use milestone_store_sqlite::SqliteMilestoneStore;
 pub use partner::{
     Bond, BondCharacter, BondDepth, BondStage, InMemoryPartnerStore, Partner, PartnerId,
     PartnerPreferences, PartnerStore, PrivacyBoundary,
@@ -260,6 +323,7 @@ pub use session_lifecycle::{
     SessionState,
 };
 // Core Capability Expansion Phase 3: 记忆治理 (forget/protect/update, 不破坏 append-only episodes).
+pub mod associative_recall;
 pub mod memory_governance;
 pub use memory_governance::{
     GovernedEpisode, MemoryGovernanceError, MemoryGovernanceStatus, MemoryGovernanceStore,
@@ -281,11 +345,15 @@ pub use research_derived_memory::{
 };
 // B2 · RA-15 P0-B (research, 默认关闭): 屏障优先级联修复执行器
 // (吸收自 arXiv:2605.07242 MEMOREPAIR; 自写 Dinic, 0 新外部依赖).
-pub mod derived_repair;
+pub mod anchor_injection; // 结构化锚点（第N回/相对时间）+ 主体段定位: 把「定位」与「送达」两个信号做成库级能力; 状态 NOT IMPLEMENTED (新增未接线).
+pub mod delivery_metrics;
+pub mod derived_repair; // 证据「送达率」 (groundedness/recall): 把「检索到了却没送到」变成常驻数字; 状态 NOT IMPLEMENTED (新增未接线).
 pub use derived_repair::{RepairExecutor, RepairNode, RepairOutcome, RepairTradeoff};
 // B2 · RA-15 P0-A 生产接线 (opt-in, 默认关闭): 三段式协调遗忘
 // (吸收自 arXiv:2609.04875; 持久化遗忘集 V10 + 行为契约自验 + P0-B 结局应用).
-pub mod forget_coordinator;
+pub mod forget_access_guard;
+pub mod forget_coordinator; // 遗忘访问闸门 (W-18): 状态 NOT IMPLEMENTED (新增未接线).
+pub mod forgetting_metrics; // 设计稿 §6.2 四个「遗忘」指标 (降权正确率/保真可达率/销毁合规率/秩位位移); 状态 NOT IMPLEMENTED (新增未接线).
 pub use forget_coordinator::{CoordinatedForget, CoordinatedForgetReport};
 // B2 · RA-15 P1-A (research, 默认关闭): 记忆准入控制 (吸收自 arXiv:2603.04549 A-MAC).
 pub mod admission_gate;
@@ -332,6 +400,7 @@ pub use three_layer::{ThreeLayerMemory, SHORT_TERM_WINDOW_SECS, WORKING_CAPACITY
 pub mod access_history;
 pub mod commitments;
 pub mod consolidation;
+pub mod consolidation_trigger;
 pub mod context_compiler;
 pub mod context_window;
 pub mod continuity_state;
@@ -344,10 +413,26 @@ pub mod layers;
 pub mod memory_materializer;
 pub mod partner_store_sqlite;
 pub mod persona_store_sqlite;
+pub mod ranking_knobs;
 pub mod reconciler;
 pub mod retrieval_pipeline;
 // V4-c 检索维度自进化 (证据账 + 有界调权内核 + 生效值落地槽)。
+/// **主体 → 会话**归属映射的**写侧**（2026-11-01 安全审计 P1 收口）。
+///
+/// ⚠️ 2026-11-02 补回：记忆线的 `553af676`（`QualityDriftMonitor`）在改 `lib.rs` 时
+/// 把这一行**连注释一起删掉**了（它基于「API 重建」的树 ⇒ 那边没有这行）
+/// ⇒ ⇒ 本地与 CI 立刻 `E0432: unresolved import apeireth_memory::principal_sessions`
+/// ⇒ ⇒ **连带所有门禁全红**（编译失败 ⇒ 每个 workflow 都挂）
+/// ⇒ ⇒ 所以这里**补回**，并在下面留一行注释提醒：**改 `lib.rs` 时要用合并，不要整树覆盖**。
+///
+/// 2026-11-03 合并：记忆线的 `9ff0f312`（"恢复被我覆盖的模块声明"）也补了这一行
+/// ⇒ ⇒ **两边都要**（`principal_sessions` 是我的归属写面，`quality_drift` 是他们的漂移监控）
+/// ⇒ ⇒ 冲突解法：**两个都留**（各自保留注释）。
+pub mod principal_sessions;
+pub mod quality_drift;
+pub use quality_drift::{QualityDriftMonitor, QualitySample};
 pub mod retrieval_tuning;
+pub mod robustness_metrics;
 pub mod scope;
 pub mod temporal_graph_store;
 pub mod universal_forget;
@@ -833,6 +918,7 @@ impl crate::scope::ScopedMemoryBackend for SqliteMemoryStore {
 pub use apeireth_core;
 
 #[cfg(test)]
+#[allow(dead_code)]
 pub(crate) fn fresh_store() -> SqliteMemoryStore {
     SqliteMemoryStore::open_in_memory().expect("open in-memory store")
 }
