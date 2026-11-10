@@ -61,6 +61,8 @@ def tracked_files() -> set[str]:
             ["git", "-C", str(ROOT), "ls-files"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=60,
             check=False,
         ).stdout

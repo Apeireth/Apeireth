@@ -530,6 +530,8 @@ def run_gate(gate: dict[str, Any], timeout: int) -> dict[str, Any]:
                 cwd=str(ROOT),
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=300,
                 check=False,
             )
@@ -837,7 +839,8 @@ def impact_plan(base: str | None) -> dict:
         cmd += ["--base", base]
     try:
         proc = subprocess.run(
-            cmd, cwd=ROOT, capture_output=True, text=True, timeout=300
+            cmd, cwd=ROOT, capture_output=True, text=True,
+            encoding="utf-8", errors="replace", timeout=300
         )
         if proc.returncode == 0:
             data = json.loads(proc.stdout)
@@ -1168,6 +1171,8 @@ def cmd_check(args: argparse.Namespace) -> int:
             cwd=str(ROOT),
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=180,
             check=False,
         )
