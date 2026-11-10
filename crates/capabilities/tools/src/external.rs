@@ -1845,7 +1845,10 @@ mod tests {
     /// 有界退避重试，且只认 ETXTBSY 这一个具体错误 —— 真实失败（缺依赖、权限
     /// 不足、非零退出）不会被重试掩盖成通过。
     #[cfg(unix)]
-    async fn invoke_with_etxtbsy_retry(tool: &dyn ToolCapability, call: &ToolCall) -> ToolResult {
+    pub(super) async fn invoke_with_etxtbsy_retry(
+        tool: &dyn ToolCapability,
+        call: &ToolCall,
+    ) -> ToolResult {
         const ATTEMPTS: usize = 5;
         let mut attempt = 0usize;
         loop {
@@ -2107,6 +2110,7 @@ mod real_tool_tests {
 
 #[cfg(all(test, unix))]
 mod yara_cli_tests {
+    use super::tests::invoke_with_etxtbsy_retry;
     use super::*;
     use apeireth_protocol::canonical::ToolOutcome;
 
@@ -2145,11 +2149,14 @@ mod yara_cli_tests {
         std::fs::write(workspace.join("target.bin"), b"hello").expect("target");
         let tool = YaraCliTool::new(&workspace).with_binary(&binary);
         let value = ok_value(
-            tool.invoke(&ToolCall {
-                id: "c".into(),
-                name: "ext.yara".into(),
-                arguments: json!({"path": "target.bin", "rules": "rule demo { condition: true }"}),
-            })
+            invoke_with_etxtbsy_retry(
+                &tool,
+                &ToolCall {
+                    id: "c".into(),
+                    name: "ext.yara".into(),
+                    arguments: json!({"path": "target.bin", "rules": "rule demo { condition: true }"}),
+                },
+            )
             .await,
         );
         assert_eq!(value["details"]["matches"][0], "demo");
@@ -2188,6 +2195,7 @@ mod yara_cli_tests {
 
 #[cfg(all(test, unix))]
 mod binwalk_radare_tests {
+    use super::tests::invoke_with_etxtbsy_retry;
     use super::*;
     use apeireth_protocol::canonical::ToolOutcome;
     use std::io::Write;
@@ -2235,11 +2243,14 @@ mod binwalk_radare_tests {
         std::fs::write(workspace.join("sample.bin"), b"data").expect("sample");
         let tool = BinwalkTool::new(&workspace).with_binary(binary);
         let value = ok_value(
-            tool.invoke(&ToolCall {
-                id: "c".into(),
-                name: "ext.binwalk".into(),
-                arguments: json!({"path": "sample.bin"}),
-            })
+            invoke_with_etxtbsy_retry(
+                &tool,
+                &ToolCall {
+                    id: "c".into(),
+                    name: "ext.binwalk".into(),
+                    arguments: json!({"path": "sample.bin"}),
+                },
+            )
             .await,
         );
         assert_eq!(value["details"]["entries"][0]["offset"], 0);
@@ -2262,11 +2273,14 @@ mod binwalk_radare_tests {
         std::fs::write(workspace.join("sample.bin"), b"data").expect("sample");
         let tool = RadareTool::new(&workspace).with_binary(binary);
         let value = ok_value(
-            tool.invoke(&ToolCall {
-                id: "c".into(),
-                name: "ext.radare2".into(),
-                arguments: json!({"path": "sample.bin"}),
-            })
+            invoke_with_etxtbsy_retry(
+                &tool,
+                &ToolCall {
+                    id: "c".into(),
+                    name: "ext.radare2".into(),
+                    arguments: json!({"path": "sample.bin"}),
+                },
+            )
             .await,
         );
         assert_eq!(value["details"]["functions"], 1);
@@ -2305,6 +2319,7 @@ mod binwalk_radare_tests {
 
 #[cfg(all(test, unix))]
 mod android_adapter_tests {
+    use super::tests::invoke_with_etxtbsy_retry;
     use super::*;
     use apeireth_protocol::canonical::ToolOutcome;
     use std::io::Write;
@@ -2352,11 +2367,14 @@ mod android_adapter_tests {
         std::fs::write(workspace.join("app.apk"), b"fake").expect("apk");
         let tool = JadxTool::new(&workspace).with_binary(binary);
         let value = ok_value(
-            tool.invoke(&ToolCall {
-                id: "c".into(),
-                name: "ext.jadx".into(),
-                arguments: json!({"path": "app.apk"}),
-            })
+            invoke_with_etxtbsy_retry(
+                &tool,
+                &ToolCall {
+                    id: "c".into(),
+                    name: "ext.jadx".into(),
+                    arguments: json!({"path": "app.apk"}),
+                },
+            )
             .await,
         );
         assert!(value["details"]["classes"]
@@ -2382,11 +2400,14 @@ mod android_adapter_tests {
         std::fs::write(workspace.join("app.apk"), b"fake").expect("apk");
         let tool = ApktoolTool::new(&workspace).with_binary(binary);
         let value = ok_value(
-            tool.invoke(&ToolCall {
-                id: "c".into(),
-                name: "ext.apktool".into(),
-                arguments: json!({"path": "app.apk"}),
-            })
+            invoke_with_etxtbsy_retry(
+                &tool,
+                &ToolCall {
+                    id: "c".into(),
+                    name: "ext.apktool".into(),
+                    arguments: json!({"path": "app.apk"}),
+                },
+            )
             .await,
         );
         assert_eq!(value["details"]["package"], "com.example.app");
@@ -2404,6 +2425,8 @@ mod ghidra_adapter_tests {
     use super::*;
     use std::io::Write;
     // 断言辅助只在 unix 侧用例里用得上 ⇒ 只在 unix 侧引入（Windows 上是死码）。
+    #[cfg(unix)]
+    use super::tests::invoke_with_etxtbsy_retry;
     #[cfg(unix)]
     use super::tests::ok_value;
 
@@ -2436,11 +2459,14 @@ mod ghidra_adapter_tests {
         std::fs::write(workspace.join("sample.bin"), b"data").expect("sample");
         let tool = GhidraTool::new(&workspace).with_binary(binary);
         let value = ok_value(
-            tool.invoke(&ToolCall {
-                id: "c".into(),
-                name: "ext.ghidra".into(),
-                arguments: json!({"path": "sample.bin"}),
-            })
+            invoke_with_etxtbsy_retry(
+                &tool,
+                &ToolCall {
+                    id: "c".into(),
+                    name: "ext.ghidra".into(),
+                    arguments: json!({"path": "sample.bin"}),
+                },
+            )
             .await,
         );
         assert_eq!(value["details"]["functions"], 2);
@@ -2467,6 +2493,7 @@ mod ghidra_adapter_tests {
 
 #[cfg(all(test, unix))]
 mod openssl_syn_tests {
+    use super::tests::invoke_with_etxtbsy_retry;
     use super::*;
     use apeireth_protocol::canonical::ToolOutcome;
     use std::io::Write;
@@ -2623,11 +2650,14 @@ EOF"#,
         );
         let tool = OpenSslTool::new(scope_localhost()).with_binary(binary);
         let value = ok_value(
-            tool.invoke(&ToolCall {
-                id: "c".into(),
-                name: "ext.openssl".into(),
-                arguments: json!({"host": "127.0.0.1", "port": 443}),
-            })
+            invoke_with_etxtbsy_retry(
+                &tool,
+                &ToolCall {
+                    id: "c".into(),
+                    name: "ext.openssl".into(),
+                    arguments: json!({"host": "127.0.0.1", "port": 443}),
+                },
+            )
             .await,
         );
         assert_eq!(value["details"]["certificates"], 2);
@@ -2654,13 +2684,15 @@ XML"#,
         );
         let arg_file = PathBuf::from(format!("{}.args", binary.display()));
         let tool = NmapTool::new(scope_localhost()).with_binary(&binary);
-        let result = tool
-            .invoke(&ToolCall {
+        let result = invoke_with_etxtbsy_retry(
+            &tool,
+            &ToolCall {
                 id: "c".into(),
                 name: "ext.nmap".into(),
                 arguments: json!({"target": "127.0.0.1", "syn": true}),
-            })
-            .await;
+            },
+        )
+        .await;
         assert!(result.is_ok(), "{result:?}");
         let args = std::fs::read_to_string(&arg_file).expect("arg file");
         assert!(args.contains("-sS"), "args: {args}");
