@@ -82,10 +82,13 @@ impl McpToolEntry {
         use apeireth_governance::tool_desc_audit::ToolDescAuditError;
 
         let auditor = ToolDescAuditor::new();
-        // ⚠️ 审计器的错误语义**不是**统一的：它用 `Err` 表达两种完全不同的结果 ——
-        //   `EmptyDescription`  = 服务器给了空描述 ⇒ 常态，按「无描述」放行；
-        //   `InjectionKeywordDetected` / `DangerousDiffDetected` / `InvisibleCharDetected`
-        //                       = **审计判定拒绝** ⇒ 必须 fail-closed。
+        // ⚠️ 审计器的错误语义**不是**统一的：它用 `Err` 表达两种完全不同的结果：
+        //   `EmptyDescription` = 服务器给了空描述 ⇒ 常态，按「无描述」放行；
+        //   `InjectionKeywordDetected` = **审计判定拒绝** ⇒ 必须 fail-closed。
+        // （`ToolDescAuditError` 里另有 `InvisibleCharDetected` / `DangerousDiffDetected`
+        //   两个变体，但**审计器当前从不返回它们** —— 隐形字符走 `Ok(Warning)`、
+        //   体量暴增走 `Ok(Warning)`。下面那个 `Err(error) =>` 兜底分支仍会 fail-closed
+        //   接住**将来**新增的拒绝变体 ⇒ 语义不变，只是别把死变体当成活路。）
         // 我第一版把**任何** `Err` 都当「无描述」放行，导致注入被放过 ——
         // 是测试（`injection_keywords_reject_the_tool`）抓到的。别再把 Err 一律当放行。
         let result = match auditor.audit(model_name, raw) {
@@ -147,8 +150,9 @@ impl McpToolCatalog {
             .values()
             .find(|e| e.capability_id == entry.capability_id)
         {
-            return Err(McpCatalogError::DuplicateToolName {
+            return Err(McpCatalogError::DuplicateCapabilityId {
                 model_name: entry.model_name.clone(),
+                capability_id: entry.capability_id.as_str().to_string(),
                 registered_by: existing.server.clone(),
             });
         }
@@ -176,6 +180,9 @@ impl McpToolCatalog {
             .unwrap_or_else(|poisoned| poisoned.into_inner());
 
         let mut seen = std::collections::BTreeSet::new();
+        // 能力身份 → 模型名（一个能力身份只能有一个模型名）。
+        let mut seen_capabilities: std::collections::BTreeMap<&str, &str> =
+            std::collections::BTreeMap::new();
         for entry in &fresh {
             if !seen.insert(entry.model_name.as_str()) {
                 return Err(McpCatalogError::DuplicateToolName {
@@ -191,6 +198,40 @@ impl McpToolCatalog {
                     });
                 }
             }
+            // 撞**能力身份**：目录里「一个能力身份 = 一个工具」是治理面的前提
+            // （授权档 / deny 名单 / 只读声明全按能力身份判定）⇒ 撞身份必须拒。
+            // 此前这条登记路径只查模型名，于是两个模型名不同的工具可以共用一个
+            // 能力身份 ⇒ 授权其中一个就把另一个一起授权了。
+            //
+            // **可达性（据实口径，勿高估）**：生产接线上**不可达** ——
+            // 服务器名文法 `[a-z0-9][a-z0-9_-]*`（`config.rs:160`）与
+            // MCP 工具名文法（`is_valid_mcp_name`：ASCII 小写/数字/`_`/`-`，
+            // 见 `apeireth_plugin::mcp::schema`）**都不含点**，且发现路径
+            // `connection.rs:340` 对非法名**硬报错** ⇒ `(server, tool) → capability_id`
+            // 在生产是**单射**。故这是**登记层的纵深防御缺口**
+            // （`McpToolEntry::new` 不校验这两个名字的文法，公开 API 可构造），
+            // **不是「现网可利用」**。
+            let capability_id = entry.capability_id.as_str();
+            if let Some(other_model) = seen_capabilities.get(capability_id) {
+                if *other_model != entry.model_name.as_str() {
+                    return Err(McpCatalogError::DuplicateCapabilityId {
+                        model_name: entry.model_name.clone(),
+                        capability_id: capability_id.to_string(),
+                        registered_by: server.to_string(),
+                    });
+                }
+            }
+            if let Some(existing) = entries.values().find(|existing| {
+                existing.capability_id == entry.capability_id
+                    && existing.model_name != entry.model_name
+            }) {
+                return Err(McpCatalogError::DuplicateCapabilityId {
+                    model_name: entry.model_name.clone(),
+                    capability_id: capability_id.to_string(),
+                    registered_by: existing.server.clone(),
+                });
+            }
+            seen_capabilities.insert(capability_id, entry.model_name.as_str());
         }
 
         let incoming: std::collections::BTreeSet<&str> =
@@ -349,12 +390,29 @@ pub enum McpCatalogError {
         /// What the audit flagged.
         reason: String,
     },
-    /// Two tools want one model-facing name or capability id.
+    /// Two tools want one model-facing name.
     #[error("duplicate tool name {model_name:?}: already registered by server {registered_by:?}")]
     DuplicateToolName {
         /// The contested model-facing name.
         model_name: String,
         /// The server whose entry already holds it.
+        registered_by: String,
+    },
+    /// Two tools want one capability identity under different model-facing names.
+    ///
+    /// 目录里「**一个能力身份 = 一个工具**」是治理面的前提：授权档
+    /// （`Permission::ExecuteTool(capability_id)`）、deny 名单、只读声明
+    /// 全都按**能力身份**判定 ⇒ 一旦两个工具共用一个身份，授权其中一个就会
+    /// 把另一个一起授权。故撞身份必须拒（与撞模型名同一条线）。
+    #[error(
+        "duplicate capability id {capability_id:?} for {model_name:?}: already registered by server {registered_by:?}"
+    )]
+    DuplicateCapabilityId {
+        /// The model-facing name of the refused entry.
+        model_name: String,
+        /// The contested capability identity.
+        capability_id: String,
+        /// The server whose entry already holds that identity.
         registered_by: String,
     },
     /// The composed identity violates the stable-id grammar.
@@ -414,6 +472,57 @@ mod tests {
         assert_eq!(removed.len(), 1);
         assert_eq!(removed[0].model_name, "mcp:demo:one");
         assert_eq!(catalog.len(), 2);
+    }
+
+    /// **撞能力身份**：两个**模型名不同**的条目撞同一个 capability id
+    /// （`demo` 的 `x.y` 与 `demo.x` 的 `y` 都合成 `tool.mcp.demo.x.y`）。
+    ///
+    /// 契约：模块文档写明「登记拒绝冲突：同名**或同能力 id** 一律拒，绝不合并 /
+    /// 静默覆盖」，`insert` 也确实拒了；`replace_server` 这条登记路径此前**漏判**，
+    /// 于是目录里能同时躺着两个模型名不同、能力身份相同的工具 ——
+    /// 而治理面（授权档 / deny 名单 / 只读声明）全部按**能力身份**判定 ⇒
+    /// 授权其中一个 = 授权了两个。
+    #[test]
+    fn replace_server_refuses_a_capability_id_collision() {
+        let catalog = McpToolCatalog::new();
+        let dotted = McpToolEntry::new("demo", &tool("x.y", false)).unwrap();
+        catalog.insert(dotted.clone()).unwrap();
+
+        // 前置事实：两个模型名不同、能力身份相同。
+        let colliding = McpToolEntry::new("demo.x", &tool("y", false)).unwrap();
+        assert_ne!(dotted.model_name, colliding.model_name);
+        assert_eq!(dotted.capability_id, colliding.capability_id);
+
+        let before = catalog.list();
+        let err = catalog
+            .replace_server("demo.x", vec![colliding])
+            .expect_err("撞能力身份的刷新必须被拒");
+        assert!(
+            matches!(err, McpCatalogError::DuplicateCapabilityId { .. }),
+            "{err:?}"
+        );
+        assert_eq!(
+            catalog.list(),
+            before,
+            "被拒的刷新不得动目录（失败必须不落任何改动）"
+        );
+    }
+
+    /// 同一服务器**刷新自己的**工具不算撞身份（能力身份没变，只是描述变了）。
+    #[test]
+    fn replace_server_still_refreshes_its_own_tool() {
+        let catalog = McpToolCatalog::new();
+        let first = McpToolEntry::new("demo", &tool("lookup", false)).unwrap();
+        catalog.insert(first.clone()).unwrap();
+
+        let refreshed = McpToolEntry::new("demo", &tool("lookup", true)).unwrap();
+        let (added, removed) = catalog
+            .replace_server("demo", vec![refreshed.clone()])
+            .expect("同一服务器刷新自己的工具必须允许");
+        assert_eq!(added.len(), 1);
+        assert_eq!(removed.len(), 1);
+        assert_eq!(catalog.len(), 1);
+        assert!(catalog.get("mcp:demo:lookup").unwrap().declared_read_only);
     }
 
     // === OWASP ASI-01：工具描述投毒审计（此前整条防线零调用）===

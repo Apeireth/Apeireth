@@ -8,9 +8,8 @@
 //! 3. **取值先过闸** — [`clamp_timeout`] 拒绝 0 与"无界"哨兵
 //!    ([`UNBOUNDED_TIMEOUT_SENTINEL`]); 超上限一律不放行。
 //!
-//! 另有 [`IdleWatchdog`]: 只在"等待产出"段计时 —— 消费者自身的思考/处理
-//! 时间不算空闲, 不吃预算。错误归属见 [`TimeoutErrorCode`]: 超时类自成
-//! 独立 code 族 (`timeout.*`), 与其它错误域分开归类。
+//! 错误归属见 [`TimeoutErrorCode`]: 超时类自成独立 code 族 (`timeout.*`),
+//! 与其它错误域分开归类。
 
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -229,84 +228,6 @@ impl DeadlineNotice {
     }
 }
 
-/// 空闲看门狗: 只在"等待产出"段计时。
-///
-/// 口径: [`IdleWatchdog::begin_wait`] 打开一个等待段, [`IdleWatchdog::end_wait`]
-/// 关闭它; 只有打开的等待段计入空闲 —— 消费者自身的思考/处理时间不计
-/// (不是提供方空闲), 也不清空已累计的等待。
-#[derive(Debug, Clone)]
-pub struct IdleWatchdog {
-    budget: Duration,
-    waiting_since: Option<Instant>,
-    waited: Duration,
-}
-
-impl IdleWatchdog {
-    /// 空闲预算为 `budget` 的看门狗。
-    pub fn new(budget: Duration) -> Self {
-        Self {
-            budget,
-            waiting_since: None,
-            waited: Duration::ZERO,
-        }
-    }
-
-    /// 空闲预算。
-    pub fn budget(&self) -> Duration {
-        self.budget
-    }
-
-    /// 开始等待产出 (已在等待中则保持原起点, 不重复计段)。
-    pub fn begin_wait(&mut self) {
-        self.begin_wait_at(Instant::now());
-    }
-
-    /// [`Self::begin_wait`] 的显式时刻版 (确定性测试/模拟时钟用)。
-    pub fn begin_wait_at(&mut self, at: Instant) {
-        if self.waiting_since.is_none() {
-            self.waiting_since = Some(at);
-        }
-    }
-
-    /// 产出到达 (或消费者接管): 关闭当前等待段。
-    pub fn end_wait(&mut self) {
-        self.end_wait_at(Instant::now());
-    }
-
-    /// [`Self::end_wait`] 的显式时刻版。
-    pub fn end_wait_at(&mut self, at: Instant) {
-        if let Some(since) = self.waiting_since.take() {
-            if at > since {
-                self.waited += at - since;
-            }
-        }
-    }
-
-    /// 已累计的等待产出时间 (含当前未关闭的等待段)。
-    pub fn idle_elapsed(&self) -> Duration {
-        self.idle_elapsed_at(Instant::now())
-    }
-
-    /// [`Self::idle_elapsed`] 的显式时刻版。
-    pub fn idle_elapsed_at(&self, now: Instant) -> Duration {
-        let open = match self.waiting_since {
-            Some(since) if now > since => now - since,
-            _ => Duration::ZERO,
-        };
-        self.waited + open
-    }
-
-    /// 空闲累计是否已吃满预算。
-    pub fn is_tripped(&self) -> bool {
-        self.is_tripped_at(Instant::now())
-    }
-
-    /// [`Self::is_tripped`] 的显式时刻版。
-    pub fn is_tripped_at(&self, now: Instant) -> bool {
-        self.idle_elapsed_at(now) >= self.budget
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -392,44 +313,6 @@ mod tests {
                 UNBOUNDED_TIMEOUT_SENTINEL
             ),
             Err(TimeoutError::UnboundedSentinel)
-        );
-    }
-
-    #[test]
-    fn idle_watchdog_counts_only_output_wait_time() {
-        let t0 = Instant::now();
-        let mut watchdog = IdleWatchdog::new(Duration::from_millis(100));
-
-        // 第一段等待 40ms: 计入。
-        watchdog.begin_wait_at(t0);
-        watchdog.end_wait_at(t0 + Duration::from_millis(40));
-        assert_eq!(watchdog.idle_elapsed_at(t0), Duration::from_millis(40));
-
-        // 消费者自身思考 200ms: 不算提供方空闲, 预算不被吃掉。
-        let think_end = t0 + Duration::from_millis(240);
-        assert_eq!(
-            watchdog.idle_elapsed_at(think_end),
-            Duration::from_millis(40)
-        );
-        assert!(!watchdog.is_tripped_at(think_end), "思考时间不得顶掉预算");
-
-        // 第二段等待 70ms: 累计 110ms, 顶掉 100ms 预算。
-        watchdog.begin_wait_at(think_end);
-        assert!(
-            watchdog.is_tripped_at(think_end + Duration::from_millis(70)),
-            "累计等待产出超预算才触发"
-        );
-        assert_eq!(
-            watchdog.idle_elapsed_at(think_end + Duration::from_millis(70)),
-            Duration::from_millis(110)
-        );
-
-        // 重复 begin 不重置起点; end 未开段是 no-op。
-        watchdog.end_wait_at(think_end + Duration::from_millis(70));
-        watchdog.end_wait_at(think_end + Duration::from_millis(90));
-        assert_eq!(
-            watchdog.idle_elapsed_at(think_end + Duration::from_millis(90)),
-            Duration::from_millis(110)
         );
     }
 

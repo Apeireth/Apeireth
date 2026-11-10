@@ -5,13 +5,40 @@
     - https://github.com/tokio-rs/tokio/blob/master/.github/PULL_REQUEST_TEMPLATE.md
     - https://github.com/qdrant/qdrant/blob/master/.github/PULL_REQUEST_TEMPLATE.md
   硬约束 (per CONTRIBUTING.md §0 触碰实查 + rust.yml hard-walls job):
-    - 0 触碰 24 LOCKED crate (per hard-walls job 实际清单, 含 apeireth-graph)
-    - 0 改 workspace.version (1.2.0 semver 严守)
+    - 0 触碰受锁源码（**清单与数字见下方「自动生成」块** ⇒ 不要在此手写）
+    - 0 改 workspace.version（**当前值见下方「自动生成」块**）
     - 0 改 R11 baseline 3 值 (V1141=0.8682 / V1131=0.8532 / V1136=0.9063)
     - R11 baseline 在 `legacy/donor/apeireth-asi/tests/integration_r_measure.rs` (编译期 const)
     - cargo test pass (cargo test --workspace 全绿)
     - 0 假装 (不假装已实现, skeleton 标 ⏳)
 -->
+
+<!-- BEGIN:auto-facts -->
+<!-- 本块由 `scripts/gen_gate_manifest.py` 从 `docs/architecture/contract.toml` **生成** ⇒ **请勿手改** -->
+<!-- 手改会被 `scripts/gen_gate_manifest.py --check` 拦下（守卫会红） -->
+
+### 仓库事实（**自动生成** · 真源 = `docs/architecture/contract.toml`）
+
+- **workspace.version**：`2.0.0-rc.4`（契约 `1.0` · 状态 `adjudicated`）
+- **workspace 成员**：`30`（产品 crate `29`）
+- **受锁源码（0 触碰 · CI hard-walls 实际清单）**：
+  - `crates/foundation/core/src/eight_anchors.rs`
+  - `crates/foundation/core/src/onion.rs`
+  - `crates/foundation/core/src/philosophy.rs`
+- **哲学锚**：**9** 条（`docs/01-architecture/philosophy.md`）
+- **workflow**：**49** 个（`.github/workflows/*.yml`）
+- **crate**：**29** 个（`crates/*/Cargo.toml`）
+- **门禁登记表**：`docs/architecture/contract.toml` 的 `[ci_gates]`（共 **44** 条 · required **42** 条）
+  - 本地可跑（`37` 条）：`docs-truth` · `doc-class` · `yaml-duplicate-keys` · `matrix-module-paths` · `doc-caliber` · `doc-numbers` · `doc-paths` · `docs-links` · `batch-status` · `claims-verify` · `arch-strict` · `arch-doc` · `crate-budget` · `dead-code` · `unwired` · `unwired-groups` · `stale-binaries` · `mod-targets` · `guard-wiring` · `quality-metrics` · `golden-baseline` · `real-query-baseline` · `real-query-baseline-self-test` · `golden-no-leak` · `internal-golden` · `d4-ledger` · `wiring-report` · `verify-ledger` · `failure-knowledge` · `guard-inventory` · `toolchain-pin` · `gate-manifest` · `self-status-vocab` · `memory-reachability` · `memory-reachability-self-test` · `harness-status-self-test` · `fusion-channels`
+  - 完整清单与命令：**不要在这里复制**，改看契约 `[ci_gates]`（`scripts/harness.py plan` 会按变更范围列出该跑哪几条）
+
+### 硬约束（**数字全部来自上面那块，不要在此手写**）
+
+- [ ] **0 触碰受锁源码**（清单见上，CI `hard-walls` 逐文件 word-diff 守）
+- [ ] **0 改 `workspace.version`**（除非带 release 拍板证据，见 `docs/archive/versioning/`）
+- [ ] `cargo test --workspace` 全绿 + `cargo test --doc` 全绿
+- [ ] **0 假装**（skeleton 标 ⏳，不假装已实现，编译期 hardcode 守门）
+<!-- END:auto-facts -->
 
 ## Description
 
@@ -42,8 +69,8 @@
 
 <!-- 任务要的 5 项 1:1, 提交前必跑实查 -->
 
-- [ ] **0 触碰 24 LOCKED crate** (per hard-walls job 实际清单, 24 个: apeireth-{supervisor, agent, council, bus, protocol, mcp, tool-registry, tool-runtime, graph, pipeline, tool-approval, extension, evolution, api, core, memory, asi, tools, cli, bench, cognition, action, life-force, constraint})
-- [ ] **0 改 workspace.version** (1.2.0 semver 严守, per `docs/versioning/`)
+- [ ] **0 触碰受锁源码**（**逐个文件清单见上方「自动生成」块** ⇒ CI `hard-walls` 按该清单 word-diff 守；此处**不手写清单**，避免副本过期）
+- [ ] **0 改 `workspace.version`**（**当前值见上方「自动生成」块**；改动须带 release 拍板证据，per `docs/archive/versioning/`）
 - [ ] **0 改 R11 baseline 3 值** (V1141=0.8682 / V1131=0.8532 / V1136=0.9063, in `legacy/donor/apeireth-asi/tests/integration_r_measure.rs`)
 - [ ] **cargo test pass** (`cargo test --workspace` 全绿 + `cargo test --doc` 全绿)
 - [ ] **0 假装** (skeleton 标 ⏳, 不假装已实现, 编译期 hardcode 守门)
@@ -61,11 +88,11 @@
 
 - [ ] 涉及代码改动 → `CHANGELOG.md` 顶部 `## [Unreleased]` 段加 1 行
 - [ ] 涉及路线图变更 → `ROADMAP.md` 按状态标记 (✅ / ⏳ / ❌)
-- [ ] 涉及 4 关 / 12 键 / 5 重守门 / 24 维 / 9 器官 / 6 哲学锚 → 同步 `docs/conventions/` + `docs/glossary/`
+- [ ] 涉及 4 关 / 12 键 / 5 重守门 / 24 维 / 9 器官 / **哲学锚（数量见上方自动块）** → 同步 `docs/archive/conventions/` + `docs/03-reference/glossary.md`
 - [ ] 涉及新 public API → 加 `///` rustdoc (per `cargo doc` 通过)
 - [ ] 涉及新 submodule → 加 `mod.rs` 顶部 30+ 行守门 (per 主人偏好 O-4)
 
-## 6 哲学 anchor 穿透 (per `docs/conventions/09-anchor.md`)
+## 6 哲学 anchor 穿透 (per `docs/archive/conventions/09-anchor.md`)
 
 <!-- 每个 PR 必含的 6 段, 删掉不适用的项 -->
 
@@ -76,7 +103,7 @@
 - [ ] **O-4** 任何人都能接手: doc 顶部 30+ 行 + 编译期 hardcode 守门?
 - [ ] **O-5** 不假装: skeleton 标 ⏳ + 不假装已实现?
 
-## 8 项不修改承诺 (per `docs/conventions/10-locked.md`)
+## 8 项不修改承诺 (per `docs/archive/conventions/10-locked.md`)
 
 <!-- 8 项 1:1, 0 触碰 严守 -->
 
@@ -115,7 +142,7 @@
 - [ ] 上面文档段 5 项对应勾
 - [ ] 上面 6 哲学 anchor 段 6 项对应勾
 - [ ] 上面 8 项不修改承诺段 8 项对应勾
-- [ ] 跟现有 18 workflow yml + 18 LOCKED crate 0 冲突
+- [ ] 跟现有 workflow 与受锁源码 0 冲突（**清单见上方自动块**）
 - [ ] 跟 A / B / C / D-2 / D-3 并行任务 0 冲突 (per `reports/agent-a2-final-2026-08-10.md`)
 - [ ] commit message 规范: `<type>(<scope>): <subject>`, 例: `feat(workspace): R26 阶段 — dependabot + ISSUE_TEMPLATE 补全`
 - [ ] CODEOWNERS 自动 review (per CONTRIBUTING.md §PR 流程 第 6 步)

@@ -415,7 +415,11 @@ async fn bounded_admission_cancellation_and_timeout_report_uncertain_execution()
         let token = r.cancellation.clone();
         let port = a.port();
         let pending = tokio::spawn(async move { port.send(r).await });
-        tokio::time::timeout(Duration::from_secs(2), b.entered.notified())
+        // ⚠️ **2026-11-06 放宽护栏**（主指挥）：这里是「等请求进入准入」的**同步点**，
+        // ⭐ **不是**在测 2 秒这个数（真测超时路径的是上面 `r.timeout = 100ms` 那个参数）
+        // ⇒ ⇒ 而 2 秒在**全量并发 / CI 2 核 runner** 下会被负载打穿（实测 2.021s ⇒ 撞线）
+        // ⇒ ⇒ ⇒ 放宽到 10 秒（10 倍余量）⇒ ⇒ **产品语义与断言一字不动**。
+        tokio::time::timeout(Duration::from_secs(10), b.entered.notified())
             .await
             .unwrap();
         assert_eq!(
@@ -579,7 +583,8 @@ async fn stopping_source_drains_private_mailbox_and_old_generation_cannot_reacqu
     let old = a.port();
     let port = old.clone();
     let pending = tokio::spawn(async move { port.send(request("module.b", "hold")).await });
-    tokio::time::timeout(Duration::from_secs(2), b.entered.notified())
+    // ⚠️ 2026-11-06 同上：同款「等进入准入」同步点 ⇒ ⇒ 同样放宽（负载型 flake）
+    tokio::time::timeout(Duration::from_secs(10), b.entered.notified())
         .await
         .unwrap();
     let session = b.contexts.lock().unwrap()[0].session.unwrap();

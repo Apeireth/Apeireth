@@ -17,7 +17,12 @@ pub mod admin;
 
 /// Native and OpenAI-compatible HTTP chat entry points.
 pub mod canonical_entry;
+/// **设备面：宿主拍板 ⇒ 决定账落账**（审计 P3-1/P3-2 闭环）。
+pub mod device_decision;
+/// **主体 → 会话**归属登记（审计 P1 收口；episode 维度的被遗忘权前提）。
+pub mod principal_attribution;
 
+pub(crate) mod panel_errors;
 /// Panel introspection surface (`/v1/panel/*`, tools, capabilities, audit, traces).
 pub mod panel_memory_update;
 pub mod panels;
@@ -130,13 +135,12 @@ pub use presence::{
 
 pub use canonical_entry::{
     build_gateway_state, build_gateway_state_with_services, canonical_router,
-    canonical_router_with_panels, canonical_router_with_services, canonical_router_with_state,
-    execute_chat, execute_chat_attributed, resolve_approval, resolve_approval_attributed,
-    serve_canonical, serve_canonical_with_services, serve_state_with_shutdown,
-    serve_state_with_tls, serve_with_shutdown, CanonicalApprovalRequest, CanonicalChatOutcome,
-    CanonicalChatRequest, CanonicalChatResponse, CanonicalEntryError, CanonicalExecutionEvent,
-    CanonicalPendingApproval, GateVerdict, GatewayTokenGate, SessionAttribution,
-    UNAUTHENTICATED_PROBE_PATHS,
+    canonical_router_with_services, canonical_router_with_state, execute_chat,
+    execute_chat_attributed, resolve_approval, resolve_approval_attributed,
+    serve_state_with_shutdown, serve_state_with_tls, CanonicalApprovalRequest,
+    CanonicalChatOutcome, CanonicalChatRequest, CanonicalChatResponse, CanonicalEntryError,
+    CanonicalExecutionEvent, CanonicalPendingApproval, GateVerdict, GatewayTokenGate,
+    SessionAttribution, UNAUTHENTICATED_PROBE_PATHS,
 };
 
 pub use client_tokens::{

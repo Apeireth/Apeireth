@@ -145,6 +145,15 @@ pub fn extract_links(html: &str) -> Vec<(String, String)> {
             while j < bytes.len() && bytes[j] != b'"' {
                 j += 1;
             }
+            // ⚠️ **未闭合的 `href="` 必须在此收口**（2026-10-26 修，缺陷 ⑳）：
+            // `j` 扫到末尾仍没找到闭合引号 ⇒ 后面**不可能**再有别的 `href="`
+            //（那必然自带引号）⇒ 无可取内容，**停止扫描**。
+            // 旧代码在此继续走 ⇒ `text_start = j + 1` 越过末尾
+            // ⇒ `bytes[text_start..text_end]` **越界 panic** ⇒ 畸形 HTML 即可
+            // 触发进程级 abort（实测 `"href=\"x"` / `"<a href=\"x"` 等 4 例全炸）。
+            if j >= bytes.len() {
+                break;
+            }
             let url = String::from_utf8_lossy(&bytes[start..j]).to_string();
             let mut text_start = j + 1;
             let mut text_end = text_start;
@@ -243,6 +252,26 @@ mod tests {
         let links = extract_links(h);
         assert_eq!(links.len(), 2);
         assert_eq!(links[0].0, "https://a.com");
+    }
+
+    /// 缺陷 ⑳：未闭合的 `href="` ⇒ 旧代码越界切片 **panic**（畸形 HTML 即可触发）。
+    /// 修法：扫不到闭合引号就**停止扫描**（后面不可能再有 `href="`）⇒ 不产出半截链接。
+    #[test]
+    fn extract_links_unterminated_href_does_not_panic() {
+        for html in [
+            "href=\"x",
+            "<a href=\"x",
+            "x href=\"y",
+            "href=\"<a",
+            "href=\"",
+            "a href=\"b href=\"c",
+        ] {
+            let links = extract_links(html);
+            assert!(
+                links.iter().all(|(url, _)| !url.is_empty()),
+                "未闭合的 href 不得产出半截链接: {html:?} -> {links:?}"
+            );
+        }
     }
 
     #[test]

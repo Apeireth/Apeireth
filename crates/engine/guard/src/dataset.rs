@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
@@ -227,6 +227,10 @@ pub struct DatasetRecorder {
     enabled: AtomicBool,
     output_path: PathBuf,
     file_lock: Mutex<()>,
+    /// 落盘失败次数（**明确化**：旧实现把写失败全吞了 ⇒ 数据**静默丢失**）。
+    write_failures: AtomicU64,
+    /// 最近一次落盘失败的原因（**不静默**：面板/运维可读）。
+    last_write_error: Mutex<Option<String>>,
 }
 
 impl DatasetRecorder {
@@ -236,6 +240,8 @@ impl DatasetRecorder {
             enabled: AtomicBool::new(false),
             output_path: output_path.as_ref().to_path_buf(),
             file_lock: Mutex::new(()),
+            write_failures: AtomicU64::new(0),
+            last_write_error: Mutex::new(None),
         }
     }
 
@@ -431,21 +437,65 @@ impl DatasetRecorder {
     }
 
     fn write_line(&self, record: &GuardDatasetRecord) {
-        let Ok(serialized) = serde_json::to_string(record) else {
-            return;
-        };
+        self.record_line(record);
+    }
+
+    /// 写一行并**记账**失败（**不静默**）。
+    ///
+    /// ⚠️ 旧实现把序列化 / 建目录 / 开文件 / 写盘 的失败**全部**吞掉 ⇒ ⇒
+    /// 分类训练数据**静默丢失**且**无信号**（调用方以为存上了）。
+    /// ⇒ ⇒ 现在失败**计数 + 记原因** ⇒ ⇒ 「这次没存上」是**可观测**的。
+    fn record_line(&self, record: &GuardDatasetRecord) {
+        if let Err(error) = self.try_write_record(record) {
+            self.write_failures.fetch_add(1, Ordering::Relaxed);
+            *self.last_write_error.lock() = Some(error);
+        }
+    }
+
+    /// 写一行（**错误如实返回**，不吞）。
+    ///
+    /// ⇒ ⇒ 调用方能知道「这次没存上」（要么拿到 `Err`，要么看
+    /// [`Self::write_failures`] / [`Self::last_write_error`]）。
+    pub fn try_write_record(&self, record: &GuardDatasetRecord) -> Result<(), String> {
+        let serialized = serde_json::to_string(record)
+            .map_err(|error| format!("guard dataset serialize failed: {error}"))?;
 
         let _guard = self.file_lock.lock();
         if let Some(parent) = self.output_path.parent() {
-            let _ = std::fs::create_dir_all(parent);
+            std::fs::create_dir_all(parent).map_err(|error| {
+                format!(
+                    "guard dataset directory create failed ({}): {error}",
+                    parent.display()
+                )
+            })?;
         }
-        if let Ok(mut file) = OpenOptions::new()
+        let mut file = OpenOptions::new()
             .create(true)
             .append(true)
             .open(&self.output_path)
-        {
-            let _ = writeln!(file, "{serialized}");
-        }
+            .map_err(|error| {
+                format!(
+                    "guard dataset open failed ({}): {error}",
+                    self.output_path.display()
+                )
+            })?;
+        writeln!(file, "{serialized}").map_err(|error| {
+            format!(
+                "guard dataset write failed ({}): {error}",
+                self.output_path.display()
+            )
+        })?;
+        Ok(())
+    }
+
+    /// 落盘失败次数（**0 装诚实**：数据丢了就是丢了，不装作成功）。
+    pub fn write_failures(&self) -> u64 {
+        self.write_failures.load(Ordering::Relaxed)
+    }
+
+    /// 最近一次落盘失败的原因（**不静默**；没有失败 ⇒ `None`）。
+    pub fn last_write_error(&self) -> Option<String> {
+        self.last_write_error.lock().clone()
     }
 
     /// Read and correlate classifications and outcomes into complete supervised training samples.
@@ -591,5 +641,62 @@ mod tests {
         }
         assert!(raw.contains("runtime_failure"));
         assert!(raw.contains("unknown"));
+    }
+
+    /// **落盘失败必须可观测**（不是静默成功）。
+    ///
+    /// 旧实现把写失败**全吞了** ⇒ ⇒ 分类训练数据**静默丢失**且**无信号**。
+    /// ⇒ ⇒ 现在：失败**计数 + 原因可读** ⇒ ⇒ 「这次没存上」看得见。
+    #[test]
+    fn a_failed_dataset_write_is_observable() {
+        let dir = tempfile::tempdir().expect("temporary dataset directory");
+        // 让**父路径**是一个普通文件 ⇒ 建目录/开文件必然失败。
+        let blocker = dir.path().join("not-a-directory");
+        std::fs::write(&blocker, b"x").expect("blocker file");
+        let path = blocker.join("guard.jsonl");
+        let recorder = DatasetRecorder::new(&path);
+        recorder.set_enabled(true);
+
+        recorder.record_outcome(
+            "trace-1",
+            Some("action-1"),
+            None,
+            None,
+            None,
+            Some("success"),
+        );
+
+        assert_eq!(
+            recorder.write_failures(),
+            1,
+            "落盘失败必须计数（不许静默丢失）"
+        );
+        let error = recorder
+            .last_write_error()
+            .expect("失败原因必须可读（不静默）");
+        assert!(!error.is_empty(), "失败原因不得为空: {error:?}");
+        assert!(!path.exists(), "没存上就是没存上（不许假装成功）");
+    }
+
+    /// 落盘**成功** ⇒ 不计数（失败计数只反映真失败）。
+    #[test]
+    fn a_successful_dataset_write_is_not_counted_as_a_failure() {
+        let dir = tempfile::tempdir().expect("temporary dataset directory");
+        let path = dir.path().join("guard.jsonl");
+        let recorder = DatasetRecorder::new(&path);
+        recorder.set_enabled(true);
+
+        recorder.record_outcome(
+            "trace-1",
+            Some("action-1"),
+            None,
+            None,
+            None,
+            Some("success"),
+        );
+
+        assert_eq!(recorder.write_failures(), 0, "成功落盘不计数");
+        assert!(recorder.last_write_error().is_none(), "成功 ⇒ 无失败原因");
+        assert!(path.exists(), "成功落盘 ⇒ 文件在场");
     }
 }

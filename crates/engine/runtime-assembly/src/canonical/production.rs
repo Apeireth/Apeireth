@@ -12,8 +12,9 @@ use std::sync::Mutex;
 use apeireth_core::kernel::Clock;
 use apeireth_guard::hook::SharedImmuneMemory;
 use apeireth_memory::{
-    AccessHistoryActivationSource, ContextWindowManager, EmbeddingProvider, MemoryCoordinator,
-    MemoryExtractor, MemoryGovernanceStore, MemoryMaterializer, MemoryMaterializerPort,
+    AccessHistoryActivationSource, ConsolidationPolicy, ConsolidationTrigger, ContextWindowManager,
+    EmbeddingProvider, FileConsolidationWatermark, MemoryCoordinator, MemoryExtractor,
+    MemoryGovernanceStore, MemoryMaterializer, MemoryMaterializerPort,
     MemoryTypedMaterializationSink, ProactiveRecallPolicy, ScopedMemoryBackend,
     SqliteAccessHistoryStore, TypedMemoryRecallSource, TypedRecallIdentity,
 };
@@ -41,6 +42,7 @@ use super::cognitive::{
     SelfAssessmentModule,
 };
 use super::error::{RuntimeError, RuntimeResult};
+use super::memory_assembly;
 use super::memory_typed_sink::CanonicalMemoryTypedSink;
 use super::module::Module;
 use super::nervous_bridge::NervousBridgeModule;
@@ -48,19 +50,21 @@ use super::nervous_bus::NervousBus;
 use super::nervous_switchboard::{BioSwitch, NervousSwitchboard};
 use super::organ_module::OrganModule;
 use super::preference_learning::PreferenceLearningModule;
+use super::prompt_injection_guard::{self, PromptInjectionReport};
 use super::self_status_source::{
     doc_ops_status_probe, image_ops_status_probe, proposal_status_probe, roster_from_config,
     sheet_ops_status_probe, task_board_status_probe, ProductionSelfStatusSource,
 };
 use super::tool_modules::{
     ApplyPatchModule, BackupExportModule, CareScheduleModule, ContentFeedModule, DocOpsModule,
-    EducationModule, ExposureAuditModule, FetchModule, FilesystemModule, GitWriteModule,
-    ImageOpsModule, McpModule, ProcessModule, ProposalModule, ReconModule, RepoModule,
-    SearchModule, SelfStatusModule, SheetOpsModule, ShellModule, SkillDistillModule,
-    SkillSearchModule, TaskBoardModule, TraitReportModule, VoiceSpeakModule, WorktreeApplyModule,
-    WorktreePlanModule,
+    EducationModule, ExposureAuditModule, ExternalToolsModule, FetchModule, FilesystemModule,
+    GitWriteModule, ImageOpsModule, McpModule, ProcessModule, ProposalModule, ReconModule,
+    RepoMapModule, RepoModule, SearchModule, SelfStatusModule, SheetOpsModule, ShellModule,
+    SkillDistillModule, SkillSearchModule, TaskBoardModule, TraitReportModule, VoiceSpeakModule,
+    WorktreeApplyModule, WorktreePlanModule,
 };
 use super::trait_growth::{trait_growth_probe, trait_status_probe, TraitGrowthPaths};
+use crate::consequence_backfill::{default_data_root, ConsequenceBackfillModule};
 use crate::startup::{StartupPhase, StartupTimeline};
 
 // 生物机制族装配块（W3.2/W3.3/W3.5/W3.6）搬至子模块；`production.rs` 只留调用与字段。
@@ -283,6 +287,15 @@ pub struct ProductionModulesConfig {
     pub community_triage: bool,
     /// W2 §4.3 (2026-10-10, 默认关): education Dx-Check 换元检查工具注册。
     pub education: bool,
+    /// 代码地图工具注册 (`tool.repo_map`, 代码骨架概览)。
+    ///
+    /// 2026-10-24: 跨语言符号提取 + 跨文件依赖图 + Personalized PageRank
+    /// 排序, 在 token 预算内输出紧凑大纲。**只读**、工作区限域、三重预算封顶。
+    ///
+    /// 扫描根与 `tool.repo` **同源**（[`Self::repo`] 用同一个
+    /// `backends.workspace_root`）—— 同一份工作区只有一把尺。
+    /// 工作区根缺席时不注册（名册按实际注册条件取值）。
+    pub repo_map: bool,
     /// W2 §4.4 (2026-10-10, 默认关): 研究吸收批认知体操 (四算法实验性洞察)。
     pub absorption_insight: bool,
     /// Register the structured self-report tool (`tool.self_status`, 自省通道).
@@ -447,6 +460,7 @@ impl Default for ProductionModulesConfig {
     fn default() -> Self {
         Self {
             memory_recall: true,
+            repo_map: true,
             proactive_recall: None,
             memory_writeback: true,
             preference_recall: true,
@@ -531,6 +545,11 @@ pub struct ProductionBackends {
     /// Council service, supplied only when the adapter explicitly enables it.
     pub council: Option<Arc<Council>>,
     /// Workspace root directory for local file tools.
+    /// 关系里程碑存储（初见 / 阶段跃迁）。
+    ///
+    /// 缺席 = 不记里程碑（零行为变化）。生产装配走
+    /// `SqliteMilestoneStore`（与认知库同一份库，关系史跨重启存活）。
+    pub milestone_store: Option<Arc<dyn apeireth_memory::milestone::MilestoneStore>>,
     pub workspace_root: Option<PathBuf>,
     /// Scoped memory backend for cross-session storage queries.
     pub scoped_memory: Option<Arc<dyn ScopedMemoryBackend>>,
@@ -538,6 +557,11 @@ pub struct ProductionBackends {
     pub embedding_provider: Option<Arc<dyn EmbeddingProvider>>,
     /// Optional durable selected-context access history.
     pub access_history: Option<Arc<SqliteAccessHistoryStore>>,
+    /// Optional **read-only** diary store (cross-diary retrieval wiring).
+    ///
+    /// 缺席 = 检索路径不碰日记 (零行为变化); 在场 = 命中事实可附**关联日记片段**
+    /// (「你上周写过…」). 只读面: 检索路径只 `list_days` / `read_day`, 绝不写日记.
+    pub diary: Option<Arc<dyn apeireth_memory::diary::DiaryStore>>,
     /// Optional unified materializer for bounded AfterTurn memory writeback.
     pub memory_materializer: Option<Arc<dyn MemoryMaterializerPort>>,
     /// Optional unified extractor used to build a default materializer.
@@ -556,7 +580,8 @@ pub struct ProductionBackends {
     pub ingest_gate: Option<Arc<dyn apeireth_memory::IngestGate>>,
     /// Reflexion failure-feedback store (2026-10-06 W2 记忆闭环批).
     pub reflexion_store: Option<Arc<dyn apeireth_memory::reflexion::ReflexionStore>>,
-    /// W2 §4.2: partner 羁绊存储 (InMemoryPartnerStore 或未来 sqlite 实现)。
+    /// W2 §4.2: partner 羁绊存储（默认生产装配走 `SqlitePartnerStore`，
+    /// 2026-10-24 接上；trait 落点不绑后端）。
     pub partner_store: Option<Arc<dyn apeireth_memory::partner::PartnerStore>>,
     /// 「性格养成」第一铲 (默认无 = 自学习关): 自校准接线层, 接上后
     /// MemoryRecallModule 的召回结果作为真接信号喂给引擎。
@@ -632,6 +657,7 @@ pub struct ProductionModules {
     mcp_module: Option<Arc<McpModule>>,
     /// 器官模块句柄 (`config.organs` 开才 `Some`), 供组合根迟绑定 guard 免疫记忆.
     organ_module: Option<Arc<OrganModule>>,
+    memory_slot: Option<Arc<super::memory_module::MemoryModule>>, // 记忆工具面槽位（注册期迟绑定 Host 映射）
     /// 生物机制族 W3.3: 调质状态句柄 (开关开才 `Some`, 与注册模块共享同一 `Arc`)。
     bio_tone_state: Option<Arc<ToneState>>,
     /// 生物机制族 W3.5 (SG-18): 生命周期状态句柄 (开关开才 `Some`, 与注册模块同一 `Arc`)。
@@ -643,105 +669,18 @@ pub struct ProductionModules {
     nervous_bus: Arc<NervousBus>,
     /// Wave 4 / ADR-0009 R1b-1a: 本次装配生效的开关快照 (一次解析, 诊断读).
     nervous_switchboard: NervousSwitchboard,
+    /// 回合层提示注入告警账句柄 (fetch 开才 `Some`, 与注册的告警模块同一 `Arc`)。
+    /// `None` = fetch 面没开 = 没有任何输出侧标记可读 ⇒ 零告警 (不是「读了但没命中」)。
+    pub(super) prompt_injection_report: Option<Arc<PromptInjectionReport>>,
 }
 
 /// Compatibility alias for [`ProductionModules`].
 pub use ProductionModules as ProductionCognitiveModules;
 
-/// 模块族 (懒加载断言单位): 一族 = 一个开关族在 [`ProductionModules::build`] 里的构造点。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum ModuleFamily {
-    /// 文件读工具族 (`filesystem`)。
-    Filesystem,
-    /// 搜索工具族 (`search`)。
-    Search,
-    /// 仓库检视工具族 (`repo`)。
-    Repo,
-    /// 受控写文件族 (`file_write`)。
-    ApplyPatch,
-    /// 工作树改单族 (`worktree_plan`)。
-    WorktreePlan,
-    /// 工作树落盘族 (`worktree_apply`)。
-    WorktreeApply,
-    /// git 写族 (`git_write`)。
-    GitWrite,
-    /// 技能沉淀族 (`skill_distill`)。
-    SkillDistill,
-    /// 技能检索族 (`skill_search`)。
-    SkillSearch,
-    /// Dx-Check 检查族 (`education`)。
-    Education,
-    /// 受控 shell 族 (`shell`)。
-    Shell,
-    /// 受控抓取族 (`fetch`)。
-    Fetch,
-    /// 内容流族 (`content_feed`)。
-    ContentFeed,
-    /// 关怀规则族 (`care_schedule`)。
-    CareSchedule,
-    /// 备份导出族 (`backup`)。
-    BackupExport,
-    /// 发声族 (`voice_speak`)。
-    VoiceSpeak,
-    /// 任务簿族 (`task_board`)。
-    TaskBoard,
-    /// 性格周报族 (`trait_report`)。
-    TraitReport,
-    /// 暴露面体检族 (`exposure_audit`)。
-    ExposureAudit,
-    /// 创作工具面 W1 · 图像操作族 (`image_ops`)。
-    ImageOps,
-    /// 创作工具面 W2 · 文档操作族 (`doc_ops`)。
-    DocOps,
-    /// 创作工具面 K3 · 表格操作族 (`sheet_ops`)。
-    SheetOps,
-    /// K 轴 L1 在场感知族 (`device_sense`)。
-    DeviceSense,
-    /// K 轴 L1 天气感知族 (`weather`)。
-    Weather,
-    /// K 轴 L3/L4 受控执行族 (`device_control`)。
-    DeviceControl,
-    /// K 轴 L5 看家骨架族 (`guard_watch`)。
-    GuardWatch,
-    /// 生物机制族 W3.3 · 游戏练习场工具族 (`play_*`, 默认关): 四个工具模块各自
-    /// 一个构造点 (propose/start/finish/abort, 共享同一本内存账本);
-    /// env `APEIRETH_ENABLE_BIO_PLAY` 只认 `"1"` 且工作区根注入才构造。
-    BioPlay,
-    /// 自省通道族 (`self_status`)。
-    SelfStatus,
-    /// 安全/逆向侦察族 (`tool.recon.*`, 9 件, 默认关)。
-    Recon,
-    /// 外部适配器族 (`ext.*`, 10 件, 默认关; 子进程封装)。
-    ExternalTools,
-    /// 外部工具桥族 (`mcp`)。
-    Mcp,
-    /// 记忆协调器 (memory_recall / memory_writeback 共用)。
-    MemoryCoordinator,
-    /// 记忆召回族 (`memory_recall`)。
-    MemoryRecall,
-    /// 偏好召回族 (`preference_recall`)。
-    PreferenceRecall,
-    /// 偏好学习族 (`preference_learning`)。
-    PreferenceLearning,
-    /// 评判族 (`judge`)。
-    Judge,
-    /// 自评族 (`self_assessment`)。
-    SelfAssessment,
-    /// 议事族 (`council`)。
-    Council,
-    /// 器官网族 (`organs`)。
-    Organs,
-    /// 反思族 (`reflexion`)。
-    Reflexion,
-    /// 吸收洞察族 (`absorption_insight`)。
-    AbsorptionInsight,
-    /// 羁绊族 (`partner_bond`)。
-    PartnerBond,
-    /// 恒定人格注入族 (人格层槽)。
-    PersonaConstantInjection,
-    /// 记忆写回族 (`memory_writeback`)。
-    MemoryWriteback,
-}
+/// 模块族枚举 (`canonical::ModuleFamily`) 的兼容再导出: 族枚举本体住在装配面
+/// 这一层 (装配根 / 生物机制族装配块 / 回合层提示注入告警面三处共用) ⇒ ⇒ 旧路径
+/// `production::ModuleFamily` 保留 ⇒ ⇒ 外部调用点零改动。
+pub use super::ModuleFamily;
 
 /// 构造探针 (B-P1 懒加载断言口): 族构造点上报一次。
 ///
@@ -822,7 +761,7 @@ impl BuildInstrumentation {
         self
     }
 
-    fn constructed(&self, family: ModuleFamily) {
+    pub(super) fn constructed(&self, family: ModuleFamily) {
         if let Some(probe) = &self.probe {
             probe.constructed(family);
         }
@@ -874,8 +813,24 @@ impl ProductionModules {
                 Arc::new(NervousBridgeModule::new(nervous_bus.as_ref().clone())) as Arc<dyn Module>,
             );
         }
+        // 问责闭环第 ③ 步 · 自动回填面（ADR-0014 §5）：工具调用失败 ⇒ 把**对应的那条**
+        // 已声明影响回填 `failed`。归属（action_id ↔ tool_call_id）**由调用方显式登记**
+        // （`apeireth egress bind`），登记不到 ⇒ 不动 —— 系统不推断归属。
+        //
+        // **默认关**：与问责面共用同一个开关（`APEIRETH_ENABLE_EGRESS_GATE`）——
+        // 开闸才装（闸 = 影响声明 + 后果账 + 自动回填这一整套）；关时**零注册**、
+        // 零行为变化（未启用 = 不注册）。
+        // `confirmed` **绝不**自动填（本地成功 ≠ 影响已确认 = 替外部背书）。
+        if crate::egress_gate::egress_gate_enabled_from_env() {
+            modules.push(Arc::new(ConsequenceBackfillModule::from_data_root(
+                &default_data_root(),
+            )) as Arc<dyn Module>);
+        }
         let mut capabilities: Vec<Arc<dyn ToolCapability>> = Vec::new();
         let mut tool_modules: Vec<Arc<dyn Plugin>> = Vec::new();
+        // 回合层提示注入告警账 (fetch 开时才构造 = 才有输出侧标记可读);
+        // 组合根取回同一句柄, 让宿主能读「本进程见过几次注入命中」。
+        let mut prompt_injection_report: Option<Arc<PromptInjectionReport>> = None;
         // W3.3: 器官模块句柄留给组合根迟绑定 guard 免疫记忆 (默认 None = 未注册).
         let mut organ_module: Option<Arc<OrganModule>> = None;
         // W3.6: 自述 probe 迟绑定槽 (安装点按开关武装; cli/组合根后续填句柄).
@@ -976,6 +931,18 @@ impl ProductionModules {
             }
         }
 
+        // 代码地图 (`tool.repo_map`, 2026-10-24): 跨语言符号提取 + 跨文件
+        // 依赖图 + Personalized PageRank, token 预算内输出紧凑大纲。
+        // **只读**、工作区限域、三重预算封顶 (文件数 / 单文件字节 / token)。
+        // 扫描根与 `tool.repo` 同源 (同一个 `backends.workspace_root`)。
+        if config.repo_map {
+            if let Some(root) = &backends.workspace_root {
+                instrument.constructed(ModuleFamily::Repo);
+                let provider = RepoMapModule::new(root.clone());
+                capabilities.extend(provider.capabilities());
+            }
+        }
+
         // 受控文件写入 (`tool.apply_patch`, 第七件生产工具, opt-in): 补丁式
         // 创建/修改/删除显式声明 + 读前观测门禁; 写入风险档位默认 require-approval
         // 级 (每次写入都要人批), 授权层按同一开关接线。git 写边界 (分级语义):
@@ -1069,6 +1036,13 @@ impl ProductionModules {
             instrument.constructed(ModuleFamily::Fetch);
             let provider = FetchModule::new(fetch_config);
             collect_tool_module(&mut tool_modules, &mut capabilities, &provider)?;
+
+            // 回合层提示注入告警面 (2026-11-05): 装在抓取面旁边 ⇒ ⇒ 抓取面一开,
+            // 它的输出侧标记就**一定**有人读 (恒不阻断, 显式化不静默)。
+            // ⚠️ 构造条件 = fetch 工具开着 (fetch 关 = 根本没有这个输出面)。
+            // 装点、告警措辞与告警账的说明见 `prompt_injection_guard::install`。
+            prompt_injection_report =
+                Some(prompt_injection_guard::install(&mut modules, instrument));
         }
 
         // 内容流接入 (`tool.content_feed`, J1, opt-in): 订阅源管理 + 受控拉取 +
@@ -1446,7 +1420,7 @@ impl ProductionModules {
         bio_probe_slots.fill_ecosystem_profiles(&capabilities);
 
         // Unified Memory 2.0 coordinator wiring
-        let mut shared_coordinator: Option<Arc<MemoryCoordinator>> = None;
+        let (mut shared_coordinator, mut memory_slot) = (None::<Arc<MemoryCoordinator>>, None);
         if config.memory_recall || config.memory_writeback {
             instrument.constructed(ModuleFamily::MemoryCoordinator);
             let memory = required(backends.memory.clone(), "memory", "memory")?;
@@ -1456,7 +1430,8 @@ impl ProductionModules {
                 "memory_governance",
             )?;
             let mut coordinator =
-                MemoryCoordinator::new(Arc::clone(&memory), Arc::clone(&governance));
+                memory_assembly::assemble_memory(Arc::clone(&memory), Arc::clone(&governance))
+                    .map_err(RuntimeError::misconfigured)?;
             if let Some(scoped) = &backends.scoped_memory {
                 coordinator = coordinator.with_scoped_backend(Arc::clone(scoped));
             }
@@ -1466,24 +1441,48 @@ impl ProductionModules {
             if config.memory_injection {
                 coordinator = coordinator.with_memory_injection_format();
             }
+            // 记忆线（2026-11-03）：接上**夜间整编驱动** ⇒「只整新料 + 同一窗口只整一次」。
+            // ⚠️ **水位跨进程持久化**（文件）⇒ ⇒ 进程重启后**不会**把老料重整一遍。
+            // ⚠️ **窗口 = 0** ⇒ **不设时间闸**（时间节奏仍由既有的
+            // `APEIRETH_TUNE_CONSOLIDATION_CADENCE` 旋钮管）⇒ ⇒ 只剩「只整新料」这一条语义。
+            // ⚠️ **装不上驱动 ⇒ 走旧路径**（`run_consolidation_at` 的降级分支）⇒ ⇒ 不阻断启动。
+            let watermark_path = default_data_root()
+                .join("memory")
+                .join("consolidation-watermark.json");
+            let watermark_dir = watermark_path.parent().unwrap_or(std::path::Path::new("."));
+            if std::fs::create_dir_all(watermark_dir).is_ok() {
+                coordinator = coordinator.with_consolidation_trigger(ConsolidationTrigger::new(
+                    ConsolidationPolicy::new(0).with_min_episodes(1),
+                    Arc::new(FileConsolidationWatermark::new(watermark_path)),
+                ));
+            }
             if let Some(pref) = &backends.preferences {
                 coordinator = coordinator.with_preferences(Arc::clone(pref));
             }
             if let (Some(graph), Some(associations)) = (&backends.graph, &backends.associations) {
-                coordinator =
-                    coordinator.with_experience(Arc::clone(graph), Arc::clone(associations));
+                coordinator = coordinator.with_experience(graph.clone(), associations.clone());
             }
             if let Some(history) = &backends.access_history {
                 coordinator = coordinator.with_activation_source(Arc::new(
                     AccessHistoryActivationSource::new(Arc::clone(history), 0.5, 0.0),
                 ));
             }
+            // 跨日记检索接线 (只读): 日记面在场 ⇒ 命中事实可附关联日记片段.
+            // 缺席 = 检索路径不碰日记 ⇒ 逐字节零行为变化.
+            if let Some(diary) = &backends.diary {
+                coordinator = coordinator.with_diary_store(Arc::clone(diary));
+            }
+            // 用户知识库接线 (只读): 语料根 = <data>/wiki。
+            // 目录不存在 ⇒ 检索路径整段跳过 ⇒ 逐字节零行为变化。
+            coordinator = coordinator.with_wiki_root(default_data_root().join("wiki"));
             if let (Some(source), Some(identity)) =
                 (&backends.typed_recall, &backends.typed_recall_identity)
             {
                 coordinator = coordinator.with_typed_recall(Arc::clone(source), identity.clone());
             }
-            shared_coordinator = Some(Arc::new(coordinator));
+            let sinks = (&mut tool_modules, &mut capabilities);
+            let (slot, shared) = memory_assembly::wire(sinks.0, sinks.1, coordinator, &clock);
+            (memory_slot, shared_coordinator) = (Some(slot), Some(shared));
         }
 
         // Register cognitive modules
@@ -1580,11 +1579,18 @@ impl ProductionModules {
 
         if config.council {
             instrument.constructed(ModuleFamily::Council);
+            // D-2：council 决议的票落盘（append-only）⇒ 守夜人的「立场平衡复盘」段
+            // 不再永远空转。路径与 CLI 侧读账处**同一份**（`default_data_root()` 与
+            // `default_panel_data_dir()` 同实现同路径：`$APEIRETH_DATA_DIR` 或 `~/.apeireth`）。
+            let ballot_log = Arc::new(super::council_ballot_log::CouncilBallotLog::open(
+                super::council_ballot_log::default_council_ballot_log_path(&default_data_root()),
+            ));
             modules.push(Arc::new(
                 CouncilModule::new(
                     required(backends.council, "council", "council")?,
                     Arc::clone(&clock),
                 )
+                .with_ballot_log(ballot_log)
                 .with_telemetry(Arc::clone(&telemetry)),
             ));
         }
@@ -1621,10 +1627,17 @@ impl ProductionModules {
                 .as_ref()
                 .map(|identity| identity.subject_id.clone())
                 .unwrap_or_else(|| "local-user".to_string());
-            modules.push(Arc::new(
+            let mut bond_module =
                 super::cognitive::PartnerBondModule::new(store, subject_id, Arc::clone(&clock))
-                    .with_telemetry(Arc::clone(&telemetry)),
-            ));
+                    .with_telemetry(Arc::clone(&telemetry));
+            // 关系里程碑（初见 / 阶段跃迁）：只在注入了存储时挂 —— 缺存储 =
+            // 不记 = 零行为变化。记录面本身带幂等闸，装配层不必自己判重。
+            if let Some(milestones) = backends.milestone_store {
+                bond_module = bond_module.with_milestones(Arc::new(
+                    apeireth_memory::milestone::MilestoneRecorder::new(milestones),
+                ));
+            }
+            modules.push(Arc::new(bond_module));
         }
 
         // V4-a 恒定小注入 (人格记忆层回取面 ①) 的 TurnStart overlay 装配点:
@@ -1751,6 +1764,7 @@ impl ProductionModules {
         }
         Ok(Self {
             modules,
+            memory_slot,
             tool_modules,
             capabilities,
             telemetry,
@@ -1762,6 +1776,7 @@ impl ProductionModules {
             bio_probe_slots,
             nervous_bus,
             nervous_switchboard,
+            prompt_injection_report,
         })
     }
 
@@ -1828,6 +1843,7 @@ impl ProductionModules {
         mappings: Arc<crate::profile_memory::ProfileMemoryMappings>,
     ) -> RuntimeBuilder {
         let mut builder = mappings.register_into(builder, &self.modules);
+        memory_assembly::bind_profile_mappings(&self.memory_slot, &mappings);
         for module in self.tool_modules {
             builder = builder.with_plugin(module);
         }

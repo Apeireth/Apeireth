@@ -6,6 +6,8 @@
 > 分层 —— **IMPLEMENTED (代码存在) ≠ PRODUCTION WIRED (接主路径) ≠
 > DEFAULT ENABLED (默认开) ≠ HARDWARE VALIDATED (真机验证)**。文档自标的 ✅
 > 多数只达第一级, 本文逐项标注真实层级。
+>
+> **口径更正（2026-11-04 文档真源批；上方原文保留不改）**：上文所引「四级」中的 `DEFAULT ENABLED` **不是一级**，是横切属性（默认开/关，与阶梯正交）；现行口径阶梯 = **NOT IMPLEMENTED < IMPLEMENTED < PRODUCTION WIRED < HARDWARE VALIDATED**（见 [claims.yaml](../status/claims.yaml) 头部）。
 
 ## 1. 规模与形态对比
 

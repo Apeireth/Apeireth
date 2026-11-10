@@ -82,9 +82,10 @@ pub use quiet::{
 };
 pub use speak::{
     authorized_voice_speak_policy, resolve_voice, speak_request_refusal, speak_scope_refusal,
-    voice_speak_capability, voice_speak_pipeline, SpeakGate, SpeakOutcome, SpeakScope,
-    VoiceSpeakBoundaryGuard, VoiceSpeakConfig, VoiceSpeakParams, VoiceSpeakRiskMappingHook,
-    VoiceSpeakTool, VOICE_RATE_DEFAULT, VOICE_RATE_MAX, VOICE_RATE_MIN, VOICE_SPEAK_CAPABILITY_ID,
+    voice_speak_capability, voice_speak_capability_with_slot, voice_speak_pipeline,
+    voice_speak_pipeline_with_slot, SpeakGate, SpeakOutcome, SpeakScope, VoiceSpeakBoundaryGuard,
+    VoiceSpeakConfig, VoiceSpeakParams, VoiceSpeakRiskMappingHook, VoiceSpeakTool,
+    VOICE_RATE_DEFAULT, VOICE_RATE_MAX, VOICE_RATE_MIN, VOICE_SPEAK_CAPABILITY_ID,
     VOICE_SPEAK_MAX_TEXT_CHARS, VOICE_SPEAK_MAX_TIMEOUT_MS, VOICE_SPEAK_SCOPE_ENV,
     VOICE_SPEAK_TIMEOUT_MS, VOICE_SPEAK_TOOL_DESCRIPTION, VOICE_SPEAK_TOOL_NAME,
     VOICE_VOLUME_DEFAULT, VOICE_VOLUME_MAX, VOICE_VOLUME_MIN,

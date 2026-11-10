@@ -73,16 +73,30 @@ pub fn redact_len(len: usize) -> String {
 
 /// 对任意字符串做"保首尾、掩中段"的展示脱敏 (仅供 UI 提示, 非存储)。
 ///
-/// 例: `sk-abc...xyz`。长度 ≤ 4 时全掩, 不透任何字符。
+/// 例: `sk-abc…xyz`。
+///
+/// **口径按【字符数】**（不是字节数）—— 窗口（首 3 + 尾 3）本身按 `chars()` 取，
+/// 阈值必须同口径，否则**多字节秘密会绕过「短秘密全掩」这条红线**：
+/// 修复前阈值用 `secret.len()`（字节数）⇒ 3 个汉字 = 9 字节 > 4 ⇒ 走「保留首尾」分支
+/// ⇒ 而首尾窗口恰好覆盖整串 ⇒ `mask("密钥库")` = `"密钥库…密钥库"`（**整条明文**）。
+///
+/// **两条全掩规则**：
+/// 1. **字符数 ≤ 4** ⇒ 全掩，不透任何字符（原始红线）；
+/// 2. **首尾窗口会覆盖全串**（字符数 ≤ 6）⇒「掩中段」根本没发生 ⇒ 输出等于
+///    **明文 + 省略号** ⇒ 与短秘密同等对待，**也全掩**
+///    （否则 `mask("abcde")` = `"abc…cde"` —— 每个字符都露出来了）。
+///
 /// **注**: 此为展示友好脱敏, 与日志红线用的 [`SecretString`] (全掩) 分途。
 pub fn mask_for_display(secret: &str) -> String {
-    let n = secret.len();
-    if n <= 4 {
+    let chars: Vec<char> = secret.chars().collect();
+    let n = chars.len();
+    // 首 3 + 尾 3 的窗口覆盖全串 ⇒ 无中段可掩 ⇒ 全掩。
+    if n <= 6 {
         return "*".repeat(n.max(4));
     }
-    let head: String = secret.chars().take(3).collect();
-    let tail: String = secret
-        .chars()
+    let head: String = chars.iter().take(3).collect();
+    let tail: String = chars
+        .iter()
         .rev()
         .take(3)
         .collect::<Vec<_>>()
@@ -94,6 +108,36 @@ pub fn mask_for_display(secret: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn mask_for_display_short_multibyte_fully_masked() {
+        // 3 字符多字节秘密：修复前（字节阈值）会整条明文显示。
+        let m = mask_for_display("密钥库");
+        assert_eq!(m, "****", "3 字符的多字节秘密必须全掩: {m}");
+        for c in "密钥库".chars() {
+            assert!(!m.contains(c), "短秘密不得透出任何字符 {c:?}: {m}");
+        }
+        // 4 字符多字节秘密：同一条红线，字节口径下会被绕过。
+        let m = mask_for_display("密钥库门");
+        assert_eq!(m, "****", "4 字符的多字节秘密必须全掩: {m}");
+    }
+
+    #[test]
+    fn mask_for_display_window_covering_whole_secret_is_fully_masked() {
+        // 首 3 + 尾 3 的窗口覆盖全串 ⇒「掩中段」没发生 ⇒ 输出等于明文 + 省略号
+        // ⇒ 必须与短秘密同等对待（全掩）。
+        for secret in ["abcde", "abcdef", "abcde中", "中文abcd"] {
+            let m = mask_for_display(secret);
+            assert_eq!(
+                m,
+                "*".repeat(secret.chars().count().max(4)),
+                "窗口覆盖全串时必须全掩: {secret:?} -> {m}"
+            );
+        }
+        // ≥ 7 字符 ⇒ 保首 3 尾 3、中段被掩（契约口径不变）。
+        let m = mask_for_display("abcdefg");
+        assert_eq!(m, "abc…efg");
+    }
     use super::*;
 
     #[test]

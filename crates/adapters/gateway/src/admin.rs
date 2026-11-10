@@ -36,6 +36,42 @@ pub const MODEL_ENV: &str = "APEIRETH_MODEL";
 pub trait CredentialWriter: Send + Sync {
     /// Write `value` under the backend credential name `name`.
     fn write(&self, name: &str, value: &str) -> Result<(), String>;
+
+    /// Write `value` **and** declare the endpoints this credential is allowed
+    /// to reach (2026-11-01 安全审计 P1：凭据 ↔ 端点绑定).
+    ///
+    /// # 为什么默认实现是 **Err**（而不是静默忽略）
+    ///
+    /// 「静默丢弃绑定」会让部署方以为绑定生效了（实际没生效 ⇒ 保护是假的）。
+    /// ⇒ 不支持绑定的写入端**必须如实报失败**。
+    fn write_with_endpoints(
+        &self,
+        name: &str,
+        value: &str,
+        _endpoints: &[String],
+    ) -> Result<(), String> {
+        // ⚠️ **先把凭据写了**（不能因为「不支持绑定」就把凭据也丢掉 ⇒ 功能回归）；
+        //    再如实报「绑定未登记」⇒ 调用方看到 warning，不会误以为绑定生效。
+        self.write(name, value)?;
+        Err("该凭据写入端不支持端点绑定声明（凭据已写入，但绑定未登记）".to_string())
+    }
+
+    /// 该凭据**已声明**的端点（`None` = **未声明** ⇒ 不参与绑定闸；空 `Some` = 声明了但为空）。
+    ///
+    /// # 为什么需要它（2026-11-04 · 端点绑定闸的连带残留）
+    /// 绑定闸（`apeireth_provider::endpoint_binding`）在凭据**未声明绑定**时
+    /// **不拦**（2026-11-01 P1 的有意权衡：否则正常的自建端点会被全部打死）。
+    /// ⇒ ⇒ 于是「**只改端点、不带凭据**」时，若这把凭据**从未声明绑定**，
+    /// 它会**静默跟随**到新端点 ⇒ ⇒ 真实 API key 可能被发往非预期主机。
+    ///
+    /// ⇒ ⇒ 本方法让网关能**读出**绑定状态 ⇒ ⇒ 在热更响应里**如实告警**
+    /// （「失败显式化 ⇒ 没有静默降级」）⇒ ⇒ 而不是假装没有这回事。
+    ///
+    /// ⚠️ 默认实现返回 `None`（「该写入端不可知」）⇒ ⇒ 与同 trait 既有
+    /// 「默认实现 = 如实报失败」风格一致 ⇒ ⇒ **不假装**绑定存在。
+    fn bound_endpoints(&self, _name: &str) -> Option<Vec<String>> {
+        None
+    }
 }
 
 /// Capability flags carried by the hot config.
@@ -238,11 +274,67 @@ pub async fn admin_config_update(
         );
     }
 
+    // ⚠️ **只改端点、不带凭据** ⇒ ⇒ 这把凭据将**跟随**到新端点
+    // ⇒ ⇒ 若它**从未声明绑定** ⇒ ⇒ 绑定闸不拦 ⇒ ⇒ 真实 key 可能被发往非预期主机
+    // ⇒ ⇒ 这里**如实告警**（2026-11-04）：失败显式化 ⇒ 没有静默降级。
+    // ⇒ ⇒ 顺带把「显式绑定」的做法告诉操作者（同笔提交 api_key）。
+    if patch.base_url.is_some() && patch.api_key.is_none() {
+        let name = credential_name(&provider);
+        let declared = state
+            .services
+            .credentials
+            .as_ref()
+            .and_then(|writer| writer.bound_endpoints(&name));
+        match declared {
+            None => warnings.push(format!(
+                "凭据 {name} **未声明端点绑定** ⇒ 本次只改端点 ⇒ 该凭据将被发往 {}                  （要显式绑定：请与 base_url **同笔**提交 api_key）",
+                patch.base_url.as_deref().unwrap_or_default()
+            )),
+            Some(list) if list.is_empty() => warnings.push(format!(
+                "凭据 {name} 的端点绑定**为空** ⇒ 本次只改端点 ⇒ 该凭据将被发往 {}                  （要显式绑定：请与 base_url **同笔**提交 api_key）",
+                patch.base_url.as_deref().unwrap_or_default()
+            )),
+            Some(list) => {
+                let target = patch.base_url.as_deref().unwrap_or_default();
+                let matches = list.iter().any(|raw| {
+                    raw.trim_start_matches("https://")
+                        .trim_start_matches("http://")
+                        .trim_end_matches('/')
+                        == target
+                            .trim_start_matches("https://")
+                            .trim_start_matches("http://")
+                            .trim_end_matches('/')
+                });
+                if !matches {
+                    warnings.push(format!(
+                        "凭据 {name} 当前绑定在 {list:?}，与新端点 {target} **不一致**                          ⇒ 绑定闸会在下一次请求时**拒发**该凭据                          （要让它跟随新端点：请与 base_url **同笔**提交 api_key 重新声明绑定）"
+                    ));
+                }
+            }
+        }
+    }
+
     if let Some(api_key) = patch.api_key.as_deref() {
         let name = credential_name(&provider);
+        // ⚠️ **同笔**带 `base_url` + `api_key` ⇒ 视为一次**显式的端点绑定声明**
+        // （安全审计 P1：凭据与端点是两份独立配置 ⇒ 只改端点会把旧凭据发给新主机；
+        //   ⇒ 「换端点 + 换凭据」同笔提交 = 部署方明确说「这个凭据属于这个端点」）。
+        // ⇒ 绑定**与凭据同库写入**（`HotCredentialStore::set_with_endpoints`）
+        // ⇒ 之后**只改端点**不再能把这把凭据带走。
+        let bound_endpoint = patch
+            .base_url
+            .as_deref()
+            .map(|url| url.trim().to_string())
+            .filter(|url| !url.is_empty());
         match &state.services.credentials {
             Some(writer) => {
-                if let Err(error) = writer.write(&name, api_key) {
+                let result = match &bound_endpoint {
+                    Some(endpoint) => {
+                        writer.write_with_endpoints(&name, api_key, &[endpoint.clone()])
+                    }
+                    None => writer.write(&name, api_key),
+                };
+                if let Err(error) = result {
                     warnings.push(format!("api_key 未写入 keyring ({name}): {error}"));
                 }
             }

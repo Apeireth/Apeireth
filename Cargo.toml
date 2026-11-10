@@ -197,12 +197,16 @@ futures = "0.3"
 
 # PyO3 (仅 apeireth-pybridge feature flag, 不进核心依赖)
 pyo3 = { version = "0.29", features = ["auto-initialize"] }
-# rusqlite 锁到 0.32 (workspace 级硬锁, 防 V2 各 crate libsqlite3-sys links 冲突)。
+# rusqlite 锁到 0.41 (workspace 级硬锁, 防 V2 各 crate libsqlite3-sys links 冲突)。
 # 所有用 SQLite 的 crate (memory / vector / api / mcp) 必须写 `rusqlite = { workspace = true }`,
 # 禁止各 crate 钉自己的 minor/patch 版本。fix(R19/V1266 code_reviewer-audit): 统一 workspace 锁定。
-rusqlite = { version = "0.32", features = ["bundled"] }
+# 2026-11-10 升 0.32 → 0.41: libsqlite3-sys 0.30.1 命中 RUSTSEC-2026-0459 (CVE-2026-119375);
+# 只有 libsqlite3-sys 0.39 (SQLite 3.54.0+) 已修 ⇒ 只能走 rusqlite 0.41 (r2d2_sqlite 0.36 同)。
+# `fallible_uint`: 0.41 把 u64/usize 的 FromSql 改成需要显式开这个特性 (0.32 是无条件可读)。
+# 开着它 = 读越界整数报错而不是静默回绕 ⇒ 存量读 COUNT(*) 的 u64 位点语义不变 (COUNT ≥ 0)。
+rusqlite = { version = "0.41", features = ["bundled", "fallible_uint"] }
 r2d2 = { version = "0.8" }
-r2d2_sqlite = "0.25"
+r2d2_sqlite = "0.36"
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1.10", features = ["v4", "serde"] }
 criterion = { version = "0.5", features = ["html_reports"] }
@@ -225,7 +229,7 @@ clap = { version = "4.5", features = ["derive"] }
 # 整合 #4 commit 仅加来源 ID 索引 + Cargo.toml dep 0 装, P9-1 1.0 真 use
 hyper-util = { version = "0.1", features = ["client", "client-legacy", "http1"] }
 # R19 P2 战区 4: 真接 sqlite-vec C 扩展 (0.1.x, MIT/Apache-2.0).
-# 0.1.9 最新, 跟 rusqlite 0.32 bundled 兼容 (走 sqlite3_auto_extension 路径,
+# 0.1.9 最新, 跟 rusqlite 0.41 bundled 兼容 (走 sqlite3_auto_extension 路径,
 # 避开 SQLITE_ENABLE_LOAD_EXTENSION 宏的 bundled 缺位).
 sqlite-vec = "0.1"
 
@@ -271,7 +275,7 @@ unused_macro_rules = 'warn'
 #  之前错放导致 cargo check 报 E0602 unknown lint warning, 5 P0 + 9 skeleton 全员触发)
 missing_docs = 'allow'
 unused_imports = 'allow'
-dead_code = 'allow'
+dead_code = 'warn'
 unused_must_use = 'allow'
 unused_mut = 'allow'
 # Windows MSVC 链接器 stdout 噪音 ("正在创建库 ... .lib 和对象 ... .exp") —

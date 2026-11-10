@@ -17,7 +17,7 @@ Author:          <施工线/代理 ID>
 
 - **接缝**：（X 并行线，已兑现其报备 / 本批无跨线接缝）——形状 + 词表 + 谁供谁消费
 - **write_scope**：本批动的文件清单（他线在途脏文件 = 未碰，列出以示清白）
-- **四级口径**：本批每个能力落在哪一级（IMPLEMENTED / PRODUCTION WIRED / DEFAULT ENABLED / HARDWARE VALIDATED）
+- **四级口径**：本批每个能力落在阶梯哪一级（NOT IMPLEMENTED < IMPLEMENTED < PRODUCTION WIRED < HARDWARE VALIDATED）+ 默认开否（横切属性 `default: ON/OFF/null`；**`DEFAULT ENABLED` 不是一级**）
 - **取材口径**（如涉外部素材）：净化 / 限读 / 剥装饰声明
 
 ## 一、本批交付总账

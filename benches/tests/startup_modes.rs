@@ -4,12 +4,39 @@ use std::collections::BTreeSet;
 use std::io::Write;
 use std::process::{Command, Output, Stdio};
 
-const EXE: &str = env!("CARGO_BIN_EXE_apeireth-bench-harness");
+/// 基准 harness 可执行文件路径。
+///
+/// **为什么不用 `env!("CARGO_BIN_EXE_…")`**: 本机 cargo 1.97.1 在
+/// `cargo build --workspace --tests` / `cargo test --no-run` 下**不注入**该变量
+/// （最小复现：一个只有 `src/main.rs` + 一个集成测试的包同样报
+/// “not defined at compile time”）⇒ `env!` 直接编译失败 ⇒ 整条门禁红。
+/// 改为**运行期定位**：集成测试可执行文件在 `target/<profile>/deps/<test>-<hash>`，
+/// 向上一层（`<profile>`）取同名二进制即 harness；Windows 按 `EXE_SUFFIX` 补 `.exe`。
+fn exe() -> std::path::PathBuf {
+    if let Ok(path) = std::env::var("CARGO_BIN_EXE_apeireth-bench-harness") {
+        return std::path::PathBuf::from(path);
+    }
+    let mut dir = std::env::current_exe().expect("current_exe");
+    dir.pop();
+    if dir.ends_with("deps") {
+        dir.pop();
+    }
+    let candidate = dir.join(format!(
+        "apeireth-bench-harness{}",
+        std::env::consts::EXE_SUFFIX
+    ));
+    assert!(
+        candidate.exists(),
+        "先构建 harness 二进制（`cargo build -p apeireth-bench-harness`），期望路径: {}",
+        candidate.display()
+    );
+    candidate
+}
 
 #[test]
 fn independent_modes_report_samples_and_reap_their_children() {
     for mode in ["first_run", "normal_start", "warm_resume"] {
-        let output = Command::new(EXE)
+        let output = Command::new(exe())
             .arg(mode)
             .env("BENCH_QUICK", "1")
             .env("BENCH_RAW", "1")
@@ -60,7 +87,7 @@ fn independent_modes_report_samples_and_reap_their_children() {
 }
 
 fn probe(mode: &str, dir: &std::path::Path) -> Output {
-    let mut child = Command::new(EXE)
+    let mut child = Command::new(exe())
         .args(["__startup-probe", mode])
         .arg(dir)
         .stdin(Stdio::piped())

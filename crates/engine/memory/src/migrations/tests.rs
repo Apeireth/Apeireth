@@ -11,7 +11,17 @@ fn historical_database(through: usize) -> Connection {
     tx.execute_batch(INIT_SQL).unwrap();
     install_history_guards(&tx).unwrap();
     for migration in &MIGRATIONS[..through] {
-        tx.execute_batch(migration.sql).unwrap();
+        // 历史路径必须与生产路径**同构**：`Migration` 的 DDL 有两个载体 ——
+        // 静态 `sql` 与 `idempotent` 钩子（SQLite 的 `ADD COLUMN` 无
+        // `IF NOT EXISTS`，V19 只能走钩子）。只回放 `sql` 会漏掉 V19 的
+        // `memory_chain_heads` 与 `chain_hash` 列 ⇒ 与 fresh 路径不等 ⇒
+        // 「全新库 = 历史库」这条守卫变成误报。2026-10-31 合并时补上。
+        if !migration.sql.trim().is_empty() {
+            tx.execute_batch(migration.sql).unwrap();
+        }
+        if let Some(idempotent) = migration.idempotent {
+            idempotent(&tx).unwrap();
+        }
         tx.execute(
             "INSERT INTO schema_migrations VALUES (?1, ?2, 0)",
             params![migration.version, migration.name],
@@ -404,12 +414,16 @@ fn migrations_reopen_preserves_data_and_idempotent() {
     // 增长面, 每加一条合法迁移本计数 +1 (钉「无重复」语义, 数字随迁移清单走).
     // 断言演进 (2026-10-17, V4-b 记忆保鲜回路批): 12 → 13 —— 同上语义不变,
     // 新增 V17__memory_freshness_loop (保鲜三件套三表)。
+    // 断言演进 (2026-10-31, 合并批): 14 → 15 —— 总指挥线新增
+    // V19__memory_chain_schema (哈希链: memory_chain_heads 表 + episodes 两列,
+    // DDL 走 `idempotent` 钩子) ⇒ V5..V19 共 15 条, 语义仍是「无重复」。
     let applied = store.applied_migrations().unwrap();
     assert_eq!(
         applied.iter().filter(|v| **v >= 5).count(),
-        14,
-        "V5..V18 各一条 (V15 = dedup_fingerprints; V16 = persona_memory_*; \
-         V17 = 记忆保鲜 source_hash/ingest_queue/memory_fold_segments; V18 = lessons)"
+        15,
+        "V5..V19 各一条 (V15 = dedup_fingerprints; V16 = persona_memory_*; \
+         V17 = 记忆保鲜 source_hash/ingest_queue/memory_fold_segments; V18 = lessons; \
+         V19 = 哈希链链头表 + episodes 的 chain_hash/chain_prev_hash)"
     );
 }
 
@@ -495,4 +509,55 @@ fn v15_creates_dedup_fingerprints() {
         )
         .unwrap();
     assert!(exists, "V15 必须创建 dedup_fingerprints");
+}
+
+/// V19 (W-10): 链的 schema 必须由**迁移列表**提供 (不再是运行时懒建) ——
+/// 迁移列表与簿记不得漂移, 版本号不得跳号。
+///
+/// 合并注记 (2026-10-31): 本条原在 `migrations.rs` 的内联 `mod tests` 里,
+/// main 把测试模块外置成 `migrations/tests.rs` 后本用例**不在**外置文件里
+/// ⇒ 合并时按语义搬过来 (否则「V19 必须走幂等钩子」这条守卫会静默消失)。
+#[test]
+fn v19_registers_chain_schema_and_versions_are_contiguous() {
+    let versions: Vec<i64> = MIGRATIONS.iter().map(|m| m.version).collect();
+    assert_eq!(
+        versions,
+        (1..=MIGRATIONS.len() as i64).collect::<Vec<_>>(),
+        "迁移版本号必须连续无跳号 (跳号 ⇒ 簿记与迁移列表漂移)"
+    );
+    let v19 = MIGRATIONS
+        .iter()
+        .find(|m| m.version == 19)
+        .expect("MIGRATIONS 必须含 V19");
+    assert_eq!(v19.name, "V19__memory_chain_schema");
+    assert!(
+        v19.idempotent.is_some(),
+        "V19 的 DDL 必须走幂等钩子 (SQLite 的 ADD COLUMN 无 IF NOT EXISTS)"
+    );
+
+    let store = SqliteMemoryStore::open_in_memory().unwrap();
+    assert!(store.applied_migrations().unwrap().contains(&19));
+    let conn = store.conn().unwrap();
+    let heads: bool = conn
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'memory_chain_heads')",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert!(heads, "V19 必须创建 memory_chain_heads");
+    let mut stmt = conn.prepare("PRAGMA table_info(episodes)").unwrap();
+    let columns: Vec<String> = stmt
+        .query_map([], |row| row.get::<_, String>(1))
+        .unwrap()
+        .map(|row| row.unwrap())
+        .collect();
+    assert!(
+        columns.iter().any(|c| c == "chain_hash"),
+        "V19 必须给 episodes 加 chain_hash, 实际列集: {columns:?}"
+    );
+    assert!(
+        columns.iter().any(|c| c == "chain_prev_hash"),
+        "V19 必须给 episodes 加 chain_prev_hash, 实际列集: {columns:?}"
+    );
 }

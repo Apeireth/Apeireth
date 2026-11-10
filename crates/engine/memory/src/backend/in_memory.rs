@@ -218,6 +218,7 @@ impl crate::scope::ScopedMemoryBackend for InMemoryBackend {
     }
 }
 
+#[allow(dead_code)]
 fn stream_name_to_kind(_name: &str) -> MemoryResult<StreamKind> {
     // 0 装: typed enum 编译期保证 6 个 StreamKind, 无运行时转换
     // 保留为 helper 占位给 caller 用 (e.g. CLI 参数解析); rc 阶段接 SchemaRegistry 时改

@@ -16,6 +16,7 @@
 //! 脱敏会改写请求内容 —— 那是**行为变化**，不是「更安全的默认值」。
 //! 因此闸由 env 显式开启（`APEIRETH_ENABLE_EGRESS_GATE`），关时逐字节零变化。
 
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use apeireth_core::kernel::Clock;
@@ -45,6 +46,13 @@ pub const EGRESS_USAGE_CHAT: &str = "chat";
 /// 线程安全：`RedactionBridge` 内部有本会话登记簿（真值驻留处），用互斥量串行化。
 pub struct RedactionEgressGate {
     bridge: Mutex<RedactionBridge>,
+    /// **出网动作序号**（单调递增）：与毫秒时间戳一起组成 `action_id`。
+    ///
+    /// 修「同毫秒两次出网 ⇒ 同 `action_id`」的碰撞（2026-10-25 实测发现）：
+    /// 毫秒级 id 在同毫秒内产生两条影响声明时会**共用一个 id** ⇒ 破坏「一次
+    /// 行动 ↔ 一条影响声明」的 1:1 不变式（后果回填的绑定账会因此拒绑第二侧）。
+    /// 加序号后 id 恒唯一（进程内单调）。
+    action_seq: AtomicU64,
     /// 出域账本（承诺措辞里「记录已知流向」的载体；零真值、append-only）。
     ledger: Arc<EgressLedger>,
     /// 授权策略对象（可携带/可委托/可过期/可追溯）。
@@ -75,6 +83,7 @@ impl RedactionEgressGate {
     pub fn with_session_key(session_key: [u8; 32]) -> Self {
         Self {
             bridge: Mutex::new(RedactionBridge::with_session_key(session_key)),
+            action_seq: AtomicU64::new(0),
             ledger: Arc::new(EgressLedger::new(None)),
             authorization: None,
             clock: Arc::new(apeireth_core::kernel::SystemClock),
@@ -87,6 +96,7 @@ impl RedactionEgressGate {
     pub fn with_ledger(ledger: Arc<EgressLedger>) -> Self {
         Self {
             bridge: Mutex::new(RedactionBridge::new_session()),
+            action_seq: AtomicU64::new(0),
             ledger,
             authorization: None,
             clock: Arc::new(apeireth_core::kernel::SystemClock),
@@ -117,6 +127,13 @@ impl RedactionEgressGate {
         clock: Arc<dyn Clock>,
     ) -> Self {
         self.authorization = Some(Arc::new(policy));
+        self.clock = clock;
+        self
+    }
+
+    /// 注入时钟（判定过期与 `action_id` 时间戳用；默认系统时钟）。
+    #[must_use]
+    pub fn with_clock(mut self, clock: Arc<dyn Clock>) -> Self {
         self.clock = clock;
         self
     }
@@ -172,7 +189,9 @@ impl RedactionEgressGate {
     /// （那要等上下文装配面接上来）。**空 = 如实没有**，不编。
     fn declare_impact(&self, destination: &str, _redacted: bool) {
         let now_ms = self.clock.now().timestamp_millis();
-        let action_id = format!("act-{now_ms}");
+        // 序号入 id ⇒ 同毫秒多次出网也不撞 id（1:1 不变式的前提）。
+        let seq = self.action_seq.fetch_add(1, Ordering::SeqCst);
+        let action_id = format!("act-{now_ms}-{seq}");
         // 后果初始状态 = `unknown`（**显式**，不假装知道）。
         // 模型侧发生了什么我们观测不到 —— 设计文档 §2.3 的最小实现就是这一档。
         // **独立于影响声明**：没挂问责账本时也要记后果。
@@ -291,6 +310,28 @@ impl EgressGate for RedactionEgressGate {
     }
 }
 
+/// 闸 env 的**生效判定**（值语义；不含 env 读取）。
+///
+/// 未设 / 空 / `"0"` / `"false"`（大小写不敏感）= **关**；其余（`"1"` 或授权策略
+/// JSON）= **开**。
+///
+/// 装配根（模块表）与闸工厂**共用这一条判据** —— 两边各判一次必然漂移。
+pub fn egress_gate_enabled_from_value(raw: &str) -> bool {
+    let trimmed = raw.trim();
+    !(trimmed.is_empty() || trimmed == "0" || trimmed.eq_ignore_ascii_case("false"))
+}
+
+/// 闸 env 是否**开启**（读 env；未设 = 关）。
+///
+/// 问责闭环第 ③ 步的**自动回填面**与问责面共用这一个开关：
+/// 开闸 = 装影响声明 + 后果账 + 自动回填；关闸 = 一样都不装（零注册）。
+pub fn egress_gate_enabled_from_env() -> bool {
+    match std::env::var(EGRESS_GATE_ENV) {
+        Ok(raw) => egress_gate_enabled_from_value(&raw),
+        Err(_) => false,
+    }
+}
+
 /// 按 env 决定是否装配闸。**两种形态**（不新增第二个开关 —— env 名数有棘轮）：
 ///
 /// - 未设 / 其它值 → `None`（runtime 侧默认放行，零行为变化）；
@@ -335,7 +376,8 @@ pub fn egress_gate_from_env_with_all(
 ) -> Option<std::sync::Arc<dyn EgressGate>> {
     let raw = std::env::var(EGRESS_GATE_ENV).ok()?;
     let trimmed = raw.trim();
-    if trimmed.is_empty() || trimmed == "0" || trimmed.eq_ignore_ascii_case("false") {
+    // 生效判据与装配根共用（`egress_gate_enabled_from_value`）。
+    if !egress_gate_enabled_from_value(&raw) {
         return None;
     }
     let ledger = Arc::new(EgressLedger::new(ledger_path));
@@ -348,19 +390,67 @@ pub fn egress_gate_from_env_with_all(
             ConsequenceTracker::with_ledger(path),
         )));
     }
-    if trimmed != "1" {
-        match AuthorizationPolicy::from_carryable(trimmed) {
-            Ok(policy) => {
-                gate =
-                    gate.with_authorization(policy, Arc::new(apeireth_core::kernel::SystemClock));
-            }
-            Err(error) => {
-                eprintln!("[egress] 授权策略解析失败（{error}）—— 不装配出网闸");
-                return None;
-            }
+    match plan_authorization(trimmed) {
+        GateAuthorizationPlan::RedactionOnly => {}
+        GateAuthorizationPlan::WithPolicy(policy) => {
+            gate = gate.with_authorization(policy, Arc::new(apeireth_core::kernel::SystemClock));
+        }
+        GateAuthorizationPlan::DenyAll { error } => {
+            // ⚠️ **fail-closed**（2026-10-31 · 静态安全审计复核）。
+            //
+            // 旧行为是 `return None` ⇒ **闸根本不装配** ⇒ 脱敏与授权**双双失效**
+            // ⇒ 而启用判定（`egress_gate_enabled_from_value`）对「非 1 非空」的值
+            //   一律为**真** ⇒ ⇒ 操作者以为闸开着，实际**全裸出网**（fail-open）。
+            //
+            // ⇒ 新行为：闸**照常装配**（脱敏仍在），但挂一个**空授权策略**
+            //   （无 grant ⇒ `allows_at` 必假 ⇒ 出网一律 `Deny`）
+            //   ⇒ ⇒ 配置写错 ⇒ **显式拒绝**，而不是静默放行。
+            eprintln!(
+                "[egress] 授权策略解析失败（{error}）—— **按 fail-closed 处理**：闸照常装配，出网一律拒绝"
+            );
+            gate = gate.with_authorization(
+                AuthorizationPolicy::new(
+                    "egress-gate",
+                    "egress-gate-malformed-policy",
+                    0,
+                    Vec::new(),
+                ),
+                Arc::new(apeireth_core::kernel::SystemClock),
+            );
         }
     }
     Some(Arc::new(gate) as std::sync::Arc<dyn EgressGate>)
+}
+
+/// 授权策略的装配计划（**纯函数** ⇒ 可直接测，不碰 env）。
+///
+/// | env 值 | 计划 | 语义 |
+/// |---|---|---|
+/// | `"1"` | `RedactionOnly` | 闸照常装配，**只做脱敏**（无授权判定）|
+/// | 合法策略 JSON | `WithPolicy` | 闸 + 授权策略（未授权即拒绝，fail-closed）|
+/// | **其它非空值（畸形）** | `DenyAll` | **fail-closed**：闸照常装配，但出网一律拒绝 |
+///
+/// ⚠️ 畸形值**不能**当成「没配」（那会 fail-open ⇒ 脱敏与授权一起消失）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GateAuthorizationPlan {
+    /// `"1"` ⇒ 只脱敏。
+    RedactionOnly,
+    /// 合法策略 ⇒ 挂上它。
+    WithPolicy(AuthorizationPolicy),
+    /// 畸形 ⇒ 一律拒（fail-closed）。
+    DenyAll { error: String },
+}
+
+/// 判定 env 值对应的授权装配计划（**纯函数**）。
+pub fn plan_authorization(trimmed: &str) -> GateAuthorizationPlan {
+    let trimmed = trimmed.trim();
+    if trimmed == "1" {
+        return GateAuthorizationPlan::RedactionOnly;
+    }
+    match AuthorizationPolicy::from_carryable(trimmed) {
+        Ok(policy) => GateAuthorizationPlan::WithPolicy(policy),
+        Err(error) => GateAuthorizationPlan::DenyAll { error },
+    }
 }
 
 #[cfg(test)]
@@ -390,6 +480,28 @@ mod tests {
                 name: None,
             }],
         )
+    }
+
+    #[test]
+    fn same_millisecond_egresses_get_distinct_action_ids() {
+        // 同毫秒两次出网 ⇒ 两条影响声明必须**不同 id**（1:1 不变式的前提）。
+        // 修前 id = `act-{now_ms}` ⇒ 同毫秒撞 id（后果回填绑定账会拒绑第二侧）。
+        let dir = tempfile::tempdir().expect("temp dir");
+        let ledger = Arc::new(AccountabilityLedger::new(Some(
+            dir.path().join("impact.jsonl"),
+        )));
+        let gate = RedactionEgressGate::new()
+            .with_accountability(Arc::clone(&ledger))
+            .with_clock(Arc::new(FixedClock(1_700_000_000_000)));
+        let request = request_with("今天天气不错");
+        assert!(matches!(gate.vet(&request), EgressVerdict::Pass));
+        assert!(matches!(gate.vet(&request), EgressVerdict::Pass));
+        let statements = ledger.statements();
+        assert_eq!(statements.len(), 2, "两次出网 ⇒ 两条影响声明");
+        assert_ne!(
+            statements[0].action_id, statements[1].action_id,
+            "同毫秒两次出网不得共用 action_id"
+        );
     }
 
     #[test]
@@ -651,6 +763,102 @@ mod tests {
         let value = std::env::var(EGRESS_GATE_ENV).ok();
         if value.as_deref() != Some("1") {
             assert!(egress_gate_from_env().is_none());
+        }
+    }
+
+    // ===== 2026-10-31 · 静态安全审计复核：畸形策略必须 fail-closed =====
+
+    /// 畸形策略 ⇒ **必须**是 fail-closed 计划（**不能**是「不装配闸」）。
+    #[test]
+    fn malformed_policy_plans_deny_all_not_no_gate() {
+        for bad in [
+            "{not json",
+            r#"{"subject":"u1""#, // 截断的 JSON
+            "true",               // 不是 "1"，也不是策略
+            "[]",                 // 类型不对
+        ] {
+            match plan_authorization(bad) {
+                GateAuthorizationPlan::DenyAll { .. } => {}
+                other => panic!("畸形值 {bad:?} 必须走 fail-closed，实际：{other:?}"),
+            }
+        }
+    }
+
+    /// **合法但空 grants** 的策略 ⇒ 挂上它 ⇒ 但**无 grant ⇒ 一律拒**（同样 fail-closed）。
+    #[test]
+    fn valid_but_empty_grants_policy_still_denies() {
+        let json = r#"{"version":1,"subject":"u1","issuer":"o","issued_at_ms":1,"grants":[]}"#;
+        match plan_authorization(json) {
+            GateAuthorizationPlan::WithPolicy(policy) => {
+                assert!(policy.grants.is_empty());
+                let gate = RedactionEgressGate::new()
+                    .with_authorization(policy, Arc::new(apeireth_core::kernel::SystemClock));
+                assert!(
+                    matches!(
+                        gate.vet(&request_with("今天天气不错")),
+                        EgressVerdict::Deny { .. }
+                    ),
+                    "空授权 ⇒ 必须拒绝出网"
+                );
+            }
+            other => panic!("合法策略应走 WithPolicy，实际：{other:?}"),
+        }
+    }
+
+    /// `"1"` ⇒ 只脱敏（既有语义不变）。
+    #[test]
+    fn one_plans_redaction_only() {
+        assert_eq!(
+            plan_authorization("1"),
+            GateAuthorizationPlan::RedactionOnly
+        );
+        assert_eq!(
+            plan_authorization(" 1 "),
+            GateAuthorizationPlan::RedactionOnly
+        );
+    }
+
+    /// 合法策略 ⇒ 挂上它。
+    #[test]
+    fn valid_policy_plans_with_policy() {
+        let json = r#"{"version":1,"subject":"u1","issuer":"owner","issued_at_ms":1,
+            "grants":[{"resource":"egress","action":"egress"}]}"#;
+        match plan_authorization(json) {
+            GateAuthorizationPlan::WithPolicy(policy) => {
+                assert_eq!(policy.subject, "u1");
+            }
+            other => panic!("合法策略应走 WithPolicy，实际：{other:?}"),
+        }
+    }
+
+    /// **端到端**：畸形 env 值 ⇒ 闸**被装配**且**出网被拒**（fail-closed）。
+    ///
+    /// ⚠️ 不能直接改 env（全局状态 + 2024 版 `set_var` 不安全）
+    /// ⇒ ⇒ 用纯函数 + 显式装配走同一条语义路径。
+    #[test]
+    fn malformed_policy_yields_installed_gate_that_denies() {
+        let plan = plan_authorization("{broken");
+        let gate = match plan {
+            GateAuthorizationPlan::DenyAll { .. } => RedactionEgressGate::new().with_authorization(
+                AuthorizationPolicy::new(
+                    "egress-gate",
+                    "egress-gate-malformed-policy",
+                    0,
+                    Vec::new(),
+                ),
+                Arc::new(apeireth_core::kernel::SystemClock),
+            ),
+            _ => panic!("畸形值必须走 DenyAll"),
+        };
+        let request = request_with("今天天气不错");
+        match gate.vet(&request) {
+            EgressVerdict::Deny { reason } => {
+                assert!(
+                    reason.contains("未获授权") || reason.contains("拒绝"),
+                    "拒绝理由应可读: {reason}"
+                );
+            }
+            other => panic!("畸形策略下必须拒绝出网，实际：{other:?}"),
         }
     }
 

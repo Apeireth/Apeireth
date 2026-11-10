@@ -11,8 +11,9 @@ use std::sync::{Arc, Mutex};
 
 use apeireth_gateway::{
     build_gateway_state_with_services, canonical_router_with_state, AuditCommand, GatewayServices,
-    GatewayState, GatewayTokenGate,
+    GatewayState, GatewayTokenGate, UserAccess,
 };
+use apeireth_governance::{UserRecord, UserTable};
 use apeireth_runtime::canonical::Runtime;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
@@ -66,6 +67,17 @@ struct Harness {
 }
 
 /// One gateway assembly with an explicit gate mode (no env mutation).
+///
+/// 角色面为什么**激活** (P0-1 · 2026-11-04): 本文件用 `/v1/admin/config` 当
+/// 敏感面探针, 而管理面要求 `AdminControl` 档 ⇒ 角色面未激活时管理面
+/// fail-closed 403 ⇒ 本文件要测的是**令牌门**三态语义, 不是角色门 ⇒ 角色面
+/// 显式装上, 且把过门署名名 (env 面单令牌 = `env`) 绑给一名 owner, 让管理面
+/// 可达。
+///
+/// ⚠️ **未设防口径的 `anonymous` 不再是 owner** (F-2 · 2026-11-05): 角色门
+/// **只认已认证身份** ⇒ 未设防/逃生阀下的过门身份 (`anonymous`, 未认证) 不是
+/// 任何用户 ⇒ 管理面对它一律 fail-closed ⇒ ⇒ 本文件在未设防/逃生阀口径下改用
+/// **读面**探针 (`GET /v1/providers`, 不经角色门判权) 来观察令牌门的三态语义。
 async fn harness(gate: GatewayTokenGate) -> Harness {
     let runtime = Arc::new(Runtime::builder().build().await.unwrap());
     let audit = Arc::new(RecordingAudit::default());
@@ -75,7 +87,21 @@ async fn harness(gate: GatewayTokenGate) -> Harness {
     };
     let mut state = build_gateway_state_with_services(runtime, services);
     state.token_gate = gate;
+    state.user_access = UserAccess::from_table(owner_table());
     Harness { state, audit }
+}
+
+/// 一名 owner, 绑定 env 单令牌面的过门署名名 (未设防口径的 `anonymous`
+/// **不是** owner —— 见文件头的 F-2 说明)。
+fn owner_table() -> UserTable {
+    let users = UserTable::new(vec![UserRecord {
+        user_id: "user-owner".to_string(),
+        role: "owner".to_string(),
+        client_names: vec![GatewayTokenGate::ENV_FACE_CLIENT_NAME.to_string()],
+        domain: None,
+    }]);
+    users.validate().expect("valid user table");
+    users
 }
 
 fn admin_get(token: Option<&str>) -> Request<Body> {
@@ -90,6 +116,17 @@ fn admin_get(token: Option<&str>) -> Request<Body> {
             .insert("authorization", token_header(token));
     }
     request
+}
+
+/// 读面探针 (不经角色门判权): 未设防/逃生阀口径下用它观察**令牌门**的放行
+/// 语义 —— 写面/管理面还要过角色门 (未认证身份 ⇒ fail-closed), 探针放那里
+/// 测到的就不是令牌门 (F-2 · 2026-11-05)。
+fn providers_get() -> Request<Body> {
+    Request::builder()
+        .method("GET")
+        .uri("/v1/providers")
+        .body(Body::empty())
+        .unwrap()
 }
 
 fn admin_get_with_origin(token: Option<&str>, origin: &str) -> Request<Body> {
@@ -245,18 +282,22 @@ async fn unset_gate_accepts_unauthenticated_calls_with_warning_frame_and_audit()
     let router = canonical_router_with_state(harness.state.clone());
     let mut frames = harness.state.events.subscribe();
 
-    // 无令牌客户端兼容路径: 调用到达 handler (未知审批 → 400), 不是 401。
-    let (status, _) = json_body(router.oneshot(resolve_post(None)).await.unwrap()).await;
+    // 无令牌客户端兼容路径: 调用**过令牌门**并到达 handler (不是 401)。
+    //
+    // ⚠️ 探针选**读面**: 写面/管理面还要过角色门 (F-2 · 2026-11-05: 未认证
+    // 身份 ≡ 未绑定用户 ⇒ 那些面 fail-closed) ⇒ 探针放那里测到的就不是
+    // 「令牌门放行」。
+    let (status, _) = json_body(router.oneshot(providers_get()).await.unwrap()).await;
     assert_eq!(
         status,
-        StatusCode::BAD_REQUEST,
+        StatusCode::OK,
         "未设令牌时无认证调用必须放行到 handler"
     );
 
     // 警告帧: 端点 + 模式, 不含令牌面。
     let frame = frames.try_recv().expect("warning frame");
     assert_eq!(frame.event, "gateway_auth_unprotected");
-    assert_eq!(frame.data["endpoint"], "/v1/approvals/resolve");
+    assert_eq!(frame.data["endpoint"], "/v1/providers");
     assert_eq!(frame.data["mode"], "env_unset");
 
     // 审计事实同行留痕。
@@ -264,7 +305,7 @@ async fn unset_gate_accepts_unauthenticated_calls_with_warning_frame_and_audit()
     let detail = harness.audit.detail_of("gateway.auth_unprotected");
     assert_eq!(
         detail.as_deref(),
-        Some("endpoint=/v1/approvals/resolve mode=env_unset")
+        Some("endpoint=/v1/providers mode=env_unset")
     );
 }
 
@@ -280,7 +321,10 @@ async fn declared_unprotected_escape_valve_stays_quiet_but_audit_traced() {
     let router = canonical_router_with_state(harness.state.clone());
     let mut frames = harness.state.events.subscribe();
 
-    let (status, _) = json_body(router.oneshot(admin_get(None)).await.unwrap()).await;
+    // ⚠️ 探针选**读面** (F-2 · 2026-11-05): 逃生阀下的过门身份是 `anonymous`
+    // (**未认证**) ⇒ 角色门不认 ⇒ 管理面对它 fail-closed ⇒ 探针放管理面上
+    // 测到的就不是「令牌门放行」。
+    let (status, _) = json_body(router.oneshot(providers_get()).await.unwrap()).await;
     assert_eq!(status, StatusCode::OK, "逃生阀下放行");
 
     assert!(frames.try_recv().is_err(), "明示不设防不逐次发警告帧");
@@ -297,7 +341,7 @@ async fn declared_unprotected_escape_valve_stays_quiet_but_audit_traced() {
     let detail = harness.audit.detail_of("gateway.auth_unprotected");
     assert_eq!(
         detail.as_deref(),
-        Some("endpoint=/v1/admin/config mode=declared_none")
+        Some("endpoint=/v1/providers mode=declared_none")
     );
 }
 

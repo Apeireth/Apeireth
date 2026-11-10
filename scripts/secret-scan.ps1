@@ -86,6 +86,14 @@ $AllowlistPaths = @(
     'crates/adapters/cli/tests/*',
     'crates/adapters/sdk/examples/*',
     'crates/capabilities/tools/src/guardrail.rs',
+    # fuzz target 里的 PEM 形态假键 (测私钥体脱敏覆盖用——假键非真凭据;
+    # 与上面 guardrail.rs 同类：脱敏面测试必须写得出 PEM 的真形状)
+    'fuzz/fuzz_targets/guard_supervisor.rs',
+      # fuzz target 里的**假**凭据标记 (测「图片元数据里的凭据要脱敏」用——
+      # `F0ZZ-SECRET-MARKER-8A2C` 写在生成的 PNG 的 tEXt Comment 块里，
+      # 用来验证 image_ops 的元数据脱敏面能盖住它。假标记非真凭据;
+      # 同类：脱敏面测试必须写得出凭据的真形状，否则测不到要测的那条路)
+      'fuzz/fuzz_targets/fetch_image.rs',
     'crates/adapters/sdk/src/livekit/auth.rs',
     'crates/engine/perception/tests/*',
     'crates/foundation/governance/src/input_security.rs',

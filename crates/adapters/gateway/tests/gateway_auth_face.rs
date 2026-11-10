@@ -14,8 +14,9 @@ use std::sync::{Arc, Mutex};
 use apeireth_gateway::{
     build_gateway_state_with_services, canonical_router_with_state, AuditCommand,
     ClientTokenConfig, ClientTokenSpec, ClientTokenTable, GatewayServices, GatewayState,
-    GatewayTokenGate, UNAUTHENTICATED_PROBE_PATHS,
+    GatewayTokenGate, UserAccess, UNAUTHENTICATED_PROBE_PATHS,
 };
+use apeireth_governance::{UserRecord, UserTable};
 use apeireth_runtime::canonical::Runtime;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
@@ -59,7 +60,13 @@ struct Harness {
     audit: Arc<RecordingAudit>,
 }
 
-/// 一份网关装配 (显式门口径 + 显式令牌表, 不动进程环境)。
+/// 一份网关装配 (显式门口径 + 显式令牌表 + **激活的角色面**, 不动进程环境)。
+///
+/// 角色面为什么在 (P0-1 · 2026-11-04): 管理面 (`/v1/admin/config`) 要求
+/// `AdminControl` 档, 角色面未激活 ⇒ 管理面 fail-closed 403 ⇒ 本文件用管理面
+/// 当「敏感面探针」时必须显式装上 owner, 才是在测**令牌门**而不是角色门。
+/// owner 绑定的客户端名 = 本文件用到的全部过门署名名 (env 面单令牌 = `env`,
+/// 令牌表条目 = 各自 `name`)。
 async fn harness(gate: GatewayTokenGate, clients: ClientTokenTable) -> Harness {
     let runtime = Arc::new(Runtime::builder().build().await.unwrap());
     let audit = Arc::new(RecordingAudit::default());
@@ -70,7 +77,25 @@ async fn harness(gate: GatewayTokenGate, clients: ClientTokenTable) -> Harness {
     let mut state = build_gateway_state_with_services(runtime, services);
     state.token_gate = gate;
     state.client_tokens = clients;
+    state.user_access = UserAccess::from_table(owner_table());
     Harness { state, audit }
+}
+
+/// 一名 owner, 绑定本文件用到的全部过门署名名。
+fn owner_table() -> UserTable {
+    let users = UserTable::new(vec![UserRecord {
+        user_id: "user-owner".to_string(),
+        role: "owner".to_string(),
+        client_names: vec![
+            GatewayTokenGate::ENV_FACE_CLIENT_NAME.to_string(),
+            "tui".to_string(),
+            "desktop-shell".to_string(),
+            "im-bridge".to_string(),
+        ],
+        domain: None,
+    }]);
+    users.validate().expect("valid user table");
+    users
 }
 
 fn table(entries: &[(&str, &str)]) -> ClientTokenTable {

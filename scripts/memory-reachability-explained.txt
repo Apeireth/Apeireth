@@ -1,0 +1,138 @@
+# 记忆 crate「已解释不可达」基线（**人工资产** ⇒ `--update` 不许冲掉）
+#
+# 由 scripts/check_memory_reachability.py 读取（**只读**）。
+# 配套：scripts/memory-reachability-baseline.txt（可达数下限棘轮）。
+#
+# ============================================================================
+# 这个文件解决什么
+# ============================================================================
+# `check_memory_reachability.py` 报「能力可达率 = 69/132 = 52%」⇒ ⇒ **52% 这个数
+# 不能指导行动**：不可达的 63 条里，**绝大部分不是缺口**（评估设施 / 研究族 /
+# 替代后端 / 台账已解释）⇒ ⇒ ⇒ **一个不分层的数字 = 一个没法用的数字**。
+#
+# ⇒ ⇒ 所以这里登记「**已解释**」：这些模块在闸门判据下**不可达**，但
+#   **台账已经说清楚它们为什么不是行动项** ⇒ ⇒ ⇒ **不需要人再去看一眼**。
+#
+# ⇒ ⇒ 闸门因此**同时报两个数**：
+#   * **能力可达率**（原口径，**不动**）⇒ ⇒ 给全局视图（别破坏既有基线与 CI 语义）；
+#   * **未解释缺口**（= 不可达 − 已解释）⇒ ⇒ **给行动目标**（这才是要干的活）。
+#
+# ============================================================================
+# 判据来源**单一**（纪律）
+# ============================================================================
+# **本文件不许自造分类语义。** 每一条的「理由」**必须**指向
+# `docs/status/unwired-ledger.md`（未接线台账 —— 本仓「已实现但没接电」的**唯一真源**）
+# 的**既有分类**，且台账里**明确写过**这个模块。
+#
+# 台账没写 ⇒ ⇒ **一律算「未解释缺口」** ⇒ ⇒ 不许在本文件里替台账补语义。
+#
+# 允许引用的台账既有分类（只有这些）：
+#   * §5.1「重复实现（5 条，不是债）」—— 「**已被谁承担**」表；
+#   * §5.2「有意不接（9 条，不是债）」；
+#   * §5.3 整族未接线（`layered_memo` 族 —— 子模块，不在本表分母内）；
+#   * §5.5「B 类（重复实现）」/「C 类（有意不接）」；
+#   * §5.5「A 类」里已标「已修 / PRODUCTION WIRED」的**模块级**条目
+#     ⇒ ⇒ 含义 = 「**它其实已经接上了**，只是闸门判据看不见（重导出面未解析）」；
+#   * §三「死 API」里「**保留**」的条目（判据盲区，如 `cfg(kani)` 下才可见）。
+#   * ⭐ **§一「W14–W32 分诊」前言（2026-11-07 主代理裁定补入）**：该前言**逐字点名**
+#     `golden_*` / `*_corpus` / `*_metrics` / `shadow_run` / `d4_eval` / `golden_diag` /
+#     `five_dimensional` / `locomo` / `novel_corpus` / `git_corpus` / `perltqa` / `robustness`
+#     并判「**不是产品能力**」⇒ ⇒ 这是台账**自己的分类结论**（不是本文件自造语义）；
+#     ⚠️ **只在两种条件同时成立时可用**：① 模块名在前言里**逐字出现**；② 台账把
+#     「登记进本文件」**明写为主代理的统一动作**（该前言第三条口径纪律原文如此）。
+#   * ⭐ **§W 系列「登记口径同 §5.x」的条目（2026-11-07 补入）**：例如 `§W33`
+#     （`facade`）明写「登记口径同 §5.1 重复实现」⇒ 视同 §5.1 引用，但理由里必须带
+#     `§W<号>` 与它自述的等价分类，不许只写「同 §5.1」。
+#
+# ============================================================================
+# 格式
+# ============================================================================
+#   explained <模块名>  # <理由>          ← 理由**不许为空**（空 ⇒ 闸门红）
+#   max_unexplained_gap = <数字>          ← 「未解释缺口」的**上限**（棘轮 · 只减不增）
+#
+# ============================================================================
+# 缩表纪律（照 scripts/unwired-baseline.txt 的形态）
+# ============================================================================
+# 1. **只减不增**：`max_unexplained_gap` 只能往下压 ⇒ ⇒ 缺口涨了 ⇒ ⇒ 闸门红
+#    ⇒ ⇒ 要么接线，要么**在台账里补一条**（口径唯一：台账）。
+# 2. **解释会过期**：模块一旦**真的可达**（接上了）⇒ ⇒ 它**不该**再留在本表
+#    ⇒ ⇒ 闸门报「**解释已过期，请移除**」⇒ ⇒ **红** ⇒ ⇒ **本表不会变成永久豁免池**。
+# 3. **`--update` 保留人工资产**：工具只改 `max_unexplained_gap` 一行（且只许往下压），
+#    **头部说明与行内理由是人写的判断依据，工具不许冲掉**。
+# 4. **不靠改判据缩表**：改判据必须说明「旧判据错在哪」（与孤儿基线同一纪律）。
+#
+# ============================================================================
+# 已还的债（证明缩表在发生）
+# ============================================================================
+#   （暂无 —— 本表 2026-11-06 首建）
+#
+# ============================================================================
+# 分组（每组条数写在组标题里）
+# ============================================================================
+
+# --- E1（4 条）：台账 §5.1「重复实现（不是债）」⇒ ⇒ **已被谁承担**
+#     ⇒ 同一能力另有主实现 ⇒ ⇒ 再接一次会引入第二份真相 ⇒ ⇒ 不是债。
+
+explained memory_rank        # 台账 docs/status/unwired-ledger.md §5.1「重复实现（不是债）」L82：排序由 `retrieval_pipeline.rs` + `scope::MemoryRankingConfig` 承担 ⇒ ⇒ 同能力另有主实现 ⇒ ⇒ 不是债
+explained preference_store   # 台账 docs/status/unwired-ledger.md §5.1「重复实现（不是债）」L83：偏好已走 `SQLitePreferenceStore`（`cli/src/lib.rs:1858`）⇒ ⇒ 同能力另有主实现 ⇒ ⇒ 不是债
+explained three_layer        # 台账 docs/status/unwired-ledger.md §5.1「重复实现（不是债）」L84：分层由 `layers.rs` + coordinator 承担（`production.rs:1435`）⇒ ⇒ 同能力另有主实现 ⇒ ⇒ 不是债
+explained vector_distance    # 台账 docs/status/unwired-ledger.md §5.1「重复实现（不是债）」L85：向量数学归 `canonical::vector`（`coordinator.rs:613`）⇒ ⇒ 同能力另有主实现 ⇒ ⇒ 不是债
+
+# --- E2（5 条）：台账 §5.2「有意不接（9 条，不是债）」里的**记忆 crate**条目
+#     ⇒ ⇒ 模块自述 default-off / 研究原型 ⇒ ⇒ **有意不接** ⇒ ⇒ 不是债。
+
+explained dream_consolidation         # 台账 docs/status/unwired-ledger.md §5.2「有意不接（不是债）」L90：模块自述 default-off / 研究原型 ⇒ ⇒ 有意不接 ⇒ ⇒ 不是债
+explained principles                  # 台账 docs/status/unwired-ledger.md §5.2「有意不接（不是债）」L92：同族 ⇒ ⇒ 有意不接 ⇒ ⇒ 不是债
+explained research_non_interference   # 台账 docs/status/unwired-ledger.md §5.2「有意不接（不是债）」L93：同族 ⇒ ⇒ 有意不接 ⇒ ⇒ 不是债
+explained research_roaming_memory     # 台账 docs/status/unwired-ledger.md §5.2「有意不接（不是债）」L94：同族 ⇒ ⇒ 有意不接 ⇒ ⇒ 不是债
+
+# --- E3（3 条）：台账 §5.5「B 类（重复实现）6 条」里的**记忆 crate**条目
+#     ⇒ ⇒ 同能力另有主实现（**已被谁承担**）⇒ ⇒ 不是债。
+
+explained chronicle_crystallizer  # 台账 docs/status/unwired-ledger.md §5.5「B 类（重复实现）」L1306：由 `consolidation` + dreaming 承担 ⇒ ⇒ 同能力另有主实现 ⇒ ⇒ 不是债
+explained history_streams         # 台账 docs/status/unwired-ledger.md §5.5「B 类（重复实现）」L1307：由 `append_only` + `SqliteMemoryStore` 承担 ⇒ ⇒ 同能力另有主实现 ⇒ ⇒ 不是债
+explained wiki_fs                 # 台账 docs/status/unwired-ledger.md §5.5「B 类（重复实现）」L1307：`WikiEntryStore` 已有生产实现 ⇒ ⇒ 同能力另有主实现 ⇒ ⇒ 不是债
+
+# --- E4（2 条）：台账 §5.5「C 类（有意不接）7 条」里的**记忆 crate**条目
+#     ⇒ ⇒ 终局台账裁定「维持未接」⇒ ⇒ 有意不接 ⇒ ⇒ 不是债。
+
+explained admission_gate  # 台账 docs/status/unwired-ledger.md §5.5「C 类（有意不接）」L1310：终局台账裁定「维持未接」⇒ ⇒ 有意不接 ⇒ ⇒ 不是债
+
+# --- E5（1 条）：台账 §三「死 API」的**保留**条目 ⇒ ⇒ **判据盲区**，不是缺口
+#     ⇒ ⇒ 本模块只含 `#[test]` 与 `#[cfg(kani)]` 证明 ⇒ ⇒ stable 生产面看不见它
+#     ⇒ ⇒ 「看不见」的原因是**编译期开关**，不是「忘了接线」。
+
+explained organ_kani_proofs  # 台账 docs/status/unwired-ledger.md §三「死 API」L50「保留」条：`organ_kani_proofs` 在 `cfg(kani)` 下使用；stable 构建看不到使用但**不是死代码** ⇒ ⇒ 判据盲区 ⇒ ⇒ 不是缺口
+
+# --- E6（2 条）：台账 §5.5「A 类」已标「已修 / PRODUCTION WIRED」的**模块级**条目
+#     ⇒ ⇒ 含义 = 「**它其实已经接上了**」⇒ ⇒ 落在不可达集合里是**闸门判据漏报**
+#     ⇒ ⇒ （漏报原因：`lib.rs` 用 `pub use <模块>::<类型>` 重导出 ⇒ ⇒ 生产侧只按
+#     ⇒ ⇒ **类型名**引用 ⇒ ⇒ 词法判据看不见「模块路径」）⇒ ⇒ 不是行动项。
+
+
+# ============================================================================
+# 「未解释缺口」的**上限**（棘轮 · **只减不增**）
+# ============================================================================
+# 语义：不可达模块数 **减去** 本表已解释条目 ⇒ ⇒ 允许的最大值。
+#   * 缺口 **≤** 上限 ⇒ ⇒ 绿；
+#   * 缺口 **>** 上限 ⇒ ⇒ 红 ⇒ ⇒ 要么接线，要么**在台账里补一条**（口径唯一）；
+#   * `--update` **只许往下压**（缺口变小才压）⇒ ⇒ 涨了不许自动抬。
+# ============================================================================
+
+explained golden_diag  # 台账 docs/status/unwired-ledger.md §一「W14–W32 分诊」前言（L74-76）明列为「**评估/基准/语料族** ⇒ ⇒ **不是产品能力**」：离线评测诊断夹具 ⇒ ⇒ 由 tests/examples/离线基准驱动，不进生产链路 ⇒ ⇒ 不是接线缺口
+explained golden_fair  # 台账 docs/status/unwired-ledger.md §一「W14–W32 分诊」前言（L74-76）明列为「**评估/基准/语料族** ⇒ ⇒ **不是产品能力**」：公平卷 golden 评测夹具 ⇒ ⇒ 由 tests/examples/离线基准驱动，不进生产链路 ⇒ ⇒ 不是接线缺口
+explained golden_injection  # 台账 docs/status/unwired-ledger.md §一「W14–W32 分诊」前言（L74-76）明列为「**评估/基准/语料族** ⇒ ⇒ **不是产品能力**」：注入类 golden 评测夹具（v1） ⇒ ⇒ 由 tests/examples/离线基准驱动，不进生产链路 ⇒ ⇒ 不是接线缺口
+explained golden_injection2  # 台账 docs/status/unwired-ledger.md §一「W14–W32 分诊」前言（L74-76）明列为「**评估/基准/语料族** ⇒ ⇒ **不是产品能力**」：注入类 golden 评测夹具（v2） ⇒ ⇒ 由 tests/examples/离线基准驱动，不进生产链路 ⇒ ⇒ 不是接线缺口
+explained locomo_corpus  # 台账 docs/status/unwired-ledger.md §一「W14–W32 分诊」前言（L74-76）明列为「**评估/基准/语料族** ⇒ ⇒ **不是产品能力**」：LoCoMo 语料适配 ⇒ ⇒ 由 tests/examples/离线基准驱动，不进生产链路 ⇒ ⇒ 不是接线缺口
+explained novel_corpus  # 台账 docs/status/unwired-ledger.md §一「W14–W32 分诊」前言（L74-76）明列为「**评估/基准/语料族** ⇒ ⇒ **不是产品能力**」：内部卷语料适配 ⇒ ⇒ 由 tests/examples/离线基准驱动，不进生产链路 ⇒ ⇒ 不是接线缺口
+explained git_corpus  # 台账 docs/status/unwired-ledger.md §一「W14–W32 分诊」前言（L74-76）明列为「**评估/基准/语料族** ⇒ ⇒ **不是产品能力**」：git 语料适配 ⇒ ⇒ 由 tests/examples/离线基准驱动，不进生产链路 ⇒ ⇒ 不是接线缺口
+explained delivery_metrics  # 台账 docs/status/unwired-ledger.md §一「W14–W32 分诊」前言（L74-76）明列为「**评估/基准/语料族** ⇒ ⇒ **不是产品能力**」：交付度量（评估设施） ⇒ ⇒ 由 tests/examples/离线基准驱动，不进生产链路 ⇒ ⇒ 不是接线缺口
+explained forgetting_metrics  # 台账 docs/status/unwired-ledger.md §一「W14–W32 分诊」前言（L74-76）明列为「**评估/基准/语料族** ⇒ ⇒ **不是产品能力**」：遗忘度量（评估设施） ⇒ ⇒ 由 tests/examples/离线基准驱动，不进生产链路 ⇒ ⇒ 不是接线缺口
+explained quality_metrics  # 台账 docs/status/unwired-ledger.md §一「W14–W32 分诊」前言（L74-76）明列为「**评估/基准/语料族** ⇒ ⇒ **不是产品能力**」：质量度量（评估设施） ⇒ ⇒ 由 tests/examples/离线基准驱动，不进生产链路 ⇒ ⇒ 不是接线缺口
+explained robustness_metrics  # 台账 docs/status/unwired-ledger.md §一「W14–W32 分诊」前言（L74-76）明列为「**评估/基准/语料族** ⇒ ⇒ **不是产品能力**」：鲁棒度量（评估设施） ⇒ ⇒ 由 tests/examples/离线基准驱动，不进生产链路 ⇒ ⇒ 不是接线缺口
+explained d4_eval  # 台账 docs/status/unwired-ledger.md §一「W14–W32 分诊」前言（L74-76）明列为「**评估/基准/语料族** ⇒ ⇒ **不是产品能力**」：D4 离线增量价值评估 ⇒ ⇒ 由 tests/examples/离线基准驱动，不进生产链路 ⇒ ⇒ 不是接线缺口
+explained five_dimensional  # 台账 docs/status/unwired-ledger.md §一「W14–W32 分诊」前言（L74-76）明列为「**评估/基准/语料族** ⇒ ⇒ **不是产品能力**」：五维人格评估/研究族（生产人格面走 persona_layer/persona_store_sqlite） ⇒ ⇒ 由 tests/examples/离线基准驱动，不进生产链路 ⇒ ⇒ 不是接线缺口
+explained perltqa_adapter  # 台账 docs/status/unwired-ledger.md §一「W14–W32 分诊」前言（L74-76）明列为「**评估/基准/语料族** ⇒ ⇒ **不是产品能力**」：PerLTQA 基准语料适配 ⇒ ⇒ 由 tests/examples/离线基准驱动，不进生产链路 ⇒ ⇒ 不是接线缺口
+explained facade  # 台账 docs/status/unwired-ledger.md §W33（L114，登记口径同 §5.1「重复实现（不是债）」）：`MemoryMutationFacade` 三能力（建承诺 / 承诺 CAS 完成 / 人格 CAS 增量）**逐条同源**，已被 `CanonicalMemoryTypedSink`（crates/engine/runtime-assembly/src/canonical/memory_typed_sink.rs:21，生产装配 crates/adapters/cli/src/lib.rs:2025）承担 ⇒ ⇒ 同能力已有主实现 ⇒ ⇒ 不重复接线
+
+max_unexplained_gap = 0

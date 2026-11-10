@@ -153,7 +153,7 @@ graph TD
 | O-5 不假装（0 装 PASS） | 绝不伪装 | 未接线写未接线；桩显式断言；未实测写未实测 |
 | O-6 永远追求最优 | 总体 > 系统 > 架构三阶审查 | 每条工程决策必写三段审查 + 拒掉的备选 + 拒理由 |
 
-细则见 [philosophy.md](../01-architecture/philosophy.md)；能力四级口径（IMPLEMENTED / PRODUCTION WIRED / DEFAULT ENABLED / HARDWARE VALIDATED）见 [system-capabilities.md](../01-architecture/system-capabilities.md) 头部。
+细则见 [philosophy.md](../01-architecture/philosophy.md)；能力口径阶梯（NOT IMPLEMENTED < IMPLEMENTED < PRODUCTION WIRED < HARDWARE VALIDATED；**`DEFAULT ENABLED` 不是一级，是横切属性**——默认开/关，与阶梯正交）见 [system-capabilities.md](../01-architecture/system-capabilities.md) 头部与 [claims.yaml](../status/claims.yaml) 头部。
 
 ### 3.3 O-6 三阶审查怎么写
 

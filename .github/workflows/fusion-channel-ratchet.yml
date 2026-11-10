@@ -1,0 +1,76 @@
+name: Fusion channel ratchet (融合通道棘轮)
+
+# 「**不许不涨**」的机检守卫（**接线面**）。
+#
+# 与既有闸门**互补**（三个面，三条尺）：
+#   * `unwired-ratchet.yml`：**公开 API 死了多少**（孤儿面）；
+#   * `check_golden_baseline`：**单路 BM25 的准确度不许掉**（词法面）；
+#   * ⭐ **本 workflow**：**多路融合不许让召回变差**（**融合面**）。
+#
+# # 为什么必须有这一条
+#
+# 既有 golden 闸门量的是**单路 BM25**（`golden_run::run` 直接调 BM25 源）
+# ⇒ ⇒ **通道级改动（加召回通道 / 加 as-of / 换融合配方）在那个闸门上完全看不见**
+# ⇒ ⇒ ⇒ 「不许变差」的纪律**对通道级改动是失效的**。
+#
+# 本 workflow 跑 `scripts/check_fusion_channels.py`：
+#   * 同一份考卷**跑两遍**（单路 vs 多路）⇒ ⇒ 量出**每个通道的收益**；
+#   * `delta < 0` ⇒ ⇒ **红**（「不许不涨」⇒ ⇒ 有害的通道不许进生产）；
+#   * `delta == 0` ⇒ ⇒ **绿**（中性通道允许 ⇒ ⇒ **但绝不虚报它涨了**）。
+#
+# ⚠️ **口径限制**（读数字前必须知道）：内部卷的题是「**从记录里挖出来的**」
+#    ⇒ ⇒ **天然偏向词面命中** ⇒ ⇒ **delta 是下界** ⇒ ⇒
+#    ⇒ ⇒ ⇒ **本闸门能证明「没有害」，不能证明「有大用」**。
+#
+# ⚠️ **缺语料时** ⇒ ⇒ 脚本**如实跳过并退出 0**（跳过不是通过 ⇒ ⇒ 打印里写明）。
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'crates/engine/memory/**'
+      - 'crates/foundation/plugin/**'
+      - 'scripts/check_fusion_channels.py'
+      - 'scripts/fusion-channels-baseline.json'
+      - '.github/workflows/fusion-channel-ratchet.yml'
+  pull_request:
+    paths:
+      - 'crates/engine/memory/**'
+      - 'crates/foundation/plugin/**'
+      - 'scripts/check_fusion_channels.py'
+      - 'scripts/fusion-channels-baseline.json'
+      - '.github/workflows/fusion-channel-ratchet.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fusion-channel-ratchet:
+    name: 融合通道（不许不涨）
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@1.97.1
+
+      # ⚠️ **语料必须先到位**（2026-11-06 主指挥补）。
+      # 此前本 workflow **没有下载语料** ⇒ ⇒ 脚本「缺语料时如实跳过并退出 0」
+      # ⇒ ⇒ ⇒ **这个闸门自诞生起就一直「不判」**（形同虚设）
+      # ⇒ ⇒ 且 `paths` 过滤器在长命分支上**无效**（比 PR 的**累积 diff**）
+      # ⇒ ⇒ ⇒ 一直触发、一直跳过 ⇒ ⇒ 磁盘与时间白花。
+      #
+      # ⇒ ⇒ 照 `golden-baseline.yml` 的既有做法（**不自创**）：
+      # 语料是**公共领域小说 + SHA-256 固定**（`scripts/download_novels.sh`）
+      # ⇒ ⇒ 落在 `$APEIRETH_DATA_DIR/novels/`
+      # ⇒ ⇒ 与 `check_fusion_channels.py` 的 `_corpus_root()` **同口径** ✔
+      - name: 下载内部卷语料（公共领域小说 · SHA-256 固定）
+        run: bash scripts/download_novels.sh
+        env:
+          APEIRETH_DATA_DIR: /tmp/apeireth-data
+
+      - name: 检查融合通道不许让召回变差
+        run: python3 scripts/check_fusion_channels.py
+        env:
+          APEIRETH_DATA_DIR: /tmp/apeireth-data

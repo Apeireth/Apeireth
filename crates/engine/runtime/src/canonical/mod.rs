@@ -35,6 +35,8 @@ pub mod context;
 // 内部控制命令: 注册式状态请求面 (描述符与实现分离; 内核不匹配业务工具名)。
 pub mod control;
 pub mod plan_mode_control;
+/// **主体 → 会话**归属映射的**端口**（审计 P1 收口；实现注入在装配层）。
+pub mod principal_sessions;
 // W3-① 多户数据隔离 (星群数据层): 用户域会话平面 (域解析 + 按域路由会话写闸)。
 // W3-③ 逐域运行时实例面 (星群正身): 每户伙伴运行时实例 + 域级运行时上下文。
 pub mod domain_plane;

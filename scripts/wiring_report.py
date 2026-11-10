@@ -40,16 +40,24 @@ REGISTRY = ROOT / "docs" / "architecture" / "env-registry.toml"
 WIRING = ROOT / "docs" / "status" / "wiring.yaml"
 CLAIMS = ROOT / "docs" / "status" / "claims.yaml"
 MATRIX = ROOT / "docs" / "03-reference" / "capabilities-matrix.md"
-ENV_RE = re.compile(r"APEIRETH_[A-Z0-9_]+")
+# ⚠️ env 口径**唯一真源** = `scripts/env_budget_caliber.py`（2026-11-07 收敛）：
+# 原先本文件与 `arch_guard.py` 各存一份正则/排除表 ⇒ ⇒ 预算账与登记账口径不一致
+# （arch_guard 把测试夹具/密钥标记也当能力开关 ⇒ 预算虚高 12）。
+# 现两边都 import 同一份，**不许**再在本地抄第二份。
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from env_budget_caliber import (  # noqa: E402 - 需先插 sys.path
+    ENV_RE,
+    PENDING_EVIDENCE_RULING,
+    TEST_ONLY_RE,
+)
 FRAGMENT_RE = re.compile(r"<!--|-->|!\s*!\s*#|^\s*[!#]|^\s*[.·]{3,}")
-# ADR-0004 §7.7/§7.8：kind 枚举 product（缺省）/ test-only / derived
-TEST_ONLY_RE = re.compile(
-    r"^APEIRETH_IMAGE_UNSHARP_|^APEIRETH_UNIQ_SECRET_MARKER_"
-    r"|^APEIRETH_REG_|^APEIRETH_IMAGE_REGEN_PROFILES$")
-# 待架构线裁决：真实 env 但本仓无 direct 读取点（不在产品 direct 校验里静默通过）
-PENDING_EVIDENCE_RULING = {"APEIRETH_MASTER_TOKEN"}
 SWITCH_HINT = re.compile(r"(ENABLE|DISABLE|FEATURE|ALLOW|STRICT|FORCE|SWITCH|TOGGLE|REQUIRE)")
-PROD_PREFIXES = ("crates/", "frontend/companion-desktop/src-tauri/src/")
+#: 「生产源」前缀。2026-11-07 增 `.github/workflows/`：对「CI 门禁类」能力
+#: （如 `gov.chain_drill_ci` / `rel.release_asset_verify`），**workflow 步骤就是
+#: 生产执行面**（失败即 job 红 ⇒ 真门禁）⇒ 把它排除在 production_refs 外会让
+#: 已接线的 CI 能力在账上显示「未找到生产引用（待核）」= 假缺口。
+#: ⚠️ 只接受 `*.yml`：md / toml / ps1 等仍按 is_production_source 后缀规则排除。
+PROD_PREFIXES = ("crates/", "frontend/companion-desktop/src-tauri/src/", ".github/workflows/")
 PROD_ROOTS = (
     "crates/engine/runtime-assembly/src/canonical/production.rs",
     "crates/adapters/cli/src/lib.rs",
@@ -888,6 +896,34 @@ def main(argv: list[str] | None = None) -> int:
     parser.print_help()
     return 0
 
+
+# ⭐ 写文件前空间自检
+# ⇒ ⇒ 治「磁盘满 ⇒ 文件被静默截断」（实测：生成物变 0 字节 ⇒ ⇒ 下游误判「脚本坏了」）
+# ⇒ ⇒ 空间不足 ⇒ ⇒ **中止且退出码 1** ⇒ ⇒ 宁可「不写」，也不写半截文件。
+# ⚠️ 放在**模块级**（`if __name__` 之前）⇒ ⇒ 缩进 0 ⇒ ⇒ 绝不可能破语法。
+if "--gen" in sys.argv or "--update" in sys.argv:
+    try:
+        import subprocess as _sp
+
+        _rc = _sp.run(
+            [
+                sys.executable,
+                str(Path(__file__).resolve().parent / "clean_test_binaries.py"),
+                "--ensure-free",
+                "300",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=300,
+            check=False,
+        )
+        if _rc.returncode != 0:
+            print("  [空间] 不足 ⇒ ⇒ **中止生成**（避免写出半截文件）", file=sys.stderr)
+            raise SystemExit(_rc.returncode)
+    except SystemExit:
+        raise
+    except Exception:
+        pass  # 自检失败**不阻断**生成（宁可少一道保险，也不要卡住日常流程）
 
 if __name__ == "__main__":
     raise SystemExit(main())

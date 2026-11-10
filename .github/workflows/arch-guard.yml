@@ -34,7 +34,7 @@ jobs:
           python-version: "3.13"
 
       - name: Setup Rust (cargo metadata only)
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.97.1
         with:
           toolchain: 1.97.1
 

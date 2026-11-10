@@ -636,13 +636,28 @@ fn spawn_plain_raw_child(
         si.hStdError = stderr_write;
 
         let mut pi: PROCESS_INFORMATION = std::mem::zeroed();
+        // ⚠️ `CREATE_UNICODE_ENVIRONMENT` **只在环境块非 NULL 时**才设
+        // （2026-11-04 CI 实测修：`os error 87` = ERROR_INVALID_PARAMETER）。
+        //
+        // 机制：`EnvironmentSpec::Inherit` ⇒ `build_environment_block` ⇒ `None`
+        // ⇒ ⇒ `lpEnvironment = NULL`（子进程继承父环境）
+        // ⇒ 但标志里**无条件**带着 `CREATE_UNICODE_ENVIRONMENT`
+        // ⇒ ⇒ Win32 语义：该标志声明「环境块是 UTF-16」
+        // ⇒ ⇒ **块为 NULL 时这个声明自相矛盾** ⇒ ⇒ `CreateProcessW` 回 87。
+        //
+        // ⇒ 旁证：Windows 上**只有「默认请求（Inherit）」这一类**失败，
+        //   显式环境（块非 NULL）的用例**都过了** ⇒ 与本修法精确吻合。
+        let mut creation_flags = CREATE_SUSPENDED;
+        if environment_block.is_some() {
+            creation_flags |= CREATE_UNICODE_ENVIRONMENT;
+        }
         let ret = CreateProcessW(
             application.as_ptr(),
             command_line.as_mut_ptr(),
             std::ptr::null_mut(),
             std::ptr::null_mut(),
             1,
-            CREATE_SUSPENDED | CREATE_UNICODE_ENVIRONMENT,
+            creation_flags,
             environment_block
                 .as_ref()
                 .map(|b| b.as_ptr().cast::<c_void>())
@@ -1330,9 +1345,8 @@ fn build_environment_block(
         super::EnvironmentSpec::Inherit => Ok(None),
         super::EnvironmentSpec::Clear => Ok(Some(vec![0, 0])),
         super::EnvironmentSpec::Explicit(vars) => {
-            // CreateProcessW 硬性要求环境块**大小写不敏感排序** (真机实测: 乱序块
-            // 报 os error 203 "找不到环境选项", 2026-10-10 AppContainer 路径咬出)。
-            // 在块构造处排序 —— 所有裸 CreateProcess* 路径同受益。
+            // CreateProcessW 硬性要求环境块**大小写不敏感排序** (真机实测: 乱序块报 os error 203
+            // "找不到环境选项", 2026-10-10 AppContainer 路径咬出) ⇒ 排序放在块构造处, 裸 CreateProcess* 路径同受益。
             let mut sorted: Vec<&(OsString, OsString)> = vars.iter().collect();
             sorted.sort_by_key(|(key, _)| key.to_string_lossy().to_lowercase());
             let mut block = Vec::new();
@@ -1344,6 +1358,7 @@ fn build_environment_block(
                 block.extend(entry);
             }
             block.push(0);
+            block.resize(block.len().max(2), 0); // 零变量 ⇒ 必须双 NUL 结尾（否则 CreateProcessW 回 os error 87）
             Ok(Some(block))
         }
     }

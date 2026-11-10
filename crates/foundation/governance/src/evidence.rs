@@ -166,11 +166,6 @@ impl EvidenceGuard {
     pub fn failure_count(&self) -> usize {
         self.failures.len()
     }
-
-    pub fn claim_count(&self) -> usize {
-        self.claims.len()
-    }
-
     pub fn get(&self, claim_id: &str) -> Option<&EvidenceEntry> {
         self.claims.get(claim_id)
     }

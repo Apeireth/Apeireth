@@ -788,13 +788,29 @@ impl EncryptedFileBackend {
         let master_key_path = dir.join("apeireth-keyring.master.key");
         let data_path = dir.join("apeireth-keyring.bin");
 
-        let master_key = if master_key_path.exists() {
-            load_master_key(&master_key_path)?
-        } else {
-            let key = generate_master_key();
-            write_master_key(&master_key_path, &key)?;
-            key
-        };
+        // ⚠️ **跨进程竞态**：master key 原来是「check-then-write」。
+        //   两个进程同时 open ⇒ 都会看到「不存在」⇒ **各自生成一把** ⇒ 后写者覆盖前写者
+        //   ⇒ ⇒ 数据文件可能是用**另一把**密钥加密的 ⇒ 凭据**静默读不出来**。
+        //
+        // ⇒ 用仓里既有的**跨进程文件锁**（`storage_atomic::with_file_lock`，与
+        //   `FileCredentialsStore::mutate_locked` 同一套）把窗口关掉，
+        //   并在**锁内**重新判定存在性 ⇒ ⇒ 只有一个进程会生成密钥。
+        let master_key = storage_atomic::with_file_lock(
+            &storage_atomic::lock_path_for(&master_key_path),
+            || {
+                if master_key_path.exists() {
+                    load_master_key(&master_key_path)
+                } else {
+                    let key = generate_master_key();
+                    write_master_key(&master_key_path, &key)?;
+                    Ok(key)
+                }
+            },
+        )
+        .map_err(|source| KeyringError::Io {
+            service: "<encrypted-file-backend>".into(),
+            source,
+        })??;
 
         Ok(Self {
             data_path,
@@ -1343,6 +1359,52 @@ fn check_service_name(service: &str) -> Result<()> {
 mod tests {
     use super::*;
     use std::sync::Arc;
+
+    // ----- §9.0 跨进程竞态（2026-10-31 · 静态安全审计复核）-----
+
+    /// 两个**线程**同时 open 同一目录 ⇒ 只能有**一个**生成 master key
+    /// ⇒ ⇒ 两侧拿到的密钥必须**完全一致**，且与盘上的文件一致。
+    ///
+    /// ⚠️ 修复前是「check-then-write」⇒ 两个都会看到「不存在」⇒ 各生成一把
+    /// ⇒ 后写者覆盖 ⇒ 两侧密钥**不同** ⇒ 数据文件用另一把密钥加密 ⇒ 凭据读不出。
+    #[test]
+    fn concurrent_open_generates_one_master_key() {
+        let dir = std::env::temp_dir().join(format!(
+            "apeireth-keyring-race-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or_default()
+        ));
+        let audit = Arc::new(CountingAudit::new());
+
+        let barrier = Arc::new(std::sync::Barrier::new(2));
+        let handles: Vec<_> = (0..2)
+            .map(|_| {
+                let dir = dir.clone();
+                let audit = audit.clone();
+                let barrier = barrier.clone();
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    let backend = EncryptedFileBackend::open(&dir, audit).expect("open");
+                    backend.master_key.as_slice().to_vec()
+                })
+            })
+            .collect();
+
+        let mut handles = handles.into_iter();
+        let first = handles.next().expect("handle 0").join().expect("thread 0");
+        let second = handles.next().expect("handle 1").join().expect("thread 1");
+        assert_eq!(
+            first, second,
+            "并发 open 必须拿到**同一把** master key（否则数据文件用另一把密钥加密）"
+        );
+
+        let on_disk =
+            std::fs::read(dir.join("apeireth-keyring.master.key")).expect("master key file");
+        assert_eq!(on_disk, first, "盘上的 master key 必须与两侧拿到的一致");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     // ----- §9.1 InMemoryKeyring round-trip -----
 

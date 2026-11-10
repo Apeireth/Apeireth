@@ -156,15 +156,6 @@ impl SqlitePersonaProfileStore {
             })
             .map_err(|error| error.to_string())
     }
-
-    /// Returns all immutable snapshots in revision order.
-    pub async fn get_history(
-        &self,
-        persona_id: &str,
-        subject_id: &str,
-    ) -> Result<Vec<PersonaMemoryProfile>, String> {
-        self.history(persona_id, subject_id).await
-    }
 }
 
 #[async_trait::async_trait]

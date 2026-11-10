@@ -35,7 +35,7 @@
 
 ## 2. 各战线四级口径终局
 
-| 战线 | IMPLEMENTED | PRODUCTION WIRED | DEFAULT ENABLED | 备注 |
+| 战线 | IMPLEMENTED | PRODUCTION WIRED | 默认开否（横切属性，非级） | 备注 |
 |---|---|---|---|---|
 | W1 shell 沙箱 | ✅ | ✅ | **默认开**（`APEIRETH_SHELL_SANDBOX=0` 裸跑）| AppContainer；用户空间零访问已双探针实证 |
 | W2 认知模块 | ✅ | ✅ | 默认关（逐模块 `APEIRETH_ENABLE_*` 旋钮）| #53 已宣告收口 |

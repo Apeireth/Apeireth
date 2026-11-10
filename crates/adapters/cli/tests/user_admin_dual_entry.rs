@@ -8,6 +8,8 @@
 //!    一致 (同一把闸, 不是两套近似实现);
 //! 3. **问责链不断** —— 两入口都过发令牌序 (删用户前先摘令牌绑定)。
 
+mod common;
+
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -23,6 +25,8 @@ use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use http_body_util::BodyExt;
 use tower::ServiceExt;
+
+use common::{owner_record, write_users};
 
 const GATE_TOKEN: &str = "gate-token-0123456789abcdef";
 const OWNER_TOKEN: &str = "tok-owner-0123456789abcdef";
@@ -217,13 +221,25 @@ async fn cli_and_http_administer_one_shared_user_table() {
 }
 
 /// 同语义: 引导口径与末 owner 保护在两个入口逐字一致 (同一把闸)。
+///
+/// # 前置条件 (P0-1 · 2026-11-04 管理面 fail-closed)
+///
+/// `/v1/admin/users*` 属**管理面** (要求 `UserCapability::AdminControl`) ⇒
+/// 角色面**未激活** (无 `users.json`) 时一律 403 ⇒ 本用例要打管理面, 必须
+/// 先按真实产品前置条件把角色面装上: owner-1 在册 + 令牌表条目 `tui` 声明
+/// `user_id=owner-1` ⇒ 令牌→用户→角色链解析出 owner (持 `AdminControl`)。
+///
+/// 引导口径 (空表首用户必须 owner) 在 HTTP 面的可见性依赖**产品既有的两段
+/// 语义**: 角色门按**装载期快照**判定 (「令牌/角色门的运行期判定仍按
+/// W2-②/W3-② 装载期快照语义」), 而管理服务每个动作**重读** `users.json`
+/// (「操作前重读、校验后落盘」) ⇒ 装载之后名册被重置为空表 ⇒ 管理面仍对
+/// owner 令牌可达, 而引导口径在 HTTP 面同样生效 (同一把闸, 同一拒因)。
 #[tokio::test]
 async fn the_bootstrap_and_last_owner_rules_read_the_same_on_both_entries() {
     let dir = temp_dir("same-rules");
     write_tokens(&dir, &[("tui", OWNER_TOKEN, Some("owner-1"))]);
-    let router = router_over(&dir).await;
 
-    // 引导口径 (空表首用户必须 owner): CLI 拒、HTTP 拒, 拒因同源。
+    // 引导口径 · CLI 面 (空表 ⇒ 首用户必须 owner): 免令牌引导口, 拒因同源。
     let error = run_user_admin_at(
         &dir,
         &args(&[
@@ -238,6 +254,14 @@ async fn the_bootstrap_and_last_owner_rules_read_the_same_on_both_entries() {
     )
     .expect_err("CLI 首用户非 owner 必须拒");
     assert!(error.contains("first user must be owner"), "{error}");
+
+    // 角色面激活: owner-1 在册 (绑 `tui` —— 令牌表条目 `tui` 声明 user_id
+    // owner-1 ⇒ 令牌→用户→角色链解析出 owner ⇒ 管理面可达)。
+    write_users(&dir, vec![owner_record("owner-1", &["tui"])]);
+    let router = router_over(&dir).await;
+
+    // 名册复位为空表 (运营侧重置) ⇒ 引导口径复位。
+    write_users(&dir, Vec::new());
     let (status, text) = status_and_body(
         router
             .clone()

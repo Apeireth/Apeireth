@@ -272,6 +272,12 @@ pub enum BackupError {
     /// 清单不可解析/结构非法 (损坏可检出 → 拒)。
     #[error("backup manifest is corrupt: {0}")]
     ManifestCorrupt(String),
+    /// 目标目录**不是一个备份包**（不存在 / 没有清单）。
+    ///
+    /// 与 [`Self::ManifestCorrupt`] **分开**：路径打错是客户端输入问题，
+    /// 说成「清单损坏」会让人以为自己的备份坏了（真机实测 2026-10-25）。
+    #[error("{0}")]
+    NotABundle(String),
     /// 备份格式版本不匹配 (版本兼容语义 = 显式拒, 宁拒不损)。
     #[error(
         "backup format version mismatch: bundle={found}, supported={expected} (版本不兼容: 显式拒, 宁拒不损)"
@@ -577,11 +583,6 @@ fn sha256_file(path: &Path) -> Result<(u64, String), BackupError> {
     Ok((total, hex(&hasher.finalize())))
 }
 
-/// 字节摘要 (hex)。
-fn sha256_bytes(bytes: &[u8]) -> String {
-    hex(&Sha256::digest(bytes))
-}
-
 /// 摘要字节 → hex 词面。
 fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
@@ -767,7 +768,44 @@ fn export_into_staging(
 /// 载入并结构校验清单 (解析 + 版本 + 路径安全 + 唯一性)。
 fn load_manifest(bundle_dir: &Path) -> Result<BackupManifest, BackupError> {
     let manifest_path = bundle_dir.join(MANIFEST_FILE_NAME);
+    // **先区分「包不存在」与「清单损坏」**：此前二者共用 `ManifestCorrupt`，
+    // 路径打错时用户会看到「备份清单损坏」——以为自己的备份坏了，其实是没这个包
+    // （真机实测 2026-10-25）。「没有包」是可自救的输入问题，必须说清。
+    if !bundle_dir.exists() {
+        return Err(BackupError::NotABundle(format!(
+            "备份包不存在: {} （路径打错？先用 `apeireth backup export <DIR>` 导出）",
+            bundle_dir.display()
+        )));
+    }
     let bytes = fs::read(&manifest_path).map_err(|error| {
+        if error.kind() == std::io::ErrorKind::NotFound {
+            // **清单不见了 ≠ 这目录不是备份包** —— 要看目录里还有没有内容：
+            //   * 空目录 ⇒ 确实不是包（路径打错/还没导出）⇒ `NotABundle`（可自救的输入问题）；
+            //   * 目录里还有数据文件、只是清单没了 ⇒ **包被破坏/清单被删**
+            //     ⇒ `ManifestCorrupt`（宁拒不损：不能把「缺清单的目录」当成合法备份包恢复）。
+            // （此前一律判 `NotABundle` ⇒ 「清单被删」被说成「这不是包」，
+            //   既有测试 `corrupt_manifest_is_refused_and_nothing_touches_the_data_plane` 因此红。）
+            let has_payload = fs::read_dir(bundle_dir)
+                .map(|mut entries| {
+                    entries.any(|entry| {
+                        entry
+                            .map(|entry| entry.file_name() != MANIFEST_FILE_NAME)
+                            .unwrap_or(false)
+                    })
+                })
+                .unwrap_or(false);
+            if has_payload {
+                return BackupError::ManifestCorrupt(format!(
+                    "备份包里没有清单 {} —— 清单被删或包已损坏，拒绝恢复（宁拒不损）",
+                    MANIFEST_FILE_NAME
+                ));
+            }
+            return BackupError::NotABundle(format!(
+                "目录 {} 里没有清单 {} —— 这不是一个备份包；用 `apeireth backup export <DIR>` 导出",
+                bundle_dir.display(),
+                MANIFEST_FILE_NAME
+            ));
+        }
         BackupError::ManifestCorrupt(format!("{} unreadable: {error}", manifest_path.display()))
     })?;
     let manifest: BackupManifest = serde_json::from_slice(&bytes)
@@ -1134,12 +1172,14 @@ mod tests {
     #[test]
     fn sha256_matches_the_canonical_vector() {
         // 官方测试向量钉死摘要实现 (空串与 "abc"), 防手写摘要漂移。
+        // 直接用「摘要 + hex」这两个真实组成件（`sha256_bytes` 薄封装已删 ——
+        // 它在 lib 侧零调用，只有本测试用 ⇒ 留着就是 D-1 要抓的死代码）。
         assert_eq!(
-            sha256_bytes(b""),
+            hex(&Sha256::digest(b"")),
             "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
         );
         assert_eq!(
-            sha256_bytes(b"abc"),
+            hex(&Sha256::digest(b"abc")),
             "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
         );
     }

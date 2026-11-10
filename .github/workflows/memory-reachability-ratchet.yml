@@ -1,0 +1,55 @@
+name: Memory reachability ratchet (记忆能力可达率棘轮)
+
+# 「能力建好了但没接电」的**机检守卫**（**接线面**）。
+#
+# 与 `unwired-ratchet.yml`（孤儿面）**互补**：
+#   * 孤儿面钉的是「**公开 API 死了多少**」（`scripts/unwired-baseline.txt`）；
+#   * 可达率钉的是「**能力接上了多少**」（`scripts/memory-reachability-baseline.txt`）。
+#
+# 背景：库级能力写得完整、测试也绿，但**生产链路上走不到**（没接电）——
+# 人肉台账（docs/status/unwired-ledger.md）能记已知的，挡不住新长出来的。
+#
+# 本 workflow 接的是 `scripts/check_memory_reachability.py`：
+#   * 判据 = **生产传递闭包**（生产入口 → 依赖闭包 → BFS 到不动点）；
+#   * 基线**只减不增** ⇒ ⇒ 少一个（能力掉线）⇒ ⇒ 红；多一个（接上了）⇒ ⇒ 绿并建议抬基线。
+#
+# ⚠️ **判据的可靠度与盲区写在脚本头部 docstring**（读它再用，别猜）。
+#    方向刻意选「**宁可漏报未接线，不可虚报已接线**」。
+#
+# 独立的 workflow（不并进 `unwired-ratchet.yml`）⇒ ⇒ 免得改动那个正在被上游维护的文件。
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'crates/engine/memory/**'
+      - 'crates/engine/runtime-assembly/**'
+      - 'crates/engine/runtime/**'
+      - 'crates/adapters/**'
+      - 'scripts/check_memory_reachability.py'
+      - 'scripts/memory-reachability-baseline.txt'
+      - '.github/workflows/memory-reachability-ratchet.yml'
+  pull_request:
+    paths:
+      - 'crates/engine/memory/**'
+      - 'crates/engine/runtime-assembly/**'
+      - 'crates/engine/runtime/**'
+      - 'crates/adapters/**'
+      - 'scripts/check_memory_reachability.py'
+      - 'scripts/memory-reachability-baseline.txt'
+      - '.github/workflows/memory-reachability-ratchet.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  memory-reachability-ratchet:
+    name: 记忆能力可达率（基线只减不增）
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 检查能力可达率（基线只减不增）
+        run: python3 scripts/check_memory_reachability.py --check

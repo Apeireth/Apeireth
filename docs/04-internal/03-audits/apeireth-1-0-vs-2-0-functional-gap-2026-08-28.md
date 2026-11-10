@@ -2,6 +2,8 @@
 
 > ⚠️ **2026-10-06 复核批历史批注（正文按约定不改，结论以新审计为准）**：本文写于 2026-08-28（Round 11），其 🔴/🟢 结论已**大面积过时**。按四级口径（`docs/01-architecture/system-capabilities.md` 头部定义：IMPLEMENTED ≠ PRODUCTION WIRED ≠ DEFAULT ENABLED ≠ HARDWARE VALIDATED）重读后，权威结论见 `docs/04-internal/v1-vs-v2-capability-gap-audit-2026-10-06.md`（§7 两级化 / §8 附录 A）与 `engineering-review-handoff-2026-10-06.md` §2.7 复核判定。已知修正对照（复核实测）：
 >
+> **口径更正（2026-11-04 文档真源批；上方批注原文保留不改）**：上文所引「四级」中的 `DEFAULT ENABLED` **不是一级**，是横切属性（默认开/关，与阶梯正交）；现行口径阶梯 = **NOT IMPLEMENTED < IMPLEMENTED < PRODUCTION WIRED < HARDWARE VALIDATED**（见 [claims.yaml](../../status/claims.yaml) 头部）。
+>
 > | 本文旧结论 | 修正 |
 > |---|---|
 > | "v2 缺 BM25 混合检索" | ❌ 错：`crates/engine/memory/src/hybrid_search.rs` 有 Okapi BM25 + RRF 真实现（**IMPLEMENTED**） |

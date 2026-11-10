@@ -36,7 +36,7 @@ struct State {
     instance: Mutex<Option<apeireth_core::kernel::ModuleInstanceId>>,
     organizer_handles: Mutex<BTreeMap<TaskId, apeireth_core::kernel::AgentId>>,
     coordinator: Arc<MemoryCoordinator>,
-    mappings: Option<Arc<crate::profile_memory::ProfileMemoryMappings>>,
+    mappings: Mutex<Option<Arc<crate::profile_memory::ProfileMemoryMappings>>>,
     clock: Arc<dyn Clock>,
     writes: Mutex<()>,
     agents: Mutex<Option<Arc<dyn ModuleAgents>>>,
@@ -53,8 +53,19 @@ pub fn namespace_key(principal: &AgentPrincipal) -> String {
         principal.profile, principal.namespace
     )
 }
+/// Capability prefix of the memory tool face (every id is derived from it).
+const MEMORY_CAPABILITY_PREFIX: &str = "tool.memory.";
 fn capability(op: &str) -> CapabilityId {
-    CapabilityId::new(format!("tool.memory.{op}")).expect("constant capability")
+    CapabilityId::new(format!("{MEMORY_CAPABILITY_PREFIX}{op}")).expect("constant capability")
+}
+/// The memory tool face is **namespace-scoped**: its only authority is a
+/// Host-bound identity carried by the execution context.
+///
+/// A composition that binds no identity must therefore **not offer** these
+/// capabilities: exposing them leaves the model with tools that can only ever
+/// answer `namespace_denied` (a promise the model cannot keep).
+pub fn is_namespace_scoped(capability: &CapabilityId) -> bool {
+    capability.as_str().starts_with(MEMORY_CAPABILITY_PREFIX)
 }
 fn memory_contract(op: &str) -> apeireth_plugin::module_contract::ModuleToolContract {
     use apeireth_plugin::module_contract::{EffectClass, ExecutionMode, ModuleToolContract};
@@ -105,7 +116,7 @@ impl MemoryModule {
                 instance: Mutex::new(None),
                 organizer_handles: Mutex::new(BTreeMap::new()),
                 coordinator,
-                mappings: None,
+                mappings: Mutex::new(None),
                 clock,
                 writes: Mutex::new(()),
                 agents: Mutex::new(None),
@@ -145,13 +156,23 @@ impl MemoryModule {
         self
     }
     pub fn with_profile_mappings(
-        mut self,
+        self,
         mappings: Arc<crate::profile_memory::ProfileMemoryMappings>,
     ) -> Self {
-        Arc::get_mut(&mut self.state)
-            .expect("unshared constructor")
-            .mappings = Some(mappings);
+        self.attach_profile_mappings(mappings);
         self
+    }
+    /// **迟绑定**（装配期）: 生产槽位在 build 期先建模块, Host 映射表在注册期才到位
+    /// ⇒ ⇒ 同一个模块实例接受后到的映射表（Host 只绑一次; 重绑只用于测试）。
+    pub fn attach_profile_mappings(
+        &self,
+        mappings: Arc<crate::profile_memory::ProfileMemoryMappings>,
+    ) {
+        *self
+            .state
+            .mappings
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = Some(mappings);
     }
     pub fn with_automatic_retrieval(mut self, enabled: bool) -> Self {
         self.automatic_retrieval = enabled;
@@ -242,6 +263,14 @@ impl Plugin for MemoryModule {
             .collect()
     }
     async fn on_hook(&self, ctx: &HookContextV1) -> PluginResult<Vec<HookToolRequest>> {
+        // ⭐ **授权判据 = 执行上下文里的身份**（分发器的范围闸就按它判）：
+        //   Hook 发的是记忆工具面自己的 `memory_retrieve` 调用 ⇒ ⇒ 能不能兑现，
+        //   由**发起方的主体**决定（`AgentPrincipal`），**不是**由「有没有映射」决定
+        //   ⇒ ⇒ 这里**不做额外的门**（2026-11-09 实测：曾用「有无映射」当闸，
+        //   结果把「有身份、无映射」的合法组合也一并沉默 ⇒ 既有不变量测试被打破）。
+        // ⚠️ **开这个开关的前提**（写在配置面文档里）：该组合里记忆工具面要能兑现
+        //   （有 Host 身份）；**桌面默认组合没有身份** ⇒ ⇒ 在那里开它会让
+        //   分发器范围闸拒掉每回合那次调用（一条 `scope_denied` 失败帧）。
         if !self.automatic_retrieval || ctx.hook != ModuleHookV1::BeforeModelCall {
             return Ok(vec![]);
         }
@@ -358,7 +387,13 @@ impl ToolCapability for MemoryTool {
         if ctx.principal.is_none() {
             return fail(call, "namespace_denied", "Host principal is required");
         }
-        let mapping = self.state.mappings.as_ref().map(|m| m.lease(ctx));
+        let mappings = self
+            .state
+            .mappings
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        let mapping = mappings.as_ref().map(|m| m.lease(ctx));
         if matches!(mapping, Some(None)) {
             return fail(
                 call,

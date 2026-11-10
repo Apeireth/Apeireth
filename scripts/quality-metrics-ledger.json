@@ -1,0 +1,81 @@
+{
+  "version": "quality-metrics-ledger/v1",
+  "source": "docs/01-architecture/memory-knowledge-depth-system-spec.md §6.1",
+  "implemented": [
+    "Recall@k",
+    "nDCG@k",
+    "时间正确率",
+    "矛盾检出率",
+    "Evidence Precision",
+    "Token 效率",
+    "Groundedness",
+    "Citation coverage",
+    "规模延展斜率",
+    "噪声鲁棒",
+    "确定性（逐字节）",
+    "越权命中率（恒 0）",
+    "Swap cost",
+    "影子胜率",
+    "回退时间",
+    "脱机可读",
+    "schema 自说明覆盖",
+    "handover 演练通过"
+  ],
+  "missing": [],
+  "anchors": {
+    "Citation coverage": [
+      "crates/engine/memory/src/quality_metrics.rs:pub fn measure_citation_coverage"
+    ],
+    "Evidence Precision": [
+      "crates/engine/memory/src/golden_set.rs:evidence_precision"
+    ],
+    "Groundedness": [
+      "crates/engine/memory/src/golden_set.rs:groundedness"
+    ],
+    "Recall@k": [
+      "crates/engine/memory/src/golden_set.rs:pub recall_at_k: f64"
+    ],
+    "Swap cost": [
+      "crates/engine/memory/src/swap_flow.rs:pub struct SwapCost"
+    ],
+    "Token 效率": [
+      "crates/engine/memory/src/quality_metrics.rs:pub fn measure_token_efficiency"
+    ],
+    "handover 演练通过": [
+      "crates/engine/memory/src/handover.rs:pub fn drill_handover"
+    ],
+    "nDCG@k": [
+      "crates/engine/memory/src/golden_set.rs:pub ndcg_at_k: f64"
+    ],
+    "schema 自说明覆盖": [
+      "crates/engine/memory/src/offline_archive.rs:pub fn default_field_docs"
+    ],
+    "噪声鲁棒": [
+      "crates/engine/memory/src/robustness_metrics.rs:pub fn measure_noise_robustness"
+    ],
+    "回退时间": [
+      "crates/engine/memory/src/quality_metrics.rs:pub fn measure_rollback_time"
+    ],
+    "影子胜率": [
+      "crates/engine/memory/src/quality_metrics.rs:pub fn measure_shadow_win"
+    ],
+    "时间正确率": [
+      "crates/engine/memory/src/quality_metrics.rs:pub fn measure_temporal"
+    ],
+    "矛盾检出率": [
+      "crates/engine/memory/src/quality_metrics.rs:pub fn measure_contradiction"
+    ],
+    "确定性（逐字节）": [
+      "crates/engine/memory/src/robustness_metrics.rs:pub fn measure_determinism"
+    ],
+    "脱机可读": [
+      "crates/engine/memory/src/offline_archive.rs:pub fn to_jsonl"
+    ],
+    "规模延展斜率": [
+      "crates/engine/memory/src/robustness_metrics.rs:pub fn measure_scale_slope"
+    ],
+    "越权命中率（恒 0）": [
+      "crates/engine/memory/src/robustness_metrics.rs:pub fn measure_overreach"
+    ]
+  }
+}

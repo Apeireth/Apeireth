@@ -12,10 +12,11 @@ use std::sync::{Arc, Mutex};
 
 use apeireth_core::kernel::{Clock, SessionId, Timestamp, VirtualClock};
 use apeireth_gateway::{
-    build_gateway_state_with_services, canonical_router_with_state, CredentialWriter,
-    GatewayServices,
+    build_gateway_state_with_services, canonical_router_with_state, ClientTokenConfig,
+    ClientTokenSpec, ClientTokenTable, CredentialWriter, GatewayServices, GatewayState,
+    GatewayTokenGate, UserAccess,
 };
-use apeireth_governance::AllowAll;
+use apeireth_governance::{AllowAll, UserRecord, UserTable};
 use apeireth_plugin::{CredentialResolver, Secret};
 use apeireth_provider::canonical_openai_compatible::OpenAiCompatibleProviderPlugin;
 use apeireth_runtime::canonical::{InMemorySessionStore, Runtime};
@@ -34,6 +35,12 @@ const SUCCESS_BODY: &str = r#"{
     "choices": [{"index": 0, "message": {"role": "assistant", "content": "hello"}, "finish_reason": "stop"}],
     "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2}
 }"#;
+
+/// 测试令牌 (形似凭据以便泄漏显形, 非真实秘密)。
+const GATE_TOKEN: &str = "gate-token-0123456789abcdef";
+const OWNER_TOKEN: &str = "owner-token-0123456789abcdef";
+const OWNER_CLIENT: &str = "desktop-shell";
+const OWNER_USER: &str = "user-owner";
 
 struct EnvGuard(&'static str, Option<String>);
 
@@ -141,6 +148,7 @@ fn get(uri: &str) -> Request<Body> {
     Request::builder()
         .method("GET")
         .uri(uri)
+        .header("authorization", format!("Bearer {OWNER_TOKEN}"))
         .body(Body::empty())
         .unwrap()
 }
@@ -149,9 +157,38 @@ fn post_json(uri: &str, body: serde_json::Value) -> Request<Body> {
     Request::builder()
         .method("POST")
         .uri(uri)
+        .header("authorization", format!("Bearer {OWNER_TOKEN}"))
         .header("content-type", "application/json")
         .body(Body::from(body.to_string()))
         .unwrap()
+}
+
+/// 一份**生产口径**的网关装配: 令牌门强制 + 客户端令牌表 + **角色面激活**
+/// (owner 绑定桌面客户端名)。
+///
+/// 为什么必须装角色面 (P0-1 · 2026-11-04): 管理面要求 `AdminControl` 档,
+/// 角色面未激活 ⇒ 管理面 fail-closed 403 (见
+/// `tests/admin_plane_fail_closed.rs`) ⇒ 本文件钉的是**热配置契约**,
+/// 角色门的前置条件由这里显式装上。
+fn admin_state(runtime: Arc<Runtime>, services: GatewayServices) -> GatewayState {
+    let mut state = build_gateway_state_with_services(runtime, services);
+    state.token_gate = GatewayTokenGate::Enforced(GATE_TOKEN.to_string());
+    state.client_tokens =
+        ClientTokenTable::from_config(ClientTokenConfig::new(vec![ClientTokenSpec {
+            name: OWNER_CLIENT.to_string(),
+            token: OWNER_TOKEN.to_string(),
+            user_id: Some(OWNER_USER.to_string()),
+        }]))
+        .expect("valid token table");
+    let users = UserTable::new(vec![UserRecord {
+        user_id: OWNER_USER.to_string(),
+        role: "owner".to_string(),
+        client_names: vec![OWNER_CLIENT.to_string()],
+        domain: None,
+    }]);
+    users.validate().expect("valid user table");
+    state.user_access = UserAccess::from_table(users);
+    state
 }
 
 fn chat_request(session: SessionId, input: &str) -> Request<Body> {
@@ -204,7 +241,7 @@ async fn admin_config_hot_update_takes_effect_on_the_next_request() {
 
     let mut services = GatewayServices::default();
     services.credentials = Some(Arc::new(shared.clone()));
-    let state = build_gateway_state_with_services(runtime, services);
+    let state = admin_state(runtime, services);
     let router = canonical_router_with_state(state);
 
     // Initial GET: defaults from env (which this test clears).
@@ -289,10 +326,7 @@ async fn admin_config_rejects_invalid_input_and_keeps_the_old_config() {
     let _g_model = EnvGuard::remove("APEIRETH_MODEL");
 
     let runtime = Arc::new(Runtime::builder().build().await.unwrap());
-    let router = canonical_router_with_state(build_gateway_state_with_services(
-        runtime,
-        GatewayServices::default(),
-    ));
+    let router = canonical_router_with_state(admin_state(runtime, GatewayServices::default()));
 
     let bad_base_url = serde_json::json!({ "base_url": "not-a-url" });
     let response = router

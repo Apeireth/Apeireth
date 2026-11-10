@@ -31,7 +31,8 @@
 //!     而不重付副作用。本 wave 只交付原语, 不 spawn 任何循环。
 //!   - **Continuation 映射**: `DurableHistory` 可 serde (整段或 JSONL), 可由未来适配器
 //!     放入 `ContinuationSnapshot` / 经任意 `ContinuationStore` 持久化; 测试验证了
-//!     JSONL 往返, 存储路径已证明但未接线。
+//!     JSONL 往返; 存储路径已接（`cli::continuation_guard` 回合级中断检测），
+//!     自动**重放**仍未接（产品语义待定）。
 //!   - **Future scheduler 映射**: `RetryPolicy::backoff_ms` 只返回时长, 异步 sleep
 //!     由调用方拥有; 本模块不创建任何定时任务 (无 daemon ticking)。
 

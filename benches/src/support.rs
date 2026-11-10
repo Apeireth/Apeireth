@@ -9,6 +9,7 @@
 //! - warmup 轮不计数; 预热与样本量可由 `BENCH_SCALE` 缩放 (`BENCH_QUICK=1` = 0.1 倍);
 //! - 原始逐样本数值在 `BENCH_RAW=1` 时随结果一并输出 (RAW 行)。
 
+#![allow(dead_code)]
 use std::time::Instant;
 
 /// 确定性 xorshift64* 伪随机源 (基准数据程序生成, 可复现, 0 第三方依赖)。

@@ -5,6 +5,7 @@
 //! provider is scripted and the filesystem is a temporary workspace, so the
 //! test is offline and reproducible.
 
+#![allow(dead_code)] // D-1（owner 裁定 2026-10-25）：测试夹具字段/方法（供用例构造完整对象，部分字段本文件内未被读取）
 use apeireth_runtime_assembly as apeireth_runtime;
 
 use std::sync::atomic::{AtomicUsize, Ordering};

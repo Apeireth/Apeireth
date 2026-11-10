@@ -17,7 +17,7 @@
 #
 # 8 项不修改承诺 (同 install-deb.sh, 不重述):
 #   - 0 改 24 LOCKED, 0 改 workspace version, 0 引 NewAPI
-#   - 编译期 hardcode VERSION=1.0.0, TAP_REPO=apeireth/homebrew-tap
+#   - 版本从 workspace Cargo.toml 派生（APEIRETH_VERSION 可覆盖）, TAP_REPO=apeireth/homebrew-tap
 #   - 不重复造轮子: 调 packaging/brew/apeireth.rb, 不重写 formula
 #
 # 用法:
@@ -29,7 +29,9 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/../.."
-VERSION="${APEIRETH_VERSION:-1.0.0}"
+# 版本唯一真源: workspace Cargo.toml（APEIRETH_VERSION 可覆盖；不再硬编码，避免各脚本版本漂移）
+VERSION="${APEIRETH_VERSION:-$(sed -n '/^\[workspace\.package\]/,/^\[/p' Cargo.toml | grep -E '^version[[:space:]]*=' | head -1 | sed 's/.*"\(.*\)".*/\1/')}"
+[[ -n "${VERSION}" ]] || { echo "❌ 无法从 Cargo.toml 读取 workspace.version（可显式设 APEIRETH_VERSION）" >&2; exit 1; }
 TAP_REPO="${APEIRETH_TAP_REPO:-apeireth/homebrew-tap}"
 
 echo "=== apeireth brew install v${VERSION} ==="

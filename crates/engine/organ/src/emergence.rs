@@ -776,8 +776,6 @@ pub struct EmergenceOrgan {
     _llm_factory: std::sync::Arc<dyn LlmFactory>,
     /// 保留 model ID (v2.1 真生产路径; 当前**不用** — 0 装诚实)
     _model: String,
-    /// 起始关系深度 (构造时 LocalRelationship 注入; 0.5 默认 = "中等关系")
-    initial_depth: f64,
 }
 
 impl EmergenceOrgan {
@@ -799,7 +797,6 @@ impl EmergenceOrgan {
             )),
             _llm_factory: llm_factory,
             _model: model.into(),
-            initial_depth: depth,
         }
     }
 

@@ -5,6 +5,16 @@
 //! module only proves that an ordered sequence of records has not been mutated
 //! after it was appended.
 //!
+//! # Where the primitive lives (R5)
+//!
+//! The **hash-chain primitive** (byte layout + SHA-256 + chaining) now lives in
+//! `apeireth_core::hash_chain`: it is pure cryptography with no policy, so the
+//! memory layer can use it without depending on governance. This module keeps
+//! the **governance policy** (sequence continuity, record contents, error
+//! variants) and only translates its fields into that generic layout ⇒ the
+//! digest values are byte-for-byte unchanged (asserted in the tests below
+//! against both the legacy `sha2` path and fixed historical constants).
+//!
 //! # Canonical serialization
 //!
 //! Every record hash is computed from the same fixed field order:
@@ -28,18 +38,29 @@
 
 use std::fmt;
 
+use apeireth_core::hash_chain::{hash_linked, Chunk};
 use apeireth_core::kernel::Timestamp;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use thiserror::Error;
 
 /// The fixed previous hash for the first record.
 ///
 /// A zero hash is unambiguous and does not pretend to prove anything outside
 /// the chain itself.
-pub const GENESIS_PREVIOUS_HASH: &str =
-    "0000000000000000000000000000000000000000000000000000000000000000";
+///
+/// The value now lives in `apeireth_core::hash_chain` (R5: the chain primitive
+/// moved down to core so the memory layer can use it without a cross-domain
+/// dependency). This alias keeps the governance-level constant — and its
+/// value — byte-for-byte unchanged.
+pub const GENESIS_PREVIOUS_HASH: &str = apeireth_core::hash_chain::GENESIS_PREVIOUS_HASH;
 
+/// Compute one record's digest.
+///
+/// The byte layout lives in `apeireth_core::hash_chain` (R5); this function
+/// only translates governance fields into that generic form and computes
+/// **nothing** on its own ⇒ the digest values stay byte-for-byte identical to
+/// the pre-R5 implementation (the audit ledger is an accounting book; a moved
+/// byte is an incident).
 fn hash_record(
     sequence: u64,
     timestamp: Timestamp,
@@ -47,18 +68,15 @@ fn hash_record(
     subject: &str,
     previous_hash: &str,
 ) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(sequence.to_be_bytes());
-    hasher.update(timestamp.epoch_millis().to_be_bytes());
-    update_len_prefixed(&mut hasher, event_kind.as_bytes());
-    update_len_prefixed(&mut hasher, subject.as_bytes());
-    update_len_prefixed(&mut hasher, previous_hash.as_bytes());
-    format!("{:x}", hasher.finalize())
-}
-
-fn update_len_prefixed(hasher: &mut Sha256, bytes: &[u8]) {
-    hasher.update((bytes.len() as u64).to_be_bytes());
-    hasher.update(bytes);
+    hash_linked(
+        previous_hash,
+        &[
+            Chunk::Raw(&sequence.to_be_bytes()),
+            Chunk::Raw(&timestamp.epoch_millis().to_be_bytes()),
+            Chunk::LenPrefixed(event_kind.as_bytes()),
+            Chunk::LenPrefixed(subject.as_bytes()),
+        ],
+    )
 }
 
 /// One ordered, linked audit record.
@@ -218,9 +236,36 @@ impl fmt::Display for AuditHashChain {
 mod tests {
     use super::*;
     use apeireth_core::kernel::Timestamp;
+    use sha2::{Digest, Sha256};
 
     fn ts(millis: i64) -> Timestamp {
         Timestamp::from_epoch_millis(millis).unwrap()
+    }
+
+    /// 旧路径（治理自带的 `sha2` 实现）——**只作对照**，证明 R5 下沉到 core
+    /// 之后摘要值逐字节不变。
+    ///
+    /// 为什么留这份对照：审计账本是历史账本，「值没变」这件事必须有机器证据，
+    /// 而不是靠人读代码确认「看起来一样」。
+    fn hash_record_legacy(
+        sequence: u64,
+        timestamp: Timestamp,
+        event_kind: &str,
+        subject: &str,
+        previous_hash: &str,
+    ) -> String {
+        let mut hasher = Sha256::new();
+        hasher.update(sequence.to_be_bytes());
+        hasher.update(timestamp.epoch_millis().to_be_bytes());
+        update_len_prefixed(&mut hasher, event_kind.as_bytes());
+        update_len_prefixed(&mut hasher, subject.as_bytes());
+        update_len_prefixed(&mut hasher, previous_hash.as_bytes());
+        format!("{:x}", hasher.finalize())
+    }
+
+    fn update_len_prefixed(hasher: &mut Sha256, bytes: &[u8]) {
+        hasher.update((bytes.len() as u64).to_be_bytes());
+        hasher.update(bytes);
     }
 
     #[test]
@@ -324,5 +369,64 @@ mod tests {
     fn display_does_not_hide_or_leak_surprising_state() {
         let chain = AuditHashChain::new();
         assert!(chain.to_string().contains("records: 0"));
+    }
+
+    // -- R5: 下沉到 core 之后，摘要值必须逐字节不变 ---------------------------
+
+    #[test]
+    fn core_primitive_matches_legacy_sha2_path_byte_for_byte() {
+        let inputs = [
+            ("boot_system", "system", ts(1_700_000_000_000)),
+            ("governance.evaluated", "tool.shell", ts(1_700_000_000_001)),
+            (
+                "capability.dispatched",
+                "tool.calculator",
+                ts(1_700_000_000_002),
+            ),
+            ("user_login", "alice", ts(1_700_000_000_003)),
+        ];
+
+        let mut chain = AuditHashChain::new();
+        for (event_kind, subject, timestamp) in inputs {
+            let record = chain.append(event_kind, subject, timestamp);
+            let legacy = hash_record_legacy(
+                record.sequence,
+                record.timestamp,
+                &record.event_kind,
+                &record.subject,
+                &record.previous_hash,
+            );
+            assert_eq!(
+                record.current_hash, legacy,
+                "审计账本的摘要值不能变：core 原语必须与旧 sha2 路径逐字节相同"
+            );
+        }
+        assert!(chain.verify().is_ok());
+    }
+
+    #[test]
+    fn historical_digest_constants_are_unchanged() {
+        // 常量锚点：取自下沉**之前**的实现，不是现算的。布局动一个字节即红。
+        let mut chain = AuditHashChain::new();
+        chain.append("boot_system", "system", ts(1_700_000_000_000));
+        chain.append("governance.evaluated", "tool.shell", ts(1_700_000_000_001));
+        chain.append(
+            "capability.dispatched",
+            "tool.calculator",
+            ts(1_700_000_000_002),
+        );
+        let records = chain.records();
+        assert_eq!(
+            records[0].current_hash,
+            "0edff970aed2df8f22b0ba07e6ad4fce9087d5ffa5e60a4bc631d04ba7697d9e"
+        );
+        assert_eq!(
+            records[1].current_hash,
+            "f70b452d981613ba29faa08f1f286e889ceef81108c5f1ad8baece184db7b137"
+        );
+        assert_eq!(
+            records[2].current_hash,
+            "8c69db0599fe9bc59a0c0173f21373e24fa057b7c16d6a49b430b6d2398d94f9"
+        );
     }
 }

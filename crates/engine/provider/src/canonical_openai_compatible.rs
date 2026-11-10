@@ -105,7 +105,16 @@ pub struct OpenAiCompatibleProviderCapability {
     http: reqwest::Client,
     timeout_ms: u64,
     credential_key: String,
+    /// **该凭据的端点 audience**（构造时确定）。
+    ///
+    /// ⚠️ 本 provider 是**协议族**（DeepSeek / vLLM / Ollama / 自建网关…）
+    /// ⇒ 端点本来就由**部署方**选 ⇒ 没有可推导的「厂商默认端点」
+    /// ⇒ `from_env()` 也留**空**（不误伤正常部署）。
+    /// ⇒ 想要端点保护就**显式声明绑定**
+    /// （凭据库热写带绑定）⇒ 声明后**强制**。
+    credential_audience: RwLock<Option<Vec<String>>>,
     resolver: ResolverSlot,
+    /// 推理字段归一化配置（12 别名 → 前置 think 块；出向剥离别名字段）。
     /// 推理字段归一化配置（12 别名 → 前置 think 块；归一输出不携带原始别名字段）。
     ///
     /// 默认由 `reasoning_adapter` 的 `from_env` 读取（`APEIRETH_REASONING_ENABLED`
@@ -132,6 +141,7 @@ impl OpenAiCompatibleProviderCapability {
             http,
             timeout_ms,
             credential_key: OPENAI_COMPATIBLE_API_KEY.to_string(),
+            credential_audience: RwLock::new(None),
             resolver,
             reasoning: crate::reasoning_adapter::ReasoningAdapterConfig::from_env(),
         })
@@ -154,6 +164,22 @@ impl OpenAiCompatibleProviderCapability {
     }
 
     /// Resolve the API key for this turn, or fail permanently. A missing key
+    /// **设定该凭据的端点 audience**（构造后设置；`Arc` 共享 ⇒ 内部可变性）。
+    ///
+    /// audience = 「这个凭据**该去**哪些端点」。设定后，**不在 audience 内**的端点
+    /// **拿不到**该凭据（fail-closed）—— 安全审计 P1 的落点。
+    ///
+    /// ⚠️ 部署方要用**别的**端点 ⇒ 显式声明**绑定**（凭据库维度：`HotCredentialStore::
+    /// set_with_endpoints`，或 admin 同笔提交 `base_url` + `api_key`）
+    /// ⇒ 绑定会**加宽** audience（不是替换）。
+    pub fn set_credential_audience(&self, origins: Vec<String>) {
+        let mut guard = self
+            .credential_audience
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        *guard = Some(origins);
+    }
+
     /// is permanent (§40): the legacy config made `api_key_env` mandatory, so a
     /// missing key is a misconfiguration, not an anonymous request (§19/§20).
     fn resolve_key(&self) -> Result<Secret, ProviderError> {
@@ -170,6 +196,28 @@ impl OpenAiCompatibleProviderCapability {
                 ),
             })?
         };
+        // 端点绑定闸（2026-11-01 安全审计 P1）。
+        //
+        // ⚠️ 本 provider 是**协议族**（DeepSeek / vLLM / Ollama / 自建网关…）
+        // ⇒ 端点本来就由**部署方**选 ⇒ 没有可推导的「厂商默认端点」
+        // ⇒ 信任级别是 [`OperatorChosen`]：**未声明绑定时不拦截**（保持既有行为，
+        // 否则正常的自建端点会被全部打死）；**一旦声明了绑定就强制**。
+        //
+        // ⇒ 保护要生效：给该凭据**显式声明**绑定
+        //（凭据库热写带绑定）。
+        let audience = {
+            let guard = self
+                .credential_audience
+                .read()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            guard.clone()
+        };
+        crate::endpoint_binding::ensure_credential_bound_to_endpoint(
+            resolver.as_ref(),
+            &self.credential_key,
+            &self.base_url(),
+            audience.as_deref(),
+        )?;
         resolver
             .resolve(&self.credential_key)
             .ok_or_else(|| ProviderError::AuthFailed {
@@ -590,6 +638,12 @@ impl OpenAiCompatibleProviderPlugin {
                     "reqwest client build failed: {e}"
                 )))
             })?;
+        // ⚠️ **协议族不设 audience**（不拦截）：它的端点**本来就**由部署方选
+        // （DeepSeek / vLLM / Ollama / 自建网关），没有可推导的「厂商默认端点」；
+        // 且 `admin` 的**合法热更新**（换 base_url + 换 api_key）必须能继续工作
+        // ⇒ 用 audience 拦它会打死正常部署。
+        // ⇒ 保护改由**显式绑定**承担：一旦声明了绑定就**强制**
+        //   （运行时换到未绑定的主机 ⇒ 拒绝发凭据，fail-closed）。
         Self::new(base_url, models, http, DEFAULT_TIMEOUT_MS)
     }
 
@@ -763,6 +817,76 @@ mod tests {
         format!("http://{addr}")
     }
 
+    /// **推理字段归一化的端到端证明**：经真实 provider 的 `complete()` 路径。
+    ///
+    /// mock 厂商在 `message` 里同时给 `content` 与 `reasoning_content`；
+    /// provider 打开推理适配后，客户端可见正文应是「`<think>` 块 + 结论」。
+    /// 适配**关**时正文只有结论（零行为变化）—— 两态都断言。
+    #[tokio::test]
+    async fn reasoning_adapter_is_wired_through_the_real_complete_path() {
+        async fn one_shot_response_server() -> String {
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let addr = listener.local_addr().unwrap();
+            tokio::spawn(async move {
+                use tokio::io::{AsyncReadExt, AsyncWriteExt};
+                let Ok((mut socket, _)) = listener.accept().await else {
+                    return;
+                };
+                let mut buf = [0u8; 4096];
+                let _ = socket.read(&mut buf).await;
+                let body = r#"{"id":"chatcmpl-1","choices":[{"message":{"role":"assistant","content":"结论","reasoning_content":"先想一步"},"finish_reason":"stop"}],"usage":{"prompt_tokens":5,"completion_tokens":3,"total_tokens":8}}"#;
+                let out = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    body.len(),
+                    body
+                );
+                let _ = socket.write_all(out.as_bytes()).await;
+                let _ = socket.flush().await;
+                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            });
+            format!("http://{addr}")
+        }
+
+        let base_url = one_shot_response_server().await;
+        let resolver: ResolverSlot = Arc::new(Mutex::new(Some(Arc::new(
+            apeireth_plugin::StaticCredentials::new().with(OPENAI_COMPATIBLE_API_KEY, "sk-test"),
+        )
+            as Arc<dyn apeireth_plugin::CredentialResolver>)));
+        let capability = OpenAiCompatibleProviderCapability::new(
+            base_url,
+            vec!["deepseek-v4".into()],
+            http(),
+            DEFAULT_TIMEOUT_MS,
+            resolver,
+        )
+        .expect("capability builds");
+
+        let mut request = request();
+        request.model = "deepseek-v4".to_string();
+
+        // ① 适配关：只有结论
+        let plain = capability.complete(&request).await.expect("plain complete");
+        let plain_text = plain.content;
+        assert_eq!(plain_text, "结论", "适配关时推理文本不得进入正文");
+        assert!(!plain_text.contains("<think>"));
+
+        // ② 适配开：think 块前置
+        let enabled =
+            capability.with_reasoning_config(crate::reasoning_adapter::ReasoningAdapterConfig {
+                enabled: true,
+                model_filters: vec!["deepseek".to_string()],
+                tag: "think".to_string(),
+            });
+        enabled.set_base_url(one_shot_response_server().await);
+        let reasoned = enabled.complete(&request).await.expect("reasoned complete");
+        let reasoned_text = reasoned.content;
+        assert!(
+            reasoned_text.starts_with("<think>"),
+            "think 块应前置: {reasoned_text}"
+        );
+        assert!(reasoned_text.contains("先想一步"), "{reasoned_text}");
+        assert!(reasoned_text.ends_with("结论"), "{reasoned_text}");
+    }
     mod reasoning_contract;
 
     /// The streaming path forwards incremental content deltas (not one final

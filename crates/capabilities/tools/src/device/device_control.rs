@@ -64,6 +64,19 @@
 //! `device-actions.jsonl`: 何时 (`at_ms`) / 何设备 / 何动作 / 谁批 (`approved_by`,
 //! 自动档如实记 [`AUTO_PASS_APPROVER`]) + 分级 + 计划 id + before/after +
 //! money 档的 IM 卡 id。追加写 + 落盘, 不重写、不删行; 坏行读作不存在。
+//!
+//! # 宿主授权同源 (2026-11-01 安全审计 P3-6)
+//!
+//! 本面的两道闸 ([`DeviceControlRiskMappingHook`] 的 stage-1 授权映射 +
+//! [`DeviceControlApprovalHook`] 的治理判决) 都读**共享 live 策略槽**
+//! ([`crate::live_policy`]): 槽里当前指向的就是治理链正在评估的那一份 ⇒
+//! 面板上的热撤销 (`POST /v1/panel/grants/revoke`) 对本面**立即生效**
+//! (撤销 ⇒ 拒绝即帧, 不动设备)。槽为 `None` (宿主策略未装入) ⇒ **不表态** ⇒
+//! 沿用本面原有分级口径 ⇒ **零行为变化**。
+//!
+//! ⚠️ **宿主拍板链不动**: 上面两道闸只多问一句「宿主还授权吗」; execute 拍的
+//! 放行证据仍然**只认宿主决定账 / 推送账** (`device/approval.rs`), 模型自称的
+//! `approved_by` / `im_card_id` 一律不作数。
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -85,6 +98,14 @@ use serde_json::{json, Map, Value};
 use crate::exec_pipeline::{
     AroundPolicy, OutputSchema, PreExecuteHook, PreExecuteRequest, PreVerdict, SchemaKind,
     DEFAULT_MAX_TIMEOUT_MS,
+};
+use crate::live_policy::{
+    current_live_policy, live_policy_allows, shared_live_permission_policy_slot,
+    LivePermissionPolicySlot,
+};
+
+use super::approval::{
+    host_approval_evidence, DeviceApprovalDecisionLedger, DeviceApprovalPushLedger,
 };
 
 // ---------------------------------------------------------------------------
@@ -1194,27 +1215,11 @@ impl DeviceActionLedger {
             vec![DEVICE_ACTION_DOC_VERSION],
             record,
         );
-        let line = serde_json::to_vec(&doc)
-            .map_err(|error| DeviceControlError::Ledger(format!("状态账序列化失败: {error}")))?;
-        let mut file = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&self.path)
-            .map_err(|error| {
-                DeviceControlError::Ledger(format!(
-                    "状态账打开失败 {}: {error}",
-                    self.path.display()
-                ))
-            })?;
-        file.write_all(&line)
-            .and_then(|()| file.write_all(b"\n"))
-            .and_then(|()| file.sync_all())
-            .map_err(|error| {
-                DeviceControlError::Ledger(format!(
-                    "状态账写入失败 {}: {error}",
-                    self.path.display()
-                ))
-            })
+        // ⚠️ **2026-10-27 修同族缺陷**：原写法**两次写**（行体 + 换行）
+        // ⇒ 并发写者会把两行挤成一行 ⇒ **状态记录丢失**。
+        // ⇒ 改用**共用原语**（行体与行尾换行同在一次写）。
+        crate::proposal::append_jsonl_row(&self.path, "状态账", &doc)
+            .map_err(|error| DeviceControlError::Ledger(error))
     }
 
     /// 读回整本 (逐记录语义: 坏行读作不存在并计入 `skipped`)。
@@ -1361,6 +1366,10 @@ pub struct DeviceControlRunner {
     whitelist: Arc<dyn DeviceWhitelist>,
     adapter: Arc<dyn DeviceAdapter>,
     ledger: DeviceActionLedger,
+    /// 宿主决定账 (「谁批」真值: 一计划一决定, 同一数据目录落位)。
+    decisions: DeviceApprovalDecisionLedger,
+    /// 宿主推送账 (IM 审批卡送达回执: 动钱档的 `im_card_id` 来源)。
+    pushes: DeviceApprovalPushLedger,
     /// 预览票 (进程内): plan_id → 已预览 (先模拟后执行的凭证, 不落盘)。
     previewed: Mutex<BTreeSet<String>>,
     /// 进程内记录序号 (身份唯一性用, 非安全边界)。
@@ -1369,17 +1378,24 @@ pub struct DeviceControlRunner {
 
 impl DeviceControlRunner {
     /// 组装执行核心 (白名单 + 适配器 + 状态账落位)。
+    ///
+    /// 宿主两本审批账 (决定账 + 推送账) 与状态账**同一数据目录**落位 ⇒ 执行
+    /// 核心自己就能查「谁批」, 组装签名不变 (调用方零改动)。
     pub fn new(
         config: DeviceControlConfig,
         whitelist: Arc<dyn DeviceWhitelist>,
         adapter: Arc<dyn DeviceAdapter>,
     ) -> Self {
         let ledger = DeviceActionLedger::under_data_dir(&config.data_dir);
+        let decisions = DeviceApprovalDecisionLedger::under_data_dir(&config.data_dir);
+        let pushes = DeviceApprovalPushLedger::under_data_dir(&config.data_dir);
         Self {
             config,
             whitelist,
             adapter,
             ledger,
+            decisions,
+            pushes,
             previewed: Mutex::new(BTreeSet::new()),
             ordinal: AtomicU64::new(1),
         }
@@ -1416,6 +1432,11 @@ impl DeviceControlRunner {
     /// 状态账落点 (只读消费口)。
     pub fn ledger(&self) -> &DeviceActionLedger {
         &self.ledger
+    }
+
+    /// 宿主两本审批账 (决定账 + 推送账, 只读消费口): 工具面查「谁批」用。
+    pub fn host_ledgers(&self) -> (&DeviceApprovalDecisionLedger, &DeviceApprovalPushLedger) {
+        (&self.decisions, &self.pushes)
     }
 
     /// **plan 拍** (零副作用): 白名单 + 分级词表 + 参数闭合校验 → 计划帧。
@@ -1550,6 +1571,10 @@ impl DeviceControlRunner {
     }
 
     /// 分级审批证据校验 (返回「谁批」; 自动档放行如实记 [`AUTO_PASS_APPROVER`])。
+    ///
+    /// **口径**: 本方法只认**调用方 (宿主)** 递来的证据; 模型面 (工具面) 的
+    /// 证据由 [`DeviceControlTool::host_evidence`] 从**宿主决定账/推送账**取
+    /// (模型参数不作数) —— 自动档的「谁批」是**宿主的配置**, 不是任何字符串。
     fn approval_evidence(
         &self,
         plan: &ExecutionPlan,
@@ -1559,7 +1584,7 @@ impl DeviceControlRunner {
         let note = approval_note_for(plan.grade);
         match plan.approval {
             ApprovalRequirement::Approval { auto_allowed: true } => {
-                Ok(approved_by.unwrap_or(AUTO_PASS_APPROVER).to_string())
+                Ok(AUTO_PASS_APPROVER.to_string())
             }
             ApprovalRequirement::Approval {
                 auto_allowed: false,
@@ -1686,22 +1711,57 @@ impl DeviceControlStatus {
 /// - `execute` 按分级: reversible = 审批档 (可配自动档) / irreversible =
 ///   **永远逐次人批** / money = **永远逐次人批 + IM 卡**;
 /// - 词表外动作 / 未知拍 fail-closed 拒绝即帧 ([`Decision::deny`])。
-#[derive(Debug, Clone, Copy, Default)]
+///
+/// # 宿主授权同源 (2026-11-01 安全审计 P3-6)
+///
+/// **原先错在哪**: 本钩子**只**判分级档位, **从不问宿主是否还授权** ⇒ 面板上
+/// 把 `tool.device_control` 撤销掉之后, 本钩子照样按分级索要审批 ⇒ 热撤销
+/// 对这个面**不可见** (从外面也看不出来)。
+///
+/// **现在为什么这样**: 钩子持有**共享 live 策略槽**
+/// ([`LivePermissionPolicySlot`]): 每次评估**现读**槽里当前指向的宿主策略
+/// ⇒ 撤销立即可见 (撤销 ⇒ 拒绝即帧, 不再进分级审批链)。槽为 `None`
+/// (宿主策略未装入) ⇒ **不表态** ⇒ 沿用本面原有分级档位判定 ⇒ **零行为变化**。
+///
+/// ⚠️ **宿主拍板链不动**: 本钩子只多问一句「宿主还授权吗」; 放行证据仍然只认
+/// `device/approval.rs` 的**决定账 / 推送账** (模型自称的 `approved_by` 一律
+/// 不作数), 本次改动**不碰**那条链。
+#[derive(Debug, Clone)]
 pub struct DeviceControlApprovalHook {
     /// reversible 自动档 (只此档可配; 默认 false = 审批档)。
     auto_pass_reversible: bool,
+    /// 共享 live 策略槽 (P3-6): 每次评估现读槽里当前指向的宿主策略 (不是快照)。
+    slot: LivePermissionPolicySlot,
 }
 
 impl DeviceControlApprovalHook {
-    /// 默认档构造 (reversible 也每次人批)。
+    /// 默认档构造 (reversible 也每次人批; 挂**进程内共享槽**, 宿主策略装入后
+    /// 自动对本面生效, 不必改装配根)。
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            auto_pass_reversible: false,
+            slot: shared_live_permission_policy_slot(),
+        }
+    }
+
+    /// 挂在**指定共享 live 策略槽**上的分级审批档钩子 (P3-6): 装配根注入用。
+    pub fn with_slot(slot: LivePermissionPolicySlot) -> Self {
+        Self {
+            auto_pass_reversible: false,
+            slot,
+        }
     }
 
     /// 覆盖 reversible 自动档 (irreversible / money 不受影响, 永逐次人批)。
     pub fn with_auto_pass_reversible(mut self, on: bool) -> Self {
         self.auto_pass_reversible = on;
         self
+    }
+}
+
+impl Default for DeviceControlApprovalHook {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -1721,6 +1781,20 @@ impl GovernanceHook for DeviceControlApprovalHook {
         };
         if capability.as_str() != DEVICE_CONTROL_CAPABILITY_ID {
             return Decision::Allow;
+        }
+        // 宿主授权检查 (2026-11-01 安全审计 P3-6): 未授权 / 已被撤销 ⇒ **停审批档（零落盘）**。
+        // 分工: 治理链那一层是**拒绝即帧**（撤销 ⇒ 派发前就被拒）;
+        // stage-1 这一层是**落盘前的最后一道**（未授权 ⇒ 不落盘）。
+        // 槽为 None (宿主策略未装入) ⇒ 不表态 ⇒ 沿用本面原有口径 (零回归)。
+        // 判定位置: 本面原有分级档位判定**之前** (撤销 ⇒ 不再进分级审批链)。
+        //
+        // ⚠️ 本闸只问「宿主还授权吗」; 放行证据仍只认宿主决定账 / 推送账
+        // (`device/approval.rs`) —— 宿主拍板链**未被触碰**。
+        if let Some(false) = live_policy_allows(&self.slot, capability.as_str()) {
+            return Decision::deny(format!(
+                "能力 {} 未获宿主授权或已被撤销 ⇒ 停 require-approval 档（零落盘）",
+                capability.as_str()
+            ));
         }
         let verb = arguments
             .get("action")
@@ -1753,18 +1827,48 @@ impl GovernanceHook for DeviceControlApprovalHook {
     }
 }
 
-/// 分级风险映射 (pre-execute 瀑布): 未显式授权 = require-approval 档。
+/// 分级风险映射 (pre-execute 瀑布): 宿主已授权 ⇒ 放行; 未授权 / 已被撤销 ⇒ 拒绝即帧。
 ///
 /// 与文档/图像工具风险映射同一语义: 显式授权 (grant 且未标审批) → 放行;
-/// 授权被标人工审批 / 无授权 → `ask` (拒绝即帧 `pipeline.pre_ask`)。
+/// 授权被标人工审批 → `ask` (拒绝即帧 `pipeline.pre_ask`); **未授权 / 已被撤销**
+/// → `deny` (硬拒, fail-closed; 2026-11-01 安全审计 P3-6)。
+///
+/// # 宿主授权同源 (2026-11-01 安全审计 P3-6)
+///
+/// **原先错在哪**: 本钩子查的是**工具面自建**的一份策略
+/// ([`authorized_device_control_policy`] 只 grant 一条), 它与治理链正在评估的
+/// **宿主策略** (`PermissionGovernanceHook` 持有的那一份) **不是同一个对象**
+/// ⇒ 面板上的热撤销 (`POST /v1/panel/grants/revoke` → `PermissionPolicy::revoke`)
+/// 对设备受控执行面**完全无效** (闸恒放行, 且从外面看不出来)。
+///
+/// **现在为什么这样**: 策略改成**可换指针的槽**
+/// ([`LivePermissionPolicySlot`]): 每次判定**现读**槽里当前指向的那一份
+/// ⇒ 撤销立即可见。判定顺序: ① 宿主授权闸 (未授权 / 已撤销 ⇒ **拒绝即帧**,
+/// 槽为 `None` = 宿主策略未装入 ⇒ **不表态** ⇒ 沿用本面原有口径, 零回归);
+/// ② 档位判定 (授权在 ⇒ 放行)。
 pub struct DeviceControlRiskMappingHook {
-    policy: Arc<Mutex<PermissionPolicy>>,
+    /// 共享 live 策略槽: 每次检查都**现读**槽里当前指向的策略 (不是快照)。
+    slot: LivePermissionPolicySlot,
+    /// **宿主策略未装入时**沿用的本面授权口径 (`None` = 不表态 ⇒ 零回归)。
+    fallback: Arc<Mutex<PermissionPolicy>>,
 }
 
 impl DeviceControlRiskMappingHook {
-    /// 挂在共享授权策略上的风险映射钩子。
+    /// 挂在共享授权策略上的风险映射钩子 (签名不变; 本钩子自带一个只属于它的槽)。
     pub fn new(policy: Arc<Mutex<PermissionPolicy>>) -> Self {
-        Self { policy }
+        Self {
+            slot: Arc::new(Mutex::new(Some(policy))),
+            fallback: authorized_device_control_policy(),
+        }
+    }
+
+    /// 挂在**共享 live 策略槽**上的风险映射钩子 (P3-6): 槽里当前指向的策略
+    /// 就是治理链正在评估的那一份 ⇒ 热撤销对设备受控执行面立即生效。
+    pub fn with_slot(slot: LivePermissionPolicySlot) -> Self {
+        Self {
+            slot,
+            fallback: authorized_device_control_policy(),
+        }
     }
 }
 
@@ -1774,11 +1878,34 @@ impl PreExecuteHook for DeviceControlRiskMappingHook {
     }
 
     fn pre_verdict(&self, request: &PreExecuteRequest<'_>) -> PreVerdict {
-        let decision = self
-            .policy
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .decision_for_capability(request.capability.as_str());
+        // 宿主授权检查 (2026-11-01 安全审计 P3-6): 未授权 / 已被撤销 ⇒ **停审批档（零落盘）**。
+        // 分工: 治理链那一层是**拒绝即帧**（撤销 ⇒ 派发前就被拒）;
+        // stage-1 这一层是**落盘前的最后一道**（未授权 ⇒ 不落盘）。
+        // 槽为 None (宿主策略未装入) ⇒ 不表态 ⇒ 沿用本面原有口径 (零回归)。
+        // 只在能力 id 命中本面能力时才有话说 (别的面不归本钩子管)。
+        if request.capability.as_str() == DEVICE_CONTROL_CAPABILITY_ID {
+            if let Some(false) = live_policy_allows(&self.slot, request.capability.as_str()) {
+                return PreVerdict::Ask {
+                    reason: format!(
+                        "能力 {} 未获宿主授权或已被撤销 ⇒ 停 require-approval 档（零落盘）",
+                        request.capability.as_str()
+                    ),
+                };
+            }
+        }
+        // 档位判定: 现读槽里当前指向的策略; 槽为 None ⇒ 用本面自建口径
+        // (`authorized_device_control_policy`) ⇒ 与改动前逐字一致。
+        let decision = match current_live_policy(&self.slot) {
+            Some(policy) => policy
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .decision_for_capability(request.capability.as_str()),
+            None => self
+                .fallback
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .decision_for_capability(request.capability.as_str()),
+        };
         match decision {
             Decision::Allow => PreVerdict::Allow,
             Decision::RequireApproval { reason } => PreVerdict::Ask { reason },
@@ -1877,6 +2004,10 @@ pub fn authorized_device_control_policy() -> Arc<Mutex<PermissionPolicy>> {
 }
 
 /// 组装设备控制五段流水线: 风险映射 → 单调边界 Guard → 超时 → 输出归一合同。
+///
+/// 风险映射挂的是**本面自建**策略 (与改动前一致) ⇒ 本函数**零行为变化**;
+/// 要让 stage-1 闸跟宿主策略同源 (面板热撤销立即生效), 用
+/// [`device_control_pipeline_with_slot`]。
 pub fn device_control_pipeline(
     whitelist: Arc<dyn DeviceWhitelist>,
 ) -> Arc<crate::exec_pipeline::ToolExecutionPipeline> {
@@ -1885,6 +2016,35 @@ pub fn device_control_pipeline(
             .with_pre_hook(Arc::new(DeviceControlRiskMappingHook::new(
                 authorized_device_control_policy(),
             )))
+            .with_guard(Arc::new(DeviceControlBoundaryGuard::new(whitelist)))
+            .with_around(
+                AroundPolicy::new().with_timeout(DEVICE_CONTROL_TIMEOUT_MS, DEFAULT_MAX_TIMEOUT_MS),
+            )
+            .with_output_schema(DeviceControlTool::output_schema()),
+    )
+}
+
+/// 组装设备控制五段流水线 + **共享 live 策略槽** (2026-11-01 安全审计 P3-6)。
+///
+/// **原先错在哪**: [`device_control_pipeline`] 的 stage-1 风险映射查的是**工具
+/// 面自建**的策略 ⇒ 面板上的热撤销对它无效。
+/// **现在为什么这样**: 风险映射改挂**共享槽** ⇒ 与治理链同源 ⇒ 撤销立即生效
+/// (撤销 ⇒ 拒绝即帧, 不动设备); 槽为 `None` (宿主策略未装入) ⇒ 沿用本面自建
+/// 口径 ⇒ 零行为变化。
+///
+/// ⚠️ 宿主策略必须 **grant `tool.device_control`** ⇒ 否则 stage-1 直接硬拒
+/// (fail-closed, 双闸注册即闸)。
+///
+/// ⚠️ **宿主拍板链不动**: 本函数只换 stage-1 的**授权来源**; execute 拍的放行
+/// 证据仍只认 `device/approval.rs` 的决定账 / 推送账 (模型自称的 `approved_by`
+/// 一律不作数)。
+pub fn device_control_pipeline_with_slot(
+    whitelist: Arc<dyn DeviceWhitelist>,
+    slot: LivePermissionPolicySlot,
+) -> Arc<crate::exec_pipeline::ToolExecutionPipeline> {
+    Arc::new(
+        crate::exec_pipeline::ToolExecutionPipeline::new()
+            .with_pre_hook(Arc::new(DeviceControlRiskMappingHook::with_slot(slot)))
             .with_guard(Arc::new(DeviceControlBoundaryGuard::new(whitelist)))
             .with_around(
                 AroundPolicy::new().with_timeout(DEVICE_CONTROL_TIMEOUT_MS, DEFAULT_MAX_TIMEOUT_MS),
@@ -1922,9 +2082,11 @@ pub struct DeviceControlParams {
     pub params: Value,
     /// 计划 id (preview / execute 必带, 三拍同计划绑定)。
     pub plan_id: Option<String>,
-    /// 谁批 (execute 的审批证据)。
+    /// 模型自称的「谁批」 —— **一律不作数** (2026-11-01 安全审计: 原实现直接
+    /// 取这个模型参数当审批证据 ⇒ 模型可自称「已获批准」执行不可逆/动钱动作,
+    /// 状态账里的授权人也不可信)。真证据只认宿主决定账/推送账。
     pub approved_by: Option<String>,
-    /// IM 审批卡标识 (money 档 execute 必带)。
+    /// 模型自称的 IM 审批卡标识 —— **一律不作数** (真卡号取宿主推送账的送达回执)。
     pub im_card_id: Option<String>,
 }
 
@@ -1960,6 +2122,24 @@ impl DeviceControlTool {
     /// 执行核心 (测试直调口, 与工具面同一真源)。
     pub fn runner(&self) -> &Arc<DeviceControlRunner> {
         &self.runner
+    }
+
+    /// 宿主拍板证据 (模型面 execute 拍): 只认**宿主写的账**, 不认模型参数。
+    ///
+    /// reversible **自动档** = 宿主配置的如实标签; 其余档 (reversible 审批档 /
+    /// irreversible / money) = 决定账里的宿主署名 (动钱档另需推送账的送达回执)。
+    fn host_evidence(
+        &self,
+        params: &DeviceControlParams,
+        action_params: &Value,
+        plan_id: &str,
+    ) -> Result<ApprovalEvidence, DeviceControlError> {
+        let plan = self
+            .runner
+            .plan(&params.device, &params.device_action, action_params)?;
+        let (decisions, pushes) = self.runner.host_ledgers();
+        host_approval_evidence(decisions, pushes, plan_id, plan.approval)
+            .map_err(DeviceControlError::ApprovalRequired)
     }
 
     /// 输出归一合同: 结构化输出必须是对象且 `action` / `status` 恒在场。
@@ -2007,14 +2187,6 @@ impl ToolCapability for DeviceControlTool {
                     "plan_id": {
                         "type": "string",
                         "description": "preview / execute only: the plan id returned by the plan beat (payload drift is refused)."
-                    },
-                    "approved_by": {
-                        "type": "string",
-                        "description": "execute only: who approved this call (human name or IM card callback id)."
-                    },
-                    "im_card_id": {
-                        "type": "string",
-                        "description": "execute on money-grade actions only: the IM approval card id (required for purchase / order words)."
                     }
                 },
                 "required": ["action", "device", "device_action"],
@@ -2124,9 +2296,15 @@ impl ToolCapability for DeviceControlTool {
                         ),
                     );
                 };
-                let evidence = ApprovalEvidence {
-                    approved_by: params.approved_by.clone(),
-                    im_card_id: params.im_card_id.clone(),
+                // **原先错在哪**: 审批证据直接取模型参数 (`approved_by` /
+                // `im_card_id`) ⇒ 模型自称「已获批准」就能执行不可逆/动钱动作,
+                // 且状态账里的「谁批」不可信 (不可逆/动钱档还不查主体)。
+                // **现在为什么这样**: 证据只从**宿主写的账**取 (决定账 = 谁批,
+                // 推送账 = IM 卡送达回执; 判据照抄 IM 面): 宿主没拍板 ⇒ 拒绝
+                // 即帧; 模型自称的授权人/卡号一律不作数 (不采信、不落账)。
+                let evidence = match self.host_evidence(&params, &action_params, plan_id) {
+                    Ok(evidence) => evidence,
+                    Err(error) => return self.refuse(call, error),
                 };
                 match self.runner.execute(
                     &params.device,
@@ -2171,6 +2349,24 @@ pub fn device_control_capability(runner: Arc<DeviceControlRunner>) -> Arc<dyn To
     Arc::new(crate::exec_pipeline::PipelinedCapability::new(
         tool,
         device_control_pipeline(runner.whitelist().clone()),
+    ))
+}
+
+/// 组装生产工具面 + **共享 live 策略槽** (2026-11-01 安全审计 P3-6)。
+///
+/// 装配根用这个入口把宿主策略装进设备受控执行面 ⇒ 面板热撤销对
+/// `tool.device_control` 立即生效 (stage-1 闸与治理链同源)。
+///
+/// ⚠️ **宿主拍板链不动**: 只换 stage-1 的**授权来源**; execute 拍的放行证据仍
+/// 只认 `device/approval.rs` 的决定账 / 推送账。
+pub fn device_control_capability_with_slot(
+    runner: Arc<DeviceControlRunner>,
+    slot: LivePermissionPolicySlot,
+) -> Arc<dyn ToolCapability> {
+    let tool: Arc<dyn ToolCapability> = Arc::new(DeviceControlTool::new(Arc::clone(&runner)));
+    Arc::new(crate::exec_pipeline::PipelinedCapability::new(
+        tool,
+        device_control_pipeline_with_slot(runner.whitelist().clone(), slot),
     ))
 }
 
@@ -2945,87 +3141,6 @@ mod tests {
         let section = status.to_json();
         assert_eq!(section["executed_money"], json!(0));
         assert_eq!(section["devices_enabled"], json!(3));
-    }
-
-    /// ⑲ 工具面: 三拍走通 + 缺 plan_id 即拒 + 输出归一字段恒在。
-    #[tokio::test]
-    async fn tool_face_walks_the_three_beats() {
-        use apeireth_protocol::canonical::ToolOutcome;
-
-        fn value_of(result: &ToolResult) -> Value {
-            match &result.outcome {
-                ToolOutcome::Ok { value } => value.clone(),
-                other => panic!("必须成功帧: {other:?}"),
-            }
-        }
-
-        let (_dir, runner) = temp_runner();
-        let tool = DeviceControlTool::new(runner.clone());
-        let call = |id: &str, arguments: Value| ToolCall {
-            id: id.to_string(),
-            name: DEVICE_CONTROL_TOOL_NAME.to_string(),
-            arguments,
-        };
-        let planned = tool
-            .invoke(&call(
-                "c1",
-                json!({"action": "plan", "device": "lamp", "device_action": "set_brightness", "params": {"level": 30}}),
-            ))
-            .await;
-        assert!(planned.is_ok(), "{planned:?}");
-        let planned = value_of(&planned);
-        assert_eq!(planned["action"], json!(ACTION_PLAN));
-        assert_eq!(planned["status"], json!("planned"));
-        assert_eq!(planned["grade"], json!("reversible"));
-        assert_eq!(
-            planned["zero_side_effect"],
-            json!(true),
-            "plan 帧自报零副作用"
-        );
-        let plan_id = planned["plan_id"]
-            .as_str()
-            .expect("plan_id 进帧")
-            .to_string();
-
-        let previewed = tool
-            .invoke(&call(
-                "c2",
-                json!({"action": "preview", "device": "lamp", "device_action": "set_brightness", "params": {"level": 30}, "plan_id": plan_id}),
-            ))
-            .await;
-        assert!(previewed.is_ok(), "{previewed:?}");
-        let previewed = value_of(&previewed);
-        assert_eq!(previewed["status"], json!("previewed"));
-        assert!(previewed["approval_card"].is_object(), "审批卡载荷随预览帧");
-
-        let executed = tool
-            .invoke(&call(
-                "c3",
-                json!({"action": "execute", "device": "lamp", "device_action": "set_brightness", "params": {"level": 30}, "plan_id": plan_id, "approved_by": "主人"}),
-            ))
-            .await;
-        assert!(executed.is_ok(), "{executed:?}");
-        let executed = value_of(&executed);
-        assert_eq!(executed["status"], json!("executed"));
-        assert_eq!(executed["approved_by"], json!("主人"));
-        assert!(executed["record_id"].is_string(), "状态账记录 id 进帧");
-
-        // 缺 plan_id 的 preview/execute 即拒。
-        let refused = tool
-            .invoke(&call(
-                "c4",
-                json!({"action": "execute", "device": "lamp", "device_action": "set_brightness", "params": {"level": 30}, "approved_by": "主人"}),
-            ))
-            .await;
-        assert!(!refused.is_ok(), "{refused:?}");
-        // 词表外拍即拒。
-        let refused = tool
-            .invoke(&call(
-                "c5",
-                json!({"action": "wish", "device": "lamp", "device_action": "power_on"}),
-            ))
-            .await;
-        assert!(!refused.is_ok(), "{refused:?}");
     }
 
     /// ⑳ 白名单复用: L1 设备表 (`devices.json`) 只读消费桥 —— 同一本设备表,

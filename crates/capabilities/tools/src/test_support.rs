@@ -19,7 +19,7 @@
 //!
 //! 其它 crate 若出现同形态 flake, 建议按同一模式在各自 crate 内放一份
 //! (仓库不新增 test-support crate: 不改 `workspace.members` 口径, 不引外部依赖)。
-#![allow(dead_code)]
+#![allow(dead_code)] // D-1（owner 裁定 2026-10-25）：测试夹具字段/方法（供用例构造完整对象，部分字段本文件内未被读取）
 
 use std::io;
 use std::time::Duration;

@@ -151,13 +151,16 @@ ignore = [
     #   上游已归档, 无安全升级路径。缓解: 我们对外只暴露 png/jpeg/webp/bmp 四格式,
     #   EXR 属核面保留能力; 若将来放弃 EXR 承诺, 去掉 exr 依赖即消。
     "RUSTSEC-2024-0436",
-    # zbus_names / zvariant / zvariant_derive 5.x 家族 ← zbus 5.19 ← xcap 0.9.8
-    #   ← apeireth-perception（屏幕采集面）。RustSec 2026-10 新判「不再作为独立
-    #   crate 维护，迁移到 zbus 6」，而 xcap 0.9.8 钉 zbus 5.x —— 无安全升级路径，
-    #   只能等上游 xcap 升 zbus 6。0 直接业务依赖。
-    "RUSTSEC-2026-0370",
-    "RUSTSEC-2026-0371",
-    "RUSTSEC-2026-0372",
+    #
+    # 2026-11-10 依赖升级批（rusqlite 0.32 → 0.41）复审：删掉 8 条已失效 ignore。
+    #   ① zbus 5.x 家族（RUSTSEC-2026-0370/0371/0372）: **Cargo.lock 里已无 zbus**
+    #      （xcap 那条链不在当前依赖树）⇒ `cargo deny check advisories` 报
+    #      advisory-not-detected ⇒ 按本文件既有规则「条目若变成 advisory-not-detected 即删」删除。
+    #   ② quinn-proto 5 条（RUSTSEC-2026-0338/0339/0340/0341/0342）: 该 advisory 针对
+    #      quinn-proto 0.11.16, 依赖树里现为 **0.11.19（已修）** ⇒ 同上, ignore 已失效。
+    #   **留档（复审条件）**: 上述两条链若再进依赖树（xcap 回来 / 启用 reqwest 的 http3 特性），
+    #   因为 ignore 已删, advisory 会**直接报出来**而不是被静默吞掉 ⇒ 这是更安全的形状。
+    #   同步面: .github/workflows/cargo-audit.yml 的 --ignore 同批同删（两处口径一致）。
     #
     # 说明: 本清单只收 unmaintained 类（非漏洞）; vulnerability / unsound 仍 0 ignore。
     # 每次依赖树变动后复核: 条目若变成 advisory-not-detected 即删 (同 2026-10-06 批)。
