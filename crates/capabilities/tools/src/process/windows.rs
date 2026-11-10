@@ -1345,9 +1345,8 @@ fn build_environment_block(
         super::EnvironmentSpec::Inherit => Ok(None),
         super::EnvironmentSpec::Clear => Ok(Some(vec![0, 0])),
         super::EnvironmentSpec::Explicit(vars) => {
-            // CreateProcessW 硬性要求环境块**大小写不敏感排序** (真机实测: 乱序块
-            // 报 os error 203 "找不到环境选项", 2026-10-10 AppContainer 路径咬出)。
-            // 在块构造处排序 —— 所有裸 CreateProcess* 路径同受益。
+            // CreateProcessW 硬性要求环境块**大小写不敏感排序** (真机实测: 乱序块报 os error 203
+            // "找不到环境选项", 2026-10-10 AppContainer 路径咬出) ⇒ 排序放在块构造处, 裸 CreateProcess* 路径同受益。
             let mut sorted: Vec<&(OsString, OsString)> = vars.iter().collect();
             sorted.sort_by_key(|(key, _)| key.to_string_lossy().to_lowercase());
             let mut block = Vec::new();
