@@ -581,18 +581,24 @@ fn f10_concurrent_appends_keep_every_record() {
     cleanup(&path);
 }
 
-/// F11 多写者分叉：分叉是**已披露**口径，但分叉后的账本属"断链" ⇒ 必须拒开。
+/// F11 多写者：**单写者强制** ⇒ 第二个写者必须**被拒开**（如实错误, 不是静默分叉）。
 ///
-/// 契约：`chain_audit.rs` "0 装口径: 单写者假设 —— 链 sequence = 记录数,
-/// 多进程并发追加会分叉"（`src: chain_audit.rs:15-16`）⇒ 分叉本身不判违约；
-/// "任何篡改/断链 = 拒开"（`src: chain_audit.rs:49-50`）⇒ 分叉账本必须拒开
-/// （fail-closed），不许默默当好账本收下。
+/// 契约：`chain_audit.rs` "0 装口径: **单写者（现已强制，不再只是假设）**"
+/// （`src: chain_audit.rs:15-16`）⇒ `open` 抢 `<ledger>.lock`（OS 文件锁），
+/// **第二个写者得到如实错误**（`src: chain_audit.rs:18-20` / `:105-112`）⇒ 旧口径
+/// 「两写者各 append ⇒ 分叉 ⇒ 第三次拒开断链账本」已随 2026-11-01 单写者强制
+/// **不可达**（分叉根本不会发生 ⇒ 断链账本无从构造）⇒ 本臂改钉**当前**口径：
+/// 第二写者拒开 + 被拒的那次没写进任何记录 + 原账本仍完整可开。
 fn f11_multi_writer_fork_is_refused_at_open() {
     let Some(path) = ledger_path("f11") else {
         return;
     };
     let first = FileChainAuditSink::open(path.clone()).expect("open first writer");
-    let second = FileChainAuditSink::open(path.clone()).expect("open second writer");
+    let second = FileChainAuditSink::open(path.clone());
+    assert!(
+        second.is_err(),
+        "单写者强制 ⇒ 第二个写者必须被拒开 (如实错误, 不是静默分叉)"
+    );
     first
         .append(
             "governance.allowed",
@@ -600,17 +606,11 @@ fn f11_multi_writer_fork_is_refused_at_open() {
             safe_ms(1_700_000_000_000),
         )
         .expect("first writer append");
-    second
-        .append(
-            "governance.allowed",
-            "tool.repo",
-            safe_ms(1_700_000_000_000),
-        )
-        .expect("second writer append");
-    assert!(
-        FileChainAuditSink::open(path.clone()).is_err(),
-        "多写者分叉后的账本必须拒开 (断链, fail-closed)"
-    );
+    drop(first);
+    let reopened = FileChainAuditSink::open(path.clone()).expect("首写者放手后必须开得出");
+    assert_eq!(reopened.len(), 1, "被拒开的第二写者没有写进任何记录");
+    reopened.verify().expect("账本链仍完整");
+    drop(reopened);
     cleanup(&path);
 }
 

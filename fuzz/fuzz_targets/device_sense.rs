@@ -354,8 +354,26 @@ struct ParsedArgs {
     authorized_by: Option<String>,
 }
 
-/// 闭合词表: 工具只认这四个字段（`sense.rs:75-82` + 声明面 `additionalProperties: false`）。
-const KNOWN_FIELDS: &[&str] = &[
+/// 声明面（模型看得见的）闭合词表: 工具**只向模型声明**这三个字段
+/// （`sense.rs:488-515` 的 `declaration()` + `additionalProperties: false`）。
+///
+/// ⚠️ 2026-11-01 安全审计后 `authorized_by` **不再进声明面** —— 模型面**无权提供授权人**
+/// （文件头 doctrine: 放行只认宿主决定账, `sense.rs:10-22`）。旧版本把「声明面」与
+/// 「解析面」当同一张表, 审计改声明面时没同步这里 ⇒ 本臂长期红在「声明里必须有字段
+/// authorized_by」上 ⇒ 现按**当前**契约拆成两张表: 声明面 3 字段 / 解析面 4 字段。
+const DECLARED_FIELDS: &[&str] = &[
+    "action",
+    "device_ids",
+    "sensitive_read_authorized",
+];
+
+/// 解析面（实际收参）词表 = 声明面 + **只解析不作数**的 `authorized_by`
+/// （`sense.rs:93-96`:「保留解析只为旧提示词不硬失败; 真授权只认宿主决定账」）。
+///
+/// ⇒ 解析面比声明面多一个**历史遗留**键: 老提示词里带它不该硬失败, 但它**不在声明面**
+/// ⇒ 按 schema 生成参数的模型永远不会带它 ⇒ 边界 Guard 的「旗开人空必拒」对
+/// schema 合规调用者恒真（该张力已单独记账, 不在本臂改口径）。
+const ACCEPTED_FIELDS: &[&str] = &[
     "action",
     "device_ids",
     "sensitive_read_authorized",
@@ -370,7 +388,7 @@ fn parse_args(args: &Value) -> Result<ParsedArgs, ()> {
     let object = args.as_object().ok_or(())?;
     if object
         .keys()
-        .any(|key| !KNOWN_FIELDS.contains(&key.as_str()))
+        .any(|key| !ACCEPTED_FIELDS.contains(&key.as_str()))
     {
         return Err(());
     }
@@ -1327,16 +1345,17 @@ fn fixture_suite() {
         .keys()
         .map(String::as_str)
         .collect();
-    for field in KNOWN_FIELDS {
+    for field in DECLARED_FIELDS {
         assert!(
             declared.contains(field),
-            "声明里必须有字段 {field} (sense.rs:444-467): {declared:?}"
+            "声明里必须有字段 {field} (sense.rs:488-515): {declared:?}"
         );
     }
     assert_eq!(
         declared.len(),
-        KNOWN_FIELDS.len(),
-        "声明里不得有多余字段 (additionalProperties: false): {declared:?}"
+        DECLARED_FIELDS.len(),
+        "声明里不得有多余字段 (additionalProperties: false; 解析面多出的 authorized_by \
+         只解析不作数, 不进声明面 ⇒ 模型无权提供授权人): {declared:?}"
     );
 
     // (b) 输出归一合同: `action` / `status` 恒在场 (`sense.rs:218-223`)。
