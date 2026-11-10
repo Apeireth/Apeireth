@@ -822,7 +822,20 @@ mod macos_tests {
         let exe = std::env::current_exe().expect("current_exe");
         let mut role = Command::new(&exe)
             .arg("--exact")
-            .arg("macos_executor_role_process")
+            // ⚠️ **`--exact` 要的是**全路径**（2026-11-10 CI 实测修正）。
+            //
+            // 现象：macOS CI 上本测试红，报 "the executor's child must show up in
+            // the process table"，而**角色进程自己的输出**是
+            // 「running 0 tests / test result: ok. 0 passed」⇒ ⇒ 角色**根本没跑**。
+            //
+            // 机制：角色测试住在 `mod macos_tests` 里 ⇒ 它的全名是
+            // `macos_tests::macos_executor_role_process`；而 `--exact` 是**全名精确匹配**
+            // ⇒ 只给裸名 `macos_executor_role_process` ⇒ **匹配不到任何测试**
+            // ⇒ 角色进程空跑退出 ⇒ 它的子进程（`sleep <marker>`）压根没起
+            // ⇒ 父测试在进程表里等不到 ⇒ 30 s 后超时 panic。
+            //
+            // ⇒ 修法：过滤器写**全路径**（与 `fn` 所在的模块路径一致）。
+            .arg("macos_tests::macos_executor_role_process")
             .arg("--nocapture")
             .env(ROLE_ENV, "1")
             .stdout(Stdio::piped())
