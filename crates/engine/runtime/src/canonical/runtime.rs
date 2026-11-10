@@ -576,6 +576,24 @@ impl Runtime {
     /// plan-mode mechanism is on), so this merge does not change the
     /// catalog in either posture.
     pub fn tool_declarations(&self) -> Vec<apeireth_protocol::canonical::NormalizedTool> {
+        let mut declarations = self.local_tool_declarations();
+        // Remote declarations are projected through the capability port. A
+        // name contested between a local surface and a peer (or between two
+        // peers) never reaches the model: the derived route table drops it.
+        declarations.extend(self.tool_route_table().remote_model_catalog());
+        declarations
+    }
+
+    /// The local, registry-driven half of the model-facing catalog.
+    ///
+    /// This is the list the runtime has always published locally: the tool
+    /// declarations of the capability registry, then the control
+    /// declarations. It is kept separate from the remote projection so a
+    /// session scope can filter the local surface without also dropping
+    /// declarations that no local dispatcher is able to scope.
+    pub(super) fn local_tool_declarations(
+        &self,
+    ) -> Vec<apeireth_protocol::canonical::NormalizedTool> {
         let mut declarations: Vec<apeireth_protocol::canonical::NormalizedTool> = self
             .capabilities
             .declarations()
@@ -583,10 +601,6 @@ impl Runtime {
             .collect::<Vec<_>>();
         // Control declarations are part of the one registry-driven catalog.
         declarations.extend(self.capabilities.control_declarations());
-        // Remote declarations are projected through the capability port. A
-        // name contested between a local surface and a peer (or between two
-        // peers) never reaches the model: the derived route table drops it.
-        declarations.extend(self.tool_route_table().remote_model_catalog());
         declarations
     }
 

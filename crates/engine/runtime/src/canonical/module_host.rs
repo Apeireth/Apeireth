@@ -55,7 +55,8 @@ impl Runtime {
         &self,
         session: SessionId,
     ) -> Vec<apeireth_protocol::canonical::NormalizedTool> {
-        self.tool_declarations()
+        let mut declarations: Vec<apeireth_protocol::canonical::NormalizedTool> = self
+            .local_tool_declarations()
             .into_iter()
             .filter(|tool| {
                 self.capabilities
@@ -69,7 +70,15 @@ impl Runtime {
                     })
                     .unwrap_or(false)
             })
-            .collect()
+            .collect();
+        // The remote projection is appended *after* the local scope filter.
+        // The local dispatcher holds no scope object for a peer's
+        // capability, so a remote declaration judged by that filter would
+        // be dropped every time and the model would never see the peer.
+        // The peer applies its own scope; the mesh trust policy and the
+        // peer state gate the peer itself.
+        declarations.extend(self.tool_route_table().remote_model_catalog());
+        declarations
     }
 
     pub(super) fn tool_is_legacy(&self, id: &CapabilityId) -> bool {
