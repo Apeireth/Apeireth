@@ -47,7 +47,7 @@
 | `bio.capacity` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_SELF_STATUS` | `52009d5f` | 2026-11-20 |
 | `rt.registered_module_v1` | PRODUCTION WIRED | ON | - | `6a6c75e6` | 2026-11-28 |
 | `rt.owned_agents` | PRODUCTION WIRED | - | - | `822d3cac` | 2026-11-20 |
-| `mem.registered_namespace` | PRODUCTION WIRED | - | - | `822d3cac` | 2026-11-20 |
+| `mem.registered_namespace` | PRODUCTION WIRED | - | - | `8bee1e90d` | 2026-11-20 |
 | `rt.desktop_managed_main` | PRODUCTION WIRED | ON | - | `822d3cac` | 2026-11-20 |
 | `rt.module_execution_contract` | PRODUCTION WIRED | OFF | - | `05759be1` | 2026-11-20 |
 | `rt.system_one_internal` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_SYSTEM_ONE` | `05759be1` | 2026-11-20 |
