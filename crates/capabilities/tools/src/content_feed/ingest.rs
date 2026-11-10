@@ -175,11 +175,6 @@ fn fnv1a64(input: &str) -> u64 {
     hash
 }
 
-/// 条目内容散列十六进制 (跨面稳定锚, 测试断言用)。
-pub fn item_content_hash(item: &FeedItemSummary) -> String {
-    format!("{:016x}", item_content_key(item))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

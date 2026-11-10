@@ -201,11 +201,6 @@ where
         &self.config
     }
 
-    /// Live stats handle.
-    pub fn stats_ref(&self) -> &CacheStats {
-        &self.stats
-    }
-
     /// Get using wall clock.
     pub fn get(&self, key: &K) -> Option<V> {
         self.get_at(key, Instant::now())
@@ -336,25 +331,6 @@ where
     pub fn stats(&self) -> CacheStatsSnapshot {
         self.stats.set_size(self.shards.len());
         self.stats.snapshot()
-    }
-
-    /// Manually evict one victim. Used by tests.
-    pub fn evict_one(&self) -> Option<K> {
-        let victim = {
-            let mut evictor = self.evictor.lock().ok()?;
-            evictor.pick_victim()
-        };
-        if let Some(victim) = victim {
-            self.shards.remove(&victim);
-            if let Ok(mut evictor) = self.evictor.lock() {
-                evictor.on_remove(&victim);
-            }
-            self.stats.record_eviction();
-            self.stats.set_size(self.shards.len());
-            Some(victim)
-        } else {
-            None
-        }
     }
 }
 

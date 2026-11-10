@@ -323,46 +323,6 @@ impl ScheduleTrigger {
             },
         }
     }
-
-    /// 严格晚于 `after_ms` 的下一个发生时点 (没有则为空)。
-    pub fn next_occurrence_after(&self, after_ms: i64) -> Option<i64> {
-        match self {
-            Self::After { at_ms } => (*at_ms > after_ms).then_some(*at_ms),
-            Self::Every {
-                every_ms,
-                anchor_ms,
-            } => {
-                if after_ms < *anchor_ms {
-                    return Some(*anchor_ms);
-                }
-                Some(*anchor_ms + ((after_ms - *anchor_ms).div_euclid(*every_ms) + 1) * *every_ms)
-            }
-            Self::Cron { spec } => match spec {
-                CronSubset::Daily {
-                    hour,
-                    minute,
-                    utc_offset_minutes,
-                } => {
-                    let target = fixed_time_target_ms(*hour, *minute);
-                    fixed_time_next(after_ms, target, *utc_offset_minutes, None)
-                }
-                CronSubset::Weekly {
-                    weekday,
-                    hour,
-                    minute,
-                    utc_offset_minutes,
-                } => {
-                    let target = fixed_time_target_ms(*hour, *minute);
-                    fixed_time_next(
-                        after_ms,
-                        target,
-                        *utc_offset_minutes,
-                        Some(i64::from(*weekday)),
-                    )
-                }
-            },
-        }
-    }
 }
 
 /// 固定时刻的日内毫秒 (时*3600 + 分*60) * 1000。

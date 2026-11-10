@@ -2289,11 +2289,6 @@ mod tests {
 // Future upgrade path (P28 stage 6 real impl): replace this stub with the real macro
 // call once the circular dependency is resolved (e.g., via inventory/ctor or refactor
 // apeireth-verify to be a thin facade).
-#[allow(missing_docs, dead_code)] // V26.4 stub: walk_all_crates calls this no-op
-pub fn __register_all_asserts() {
-    // no-op by design
-}
-
 // ============================================
 // R17 战役 4-5 (2026-08-04) 后端 1.0 release manifest
 // 编译期 hardcode, 主人授权, 不假装

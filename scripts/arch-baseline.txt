@@ -122,6 +122,9 @@ edge apeireth-tools-canonical -> apeireth-plugin
 edge apeireth-tools-canonical -> apeireth-protocol
 edge apeireth-tui -> apeireth-credentials
 
+# --- devcycle (1) ---
+devcycle apeireth-memory,apeireth-orchestration,apeireth-plugin,apeireth-provider
+
 # --- env (162) ---
 env APEIRETH_ANTHROPIC_
 env APEIRETH_ANTHROPIC_KEY
@@ -286,16 +289,16 @@ env APEIRETH_VOICE_INTERRUPT
 env APEIRETH_VOICE_QUIET_HOURS
 env APEIRETH_VOICE_SPEAK_SCOPE
 
-# --- size (82) ---
+# --- size (83) ---
 size crates/adapters/cli/src/care_heartbeat.rs 1621
-size crates/adapters/cli/src/gateway_panels.rs 1516
+size crates/adapters/cli/src/gateway_panels.rs 1526
 size crates/adapters/cli/src/lib.rs 3774
-size crates/adapters/cli/src/main.rs 1453
-size crates/adapters/cli/src/onboarding.rs 1347
+size crates/adapters/cli/src/main.rs 1464
+size crates/adapters/cli/src/onboarding.rs 1332
 size crates/adapters/gateway/src/canonical_entry.rs 2291
 size crates/adapters/gateway/src/events.rs 1623
-size crates/adapters/gateway/src/panels.rs 1641
-size crates/adapters/gateway/src/presence.rs 1300
+size crates/adapters/gateway/src/panels.rs 1623
+size crates/adapters/gateway/src/presence.rs 1279
 size crates/adapters/sdk/src/client.rs 1552
 size crates/adapters/tui/src/state.rs 1585
 size crates/capabilities/tools/src/backup.rs 1236
@@ -315,6 +318,7 @@ size crates/capabilities/tools/src/self_status.rs 4184
 size crates/capabilities/tools/src/sheet_ops.rs 4387
 size crates/capabilities/tools/src/shell.rs 1280
 size crates/engine/guard/src/scenario.rs 3853
+size crates/engine/guard/src/semantics.rs 1216
 size crates/engine/image/algo/src/artistic_fx.rs 1335
 size crates/engine/image/algo/src/inpaint.rs 2501
 size crates/engine/image/algo/src/lib.rs 1322
@@ -334,7 +338,7 @@ size crates/engine/image/psd/src/tiff.rs 2440
 size crates/engine/image/raster/src/lib.rs 1676
 size crates/engine/memory/src/coordinator.rs 2346
 size crates/engine/memory/src/golden_mining.rs 1352
-size crates/engine/memory/src/persona_layer.rs 1685
+size crates/engine/memory/src/persona_layer.rs 1680
 size crates/engine/memory/src/reflexion.rs 1239
 size crates/engine/memory/src/research_derived_memory.rs 1211
 size crates/engine/memory/src/retrieval_pipeline.rs 1220
@@ -347,23 +351,23 @@ size crates/engine/organ/src/nociception.rs 1487
 size crates/engine/organ/src/prompt_assembly.rs 1492
 size crates/engine/organ/src/world_model.rs 1332
 size crates/engine/runtime-assembly/src/canonical/bio_tone.rs 1319
-size crates/engine/runtime-assembly/src/canonical/cognitive.rs 5703
-size crates/engine/runtime-assembly/src/canonical/orchestrator.rs 2435
+size crates/engine/runtime-assembly/src/canonical/cognitive.rs 5720
+size crates/engine/runtime-assembly/src/canonical/orchestrator.rs 2432
 size crates/engine/runtime-assembly/src/canonical/play_tools.rs 1412
-size crates/engine/runtime-assembly/src/canonical/production.rs 1884
+size crates/engine/runtime-assembly/src/canonical/production.rs 1896
 size crates/engine/runtime-assembly/src/canonical/retrieval_tuning_wire.rs 1336
 size crates/engine/runtime-assembly/src/canonical/self_status_source.rs 2064
 size crates/engine/runtime-assembly/src/canonical/tool_modules.rs 1395
 size crates/engine/runtime/src/canonical/execute.rs 4731
-size crates/engine/runtime/src/canonical/runtime.rs 1239
+size crates/engine/runtime/src/canonical/runtime.rs 1229
 size crates/foundation/core/src/cost_router.rs 1399
-size crates/foundation/core/src/lib.rs 2488
+size crates/foundation/core/src/lib.rs 2483
 size crates/foundation/core/src/stored_doc.rs 1304
 size crates/foundation/credentials/src/keyring.rs 1825
 size crates/foundation/governance/src/chain.rs 1320
 size crates/foundation/governance/src/input_security.rs 1298
 size crates/foundation/governance/src/sandbox_ladder.rs 1220
-size crates/foundation/orchestration/src/durable_schedule.rs 1282
+size crates/foundation/orchestration/src/durable_schedule.rs 1242
 size crates/foundation/orchestration/src/lib.rs 1426
 size crates/foundation/orchestration/src/lifecycle.rs 1255
 size crates/foundation/orchestration/src/self_tuning.rs 1361

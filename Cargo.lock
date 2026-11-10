@@ -429,6 +429,7 @@ dependencies = [
 name = "apeireth-image-psd"
 version = "2.0.0-rc.5"
 dependencies = [
+ "apeireth-image-psd",
  "flate2",
  "proptest",
  "serde",
@@ -486,6 +487,8 @@ name = "apeireth-orchestration"
 version = "2.0.0-rc.5"
 dependencies = [
  "apeireth-core",
+ "apeireth-plugin",
+ "apeireth-provider",
  "async-trait",
  "futures",
  "serde",

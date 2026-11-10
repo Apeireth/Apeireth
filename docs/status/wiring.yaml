@@ -628,7 +628,6 @@ items:
     wired:
       production_refs:
         - "crates/adapters/cli/src/bio_switches.rs"
-        - "crates/adapters/cli/src/lib.rs"
         - "crates/engine/organ/src/nociception.rs"
         - "crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs"
         - "crates/engine/runtime-assembly/src/canonical/nervous_switchboard.rs"
@@ -748,6 +747,7 @@ items:
         - "crates/capabilities/tools/src/self_status.rs"
         - "crates/engine/organ/src/social_repair.rs"
         - "crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_production_wiring/tests.rs"
         - "crates/engine/runtime-assembly/src/canonical/bio_social_repair.rs"
         - "crates/engine/runtime-assembly/src/canonical/cognitive.rs"
         - "crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs"
@@ -1200,6 +1200,7 @@ items:
       production_refs:
         - "crates/adapters/cli/src/lib.rs"
         - "crates/adapters/cli/src/llm_factory_env.rs"
+        - "crates/engine/runtime-assembly/src/canonical/desktop_host.rs"
         - "crates/engine/runtime-assembly/src/canonical/memory_module.rs"
         - "crates/engine/runtime-assembly/src/system_one.rs"
         - "crates/engine/runtime/src/canonical/dispatcher.rs"
@@ -1308,7 +1309,7 @@ items:
         - "crates/engine/runtime-assembly/src/canonical.rs"
         - "crates/engine/runtime-assembly/src/canonical/cognitive.rs"
         - "crates/engine/runtime-assembly/src/canonical/retrieval_tuning_wire.rs"
-        - "crates/engine/runtime-assembly/src/lib.rs"
+        - "crates/engine/runtime-assembly/src/desktop.rs"
     default_enabled: false
     validated:
       tests:
