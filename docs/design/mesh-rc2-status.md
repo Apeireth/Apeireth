@@ -2,8 +2,11 @@
 
 > 冻结时点快照（2026-10-11）。权威现状以 [`mesh-architecture.md`](mesh-architecture.md)
 > 为准；本文只是一页纸摘要。证据记录见
-> [`mesh-nat-e2e-report.md`](mesh-nat-e2e-report.md)。分支 `replay/mesh-on-rc2`，
-> 未 push。
+> [`mesh-nat-e2e-report.md`](mesh-nat-e2e-report.md)。
+> **2026-11-10 更正**：原文写的「分支 `replay/mesh-on-rc2`，未 push」已不成立 ——
+> 该线后来以 `feature/mesh-rc2-integration` 推到上游（PR #31），并在 #94（debt-round8）
+> 合入 main 之后 rebase 成新 PR。**冻结时点的结论（下面各节）未变**：
+> 打洞仍只在 Windows loopback 验过、真实 NAT 仍未测、自动传输编排仍未实现。
 
 ## Transport
 
