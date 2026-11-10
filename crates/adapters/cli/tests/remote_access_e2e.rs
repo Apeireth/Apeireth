@@ -493,6 +493,30 @@ async fn non_loopback_escape_valve_runs_but_leaves_the_audit_trace() {
         "拒因必须点名角色门裁决: {refused_body}"
     );
 
+    // ⚠️ Windows: 停机面只有**硬杀** (TerminateProcess) ⇒ 没有优雅收尾 ⇒
+    // 审计只能靠后台 flush 落盘 (`FLUSH_PASS_INTERVAL_SECS = 30` 且首个 tick 被跳过
+    // ⇒ 首个真实 flush 在 2 × 30 = 60s) ⇒ ⇒ 先等落盘再硬杀。
+    // unix 走 SIGTERM ⇒ 收尾时同步 flush ⇒ 不用等。
+    #[cfg(not(unix))]
+    {
+        let audit_path = data_dir.join("daemon-audit.jsonl");
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(120);
+        loop {
+            let flushed = fs_err::read_to_string(&audit_path).unwrap_or_default();
+            if flushed.contains("gateway.auth_declared_unprotected")
+                && flushed.contains("gateway.remote_bind")
+                && flushed.contains("gateway.auth_unprotected")
+            {
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "审计未在 120s 内落盘 (后台 flush 未到): {flushed}"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        }
+    }
+
     let exit_code = terminate_by_signal(&mut child).await;
     #[cfg(unix)]
     assert_eq!(exit_code, Some(0), "SIGTERM 停机必须干净退出 (同走收尾账)");
