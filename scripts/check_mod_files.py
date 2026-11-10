@@ -104,7 +104,7 @@ def main() -> int:
                 text = src.read_text(encoding="utf-8", errors="replace")
             except Exception:
                 continue
-            rel_src = str(src.relative_to(ROOT))
+            rel_src = src.relative_to(ROOT).as_posix()
             lines = text.splitlines()
             skip_next = False
             for line in lines:
@@ -136,7 +136,7 @@ def main() -> int:
                     # **不在这里报**（我第一版因此产生 88 处假阳性）。
                     continue
                 resolved += 1
-                rel_found = str(found.relative_to(ROOT))
+                rel_found = found.relative_to(ROOT).as_posix()
                 if rel_found not in tracked:
                     problems.append(
                         f"{rel_src}: `mod {name};` 指向的 **{rel_found} 未被 git 跟踪**"
