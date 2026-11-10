@@ -202,10 +202,13 @@ async fn two_runtimes_exchange_a_capability_call_over_the_mesh() {
     // A's own runtime never gained an implementation: its module registry
     // still holds exactly nothing.
     assert_eq!(runtime_a.plugins().plugins().len(), 0);
-    assert!(!runtime_a
-        .plugins()
-        .capabilities()
-        .contains(&CapabilityId::new(ECHO_CAP).unwrap()));
+    assert!(
+        runtime_a
+            .plugins()
+            .record(&CapabilityId::new(ECHO_CAP).unwrap())
+            .is_err(),
+        "A's capability index holds none of B's implementations"
+    );
 
     // ---- The first real remote call. --------------------------------------
     let trace = TraceId::new();
@@ -320,9 +323,9 @@ async fn a_remote_call_keeps_the_canonical_capability_id_end_to_end() {
     // the tool resolves by its canonical CapabilityId.
     let owner = runtime_b
         .plugins()
-        .capabilities()
-        .owner(&CapabilityId::new(ECHO_CAP).unwrap())
+        .record(&CapabilityId::new(ECHO_CAP).unwrap())
         .unwrap()
+        .owner
         .clone();
     assert_eq!(owner, PluginId::new(TEST_MODULE).unwrap());
 

@@ -71,11 +71,10 @@ impl ToolCapability for EchoTool {
     }
 }
 
-/// A module owning the echo tool (or nothing, for dynamic-ownership tests).
+/// A module owning the echo tool.
 struct MeshTestModule {
     manifest: PluginManifest,
     tools: RwLock<Vec<Arc<dyn ToolCapability>>>,
-    dynamic: bool,
 }
 
 #[async_trait]
@@ -169,14 +168,6 @@ impl PluginManagerView for Holder {
     }
 }
 
-/// A node's local world: the canonical manager (with `builtin.mesh-test`) and
-/// its mesh presence.
-struct TestNode {
-    node: Arc<MeshNode>,
-    holder: Arc<Holder>,
-    recorder: Arc<ExecRecorder>,
-}
-
 fn echo_call(id: &str) -> ToolCall {
     ToolCall {
         id: id.into(),
@@ -226,7 +217,6 @@ async fn node_with_echo_and_trust(
             name: "mesh_echo".into(),
             recorder: Arc::clone(&recorder),
         }) as Arc<dyn ToolCapability>]),
-        dynamic: false,
     });
     manager.register(module).unwrap();
     let ctx = apeireth_plugin::PluginContext::new(
@@ -530,10 +520,11 @@ async fn test_05_20_21_an_advert_is_a_projection_and_never_an_implementation() {
 
     // (21) The capability index maps identity to owner, and every entry is
     // locally owned. The remote id exists only inside the routing projection.
-    for id in manager.capabilities().ids() {
-        let owner = manager.capabilities().owner(id).unwrap();
+    // The index itself is private in the plugin manager; `records()` is the
+    // public view of it (declaration + owner + availability).
+    for record in manager.records() {
         assert_eq!(
-            owner.as_str(),
+            record.owner.as_str(),
             TEST_MODULE,
             "index holds local ownership only"
         );

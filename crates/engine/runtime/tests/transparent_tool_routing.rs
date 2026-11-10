@@ -345,7 +345,6 @@ impl MeshConnection for CountingLink {
 
 struct Rig {
     runtime_a: Arc<Runtime>,
-    runtime_b: Arc<Runtime>,
     node_a: Arc<MeshNode>,
     node_b: Arc<MeshNode>,
     hook_a: Arc<CountingHook>,
@@ -416,7 +415,6 @@ async fn rig(tool_name: &str, hook_a: Arc<CountingHook>, hook_b: Arc<CountingHoo
 
     Rig {
         runtime_a,
-        runtime_b,
         node_a,
         node_b,
         hook_a,
@@ -835,7 +833,7 @@ async fn test_16_local_remote_name_collision_is_ambiguous() {
         .active_tools()
         .into_iter()
         .map(|tool| apeireth_runtime::canonical::LocalToolView {
-            owner: manager.capabilities().owner(tool.id()).unwrap().clone(),
+            owner: manager.record(tool.id()).unwrap().owner.clone(),
             capability_id: tool.id().clone(),
             declaration: tool.declaration(),
         })
@@ -1042,9 +1040,9 @@ async fn test_22_23_24_registries_own_zero_remote_implementations() {
         module_ids.iter().all(|id| id != TEST_MODULE),
         "A's PluginRegistry must not hold B's module: {module_ids:?}"
     );
-    for id in manager.capabilities().ids() {
+    for record in manager.records() {
         assert_ne!(
-            id.as_str(),
+            record.descriptor.id.as_str(),
             ECHO_CAP,
             "A's CapabilityRegistry must not index the remote capability"
         );

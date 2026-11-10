@@ -109,13 +109,12 @@ impl PluginManagerView for Holder {
     }
 }
 
-/// A node's identity + mesh presence + its canonical executor world.
+/// A node's mesh presence + its canonical executor world.
 struct TestNode {
     node: Arc<MeshNode>,
-    identity: Arc<NodeIdentity>,
 }
 
-async fn build_node(id: &str, trust: TrustPolicy, identity: Arc<NodeIdentity>) -> TestNode {
+async fn build_node(id: &str, trust: TrustPolicy) -> TestNode {
     let mut manager = PluginManager::new();
     let manifest = PluginManifest::new(
         apeireth_core::kernel::PluginId::new(TEST_MODULE).unwrap(),
@@ -155,7 +154,7 @@ async fn build_node(id: &str, trust: TrustPolicy, identity: Arc<NodeIdentity>) -
         Arc::new(ManagerExecutor::new(Arc::clone(&holder))),
         system_clock(),
     );
-    TestNode { node, identity }
+    TestNode { node }
 }
 
 fn meta() -> InvokeMeta {
@@ -297,8 +296,8 @@ async fn a_remote_tool_works_over_relay_only() {
         "relay://node-a",
         KeyFingerprint::of_public_key(id_a.public_key()),
     );
-    let mut a = build_node("node-a", trust_a, Arc::clone(&id_a)).await;
-    let mut b = build_node("node-b", trust_b, Arc::clone(&id_b)).await;
+    let mut a = build_node("node-a", trust_a).await;
+    let mut b = build_node("node-b", trust_b).await;
 
     let ep_a = register_node(&addr, &id_a, &na).await;
     let ep_b = register_node(&addr, &id_b, &nb).await;
@@ -406,8 +405,8 @@ async fn a_wrong_pin_fails_the_relay_connection() {
         "relay://node-a",
         KeyFingerprint::of_public_key(id_a.public_key()),
     );
-    let mut a = build_node("node-a", trust_a, Arc::clone(&id_a)).await;
-    let mut b = build_node("node-b", trust_b, Arc::clone(&id_b)).await;
+    let mut a = build_node("node-a", trust_a).await;
+    let mut b = build_node("node-b", trust_b).await;
 
     let ep_a = register_node(&addr, &id_a, &na).await;
     let ep_b = register_node(&addr, &id_b, &nb).await;

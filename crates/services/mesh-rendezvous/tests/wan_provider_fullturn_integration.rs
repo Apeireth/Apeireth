@@ -249,6 +249,9 @@ fn rich_response() -> NormalizedResponse {
             prompt_tokens: 11,
             completion_tokens: 22,
             total_tokens: 33,
+            // The scripted provider reports no cache column at all: `None`
+            // means "unknown", not zero (see `NormalizedUsage`).
+            prompt_cache_hit_tokens: None,
         },
         tool_calls: vec![ToolCall {
             id: "tc-1".into(),
@@ -269,6 +272,9 @@ fn text_response(text: &str) -> NormalizedResponse {
             prompt_tokens: 1,
             completion_tokens: 2,
             total_tokens: 3,
+            // The scripted provider reports no cache column at all: `None`
+            // means "unknown", not zero (see `NormalizedUsage`).
+            prompt_cache_hit_tokens: None,
         },
         tool_calls: Vec::new(),
         raw_metadata: serde_json::Map::new(),
@@ -574,18 +580,21 @@ async fn three_node_full_turn_over_relay_keeps_agent_authority() {
     // Authority: A owns the loop/transcript and its registries hold none of the
     // remote implementations.
     assert!(runtime_a.plugins().plugins().is_empty());
+    // The capability index is private in the current plugin manager; the
+    // public way to ask "is this capability registered here?" is `record`,
+    // which answers `UnknownCapability` when the id is absent.
     assert!(
-        !runtime_a
+        runtime_a
             .plugins()
-            .capabilities()
-            .contains(&CapabilityId::new(ECHO_CAP).unwrap()),
+            .record(&CapabilityId::new(ECHO_CAP).unwrap())
+            .is_err(),
         "A's registries stay free of C's tool implementation"
     );
     assert!(
-        !runtime_a
+        runtime_a
             .plugins()
-            .capabilities()
-            .contains(&CapabilityId::new(PROVIDER_CAP).unwrap()),
+            .record(&CapabilityId::new(PROVIDER_CAP).unwrap())
+            .is_err(),
         "A's registries stay free of B's provider implementation"
     );
 }

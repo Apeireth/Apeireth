@@ -8,7 +8,6 @@
 //! 30 three-node full turn · 31/32 ownership + full Runtime turn.
 
 use std::collections::VecDeque;
-use std::net::SocketAddr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -235,45 +234,12 @@ fn text_response(text: &str) -> NormalizedResponse {
             prompt_tokens: 1,
             completion_tokens: 2,
             total_tokens: 3,
+            // The scripted provider reports no cache column: `None` means
+            // "unknown", not zero (see `NormalizedUsage`).
+            prompt_cache_hit_tokens: None,
         },
         tool_calls: Vec::new(),
         raw_metadata: serde_json::Map::new(),
-    }
-}
-
-/// One node: identity + QUIC listener + MeshNode over a manager holder.
-struct QuicNode {
-    identity: Arc<NodeIdentity>,
-    node: Arc<MeshNode>,
-    listener: QuicMeshListener,
-    addr: SocketAddr,
-}
-
-async fn quic_node(
-    id: &str,
-    holder: Arc<Holder>,
-    pins: &[apeireth_mesh::KeyFingerprint],
-    trust: TrustPolicy,
-) -> QuicNode {
-    let identity = Arc::new(NodeIdentity::generate().unwrap());
-    let node = MeshNode::new(
-        MeshNodeConfig::new(NodeId::new(id).unwrap(), format!("node {id}")).with_trust(trust),
-        Arc::new(ManagerExecutor::new(holder)),
-        system_clock(),
-    );
-    let listener = QuicMeshListener::bind(
-        "127.0.0.1:0".parse().unwrap(),
-        Arc::clone(&identity),
-        pins,
-        QuicTransportConfig::default(),
-    )
-    .unwrap();
-    let addr = listener.local_addr().unwrap();
-    QuicNode {
-        identity,
-        node,
-        listener,
-        addr,
     }
 }
 
@@ -462,10 +428,13 @@ async fn test_16_17_18_19_30_32_tool_provider_rpc_and_full_turns_over_quic() {
     // into any mesh structure (asserted structurally in unit tests) and A's
     // registries remain free of B's implementations.
     assert!(runtime_a.plugins().plugins().is_empty());
-    assert!(!runtime_a
-        .plugins()
-        .capabilities()
-        .contains(&CapabilityId::new(ECHO_CAP).unwrap()));
+    assert!(
+        runtime_a
+            .plugins()
+            .record(&CapabilityId::new(ECHO_CAP).unwrap())
+            .is_err(),
+        "A's capability index holds none of B's implementations"
+    );
 }
 
 // ---------------------------------------------------------------------------
