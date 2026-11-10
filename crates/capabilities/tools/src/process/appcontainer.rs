@@ -679,7 +679,7 @@ fn revoke_acl_from_sid(path: &Path, sid: PSID) -> Result<(), ProcessError> {
     rewrite_acl(path, sid, SANDBOX_DATA_ACCESS, 0x00000003u32, REVOKE_ACCESS)
 }
 
-/// 改写 `path` 的 DACL: 按 `mode` (GRANT_ACCESS / REVOKE_ACCESS) 处理 `sid`。
+/// 改写 `path` 的 DACL: 按 `mode` (GRANT_ACCESS / REVOKE_ACCESS) 处理 `sid`（⚠️ `GetNamedSecurityInfoW` 出参: ppDacl 第 6、ppSacl 第 7 ⇒ 既有 DACL 必须挂第 6 个 ⇒ 否则拿到 NULL ⇒ 写回按「新建」语义整片替换显式 ACE, 继承 ACE 由 Windows 补回）。
 fn rewrite_acl(
     path: &Path,
     sid: PSID,
@@ -703,8 +703,8 @@ fn rewrite_acl(
             DACL_SECURITY_INFORMATION,
             std::ptr::null_mut(),
             std::ptr::null_mut(),
-            std::ptr::null_mut(),
             &mut old_acl,
+            std::ptr::null_mut(),
             &mut sd,
         );
         if status != 0 {
@@ -866,8 +866,8 @@ mod tests {
                     DACL_SECURITY_INFORMATION,
                     std::ptr::null_mut(),
                     std::ptr::null_mut(),
-                    std::ptr::null_mut(),
                     &mut acl,
+                    std::ptr::null_mut(),
                     &mut sd,
                 );
                 assert_eq!(status, 0, "GetNamedSecurityInfoW 失败: {status}");

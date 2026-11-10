@@ -1359,6 +1359,7 @@ fn build_environment_block(
                 block.extend(entry);
             }
             block.push(0);
+            block.resize(block.len().max(2), 0); // 零变量 ⇒ 必须双 NUL 结尾（否则 CreateProcessW 回 os error 87）
             Ok(Some(block))
         }
     }
