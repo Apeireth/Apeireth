@@ -105,7 +105,8 @@ def run_report() -> tuple[dict | None, str]:
         "--example", "fusion_channel_report",
     ]
     proc = subprocess.run(
-        cmd, cwd=ROOT, env=env, capture_output=True, text=True, timeout=7200
+        cmd, cwd=ROOT, env=env, capture_output=True, text=True,
+        encoding="utf-8", errors="replace", timeout=7200
     )
     if proc.returncode != 0:
         tail = (proc.stderr or proc.stdout or "").strip().splitlines()[-5:]
