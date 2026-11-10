@@ -89,6 +89,7 @@ cargo clippy --workspace --all-targets --locked -- -D warnings      # 期望 0 �
 cargo fmt --check                                                    # 期望 0 diff
 ```
 
+- **Windows 侧 fmt 口径**：`cargo fmt --all -- --check` 在 Windows 上**不可用**（cargo-fmt 把每个目标文件当 argv 传给 rustfmt ⇒ 超 Windows 命令行长度上限 ⇒ 报 `文件名或扩展名太长。 (os error 206)` 并打印 rustfmt usage ⇒ 是**调用方式坏了**，不是格式坏了）⇒ Windows 改用 `pwsh -NoProfile -File scripts/fmt-check.ps1`（逐 crate `cargo fmt -p <crate> --check`，覆盖同一批文件）；CI（Linux）仍以 `cargo fmt --all -- --check` 为准。
 - 数字对外引用时对照 test-baseline.md 现行口径；不一致如实报「本批实测值 + 日期」，不代改真源。
 - 纯文档批同样跑校验；扫描类收尾（旧版本号 / 旧口径词）要求现值文档零命中、历史卷宗如实登记。
 
