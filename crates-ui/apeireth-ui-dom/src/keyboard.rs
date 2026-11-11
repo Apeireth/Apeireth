@@ -94,6 +94,9 @@ impl FocusOrder {
     ///
     /// ⇒ ⇒ **没有下一个**（序列为空，或陷阱内一个都没有）⇒ ⇒
     /// ⇒ ⇒ 调用方**不要** `prevent_default` ⇒ ⇒ ⇒ 让浏览器自己处理（退化为无 Tab 行为）。
+    ///
+    /// ⭐ **例外（2026-11-11）**：**模态激活期间** ⇒ ⇒ 即使返回 `None` 也**要**拦住这次 Tab
+    /// ⇒ ⇒ ⇒ 否则浏览器原生 Tab 会把焦点带出模态作用域（引擎动了就拦、没动也要拦）。
     pub fn next(
         &self,
         current: Option<&[usize]>,
@@ -282,9 +285,14 @@ impl<D: crate::dom::Dom> KeyNavigation<D> {
             //   ⇒ ⇒ ⇒ 而且必须**在这里**移动 ⇒ ⇒ 否则 Tab 的移动会**延迟**
             //   ⇒ ⇒ ⇒ ⇒ 焦点会「慢半拍」（用户看到的是错的）。
             let moved = cell.borrow_mut().focus_next(shift).unwrap_or(false);
-            if moved {
+            if cell.borrow().should_consume_tab(moved) {
                 // ⭐ 引擎动了焦点 ⇒ ⇒ **阻止**浏览器原生 Tab
                 //   ⇒ ⇒ ⇒ 否则浏览器会**再走一次** ⇒ ⇒ 焦点跳两步。
+                //
+                // ⭐⭐⭐ **模态激活期间**即使引擎**没动**也照样拦
+                //   （作用域里只剩一个可聚焦项时引擎故意停在原地）
+                //   ⇒ ⇒ 若这时不拦 ⇒ ⇒ 浏览器原生 Tab 会把焦点带出作用域
+                //   ⇒ ⇒ ⇒ 所以这条策略收在引擎里（`should_consume_tab`）。
                 event.prevent_default();
             }
         });

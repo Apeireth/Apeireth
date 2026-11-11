@@ -249,3 +249,63 @@ cd evidence\p5-b; bash build.sh; python drive_l1.py     # 期望 EXIT 0
 - ⚠️ **未做逐像素对照**（r10 原型 HTML 未搬入私有仓）⇒ 符合性是**结构 + 计算样式**级。
 - ⚠️ 探针依赖**浏览器路径**；换机需设 `CHROME` / `CHROME_PATH`。
 - ⚠️ 引擎**未跑**真实 GPU 硬件矩阵（只跑过软件后端与 Chromium WebGL/WebGPU 探针）。
+
+## 2026-11-11 模态作用域能力（feat/engine-modal-scope-2026-11-11）
+
+**做了什么**：引擎的模态作用域改按「子树身份」打开 —— 应用只声明「这棵子树是模态作用域」，引擎负责枚举该子树内的可聚焦项、独占 Tab 消费、把初始焦点落在指定元素、关闭时归还焦点。
+
+**为什么在引擎层**：宿主侧原先自建了一套捕获阶段的 Tab 陷阱（等于第二套焦点系统，且让引擎的 Tab 通路完全失效）；引擎真缺口是「陷阱内只剩一个可聚焦项时 `FocusOrder::next` 返回 None ⇒ 浏览器原生 Tab 接手 ⇒ 焦点跑出作用域」。
+
+**新增 API**（`crates-ui/apeireth-ui-dom/src/renderer.rs`）：`open_modal_scope` / `open_modal_scope_at_identity` / `focusable_paths_under` / `should_consume_tab`；`ModalLayer` 增 `scope_root`；`focus_next` 每次 Tab 重新枚举子树内可聚焦项且焦点在作用域外时拉回；`focus_at_path` 按作用域判定；`keyboard.rs` 的 `KeyNavigation::install` 改用 `should_consume_tab` ⇒ 模态激活期间独占 Tab。
+
+**0 装口径**：IMPLEMENTED（引擎能力层）。`cargo test -p apeireth-ui-dom --locked --lib` ⇒ 241 passed / 0 failed（236 ⇒ 241，新增 5 条）；`cargo test -p apeireth-ui-dom -p apeireth-ui-kit -p apeireth-ui-app --locked -j 2` 全绿；clippy 三 crate 0 警告；`cargo fmt -p apeireth-ui-dom --check` 0 diff；`scripts/arch_guard.py --strict` VIOLATIONS 0。**未实测**：真实 WebView2 / WKWebView 宿主、真人输入法、macOS、非 Chromium 内核。
+
+**反向验伪**：三处接线各一组红 → 绿（摘「每次 Tab 重新枚举」⇒ 4 passed/1 failed；摘「焦点在作用域外拉回」⇒ 4 passed/1 failed；摘「模态激活时即使没动也消费 Tab」⇒ 4 passed/1 failed ⇒ 装回各 5 passed/0 failed）。
+
+**下一步**：本分支开 PR（base 挂 `ui-engine-p0-2026-10-24`）；合入后宿主侧把引擎 pin 抬到合并后的 SHA。
+
+## 2026-11-11 作用域根按稳定身份跟随（feat/engine-modal-scope-2026-11-11 · c22622e22）
+
+**做了什么**：模态作用域的根除记「子节点下标链」外，另记一份**稳定身份段**（有 key 的层记 key、没有的记下标）；每次用作用域根时**按当前树重新解析**身份 ⇒ ⇒ 元素在树里搬家后，作用域仍跟着同一个元素。
+
+**为什么在引擎层**：`scope_root` 是**位置**（第几个子节点）⇒ ⇒ 树一变（前面插一个兄弟节点、抽屉遮罩撤掉、条件块切换）⇒ ⇒ 下标全变 ⇒ ⇒ 打开那一刻记下的路径会指向**另一个元素** ⇒ ⇒ 作用域判定跑偏 ⇒ ⇒ Tab 在错的子树里走 ⇒ ⇒⇒ 焦点卡住（产品侧的表现是「连续按 Tab 焦点不动，关闭重开才恢复」）。
+
+**新增 API**（`crates-ui/apeireth-ui-dom/src/renderer.rs`）：`ModalLayer.scope_identity`（作用域根的稳定身份段）；私有方法 `Renderer::scope_root_path()`（先按身份在**当前树**重解析，解析失败再回退到 `scope_root`）；`scope_allows_path` / `sync_scope_trap` / `focus_next` 三处统一改走 `scope_root_path()` ⇒ ⇒ 判定口径只有一份。
+
+**0 装口径**：IMPLEMENTED（引擎能力层）。`cargo test -p apeireth-ui-dom --locked --lib` ⇒ **244 passed / 0 failed**（236 ⇒ 241「子树身份打开」+5 ⇒ 243「初始焦点按子树内 key 定位」+2 ⇒ 244「作用域根按身份跟随」+1）；`cargo clippy -p apeireth-ui-dom --all-targets --locked -- -D warnings` ⇒ **0 警告**；`cargo fmt -p apeireth-ui-dom --check` ⇒ **0 diff**；`python scripts/arch_guard.py --strict` ⇒ **VIOLATIONS 0**（crates=31 edges=118 env=150）。**未实测**：真实 WebView2 / WKWebView 宿主、真人输入法、macOS、非 Chromium 内核（与上一节同一批未实测边界）。
+
+**反向验伪**：摘掉 `scope_root_path` 里的身份重解析（退回「打开那一刻的冻结路径」）⇒ ⇒ 新增单测 `modal_scope_follows_the_root_after_the_tree_shifts` **红**（`assertion left == right failed: ⭐ 作用域根必须跟着稳定身份走到新下标 / left: Some([1]) / right: Some([2])`）⇒ ⇒ 装回 **绿**（`1 passed; 0 failed`）。
+
+**下一步**：本分支随 PR #118 合入主线；合入后宿主侧把引擎 pin 抬到合并后的 SHA。
+
+## 2026-11-11 · 吸收 S1 六轮「用引擎」的经验（手册 / 经验手册 / 缺陷台账三处同批更新）
+
+【为什么有这一节】2026-11-10～11-11，私有仓新前端 **S1 工作台**（六轮验收、约 40 项取证断言）
+**第一次把本引擎当作「真实产品要用的引擎」用满** ⇒ 暴露了三处引擎级缺口（已修，引擎 PR #118）
+与四类**调用方式**的错误。引擎的缺陷修了还不够 —— **调用方下次还会犯同样的错**，
+除非经验进到「调用方会读到的那几本」里。
+
+【三处落点（本次同批更新，手册与引擎同批 = 引擎交付的一部分，不是文档债）】
+1. **使用手册** `docs/04-internal/ui-engine-w0-onboarding.md`：§2.4 焦点与模态改成 **一等口径**
+   （`open_modal_scope` / `open_modal_scope_at_identity` / `close_modal`）+ **调用方须知五条**；
+   §4 五个坑 → **加坑 6（宿主自建焦点陷阱 ⇒ 引擎根节点收到 0 次 Tab）**、
+   **坑 7（身份路径跳中间容器 ⇒ 模态作用域根本没建立）**；§5 自证清单加两条
+   （引擎自己消费 Tab / 焦点请求读回 `activeElement` 对账）；§6「可以依赖」加「模态作用域」段。
+2. **经验手册** `docs/04-internal/engineering-experience/02-failure-anatomy.md`：
+   新增 **死法 8 · 引擎使用错法**（8a 宿主自建第二套焦点系统 / 8b 把「调用返回成功」当「焦点真的移动」/
+   8c 身份路径按「跳中间容器」拼 / 8d 读一个文件就下结论 / 8e 验收探针恒真谓词假绿），
+   每条按「症状 → 死因 → 药方 → 防复发断言 + ★ 出处」四段式；速查表补 5 行。
+3. **缺陷台账** `docs/04-internal/ui-engine-defect-ledger.md`：新增 **§3.7**，登记
+   **E-193**（模态作用域根只记路径、不跟身份 ⇒ 树位移后 Tab 卡死，已修 `c22622e22`）、
+   **E-194**（模态激活期间 Tab 未被引擎独占 ⇒ 原生 Tab 逃逸，已修 `662912262`）、
+   **E-195**（模态初始焦点不是一等参数 ⇒ 调用方自拼身份且拼错被静默忽略，已修 `662912262`）、
+   **E-196**（使用侧反模式登记：四条真实事故 ⇒ 药方指向死法 8 与使用手册）。
+
+【本轮的一条结构性结论（比单条缺陷更重要）】
+**「引擎的一等能力」必须被调用方当成一等能力**：三处引擎级缺口（E-193/E-194/E-195）全部是
+「本该由引擎承担的事被推给调用方」的产物（路径自己算、初始焦点自己算、Tab 归属自己管）；
+四类使用侧反模式（E-196）全部是「调用方没读手册 / 手册落后于引擎」或「调用方自建了一套」的产物
+⇒ ⇒ **手册与引擎同批更新，是引擎交付的一部分**；下次引擎交付要带「调用方须知」一起出。
+
+【本节未验证/边界】本节是文档与经验登记，不含代码改动；三条引擎修法本身的红→绿输出见引擎 PR #118
+的提交正文与 `docs/04-internal/ui-engine-defect-ledger.md` §3.7 的证据列。
