@@ -11,7 +11,7 @@
 //!
 //! The server sees only routing metadata (circuit ids) and opaque bytes. Once a
 //! circuit is up, the two nodes run the E2E [`SecureChannel`](super::e2e::SecureChannel)
-//! over it and present a [`RelayMeshConnection`](super::connection::RelayMeshConnection)
+//! over it and present a [`RelayMeshConnection`]
 //! to the mesh — so the runtime cannot tell relay from direct.
 
 use std::collections::BTreeMap;

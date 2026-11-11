@@ -134,7 +134,7 @@ impl PreparedMeshEndpoint {
                 }
                 Ok(Err(error)) => return Err(ObserveError::Io(error.to_string())),
                 // The resend window elapsed with nothing usable; try again.
-                Err(_) => continue,
+                Err(_) => {}
             }
         }
     }

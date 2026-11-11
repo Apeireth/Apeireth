@@ -9,7 +9,7 @@
 //! or relayed.
 //!
 //! Underneath, every envelope is serialized and sealed with the
-//! [`SecureChannel`](super::e2e::SecureChannel)'s AEAD key before it enters the
+//! [`SecureChannel`]'s AEAD key before it enters the
 //! tunnel, so the relay only ever forwards ciphertext. The `peer_fingerprint`
 //! is the E2E-authenticated `NodeIdentity` key — never the relay's TLS identity.
 
