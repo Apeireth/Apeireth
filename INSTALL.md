@@ -1,9 +1,9 @@
-# INSTALL.md — Apeireth-rust 安装步骤
+# INSTALL.md — Apeireth 源码构建指南
 
-> **性质**: 接手团队第一份必读——三平台安装（Windows / Linux / macOS）+ 验证步骤。
+> **性质**: 面向开发与集成的源码环境准备（Windows / Linux / macOS）与验证步骤。新版桌面前端仍在开发；普通用户先查看 [README](README.zh-CN.md) 与 [支持指南](SUPPORT.md)，历史预发布安装包以对应 [Release](https://github.com/Apeireth/Apeireth/releases) 为准。
 > **依据**: 我们 2026-07-31 "开干前补齐 4 件套" + rust-toolchain.toml 锁定 Rust 1.97.1 stable。
-> **当前基线**: 默认分支 `main`、**workspace = 30 members（29 crates + bench harness；2026-10-20 perception 归档后口径）**（v2.0.0-rc.4；2026-10-18 许可搬运线 image 家族 +11 后口径）；测试基线**单一真源**见 [docs/03-reference/test-baseline.md](docs/03-reference/test-baseline.md)（2026-10-18 全量 `-j 2` 口径在该文件，本文不抄写数字），历史口径见 CHANGELOG；`legacy/` 不参与构建。
-> **独立 workspace（如实备案）**：`crates-ui/` 是**独立** Cargo workspace（**不计入**上面 30 members、与根 workspace 无依赖边），含 **1 个 crate** `apeireth-ui-core`（纯响应式内核，0 外部依赖）；范围 = IMPLEMENTED、**尚无生产前端消费点**（ADR-0021，owner 2026-10-29；自带独立 CI `ui-core-ci.yml`）⇒ 安装/构建主产品**不需要**它。
+> **当前基线**: 默认分支 `main`；版本与成员以根 [Cargo.toml](Cargo.toml) 为准，测试结果、日期和复现方法统一见 [测试基线](docs/03-reference/test-baseline.md)，历史变化见 [CHANGELOG](CHANGELOG.md)。`legacy/` 不参与根 workspace 构建。
+> **独立 workspace（如实备案）**：`crates-ui/` 是**独立** Cargo workspace（**不计入**根 workspace、与根 workspace 无依赖边），含 **1 个 crate** `apeireth-ui-core`（纯响应式内核，0 外部依赖）；范围 = IMPLEMENTED、**尚无生产前端消费点**（ADR-0021，owner 2026-10-29；自带独立 CI `ui-core-ci.yml`）⇒ 安装/构建主产品**不需要**它。
 
 ---
 
@@ -75,8 +75,8 @@ cargo test --workspace
 ### 步骤 5：验证
 
 ```powershell
-cargo run --bin apeireth session
-# 预期：打印 canonical runtime ready / providers: … 就绪信息后退出（诊断命令）；对话请用 apeireth chat <prompt>（需 APEIRETH_API_KEY）或桌面端
+cargo run --locked -p apeireth-cli --bin apeireth -- --help
+# 显示命令帮助，不启动模型任务；session 是运行时诊断，对话需另行配置模型服务与凭据。
 ```
 
 ---
@@ -117,8 +117,8 @@ cargo test --workspace
 ### 步骤 4：验证
 
 ```bash
-cargo run --bin apeireth session
-# 预期：打印 canonical runtime ready / providers: … 就绪信息后退出（诊断命令）；对话请用 apeireth chat <prompt>（需 APEIRETH_API_KEY）或桌面端
+cargo run --locked -p apeireth-cli --bin apeireth -- --help
+# 显示命令帮助，不启动模型任务；session 是运行时诊断，对话需另行配置模型服务与凭据。
 ```
 
 ---
@@ -165,7 +165,8 @@ cargo test --workspace
 ### 步骤 5：验证
 
 ```bash
-cargo run --bin apeireth session
+cargo run --locked -p apeireth-cli --bin apeireth -- --help
+# 显示命令帮助；运行时诊断与真实对话需要进一步配置。
 ```
 
 ---
@@ -178,7 +179,7 @@ cargo run --bin apeireth session
 # 1. Build（应该 0 error）
 cargo build --workspace
 
-# 2. Test（测试基线单一真源见 docs/03-reference/test-baseline.md；现行口径以该文件 2026-10-18 全量 -j 2 实测为准，本文不抄写数字）
+# 2. Test（结果、日期与正式全量门禁以 docs/03-reference/test-baseline.md 为准，本文不抄写数字）
 cargo test --workspace --all-targets --locked --no-fail-fast
 
 # 3. Clippy（应该 0 warning）
@@ -332,4 +333,4 @@ apeireth approve --session <sid> --approval <approval-id>   # 主人批准后才
 _安装指南 v1 修订版（leader 亲自产出）._
 _依据我们 2026-07-31 "开干前补齐 4 件套" + rust-toolchain.toml 1.97.1 锁定._
 _主哲学 9 锚穿透 (S-1 北极星 / S-2 实事求是 / S-3 质量工程化 NEW / O-1 安全优先 NEW / O-2 走在前人 / O-3 干到底 / O-4 接手 / O-5 不假装 / O-6 永远追求最优 NEW 2026-08-27; per R125 B5 升级 + R126 P1-2 实施 + 2026-08-27 加 O-6，审计修 A-14)._
-_前置依赖为实测最小集（2026-10-16 核对；审计修 D-01/D-02/D-03），测试基线单一真源见 docs/03-reference/test-baseline.md（审计修 B-01）；crate 口径 = workspace 30 members（29 crates + bench harness；2026-10-20 perception 归档后；历史 31 members 见 CHANGELOG）；版本 v2.0.0-rc.4._
+_前置依赖的历史核对日期为 2026-10-16；当前工具链以 rust-toolchain.toml 为准，版本和成员以 Cargo.toml 为准。2026-11-11 同步 README 入口与产品阶段说明，本次未重新执行三平台构建或产品端到端验证。_

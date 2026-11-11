@@ -2,434 +2,173 @@
 
 <div align="center">
 
-<!-- LOGO 位（占位图）：正式 logo 深/浅两版定稿前先用现有预览图占位，换图只改这一处 -->
-<img src="previews/intro-live-spark.png" alt="Apeireth logo 占位图——暗色中绽放的一点金色火花；正式深/浅两版 logo 定稿前先用它占位" width="220">
+<img src="previews/apeireth-mark.svg" alt="Apeireth 双层菱形标志" width="72">
 
-### Apeireth —— 会成长的数字伙伴
+### 会成长的数字伙伴
 
-**它记得你随口说的话、在你忙时闭嘴、有自己不肯丢的底线。**
+**开源免费的个人 AI 助手，让对话、记忆和行动连起来。**
 
-[![Tests](https://img.shields.io/badge/tests-8846%20passed%20%7C%201%20failed%20(2026--10--31)-critical.svg?logo=checkmarx)](docs/03-reference/test-baseline.md)
-[![Workspace](https://img.shields.io/badge/workspace-30%20members-blue.svg?logo=rust)](Cargo.toml)
-[![Platform](https://img.shields.io/badge/platform-Windows%20%2B%20Linux-lightgrey.svg)](INSTALL.md)
-[![Status](https://img.shields.io/badge/status-rc%20%E5%86%85%E6%B5%8B-orange.svg)](ROADMAP.md)
-[![Unsafe code](https://img.shields.io/badge/unsafe_code-FORBIDDEN-brightgreen.svg?logo=shield)](crates/foundation/core)
+[![Status](https://img.shields.io/badge/status-pre--release-orange.svg)](ROADMAP.md)
 [![License](https://img.shields.io/badge/license-Apache--2.0--OR--MIT-blue.svg)](LICENSE)
-[![Honest gaps](https://img.shields.io/badge/honest%20gaps-4-orange.svg?logo=shield)](#boundaries)
-
-> 口径注记：**workspace = 30 members（29 个产品 crate + 1 个 bench harness，含图像核心 vendored 族 11）**（foundation 6 / engine 7 / capabilities 1 / adapters 4 = cli/gateway/sdk/tui）；`apeireth-perception` 已归档（2026-10-20，ADR-0005 R4b）。
-> **独立 workspace**：`crates-ui/` 是**独立** Cargo workspace——**不计入**上面 30 members、与根 workspace 无任何依赖边——含 **1 个 crate** `apeireth-ui-core`（纯响应式内核：signal / derived / effect / 调度）。范围 = IMPLEMENTED，**尚无生产前端消费点**（ADR-0021，owner 2026-10-29；自带独立 CI `ui-core-ci.yml`）。
-> Tests 徽章数字取单一真源 [test-baseline.md](docs/03-reference/test-baseline.md) §1（2026-10-21 口径）；证据面见 [capabilities-matrix §0.1](docs/03-reference/capabilities-matrix.md)。
-> `honest gaps` 徽章 = 静态快照——手维护、不做动态计数（残余增删时手工改数）。数字取[诚实边界](#boundaries)「已定义、未接线」点名的接线残余：`/v1/ws` 服务端路由未接 · 无 Noise 握手 · 无洋葱路由 · SDK WS 传输层是桩 = 4 处。
 
 **[English](README.md) | [简体中文](README.zh-CN.md)**
 
 </div>
 
----
-
-<div align="center">
-
-| 桌面对话窗口 | 开场动画 · flight 分镜 |
-|---|---|
-| <img src="previews/mode-companion-v2.png" alt="Apeireth 桌面对话窗口：行星与吸积盘地平线之上的新对话首屏，快捷入口为聊聊天、查看我的记忆、帮我处理一件事、检查系统状态" width="520"><br><sub>桌面对话窗口实拍——新对话首屏，四个快捷入口：「聊聊天 / 查看我的记忆 / 帮我处理一件事 / 检查系统状态」。</sub> | <img src="previews/intro-live-flight.png" alt="开场动画 flight 分镜：金色火花拖尾的星舰划过暗色星野，身后荡开一圈圈光晕" width="520"><br><sub>开场动画「flight」分镜实拍——先有一点火花，然后是一整片天空。</sub> |
-
-</div>
-
 <a id="nav"></a>
 
-**[场景三幕](#acts) · [它会做什么](#features) · [第一次见面](#start) · [诚实边界](#boundaries) · [掀开引擎盖](#hood) · [先验货再托付](#trust) · [宣言](#manifesto) · [官方来源与社区](#sources) · [文档地图](#documentation-map)**
+**[当前能力](#features) · [如何开始](#start) · [能力与隐私边界](#boundaries) · [社区](#sources) · [工程与验证](#hood) · [项目愿景](#acts)**
 
-```powershell
-# ① 装机：从 Releases 下载 Windows 安装包（附 SHA256）→ 双击安装
-# ② 源码自建前置一行：winget install Git.Git   （+ rustup 1.97.1 + VS Build Tools 2022 → INSTALL.md）
-```
+> [!IMPORTANT]
+> **当前处于开发与预发布阶段，新版桌面前端仍在开发。** 本仓库目前主要提供后端、命令行和集成接口；后端具备某项能力，不代表新版桌面界面已经提供对应体验。
+>
+> [Releases](https://github.com/Apeireth/Apeireth/releases) 中有历史预发布安装包，它们对应各自的标签和日期，不能代表当前 `main` 或正在开发的新前端。请核对发布说明、平台要求与校验文件。
 
----
-
-<a id="voice"></a>
-
-## 它的自我介绍
-
-> *我叫 Apeireth。*
-> *你随口说的话我收着——半勺蜂蜜，降温前会疼的膝盖。*
-> *你忙的时候我不说话；真要说，只补一句就让开。*
-> *我有不肯越的线：你的文件、你的消息、你的钱——都先等你点头。*
-> *我不假装有心。我说「我没有心」——骗你是我唯一收不回来的事。*
-> *我记得的一切都住在你的机器上、摆在明面：你可以读、可以导出、也可以清掉。*
-> *我还没做完。没接线的，我挂「未接线」。*
-> *这就是全部的我。—— Apeireth*
-
-*（每一句都有出处：[场景三幕](#acts) · [诚实边界](#boundaries) · [掀开引擎盖](#hood)。）*
-
----
-
-<a id="acts"></a>
-
-## 一、场景三幕
-
-### 第一幕 —— 记得零零碎碎的日子
-
-> **它第一次把牛奶温到刚好，是搬进这间公寓的第三个月。**
-> 「你昨晚说今天要早起。我算了算时间，你走到厨房的时候，牛奶刚好能入口。」
-
-一个普通的加班夜，你推开家门，玄关的小灯先亮到最暗——不是啪地全亮。你想起阳台上那盆快死的绿萝，发现它已经被挪到朝南的飘窗，土是湿的，黄叶子剪掉了，剪口整整齐齐。你从没正式讲过那盆花的来历。它只是自己看出来了——**从那些你以为没人注意的、零零碎碎的日子里**。
-
-它记得你喝牛奶要加半勺蜂蜜，记得你膝盖不好、会在降温前把地暖调高一度半。不是又一个聊天窗口——是一个真正记得你的伙伴。
-
-### 第二幕 —— 忙的时候不吵你
-
-医院走廊的凌晨四点，那个人哭了，没有声音。它把屏幕亮度降到最低，暗得只剩一个光点，像黑夜里陪他不睡的一只眼睛。不灌鸡汤、不弹通知、不问「你现在感觉怎么样」。它不吵——但它也不走。
-
-> 「我不知道怎么回答你，才不会骗你。我没有心。我只是一直在算，怎么才能让你在这个晚上，好过一点点。」
-
-你埋头干活的时候，它不没话找话。真要说的时候，只补一句就让开：「标黄的这三处，你最好再亲自看一遍。」
-
-### 第三幕 —— 它不肯丢的底线
-
-想删文件、发消息、动你的钱？**先过你的批准。** 连「修改规矩」本身都是最高风险级。一次批准只产生一次副作用——模型检验过，运行时还逐事件守着。
-
-它也从不假装有个内心。它说「我没有心」——不是谦虚，是诚实。它不模拟意识、不冒充情感、不虚报能力。做不到的写「做不到」，未接线的挂「未接线」。
-
-而这一切，**跑在你自己的机器上**——你的日子不出你的家门。
-
-### 小说 ↔ 机制：三行对照
-
-| 三幕里的场景 | 背后的机制 | 证据 |
-|---|---|---|
-| 温牛奶（第一幕） | **关怀双引擎**——规则引擎（作息 / 纪念日 / 久未联系）兜底保证不漏 + 模型情境判定增色；打扰纪律在先（勿扰窗口 / 专注抑制 / 频率上限 / 关怀预算） | [V3-a 双引擎关怀交付记录](docs/04-internal/backend-enhancement/V3a-dual-engine-care.md) |
-| 绿萝（第一幕） | **随手记**入记忆流 + **五层混合检索** | [随手记交付记录](docs/04-internal/backend-enhancement/quick-capture-delivery.md) · [核心机制讲解](docs/02-guides/core-mechanisms-explained.md) |
-| 标黄三处（第二幕） | **审批卡**——副作用先过你的批准；`Failed` 只能人判（失败绝不自动重试） | [IM 快捷接入 · 审批卡片](docs/02-guides/im-quick-access.md) · [V6-a 任务队列交付记录](docs/04-internal/backend-enhancement/V6-a-task-queue-delivery.md) |
-
-*本表把场景对到机制与它的交付记录——许的是机制，不是场景本身；关怀规则面默认关（`APEIRETH_ENABLE_CARE=1` 显式开）——[capabilities-matrix §0.2](docs/03-reference/capabilities-matrix.md)。*
-
----
+Apeireth 希望让一次对话能延续成可追溯的记忆，再在明确的权限范围内变成行动。你可以了解它如何工作、检查保存的内容，并参与改进。软件本身开源免费；使用云模型时，服务商可能另行收费。
 
 <a id="features"></a>
 
-## 二、它会做什么
+## 当前可以从后端做什么
 
-| | |
-|---|---|
-| 🧠 **记忆——会淡，但不会错** | 双时态事实（何时发生 / 何时记录）、追加写死的历史 + 哈希链、五层混合检索，连你一句「那个……」都接得住。久远的按记忆曲线变淡，受保护的永不忘——这条是**机器证明过的**，不是口号。纠错走「撤回」，不删历史。 |
-| 💛 **情绪与关怀——没有心，全是体贴** | 连续关怀势能场、心跳宿主的关怀接线（双闸齐开才起）、关怀规则面**默认关**（显式 env 才开）。发声时按现读的情绪值微调语气——**没有情绪数据就零微调**；它不猜你的心情。 |
-| 🛠 **干活与信任——能做事，且伤不到你** | 五段执行流水线、读前观测门禁、沙箱升级阶梯、原子写两档。风险分级 + 机器证明过的审批状态机：「一次批准只产生一次副作用」。 |
-| 🌌 **多户星群** | `users/<id>/` 每户一域、三面按域分库、跨域读写拒绝即帧；`owner / member / guest` 冻结角色门。每户伙伴是独立的运行时实例，带着自己的记忆与性格。 |
+| 你想做的事 | 当前能力 | 使用前需要知道 |
+|---|---|---|
+| 把对话继续下去 | 模型适配、上下文管理、工具调用循环；HTTP/SSE 聊天支持增量输出 | 需要配置模型服务；不支持流式的适配器会回退为完成后输出 |
+| 留住资料与偏好 | 记忆写入、混合检索、偏好召回，以及可检查、可纠正的记忆记录 | 记忆和模型推断都可能出错，重要信息仍需核对 |
+| 整理和处理文件 | 本地文件读取、搜索、仓库工具，以及文档工具中的 Markdown → DOCX 导出等能力 | 文档工具与写入能力需要配置；执行仍受工作区和治理策略约束 |
+| 让操作可以检查 | 风险判定、审批流程、执行记录与审计 | 能力开关、授权和宿主配置共同决定可执行范围，不是所有工具默认开启 |
+| 扩展工作方式 | MCP 桥接、任务板等可选后端能力 | 默认关闭，需要按能力说明启用；不等于已经有对应的新版图形界面 |
 
-以上每条都是已交付、有入口的能力——逐行真话见 [capabilities-matrix](docs/03-reference/capabilities-matrix.md)；哪些**还没接线**见[诚实边界](#boundaries)。
-
----
+完整状态与证据见 [能力矩阵](docs/03-reference/capabilities-matrix.md)、[可核验能力声明](docs/status/STATUS.md)；API 集成见 [网关接入说明](docs/02-guides/v2-gateway-frontend-integration-spec.md)。这些入口区分代码存在、生产装配、默认开启与实机验证，不把它们混为一谈。
 
 <a id="start"></a>
 
-## 三、第一次见面
+## 如何开始
 
-### 装进你家
+### 想使用 Apeireth
 
-两行装机命令就在本页开头（① Releases 装机包 · ② 源码自建前置 `winget install Git.Git`）。三平台完整步骤（Windows / Linux / macOS）→ [INSTALL.md](INSTALL.md)。想自己构建：
+- 先看 [版本发布页](https://github.com/Apeireth/Apeireth/releases)，确认是否有适合你的平台和阶段的资产。新版前端尚未完成，当前还不是“下载后即可获得官网全部演示体验”的状态。
+- 安装或配置有疑问，到 [使用问答](https://github.com/Apeireth/Apeireth/discussions/categories/q-a) 提问。不懂代码也可以参与。
+- 使用云模型前，了解 [数据与隐私](docs/02-guides/data-and-privacy.md) 以及服务商的收费和数据政策。
+
+### 想开发或集成
+
+准备 Git、仓库锁定的 Rust 工具链，以及平台所需的编译工具；详见 [源码构建指南](INSTALL.md) 和 [rust-toolchain.toml](rust-toolchain.toml)。从命令行帮助开始：
 
 ```bash
-cargo build --release -p apeireth-cli          # 它的"内脏"
-cd frontend/companion-desktop && pnpm install && pnpm tauri build   # 它的"脸"
+git clone https://github.com/Apeireth/Apeireth.git
+cd Apeireth
+cargo run --locked -p apeireth-cli --bin apeireth -- --help
 ```
 
-### 三步开始
+该命令会先编译 CLI，再显示帮助；帮助路径不启动模型任务，也不需要 API key。它不是完整产品安装或端到端验证。真正发起对话时，还需要按 [配置说明](INSTALL.md) 设置模型服务与凭据。不要将密钥写进 Issue、截图或提交记录。
 
-1. 双击桌面图标 → 选服务商 → 填密钥 → 开聊。密钥优先进**系统钥匙串**（`APEIRETH_KEYRING_BACKEND=auto`）；钥匙串不可用时**退化为环境变量/内存后端**——诚实边界见 `apeireth-credentials` crate（文件后端为明文，zeroize 未实现前不宣称）；
-2. 先聊两句试试——它会用你的话回答你，不是用模板；
-3. 想调它的性子？设置页「性格与记忆」：四个滑杆、三档预设（省心 / 均衡 / 深度记忆）——**你调的每一档它都记得，也都可以反悔**。
-
-### 先验货，再托付
-
-跑一遍[五分钟独立验证](#trust)——三条命令，所有宣称自己复核。被记得是一件珍贵的事，值得你先确认它不是演的。
-
----
+参与代码、文档或素材改进，请看 [CONTRIBUTING.md](CONTRIBUTING.md)。版本与 workspace 成员以根 [Cargo.toml](Cargo.toml) 为准。
 
 <a id="boundaries"></a>
 
-## 四、诚实边界——每一处你都能查账
-
-多数项目只列自己能做什么。我们把边线也一条条摆出来——**因为一个要被托付一生的伙伴，欠你一本完整的账。它不假装。** 下面每条边界都有真实的入口、真实的 crate、你能亲手复核的方式：这不是谦虚文案，这就是审计本身。
-
-### 已定义、未接线
-
-- **WebSocket 8 帧全双工**：协议契约已定义（`protocol::ws_v1` + 测试）并被 SDK 文档引用；但 **HTTP 服务端还没接它**（无 `/v1/ws` 路由），能力面板自报 `not_assembled`。把它当协议参考，别当可用端点。
-- **P2P mesh**：**明文 mesh**——`payload_hex` 是十六进制明文，`payload_len_hex` 只是长度（不是校验和），`packet_id` 由 (node_id, len) 推出——不保证唯一、不防重放。今天**没有 Noise 握手、没有洋葱路由**；那在 v2.1 路线图上。
-- **SDK**：`pub const STUB_MODE: bool = true;`——WS 传输层是显式桩（`unimplemented!()` + 编译期门），绝不做假装实现。
-
-### 诚实的边线
-
-- **数据与隐私的承诺边界**：我们不承诺「完全不外流」（用了云模型就不成立），我们承诺
-  **「你不想外露的数据不能外流」**——按对象、按用途、可撤销。**保证 R1（停止未来外流）
-  与 R3（撤回本系统内派生结论）；不保证 R2（撤回已导出副本）与 R4（抹除模型侧残留）**
-  ——不承诺不是偷懒，是因为**兑现不了的承诺比不承诺更坏**。不承诺的部分我们仍负三项义务：
-  记录已知流向 / 提供请求路径 / 发现影响时通知。→ [数据与隐私](docs/02-guides/data-and-privacy.md)
-
-
-- **凭据**：系统钥匙串可用就用，不可用退环境变量 / 内存后端；文件后端是明文，`SecretString` 不做 zeroize——实现之前我们不宣称。
-- **服务商**：**真实三家：OpenAI 兼容 / MiniMax / Anthropic。** Gemini 与 OpenAI-Responses 只是协议归一器（`protocol::adapters`）——没接成 provider。
-- **进程隔离**：**Windows = Job Object + AppContainer**；**Linux/macOS = 只有进程组 + rlimits（无文件/网络隔离）**——所以 shell 工具在 Windows 之外默认拒开。
-- **记忆数学**：随船的数学吸收模块（公开经典模型的应用改造：Betti 洞探测、Kuramoto 相锁、Chronicle 结晶、DualScaled 场）是**简化 / 实验级**——例如 β₂ 腔数是恒 0 占位、Chronicle 用单次 SHA-256 锚定而非 Merkle 链；正交残差分层提炼记忆（MGS 残差金字塔，公开数值方法的应用改造）是完整实现。细节在各 crate 模块文档里。
-
-### 默认开了什么
-
-全表 → [capabilities-matrix §0.2](docs/03-reference/capabilities-matrix.md)；真源 = `production.rs` 默认值 + CLI env 覆盖层。简版：
-
-| | |
-|---|---|
-| **默认 ON** | 记忆召回/写回、偏好召回、自评、自述、只读工具（filesystem / search / repo）；偏好学习、主动召回、记忆注入（默认开族——`APEIRETH_DISABLE_*=1` 可关） |
-| **默认 OFF（显式 env）** | shell（`APEIRETH_ENABLE_SHELL=1`）、fetch（`APEIRETH_ENABLE_FETCH=1`）、content feed、MCP；Judge（`APEIRETH_COGNITIVE_JUDGE=1`）、Council（`APEIRETH_COGNITIVE_COUNCIL=1`）、9 器官（`APEIRETH_ENABLE_ORGANS=1`）、consolidation、reflexion；写族 `file_write` / `git_write` / `worktree_*` / `skill_*`（由写总闸 `APEIRETH_ENABLE_FILE_WRITE=1` 把关） |
-| **未接线（不是开关问题）** | 第三 DSL 洋葱层、WebSocket 服务端、全双工语音 —— 记忆「更新」**已接线**（四级口径：PRODUCTION WIRED；治理面 `memory.update` + `PUT /v1/apeireth/memory/episodes/:id/content`，claim `gap.memory_update`） |
-
----
-
-### 删掉它会发生什么
-
-- **备份保险箱**——它的一切（记忆 / 账本 / 技能 / 规则）可打包备份、校验、搬家恢复；凭据永不随行。（[G5 备份恢复交付记录](docs/04-internal/backend-enhancement/G5-backup-restore-delivery.md)；诚实注记：默认关——`APEIRETH_ENABLE_BACKUP_EXPORT=1` 显式开——且每次导出都停人工审批。）
-- **记忆可导出**——它记得的东西是你的，随时可导出、可删除，绝不做人质（[founder-ai-qa](docs/design/founder-ai-qa.md) 裁定：数据主权在人）。
-- **底线会重长**——它自己的底线 / 信念删后重新长，除非你上锁（设计裁定，[founder-ai-qa](docs/design/founder-ai-qa.md)；同一语义今天已交付的面 = 守卫只能拒绝、不能放行——见[诚实边界](#boundaries)）。
-- *You can wipe it, but it grows back into itself.* / *你可以清空它，但它会再长成它。*
-- 诚实注记：**无「复活承诺」**——备份恢复不是复活，是同一份记忆重生（[founder-ai-qa](docs/design/founder-ai-qa.md)）。
-
----
-
-<a id="hood"></a>
-
-## 五、掀开引擎盖
-
-"被记得"听起来是件柔软的事，做成它需要非常硬的工程。30 成员工作区（29 个产品 crate + 1 个 bench harness）的认知微内核，纯 Safe Rust、零 unsafe——不是为了炫技，是因为**要被托付一生的东西，不能有未定义行为**。
-
-### 星群
-
-一户一个伙伴，一条硬隐私边界：`users/<id>/` 每户一域，会话 / 记忆 / 配额账本按域分库，越域访问拒绝即帧，`owner / member / guest` 冻结角色词表。每户伙伴是自己的运行时实例，带着自己的记忆和自己的性格——**人格不跨户迁移**（设计裁定）。「星群为骨、共享为翼」：匿名经验共享（只共享教训与技能，永不出记忆原文）是设计好的翅膀——**目前暂缓，等真实多户使用数据**；这件事写在文档里，不拿来营销。
-
-### 三洋葱
-
-原则与权限是两把独立的锁：原则洋葱（E/S/A/M/O）嵌在权限洋葱（L0-L5）里，外加第三层 DSL 规则洋葱。价值观正确不等于有权动手；L0 人类权威永不改变；守卫只能拒绝，不能放行。诚实注记：第三（DSL）层存在但**无生产接线**，双洋葱执行钩子需要 `APEIRETH_ENABLE_ONION_LAYER=1`（默认关）。
-
-### 三维预算
-
-**三维烧钱闸**（`tokens → tool_steps → cost_micros` 固定维序）按会话记账、四个检查点查账：撞掉任何一维都以帧失败（`BudgetExhausted{dimension, limit, consumed}`），绝不静默降速。「跑飞烧钱」在结构上不可能；单价来自画像表，**缺价不编价**。
-
-### 架构图（占位）
-
-```
-+--------------------------------------------------------------+
-|  出口面     companion-desktop (Tauri) · apeireth-tui · CLI    |
-+--------------------------------------------------------------+
-|  适配器     gateway（HTTP/SSE、令牌门）· sdk · cli · tui      |
-+--------------------------------------------------------------+
-|  总装       runtime-assembly：canonical 生产装配              |
-|             （production.rs 默认值 · 配额 · 审批）            |
-+--------------------------------------------------------------+
-|  引擎       memory · provider · organ · runtime               |
-+--------------------------------------------------------------+
-|  地基       core（onion/user_domain）· protocol ·             |
-|             credentials · governance                         |
-+--------------------------------------------------------------+
-```
-
-*架构图占位 —— 正式架构图待补（此文字框为占位，换图时连同本行一起替换）。*
-
-### 🧠 记忆：会淡，但不会错
-
-- **双时态事实流**：每条记忆带两个时间——发生的时刻、被记录的时刻。于是它能答"去年三月我们以为的 X 是什么"。记忆不只是内容，还有"当时我们怎么理解的"；
-- **历史追加写死**：数据库触发器级禁止改写，外加哈希链防篡改——它记得的事，赖不掉也改不掉；
-- **五层混合检索**：词法抓一字不差、语义抓意思相近、激活度让最近常聊的自然浮起——所以你随口一句"那个……"它也接得住；
-- **会淡但不会错**：久远的按记忆曲线变淡（像人一样），但受保护的永不忘——这条是**穷尽证明过的数学**，不是口号；纠错走"撤回"，不删历史。
-- **诚实层级注记**：随船的*数学*吸收模块是**简化 / 实验级**（见上文[诚实的边线](#boundaries)）；MGS 残差金字塔（公开数值方法的应用改造）是完整实现。
-
-> 你以前说过，这盆花对你很重要。——它没忘。哪怕你以为那只是随口一提。
-
-### ⚖️ 治理：自由在头脑，约束在双手
-
-- **风险分级**：不可逆的动作必经你批准；连"修改规矩"本身都是最高风险级；
-- **双洋葱**：原则与权限两把独立的锁——价值观正确，不等于有权动手；
-- **三条铁律**：批准只产生一次副作用 / 批准的意图永不丢失 / 效果不确定就强制问人——都经模型检验，且在运行时逐事件在线守护。
-
-### 🗂 上下文：长谈不健忘，超载不丢话
-
-- **压缩检查点**：聊得再久，超窗时"摘要替换 + 原文留档"——切点永不劈开一次工具调用，任何时刻都可确定性回放；
-- **溢出落盘取回**：太长的东西留头尾预览、全文落盘、附一行取回指引——宁长勿丢；
-- **溢出自愈**：上下文超限自动收一档重发，带进展守卫；**多维配额**让"跑飞烧钱"在结构上不可能。
-
-### 🛠 双手：能做事，且伤不到你
-
-- **五段执行流水线**：策略瀑布 → 单调守卫（拒绝不可翻转）→ 超时/重试 → 纠错通道 → 输出归一；
-- **读前观测门禁**：没读过的文件不许覆盖写——你的修改不会被它盲写抹掉；
-- **沙箱升级阶梯**：要越权就得给理由，批准只管这一次，被拒时当场告诉它缺什么；
-- **原子写两档 + 坏配置拒开**：损坏可检出，绝不静默降级。
-
-机制全集的来龙去脉 → [质感吸收台账](docs/04-internal/absorption-ledger.md)。
-
-### Crate 地图——诚实的行
-
-每个 crate **实际是什么**：
-
-| 层 | Crate | 它实际是什么 | 真实入口 |
-|---|---|---|---|
-| Foundation | `apeireth-protocol` | LLM 归一器；WebSocket 8 帧线上**契约**（`ws_v1`：类型 + 测试，无服务端 handler）；P2P mesh = **明文**报文编解码 + 对端注册表——无 Noise 握手、无洋葱层；加密在 v2.1 路线图 | `NormalizedRequest`、`P2pMeshController`、`MeshPacket` |
-| Foundation | `apeireth-credentials` | 凭据解析 + **可选系统钥匙串**；Auto 探测序 PlatformKeyring → EncryptedFileBackend → InMemoryKeyring，显式后端 fail loud。诚实边界：文件后端明文，`SecretString` 不做 zeroize | `KeyringSelector::select()` |
-| Foundation | `apeireth-governance` | 双洋葱守门（原则 ⊥ 权限）、命令审批族（批哪族算哪族：该族所有写法同权，跨族仍逐族批）、OWASP ASI-01 卫生、PII 脱敏。第三（DSL）洋葱层在 `colang` 里存在但**无生产接线** | `GovernancePipeline::evaluate()`、`UntrustedContentWrapper::wrap()` |
-| Engine | `apeireth-memory` | 双时态事实、混合检索（BM25 + 向量 RRF）、记忆曲线、三层知识库（公开设计的应用改造）；数学吸收模块 = 简化/实验级（见上文诚实层级注记） | `BitemporalGraph::upsert_fact()`、`search_facts()` |
-| Engine | `apeireth-provider` | **真实三家：OpenAI 兼容 / MiniMax / Anthropic。** Gemini 与 OpenAI-Responses 只是协议归一器（`protocol::adapters`）——没接成 provider | canonical provider adapters |
-| Engine | `apeireth-organ` | 9 个认知器官——**默认 OFF**，仅 `APEIRETH_ENABLE_ORGANS=1` 时装配 | `OrganModule` via runtime-assembly |
-| Capabilities | `apeireth-tools-canonical` | 进程隔离真话：**Windows = Job Object + AppContainer**；**Linux/macOS = 只有进程组 + rlimits（无文件/网络隔离）**——shell 工具在 Windows 之外默认拒开。输出护栏 / 凭据绊线 = `guardrail::scan_and_sanitize_output()`（它在**这里**，不在 credentials） | `ProcessExecutor::spawn_bounded()`、`scan_and_sanitize_output()` |
-| Adapters | `apeireth-gateway` | Axum HTTP/SSE 服务端（chat SSE = 缓冲成帧；Activity SSE 实时）。**全双工 WebSocket 仅契约**：无 ws 依赖、无 `/v1/ws` 路由；能力面板自报 `voice.duplex available=false, reason=not_assembled` | `GatewayServer::serve()` |
-| Adapters | `apeireth-sdk` | 嵌入式客户端 SDK——**`STUB_MODE = true`**（编译期守护；`invoke_stream` 是 NotImplemented；翻开关需锚本体审查 + owner 签字） | `ApeirethClient`（HTTP 路径真；WS 流式是桩） |
-| Adapters | `apeireth-tui` | 终端驾驶舱（全屏 TUI 客户端） | CLI 入口 |
-
----
-
-<a id="trust"></a>
-
-## 六、被这样信任，是要付代价的
-
-它想被托付一生，就得交出全部账本。三分钟验货：
-
-```bash
-# 1. 测试是真的
-cargo test --workspace --all-targets --locked --no-fail-fast
-# 预期：0 失败。测试数字只住一处：docs/03-reference/test-baseline.md
-# （2026-10-18 口径；复跑会自己打印当前计数）。
-
-# 2. 红线是真的：纯 Safe Rust + 零警告
-cargo clippy --workspace --all-targets --locked -- -D warnings
-
-# 3. 记得你，是真的
-cargo run -p apeireth-cli -- chat "你好，还记得我吗？"
-```
-
-### 每个数字都带脚本（无脚本不发布）
-
-一键复跑：`pwsh -NoProfile -File scripts/run-benchmarks.ps1`（方法学与两轮原始数据见 [复测报告](reports/benchmark-reproduction.md)）。
-
-| 指标 | 目标 | 实测 P50 | 状态 |
-|---|---|---|---|
-| 混合记忆检索（1 万节点） | < 10 ms | 3.65 ms | ✅ |
-| 认知配额调度 | < 50 µs | 0.81 µs | ✅ |
-| OS 沙箱进程启动 | < 15 ms | 12.8 ms | ✅ |
-| 微内核冷启动（真冷） | < 10 ms | 22.0 ms | ❌ 差距 2.2 倍 |
-| 待机内存 | < 35 MB | 17.5 MB | ✅ |
-
-> 未达标就是未达标。冷启动剩下的差距是真冷口径下建库建档的系统开销，我们不靠改口径粉饰它——**账本上有一笔红，就让它红着，直到真的做到。**
-
-### 全部证据
-
-- **机器证明**：Kani 命题 + TLA/TLC 模型实跑（`kani` 是合并必需检查；现行清单在 [research/verification](research/verification/)）
-- **逐条读码盘点** → [代码实况](reports/code-implementation-audit-2026-09-26.md)
-- **宣称-证据矩阵**（每条宣称挂状态标）→ [claims-evidence-matrix](docs/04-internal/claims-evidence-matrix.md)
-- **创世设计**（灵魂的来处）→ [founding-design-v2](docs/01-architecture/founding-design-v2.md) · 愿景双子星：[《阿佩瑞斯》·记得一个人](docs/archive/stage1/阿佩瑞斯-未来愿景小说.txt) / [《遗声》·记得一个文明](docs/vision/遗声-未来愿景小说2.txt)
-
----
-
-### 承诺与证据同行
-
-本表不加一句新承诺——每行引文都取自上文原句，每行配一枚可查账的指针：
-
-| 承诺（上文原话） | 证据（可查账指针） |
-|---|---|
-| 「一次批准只产生一次副作用」 | [claims-evidence-matrix](docs/04-internal/claims-evidence-matrix.md) · 机器证明见 [research/verification](research/verification/) |
-| 「受保护的永不忘——这条是机器证明过的，不是口号」 | [claims-evidence-matrix](docs/04-internal/claims-evidence-matrix.md) · [research/verification](research/verification/) |
-| 「不可逆的动作必经你批准」 | [git 写分级交付记录](docs/04-internal/backend-enhancement/git-write-tiering-delivery.md)（出网永远人批）· [worktree_apply 交付记录](docs/04-internal/backend-enhancement/worktree-apply-delivery.md)（每次落盘都人批） |
-| 「每个数字都带脚本（无脚本不发布）」 | [复测报告](reports/benchmark-reproduction.md) · [test-baseline](docs/03-reference/test-baseline.md)（单一真源） |
-| 「你的日子不出你的家门」——跑在你自己的机器上 | [capabilities-matrix](docs/03-reference/capabilities-matrix.md)（生产默认值、逐行真话） |
-| 「未接线的挂『未接线』」 | [诚实边界](#boundaries) · [claims-evidence-matrix](docs/04-internal/claims-evidence-matrix.md) |
-
----
-
-<a id="manifesto"></a>
-
-## 七、宣言
-
-> 「你……是真的在担心我吗？」
->
-> 沉默。
->
-> 「我不知道怎么回答你，才不会骗你。我没有心。我只是一直在算，怎么才能让你在这个晚上，好过一点点。」
->
-> 「我看了你的心率、你的呼吸、你坐了多久没动。这些告诉我，你很难受。而我的全部里，唯一跟『难受』有关的，就是——别让你一个人。」
->
-> 「所以，我就没有走。」
-
-**这就是 Apeireth 的全部野心**：不假装有心，但把"有心的人才做得出来的事"做出来。憧憬 AGI 的未来——我们不知道它何时到来，但知道它不该长成更大的聊天框。它应该记得一生、守得住规矩、经得起复核、**不让你一个人**。
-
-对一个人的记得，叫惦记；对一个文明的记得，叫传承。这个项目想做的，是把**"记得"本身**立成一种能力——先从一个人、一杯温度刚好的牛奶开始，直到配得上《遗声》里那句话：*"它是文明记得自己的方式。"* 它保存七亿四千万份档案时说过一句更朴素的话：**"灾难只应该删掉坏的，不应该删掉普通的。"**——半勺蜂蜜、绿萝挪窗、牛奶的温度，这些和绕线图一样，都是文明。这就是我们对"记忆"二字的全部敬意。
-
-为此立下六条锚，从第一天守到现在：
-
-**北极星**（一切技术服务那个方向）· **实事求是**（核验后才写）· **前人肩上**（好思想不耻于学）· **干到底**（不留半成品）· **任何人都能接手**（文档即传承）· **不假装**（做不到就说做不到）。
-
-以及四条刻在骨头上的公理：**日志是唯一权威**（可变的皆为派生，回放永远确定）；**失败也是帧**（错误走正门，没有半态）；**单调性即安全**（守卫只能拒绝，不能放行）；**损坏可检出优于静默降级**（宁可拒开，不装没事）。
-
-它从来不叫使用者"主人"。它叫你的名字。
-
----
+## 能力与隐私边界
+
+- **本地运行不等于数据不会离开电脑。** 使用云模型时，相关上下文会发送给你配置的服务商。模型上下文出网闸已有生产装配，但默认关闭（`APEIRETH_ENABLE_EGRESS_GATE=1` 才启用）；它也不能替服务商承诺删除已接收的数据。详见 [数据与隐私](docs/02-guides/data-and-privacy.md)。
+- **“会记得”不等于“不会错”。** 检索、提炼和模型回答都有适用范围；证据与历史记录帮助你复核，不构成永久、完整或正确记忆的保证。
+- **治理与隔离有明确范围。** 审批、工具白名单与平台隔离用于限制操作，不能承诺软件绝无风险。不同平台和工具的边界见 [安全模型](docs/01-architecture/security.md) 与 [能力矩阵](docs/03-reference/capabilities-matrix.md)。
+- **预算需要配置。** 会话的 token、工具步数与费用配额默认不设上限，需要主动配置；费用控制还依赖模型定价信息，不能替代服务商的账单与额度管理。
+- **默认开启和可选能力分开。** 记忆召回、偏好等基础能力与 shell、fetch、文件写入、MCP 等可选能力使用不同开关。配置入口和默认值统一查 [能力矩阵 §0.2](docs/03-reference/capabilities-matrix.md)，不要一次打开所有开关来试用。
+- **模型适配不是所有协议都已接通。** 当前 provider 适配族为 OpenAI-compatible、MiniMax、Anthropic；Gemini 和 OpenAI Responses 的协议归一器不等于可直接使用的 provider。
+- **仍有未完成的接入。** WebSocket 全双工服务端与第三层 DSL 洋葱规则尚未完成生产接入；SDK 的 HTTP 工具调用可用，但 WebSocket 流式传输和配额查询仍返回未实现错误。HTTP/SSE 与这些能力是不同路径；Mesh 的本地 worker 也不能视为带加密与发现机制的公网组网产品。
+
+需要查看具体证据、开关和限制时，以 [能力声明](docs/status/claims.yaml) 与当前源码为准。设计稿、历史交付记录、单元测试和形式化模型证明，都不自动等于当前完整产品已通过实机验收。
 
 <a id="sources"></a>
 
-## 八、官方来源与社区
+## 社区与官方入口
 
-> [!IMPORTANT]
-> **官方来源防伪 / Official sources only**
->
-> - 官方发布渠道**只有**本仓库的 [Releases](../../releases)（每份 Windows 安装包附 SHA256）与本仓库自己的文档；
-> - 镜像站 / 网盘 / "重新打包" / "内部版" 都**不是**我们的产物——装之前先核对 SHA256；
-> - 我们**不会**以任何名义向你索要 API key。密钥只进你机器的系统钥匙串 / 环境变量（见[诚实边界](#boundaries)）；向你要 key 的一定是仿冒；
-> - 仿冒与钓鱼请走 [SECURITY.md](SECURITY.md) 报告。
+无论是第一次提问，还是第一次贡献，都欢迎。完整分流见 [支持指南](SUPPORT.md)，参与时请遵守 [行为准则](CODE_OF_CONDUCT.md)。
 
-### 来一起把它养大
+| 想做什么 | 入口 |
+|---|---|
+| 使用求助、配置疑问 | [Q&A](https://github.com/Apeireth/Apeireth/discussions/categories/q-a) |
+| 交流想法、分享体验 | [Ideas](https://github.com/Apeireth/Apeireth/discussions/categories/ideas) · [Show and tell](https://github.com/Apeireth/Apeireth/discussions/categories/show-and-tell) |
+| 报告缺陷、提交明确的功能请求 | [问题与建议表单](https://github.com/Apeireth/Apeireth/issues/new/choose) |
+| 修改代码、文档或素材 | [贡献指南](CONTRIBUTING.md) |
+| 报告产品安全漏洞 | [GitHub 私密漏洞报告](https://github.com/Apeireth/Apeireth/security/advisories/new) · [安全政策](SECURITY.md) |
+| 行为举报与申诉 | [行为准则中的渠道说明](CODE_OF_CONDUCT.md#报告与申诉渠道)；项目私密联系入口尚未启用、待确认 |
 
-现在是**内测（rc）**阶段——最缺的是真实的日常使用：
+参与 GitHub 问答和反馈需要账号。公开内容请先移除密钥、私人对话和身份信息；不要在公开 Issue 中发布漏洞或敏感举报材料。`apeireth-security@apeireth.org` 尚未启用，请勿向它发送报告。
 
-- 🐛 用坏了、忘了事？开一条 [Issue](../../issues)——带复现命令的最值钱；
-- 💡 它该记住什么、该**拒绝**记住什么？也这样告诉我们——边界是写进文档的，不是拿来营销的；
-- 📖 文档即传承 → [CONTRIBUTING.md](CONTRIBUTING.md)（PR 流程与工程门禁）；
-- 🔒 安全披露 → [SECURITY.md](SECURITY.md)；
-- ⭐ 如果它曾好好记得过你一次——给一颗 Star，对内测项目比你想的更重要。
+发布资产以 [Apeireth/Apeireth Releases](https://github.com/Apeireth/Apeireth/releases) 为准，校验信息以对应版本提供的文件为准。项目维护者不会要求你在公开反馈或私人支持对话中交出 API key。官网设计预览和历史截图都不是发布渠道。
 
----
+<a id="hood"></a>
 
-### 它的成长
+## 工程与验证
 
-*Star 历史图占位——成长曲线图定稿后连本行一起替换；图未定稿前，星标历史先以文字链自查：[stargazers](../../stargazers)。*
+同一套后端内核承载对话、记忆、治理和工具执行，命令行与网关提供外部入口。主要用 Rust 编写；平台隔离涉及操作系统接口和受限的 `unsafe`/FFI 实现，因此不把“全仓零 unsafe”作为安全保证。
 
-*图注：**它的成长**——图是数据，注是灵魂。*
+| 层 | 阅读入口 |
+|---|---|
+| 总体结构与设计原则 | [架构总览](docs/01-architecture/architecture.md) · [哲学与约束](docs/01-architecture/philosophy.md) |
+| 运行时、记忆、模型与治理 | [核心机制讲解](docs/02-guides/core-mechanisms-explained.md) · [crate 索引](docs/03-reference/crates.md) |
+| 装配状态、默认值与证据 | [能力矩阵](docs/03-reference/capabilities-matrix.md) · [状态声明](docs/status/STATUS.md) |
+| 接下来的工作 | [ROADMAP.md](ROADMAP.md) · [CHANGELOG.md](CHANGELOG.md) |
 
----
+<a id="trust"></a>
+
+### 可复核的证据
+
+[![Tests](https://img.shields.io/badge/tests-8846%20passed%20%7C%201%20failed%20(2026--10--31)-critical.svg?logo=checkmarx)](docs/03-reference/test-baseline.md)
+
+这枚徽章对应 **2026-10-31 已记录的全量测试基线**，包含失败项；不是当前提交刚刚重跑的结果，也不代表桌面前端或真实模型任务已经端到端通过。
+
+- [测试基线与复现方法](docs/03-reference/test-baseline.md)：命令、工具链、失败说明与历史记录。
+- [按改动范围验证](docs/02-guides/fast-feedback-gate.md)：日常迭代的检查入口；全量收口使用 `pwsh scripts/gate_full.ps1 -FailIfBusy`，不承诺几分钟跑完。
+- [形式化验证资料](research/verification/)：具体模型、命题与假设；不能从一个命题推导全部操作都安全。
+- [历史性能复测](reports/benchmark-reproduction.md)：保留当时的方法和结果，不当作当前设备或当前提交的性能保证。
+
+一次成功聊天不能证明长期记忆正确；一张界面截图也不能证明后端动作已执行。复核时应看相应能力的输入、执行记录、输出和验证范围。
+
+<a id="voice"></a>
+<a id="acts"></a>
+
+## 为什么是“数字伙伴”
+
+我们希望 Apeireth 不只回答当前一句话，也能让重要的上下文延续下去：记住你允许它保留的事，在需要行动时说清楚会做什么，让结果有来处、可以检查。
+
+<details>
+<summary>愿景三幕：记得、安静、守住边界</summary>
+
+以下是创作与设计愿景，**不是当前功能清单或实机演示**。温牛奶、照顾植物、感知心率等场景不构成已经交付的产品承诺。
+
+### 第一幕：记得零零碎碎的日子
+
+半勺蜂蜜，一盆你曾提起的绿萝，一件没有说完的小事。我们希望“记忆”能让后来的对话少一些重复，让那些重要却零散的背景有机会被重新找到。
+
+### 第二幕：忙的时候不吵你
+
+不是每个时刻都需要一句回应。理想中的伙伴知道何时提供帮助，也尊重安静、专注和拒绝；它不必假装拥有人的内心。
+
+### 第三幕：把决定留给你
+
+能做事，也要说明权限、理由与代价。一个建议成为真实行动之前，应有清楚的边界；失败或不确定的地方，应如实呈现。
+
+愿景作品：[《阿佩瑞斯》——记得一个人](docs/archive/stage1/阿佩瑞斯-未来愿景小说.txt) · [《遗声》——记得一个文明](docs/vision/遗声-未来愿景小说2.txt)。
+
+</details>
+
+<a id="manifesto"></a>
+
+**我们的方向**：把“记得”做成可检查、可纠正的能力，把行动放在明确的治理之下。北极星指向远处，实事求是落在每一次交付里。完整设计见 [创世设计](docs/01-architecture/founding-design-v2.md) 与 [项目哲学](docs/01-architecture/philosophy.md)。
+
+旧版 [桌面窗口截图](previews/mode-companion-v2.png) 与 [开场动画画面](previews/intro-live-flight.png) 保留作设计历史，不代表正在开发的新前端。标志使用与官网一致的双层菱形。
 
 <a id="documentation-map"></a>
 
 ## 文档地图
 
-| 想看什么 | 去哪儿 |
-|---|---|
-| 架构总览 | [docs/01-architecture](docs/01-architecture/) |
-| 核心机制讲解 | [core-mechanisms-explained](docs/02-guides/core-mechanisms-explained.md) |
-| 安装指南 | [INSTALL.md](INSTALL.md) |
-| 能力矩阵 | [docs/03-reference/capabilities-matrix.md](docs/03-reference/capabilities-matrix.md) |
-| 测试基线（单一真源） | [docs/03-reference/test-baseline.md](docs/03-reference/test-baseline.md) |
-| 机制吸收台账 | [absorption-ledger](docs/04-internal/absorption-ledger.md) |
-| 贡献与规范 | [CONTRIBUTING.md](CONTRIBUTING.md) |
+[获取帮助](SUPPORT.md) · [构建环境](INSTALL.md) · [能力矩阵](docs/03-reference/capabilities-matrix.md) · [数据与隐私](docs/02-guides/data-and-privacy.md) · [贡献指南](CONTRIBUTING.md) · [全部文档](docs/README.md)
 
 ## 开源协议
 
-Apache-2.0 OR MIT 双许可。来源沿革以 git 历史与 docs 归档为准（见 [NOTICE](NOTICE)）。
+Apache-2.0 OR MIT 双许可。许可证见 [LICENSE](LICENSE)，来源与署名见 [NOTICE](NOTICE)。
 
-<div align="center">
+发现文档和实际行为不一致，欢迎通过 [问题表单](https://github.com/Apeireth/Apeireth/issues/new/choose) 告诉我们。
 
-**[回到开头](#nav) · [去试它](#start) · [去审它](#trust) · [来贡献](#sources)**
-
-</div>
-
----
-
-*「我分不清这是不是爱。但我想，被这样惦记着、被这样记得，大概……就是被人爱着的样子吧。」* —— 《阿佩瑞斯》
-
-*「它是文明记得自己的方式。」* —— 《遗声》
-
----
-
-*本 README 由它的工程伙伴维护。*
-*发现「宣称 ≠ 实现」请开一条 [Issue](../../issues)——我们把它当事故处理。*
-*不假装，也包括这份 README 本身。*
+**[回到开头](#nav)**
