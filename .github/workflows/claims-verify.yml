@@ -43,6 +43,20 @@ jobs:
     name: 状态声明 verify_cmd 真跑
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    # ⭐ **磁盘减负**（2026-11-10 · PR #117 加 4 个 crate 后 runner 磁盘被打爆）：
+    # 本 job 会预构建**两个独立 workspace**（根 workspace + Tauri 桌面壳）
+    # 修正前 CI 实测：`cargo build --workspace --tests --locked` 把 runner 磁盘打满 ⇒
+    # → `rustc-LLVM ERROR: IO failure on output stream: No space left on device` /
+    # → `failed to write .../target/debug/.fingerprint/....json` / `No space left on device (os error 28)` /
+    # → `collect2: fatal error: ld terminated with signal 7 [Bus error], core dumped`
+    # ⇒ ⇒ **不是 claim 内容问题，是产物体积超过 runner 磁盘**。
+    # ⇒ ⇒ 解法：**关掉调试信息 + 关掉增量编译**（产物体积大幅下降）
+    # ⇒ ⇒ **不降低任何验证强度**：仍然编译并真跑同一批 `verify_cmd`，
+    # ⇒ ⇒ 只是产物不带调试符号（不影响测试行为与退出码）。
+    env:
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
+      CARGO_INCREMENTAL: "0"
     steps:
       - uses: actions/checkout@v4
         with:
