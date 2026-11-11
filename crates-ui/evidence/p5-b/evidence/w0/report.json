@@ -1,0 +1,31 @@
+{
+  "ok": true,
+  "failures": [],
+  "deferred": {
+    "mode": "deferred",
+    "pollute": 0,
+    "rows": 9,
+    "t_dom": 39.80000000074506,
+    "t_painted": 40.30000000074506,
+    "step": "already-windowized",
+    "errors": []
+  },
+  "sync": {
+    "mode": "sync",
+    "pollute": 0,
+    "rows": 9,
+    "t_dom": 15.699999999254942,
+    "t_painted": 15.800000000745058,
+    "step": "already-windowized",
+    "errors": []
+  },
+  "polluted": null,
+  "scroll": {
+    "first_row_before": "行 0",
+    "first_row_after": "行 98",
+    "scroll_top_set": 4000,
+    "scroll_top_after": 4000,
+    "scroll_top_kept": true,
+    "window_moved": true
+  }
+}

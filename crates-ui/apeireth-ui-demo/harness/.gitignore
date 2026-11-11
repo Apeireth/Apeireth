@@ -1,0 +1,18 @@
+# 生成物（构建期产出，不入库）
+node_modules
+dist/
+public/design/
+public/pilot-card.css
+public/tool-card.css
+public/lifecycle-card.css
+public/provenance.json
+# 工具卡面批二的抽取产物（区块级 CSS + 溯源）⇒ 同样是生成物
+public/toolgrid/
+public/engine/
+out/
+
+# 主仓根 .gitignore 全局忽略 `*.py` ⇒ 本 harness 的对照驱动（唯一的对照装置）
+# 必须**显式放行**，否则 P3 的像素 / 逐帧证据无法入库、无法复核。
+# （本目录的规则比根目录更深 ⇒ 优先级更高。）
+!tools/
+!tools/*.py

@@ -1,0 +1,10 @@
+{
+  "title": "读取卷宗目录",
+  "commandText": "apeireth fs list --scope workspace",
+  "argumentsSummary": "{\"path\": \"/卷宗/工作区\", \"depth\": 1}",
+  "reason": "需要列出目录才能定位目标文件",
+  "createdAt": 1761354600000,
+  "sandbox": "工作区沙箱",
+  "cwd": "/卷宗/工作区",
+  "isolation": "文件可写 / 网络断"
+}

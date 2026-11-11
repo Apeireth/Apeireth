@@ -1,0 +1,112 @@
+{
+  "note": "该面对照资产的来源指纹（单一真源的可复核证据）",
+  "components": [
+    {
+      "path": "frontend/companion-desktop/src/lib/components/SessionModelPicker.svelte",
+      "slug": "model-picker",
+      "scoped_css_sha256_16": "6dfb5e549e15946d"
+    }
+  ],
+  "icons": [
+    {
+      "alias": "server",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/server.svelte",
+      "name": "server"
+    },
+    {
+      "alias": "globe",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/globe.svelte",
+      "name": "globe"
+    },
+    {
+      "alias": "sparkles",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/sparkles.svelte",
+      "name": "sparkles"
+    },
+    {
+      "alias": "eye",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/eye.svelte",
+      "name": "eye"
+    },
+    {
+      "alias": "eye-off",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/eye-off.svelte",
+      "name": "eye-off"
+    },
+    {
+      "alias": "lock",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/lock.svelte",
+      "name": "lock"
+    },
+    {
+      "alias": "check",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/check.svelte",
+      "name": "check"
+    },
+    {
+      "alias": "check-circle-2",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/circle-check.svelte",
+      "name": "circle-check"
+    },
+    {
+      "alias": "x-circle",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/circle-x.svelte",
+      "name": "circle-x"
+    },
+    {
+      "alias": "chevron-down",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/chevron-down.svelte",
+      "name": "chevron-down"
+    },
+    {
+      "alias": "chevron-up",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/chevron-up.svelte",
+      "name": "chevron-up"
+    },
+    {
+      "alias": "search",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/search.svelte",
+      "name": "search"
+    },
+    {
+      "alias": "rotate-ccw",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/rotate-ccw.svelte",
+      "name": "rotate-ccw"
+    },
+    {
+      "alias": "trash-2",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/trash-2.svelte",
+      "name": "trash-2"
+    }
+  ],
+  "design_css": [
+    {
+      "path": "frontend/companion-desktop/src/lib/design/base.css",
+      "sha256_16": "97498c495765332f"
+    },
+    {
+      "path": "frontend/companion-desktop/src/lib/design/essence.css",
+      "sha256_16": "e96dd8efc9a61ecb"
+    },
+    {
+      "path": "frontend/companion-desktop/src/lib/design/hud.css",
+      "sha256_16": "482d7ca607fc8b02"
+    },
+    {
+      "path": "frontend/companion-desktop/src/lib/design/motion.css",
+      "sha256_16": "755013aff035b60e"
+    },
+    {
+      "path": "frontend/companion-desktop/src/lib/design/prose.css",
+      "sha256_16": "cc3cf6501b68fa1e"
+    },
+    {
+      "path": "frontend/companion-desktop/src/lib/design/shell.css",
+      "sha256_16": "0175375a1eecdfa6"
+    },
+    {
+      "path": "frontend/companion-desktop/src/lib/design/tokens.css",
+      "sha256_16": "80584b228c87ce40"
+    }
+  ]
+}

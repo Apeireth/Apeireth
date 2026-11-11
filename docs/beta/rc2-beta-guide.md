@@ -1,10 +1,10 @@
-# Apeireth v2.0.0-rc.4 内测指南
+# Apeireth v2.0.0-rc.5 内测指南
 
 > 欢迎来到 Apeireth 内测。这是一份一页纸的安装与反馈指南——**三分钟上手，反馈格式学自我们的真机点击流验收**（步骤号+现象+期望，能让我一次复现）。
 
 ## 一、安装（2 分钟）
 
-1. 下载 `Apeireth Companion_2.0.0-rc.4_x64-setup.exe`（[Releases 页](https://github.com/Apeireth/Apeireth/releases)）；
+1. 下载 `Apeireth Companion_2.0.0-rc.5_x64-setup.exe`（[Releases 页](https://github.com/Apeireth/Apeireth/releases)）；
 2. （可选）核对 SHA256 与 `SHA256SUMS` 一致——我们所有数字都可复核；
 3. 双击安装（默认装到 `C:\Program Files\Apeireth Companion`）→ 桌面出现快捷方式。
 

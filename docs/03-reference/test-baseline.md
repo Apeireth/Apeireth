@@ -14,8 +14,8 @@
 | 项 | 值 |
 |---|---|
 | **命令** | `pwsh scripts/gate_full.ps1 -FailIfBusy`（R6-A 唯一全量执行器：main workspace `cargo test --workspace --all-targets --locked --no-fail-fast --exclude <图像家族 11 crate>` + 图像家族独立同命令；等价于全 workspace 口径） |
-| **结果** | **341 套件 / 8570 passed / 0 failed / 51 ignored**（main 264 套件 / 6263 passed / 19 ignored + image 家族 77 套件 / 2307 passed / 32 ignored；首轮环境敏感失败口径已退役，见 §3） |
-| **日期** | 2026-10-21 |
+| **结果** | **351 套件 / 8846 passed / 1 failed / 51 ignored**（2026-10-31 实测；**那 1 例 failed 是并发敏感 flaky**——`runtime-assembly --lib` 的 `bio_switch_off_keeps_the_frame_identical_and_never_reads`，单独跑/连跑 3 遍均绿，根因是 `tuning` 段读进程级可变全局 `TunableParam::*.effective()` 被并发测试污染；**pre-existing，非该批引入**（该批对 `runtime-assembly` 0 行 src 改动）；详见 §3 并发敏感失败口径） |
+| **日期** | 2026-10-31 |
 | **工具链** | rustc 1.97.1 (8bab26f4f 2026-07-14) / cargo 1.97.1 (c980f4866 2026-06-30) / rustup 1.29.1 |
 | **构建环境（Windows 实测）** | MSVC 14.44.35207（VS Build Tools 2022，C++ workload）+ Windows SDK 10.0.26100.0 |
 | **来源** | 由全量门禁执行线（效率线）执行（接管日期 2026-10-21；Wave 4 收口时由架构线以 R6-A 执行器代跑的事实保留于此）：`pwsh scripts/gate_full.ps1 -FailIfBusy` 实测 2026-10-21、26.8 分钟、exit 0、HEAD `f2dad300`；日志 `artifacts/wave4-close-full-2026-10-21.log` 与 `logs/gate-full.log` |
@@ -227,10 +227,36 @@
   「例」= 用例数（passed/failed/ignored）。
 - 前端 `frontend/companion-desktop` 独立 workspace，`pnpm test` 数字不并入本表。
 
+> **环境敏感失败口径（2026-10-31 实测登记）**：本仓测试有 **2 处依赖外部工具输出语言**的断言
+> —— `apeireth-tools-canonical` 的 `repo::tests::non_git_directory_is_an_error`（匹配 git 的
+> 英文报错 "not a git repository"）与 `recon_differential::elf_header_matches_readelf`（按 readelf
+> 的英文标签 `Class:` / `Entry point address:` 解析）。**本机 locale 为 `zh_CN.UTF-8`** ⇒ git/readelf
+> 输出中文 ⇒ 这 2 例在中文 locale 下失败（实测 `LANG=C LC_ALL=C` 即全绿，**代码无缺陷**）。
+> **处置（2026-10-31）**：① `recon_differential` 的 readelf 调用固定 `.env("LC_ALL", "C")`；
+> ② `repo.rs` 的 `#[cfg(test)]` 模块内 `pin_c_locale()` 固定进程 locale（**仅测试进程**）。
+> ⚠️ **生产路径的 git spawn 未改** ⇒ 工具对用户呈现的 git 报错文案仍随运行机器 locale 变化
+> （既有行为，非本批引入；是否固定为英文属产品决策，未擅自改）。
+> **复现口径**：非 C locale 环境跑全量时若见这 2 例失败，先用 `LC_ALL=C` 复跑判定是 locale 差异
+> 还是真缺陷。
+
+> **并发敏感失败口径（2026-10-31 实测登记）**：`apeireth-runtime-assembly --lib` 的
+> `canonical::production::bio_production_wiring::tests::bio_switch_off_keeps_the_frame_identical_and_never_reads`
+> 在**全量并发**（`--workspace -j 2`）下偶发失败，**单独跑 / 连续跑 3 遍均绿**。
+> **根因（已定位）**：该断言比对「自述帧逐字节不变」，其中 `tuning` 段的数据来自**进程级可变全局**
+> （`TunableParam::MemoryFade.effective()` / `CuriosityStrength.effective()` 等，
+> 见 `self_status_source.rs:762-784`）⇒ 并发下被**其它测试的调参动作**污染，
+> 于是 baseline（`preset: "balanced"`）与 installed（`preset: "custom"`）不等。
+> **定性**：**测试隔离缺陷（pre-existing，非本批引入）** —— 本批对 `runtime-assembly` **0 行 src 改动**
+> （仅 Cargo.toml + 新增 README）。
+> **未擅自修**：修法涉及「逐字节不变」断言的语义口径（排除哪几段 / 是否对 tuning 做归一化），
+> 属该线/owner 决策，不在本批范围。
+> **复现口径**：全量跑若见此例失败 ⇒ 单独复跑该 target 判定是并发敏感还是真缺陷。
+
 ## 3. 历史口径（带日期保留，不追溯改写）
 
 | 日期 | 结果 | 备注 |
 |---|---|---|
+| 2026-10-31 | 351 套件 / 8846 passed / 1 failed / 51 ignored | 引擎仓 / 产品仓分离批 + 门面 crate + 版本轴 rc.5（ADR-0017 / 0019 / 0020）。1 例 failed = 并发敏感 flaky（见 §3 并发敏感失败口径，pre-existing）。**命令**：`cargo test --workspace --all-targets --locked --no-fail-fast -j 2`（exit 101，失败项即上述 1 例）；**工具链** rustc 1.97.1 / cargo 1.97.1 |
 | 2026-10-21 | 341 套件 / 8570 passed / 0 failed / 51 ignored | Wave 4 收口（gate_full 实测；R4b 四岛归档后首次全量口径：main 6263 + image 2307；较 2026-10-20 的 9076 下降主要来自 R4b 归档移除的测试（SDK 607→92 等）与新增机制的净差） |
 | 2026-10-20 | 336 套件 / 9075 passed / 1 failed / 52 ignored（产品面 0 失败） | 生物机制族 W3.4 首轮全量（D27 环境敏感 1 失败；非绿跑口径；第三线权威复跑 9076 绿后移入历史） |
 | 2026-10-19 | 326 套件 / 8889 passed / 0 failed / 52 ignored | 生物机制族 W3.3 批（§1 曾用，2026-10-20 W3.4 批刷新后移入历史） |

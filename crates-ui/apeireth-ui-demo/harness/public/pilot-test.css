@@ -1,0 +1,47 @@
+/* ============================================================================
+   仅测试注入的样式表（**不进产品资产**）—— 设计文档 §9.4 的相位固定手段。
+   ----------------------------------------------------------------------------
+   两侧页面**逐字相同**地链入本文件 ⇒ 任何差异都只能来自渲染实现。
+   用法（由对照 harness 在运行时切换）：
+   - `html[data-pilot-motion="on"]`     ⇒ 打开「卡片入场动画」（**挂载时机**的代理）；
+   - `html[data-pilot-transition="on"]` ⇒ 打开「按钮过渡」（**更新时机**的代理）；
+     ⚠️ 两者**分开**用：入场动画会让卡片处于合成层（阴影的抗锯齿与层提升有关）
+     ⇒ 与「更新时机」的逐帧对照混用会把噪声算进差异里。
+   - `html[data-pilot-freeze="1"]`  ⇒ 把动画**冻结**在 `--pilot-phase` 相位
+     （`--pilot-phase` 是**负**的延迟，例如 `-300ms` = 冻结在 300ms 处）。
+   ========================================================================== */
+
+/* ── 卡片入场动画（挂载时机的可观测代理） ─────────────────────────────── */
+html[data-pilot-motion='on'] .approval-card {
+  animation: ap-pilot-card-in 600ms linear both;
+}
+
+@keyframes ap-pilot-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ── 按钮过渡（更新时机的可观测代理） ─────────────────────────────────── */
+html[data-pilot-transition='on'] .allow-btn,
+html[data-pilot-transition='on'] .reject-btn,
+html[data-pilot-transition='on'] .close-btn,
+html[data-pilot-transition='on'] .copy-btn {
+  transition:
+    opacity 600ms linear,
+    color 600ms linear,
+    border-color 600ms linear,
+    background 600ms linear;
+}
+
+/* ── 相位冻结 ─────────────────────────────────────────────────────────── */
+html[data-pilot-freeze='1'] * {
+  animation-play-state: paused !important;
+  animation-delay: var(--pilot-phase, 0ms) !important;
+  transition: none !important;
+}

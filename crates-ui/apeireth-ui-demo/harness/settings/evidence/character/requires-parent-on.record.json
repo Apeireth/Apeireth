@@ -1,0 +1,14 @@
+{
+  "passed": false,
+  "t1_pixel_ratio": 1.0,
+  "t1_pixel_different": -1,
+  "t1_pixel_total": 0,
+  "t2_dom_equal": true,
+  "t2_dom_diffs": [],
+  "t3_same_width": true,
+  "t3b_same_height": false,
+  "t3_reference_width": 826,
+  "t3_engine_width": 826,
+  "case": "requires-parent-on",
+  "fileWrite_value": "true"
+}

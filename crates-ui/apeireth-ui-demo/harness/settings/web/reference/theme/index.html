@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="night">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>参考侧 · 主题外观面板</title>
+    <!--
+      设计令牌层：**只读引用**生产前端的同一批 CSS（构建期复制到 public/design/）。
+      链接顺序与引擎侧**完全一致** ⇒ 两侧的计算样式同源。
+    -->
+    <link rel="stylesheet" href="/design/tokens.css" />
+    <link rel="stylesheet" href="/design/base.css" />
+    <link rel="stylesheet" href="/design/essence.css" />
+    <link rel="stylesheet" href="/design/hud.css" />
+    <link rel="stylesheet" href="/design/motion.css" />
+    <link rel="stylesheet" href="/design/prose.css" />
+    <link rel="stylesheet" href="/design/shell.css" />
+    <!--
+      参考侧**不**链入抽取出来的子面 CSS：生产组件自带**作用域化**的
+      `<style>`（构建期由组件编译器注入）⇒ 参考侧的画面就是生产画面。
+    -->
+    <!-- 对照专用样式（两侧**逐字相同**地链入）：舞台宽度。 -->
+    <link rel="stylesheet" href="/settings-test.css" />
+  </head>
+  <body>
+    <!--
+      本面：**主题外观面板**（`theme`）
+
+      - 生产源文件（**只读引入**，不复制、不改）：`../../../../../frontend/companion-desktop/src/lib/components/ThemeSettingsPanel.svelte`
+      - 生产行号区间：script 1-113 / markup 115-230 / style 232-447（文件共 447 行）
+      - CSS 根 class（引擎侧的作用域前缀）：`.sp-theme`
+      - 裁剪选择器（参考侧 / 引擎侧）：`.setting-block` / `.sp-theme .setting-block`
+      - 裁剪方式：元素框
+      - 固定数据：`fixtures/theme.json`
+      - 依赖：无
+      - 图标（生产 import 名）：Check、Upload、ImageOff
+      - 可信度：**high** —— 内联 swatch 渐变与 CSS 变量覆写必须逐字 ⇒ 提前暴露这条硬要求
+    -->
+    <div id="app"></div>
+    <script type="module" src="../main.js"></script>
+  </body>
+</html>

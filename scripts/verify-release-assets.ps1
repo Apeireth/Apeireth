@@ -25,7 +25,7 @@
     附加门槛：签名状态非「有效」即判失败。默认签名状态只如实报告、不参与成败
     （当前发布物未签名是既成事实，如实报，不假装）。
 .EXAMPLE
-    pwsh -File scripts/verify-release-assets.ps1 -ArtifactPath dist\apeireth-2.0.0-rc.4.msi -ManifestPath dist\SHA256SUMS
+    pwsh -File scripts/verify-release-assets.ps1 -ArtifactPath dist\apeireth-2.0.0-rc.5.msi -ManifestPath dist\SHA256SUMS
 .EXAMPLE
     pwsh -File scripts/verify-release-assets.ps1 .\apeireth-companion-setup.exe -ExpectedSha256 3a7f...（64 位完整哈希）
 .OUTPUTS

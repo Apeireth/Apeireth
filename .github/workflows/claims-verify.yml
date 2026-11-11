@@ -42,7 +42,33 @@ jobs:
   claims-verify:
     name: 状态声明 verify_cmd 真跑
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # ⚠️ **2026-11-11 调（PR #78 第二/三轮实测）**：45 分钟**从来不够** ——
+    #   这份 job 的真实工作量 = 编译声明要用的测试产物（~160 个二进制）+ 跑 52 条声明
+    #   ⇒ ⇒ 45 分钟下**它连预构建都跑不完**（历史 60 次运行 0 次成功，见提交正文）。
+    #   ⇒ ⇒ 本机实测（debug=0，单个 runtime-assembly 测试目标 199s、产物 95MB）：
+    #   ⇒ ⇒ 161 个测试目标 × 链接 ~15-20s ≈ 50 分钟 + 依赖编译 ~10 分钟
+    #   ⇒ ⇒   + Tauri 桌面壳 ~10 分钟 + 三条整包声明重跑全部测试目标 ~15 分钟
+    #   ⇒ ⇒   ⇒ 单 runner 4 核上**总墙钟 ≈ 85 分钟** ⇒ 90 分钟**卡在边缘**
+    #   ⇒ ⇒ ⇒ 给足 150 分钟：这是**给足时间**，不是**放松验证**（判定条件一条没改）。
+    timeout-minutes: 150
+    # ⚠️ **2026-11-11 修（PR #78 第二轮实测 · 真因 = runner 磁盘爆）**：
+    #   实测证据（job 130246639737 的 check-run annotation）：
+    #     `Unhandled exception. System.IO.IOException: No space left on device :
+    #      '/home/runner/actions-runner/cached/2.338.2/_diag/Worker_20261111-011632-utc.log'`
+    #   ⇒ runner 连**自己的诊断日志**都写不下去 ⇒ job log blob 直接 404（BlobNotFound）
+    #   ⇒ ⇒ **不是「声明内容红」，是磁盘红**（同款签名在 main tip 7d0a8111 上也有
+    #   ⇒ ⇒ ⇒ 属仓级既有红，不是本 PR 引入的）。
+    #   ⇒ ⇒ 磁盘大头 = cargo 产物的**调试信息**（Linux 上一个测试二进制含调试信息 ~300MB；
+    #   ⇒ ⇒ 本机实测：system_one_knob 的 .pdb 279.6MB / system_one_execution 252MB
+    #   ⇒ ⇒ ⇒ libapeireth_image_algo 的 .rlib 388MB —— 全是调试信息撑起来的）。
+    #   ⇒ ⇒ 关掉调试信息 ⇒ 产物体积 ~10× 变小 ⇒ **验证强度一点不变**
+    #   ⇒ ⇒ ⇒ （debuginfo 不改测试集合 / 断言 / 编译目标；`debug_assertions` 是另一条
+    #   ⇒ ⇒ ⇒   独立开关，不受影响 —— 仓里 image/algo 那几条 `run with --release`
+    #   ⇒ ⇒ ⇒   断言的语义保持原样）。
+    env:
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
+      CARGO_INCREMENTAL: "0"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -74,19 +100,92 @@ jobs:
         with:
           shared-key: claims-verify
 
+      # ⚠️ **2026-11-11 补（PR #78 首跑实测）**：`docs/status/claims.yaml` 有 **2 条**声明的
+      # `verify_cmd` 用的是 `cargo nextest run`（`rt.system_one_internal` /
+      # `mem.failure_learning_bridge`）⇒ ⇒ 而本 job 原先**没装 nextest**
+      # ⇒ ⇒ 那 2 条会因「no such command: nextest」**假红**（不是声明内容问题）。
+      # ⇒ ⇒ 与 `rust.yml`（:99-100）**同口径**装：`taiki-e/install-action` 取预编译二进制
+      #      （不重编译 ⇒ 不吃 runner 磁盘 ⇒ 不撞 claims-verify 已知的磁盘爆问题）。
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@nextest
+
       # ⭐ **磁盘减负**（2026-11-05 · CI runner 曾因磁盘爆而 exit 101）：
       # 预构建两个 workspace 会吃掉 runner 的全部空间 ⇒ ⇒ `rustls`/`reqwest` 编译期
       # archive 写失败 ⇒ ⇒ claims-verify 假红（**不是** claim 内容问题）。
       # ⇒ ⇒ 清 apt 缓存与 rustup 旧组件 ⇒ ⇒ 把空间还给编译。
-      - name: 腾空间（apt 缓存 + rustup 旧组件）
+      - name: 腾空间（apt 缓存 + rustup 旧组件 + runner 镜像大件）
         run: |
           sudo rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*.deb || true
           rustup self update --no-self-update 2>/dev/null || true
           rustup component remove rustfmt clippy 2>/dev/null || true
+          # ⚠️ **2026-11-11 补（PR #78 第二轮实测）**：GitHub 托管 runner 镜像预装了
+          # dotnet / android SDK / ghc / boost / ghcup / CodeQL / miniconda / swift，
+          # 它们**本 job 一个都用不到** ⇒ ⇒ 删掉换磁盘（每个都是 GB 级）。
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /usr/local/share/boost /usr/local/.ghcup /opt/hostedtoolcache/CodeQL \
+            /usr/share/miniconda /usr/share/swift || true
           df -h / | tail -1
 
-      - name: 预构建测试产物（根 workspace；避免每条命令各自冷启动）
-        run: cargo build --workspace --tests --locked
+      # ⚠️ **2026-11-11 修（PR #78 第二轮实测 · 磁盘爆的直接原因）**：
+      #   初版是 `cargo build --workspace --tests --locked` ⇒ ⇒ 一次把**全 workspace**
+      #   的测试产物都编出来（31 个 crate ⇒ 数百个测试二进制；Linux 上每个含调试信息
+      #   ~300MB）⇒ ⇒ 单 runner 的空间根本装不下 ⇒ ⇒ 磁盘爆（上面那条 annotation）。
+      #   ⇒ ⇒ 改为：**只预编译「声明实际用到」的那几个 crate 的库**
+      #   ⇒ ⇒ ⇒ 测试产物（真正的大头）由各条 claim 的 verify_cmd **按需**生成
+      #   ⇒ ⇒ ⇒ ⇒ 只生成**用得到**的那几十个 ⇒ ⇒ 磁盘降到 1/5 以下。
+      #   ⇒ ⇒ ⇒ ⇒ **不降低任何验证强度**：声明要跑什么测试，仍然原样跑什么测试。
+      - name: 预构建（只编声明真正用到的测试产物）
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > /tmp/claim_prebuild.txt
+          import json, re, pathlib, subprocess
+          txt = pathlib.Path('docs/status/claims.yaml').read_text(encoding='utf-8')
+          meta = json.loads(subprocess.check_output(
+              ['cargo', 'metadata', '--no-deps', '--format-version', '1'],
+              text=True, encoding='utf-8'))
+          names = {p['name'] for p in meta['packages']}
+          cmds = re.findall(r'verify_cmd:\s*"([^"]+)"', txt)
+          seen = []
+          for c in cmds:
+              for part in c.split('&&'):
+                  if 'cargo test' not in part:
+                      continue
+                  if 'src-tauri' in part:
+                      continue          # 独立 workspace ⇒ 另有专门的预构建步
+                  m = re.search(r'-p\s+([A-Za-z0-9_-]+)', part)
+                  if not m:
+                      continue          # 无 -p ⇒ 不是根 workspace 的 crate
+                  pkg = m.group(1)
+                  if pkg not in names:
+                      continue          # 非根 workspace 的包（另有预构建步）
+                  tests = re.findall(r'--test\s+([A-Za-z0-9_-]+)', part)
+                  if tests:
+                      sel = ' '.join('--test ' + t for t in tests)
+                  elif '--lib' in part:
+                      sel = '--lib'
+                  else:
+                      sel = ''         # 过滤器式 ⇒ cargo 会编该包的**全部**测试目标
+                  key = (pkg, sel)
+                  if key not in seen:
+                      seen.append(key)
+          if not seen:
+              print('::error::claims.yaml 里没解析出任何可预构建的测试目标', file=__import__('sys').stderr)
+              raise SystemExit(1)
+          # 整包预构建已覆盖该包的具体测试目标 ⇒ 去重（少跑几轮 cargo，快）
+          whole = {pkg for pkg, sel in seen if sel == ''}
+          for pkg, sel in seen:
+              if pkg in whole and sel != '':
+                  continue
+              print(f'cargo test -p {pkg} {sel} --no-run --locked'.rstrip())
+          PY
+          echo "--- 预构建命令（$(wc -l < /tmp/claim_prebuild.txt) 条）---"
+          cat /tmp/claim_prebuild.txt
+          while IFS= read -r line; do
+              [ -z "$line" ] && continue
+              echo "::group::预构建 $line"
+              eval "$line"
+              echo "::endgroup::"
+          done < /tmp/claim_prebuild.txt
 
       # `src-tauri` 是**独立 [workspace]**（不能落到根 workspace）⇒ 单独预构建。
       # ⚠️ **不用 `--all-targets`**（2026-11-05 修正）：它会额外构建 bench / example
@@ -127,6 +226,18 @@ jobs:
       # 的声明**不许**靠「豁免 / 延后」成立 ⇒ 否则「已接线」只是个词。
       - name: 高口径声明必须真验（H5）
         run: python3 scripts/check_claims_verify.py --wired-gate
+
+      # nextest 启动前会先跑 `cargo metadata --format-version 1 --all-features ...`；
+      # 而两条 nextest 声明（rt.system_one_internal / mem.failure_learning_bridge）的
+      # verify_cmd 带 `--offline` ⇒ ⇒ 该 metadata 调用必须能在**离线**状态下解析整仓依赖图
+      # ⇒ ⇒ 但上面的预构建只取「声明真正用到的测试产物」⇒ 整仓（含可选依赖）的 manifest
+      #      并未全部落进本地 registry 缓存 ⇒ ⇒ 离线 metadata 失败：
+      #      error: command `cargo metadata --format-version=1 --all-features ...` failed
+      #      （nextest 退出码 102）
+      # 修法：先用联网的一次 metadata 把整仓全特性依赖图预热进本地缓存（只下 manifest，不编译）
+      #      ⇒ 声明语义不变（仍带 --offline）⇒ ⇒ 不降低任何验证强度。
+      - name: 预热全特性依赖缓存（nextest 的 cargo metadata --all-features 需要）
+        run: cargo metadata --format-version 1 --all-features --locked > /dev/null
 
       - name: 跑每条 claim 的 verify_cmd
         run: python3 scripts/check_claims_verify.py --check --timeout 600
