@@ -26,8 +26,8 @@
   - `crates/foundation/core/src/onion.rs`
   - `crates/foundation/core/src/philosophy.rs`
 - **哲学锚**：**9** 条（`docs/01-architecture/philosophy.md`）
-- **workflow**：**49** 个（`.github/workflows/*.yml`）
-- **crate**：**29** 个（`crates/*/Cargo.toml`）
+- **workflow**：**50** 个（`.github/workflows/*.yml`）
+- **crate**：**30** 个（`crates/*/Cargo.toml`）
 - **门禁登记表**：`docs/architecture/contract.toml` 的 `[ci_gates]`（共 **44** 条 · required **42** 条）
   - 本地可跑（`37` 条）：`docs-truth` · `doc-class` · `yaml-duplicate-keys` · `matrix-module-paths` · `doc-caliber` · `doc-numbers` · `doc-paths` · `docs-links` · `batch-status` · `claims-verify` · `arch-strict` · `arch-doc` · `crate-budget` · `dead-code` · `unwired` · `unwired-groups` · `stale-binaries` · `mod-targets` · `guard-wiring` · `quality-metrics` · `golden-baseline` · `real-query-baseline` · `real-query-baseline-self-test` · `golden-no-leak` · `internal-golden` · `d4-ledger` · `wiring-report` · `verify-ledger` · `failure-knowledge` · `guard-inventory` · `toolchain-pin` · `gate-manifest` · `self-status-vocab` · `memory-reachability` · `memory-reachability-self-test` · `harness-status-self-test` · `fusion-channels`
   - 完整清单与命令：**不要在这里复制**，改看契约 `[ci_gates]`（`scripts/harness.py plan` 会按变更范围列出该跑哪几条）
