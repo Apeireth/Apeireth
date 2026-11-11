@@ -15,7 +15,9 @@ use std::time::Duration;
 
 use apeireth_core::kernel::CapabilityId;
 use apeireth_plugin::ToolCapability;
-use apeireth_protocol::canonical::{NormalizedTool, ToolCall, ToolParameters, ToolResult};
+use apeireth_protocol::canonical::{
+    NormalizedTool, ToolCall, ToolOutcome, ToolParameters, ToolResult,
+};
 use async_trait::async_trait;
 use serde_json::{json, Value};
 use thiserror::Error;
@@ -1801,10 +1803,42 @@ pub fn external_tool_set(config: &ExternalToolsConfig) -> Vec<Arc<dyn ToolCapabi
     ]
 }
 
+/// 调一次外部工具，遇到 Linux 的 ETXTBSY 瞬态错误就退避重试。
+///
+/// Linux 的 `execve` 有一道内核闸门：只要还有进程持有该文件的**写** fd，
+/// `execve` 就返回 `ETXTBSY`(os error 26)。本模块的用例把 fake 工具脚本
+/// 写完立刻 exec，而 Rust 测试把多个用例分在不同线程上跑 —— 线程 A 写脚本
+/// 期间，线程 B fork 出子进程（Linux 后端走 `pre_exec`，即 fork+exec，子进程
+/// 会继承父进程的 fd），子进程在自身 exec 之前短暂持有 A 的写 fd，于是 A 的
+/// `execve` 偶发 ETXTBSY。与 Go golang/go#22315、内核 `__fput` 竞态同源。
+///
+/// 这个错误是**瞬态**的：那个子进程 exec/exit 之后写 fd 即释放。所以这里做
+/// 有界退避重试，且只认 ETXTBSY 这一个具体错误 —— 真实失败（缺依赖、权限
+/// 不足、非零退出）不会被重试掩盖成通过。
+///
+/// 本函数是**文件级共享**的：凡是「先写脚本、再 exec」的用例都要走它，
+/// 否则同一个竞态会在别的测试模块里以别的名字复发。
+#[cfg(all(test, unix))]
+async fn invoke_with_etxtbsy_retry(tool: &dyn ToolCapability, call: &ToolCall) -> ToolResult {
+    const ATTEMPTS: usize = 5;
+    let mut attempt = 0usize;
+    loop {
+        let result = tool.invoke(call).await;
+        let transient = matches!(
+            &result.outcome,
+            ToolOutcome::Error { message, .. } if message.contains("Text file busy")
+        );
+        if !transient || attempt + 1 >= ATTEMPTS {
+            return result;
+        }
+        attempt += 1;
+        tokio::time::sleep(Duration::from_millis(20 * attempt as u64)).await;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use apeireth_protocol::canonical::ToolOutcome;
     use std::io::Write;
 
     fn temp_workspace(tag: &str) -> PathBuf {
@@ -1829,36 +1863,6 @@ mod tests {
             .expect("write fake");
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).expect("chmod");
         path
-    }
-
-    /// 调一次外部工具，遇到 Linux 的 ETXTBSY 瞬态错误就退避重试。
-    ///
-    /// Linux 的 `execve` 有一道内核闸门：只要还有进程持有该文件的**写** fd，
-    /// `execve` 就返回 `ETXTBSY`(os error 26)。本模块的用例把 fake 工具脚本
-    /// 写完立刻 exec，而 Rust 测试把多个用例分在不同线程上跑 —— 线程 A 写脚本
-    /// 期间，线程 B fork 出子进程（Linux 后端走 `pre_exec`，即 fork+exec，子进程
-    /// 会继承父进程的 fd），子进程在自身 exec 之前短暂持有 A 的写 fd，于是 A 的
-    /// `execve` 偶发 ETXTBSY。与 Go golang/go#22315、内核 `__fput` 竞态同源。
-    ///
-    /// 这个错误是**瞬态**的：那个子进程 exec/exit 之后写 fd 即释放。所以这里做
-    /// 有界退避重试，且只认 ETXTBSY 这一个具体错误 —— 真实失败（缺依赖、权限
-    /// 不足、非零退出）不会被重试掩盖成通过。
-    #[cfg(unix)]
-    async fn invoke_with_etxtbsy_retry(tool: &dyn ToolCapability, call: &ToolCall) -> ToolResult {
-        const ATTEMPTS: usize = 5;
-        let mut attempt = 0usize;
-        loop {
-            let result = tool.invoke(call).await;
-            let transient = matches!(
-                &result.outcome,
-                ToolOutcome::Error { message, .. } if message.contains("Text file busy")
-            );
-            if !transient || attempt + 1 >= ATTEMPTS {
-                return result;
-            }
-            attempt += 1;
-            tokio::time::sleep(Duration::from_millis(20 * attempt as u64)).await;
-        }
     }
 
     fn local_scope() -> Arc<Scope> {
@@ -2065,7 +2069,6 @@ JSON"#,
 #[cfg(all(test, unix))]
 mod real_tool_tests {
     use super::*;
-    use apeireth_protocol::canonical::ToolOutcome;
 
     #[tokio::test]
     async fn real_exiftool_reads_metadata() {
@@ -2106,7 +2109,6 @@ mod real_tool_tests {
 #[cfg(test)]
 mod yara_cli_tests {
     use super::*;
-    use apeireth_protocol::canonical::ToolOutcome;
 
     fn dir(tag: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
@@ -2142,14 +2144,12 @@ mod yara_cli_tests {
         std::fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o755)).expect("chmod");
         std::fs::write(workspace.join("target.bin"), b"hello").expect("target");
         let tool = YaraCliTool::new(&workspace).with_binary(&binary);
-        let value = ok_value(
-            tool.invoke(&ToolCall {
-                id: "c".into(),
-                name: "ext.yara".into(),
-                arguments: json!({"path": "target.bin", "rules": "rule demo { condition: true }"}),
-            })
-            .await,
-        );
+        let call = ToolCall {
+            id: "c".into(),
+            name: "ext.yara".into(),
+            arguments: json!({"path": "target.bin", "rules": "rule demo { condition: true }"}),
+        };
+        let value = ok_value(invoke_with_etxtbsy_retry(&tool, &call).await);
         assert_eq!(value["details"]["matches"][0], "demo");
         std::fs::remove_dir_all(&workspace).ok();
     }
@@ -2187,7 +2187,6 @@ mod yara_cli_tests {
 #[cfg(test)]
 mod binwalk_radare_tests {
     use super::*;
-    use apeireth_protocol::canonical::ToolOutcome;
     use std::io::Write;
 
     fn dir(tag: &str) -> PathBuf {
@@ -2232,14 +2231,12 @@ mod binwalk_radare_tests {
         );
         std::fs::write(workspace.join("sample.bin"), b"data").expect("sample");
         let tool = BinwalkTool::new(&workspace).with_binary(binary);
-        let value = ok_value(
-            tool.invoke(&ToolCall {
-                id: "c".into(),
-                name: "ext.binwalk".into(),
-                arguments: json!({"path": "sample.bin"}),
-            })
-            .await,
-        );
+        let call = ToolCall {
+            id: "c".into(),
+            name: "ext.binwalk".into(),
+            arguments: json!({"path": "sample.bin"}),
+        };
+        let value = ok_value(invoke_with_etxtbsy_retry(&tool, &call).await);
         assert_eq!(value["details"]["entries"][0]["offset"], 0);
         assert_eq!(
             value["details"]["entries"].as_array().map(Vec::len),
@@ -2259,14 +2256,12 @@ mod binwalk_radare_tests {
         );
         std::fs::write(workspace.join("sample.bin"), b"data").expect("sample");
         let tool = RadareTool::new(&workspace).with_binary(binary);
-        let value = ok_value(
-            tool.invoke(&ToolCall {
-                id: "c".into(),
-                name: "ext.radare2".into(),
-                arguments: json!({"path": "sample.bin"}),
-            })
-            .await,
-        );
+        let call = ToolCall {
+            id: "c".into(),
+            name: "ext.radare2".into(),
+            arguments: json!({"path": "sample.bin"}),
+        };
+        let value = ok_value(invoke_with_etxtbsy_retry(&tool, &call).await);
         assert_eq!(value["details"]["functions"], 1);
         assert_eq!(value["details"]["names"][0]["name"], "sym.main");
         std::fs::remove_dir_all(&workspace).ok();
@@ -2304,7 +2299,6 @@ mod binwalk_radare_tests {
 #[cfg(test)]
 mod android_adapter_tests {
     use super::*;
-    use apeireth_protocol::canonical::ToolOutcome;
     use std::io::Write;
 
     fn dir(tag: &str) -> PathBuf {
@@ -2349,14 +2343,12 @@ mod android_adapter_tests {
         );
         std::fs::write(workspace.join("app.apk"), b"fake").expect("apk");
         let tool = JadxTool::new(&workspace).with_binary(binary);
-        let value = ok_value(
-            tool.invoke(&ToolCall {
-                id: "c".into(),
-                name: "ext.jadx".into(),
-                arguments: json!({"path": "app.apk"}),
-            })
-            .await,
-        );
+        let call = ToolCall {
+            id: "c".into(),
+            name: "ext.jadx".into(),
+            arguments: json!({"path": "app.apk"}),
+        };
+        let value = ok_value(invoke_with_etxtbsy_retry(&tool, &call).await);
         assert!(value["details"]["classes"]
             .as_array()
             .expect("classes")
@@ -2379,14 +2371,12 @@ mod android_adapter_tests {
         );
         std::fs::write(workspace.join("app.apk"), b"fake").expect("apk");
         let tool = ApktoolTool::new(&workspace).with_binary(binary);
-        let value = ok_value(
-            tool.invoke(&ToolCall {
-                id: "c".into(),
-                name: "ext.apktool".into(),
-                arguments: json!({"path": "app.apk"}),
-            })
-            .await,
-        );
+        let call = ToolCall {
+            id: "c".into(),
+            name: "ext.apktool".into(),
+            arguments: json!({"path": "app.apk"}),
+        };
+        let value = ok_value(invoke_with_etxtbsy_retry(&tool, &call).await);
         assert_eq!(value["details"]["package"], "com.example.app");
         assert_eq!(
             value["details"]["permissions"][0],
@@ -2400,7 +2390,6 @@ mod android_adapter_tests {
 #[cfg(test)]
 mod ghidra_adapter_tests {
     use super::*;
-    use apeireth_protocol::canonical::ToolOutcome;
     use std::io::Write;
 
     fn dir(tag: &str) -> PathBuf {
@@ -2438,14 +2427,12 @@ mod ghidra_adapter_tests {
         std::fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o755)).expect("chmod");
         std::fs::write(workspace.join("sample.bin"), b"data").expect("sample");
         let tool = GhidraTool::new(&workspace).with_binary(binary);
-        let value = ok_value(
-            tool.invoke(&ToolCall {
-                id: "c".into(),
-                name: "ext.ghidra".into(),
-                arguments: json!({"path": "sample.bin"}),
-            })
-            .await,
-        );
+        let call = ToolCall {
+            id: "c".into(),
+            name: "ext.ghidra".into(),
+            arguments: json!({"path": "sample.bin"}),
+        };
+        let value = ok_value(invoke_with_etxtbsy_retry(&tool, &call).await);
         assert_eq!(value["details"]["functions"], 2);
         assert_eq!(value["details"]["sample"][0]["name"], "main");
         std::fs::remove_dir_all(&workspace).ok();
@@ -2471,7 +2458,6 @@ mod ghidra_adapter_tests {
 #[cfg(test)]
 mod openssl_syn_tests {
     use super::*;
-    use apeireth_protocol::canonical::ToolOutcome;
     use std::io::Write;
 
     fn dir(tag: &str) -> PathBuf {
@@ -2625,14 +2611,12 @@ MIIB
 EOF"#,
         );
         let tool = OpenSslTool::new(scope_localhost()).with_binary(binary);
-        let value = ok_value(
-            tool.invoke(&ToolCall {
-                id: "c".into(),
-                name: "ext.openssl".into(),
-                arguments: json!({"host": "127.0.0.1", "port": 443}),
-            })
-            .await,
-        );
+        let call = ToolCall {
+            id: "c".into(),
+            name: "ext.openssl".into(),
+            arguments: json!({"host": "127.0.0.1", "port": 443}),
+        };
+        let value = ok_value(invoke_with_etxtbsy_retry(&tool, &call).await);
         assert_eq!(value["details"]["certificates"], 2);
         assert_eq!(value["details"]["chain"][0]["subject"], "CN = example.com");
         assert_eq!(
@@ -2657,13 +2641,12 @@ XML"#,
         );
         let arg_file = PathBuf::from(format!("{}.args", binary.display()));
         let tool = NmapTool::new(scope_localhost()).with_binary(&binary);
-        let result = tool
-            .invoke(&ToolCall {
-                id: "c".into(),
-                name: "ext.nmap".into(),
-                arguments: json!({"target": "127.0.0.1", "syn": true}),
-            })
-            .await;
+        let call = ToolCall {
+            id: "c".into(),
+            name: "ext.nmap".into(),
+            arguments: json!({"target": "127.0.0.1", "syn": true}),
+        };
+        let result = invoke_with_etxtbsy_retry(&tool, &call).await;
         assert!(result.is_ok(), "{result:?}");
         let args = std::fs::read_to_string(&arg_file).expect("arg file");
         assert!(args.contains("-sS"), "args: {args}");
