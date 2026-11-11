@@ -58,7 +58,7 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
 name = "apeireth-core"
-version = "2.0.0-rc.4"
+version = "2.0.0-rc.5"
 dependencies = [
  "anyhow",
  "chrono",
@@ -73,7 +73,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-credentials"
-version = "2.0.0-rc.4"
+version = "2.0.0-rc.5"
 dependencies = [
  "apeireth-core",
  "apeireth-governance",
@@ -92,7 +92,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-gateway"
-version = "2.0.0-rc.4"
+version = "2.0.0-rc.5"
 dependencies = [
  "apeireth-core",
  "apeireth-governance",
@@ -120,7 +120,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-governance"
-version = "2.0.0-rc.4"
+version = "2.0.0-rc.5"
 dependencies = [
  "apeireth-core",
  "async-trait",
@@ -133,7 +133,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-guard"
-version = "2.0.0-rc.4"
+version = "2.0.0-rc.5"
 dependencies = [
  "apeireth-core",
  "apeireth-governance",
@@ -149,7 +149,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-image-algo"
-version = "2.0.0-rc.4"
+version = "2.0.0-rc.5"
 dependencies = [
  "apeireth-image-color",
  "apeireth-image-geom",
@@ -161,14 +161,14 @@ dependencies = [
 
 [[package]]
 name = "apeireth-image-cms"
-version = "2.0.0-rc.4"
+version = "2.0.0-rc.5"
 dependencies = [
  "rayon",
 ]
 
 [[package]]
 name = "apeireth-image-codecs"
-version = "2.0.0-rc.4"
+version = "2.0.0-rc.5"
 dependencies = [
  "exr",
  "flate2",
@@ -187,7 +187,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-image-color"
-version = "2.0.0-rc.4"
+version = "2.0.0-rc.5"
 dependencies = [
  "apeireth-image-cms",
  "serde",
@@ -195,7 +195,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-image-compose"
-version = "2.0.0-rc.4"
+version = "2.0.0-rc.5"
 dependencies = [
  "apeireth-image-color",
  "apeireth-image-doc",
@@ -207,7 +207,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-image-core"
-version = "2.0.0-rc.4"
+version = "2.0.0-rc.5"
 dependencies = [
  "apeireth-image-algo",
  "apeireth-image-cms",
@@ -224,7 +224,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-image-doc"
-version = "2.0.0-rc.4"
+version = "2.0.0-rc.5"
 dependencies = [
  "apeireth-image-color",
  "apeireth-image-geom",
@@ -235,14 +235,14 @@ dependencies = [
 
 [[package]]
 name = "apeireth-image-geom"
-version = "2.0.0-rc.4"
+version = "2.0.0-rc.5"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "apeireth-image-psd"
-version = "2.0.0-rc.4"
+version = "2.0.0-rc.5"
 dependencies = [
  "flate2",
  "thiserror 2.0.21",
@@ -250,7 +250,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-image-raster"
-version = "2.0.0-rc.4"
+version = "2.0.0-rc.5"
 dependencies = [
  "apeireth-image-color",
  "apeireth-image-geom",
@@ -259,7 +259,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-image-vector"
-version = "2.0.0-rc.4"
+version = "2.0.0-rc.5"
 dependencies = [
  "apeireth-image-color",
  "apeireth-image-doc",
@@ -288,7 +288,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-orchestration"
-version = "2.0.0-rc.4"
+version = "2.0.0-rc.5"
 dependencies = [
  "apeireth-core",
  "async-trait",
@@ -301,7 +301,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-plugin"
-version = "2.0.0-rc.4"
+version = "2.0.0-rc.5"
 dependencies = [
  "apeireth-core",
  "apeireth-orchestration",
@@ -315,7 +315,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-protocol"
-version = "2.0.0-rc.4"
+version = "2.0.0-rc.5"
 dependencies = [
  "apeireth-core",
  "async-trait",
@@ -326,7 +326,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-runtime"
-version = "2.0.0-rc.4"
+version = "2.0.0-rc.5"
 dependencies = [
  "apeireth-core",
  "apeireth-governance",
@@ -345,7 +345,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-sdk"
-version = "2.0.0-rc.4"
+version = "2.0.0-rc.5"
 dependencies = [
  "anyhow",
  "apeireth-protocol",
@@ -363,7 +363,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-tools-canonical"
-version = "2.0.0-rc.4"
+version = "2.0.0-rc.5"
 dependencies = [
  "apeireth-core",
  "apeireth-governance",
