@@ -474,6 +474,7 @@ def unwired_memory_modules() -> list[str]:
         [sys.executable, str(AUDIT)],
         capture_output=True,
         text=True,
+        encoding="utf-8",
         cwd=str(ROOT),
         timeout=600,
     )
@@ -669,6 +670,7 @@ if "--gen" in sys.argv or "--update" in sys.argv:
             ],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             timeout=300,
             check=False,
         )
