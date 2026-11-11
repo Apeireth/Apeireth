@@ -1,15 +1,15 @@
 # 贡献指南 (Apeireth v2 工程线)
 
-> Apeireth 是我们的伙伴型 AGI 操作系统。贡献前请先读哲学——[docs/01-architecture/philosophy.md](docs/01-architecture/philosophy.md)（9 锚 / 三洋葱 / 0 装 PASS）。
+> Apeireth 是开源免费的个人 AI 助手。使用求助、分享体验与提出建议，请先看 [社区入口与支持指南](SUPPORT.md)；无需先读工程文档或编写代码。下文的架构、构建与提交要求面向参与源码开发的贡献者。
 
 **欢迎！** 无论你是修一个错别字、报一个 Bug，还是推进一个大特性，都是这个项目的建设者。第一次贡献请走 [新人上手指南](docs/02-guides/first-contribution.md)（15 分钟读完，从 good-first-issue 到第一个 PR 合并的完整动线）。
 
 参与本社区即表示你同意遵守 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)（行为准则）；角色、决策与争议解决见 [GOVERNANCE.md](GOVERNANCE.md)（治理章程）。
 
-## 必读
+## 源码开发前必读
 
 - [docs/01-architecture/philosophy.md](docs/01-architecture/philosophy.md) — 哲学（9 锚 / 三洋葱 / 0 装 PASS）
-- [docs/01-architecture/architecture.md](docs/01-architecture/architecture.md) — 架构总览（workspace = 30 members：29 crates + bench harness 分组；2026-10-20 R4b 归档后）
+- [docs/01-architecture/architecture.md](docs/01-architecture/architecture.md) — 架构总览（成员与分组以当前 Cargo.toml 和 crates 索引为准）
 - [docs/01-architecture/security.md](docs/01-architecture/security.md) — 安全模型
 - [docs/03-reference/crates.md](docs/03-reference/crates.md) — crates 索引
 - [docs/04-internal/design-intent.md](docs/04-internal/design-intent.md) — 设计意图与我们拍板历史
@@ -19,11 +19,13 @@
 - [docs/04-internal/kani-verification-playbook.md](docs/04-internal/kani-verification-playbook.md) — Kani 形式化验证实战手册（14 坑 + 配方检查单 + 本地环境）
 - [docs/04-internal/ops-network-playbook.md](docs/04-internal/ops-network-playbook.md) — 运维与网络排障（代理/下载/WSL/shell 陷阱）
 
-## 提交前必跑
+## 源码提交前必跑
+
+代码变更按以下门禁及 [AGENTS.md](AGENTS.md) 的当前规则验证。仅文档或社区表单改动，先按 [快速反馈门禁](docs/02-guides/fast-feedback-gate.md) 运行受影响的文档、链接与 YAML 检查，如实记录未运行的测试。
 
 ```bash
 cargo check --workspace --all-targets   # 编译全 target 干净（含 examples/bins/tests）
-cargo test --workspace                  # 全量测试 0 失败（当前 workspace 30 members；全量门禁走 scripts/gate_full.ps1，基线见 docs/03-reference/test-baseline.md）
+cargo test --workspace                  # 全量测试 0 失败（全量门禁走 scripts/gate_full.ps1，基线见 docs/03-reference/test-baseline.md）
 cargo fmt --all --check                 # 格式
 ```
 
@@ -46,22 +48,23 @@ cargo fmt --all --check                 # 格式
 - 开发在独立分支 → 全量验证 → PR 合入 main
 - 禁止直接 force-push 共享分支（历史净化等特殊操作除外，需我们确认）
 
-## Issue 分诊规则（我们对你的承诺）
+## Issue 分诊规则（响应目标）
+
+以下为维护者的工作目标，不是全天候服务或修复期限保证。若无法按目标回复，应尽量在原帖说明排队情况；功能是否接受、何时实现需另行评估。
 
 | 类型 | 标签 | 首次响应（工作日） |
 |---|---|---|
 | Bug 报告 | `bug` | ≤ 3 天内分诊（确认/需复现/非问题） |
 | 功能请求 | `enhancement` | ≤ 7 天内给出接受/暂缓/拒绝 + 理由 |
 | 新人任务 | `good-first-issue` | 有人认领后 ≤ 3 天内给出上手指引 |
-| 1.0 blocker | `1.0-blocker` | ≤ 1 天内分诊 |
 
-- **分诊必有结论**：不接受"无人回应"超过上述时限；若我们暂时没空，也会先回一句"已看到，排队中"。
+- **分诊应有结论**：确认、补充信息、暂缓或不做都说明理由；普通使用问答去 [Q&A](https://github.com/Apeireth/Apeireth/discussions/categories/q-a)，尚未成形的建议去 [Ideas](https://github.com/Apeireth/Apeireth/discussions/categories/ideas)。
 - 认领制：在 Issue 下留言"认领"并获确认后开干，避免撞车；`good-first-issue` 可直接认领。
 - 标签体系与运营纪律详见 [docs/development/community-ops.md](docs/development/community-ops.md)。
 
-## PR Review 规范（也是承诺）
+## PR Review 规范
 
-- **首次响应** ≤ 3 个工作日（工作日口径见 [docs/development/community-ops.md](docs/development/community-ops.md)）；
+- **首次响应目标** ≤ 3 个工作日（工作日口径见 [docs/development/community-ops.md](docs/development/community-ops.md)）；
 - Review 对事不对人，意见必须给出"为什么"或替代方案（见 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)）；
 - 合并门槛：CI 全绿（`cargo check --workspace --all-targets` + `cargo test --workspace` + `cargo fmt --all --check`）+ 至少 1 名 Reviewer/Maintainer 批准；**重大变更**按 [GOVERNANCE.md](GOVERNANCE.md) 走 RFC；
 - 超时升级：PR 首次响应超时 5 个工作日仍未获 review，可在 PR 里 @chuling 升级——**不允许无声黑洞**。

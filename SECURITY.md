@@ -2,20 +2,21 @@
 
 ## 报告安全问题 (Report a security issue)
 
-Apeireth 团队欢迎安全报告，并承诺及时处理安全问题。
+Apeireth 团队欢迎负责任的安全报告。请使用 **[GitHub 私密漏洞报告](https://github.com/Apeireth/Apeireth/security/advisories/new)**（需要 GitHub 账号；2026-11-11 已核验仓库开启此功能）。
 
-**请联系**: apeireth-security@apeireth.org (private disclosure)
-**不要**通过公开 GitHub Issue tracker 报告安全问题。
+**不要**通过公开 Issue 或 Discussion 发布漏洞细节、可利用代码、密钥或私人数据。报告可包含受影响版本或 commit、运行环境、预期与实际行为、最小复现和可能影响；不确定的部分如实说明，附件先脱敏。
+
+旧邮箱 `apeireth-security@apeireth.org` 尚未启用，请勿向它发送报告。社区行为举报与申诉请私密联系 [yintasde@qq.com](mailto:yintasde@qq.com)，处理规则见 [行为准则](CODE_OF_CONDUCT.md#报告与申诉渠道)；产品安全漏洞仍优先使用上方 GitHub 私密漏洞报告。普通使用问题见 [SUPPORT.md](SUPPORT.md)。
 
 ## 漏洞协调 (Vulnerability coordination)
 
-漏洞修复由项目团队优先处理。我们通过 [GitHub Security Advisories](https://help.github.com/en/code-security/security-advisories/working-with-global-security-advisories-from-the-tooling-side) 协调修复，第三方利益相关方包括：
+漏洞修复由项目团队优先处理。我们通过仓库的私密 Security Advisory 对话协调修复；按需要、在限制披露范围的前提下邀请相关方参与，包括：
 
 - **漏洞报告者**（原始发现者）
 - **直接 / 间接受影响用户**（Apeireth 部署者）
 - **上游依赖维护者**（如 tokio / reqwest / serde_json / pyo3 等关键 crate）
 
-下游项目维护者 / Apeireth 用户可通过发送邮箱 + GitHub username + 相关背景信息到 apeireth-security@apeireth.org 申请参与漏洞协调。参与权限由 Apeireth 团队决定。
+报告者可在私密报告中补充受影响的下游项目及需要参与协调的 GitHub 账号。维护者核实后按需邀请协作者，不要求公开个人背景或额外敏感信息。
 
 ## 安全公告 (Security advisories)
 
@@ -23,13 +24,13 @@ Apeireth 团队承诺漏洞披露过程透明，通过以下渠道公告：
 
 - **GitHub Security Advisories**: <https://github.com/Apeireth/Apeireth/security/advisories>
 - **项目 Release Notes**: <https://github.com/Apeireth/Apeireth/releases>
-- **RustSec advisory database**: <https://github.com/RustSec/advisory-db> (即 `cargo-audit`)
+- **RustSec advisory database**: 对符合收录条件的 Rust 包漏洞，视情况向 <https://github.com/RustSec/advisory-db> 提交公告；不保证每项项目修复都会被收录。
 
 ## 适用范围 (Scope)
 
-以下组件被认为是"安全边界"，其漏洞属于本政策范围（当前 workspace = 30 members：29 crates + bench harness；2026-10-20 R4b 归档 `apeireth-perception` 后口径；历史 31 members 见 CHANGELOG）：
+以下组件被认为是"安全边界"，其漏洞属于本政策范围（组件与 workspace 成员以当前 `Cargo.toml` 及 [crates 索引](docs/03-reference/crates.md) 为准）：
 
-> **独立 workspace 备案（如实）**：另有**独立** Cargo workspace `crates-ui/`（**不计入**上面 30 members、与根 workspace 无依赖边），含 **1 个 crate** `apeireth-ui-core`（纯响应式内核，0 外部依赖）；范围 = IMPLEMENTED、**尚无生产前端消费点**（ADR-0021，owner 2026-10-29；自带独立 CI `ui-core-ci.yml`）⇒ **不在本政策上述安全边界范围内**（不随主产品构建/分发），此处仅作范围备案。
+> **独立 workspace 备案（如实）**：另有**独立** Cargo workspace `crates-ui/`（**不计入**根 workspace、与根 workspace 无依赖边），含 **1 个 crate** `apeireth-ui-core`（纯响应式内核，0 外部依赖）；范围 = IMPLEMENTED、**尚无生产前端消费点**（ADR-0021，owner 2026-10-29；自带独立 CI `ui-core-ci.yml`）⇒ **不在本政策上述安全边界范围内**（不随主产品构建/分发），此处仅作范围备案。
 
 - `apeireth-core`（`crates/foundation/core`）— 稳定域原语 + kernel（IDs/时间/生命周期/事件）；键集（现行 14 键）verdict cache 与洋葱/守门语义（v1 脊椎，接线状态见 ROADMAP P0/P2）
 - `apeireth-protocol`（`crates/foundation/protocol`）— 规范化协议 DTO 与 vendor wire 翻译（不含 HTTP client）
@@ -45,24 +46,21 @@ v1 时代的安全组件（`apeireth-sovereignty`、`apeireth-tool-approval`、`
 
 **不在范围**: 业务逻辑 bug (非安全), 性能问题, doc typo, 等等. 这些走普通 GitHub Issue.
 
-## 响应时间承诺 (Response time SLA)
+## 响应与优先级 (Response and priority)
 
-| 严重程度 | 首次响应 | 修复目标 |
-|---|---|---|
-| **Critical** (远程代码执行 / L0 HA bypass) | < 24 小时 | < 7 天 |
-| **High** (权限提升 / Self-Disable 绕过) | < 48 小时 | < 30 天 |
-| **Medium** (信息泄露 / DoS) | < 1 周 | < 90 天 |
-| **Low** (最佳实践违反 / 文档错误) | < 1 月 | 下一次 release |
+维护者会优先处理正在被利用、远程代码执行、权限绕过和敏感数据泄露等风险，并在私密报告中沟通确认结果、临时缓解方式和后续安排。当前尚无经过确认的全天候值守与固定修复 SLA，因此不承诺所有报告在 24/48 小时内响应或在固定天数内修复。
+
+未收到回复时，可在同一私密报告中补充提醒，避免将细节转贴到公开 Issue。是否接受报告、严重程度与修复范围由实际复现和影响评估决定，不因报告暂不完整而要求编造证据。
 
 ## 披露政策 (Disclosure policy)
 
-我们采用 **coordinated disclosure** (90 天默认窗口)：
+我们采用 **coordinated disclosure**（协调披露）：
 
-1. 收到报告 → 24h 内确认
-2. 私有修复 → 协调报告者验证
-3. CVE 申请 (如需) → 联系 MITRE
-4. 90 天后（或修复 ready 后） → 公开公告 + Release
-5. 安全更新通过 `cargo audit` 自动告警（已配 `.github/workflows/cargo-deny.yml`）
+1. 在私密报告中确认受影响版本、复现条件和风险。
+2. 讨论缓解措施、修复计划与披露时间；如有变化，继续向报告者说明。
+3. 私下修复并邀请报告者协助验证；需要时协调申请 CVE。
+4. 在约定时间发布公告、受影响版本、修复版本或缓解办法；致谢前征得报告者同意。
+5. `cargo audit` 等工具只检查其采用的漏洞数据库，不能替代关注项目公告，也不保证自动提示所有 Apeireth 安全更新。
 
 ## 参考业界 (References)
 
@@ -80,3 +78,5 @@ _Last updated_: 2026-10-18 (文档审计批：crate 口径更新为 workspace 31
 > 2026-10-18 当时的**历史口径**（R4b 归档 `apeireth-perception` 之前），已过期 ⇒
 > **现行 = 30 members（29 crates + bench harness）**，与本文「适用范围」段一致；
 > 历史口径不改写、只在此标注。实测：`cargo metadata --no-deps` = 30 包（29 产品 crate + `apeireth-bench-harness`）。
+
+> **2026-11-11 更新**：以上 2026-11-04 更正保留为历史记录，不再作为当前成员数量声明；现行成员清单以根 `Cargo.toml` 为准。本次更新核验私密漏洞入口，纠正未启用邮箱、响应目标与披露流程，不改变运行时安全边界。

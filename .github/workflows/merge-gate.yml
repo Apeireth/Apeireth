@@ -61,23 +61,11 @@ jobs:
         with:
           python-version: '3.12'
 
-      # ⚠️ 工具链必须**显式**装配（2026-11-11 实测修）：
-      # 本 job 之前**不装任何 toolchain** ⇒ 依赖 runner 环境自带状态 ⇒
-      # 仓根 rust-toolchain.toml 钉 1.97.1 + components(rustfmt/clippy/rust-src) ⇒
-      # 第一次调 cargo 时 rustup 会自动装 ⇒ 若 runner 上残留**半装的 1.97.1**
-      #   ⇒ rustup 报 'recovering from a partially installed toolchain' +
-      #     'failed to install component: clippy-preview…, detected conflict: bin/cargo-clippy'
-      #     ⇒ 回滚 ⇒ cargo 不可用 ⇒ **凡是调 cargo 的门禁全红**
-      #   ⇒ 实测红的是 arch-doc / wiring-report（两者的 output_tail 都是 'cargo metadata failed'）
-      #     而它们的内容与被测 PR 无关（纯生成物漂移检查）⇒ 红了也看不出是环境问题。
-      # 修法：按 rust-toolchain.toml 的 channel+components+profile **显式装齐**
-      #       （--force 清掉半装残留）⇒ 之后 cargo 是确定可用的；
-      #       并打印版本自证 ⇒ 后续门禁若红，能一眼区分「环境没装好」与「内容漂移」。
+      # 每次使用 RUNNER_TEMP 下的新目录，避免 runner 共享工具链的半装残留。
+      # channel / profile / components 只读根 rust-toolchain.toml；保留原 CARGO_HOME 代理。
+      # --force 允许缺少可下载组件，不负责清理文件冲突，因此这里不使用它。
       - name: Provision pinned toolchain (deterministic)
-        run: |
-          rustup toolchain install 1.97.1 --profile minimal --component rustfmt --component clippy --component rust-src --force
-          rustup default 1.97.1
-          rustc --version && cargo --version && cargo clippy --version
+        run: python scripts/provision_ci_toolchain.py
 
       # ⚠️ `setup-python` 装的解释器**不带 PyYAML**（系统 python3 有，它没有）
       # ⇒ ⇒ 任何 `import yaml` 的门禁在 CI 上**必然退出码 2**
