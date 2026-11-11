@@ -30,6 +30,7 @@
 from __future__ import annotations
 
 import re
+import subprocess
 import sys
 import tomllib
 from pathlib import Path
@@ -53,6 +54,28 @@ ALLOWED_FLOATING = {"nightly"}
 FORBIDDEN_FLOATING = {"stable", "beta"}
 
 REF_PATTERN = re.compile(r"dtolnay/rust-toolchain@([A-Za-z0-9._-]+)")
+SHELL_TOOLCHAIN_PATTERN = re.compile(
+    r"(?m)^\s*rustup\s+(?:toolchain\s+install|default)\s+([A-Za-z0-9._-]+)"
+)
+
+
+def check_merge_gate_provisioning() -> list[str]:
+    """Require the CI-only provisioner and exercise its isolated-install behavior."""
+    workflow = ROOT / ".github/workflows/merge-gate.yml"
+    text = workflow.read_text(encoding="utf-8")
+    calls = list(re.finditer(
+        r"(?m)^\s*run:\s*python3? scripts/provision_ci_toolchain\.py\s*$", text
+    ))
+    if len(calls) != 1 or calls[0].start() > text.find("run: python3 scripts/check_guard_inventory.py"):
+        return ["merge-gate.yml: 在门禁之前必须调用一次隔离工具链装配入口"]
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "scripts/test_provision_ci_toolchain.py")],
+        cwd=ROOT, capture_output=True, text=True, timeout=30, check=False,
+    )
+    if result.returncode:
+        return ["工具链装配行为自检失败:\n" + result.stdout + result.stderr]
+    print("OK: CI 工具链装配行为自检（隔离目录、唯一钉版、完整组件、失败不导出）")
+    return []
 
 
 def declared_channel() -> str:
@@ -74,7 +97,7 @@ def declared_channel() -> str:
 
 def main() -> int:
     channel = declared_channel()
-    problems: list[str] = []
+    problems: list[str] = check_merge_gate_provisioning()
     pinned = 0
     floating = 0
     nightly = 0
@@ -99,6 +122,14 @@ def main() -> int:
                 problems.append(
                     f"{where}: 版本 `@{ref}` 与 `rust-toolchain.toml` 的"
                     f" `channel = \"{channel}\"` **不一致**"
+                )
+        shell_installs = SHELL_TOOLCHAIN_PATTERN.finditer(text) if path.name == "merge-gate.yml" else []
+        for match in shell_installs:
+            ref = match.group(1)
+            if ref not in ALLOWED_FLOATING and ref != channel:
+                line = text[: match.start()].count("\n") + 1
+                problems.append(
+                    f"{path.relative_to(ROOT)}:{line}: shell 工具链 `{ref}` 与根钉版 `{channel}` 不一致"
                 )
 
     if problems:

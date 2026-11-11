@@ -445,7 +445,7 @@
     {
       "id": "check-golden-baseline",
       "path": "scripts/check_golden_baseline.py",
-      "kind": "guard",
+      "kind": "ratchet",
       "is_guard": true,
       "blocking": true,
       "invocation": [
@@ -456,7 +456,13 @@
       ],
       "has_baseline": true,
       "notes": "内部卷检索基线闸门 —— 把「准确度不许掉」落成机器门禁",
-      "flags": []
+      "flags": [
+        "--check",
+        "--help",
+        "--update",
+        "--version-note",
+        "-h"
+      ]
     },
     {
       "id": "check-golden-no-leak",
@@ -644,6 +650,7 @@
         "--check",
         "--help",
         "--update",
+        "--version-note",
         "-h"
       ]
     },
@@ -1006,6 +1013,25 @@
       "has_baseline": false,
       "notes": "R20 阶段 6 — 1.0 release 8 项不修改承诺审计",
       "flags": []
+    },
+    {
+      "id": "provision-ci-toolchain",
+      "path": "scripts/provision_ci_toolchain.py",
+      "kind": "generator",
+      "is_guard": false,
+      "blocking": true,
+      "invocation": [
+        "python scripts/provision_ci_toolchain.py"
+      ],
+      "ci_workflows": [
+        ".github/workflows/merge-gate.yml"
+      ],
+      "has_baseline": false,
+      "notes": "Provision the merge gate's isolated CI toolchain from rust-toolchain.toml.",
+      "flags": [
+        "--help",
+        "-h"
+      ]
     },
     {
       "id": "release-1-0-checklist",
