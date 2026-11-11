@@ -11,6 +11,7 @@
 | 分享使用体验、作品或方法 | [体验分享 · Show and tell](https://github.com/Apeireth/Apeireth/discussions/categories/show-and-tell) |
 | 遇到错误或异常行为 | [报告问题](https://github.com/Apeireth/Apeireth/issues/new?template=bug_report.yml) |
 | 提交目标明确、希望跟踪处理的功能请求 | [功能建议](https://github.com/Apeireth/Apeireth/issues/new?template=feature_request.yml) |
+| 发现错字、失效链接、说明不清或文档与行为不符 | [文档与文案反馈](https://github.com/Apeireth/Apeireth/issues/new?template=documentation.yml) |
 | 查看版本、平台要求和可用安装文件 | [版本发布页](https://github.com/Apeireth/Apeireth/releases) |
 | 修改代码、文档或素材 | [贡献指南](CONTRIBUTING.md) |
 | 发现产品安全漏洞 | [私密报告](https://github.com/Apeireth/Apeireth/security/advisories/new) · [安全政策](SECURITY.md) |

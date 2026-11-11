@@ -9,6 +9,7 @@ body:
       value: |
         你的使用场景比技术方案更重要：不需要了解内部模块，也不需要指定实现方式或发布时间。
         已有具体需求，可以填写下面的表单；想先交流灵感，欢迎到 [Ideas 讨论](https://github.com/Apeireth/Apeireth/discussions/categories/ideas)。提交前可以[搜索已有建议](https://github.com/Apeireth/Apeireth/issues?q=is%3Aissue%20label%3Aenhancement)。
+        请在上方标题的 `[FEATURE]` 后补一句想达成的目标，例如“支持将选中的资料整理为会议提纲”。
 
         **这里的内容会公开。** 请勿提交 API Key、密码、令牌、完整配置、私人对话或他人的个人信息；示例与截图请先去除敏感内容。
         疑似安全漏洞请使用[私密漏洞报告](https://github.com/Apeireth/Apeireth/security/advisories/new)。社区举报或申诉请查看[行为准则](https://github.com/Apeireth/Apeireth/blob/main/CODE_OF_CONDUCT.md)。

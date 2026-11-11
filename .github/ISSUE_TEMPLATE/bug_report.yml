@@ -9,6 +9,7 @@ body:
       value: |
         谢谢你帮助改进 Apeireth。用自己的话描述即可，不需要了解内部架构或编译命令。
         可以先[搜索已有反馈](https://github.com/Apeireth/Apeireth/issues)；不确定如何使用时，欢迎到 [Q&A 提问](https://github.com/Apeireth/Apeireth/discussions/categories/q-a)。
+        文档错字、说明不清或失效链接请使用[文档反馈](https://github.com/Apeireth/Apeireth/issues/new?template=documentation.yml)。请在上方标题的 `[BUG]` 后补一句具体问题，例如“导出文稿时提示路径不存在”。
 
         **这里的内容会公开。** 请勿提交 API Key、密码、令牌、完整配置、私人对话或他人的个人信息；截图和日志请先遮盖或删除敏感内容。
         疑似安全漏洞请改用[私密漏洞报告](https://github.com/Apeireth/Apeireth/security/advisories/new)。社区举报或申诉请查看[行为准则](https://github.com/Apeireth/Apeireth/blob/main/CODE_OF_CONDUCT.md)。
@@ -16,9 +17,9 @@ body:
   - type: input
     id: version
     attributes:
-      label: Apeireth 版本
-      description: 填写你看到的版本号；找不到可写“不清楚”，并说明从哪里获取。自行构建可附提交号（选填）。
-      placeholder: 版本号 / 下载来源或运行方式
+      label: 版本或页面来源
+      description: 软件请填版本号与获取来源；官网或原型请填页面名称或不含私密参数的链接。找不到版本可写“不清楚”；自行构建可附提交号（选填）。
+      placeholder: 版本号与来源 / 官网或原型页面名称
     validations:
       required: true
 
@@ -26,8 +27,8 @@ body:
     id: environment
     attributes:
       label: 设备与使用环境
-      description: 系统及版本、使用入口（如命令行、API 或界面）；涉及浏览器时可补充浏览器名称。不需要设备序列号。
-      placeholder: 例如：Windows 11，命令行；或 macOS，API 调用
+      description: 系统及版本、使用入口（命令行、API、历史桌面包、官网或设计原型）；网页问题请补充浏览器名称。不需要设备序列号。
+      placeholder: 例如：Windows 11，官网，Edge；或 macOS，API 调用
     validations:
       required: true
 
