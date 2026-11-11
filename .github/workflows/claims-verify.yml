@@ -227,5 +227,17 @@ jobs:
       - name: 高口径声明必须真验（H5）
         run: python3 scripts/check_claims_verify.py --wired-gate
 
+      # nextest 启动前会先跑 `cargo metadata --format-version 1 --all-features ...`；
+      # 而两条 nextest 声明（rt.system_one_internal / mem.failure_learning_bridge）的
+      # verify_cmd 带 `--offline` ⇒ ⇒ 该 metadata 调用必须能在**离线**状态下解析整仓依赖图
+      # ⇒ ⇒ 但上面的预构建只取「声明真正用到的测试产物」⇒ 整仓（含可选依赖）的 manifest
+      #      并未全部落进本地 registry 缓存 ⇒ ⇒ 离线 metadata 失败：
+      #      error: command `cargo metadata --format-version=1 --all-features ...` failed
+      #      （nextest 退出码 102）
+      # 修法：先用联网的一次 metadata 把整仓全特性依赖图预热进本地缓存（只下 manifest，不编译）
+      #      ⇒ 声明语义不变（仍带 --offline）⇒ ⇒ 不降低任何验证强度。
+      - name: 预热全特性依赖缓存（nextest 的 cargo metadata --all-features 需要）
+        run: cargo metadata --format-version 1 --all-features --locked > /dev/null
+
       - name: 跑每条 claim 的 verify_cmd
         run: python3 scripts/check_claims_verify.py --check --timeout 600
