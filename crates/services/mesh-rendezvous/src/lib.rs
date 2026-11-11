@@ -12,7 +12,7 @@
 //! # What this is not
 //!
 //! Not a peer, not a trust authority, not an execution host. It holds no
-//! [`NodeId`](apeireth_mesh_protocol::NodeId)-scoped plugin, no capability, no
+//! [`NodeId`]-scoped plugin, no capability, no
 //! plugin ownership, no `KnownPeer` trust. Nodes A and B trust *each other*;
 //! neither trusts this server. It can lie about presence, drop traffic, or
 //! reorder frames — but without a node's private key it cannot impersonate a

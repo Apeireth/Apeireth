@@ -438,7 +438,7 @@ impl AeadKey {
         // Checked increment: overflow ⇒ close/rekey, never wrap (nonce reuse).
         let seq = self
             .send_seq
-            .fetch_update(
+            .try_update(
                 std::sync::atomic::Ordering::SeqCst,
                 std::sync::atomic::Ordering::SeqCst,
                 |v| v.checked_add(1),
