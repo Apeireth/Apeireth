@@ -15,6 +15,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 
 from utf8_stdout import force_utf8_stdout
 
@@ -22,7 +23,7 @@ DOMAINS = ("azure.archive.ubuntu.com", "archive.ubuntu.com", "security.ubuntu.co
 FALLBACK_DNS = ("1.1.1.1", "8.8.8.8")
 
 
-def provision(environ: dict[str, str], run=subprocess.run) -> None:
+def provision(environ: dict[str, str], run=subprocess.run, pause=time.sleep) -> None:
     if environ.get("GITHUB_ACTIONS") != "true" or environ.get("RUNNER_OS") != "Linux":
         raise ValueError("CI only: GITHUB_ACTIONS=true and RUNNER_OS=Linux are required")
 
@@ -38,7 +39,7 @@ def provision(environ: dict[str, str], run=subprocess.run) -> None:
             try:
                 result = command(["getent", "ahostsv4", domain], timeout=5, check=False)
             except subprocess.TimeoutExpired:
-                failed.append(domain)
+                failed.append(f"{domain} (timeout after 5s)")
                 continue
             addresses = [line.split()[0] for line in result.stdout.splitlines() if line.split()]
             valid = False
@@ -48,8 +49,10 @@ def provision(environ: dict[str, str], run=subprocess.run) -> None:
                     valid = True
                 except ipaddress.AddressValueError:
                     continue
-            if result.returncode or not valid:
-                failed.append(domain)
+            if result.returncode:
+                failed.append(f"{domain} (exit {result.returncode})")
+            elif not valid:
+                failed.append(f"{domain} (no IPv4)")
         if failed:
             print("DNS preflight failed: " + ", ".join(failed))
         return not failed
@@ -81,8 +84,12 @@ def provision(environ: dict[str, str], run=subprocess.run) -> None:
         command(["sudo", "-n", "resolvectl", "domain", interface, "~ubuntu.com"])
         command(["sudo", "-n", "resolvectl", "default-route", interface, "yes"])
         command(["sudo", "-n", "resolvectl", "flush-caches"])
-        if not probe():
-            raise ValueError("temporary CI DNS recovery failed; system dependencies remain unverified")
+        for attempt in range(3):
+            if probe():
+                break
+            if attempt == 2:
+                raise ValueError("temporary CI DNS recovery failed; system dependencies remain unverified")
+            pause(1)
     except (OSError, ValueError, subprocess.SubprocessError):
         if recovery_attempted:
             try:
