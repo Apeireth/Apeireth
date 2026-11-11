@@ -357,6 +357,15 @@ struct Rig {
 
 /// Build connected A (scripted provider + port) and B (echo module) runtimes.
 async fn rig(tool_name: &str, hook_a: Arc<CountingHook>, hook_b: Arc<CountingHook>) -> Rig {
+    rig_with_plan_mode(tool_name, hook_a, hook_b, false).await
+}
+
+async fn rig_with_plan_mode(
+    tool_name: &str,
+    hook_a: Arc<CountingHook>,
+    hook_b: Arc<CountingHook>,
+    plan_mode_enabled: bool,
+) -> Rig {
     let runs_b = Arc::new(AtomicUsize::new(0));
     let runtime_b = Arc::new(
         Runtime::builder()
@@ -379,6 +388,7 @@ async fn rig(tool_name: &str, hook_a: Arc<CountingHook>, hook_b: Arc<CountingHoo
         Runtime::builder()
             .with_plugin(provider_module)
             .with_governance(hook_a.clone())
+            .with_plan_mode_enabled(plan_mode_enabled)
             .build()
             .await
             .unwrap(),
@@ -708,6 +718,83 @@ async fn remote_scope_explicit_grant_preserves_governed_execution() {
     assert_eq!(rig.runs_b.load(Ordering::SeqCst), 1);
     assert_eq!(rig.hook_a.dispatch_count(), 1);
     assert_eq!(rig.hook_b.dispatch_count(), 1);
+}
+
+#[tokio::test]
+async fn remote_control_name_keeps_only_the_registered_local_control() {
+    use apeireth_runtime::canonical::plan_mode_control::{
+        plan_mode_exit_declaration, PLAN_MODE_EXIT_TOOL_NAME,
+    };
+    let rig = rig_with_plan_mode(
+        PLAN_MODE_EXIT_TOOL_NAME,
+        CountingHook::allowing(ECHO_CAP),
+        CountingHook::allowing(ECHO_CAP),
+        true,
+    )
+    .await;
+    let session = SessionId::new();
+    rig.runtime_a
+        .tool_dispatcher()
+        .set_scope(session, ToolScope::All);
+    for catalog in [
+        rig.runtime_a.tool_declarations(),
+        rig.runtime_a.tool_declarations_for_session(session),
+    ] {
+        let matching: Vec<_> = catalog
+            .into_iter()
+            .filter(|tool| tool.name == PLAN_MODE_EXIT_TOOL_NAME)
+            .collect();
+        assert_eq!(matching, vec![plan_mode_exit_declaration()]);
+    }
+    rig.runtime_a
+        .execute_outcome(TurnRequest::new(session, "hi").with_model("fake-model-1"))
+        .await
+        .unwrap()
+        .completed()
+        .unwrap();
+    assert_eq!(rig.invoke_sends.load(Ordering::SeqCst), 0);
+    assert_eq!(rig.runs_b.load(Ordering::SeqCst), 0);
+    assert_eq!(rig.hook_a.dispatch_count(), 0);
+    assert_eq!(rig.hook_b.dispatch_count(), 0);
+}
+
+#[tokio::test]
+async fn remote_control_name_cannot_widen_the_local_control_scope() {
+    use apeireth_runtime::canonical::plan_mode_control::PLAN_MODE_EXIT_TOOL_NAME;
+    let rig = rig_with_plan_mode(
+        PLAN_MODE_EXIT_TOOL_NAME,
+        CountingHook::allowing(ECHO_CAP),
+        CountingHook::allowing(ECHO_CAP),
+        true,
+    )
+    .await;
+    let session = SessionId::new();
+    rig.runtime_a.tool_dispatcher().set_scope(
+        session,
+        ToolScope::Only(BTreeSet::from([CapabilityId::new(ECHO_CAP).unwrap()])),
+    );
+    assert!(rig
+        .runtime_a
+        .tool_declarations_for_session(session)
+        .is_empty());
+    rig.runtime_a
+        .execute_outcome(TurnRequest::new(session, "hi").with_model("fake-model-1"))
+        .await
+        .unwrap()
+        .completed()
+        .unwrap();
+    assert_eq!(rig.invoke_sends.load(Ordering::SeqCst), 0);
+    assert_eq!(rig.runs_b.load(Ordering::SeqCst), 0);
+    assert_eq!(rig.hook_a.dispatch_count(), 0);
+    assert_eq!(rig.hook_b.dispatch_count(), 0);
+    let captured = rig.captured_a.lock().unwrap();
+    assert!(captured.iter().all(|request| request.tools.is_empty()));
+    let message = captured[1].messages.last().unwrap();
+    assert_eq!(message.tool_call_id.as_deref(), Some("call_1"));
+    let text = apeireth_protocol::canonical::ContentPart::join_text(&message.content);
+    let error: DispatchFailure =
+        serde_json::from_str(text.strip_prefix("error: ").unwrap()).unwrap();
+    assert_eq!(error.code, DispatchErrorCode::ScopeDenied);
 }
 
 // ---------------------------------------------------------------------------

@@ -605,14 +605,8 @@ impl Runtime {
     /// Rebuild the ephemeral name -> target routing table from the two
     /// read-only views. Derived per query; nothing is cached.
     ///
-    /// Local candidates come from the capability registry, which already holds
-    /// every active plugin tool (the runtime merges the plugin index into
-    /// that registry at build time), so the local leg is the model-facing
-    /// local surface exactly once - the plugin index is not walked a second
-    /// time, which would list every plugin tool twice. Remote candidates
-    /// come from the capability port. The resident `exit_plan_mode` control
-    /// is deliberately not routed here: it is a runtime-owned state request
-    /// intercepted before dispatch.
+    /// Registry tools and current peer projections are routing candidates.
+    /// Registered control names stay local: peer adverts cannot shadow them.
     pub(super) fn tool_route_table(&self) -> super::tool_route::ToolRouteTable {
         use super::tool_route::LocalToolView;
         let local: Vec<LocalToolView> = self
@@ -633,7 +627,14 @@ impl Runtime {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .as_ref()
             .map(|port| port.remote_tools())
-            .unwrap_or_default();
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|tool| {
+                self.capabilities
+                    .find_control_by_name(&tool.declaration.name)
+                    .is_none()
+            })
+            .collect();
         super::tool_route::ToolRouteTable::derive(local, remote)
     }
 

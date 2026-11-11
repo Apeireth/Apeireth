@@ -376,7 +376,7 @@ size crates/engine/runtime-assembly/src/canonical/retrieval_tuning_wire.rs 1336
 size crates/engine/runtime-assembly/src/canonical/self_status_source.rs 2064
 size crates/engine/runtime-assembly/src/canonical/tool_modules.rs 1395
 size crates/engine/runtime/src/canonical/execute.rs 4905
-size crates/engine/runtime/src/canonical/runtime.rs 1332
+size crates/engine/runtime/src/canonical/runtime.rs 1331
 size crates/foundation/core/src/cost_router.rs 1399
 size crates/foundation/core/src/lib.rs 2483
 size crates/foundation/core/src/stored_doc.rs 1304

@@ -14,6 +14,8 @@ Author: Xephylos
 > 该线后来以 `feature/mesh-rc2-integration` 推到上游（PR #31），并在 #94（debt-round8）
 > 合入 main 之后 rebase 成新 PR。**冻结时点的结论（下面各节）未变**：
 > 打洞仍只在 Windows loopback 验过、真实 NAT 仍未测、自动传输编排仍未实现。
+> **2026-11-11 PR 收口**：当前权限修复、门禁结果与待办另见
+> [收口进度](../status/mesh-rc2-closeout-2026-11-11.md)。下方 Testing 数字仅属冻结时点，不能代替当前提交的结果。
 
 ## Transport
 
@@ -63,7 +65,8 @@ Author: Xephylos
 - Multi-peer caveat: a punch's accept half can pick up a connection from a
   different (already pinned) peer; the handshake then fails closed (an
   availability question, never a trust one).
-- The two baseline test failures above remain open and are not mesh-related.
+- The two failures above are historical freeze-run evidence; the current
+  workspace verdict is recorded on the closeout page.
 - The live mDNS multicast probe (`crates/engine/mesh/tests/mdns_smoke.rs`) cannot
   pass on a macOS runner as an unsigned process: Apple's Local Network Privacy
   (TN3179) blocks LAN multicast sends and only root processes are exempt. CI
@@ -89,7 +92,12 @@ Author: Xephylos
   （`PeerConnector::direct_then_relay` 机制在，生产装配不在）。
 - ❌ **生产网关发现未接线**：`connect_punched` 的首个调用方仍是测试夹具；
   生产拨号仍是 `maintain_connection` 静态 endpoint + 入站 `serve`。
-- ❌ **远端准入不经本地 scope 校验、远端审批路径失败关闭**：本阶段的有意取舍。
+- ❌ **远端审批恢复尚未支持**：远端调用没有可冻结的本地 effective invocation，仍失败关闭，不接受预批准绕过。
+
+## 权限与目录收口（2026-11-11）
+
+- **IMPLEMENTED**：远端目录与准入复用本地 dispatcher 的 capability scope，父子会话权限取交集；猜测工具名也不能绕过。
+- **IMPLEMENTED**：普通本地/远端同名从目录排除；已注册的 control 保留名不被远端投影占用；广告复用工具与模块契约的双可见性判断，隐藏/Internal 不对外投影。当前测试见收口页。
 
 ## 已决的架构债（本批次收口）
 

@@ -154,8 +154,8 @@ python3 scripts/gen_gate_manifest.py --gen
       `max_production_edges = 132` / `max_file_loc = 6300` / `[env] max_distinct_names = 154` 全部保持）
 - [x] `python3 scripts/check_crate_budget.py --check` / `gen_gate_manifest.py --check` / `arch_doc.py --check` 通过
 - [x] 契约条款更新（Status: Accepted）
-- [ ] 文档随行：`docs/status/mesh-rc2-status.md`「还差什么」中的 arch-strict 条目改为已决
-- [x] LOCKED 5 项 0 触碰 / 0 新外部 dep
+- [x] 文档随行：`docs/design/mesh-rc2-status.md` 的架构登记已列为已决；当前 PR 复验另见收口页
+- [x] 本 ADR 的契约登记改动：LOCKED 5 项 0 触碰 / 0 新外部 dep（不代表整个 Mesh 功能 PR 没有新增依赖）
 
 ## 7. 后果（Consequences）
 
