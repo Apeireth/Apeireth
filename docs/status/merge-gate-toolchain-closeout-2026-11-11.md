@@ -3,7 +3,7 @@
 [Document-Meta]
 Document: docs/status/merge-gate-toolchain-closeout-2026-11-11.md
 Class: STATUS
-Status: 🟡 本地行为核验通过，当前 head 远端验收待完成
+Status: 🟢 本地行为与真实 Linux 装配已核验；合并状态见 PR
 Last-Modified: 2026-11-11
 Author: Codex
 
@@ -19,7 +19,7 @@ PR #121 的合并裁决在独立的 CI 工具链目录中，按根 `rust-toolcha
 
 ## 进度与验收
 
-- 已将主干 `c8264db2` 合入独立工作树，无文本冲突，尚未提交。
+- 主干 `c8264db2` 已合入，收口提交为 `f0facab4dd8603fa40ea08d2d227e977659858cc`。
 - 装配脚本按根声明安装，验证 rustc 版本及完整组件后才向 `GITHUB_ENV` 导出
   隔离的 `RUSTUP_HOME` 和 `RUSTUP_TOOLCHAIN`。原 `CARGO_HOME` 与代理路径保留。
 - `python3 scripts/test_provision_ci_toolchain.py`：7 个行为用例通过，exit 0。
@@ -30,7 +30,8 @@ PR #121 的合并裁决在独立的 CI 工具链目录中，按根 `rust-toolcha
   每项均产生 `FAILED (failures=1)`；恢复后 `Ran 7 tests` / `OK`，反证脚本 exit 0。
   日志在施工机 `C:/Apeireth/logs/pr-closeout-20261111/pr121-negative-controls.log`，
   不作为仓库内可移植证据冒充远端 CI。
-- 未完成：当前最终 head 的远端 required checks 验收与合并；旧 head 的绿灯不能替代。
+- 真实 Linux 装配与当前树的合并裁决已通过：[run 43013692340](https://github.com/Apeireth/Apeireth/actions/runs/43013692340)。证据绑定该 PR 的合并树，与收口提交 tree 一致。
+- 未完成的验收条件：所有适用检查通过后普通合并；实时状态见 [PR #121](https://github.com/Apeireth/Apeireth/pull/121)，本页不缓存运行中的矩阵结论。
 - 不新增产品能力，不声明真实跨节点 E2E 或硬件验收。
 
 ## 审查中纠正的旧账
