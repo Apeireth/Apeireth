@@ -84,6 +84,16 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@1.97.1
 
+      # ⚠️ **cargo-nextest 必须装**（2026-11-11 加 · PR #117）：
+      # `docs/status/claims.yaml` 里有两条声明的 verify_cmd 直接调 `cargo nextest`
+      #   （`rt.system_one_internal` / `mem.failure_learning_bridge`）
+      # ⇒ ⇒ 本 job 原先**没装 nextest** ⇒ 那两条命令在 CI 上是
+      #    「command not found」⇒ exit ≠ 0 ⇒ ⇒ **假红**（不是声明内容问题）。
+      # ⇒ ⇒ 装法与 `rust.yml` 的 OS matrix 同源（`taiki-e/install-action@nextest`
+      #    = 预编译二进制，不占编译磁盘、不触发 rustup 组件下载）。
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@nextest
+
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: claims-verify

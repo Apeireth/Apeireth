@@ -4,7 +4,7 @@
 Document: docs/design/mesh-architecture.md
 Class: SPEC
 Status: 🟢 活跃
-Last-Modified: 2026-11-10
+Last-Modified: 2026-11-11
 Author: Jimmyxiao2009
 
 Status: living document. It records what the mesh guarantees today, the rules
@@ -308,6 +308,17 @@ bound and will not silently prefer one path.
   exist in the library).
 - **Per-peer inbound policy** beyond governance (for example "node X may call
   only tools") is not modelled; governance decides.
+- **The live mDNS multicast probe is not a cross-platform guarantee.** Apple's
+  Local Network Privacy (TN3179) blocks multicast sends from unsigned processes
+  on LAN interfaces, so `crates/engine/mesh/tests/mdns_smoke.rs` cannot observe
+  an advertisement unless the test binary runs as root - the exemption Apple
+  documents, and the workaround the upstream `mdns-sd` project itself uses on
+  `macos-15` (its own CI runs its multicast integration test through
+  `CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER: sudo -E`). The CI matrix therefore
+  runs that probe on macOS through `sudo -E`, and the semantic coverage - turning
+  a resolved mDNS record into a discovery hint - is pinned by deterministic unit
+  tests (`peer_from_record`) that run on every platform. Nothing here promises
+  that an arbitrary host observes a LAN peer.
 
 ## Known repository failures unrelated to the mesh
 

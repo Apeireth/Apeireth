@@ -4,7 +4,7 @@
 Document: docs/design/mesh-rc2-status.md
 Class: STATUS
 Status: 🟢 活跃
-Last-Modified: 2026-11-10
+Last-Modified: 2026-11-11
 Author: Xephylos
 
 > 冻结时点快照（2026-10-11）。权威现状以 [`mesh-architecture.md`](mesh-architecture.md)
@@ -64,6 +64,11 @@ Author: Xephylos
   different (already pinned) peer; the handshake then fails closed (an
   availability question, never a trust one).
 - The two baseline test failures above remain open and are not mesh-related.
+- The live mDNS multicast probe (`crates/engine/mesh/tests/mdns_smoke.rs`) cannot
+  pass on a macOS runner as an unsigned process: Apple's Local Network Privacy
+  (TN3179) blocks LAN multicast sends and only root processes are exempt. CI
+  runs that probe on macOS through `sudo -E`; the record-to-hint mapping is
+  covered by deterministic unit tests on every platform.
 
 ## Frozen classification
 

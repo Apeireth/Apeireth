@@ -124,30 +124,8 @@ impl DiscoveryBackend for MdnsDiscovery {
         tokio::spawn(async move {
             while let Ok(event) = receiver.recv_async().await {
                 if let ServiceEvent::ServiceResolved(info) = event {
-                    if info.get_hostname().starts_with(&service_name) {
+                    let Some(peer) = peer_from_record(&info, &service_name) else {
                         continue; // never list ourselves
-                    }
-                    let props = info.get_properties();
-                    let endpoint = format!(
-                        "{}:{}",
-                        info.get_addresses_v4()
-                            .iter()
-                            .next()
-                            .map(|addr| addr.to_string())
-                            .unwrap_or_default(),
-                        info.get_port()
-                    );
-                    let peer = DiscoveredPeer {
-                        node_hint: props
-                            .get_property_val_str("node")
-                            .and_then(|node| NodeId::new(node).ok()),
-                        endpoint,
-                        advertised_fingerprint: props
-                            .get_property_val_str("fp")
-                            .and_then(KeyFingerprint::of_hex),
-                        display_name: props.get_property_val_str("name").map(str::to_string),
-                        discovered_via: DiscoveryMethod::Mdns,
-                        last_seen_ms: 0,
                     };
                     if let Some(sink) = &sink {
                         sink(peer);
@@ -168,6 +146,39 @@ impl DiscoveryBackend for MdnsDiscovery {
     }
 }
 
+/// Map a resolved DNS-SD record into a discovery hint.
+///
+/// `None` means "this record is our own advertisement" — a node never lists
+/// itself. Hints only: a claimed [`NodeId`] or fingerprint proves nothing
+/// until the pairing ceremony runs.
+fn peer_from_record(info: &ServiceInfo, service_name: &str) -> Option<DiscoveredPeer> {
+    if info.get_hostname().starts_with(service_name) {
+        return None;
+    }
+    let props = info.get_properties();
+    let endpoint = format!(
+        "{}:{}",
+        info.get_addresses_v4()
+            .iter()
+            .next()
+            .map(|addr| addr.to_string())
+            .unwrap_or_default(),
+        info.get_port()
+    );
+    Some(DiscoveredPeer {
+        node_hint: props
+            .get_property_val_str("node")
+            .and_then(|node| NodeId::new(node).ok()),
+        endpoint,
+        advertised_fingerprint: props
+            .get_property_val_str("fp")
+            .and_then(KeyFingerprint::of_hex),
+        display_name: props.get_property_val_str("name").map(str::to_string),
+        discovered_via: DiscoveryMethod::Mdns,
+        last_seen_ms: 0,
+    })
+}
+
 fn split_endpoint(endpoint: &str) -> Result<(&str, u16), String> {
     let addr: SocketAddr = endpoint
         .parse()
@@ -178,4 +189,78 @@ fn split_endpoint(endpoint: &str) -> Result<(&str, u16), String> {
         None => return Err(format!("invalid endpoint {endpoint:?}")),
     };
     Ok((host, addr.port()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::net::{IpAddr, Ipv4Addr};
+
+    /// A DNS-SD record as the browser sees it: one address, one port, the TXT
+    /// hints the mesh advertises. Built with the real `mdns-sd` type so the
+    /// mapping is exercised against the library's own representation.
+    fn record(hostname: &str, ip: Ipv4Addr, port: u16, props: &[(&str, &str)]) -> ServiceInfo {
+        ServiceInfo::new(
+            MESH_SERVICE_TYPE,
+            "instance",
+            hostname,
+            IpAddr::V4(ip),
+            port,
+            props,
+        )
+        .expect("valid DNS-SD record")
+    }
+
+    #[test]
+    fn resolved_record_maps_to_a_discovery_hint() {
+        let fingerprint = KeyFingerprint::of_public_key(&[7u8; 32]);
+        let info = record(
+            "peer-b.local.",
+            Ipv4Addr::new(192, 168, 7, 9),
+            7443,
+            &[
+                ("ver", "1"),
+                ("node", "node-b"),
+                ("fp", fingerprint.as_str()),
+                ("name", "Apeireth node"),
+            ],
+        );
+
+        let peer = peer_from_record(&info, "peer-a").expect("a foreign record maps to a hint");
+
+        assert_eq!(peer.node_hint, Some(NodeId::new("node-b").unwrap()));
+        assert_eq!(peer.endpoint, "192.168.7.9:7443");
+        assert_eq!(peer.advertised_fingerprint, Some(fingerprint));
+        assert_eq!(peer.display_name.as_deref(), Some("Apeireth node"));
+        assert_eq!(peer.discovered_via, DiscoveryMethod::Mdns);
+    }
+
+    #[test]
+    fn own_advertisement_is_never_listed() {
+        let info = record(
+            "smoke-a.local.",
+            Ipv4Addr::new(127, 0, 0, 1),
+            7443,
+            &[("node", "node-a")],
+        );
+
+        assert!(peer_from_record(&info, "smoke-a").is_none());
+    }
+
+    #[test]
+    fn malformed_hints_degrade_instead_of_failing_the_observation() {
+        let info = record(
+            "peer-c.local.",
+            Ipv4Addr::new(10, 0, 0, 7),
+            1,
+            &[("node", "not a node id"), ("fp", "zz")],
+        );
+
+        let peer = peer_from_record(&info, "peer-a").expect("a record with bad hints still maps");
+
+        assert_eq!(peer.node_hint, None);
+        assert_eq!(peer.advertised_fingerprint, None);
+        assert_eq!(peer.display_name, None);
+        assert_eq!(peer.endpoint, "10.0.0.7:1");
+    }
 }
