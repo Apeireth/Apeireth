@@ -59,7 +59,7 @@ def head_tree_files() -> set[str]:
 
 def is_ignored(path: pathlib.Path) -> bool:
     result = subprocess.run(
-        ["git", "check-ignore", "-q", str(path.relative_to(ROOT))],
+        ["git", "check-ignore", "-q", path.relative_to(ROOT).as_posix()],
         cwd=ROOT,
         check=False,
     )
@@ -86,7 +86,7 @@ def main() -> int:
 
     # ② 工作区里有、但没进提交、且**不是**被 ignore 的 .py
     for path in sorted((ROOT / "scripts").glob("*.py")):
-        rel = str(path.relative_to(ROOT))
+        rel = path.relative_to(ROOT).as_posix()
         if rel in tracked:
             continue
         if is_ignored(path):

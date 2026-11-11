@@ -1,0 +1,8 @@
+# 本目录的对照驱动（`*.py`）必须入库。
+#
+# 主仓根 `.gitignore` 全局忽略 `*.py` ⇒ 设置页 harness 的 `.gitignore` 只放行了
+# `tools/*.py` ⇒ 本目录（`web/engine/character/`）的驱动会被一并忽略。
+#
+# ⇒ 本文件（**本面独占目录**内）把 `*.py` 重新放行：更深层的 `.gitignore`
+# 优先级更高 ⇒ 本目录的 `*.py` 入库。
+!*.py

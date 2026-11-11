@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="night">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>引擎侧 · 治理卷宗面 · 授权管理</title>
+    <!--
+      设计令牌层：**只读引用**生产前端的同一批 CSS（构建期复制到 public/design/）。
+      链接顺序与参考侧**完全一致** ⇒ 两侧的计算样式同源。
+    -->
+    <link rel="stylesheet" href="/design/tokens.css" />
+    <link rel="stylesheet" href="/design/base.css" />
+    <link rel="stylesheet" href="/design/essence.css" />
+    <link rel="stylesheet" href="/design/hud.css" />
+    <link rel="stylesheet" href="/design/motion.css" />
+    <link rel="stylesheet" href="/design/prose.css" />
+    <link rel="stylesheet" href="/design/shell.css" />
+    <!--
+      组件 scoped CSS：构建期从生产组件的 `<style>` 块抽取，并按组件
+      **作用域化**（作用域 class ⇒ 作用域锚 `:is(根, 根 *)`；见抽取脚本）。
+      每个 Tab **各自一页** ⇒ 四个 Tab 的同名 class（`.gov-card-title` 等）
+      不会互相覆盖。
+    -->
+    <link rel="stylesheet" href="/grants-tab.css" />
+    <link rel="stylesheet" href="/status-badge.css" />
+    <link rel="stylesheet" href="/empty-state.css" />
+    <link rel="stylesheet" href="/error-state.css" />
+    <link rel="stylesheet" href="/loading-state.css" />
+    <link rel="stylesheet" href="/gov-manifest-pending.css" />
+    <link rel="stylesheet" href="/gov-unsupported.css" />
+    <!-- 对照专用样式（两侧**逐字相同**地链入）：容器盒 + 相位冻结。 -->
+    <link rel="stylesheet" href="/governance-test.css" />
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>

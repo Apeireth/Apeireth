@@ -1,7 +1,7 @@
 //! # apeireth-ui-core — 响应式核心（信号 / 派生 / 依赖图 / 调度 / effect）
 //!
 //! 纯 Rust 响应式内核：**0 外部依赖**（含 0 依赖 web-sys）⇒ 永远能 native
-//! 单测，不需浏览器、不需 wasm target（ADR-0021 的纯逻辑验证范围）。
+//! 单测，不需浏览器、不需 wasm target（ADR-0015 §4 P1 验收门）。
 //!
 //! ## 职责边界（设计文档 §3.3.1）
 //! 只回答「**什么时候、哪些东西需要重新算**」，不回答「算出来之后放到哪」
@@ -79,7 +79,8 @@
 //!
 //! ⚠️ **诚实登记**：[`Runtime::new`] 仍是 `pub`（native 测试 / 独立运行时 /
 //! 既有 crate 的调用点不可改）⇒ ⇒ 「显式自建运行时」这条路径在**编译期**仍
-//! 可写出来。此抽取未包含 demo 宿主或其 ownership 扫描器；不能声称这些调用者已受该扫描保护。
+//! 可写出来 ⇒ ⇒ 它由 `crates-ui/apeireth-ui-demo/harness/scripts/
+//! check_runtime_ownership.py` 以**精确判据**守住（双保险）。
 //!
 //! ## 契约登记
 //! `docs/architecture/contract.toml` `[extension_points]`：
@@ -88,6 +89,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod arbitration;
 pub mod callback;
 pub mod component;
 pub mod derived;

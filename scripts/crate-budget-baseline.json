@@ -16,6 +16,10 @@
       "files": 16,
       "loc": 7925
     },
+    "crates/apeireth": {
+      "files": 1,
+      "loc": 77
+    },
     "crates/capabilities/tools": {
       "files": 131,
       "loc": 88419

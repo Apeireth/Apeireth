@@ -2,7 +2,14 @@
 # 生成: python scripts/arch_guard.py --update-baseline
 # 规则: 新指纹不在本文件 = 违规; 本文件中已消失的指纹 = 可缩表。
 
-# --- edge (111) ---
+# --- edge (118) ---
+edge apeireth -> apeireth-core
+edge apeireth -> apeireth-guard
+edge apeireth -> apeireth-memory
+edge apeireth -> apeireth-orchestration
+edge apeireth -> apeireth-protocol
+edge apeireth -> apeireth-runtime
+edge apeireth -> apeireth-tools-canonical
 edge apeireth-bench-harness -> apeireth-core
 edge apeireth-bench-harness -> apeireth-gateway
 edge apeireth-bench-harness -> apeireth-memory
@@ -118,7 +125,7 @@ edge apeireth-tui -> apeireth-credentials
 # --- devcycle (1) ---
 devcycle apeireth-memory,apeireth-orchestration,apeireth-plugin,apeireth-provider
 
-# --- env (160) ---
+# --- env (162) ---
 env APEIRETH_ANTHROPIC_
 env APEIRETH_ANTHROPIC_KEY
 env APEIRETH_ANTHROPIC_MODELS
@@ -198,6 +205,7 @@ env APEIRETH_ENABLE_PROACTIVE_RECALL
 env APEIRETH_ENABLE_PROPOSALS
 env APEIRETH_ENABLE_QUORUM_GATE
 env APEIRETH_ENABLE_RECON
+env APEIRETH_ENABLE_REFLECTION_QUEUE
 env APEIRETH_ENABLE_REFLEXION
 env APEIRETH_ENABLE_RETRIEVAL_TUNING
 env APEIRETH_ENABLE_SELF_TUNING
@@ -206,6 +214,7 @@ env APEIRETH_ENABLE_SHEET_OPS
 env APEIRETH_ENABLE_SHELL
 env APEIRETH_ENABLE_SKILL_DISTILL
 env APEIRETH_ENABLE_SKILL_SEARCH
+env APEIRETH_ENABLE_SYSTEM_ONE
 env APEIRETH_ENABLE_TASK_BOARD
 env APEIRETH_ENABLE_VOICE_SPEAK
 env APEIRETH_ENABLE_WORKTREE_APPLY
@@ -280,7 +289,7 @@ env APEIRETH_VOICE_INTERRUPT
 env APEIRETH_VOICE_QUIET_HOURS
 env APEIRETH_VOICE_SPEAK_SCOPE
 
-# --- size (81) ---
+# --- size (83) ---
 size crates/adapters/cli/src/care_heartbeat.rs 1621
 size crates/adapters/cli/src/gateway_panels.rs 1526
 size crates/adapters/cli/src/lib.rs 3774
@@ -330,6 +339,7 @@ size crates/engine/image/raster/src/lib.rs 1676
 size crates/engine/memory/src/coordinator.rs 2346
 size crates/engine/memory/src/golden_mining.rs 1352
 size crates/engine/memory/src/persona_layer.rs 1680
+size crates/engine/memory/src/reflexion.rs 1239
 size crates/engine/memory/src/research_derived_memory.rs 1211
 size crates/engine/memory/src/retrieval_pipeline.rs 1220
 size crates/engine/memory/src/retrieval_tuning.rs 1270
@@ -340,15 +350,16 @@ size crates/engine/organ/src/neuromodulation.rs 1608
 size crates/engine/organ/src/nociception.rs 1487
 size crates/engine/organ/src/prompt_assembly.rs 1492
 size crates/engine/organ/src/world_model.rs 1332
-size crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs 812
 size crates/engine/runtime-assembly/src/canonical/bio_tone.rs 1319
-size crates/engine/runtime-assembly/src/canonical/cognitive.rs 5201
+size crates/engine/runtime-assembly/src/canonical/cognitive.rs 5720
 size crates/engine/runtime-assembly/src/canonical/orchestrator.rs 2432
 size crates/engine/runtime-assembly/src/canonical/play_tools.rs 1412
 size crates/engine/runtime-assembly/src/canonical/production.rs 1896
+size crates/engine/runtime-assembly/src/canonical/retrieval_tuning_wire.rs 1336
 size crates/engine/runtime-assembly/src/canonical/self_status_source.rs 2064
 size crates/engine/runtime-assembly/src/canonical/tool_modules.rs 1395
 size crates/engine/runtime/src/canonical/execute.rs 4731
+size crates/engine/runtime/src/canonical/runtime.rs 1229
 size crates/foundation/core/src/cost_router.rs 1399
 size crates/foundation/core/src/lib.rs 2483
 size crates/foundation/core/src/stored_doc.rs 1304

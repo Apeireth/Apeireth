@@ -1,0 +1,87 @@
+{
+  "note": "治理卷宗面的抽取清单（**单一真源**）。抽取器 `scripts/extract-governance-assets.mjs` 按本文件机械派生 CSS 资产与图标几何。",
+  "out": "public",
+  "icons_out": "../../../apeireth-ui-kit/src/icons_governance.rs",
+  "components": [
+    {
+      "slug": "approvals-tab",
+      "path": "frontend/companion-desktop/src/lib/views/governance/ApprovalsTab.svelte",
+      "css": "approvals-tab.css",
+      "scope": ".gov-tab"
+    },
+    {
+      "slug": "grants-tab",
+      "path": "frontend/companion-desktop/src/lib/views/governance/GrantsTab.svelte",
+      "css": "grants-tab.css",
+      "scope": ".gov-tab"
+    },
+    {
+      "slug": "audit-tab",
+      "path": "frontend/companion-desktop/src/lib/views/governance/AuditTab.svelte",
+      "css": "audit-tab.css",
+      "scope": ".gov-tab"
+    },
+    {
+      "slug": "guard-tab",
+      "path": "frontend/companion-desktop/src/lib/views/governance/GuardTab.svelte",
+      "css": "guard-tab.css",
+      "scope": ".gov-tab"
+    },
+    {
+      "slug": "status-badge",
+      "path": "frontend/companion-desktop/src/lib/components/StatusBadge.svelte",
+      "css": "status-badge.css",
+      "scope": ".status-badge"
+    },
+    {
+      "slug": "empty-state",
+      "path": "frontend/companion-desktop/src/lib/components/EmptyState.svelte",
+      "css": "empty-state.css",
+      "scope": ".empty-state-wrap"
+    },
+    {
+      "slug": "error-state",
+      "path": "frontend/companion-desktop/src/lib/components/ErrorState.svelte",
+      "css": "error-state.css",
+      "scope": ".error-state-wrap"
+    },
+    {
+      "slug": "loading-state",
+      "path": "frontend/companion-desktop/src/lib/components/LoadingState.svelte",
+      "css": "loading-state.css",
+      "scope": ".loading-state-wrap"
+    },
+    {
+      "slug": "gov-manifest-pending",
+      "path": "frontend/companion-desktop/src/lib/views/governance/GovManifestPending.svelte",
+      "css": "gov-manifest-pending.css",
+      "scope": ".manifest-pending"
+    },
+    {
+      "slug": "gov-unsupported",
+      "path": "frontend/companion-desktop/src/lib/views/governance/GovUnsupported.svelte",
+      "css": "gov-unsupported.css",
+      "scope": ".gov-unsupported"
+    }
+  ],
+  "fixture": {
+    "src": "fixtures/governance-cases.json",
+    "out": "engine-host/src/fixture_generated.rs"
+  },
+  "icons": [
+    "inbox",
+    "rotate-ccw",
+    "radio",
+    "message-circle-more",
+    "scroll-text",
+    "clock",
+    "alert-circle",
+    "loader-2",
+    "shield-off",
+    "cloud-off",
+    "shield-alert",
+    "flask-conical",
+    "chevron-down",
+    "chevron-right"
+  ]
+}

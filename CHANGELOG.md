@@ -1,5 +1,11 @@
 # Changelog — Apeireth
 
+## [Unreleased] — 版本轴递进 2.0.0-rc.5（自研 UI 引擎线 · 门面 crate 登记 + crates-ui 发布化）
+
+- **版本轴**：根 `[workspace.package].version` 由 `2.0.0-rc.4` 递进到 `2.0.0-rc.5`（owner 2026-10-31 授权，见 `fe4ee5169` / `005b8ef73`）。
+- **本条内容**：自研 UI 引擎线的门面 crate `apeireth` 登记进架构契约（ADR-0019）；crates-ui 的 6 个库 crate 按 `2.0.0-rc.5` 上架；发行物口径与版本清扫同步（166 处 / 107 个文件；带日期的历史记录不追溯改写）。
+- **边界**：本条目只记**版本轴递进**这一事实（release authority 拍板证据），不含新能力声明；能力口径以 `docs/status/claims.yaml` 与 `docs/03-reference/test-baseline.md` 为准。
+
 ## [Unreleased] — Modular ALE / System One（2026-10-30，Partial）
 
 - **IMPLEMENTED / 默认 OFF**：显式 Host 的 Module public/private 契约、Memory 任务句柄、强制 Internal 监督与审计、typed 模块消息及固定回环 UDP Mesh worker。模型 Allow 不覆盖确定性权限；拒绝、不可用、超时或审计失败不执行受保护操作。

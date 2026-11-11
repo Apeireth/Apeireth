@@ -144,7 +144,7 @@
 
 - **已过时（🔴 缺 ~25 项清单）**：其中绝大多数已由 2026-10-06 / 2026-10-10 两条审计的复核与后续接线批次消化（详见 01 §1 §7.1/§7.2、01 §2 九项表）；原清单按「历史口径（2026-08-28）」读。
 - **已过时（规模口径）**：文中「17 crates」「86-crate v1」「~100 modules」等为当时口径；现值见 [AGENTS.md](../../../AGENTS.md) §3 与 [contract.toml](../../architecture/contract.toml)。
-- **已过时（release 估时）**：2027-Q3 / 6–9 月 / 11–13 周的推演已不适用 —— 今天版本号已到 `2.0.0-rc.4`（口径出处：根 `Cargo.toml` `[workspace.package] version`），架构波次推进到 Wave 5（`contract.toml` `current_wave = 5`）。
+- **已过时（release 估时）**：2027-Q3 / 6–9 月 / 11–13 周的推演已不适用 —— 今天版本号已到 `2.0.0-rc.5`（口径出处：根 `Cargo.toml` `[workspace.package] version`），架构波次推进到 Wave 5（`contract.toml` `current_wave = 5`）。
 - **仍成立（三条纪律）**：①「调研 ≠ 真实施」；②**调研 0 实测必须如实标**；③v1 `context.rs` / `context_rot.rs` 的 rot_score 重复实现属 v1 侧资产问题，仍需在回收时融合。
 - **仍成立（owner 决策位）**：education 物种化核心 spec、真 CAS 选型、派单 brief 模板等决策位在本审计中挂账，最终裁决未留痕于本文（未核实）。
 
@@ -166,7 +166,7 @@
 ### 现状复核（2026-10-23）
 
 - **已过时（成熟度矩阵整体）**：2026-08-28 的 REAL / PARTIAL 判定对象是 v1 `legacy/` 源码，而当时 v2 侧结论已被 2026-10-06 / 10-10 复核大量推翻（多数 v1 项 v2 已库级实现并陆续接线）。本表只能作「v1 资产清单」读，**不能**作今日能力判定。
-- **已过时（估时与 release 路径）**：12–14 周 / 6–9 月 / 2027-Q3 的推演已被后续批次消化（版本 `2.0.0-rc.4`，架构波次 Wave 5）。
+- **已过时（估时与 release 路径）**：12–14 周 / 6–9 月 / 2027-Q3 的推演已被后续批次消化（版本 `2.0.0-rc.5`，架构波次 Wave 5）。
 - **仍成立（方法论教训，本组最有价值的一条）**：**「R11 6 sub-agent 0 实测 1.0 真代码」是 O-5 失守**；任何「1.0 有 / 2.0 无」的断言都必须逐文件打开源码确认，不能凭名称级扫描 —— 这条直接催生了 2026-10-10 的 legacy 考古（01 §2）与 2026-10-06 的四审（01 §1 §7.2）。
 - **仍成立（owner 决策位）**：education 真 CAS 选型、confidence BetaBinomial trait、reflexion 3 trait 口接线 —— 三项在本审计挂「主代理亲做」，其落地口径见 [live-verification-ledger.md](../live-verification-ledger.md) 与活台账（未在本审计内留痕；本批未逐项核实 → 标「未核实」）。
 
@@ -228,7 +228,7 @@
 
 ### 现状复核（2026-10-23）
 
-- **已过时（基线数字）**：17 crates / 3120 passed / 13 ignored / version 2.0.0-rc.1 —— 今日版本 `2.0.0-rc.4`，规模口径见 [AGENTS.md](../../../AGENTS.md) §3，测试数字见 [test-baseline.md](../../03-reference/test-baseline.md)。
+- **已过时（基线数字）**：17 crates / 3120 passed / 13 ignored / version 2.0.0-rc.1 —— 今日版本 `2.0.0-rc.5`，规模口径见 [AGENTS.md](../../../AGENTS.md) §3，测试数字见 [test-baseline.md](../../03-reference/test-baseline.md)。
 - **已过时（哲学锚数）**：当时 9 锚 → 现在 [philosophy.md](../../01-architecture/philosophy.md) 标题为「The Nine Anchors」，且 O-1 描述已写「键集（现行 14 键）」（键集口径在 2026-10-11 后为 14 键，历史「13 键」为更早口径，见 ADR-0006）。
 - **仍成立（工序教训第 12 条）**：`GIT_AUTHOR_NAME` env var 漏设的失守与修法仍有效；同族纪律见 [CONSTRUCTION-DISCIPLINE.md](../backend-enhancement/CONSTRUCTION-DISCIPLINE.md) §二/§三。
 - **仍成立（0 触碰自查）**：LOCKED 5 项 0 触碰 + sub-agent 报告必亲验，是本组审计的通用做法。

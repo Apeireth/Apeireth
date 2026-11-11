@@ -1,0 +1,312 @@
+{
+  "batch": "状态条面（StatusBar + StatusBadge）",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "device_pixel_ratio": 1,
+  "timezone": "UTC",
+  "channel_threshold": 2,
+  "pixel_budget": 0.01,
+  "reference_page": "/reference/statusbar/index.html",
+  "engine_page": "/engine/statusbar/index.html",
+  "case_count": 6,
+  "t1_pixels": [
+    {
+      "case": 0,
+      "size_mismatch": false,
+      "different": 0,
+      "total": 53960,
+      "ratio": 0.0
+    },
+    {
+      "case": 1,
+      "size_mismatch": false,
+      "different": 0,
+      "total": 53960,
+      "ratio": 0.0
+    },
+    {
+      "case": 2,
+      "size_mismatch": false,
+      "different": 0,
+      "total": 53960,
+      "ratio": 0.0
+    },
+    {
+      "case": 3,
+      "size_mismatch": false,
+      "different": 0,
+      "total": 53960,
+      "ratio": 0.0
+    },
+    {
+      "case": 4,
+      "size_mismatch": false,
+      "different": 0,
+      "total": 53960,
+      "ratio": 0.0
+    },
+    {
+      "case": 5,
+      "size_mismatch": false,
+      "different": 0,
+      "total": 53960,
+      "ratio": 0.0
+    }
+  ],
+  "t2_dom": [
+    {
+      "case": 0,
+      "equal": true,
+      "diffs": []
+    },
+    {
+      "case": 1,
+      "equal": true,
+      "diffs": []
+    },
+    {
+      "case": 2,
+      "equal": true,
+      "diffs": []
+    },
+    {
+      "case": 3,
+      "equal": true,
+      "diffs": []
+    },
+    {
+      "case": 4,
+      "equal": true,
+      "diffs": []
+    },
+    {
+      "case": 5,
+      "equal": true,
+      "diffs": []
+    }
+  ],
+  "t2_dom_element_counts": [
+    {
+      "case": 0,
+      "reference": 7,
+      "engine": 7
+    },
+    {
+      "case": 1,
+      "reference": 7,
+      "engine": 7
+    },
+    {
+      "case": 2,
+      "reference": 8,
+      "engine": 8
+    },
+    {
+      "case": 3,
+      "reference": 8,
+      "engine": 8
+    },
+    {
+      "case": 4,
+      "reference": 8,
+      "engine": 8
+    },
+    {
+      "case": 5,
+      "reference": 7,
+      "engine": 7
+    }
+  ],
+  "t3_frames": {
+    "reference_frame_count": 12,
+    "engine_frame_count": 12,
+    "target_frame_count": 12,
+    "frames": [
+      {
+        "index": 0,
+        "size_mismatch": false,
+        "different": 335,
+        "total": 1296000,
+        "ratio": 0.00025848765432098764
+      },
+      {
+        "index": 1,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 1296000,
+        "ratio": 0.0
+      },
+      {
+        "index": 2,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 1296000,
+        "ratio": 0.0
+      },
+      {
+        "index": 3,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 1296000,
+        "ratio": 0.0
+      },
+      {
+        "index": 4,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 1296000,
+        "ratio": 0.0
+      },
+      {
+        "index": 5,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 1296000,
+        "ratio": 0.0
+      },
+      {
+        "index": 6,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 1296000,
+        "ratio": 0.0
+      },
+      {
+        "index": 7,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 1296000,
+        "ratio": 0.0
+      },
+      {
+        "index": 8,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 1296000,
+        "ratio": 0.0
+      },
+      {
+        "index": 9,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 1296000,
+        "ratio": 0.0
+      },
+      {
+        "index": 10,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 1296000,
+        "ratio": 0.0
+      },
+      {
+        "index": 11,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 1296000,
+        "ratio": 0.0
+      }
+    ],
+    "events": [
+      {
+        "side": "reference",
+        "frames": 12,
+        "events": {
+          "transitionrun": 1,
+          "transitionstart": 1,
+          "transitionend": 1,
+          "animationstart": 0,
+          "animationend": 0,
+          "animationcancel": 0
+        },
+        "box": {
+          "x": 0,
+          "y": 0,
+          "w": 760,
+          "h": 71.6875
+        }
+      },
+      {
+        "side": "engine",
+        "frames": 12,
+        "events": {
+          "transitionrun": 1,
+          "transitionstart": 1,
+          "transitionend": 1,
+          "animationstart": 0,
+          "animationend": 0,
+          "animationcancel": 0
+        },
+        "box": {
+          "x": 0,
+          "y": 0,
+          "w": 760,
+          "h": 71.6875
+        }
+      }
+    ],
+    "within_side_changed_pixels": {
+      "reference": [
+        384,
+        56,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "engine": [
+        374,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    }
+  },
+  "t4_click": [
+    {
+      "side": "reference",
+      "before": 0,
+      "after": 1,
+      "delta": 1
+    },
+    {
+      "side": "engine",
+      "before": 0,
+      "after": 1,
+      "delta": 1
+    }
+  ],
+  "notes": [
+    "T1/T3 的差异像素阈值：任一通道绝对差 > 2/255 即记「不同」。",
+    "T1 静态抓取时两侧**同时**停掉过渡 / 动画（`data-statusbar-static`）并把鼠标挪到容器外 ⇒ 画面只取决于渲染实现（可复现）。",
+    "T2 的归一化：剔除 Svelte 作用域 class 与注释锚点、class token 排序、属性键排序；**文本节点逐字保留**（不折叠空白、不裁剪）⇒ 比试点口径更严。",
+    "T3 是**实时**对照：悬停过渡（color 0.18s）在两侧各跑一次 ⇒ 两帧的采集耗时不同 ⇒ 相位会有偏移（采集侧的偏移，不是渲染差异）。",
+    "T4 是**行为**证据：点第 0 格 ⇒ 参考侧（Svelte 状态）与引擎侧（Rust 计数器）的回调计数都 +1 ⇒ 回调**真的**接上了。",
+    "环境：视口 1440×900、DPR 1、时区 UTC。"
+  ],
+  "checks": {
+    "t1_all_pixels_within_budget": true,
+    "t2_dom_identical": true,
+    "t2_dom_not_trivial": true,
+    "t3_enough_frames": true,
+    "t3_all_frames_within_budget": true,
+    "t3_transition_ran_on_both_sides": true,
+    "t3_captured_the_transition": true,
+    "t4_click_callback_fired_on_both_sides": true
+  },
+  "passed": true
+}

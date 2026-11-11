@@ -1,7 +1,7 @@
 # packaging/desktop/build-desktop-nsis.ps1
 # Builds and stages Tauri Desktop NSIS installer (setup.exe)
 param(
-    [string]$Version = "2.0.0-rc.4",
+    [string]$Version = "2.0.0-rc.5",
     [string]$Target = "x86_64-pc-windows-msvc"
 )
 

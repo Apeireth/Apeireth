@@ -1,0 +1,104 @@
+{
+  "_note": "T1 主题外观面板的固定数据。**swatch / accent / ink 逐字取自生产**（src/lib/theme.ts）⇒ 内联样式必须逐字一致（设计文档 §9.2 C3）。",
+  "_source": "frontend/companion-desktop/src/lib/theme.ts:13-108、132-152",
+  "themeCatalog": [
+    {
+      "id": "origin",
+      "label": "原初",
+      "desc": "默认 · DeepSeek 原生界面风 · 白底蓝标 · 零动画简洁高效",
+      "swatch": "radial-gradient(circle at 78% 22%, rgba(77, 107, 254, 0.9) 0%, rgba(77, 107, 254, 0) 34%), linear-gradient(180deg, #ffffff 0%, #f2f3f5 100%)"
+    },
+    {
+      "id": "noir",
+      "label": "纯黑",
+      "desc": "纯黑底 · 零装饰 · 高对比简洁",
+      "swatch": "radial-gradient(ellipse 120% 90% at 50% -10%, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0) 55%), #000000"
+    },
+    {
+      "id": "heritage-void",
+      "label": "遗产星空",
+      "desc": "静态星空山脉（旧前端遗图，主人供）",
+      "swatch": "url(/assets/themes/heritage-void-bg.png) center/cover"
+    },
+    {
+      "id": "essence",
+      "label": "Essence",
+      "desc": "星空山脉 · 浅色雾面",
+      "swatch": "linear-gradient(rgba(247, 245, 241, 0.45), rgba(247, 245, 241, 0.45)), url(/assets/themes/essence-bg.png) center/cover"
+    },
+    {
+      "id": "night",
+      "label": "深空舰桥",
+      "desc": "实时场景 · 金色存在",
+      "swatch": "radial-gradient(circle at 62% 55%, rgba(255, 210, 122, 0.85) 0%, rgba(255, 210, 122, 0.25) 7%, rgba(255, 210, 122, 0) 13%), radial-gradient(circle at 62% 55%, #000000 0%, #000000 10%, rgba(0, 0, 0, 0) 11%), radial-gradient(ellipse at 50% 30%, #1a1520 0%, #07070c 70%)"
+    },
+    {
+      "id": "starship",
+      "label": "星舰",
+      "desc": "科幻 HUD 档 · 深空黑底 · 发光数据",
+      "swatch": "radial-gradient(ellipse 90% 60% at 50% 118%, rgba(24, 84, 128, 0.5) 0%, rgba(4, 7, 13, 0) 62%), repeating-linear-gradient(0deg, rgba(87, 214, 255, 0.12) 0 1px, transparent 1px 14px), repeating-linear-gradient(90deg, rgba(87, 214, 255, 0.12) 0 1px, transparent 1px 14px), linear-gradient(180deg, #060d18 0%, #02060c 100%)"
+    },
+    {
+      "id": "day",
+      "label": "日光",
+      "desc": "明亮纸面 · 档案调",
+      "swatch": "radial-gradient(circle at 78% 16%, rgba(255, 236, 200, 0.95) 0%, rgba(255, 236, 200, 0) 34%), linear-gradient(180deg, #f9f7f2 0%, #ede8dc 100%)"
+    },
+    {
+      "id": "paper",
+      "label": "纸面",
+      "desc": "注册表档案 · 低饱和",
+      "swatch": "repeating-linear-gradient(180deg, rgba(20, 19, 22, 0.05) 0 1px, transparent 1px 9px), linear-gradient(180deg, #efede8 0%, #e2e0db 100%)"
+    },
+    {
+      "id": "ocean",
+      "label": "深海",
+      "desc": "深舱蓝调 · 工程感",
+      "swatch": "linear-gradient(205deg, rgba(110, 160, 195, 0.4) 0%, rgba(110, 160, 195, 0) 42%), linear-gradient(180deg, #1d2a33 0%, #050a0f 100%)"
+    },
+    {
+      "id": "forest",
+      "label": "林海",
+      "desc": "沉稳绿调 · 专注",
+      "swatch": "radial-gradient(circle at 30% 0%, rgba(127, 184, 148, 0.35) 0%, rgba(127, 184, 148, 0) 46%), linear-gradient(180deg, #1a2420 0%, #0a100e 100%)"
+    }
+  ],
+  "accentCatalog": [
+    {
+      "id": "presence-gold",
+      "label": "存在金（默认）",
+      "desc": "UI 高亮与他同色——金色纪律的默认态",
+      "accent": "#ffd27a",
+      "ink": "#1b1409"
+    },
+    {
+      "id": "deep-space",
+      "label": "深空蓝",
+      "desc": "舷窗远星色调 · 克制中性",
+      "accent": "#7d9cc0",
+      "ink": "#0b0d12"
+    },
+    {
+      "id": "sage",
+      "label": "雾原绿",
+      "desc": "清晨苔原色调 · 安静收敛",
+      "accent": "#7fb894",
+      "ink": "#0b0d12"
+    },
+    {
+      "id": "bone",
+      "label": "骨白",
+      "desc": "无彩色档案调 · 几乎隐形",
+      "accent": "#e6e2da",
+      "ink": "#1c1b1f"
+    }
+  ],
+  "state": {
+    "activeTheme": "origin",
+    "activeAccent": "presence-gold",
+    "customBg": false,
+    "customPreviewUrl": "",
+    "bgBusy": false,
+    "bgError": ""
+  }
+}

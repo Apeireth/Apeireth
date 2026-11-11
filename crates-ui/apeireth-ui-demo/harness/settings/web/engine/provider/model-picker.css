@@ -1,0 +1,131 @@
+
+  .model-picker {
+    position: relative;
+    display: inline-block;
+  }
+  .model-picker.disabled {
+    opacity: 0.55;
+  }
+  .model-picker .trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 12px;
+    border: 1px solid var(--line-strong);
+    background: var(--surface-2);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 13px;
+    cursor: pointer;
+    max-width: 320px;
+  }
+  .model-picker .trigger:hover:not(:disabled) {
+    border-color: var(--amber-line);
+  }
+  .model-picker .trigger.open {
+    border-color: var(--amber-line);
+  }
+  .model-picker .trigger:disabled {
+    cursor: default;
+  }
+  .model-picker .value {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--mono);
+  }
+  .model-picker .trigger .chevron {
+    display: inline-flex;
+    flex: none;
+    color: var(--muted);
+    transition: transform 0.15s ease;
+  }
+  .model-picker .trigger .chevron.rotated {
+    transform: rotate(180deg);
+  }
+  .model-picker .scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 210;
+  }
+  .model-picker .dropdown {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    z-index: 220;
+    min-width: 280px;
+    max-width: 420px;
+    padding: 6px;
+    background: var(--surface);
+    border: 1px solid var(--line-strong);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .model-picker .dropdown.up {
+    top: auto;
+    bottom: calc(100% + 8px);
+  }
+  .model-picker .search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    color: var(--faint);
+    margin-bottom: 2px;
+  }
+  .model-picker .search input {
+    flex: 1;
+    min-width: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: var(--text);
+    font-size: 12px;
+  }
+  .model-picker .option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    border: 0;
+    background: transparent;
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .model-picker .option:hover {
+    background: var(--surface-3);
+  }
+  .model-picker .option.current {
+    box-shadow: inset 2px 0 0 var(--amber);
+  }
+  .model-picker .model-id {
+    flex: none;
+    font-family: var(--mono);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .model-picker .owned-by {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--faint);
+    font-size: 11px;
+  }
+  .model-picker .empty {
+    padding: 10px 12px;
+    color: var(--faint);
+    font-size: 12px;
+    text-align: center;
+    line-height: 1.5;
+  }

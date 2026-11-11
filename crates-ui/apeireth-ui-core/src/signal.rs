@@ -122,6 +122,17 @@ impl<T> Signal<T> {
         self.id
     }
 
+    /// 这个信号与某个运行时的内部状态是否**同一个**（**指针身份**判定）。
+    ///
+    /// ## 用途
+    ///
+    /// 「信号属于哪个运行时」决定依赖边**能不能**建立 ⇒ ⇒ 跨运行时的信号
+    /// 写它**不会**触发任何重渲染 ⇒ ⇒ 表现为「状态变了界面不动」且**无任何报错**
+    /// ⇒ ⇒ 因此接线处必须能在**运行期**复核这件事（见 [`crate::Runtime::owns`]）。
+    pub(crate) fn same_runtime(&self, inner: &Rc<RuntimeInner>) -> bool {
+        Rc::ptr_eq(&self.inner, inner)
+    }
+
     /// 降级为只读视图（可跨层传递、不可写）。
     pub fn read_only(&self) -> ReadSignal<T> {
         ReadSignal {

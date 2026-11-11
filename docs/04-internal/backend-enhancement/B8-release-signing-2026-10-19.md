@@ -28,7 +28,7 @@ SHA-256 校验材料但未验证过本机安装包；只能确认版本号与源
 
 ## 3. 实测门禁（2026-10-20，Windows，pwsh 7）
 
-测试输入：真二进制 `target/release/apeireth.exe`（复制为 `apeireth-2.0.0-rc.4-windows-x86_64.exe`，
+测试输入：真二进制 `target/release/apeireth.exe`（复制为 `apeireth-2.0.0-rc.5-windows-x86_64.exe`，
 实算 SHA-256 `402b4726…beef4e4`）+ 构造清单（正/反/缺项/无清单四种）。
 
 | # | 用例 | 期望 | 实测 |
