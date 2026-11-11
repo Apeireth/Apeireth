@@ -263,3 +263,17 @@ cd evidence\p5-b; bash build.sh; python drive_l1.py     # 期望 EXIT 0
 **反向验伪**：三处接线各一组红 → 绿（摘「每次 Tab 重新枚举」⇒ 4 passed/1 failed；摘「焦点在作用域外拉回」⇒ 4 passed/1 failed；摘「模态激活时即使没动也消费 Tab」⇒ 4 passed/1 failed ⇒ 装回各 5 passed/0 failed）。
 
 **下一步**：本分支开 PR（base 挂 `ui-engine-p0-2026-10-24`）；合入后宿主侧把引擎 pin 抬到合并后的 SHA。
+
+## 2026-11-11 作用域根按稳定身份跟随（feat/engine-modal-scope-2026-11-11 · c22622e22）
+
+**做了什么**：模态作用域的根除记「子节点下标链」外，另记一份**稳定身份段**（有 key 的层记 key、没有的记下标）；每次用作用域根时**按当前树重新解析**身份 ⇒ ⇒ 元素在树里搬家后，作用域仍跟着同一个元素。
+
+**为什么在引擎层**：`scope_root` 是**位置**（第几个子节点）⇒ ⇒ 树一变（前面插一个兄弟节点、抽屉遮罩撤掉、条件块切换）⇒ ⇒ 下标全变 ⇒ ⇒ 打开那一刻记下的路径会指向**另一个元素** ⇒ ⇒ 作用域判定跑偏 ⇒ ⇒ Tab 在错的子树里走 ⇒ ⇒⇒ 焦点卡住（产品侧的表现是「连续按 Tab 焦点不动，关闭重开才恢复」）。
+
+**新增 API**（`crates-ui/apeireth-ui-dom/src/renderer.rs`）：`ModalLayer.scope_identity`（作用域根的稳定身份段）；私有方法 `Renderer::scope_root_path()`（先按身份在**当前树**重解析，解析失败再回退到 `scope_root`）；`scope_allows_path` / `sync_scope_trap` / `focus_next` 三处统一改走 `scope_root_path()` ⇒ ⇒ 判定口径只有一份。
+
+**0 装口径**：IMPLEMENTED（引擎能力层）。`cargo test -p apeireth-ui-dom --locked --lib` ⇒ **244 passed / 0 failed**（236 ⇒ 241「子树身份打开」+5 ⇒ 243「初始焦点按子树内 key 定位」+2 ⇒ 244「作用域根按身份跟随」+1）；`cargo clippy -p apeireth-ui-dom --all-targets --locked -- -D warnings` ⇒ **0 警告**；`cargo fmt -p apeireth-ui-dom --check` ⇒ **0 diff**；`python scripts/arch_guard.py --strict` ⇒ **VIOLATIONS 0**（crates=31 edges=118 env=150）。**未实测**：真实 WebView2 / WKWebView 宿主、真人输入法、macOS、非 Chromium 内核（与上一节同一批未实测边界）。
+
+**反向验伪**：摘掉 `scope_root_path` 里的身份重解析（退回「打开那一刻的冻结路径」）⇒ ⇒ 新增单测 `modal_scope_follows_the_root_after_the_tree_shifts` **红**（`assertion left == right failed: ⭐ 作用域根必须跟着稳定身份走到新下标 / left: Some([1]) / right: Some([2])`）⇒ ⇒ 装回 **绿**（`1 passed; 0 failed`）。
+
+**下一步**：本分支随 PR #118 合入主线；合入后宿主侧把引擎 pin 抬到合并后的 SHA。
