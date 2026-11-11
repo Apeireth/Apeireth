@@ -2,7 +2,7 @@
 # 生成: python scripts/arch_guard.py --update-baseline
 # 规则: 新指纹不在本文件 = 违规; 本文件中已消失的指纹 = 可缩表。
 
-# --- edge (111) ---
+# --- edge (125) ---
 edge apeireth-bench-harness -> apeireth-core
 edge apeireth-bench-harness -> apeireth-gateway
 edge apeireth-bench-harness -> apeireth-memory
@@ -18,6 +18,8 @@ edge apeireth-cli -> apeireth-gateway
 edge apeireth-cli -> apeireth-governance
 edge apeireth-cli -> apeireth-guard
 edge apeireth-cli -> apeireth-memory
+edge apeireth-cli -> apeireth-mesh
+edge apeireth-cli -> apeireth-mesh-quic
 edge apeireth-cli -> apeireth-orchestration
 edge apeireth-cli -> apeireth-organ
 edge apeireth-cli -> apeireth-plugin
@@ -75,6 +77,17 @@ edge apeireth-memory -> apeireth-orchestration
 edge apeireth-memory -> apeireth-plugin
 edge apeireth-memory -> apeireth-protocol
 edge apeireth-memory -> apeireth-storage
+edge apeireth-mesh -> apeireth-core
+edge apeireth-mesh -> apeireth-governance
+edge apeireth-mesh -> apeireth-mesh-protocol
+edge apeireth-mesh -> apeireth-plugin
+edge apeireth-mesh -> apeireth-protocol
+edge apeireth-mesh-protocol -> apeireth-core
+edge apeireth-mesh-protocol -> apeireth-protocol
+edge apeireth-mesh-quic -> apeireth-core
+edge apeireth-mesh-quic -> apeireth-mesh
+edge apeireth-mesh-quic -> apeireth-mesh-protocol
+edge apeireth-mesh-rendezvous -> apeireth-mesh-protocol
 edge apeireth-orchestration -> apeireth-core
 edge apeireth-organ -> apeireth-core
 edge apeireth-organ -> apeireth-governance
@@ -92,6 +105,7 @@ edge apeireth-provider -> apeireth-plugin
 edge apeireth-provider -> apeireth-protocol
 edge apeireth-runtime -> apeireth-core
 edge apeireth-runtime -> apeireth-governance
+edge apeireth-runtime -> apeireth-mesh
 edge apeireth-runtime -> apeireth-orchestration
 edge apeireth-runtime -> apeireth-plugin
 edge apeireth-runtime -> apeireth-protocol
@@ -118,7 +132,7 @@ edge apeireth-tui -> apeireth-credentials
 # --- devcycle (1) ---
 devcycle apeireth-memory,apeireth-orchestration,apeireth-plugin,apeireth-provider
 
-# --- env (160) ---
+# --- env (164) ---
 env APEIRETH_ANTHROPIC_
 env APEIRETH_ANTHROPIC_KEY
 env APEIRETH_ANTHROPIC_MODELS
@@ -198,6 +212,7 @@ env APEIRETH_ENABLE_PROACTIVE_RECALL
 env APEIRETH_ENABLE_PROPOSALS
 env APEIRETH_ENABLE_QUORUM_GATE
 env APEIRETH_ENABLE_RECON
+env APEIRETH_ENABLE_REFLECTION_QUEUE
 env APEIRETH_ENABLE_REFLEXION
 env APEIRETH_ENABLE_RETRIEVAL_TUNING
 env APEIRETH_ENABLE_SELF_TUNING
@@ -206,6 +221,7 @@ env APEIRETH_ENABLE_SHEET_OPS
 env APEIRETH_ENABLE_SHELL
 env APEIRETH_ENABLE_SKILL_DISTILL
 env APEIRETH_ENABLE_SKILL_SEARCH
+env APEIRETH_ENABLE_SYSTEM_ONE
 env APEIRETH_ENABLE_TASK_BOARD
 env APEIRETH_ENABLE_VOICE_SPEAK
 env APEIRETH_ENABLE_WORKTREE_APPLY
@@ -262,6 +278,8 @@ env APEIRETH_REASONING_TAG
 env APEIRETH_REFLEXION_DIR
 env APEIRETH_REG_APEIRETH_CORE_A
 env APEIRETH_REG_APEIRETH_CORE_B
+env APEIRETH_RENDEZVOUS_AUDIENCE
+env APEIRETH_RENDEZVOUS_LISTEN
 env APEIRETH_SESSION_DB
 env APEIRETH_SESSION_SEAL_KEY_FILE
 env APEIRETH_SHELL_SANDBOX
@@ -280,11 +298,11 @@ env APEIRETH_VOICE_INTERRUPT
 env APEIRETH_VOICE_QUIET_HOURS
 env APEIRETH_VOICE_SPEAK_SCOPE
 
-# --- size (81) ---
+# --- size (85) ---
 size crates/adapters/cli/src/care_heartbeat.rs 1621
 size crates/adapters/cli/src/gateway_panels.rs 1526
-size crates/adapters/cli/src/lib.rs 3774
-size crates/adapters/cli/src/main.rs 1464
+size crates/adapters/cli/src/lib.rs 3776
+size crates/adapters/cli/src/main.rs 1492
 size crates/adapters/cli/src/onboarding.rs 1332
 size crates/adapters/gateway/src/canonical_entry.rs 2291
 size crates/adapters/gateway/src/events.rs 1623
@@ -330,9 +348,11 @@ size crates/engine/image/raster/src/lib.rs 1676
 size crates/engine/memory/src/coordinator.rs 2346
 size crates/engine/memory/src/golden_mining.rs 1352
 size crates/engine/memory/src/persona_layer.rs 1680
+size crates/engine/memory/src/reflexion.rs 1239
 size crates/engine/memory/src/research_derived_memory.rs 1211
 size crates/engine/memory/src/retrieval_pipeline.rs 1220
 size crates/engine/memory/src/retrieval_tuning.rs 1270
+size crates/engine/mesh/src/node.rs 1884
 size crates/engine/organ/src/causal_world_model.rs 1864
 size crates/engine/organ/src/emergence.rs 1224
 size crates/engine/organ/src/goal.rs 1619
@@ -340,15 +360,16 @@ size crates/engine/organ/src/neuromodulation.rs 1608
 size crates/engine/organ/src/nociception.rs 1487
 size crates/engine/organ/src/prompt_assembly.rs 1492
 size crates/engine/organ/src/world_model.rs 1332
-size crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs 812
 size crates/engine/runtime-assembly/src/canonical/bio_tone.rs 1319
-size crates/engine/runtime-assembly/src/canonical/cognitive.rs 5201
+size crates/engine/runtime-assembly/src/canonical/cognitive.rs 5720
 size crates/engine/runtime-assembly/src/canonical/orchestrator.rs 2432
 size crates/engine/runtime-assembly/src/canonical/play_tools.rs 1412
 size crates/engine/runtime-assembly/src/canonical/production.rs 1896
+size crates/engine/runtime-assembly/src/canonical/retrieval_tuning_wire.rs 1336
 size crates/engine/runtime-assembly/src/canonical/self_status_source.rs 2064
 size crates/engine/runtime-assembly/src/canonical/tool_modules.rs 1395
-size crates/engine/runtime/src/canonical/execute.rs 4731
+size crates/engine/runtime/src/canonical/execute.rs 4905
+size crates/engine/runtime/src/canonical/runtime.rs 1332
 size crates/foundation/core/src/cost_router.rs 1399
 size crates/foundation/core/src/lib.rs 2483
 size crates/foundation/core/src/stored_doc.rs 1304
@@ -356,6 +377,7 @@ size crates/foundation/credentials/src/keyring.rs 1825
 size crates/foundation/governance/src/chain.rs 1320
 size crates/foundation/governance/src/input_security.rs 1298
 size crates/foundation/governance/src/sandbox_ladder.rs 1220
+size crates/foundation/mesh-protocol/src/rendezvous.rs 1241
 size crates/foundation/orchestration/src/durable_schedule.rs 1242
 size crates/foundation/orchestration/src/lib.rs 1426
 size crates/foundation/orchestration/src/lifecycle.rs 1255
