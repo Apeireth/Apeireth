@@ -3,7 +3,7 @@
 [Document-Meta]
 Document: docs/status/merge-gate-toolchain-closeout-2026-11-11.md
 Class: STATUS
-Status: 🟢 本地行为与真实 Linux 装配已核验；合并状态见 PR
+Status: 🟢 全部适用 CI 通过，PR #121 已合并
 Last-Modified: 2026-11-11
 Author: Codex
 
@@ -31,7 +31,7 @@ PR #121 的合并裁决在独立的 CI 工具链目录中，按根 `rust-toolcha
   日志在施工机 `C:/Apeireth/logs/pr-closeout-20261111/pr121-negative-controls.log`，
   不作为仓库内可移植证据冒充远端 CI。
 - 真实 Linux 装配与当前树的合并裁决已通过：[run 43013692340](https://github.com/Apeireth/Apeireth/actions/runs/43013692340)。证据绑定该 PR 的合并树，与收口提交 tree 一致。
-- 未完成的验收条件：所有适用检查通过后普通合并；实时状态见 [PR #121](https://github.com/Apeireth/Apeireth/pull/121)，本页不缓存运行中的矩阵结论。
+- 还差什么：本批 PR 无剩余合并阻塞；7 项 required 与全部适用 CI 通过后，[PR #121](https://github.com/Apeireth/Apeireth/pull/121) 于 2026-11-11 普通合并，主干提交 `9344d5208bf78333f5d22a607cb7d648e3de13d2`。
 - 不新增产品能力，不声明真实跨节点 E2E 或硬件验收。
 
 ## 审查中纠正的旧账
