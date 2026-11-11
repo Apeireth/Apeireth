@@ -147,6 +147,26 @@ jobs:
         working-directory: frontend/companion-desktop
         run: pnpm install --frozen-lockfile
 
+      # ⭐ **预热 cargo 索引缓存**（2026-11-11 · PR #117 红项 13 续）：
+      # 两条声明的 verify_cmd 直接调 `cargo nextest ... --offline`
+      #   （`rt.system_one_internal` / `mem.failure_learning_bridge`）
+      # ⇒ ⇒ nextest 每次先跑一次 **cargo metadata --all-features**
+      #    （实测命令：`cargo --color=always metadata --format-version=1
+      #      --all-features --filter-platform=<target> --offline`）
+      # ⇒ ⇒ `--offline` 下它要求 runner 的 cargo 索引里**有 optional-only 依赖的条目**
+      #    （本仓：`napi` / `napi-derive` / `pyo3` / `cbindgen` —— 都是 `apeireth-sdk`
+      #    的 optional 依赖，默认 feature 构建**不会**下载它们）
+      # ⇒ ⇒ runner 缓存里没有 ⇒ metadata 解析失败 ⇒ nextest 直接退出 **102**
+      #    ⇒ ⇒ 那两条声明在 CI 上**恒红**（不是声明内容问题）。
+      # ⇒ ⇒ 解法：**先在线解析一次全 feature 图**，把索引条目 + 依赖清单补进
+      #    cargo 缓存 ⇒ 之后 nextest 的 `--offline` metadata 才解析得动。
+      # ⇒ ⇒ **不降低任何验证强度**：两条声明的 verify_cmd 一字未改，测试照跑照判。
+      # ⇒ ⇒ 顺带说明：为什么不用「改成 cargo test」绕开？
+      #    `scripts/check_claims_verify.py` 的 `TEST_COMMANDS` 明确含 `cargo nextest`
+      #    ⇒ ⇒ 门禁**设计上就支持** nextest 声明 ⇒ ⇒ 该修的是**环境**，不是声明。
+      - name: 预热 cargo 索引缓存（nextest 的 cargo metadata --all-features --offline 依赖它）
+        run: cargo metadata --format-version=1 --all-features --locked > /dev/null
+
       # **H5 真值闸**：口径为 PRODUCTION WIRED / DEFAULT ENABLED / HARDWARE VALIDATED
       # 的声明**不许**靠「豁免 / 延后」成立 ⇒ 否则「已接线」只是个词。
       - name: 高口径声明必须真验（H5）
