@@ -314,7 +314,7 @@ cd evidence/p5-b && python3 drive_l1.py    # L1 浏览器探针（EXIT 0 = 全�
 
 **不能依赖**（尚未验证）：
 - 真实 Tauri 宿主（macOS WKWebView / Linux WebKitGTK / Windows WebView2）上的行为
-  ⇒ ⇒ **引擎会自动降级到 WebGL 后端**（代码里已实现），但降级后的画面**尚未在真机验证**；
+  ⇒ ⇒ **引擎会自动降级到 WebGL 后端**（代码里已实现），但降级后的画面**尚未在真机验证**（⭐ **四级口径**：**IMPLEMENTED**，**未** HARDWARE VALIDATED）；
 - 像素级结论只在**本地真实 GPU**上成立 ⇒ CI runner 是软件渲染，**不能**拿它的像素当结论；
 - panic 之后的恢复运行（wasm `panic=abort` 下不可恢复，只保证消息可达）。
 
