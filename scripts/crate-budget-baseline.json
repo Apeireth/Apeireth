@@ -78,7 +78,7 @@
     },
     "crates/engine/mesh": {
       "files": 27,
-      "loc": 9624
+      "loc": 9618
     },
     "crates/engine/mesh-quic": {
       "files": 7,

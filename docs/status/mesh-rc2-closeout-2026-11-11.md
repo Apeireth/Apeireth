@@ -23,11 +23,13 @@ Author: lead
 | 远端会话权限 | IMPLEMENTED；目录和调用边界都按 CapabilityId 检查同一 dispatcher 的会话权限；父会话的收窄不能被子会话或远端路由绕过；猜名拒绝且零 RPC 回归通过。 |
 | Mesh 广告可见性 | IMPLEMENTED；广告复用工具与模块契约的 model_visible 判据，Internal 或显式隐藏工具不投影；Protected 的可见性仍由原契约决定；定向回归通过。 |
 | resident control 保留名 | IMPLEMENTED；远端投影排除已注册 control 的保留名，原本地拦截语义不变；两项新增回归旧实现失败、修复后通过。 |
+| crate 体量预算 | CI 抓到新增代码超额后，统一会话 scope 路径并复用 Mesh 错误映射；新增 unit fixture 归测试目录、保持原 unit 模块身份，未移动既有生产逻辑。Runtime `src` 为 26206/26206 行，Mesh 为 9618 行并收紧基线至 9618；文件数不增，生命周期逻辑未改。`python3 scripts/check_crate_budget.py --check` 通过。 |
+| 依赖审计 | `rustix` 锁定到 `1.1.6`；按既有 workflow 策略本机审计通过，未增加 ignore。失败摘要和 SARIF 均包含 warning，真实失败 JSON 的旧实现三项反证失败、修复后通过。 |
 | 当前提交证据 | 定向红/绿与范围审查已完成；全工作区测试、clippy、doctest、fmt 和声明 verify_cmd 由本地波次与当前 head 的 CI 验证。合并须同时满足本地检查与所有适用 CI 通过。 |
 
 ## 行为证据与范围复核
 
-- `transparent_tool_routing` 最终 16 项通过；`transparent_provider_routing` 16 项通过；父子 scope 单测与 Mesh 广告可见性回归分别通过。
+- 预算重构前的定向证据：`transparent_tool_routing` 16 项通过，`transparent_provider_routing` 16 项通过，父子 scope 单测与 Mesh 广告可见性回归分别通过。重构后增加 legacy owner 目录兼容回归，最终新树的定向与全量结论以本地波次及当前 head 的 CI 为准。
 - 反向验伪：普通目录重名、空 scope 目录、猜名 RPC 三测旧实现失败；父子 scope 一测旧实现失败；隐藏广告一测旧实现失败；control 重名两测旧实现失败。对应修复后通过，未忽略用例或放宽断言。
 - `governance_chain_drill` 原样命令在本机 4 项通过；合并后的工作流仍在 nextest 前执行演练。
 - 受影响的 9 条声明仅更新范围复核与来源树，等级和默认开关未改；完整 verify_cmd 的结论由当前 head 的 Claims verify 门禁提供。
