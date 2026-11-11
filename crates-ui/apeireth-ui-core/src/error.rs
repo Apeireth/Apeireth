@@ -51,6 +51,17 @@ pub enum ReactiveError {
         /// 发生并发写的信号节点。
         node: NodeId,
     },
+    /// 信号**不属于**该运行时（**接线错位**）⇒ 依赖边永远不会被建立。
+    ///
+    /// ## 为什么必须显式报错
+    ///
+    /// 跨运行时的信号写它**不会**触发任何重渲染 ⇒ ⇒ 现象是
+    /// 「**状态变了界面不动**」⇒ ⇒ 且**全程无任何报错** ⇒ ⇒ 这是最难查的一类
+    /// 故障 ⇒ ⇒ 宁可在**接线当场**报错，也不要让它静默。
+    ForeignSignal {
+        /// 不属于该运行时的信号节点。
+        node: NodeId,
+    },
 }
 
 impl fmt::Display for ReactiveError {
@@ -86,6 +97,12 @@ impl fmt::Display for ReactiveError {
                 write!(
                     f,
                     "ConcurrentWrite: 读改写期间节点 {node} 被再次写入，本次读改写被拒绝"
+                )
+            }
+            ReactiveError::ForeignSignal { node } => {
+                write!(
+                    f,
+                    "ForeignSignal: 节点 {node} 不属于该运行时（接线错位）⇒ 写它不会触发重渲染"
                 )
             }
         }
@@ -127,6 +144,10 @@ mod tests {
         assert_eq!(
             ReactiveError::ConcurrentWrite { node: NodeId(6) }.to_string(),
             "ConcurrentWrite: 读改写期间节点 #6 被再次写入，本次读改写被拒绝"
+        );
+        assert_eq!(
+            ReactiveError::ForeignSignal { node: NodeId(7) }.to_string(),
+            "ForeignSignal: 节点 #7 不属于该运行时（接线错位）⇒ 写它不会触发重渲染"
         );
     }
 }

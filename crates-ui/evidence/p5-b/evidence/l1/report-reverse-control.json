@@ -1,0 +1,188 @@
+{
+  "dom": {
+    "ok": true,
+    "failures": [],
+    "payload": "value=Some(\"a\");pos=None;checked=Some(false)",
+    "g8_error_boundary_ok": true,
+    "g8_captured_error": "Unsupported: create_element() 失败：JsValue(InvalidCharacterError: Failed to execute 'createElement' on 'Document': The tag name provided ('') is not a valid name.\nInvalidCharacterError: Failed to execute 'createElement' on 'Document': The tag name provided ('') is not a valid name.\n    at http://127.0.0.1:33611/engine/pkg/p5b_harness.js:1220:30\n    at handleError (http://127.0.0.1:33611/engine/pkg/p5b_harness.js:3586:18)\n    at __wbg_createElement_74049073a11f9c31 (http://127.0.0.1:33611/engine/pkg/p5b_harness.js:1219:67)\n    at p5b_harness.wasm.<web_sys[87fce178bfa1bdc9]::features::gen_Document::Document>::create_element::__wbg_createElement_74049073a11f9c31 externref shim (http://127.0.0.1:33611/engine/pkg/p5b_harness_bg.wasm:wasm-function[7461]:0x3c322e)\n    at p5b_harness.wasm.<web_sys[87fce178bfa1bdc9]::features::gen_Document::Document>::create_element (http://127.0.0.1:33611/engine/pkg/p5b_harness_bg.wasm:wasm-function[6255]:0x3b5c27)\n    at p5b_harness.wasm.<apeireth_ui_dom[cb50d36515770dc0]::web::WebDom as apeireth_ui_dom[cb50d36515770dc0]::dom::Dom>::create_element (http://127.0.0.1:33611/engine/pkg/p5b_harness_bg.wasm:wasm-function[3845]:0x36d429)\n    at p5b_harness.wasm.<apeireth_ui_dom[cb50d36515770dc0]::renderer::Renderer<apeireth_ui_dom[cb50d36515770dc0]::web::WebDom>>::mount_node (http://127.0.0.1:33611/engine/pkg/p5b_harness_bg.wasm:wasm-function[822]:0x13e157)\n    at p5b_harness.wasm.<apeireth_ui_dom[cb50d36515770dc0]::renderer::Renderer<apeireth_ui_dom[cb50d36515770dc0]::web::WebDom>>::mount (http://127.0.0.1:33611/engine/pkg/p5b_harness_bg.wasm:wasm-function[2099]:0x2cd62d)\n    at p5b_harness.wasm.<apeireth_ui_dom[cb50d36515770dc0]::renderer::Renderer<apeireth_ui_dom[cb50d36515770dc0]::web::WebDom>>::render_guarded (http://127.0.0.1:33611/engine/pkg/p5b_harness_bg.wasm:wasm-function[1589]:0x26ff3c)\n    at p5b_harness.wasm.p5b_harness[e536333e2a4a43e4]::l1_probe (http://127.0.0.1:33611/engine/pkg/p5b_harness_bg.wasm:wasm-function[696]:0xa6cce))",
+    "g8_panic_hook": "installed",
+    "engine_form": {
+      "x": 8,
+      "y": 8,
+      "w": 1424,
+      "h": 21
+    },
+    "js_form": {
+      "x": 8,
+      "y": 8,
+      "w": 1424,
+      "h": 21
+    },
+    "device_input": {
+      "x": 20,
+      "y": 20,
+      "w": 462.5,
+      "h": 52.5
+    }
+  },
+  "upload": {
+    "ok": true,
+    "failures": [],
+    "backend_actual": "Gl",
+    "uploaded_w": 3
+  },
+  "asyncLine": {
+    "ok": false,
+    "failures": [
+      "⑥ 过期结果覆盖了新结果：DOM 显示 \"alpha 的结果\"（必须是 beta 的结果 ⇒ ⇒ 说明仲裁没挡住后到的 alpha）",
+      "⑥ 只应上屏一条：accepted=2（必须是 1）",
+      "⑥ 后到的过期结果**必须被驳回**：rejected=0（必须是 1）"
+    ],
+    "resultsText": "alpha 的结果",
+    "resolved": 2,
+    "accepted": 2,
+    "rejected": 0,
+    "arrivalOrder": [
+      "beta",
+      "alpha"
+    ],
+    "naiveLastWins": "alpha"
+  },
+  "app": {
+    "ok": true,
+    "failures": [],
+    "after_frame": {
+      "ok": true,
+      "failures": [],
+      "render_count": 3
+    },
+    "dispose": {
+      "ok": true,
+      "failures": [],
+      "renders_at_dispose": 3
+    },
+    "frame_stopped": {
+      "ok": true,
+      "failures": []
+    },
+    "reboot": {
+      "ok": true,
+      "failures": []
+    }
+  },
+  "deferredWindow": {
+    "step1": {
+      "mount_millis": 1
+    },
+    "step2": {
+      "ok": true,
+      "failures": [],
+      "deferred_millis": 0,
+      "plan_millis": 0,
+      "write_millis": 0
+    }
+  },
+  "perf": {
+    "ok": true,
+    "failures": [],
+    "width": 8,
+    "depth": 4,
+    "elements": 37483,
+    "row_elements": 4681,
+    "mount_millis": 145,
+    "update_millis": 94,
+    "screen_rows": 22,
+    "screen_nodes": 46,
+    "screen_update_millis": 0.035,
+    "screen_update_micros": 35,
+    "screen_clock_probe": 1793873164128,
+    "screen_min_sample": 0.03,
+    "build_millis": 2,
+    "compared_nodes": 42138,
+    "written_nodes": 8
+  },
+  "realLoad": {
+    "ok": true,
+    "failures": [],
+    "mount_millis": 60,
+    "input_redraw_millis": 0.055,
+    "scroll_redraw_millis": 0.025,
+    "mounted_rows": 7,
+    "rows_millis": 0,
+    "guarded_millis": 1,
+    "window_millis": 59,
+    "window_plan_millis": 58,
+    "window_write_millis": 1,
+    "window_plan2_millis": 0,
+    "rounds": 400
+  },
+  "w0Window": {
+    "ok": true,
+    "failures": [],
+    "rows_after_mount": 7,
+    "rows_after_tick": 7,
+    "tick_redrawn": true,
+    "tick_scroll_seen": true,
+    "tick_window_error": null,
+    "tick_patch_error": null,
+    "dump_mount": "row[行 0], row[行 1], row[行 2], row[行 3], row[行 4], row[行 5], row[行 6], vlist-spacer-after[]",
+    "dump_tick": "row[行 0], row[行 1], row[行 2], row[行 3], row[行 4], row[行 5], row[行 6], vlist-spacer-after[]"
+  },
+  "w0SyncProbe": {
+    "rows": 7,
+    "client_height": 200
+  },
+  "patchChildren": {
+    "after_mount": 3,
+    "after_clear": 0,
+    "after_refill": 3
+  },
+  "scrollSignal": {
+    "boxes_match": true,
+    "box_detail": "engine=(8.0,636.0,1424.0x200.0) dom=(8.0,636.0,1424.0x200.0)",
+    "engine_box": 200,
+    "dom_box_height": 200,
+    "peek_right_after_mount": false,
+    "w0_peek_after_windowize": false,
+    "min_after_manual": true,
+    "min_after_real_scroll": true,
+    "min_read_back": 2000,
+    "peek_before": false,
+    "peek_after": true
+  },
+  "binding": {
+    "ok": true,
+    "failures": [],
+    "signal_value": "uplink"
+  },
+  "keyboardSemantics": {
+    "plain_key": "Enter",
+    "plain_shift": false,
+    "plain_ctrl": false,
+    "plain_composing": false,
+    "shifted_key": "Enter",
+    "shifted_shift": true,
+    "shifted_ctrl": false,
+    "shifted_composing": false,
+    "composing_key": "Enter",
+    "composing_flag": true,
+    "ok": true
+  },
+  "focusModal": {
+    "installed": true,
+    "focus_after_first": "fm-b1",
+    "focus_after_tab": "fm-b2",
+    "focus_after_shift_tab": "fm-b1",
+    "focus_in_modal": "fm-inside",
+    "focus_after_close": "fm-b1",
+    "modal_restored": true,
+    "empty_window_ok": true,
+    "ok": true
+  },
+  "integration": {
+    "ok": true,
+    "failures": [],
+    "mounted_rows": 9,
+    "first_visible": 98
+  }
+}

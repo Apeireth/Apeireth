@@ -1,0 +1,12 @@
+[
+  {
+    "side": "reference",
+    "selector": ".setting-block",
+    "messages": []
+  },
+  {
+    "side": "engine",
+    "selector": ".sp-budget .setting-block",
+    "messages": []
+  }
+]

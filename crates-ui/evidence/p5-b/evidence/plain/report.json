@@ -1,0 +1,211 @@
+{
+  "dom": {
+    "ok": true,
+    "failures": [],
+    "payload": "value=Some(\"a\");pos=None;checked=Some(false)",
+    "g8_error_boundary_ok": true,
+    "g8_captured_error": "Unsupported: create_element() 失败：JsValue(InvalidCharacterError: The string contains invalid characters.\ncreateElement@[native code]\n@http://127.0.0.1:43477/engine/pkg/p5b_harness.js:1248:43\nhandleError@http://127.0.0.1:43477/engine/pkg/p5b_harness.js:3614:23\n7447@wasm-function[7447]\n6244@wasm-function[6244]\n3842@wasm-function[3842]\n821@wasm-function[821]\n2100@wasm-function[2100]\n1589@wasm-function[1589]\n696@wasm-function[696]\n5691@wasm-function[5691]\n6907@wasm-function[6907]\nl1_probe@http://127.0.0.1:43477/engine/pkg/p5b_harness.js:500:30\nmodule code@http://127.0.0.1:43477/l1/main.js:7:29)",
+    "g8_panic_hook": "installed",
+    "engine_form": {
+      "x": 8,
+      "y": 8,
+      "w": 1264,
+      "h": 26
+    },
+    "js_form": {
+      "x": 8,
+      "y": 8,
+      "w": 1264,
+      "h": 26
+    },
+    "device_input": {
+      "x": 20,
+      "y": 22.5,
+      "w": 387.5,
+      "h": 62.5
+    }
+  },
+  "upload": {
+    "ok": true,
+    "failures": [],
+    "backend_actual": "Gl",
+    "uploaded_w": 3
+  },
+  "asyncLine": {
+    "ok": true,
+    "failures": [],
+    "resultsText": "beta 的结果",
+    "resolved": 2,
+    "accepted": 1,
+    "rejected": 1,
+    "arrivalOrder": [
+      "beta",
+      "alpha"
+    ],
+    "naiveLastWins": "alpha"
+  },
+  "app": {
+    "ok": true,
+    "failures": [],
+    "after_frame": {
+      "ok": true,
+      "failures": [],
+      "render_count": 3
+    },
+    "dispose": {
+      "ok": true,
+      "failures": [],
+      "renders_at_dispose": 3
+    },
+    "frame_stopped": {
+      "ok": true,
+      "failures": []
+    },
+    "reboot": {
+      "ok": true,
+      "failures": []
+    }
+  },
+  "deferredWindow": {
+    "step1": {
+      "mount_millis": 0
+    },
+    "step2": {
+      "ok": true,
+      "failures": [],
+      "deferred_millis": 0,
+      "plan_millis": 0,
+      "write_millis": 0
+    }
+  },
+  "perf": {
+    "ok": true,
+    "failures": [],
+    "width": 8,
+    "depth": 4,
+    "elements": 37483,
+    "row_elements": 4681,
+    "mount_millis": 153,
+    "update_millis": 84,
+    "screen_rows": 22,
+    "screen_nodes": 46,
+    "screen_update_millis": 0.03,
+    "screen_update_micros": 30,
+    "screen_clock_probe": 1793874022624,
+    "screen_min_sample": 0.025,
+    "build_millis": 2,
+    "compared_nodes": 42138,
+    "written_nodes": 8
+  },
+  "realLoad": {
+    "ok": true,
+    "failures": [],
+    "mount_millis": 77,
+    "input_redraw_millis": 0.075,
+    "scroll_redraw_millis": 0.025,
+    "mounted_rows": 7,
+    "rows_millis": 0,
+    "guarded_millis": 0,
+    "window_millis": 77,
+    "window_plan_millis": 77,
+    "window_write_millis": 0,
+    "window_plan2_millis": 0,
+    "rounds": 400
+  },
+  "w0Window": {
+    "ok": true,
+    "failures": [],
+    "rows_after_mount": 7,
+    "rows_after_tick": 7,
+    "tick_redrawn": true,
+    "tick_scroll_seen": true,
+    "tick_window_error": null,
+    "tick_patch_error": null,
+    "dump_mount": "row[行 0], row[行 1], row[行 2], row[行 3], row[行 4], row[行 5], row[行 6], vlist-spacer-after[]",
+    "dump_tick": "row[行 0], row[行 1], row[行 2], row[行 3], row[行 4], row[行 5], row[行 6], vlist-spacer-after[]"
+  },
+  "w0SyncProbe": {
+    "rows": 7,
+    "client_height": 200
+  },
+  "patchChildren": {
+    "after_mount": 3,
+    "after_clear": 0,
+    "after_refill": 3
+  },
+  "scrollSignal": {
+    "boxes_match": true,
+    "box_detail": "engine=(8.0,644.0,1264.0x200.0) dom=(8.0,644.0,1264.0x200.0)",
+    "engine_box": 200,
+    "dom_box_height": 200,
+    "peek_right_after_mount": false,
+    "w0_peek_after_windowize": false,
+    "min_after_manual": true,
+    "min_after_real_scroll": true,
+    "min_read_back": 2000,
+    "peek_before": false,
+    "peek_after": true
+  },
+  "binding": {
+    "ok": true,
+    "failures": [],
+    "signal_value": "uplink"
+  },
+  "keyboardSemantics": {
+    "plain_key": "Enter",
+    "plain_shift": false,
+    "plain_ctrl": false,
+    "plain_composing": false,
+    "shifted_key": "Enter",
+    "shifted_shift": true,
+    "shifted_ctrl": false,
+    "shifted_composing": false,
+    "composing_key": "Enter",
+    "composing_flag": true,
+    "ok": true
+  },
+  "focusModal": {
+    "installed": true,
+    "focus_after_first": "fm-b1",
+    "focus_after_tab": "fm-b2",
+    "focus_after_shift_tab": "fm-b1",
+    "focus_in_modal": "fm-inside",
+    "focus_after_close": "fm-b1",
+    "modal_restored": true,
+    "empty_window_ok": true,
+    "ok": true
+  },
+  "integration": {
+    "ok": true,
+    "failures": [],
+    "mounted_rows": 9,
+    "first_visible": 98
+  },
+  "plainShell": {
+    "tool": "PyGObject + WebKit2 4.1（**不经 Tauri**）",
+    "display": ":100",
+    "url": "http://127.0.0.1:43477/l1/index.html",
+    "timerCallbackOk": true,
+    "rafCallbackOk": true,
+    "verdict": "callbacks-ok-in-plain-webkit",
+    "asyncLine": {
+      "ok": true,
+      "failures": [],
+      "resultsText": "beta 的结果",
+      "resolved": 2,
+      "accepted": 1,
+      "rejected": 1,
+      "arrivalOrder": [
+        "beta",
+        "alpha"
+      ],
+      "naiveLastWins": "alpha"
+    },
+    "afterFrame": {
+      "ok": true,
+      "failures": [],
+      "render_count": 3
+    },
+    "watchSeconds": 300.0
+  }
+}

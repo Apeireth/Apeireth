@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>W0 第一屏示例（引擎侧接入范式）</title>
+    <style>
+      body { font: 14px/1.5 system-ui, sans-serif; margin: 24px; }
+      #w0-list { border: 1px solid #ccc; }
+      #w0-list .row { padding: 4px 8px; border-bottom: 1px solid #eee; }
+      .hint { color: #666; }
+    </style>
+  </head>
+  <body>
+    <h1>W0 第一屏示例</h1>
+    <p class="hint">受控输入 + 虚拟列表 + 滚动联动 + 错误边界；调度器为示例级（setInterval 调 w0_tick）。</p>
+    <div id="w0-root"></div>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>

@@ -1,0 +1,192 @@
+{
+  "face": "wizard（首次运行向导 · 设置页 W1 面）",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "device_pixel_ratio": 1,
+  "timezone": "UTC",
+  "channel_threshold": 2,
+  "pixel_budget": 0.01,
+  "crop": "viewport（遮罩是 position: fixed ⇒ 整视口，不裁剪）",
+  "reference_page": "/web/reference/wizard/index.html",
+  "engine_page": "/web/engine/wizard/index.html",
+  "api_key": "（两侧同值的固定测试值）",
+  "steps": [
+    "welcome",
+    "tier",
+    "api",
+    "identity",
+    "preset",
+    "pro-guide"
+  ],
+  "pairs": [
+    {
+      "passed": true,
+      "section": "welcome",
+      "t1_pixel_ratio": 0.0,
+      "t1_pixel_different": 0,
+      "t1_pixel_total": 1296000,
+      "t2_dom_equal": true,
+      "t2_dom_diffs": [],
+      "t3_same_width": true,
+      "t3_reference_width": 1440,
+      "t3_engine_width": 1440,
+      "engine_state": {
+        "tier": null,
+        "stepIndex": 0,
+        "presetId": "deepseek",
+        "apiKey": "",
+        "baseUrl": "https://api.deepseek.com/v1",
+        "model": "deepseek-v4-flash",
+        "selfDescription": "",
+        "autoTune": true,
+        "applying": false,
+        "error": ""
+      }
+    },
+    {
+      "passed": true,
+      "section": "tier",
+      "t1_pixel_ratio": 0.0,
+      "t1_pixel_different": 0,
+      "t1_pixel_total": 1296000,
+      "t2_dom_equal": true,
+      "t2_dom_diffs": [],
+      "t3_same_width": true,
+      "t3_reference_width": 1440,
+      "t3_engine_width": 1440,
+      "engine_state": {
+        "tier": null,
+        "stepIndex": 1,
+        "presetId": "deepseek",
+        "apiKey": "",
+        "baseUrl": "https://api.deepseek.com/v1",
+        "model": "deepseek-v4-flash",
+        "selfDescription": "",
+        "autoTune": true,
+        "applying": false,
+        "error": ""
+      }
+    },
+    {
+      "passed": true,
+      "section": "api",
+      "t1_pixel_ratio": 0.0,
+      "t1_pixel_different": 0,
+      "t1_pixel_total": 1296000,
+      "t2_dom_equal": true,
+      "t2_dom_diffs": [],
+      "t3_same_width": true,
+      "t3_reference_width": 1440,
+      "t3_engine_width": 1440,
+      "engine_state": {
+        "tier": "casual",
+        "stepIndex": 2,
+        "presetId": "deepseek",
+        "apiKey": "sk-wizard-compare-key",
+        "baseUrl": "https://api.deepseek.com/v1",
+        "model": "deepseek-v4-flash",
+        "selfDescription": "",
+        "autoTune": true,
+        "applying": false,
+        "error": ""
+      }
+    },
+    {
+      "passed": true,
+      "section": "identity",
+      "t1_pixel_ratio": 0.0,
+      "t1_pixel_different": 0,
+      "t1_pixel_total": 1296000,
+      "t2_dom_equal": true,
+      "t2_dom_diffs": [],
+      "t3_same_width": true,
+      "t3_reference_width": 1440,
+      "t3_engine_width": 1440,
+      "engine_state": {
+        "tier": "casual",
+        "stepIndex": 3,
+        "presetId": "deepseek",
+        "apiKey": "sk-wizard-compare-key",
+        "baseUrl": "https://api.deepseek.com/v1",
+        "model": "deepseek-v4-flash",
+        "selfDescription": "",
+        "autoTune": true,
+        "applying": false,
+        "error": ""
+      }
+    },
+    {
+      "passed": true,
+      "section": "preset",
+      "t1_pixel_ratio": 0.0,
+      "t1_pixel_different": 0,
+      "t1_pixel_total": 1296000,
+      "t2_dom_equal": true,
+      "t2_dom_diffs": [],
+      "t3_same_width": true,
+      "t3_reference_width": 1440,
+      "t3_engine_width": 1440,
+      "engine_state": {
+        "tier": "casual",
+        "stepIndex": 4,
+        "presetId": "deepseek",
+        "apiKey": "sk-wizard-compare-key",
+        "baseUrl": "https://api.deepseek.com/v1",
+        "model": "deepseek-v4-flash",
+        "selfDescription": "",
+        "autoTune": true,
+        "applying": false,
+        "error": ""
+      }
+    },
+    {
+      "passed": true,
+      "section": "pro-guide",
+      "t1_pixel_ratio": 0.0,
+      "t1_pixel_different": 0,
+      "t1_pixel_total": 1296000,
+      "t2_dom_equal": true,
+      "t2_dom_diffs": [],
+      "t3_same_width": true,
+      "t3_reference_width": 1440,
+      "t3_engine_width": 1440,
+      "engine_state": {
+        "tier": "pro",
+        "stepIndex": 2,
+        "presetId": "deepseek",
+        "apiKey": "",
+        "baseUrl": "https://api.deepseek.com/v1",
+        "model": "deepseek-v4-flash",
+        "selfDescription": "",
+        "autoTune": true,
+        "applying": false,
+        "error": ""
+      }
+    }
+  ],
+  "checks": {
+    "t1_all_pixels_within_budget": true,
+    "t2_dom_identical": true,
+    "t3_same_width": true
+  },
+  "notes": [
+    "T1 的差异像素阈值：任一通道绝对差 > 2/255 即记「不同」。",
+    "T2 的归一化：剔除 Svelte 作用域 class 与注释锚点、class token 排序；**文本节点逐字保留**（不折叠空白、不裁剪）。",
+    "T3：向导遮罩是 `position: fixed; inset: 0` ⇒ 两侧都是整视口 ⇒ 裁剪框宽度恒为 1440px。",
+    "参考侧用**真实点击**驱动（生产组件的交互路径）；引擎侧用**状态**驱动（受控输入）⇒ 两侧画的是同一状态。",
+    "环境：视口 1440×900、DPR 1、时区 UTC。"
+  ],
+  "passed": true,
+  "console": [
+    {
+      "side": "reference",
+      "messages": []
+    },
+    {
+      "side": "engine",
+      "messages": []
+    }
+  ]
+}

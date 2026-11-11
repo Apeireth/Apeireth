@@ -2,7 +2,7 @@
 
 > 调研稿、参考手册、考古与差距研究 —— **外部输入**。读这里回答「外部怎么做、我们缺什么」。
 
-**21 篇**。按篇名查；需要横跨多篇时，回 [`../README.md`](../README.md) 的台账地图。
+**22 篇**。按篇名查；需要横跨多篇时，回 [`../README.md`](../README.md) 的台账地图。
 
 | 篇 | 是什么 |
 |---|---|
@@ -23,6 +23,7 @@
 | [`ref-hydra.md`](ref-hydra.md) | Hydra 深读笔记（2026-08-16，源码验证） |
 | [`ref-yoyo-evolve.md`](ref-yoyo-evolve.md) | yoyo-evolve / yoyo-gasp 深读笔记（2026-08-16，源码验证） |
 | [`round-10-research-plan-2026-08-28.md`](round-10-research-plan-2026-08-28.md) | Round 10 调研 plan + 主代理初步评估 (2026-08-28) |
+| [`ui-motion-prompt-research-2026-10-30.md`](ui-motion-prompt-research-2026-10-30.md) | 视觉施工提示词 · 外部方法论研究（2026-10-30；设计前判断/验证门/动效纪律/反 slop/评审 pass；只取方法不逐字复制，含许可与映射） |
 | [`upgrade-research-pack.md`](upgrade-research-pack.md) | 升级计划资料包（Upgrade Research Pack） |
 | [`v2-reference-handbook-2026-08-28.md`](v2-reference-handbook-2026-08-28.md) | Apeireth v2.0.0 Reference Handbook — 给接手团队的话 (2026-08-28) |
 | [`w3-legacy-gap-archaeology-2026-10-10.md`](w3-legacy-gap-archaeology-2026-10-10.md) | W3 九缺口 legacy 考古 (2026-10-10) |

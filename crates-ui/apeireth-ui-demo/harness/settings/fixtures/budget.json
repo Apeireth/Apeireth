@@ -1,0 +1,73 @@
+{
+  "_note": "S5 预算与配额的固定数据。**派生值（sessionTotals / budgetBadges / budgetRemaining）由纯函数算出**（lib/budget.ts 与 lib/chat-shell/turn-telemetry.ts）⇒ 迁移时把那两个纯函数一并迁进 `ui_kit::settings::budget`，**不要重写算式**（余量条的 Math.round(ratio*100) 与 JS 的浮点行为必须一致）。",
+  "_source": "frontend/companion-desktop/src/lib/budget.ts、frontend/companion-desktop/src/lib/chat-shell/turn-telemetry.ts",
+  "sessionUsage": {
+    "_note": "会话累计消耗（宿主喂）。缺字段 ⇒ 渲染「—」。",
+    "promptTokens": 18420,
+    "completionTokens": 3120,
+    "cacheHitTokens": 9120,
+    "turns": 7,
+    "durationMs": 214000,
+    "toolCalls": 12,
+    "lastTurnToolCalls": 3
+  },
+  "budgetBadges": {
+    "_note": "三枚旋钮的生效值徽标。source: configured | constant。",
+    "maxTurnRounds": {"label": "8 · constant", "source": "constant", "note": "读编译期常量（旋钮未配置，取常量默认值）"},
+    "maxToolCalls": {"label": "16 · constant", "source": "constant", "note": "读编译期常量（旋钮未配置，取常量默认值）"},
+    "contextBudgetChars": {"label": "24000 · constant", "source": "constant", "note": "读编译期常量（旋钮未配置，取常量默认值）"}
+  },
+  "budgetDraft": {
+    "_note": "数字旋钮的**原始字面量**字符串（空 = 未配置）。",
+    "maxTurnRounds": "",
+    "maxToolCalls": "",
+    "contextBudgetChars": ""
+  },
+  "budgetFeedback": {
+    "_note": "提交反馈（钳制/非法回默认的人话提示；空 = 无反馈）。",
+    "maxTurnRounds": "",
+    "maxToolCalls": "",
+    "contextBudgetChars": ""
+  },
+  "budgetRemaining": [
+    {"key": "tokenIn", "label": "Token（入）", "scope": "会话累计", "cap": "—", "used": "18.4K", "remaining": "—", "ratio": null},
+    {"key": "tokenOut", "label": "Token（出）", "scope": "会话累计", "cap": "—", "used": "3.1K", "remaining": "—", "ratio": null},
+    {"key": "cacheHit", "label": "提示缓存命中", "scope": "会话累计", "cap": "—", "used": "9.1K", "remaining": "—", "ratio": null},
+    {"key": "turns", "label": "回合数", "scope": "会话累计", "cap": "—", "used": "7", "remaining": "—", "ratio": null},
+    {"key": "duration", "label": "累计耗时", "scope": "会话累计", "cap": "—", "used": "3分34秒", "remaining": "—", "ratio": null},
+    {"key": "toolCalls", "label": "单轮工具调用", "scope": "最近一回合", "cap": "16 · constant", "used": "3", "remaining": "13", "ratio": 0.1875},
+    {"key": "turnRounds", "label": "回合轮数", "scope": "每回合（前端未测得轮数）", "cap": "8 · constant", "used": "—", "remaining": "—", "ratio": null}
+  ],
+  "quotaDimensions": [
+    {"key": "tokens", "label": "Token 配额", "reason": "后端未暴露按 Token 配额的接口。", "evidence": "后端未暴露按 Token 配额的接口。"},
+    {"key": "steps", "label": "步数配额", "reason": "后端未暴露按步数配额的接口。", "evidence": "后端未暴露按步数配额的接口。"},
+    {"key": "cost", "label": "花费配额", "reason": "后端未暴露按花费配额的接口。", "evidence": "后端未暴露按花费配额的接口。"},
+    {"key": "depth", "label": "深度配额", "reason": "后端未暴露按深度配额的接口。", "evidence": "后端未暴露按深度配额的接口。"}
+  ],
+  "budgetExhaustion": {
+    "_note": "固定语义说明（后端无可配置语义 ⇒ 不出选择器）。behaviors 是逐条渲染的文案。",
+    "behaviors": [
+      "回合预算耗尽 ⇒ 收束为 turn_not_converged 错误帧，带真实数字。",
+      "单轮工具调用超限 ⇒ 截断并补合成结果，不整轮失败。",
+      "上下文超预算 ⇒ 核心块永不截断，超出按长尾贪心截断。"
+    ]
+  },
+  "runtimeReport": {
+    "_note": "深度诊断读数（宿主喂）。subsystems[].status: ok | degraded | offline。",
+    "overall": "ok",
+    "latencyMs": 42,
+    "subsystems": [
+      {"name": "网关", "endpoint": "/v1/health", "status": "ok"},
+      {"name": "模型服务", "endpoint": "/v1/models", "status": "ok"},
+      {"name": "会话账本", "endpoint": "/v1/sessions", "status": "degraded"},
+      {"name": "记忆流", "endpoint": "/v1/memory", "status": "ok"}
+    ]
+  },
+  "checkingRuntime": false,
+  "textFlags": {
+    "_note": "S5 的 textDirty 键。",
+    "budget.maxTurnRounds": false,
+    "budget.maxToolCalls": false,
+    "budget.contextBudgetChars": false
+  }
+}

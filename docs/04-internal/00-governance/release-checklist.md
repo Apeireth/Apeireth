@@ -2,7 +2,7 @@
 
 > **用途**：每次 rc/GA 发版前逐项勾选。**性质**：文本可信度批新建（审计修 B-03 / F-04），
 > 目标是消除「版本号残留 / 发布物与文档口径漂移」类落差。
-> 版本轴现值以根 `Cargo.toml` `[workspace.package] version` 为准（现 **2.0.0-rc.4**）。
+> 版本轴现值以根 `Cargo.toml` `[workspace.package] version` 为准（现 **2.0.0-rc.5**）。
 
 ## 0. 版本号残留清扫（必做，本清单的核心）
 
@@ -27,9 +27,9 @@
 > **版本一致性门禁现状（2026-10-22 已修）**：2026-10-21 对账曾实测 **exit 1**——脚本递归扫
 > `crates/**/Cargo.toml`，把两个独立 fuzz 子工程（`crates/engine/image/codecs/fuzz/Cargo.toml`、
 > `crates/engine/image/psd/fuzz/Cargo.toml`；各自声明 `[workspace]`、fuzz 惯例 `version = "0.0.0"`）
-> 判为「显式版本 ≠ workspace 2.0.0-rc.4」。**已修**：脚本排除 `*/fuzz/Cargo.toml` 并在报告里显式列
+> 判为「显式版本 ≠ workspace 2.0.0-rc.5」。**已修**：脚本排除 `*/fuzz/Cargo.toml` 并在报告里显式列
 > `[SKIP]`（不静默），复跑 **exit 0**（`-Json`：passed=true，35 条 = 33 检查 + 2 SKIP，FAIL 0；
-> `-ExpectedVersion 2.0.0-rc.4 -Strict` exit 0；`-ExpectedVersion 9.9.9` 反证仍 exit 1）。
+> `-ExpectedVersion 2.0.0-rc.5 -Strict` exit 0；`-ExpectedVersion 9.9.9` 反证仍 exit 1）。
 > `.github/workflows/publish-release.yml` 的「Verify tag matches version sources」首关本地已绿；
 > 远程 CI 首跑仍未验证（无 tag 推送权限动作）。见 §5 R-1（已收敛）。
 
@@ -38,7 +38,7 @@
 > R-5（测试数字二源指针）、R-6（`cargo run -- --version`）全部收敛或模板侧收敛；
 > `docs_truth.py --verify --check` / `arch_guard.py --strict` / `arch_doc.py --check` 均绿。
 > **剩余只等三件 owner/发布线动作（仓库侧无待办）**：① `push`（本地跨线提交未推；推后远程 CI
-> 首跑才发生，其记录是本清单 L31/§4 的最后一格证据）；② 已发布 `v2.0.0-rc.4` Release 页正文/
+> 首跑才发生，其记录是本清单 L31/§4 的最后一格证据）；② 已发布 `v2.0.0-rc.5` Release 页正文/
 > 资产清单按新模板编辑或重发（本机无 gh / Release 面通道）；③ Authenticode 签名证书（外部持有；
 > 未签名声明已入模板，不阻塞内部测试版）。另：B6-2a 试点设计页
 > [b6-2a-sealed-session-design-2026-10-22.md](../backend-enhancement/b6-2a-sealed-session-design-2026-10-22.md)
@@ -55,21 +55,21 @@
   - 实证（2026-10-21）：原文 `cargo run --bin apeireth --version` 会被 cargo 自身参数解析拒绝
     （实测 `error: unexpected argument '--version' found` + 提示改用 `-- --version`）——已改命令。
     **2026-10-22 补证（cargo 直跑闭环）**：`cargo run -p apeireth-cli --bin apeireth --locked -j 2 -- --version`
-    → 编译成功并输出 **`apeireth 2.0.0-rc.4`**，exit 0（此前被在途 cli 编译红阻断，R-6 已收敛）。
+    → 编译成功并输出 **`apeireth 2.0.0-rc.5`**，exit 0（此前被在途 cli 编译红阻断，R-6 已收敛）。
 - [ ] 安装包文件名内嵌版本 = 新版本号；`Get-AuthenticodeSignature` 状态如实记录（未签名则发布说明写明）
-  - 部分实证（2026-10-21）：本地 NSIS 产物 `target/desktop-nsis/Apeireth Companion_2.0.0-rc.4_x64-setup.exe`
-    （13,472,128 B，2026-10-17 21:01:50 构建）文件名内嵌 **2.0.0-rc.4** = 当前版本 ✓；
+  - 部分实证（2026-10-21）：本地 NSIS 产物 `target/desktop-nsis/Apeireth Companion_2.0.0-rc.5_x64-setup.exe`
+    （13,472,128 B，2026-10-17 21:01:50 构建）文件名内嵌 **2.0.0-rc.5** = 当前版本 ✓；
     `Get-AuthenticodeSignature` 实测 **`NotSigned`**（平台原话：文件未进行数字签名）。
     「未签名则发布说明写明」：**2026-10-22 已补进发布说明模板**
     （`.github/workflows/publish-release.yml` 下载段新增 Unsigned build notice：`Get-AuthenticodeSignature`
-    = `NotSigned`，提示先核对 SHA-256 或从源码构建）。**未闭环**：已发布的 `v2.0.0-rc.4` Release 页
+    = `NotSigned`，提示先核对 SHA-256 或从源码构建）。**未闭环**：已发布的 `v2.0.0-rc.5` Release 页
     正文仍是旧文案（未重发/未编辑）⇒ 该页待发布线处理（见 §5 R-2，模板侧已收敛）。
 - [ ] **`SHA256SUMS` 与各资产 `.sha256` 一致**（E-01 前科：两文件互相矛盾——重生成覆盖全部资产，
       保留 per-asset `.sha256`；CI 增下载自校验一步。历史文件名 `SHA256SUMS.txt`，现行流水线产物为
       无后缀 `SHA256SUMS`）
   - 部分实证（2026-10-21，本地 smoke，非 Release 面；复现目录 `%TEMP%\apeireth-relcheck-20261021`）：
-    ① `pwsh -File scripts/generate-release-manifest.ps1 -DistDir <临时目录> -Version 2.0.0-rc.4
-    -ReleaseTag v2.0.0-rc.4` → exit 0，产出 `SHA256SUMS` + `releaseon`；
+    ① `pwsh -File scripts/generate-release-manifest.ps1 -DistDir <临时目录> -Version 2.0.0-rc.5
+    -ReleaseTag v2.0.0-rc.5` → exit 0，产出 `SHA256SUMS` + `releaseon`；
     ② `pwsh -File scripts/verify-release-assets.ps1 -ArtifactPath <rc.4 exe> -ManifestPath <SHA256SUMS>`
     → **PASS，exit 0**；
     ③ 同 exe 副本改末字节 1 位后复验 → **FAIL，exit 1**（fail-closed 有据）；
@@ -96,7 +96,7 @@
 - [x] crate 口径核对：`workspace = 30 members（29 crates + bench harness）`（2026-10-20 R4b 归档
       `apeireth-perception` 后；历史 31 members）；成员有变时先改 ARCHITECTURE.md / INSTALL.md /
       README 本体，再全仓 grep 旧口径
-  - 真源实证（2026-10-21）：`python -c "import tomllib; ..."` → **30 members**；版本 → `2.0.0-rc.4`。
+  - 真源实证（2026-10-21）：`python -c "import tomllib; ..."` → **30 members**；版本 → `2.0.0-rc.5`。
     **2026-10-22 旧口径清零（现值文档）**：`README.md:13` Workspace 徽章 31 → **30 members**；
     `README.zh-CN.md:13` 徽章同步、正文「31 成员工作区」→ **30 成员工作区**；
     `ARCHITECTURE.md:56`「2026-10-20：31 members / 118 production edges」→ **「2026-10-22：30 members /
@@ -140,8 +140,8 @@ cargo fmt --check                                                   # 快检：0
 ## 4. 发布后
 
 - [ ] git tag 与 Release 页互相指向；workspace.version 随 release 推进（rc.n → GA）
-  - 半实证（2026-10-21）：tag 侧 ✓ —— `git tag --list` 有 `v2.0.0-rc.4`；`git show
-    v2.0.0-rc.4:Cargo.toml` 的 `[workspace.package] version = "2.0.0-rc.4"` = 根 `Cargo.toml` 现值；
+  - 半实证（2026-10-21）：tag 侧 ✓ —— `git tag --list` 有 `v2.0.0-rc.5`；`git show
+    v2.0.0-rc.5:Cargo.toml` 的 `[workspace.package] version = "2.0.0-rc.5"` = 根 `Cargo.toml` 现值；
     `git for-each-ref` 显示该 tag 指向 commit `2a8b46fe`（轻量 tag；当前 HEAD `2ce83d45`）。
     Release 页侧**未实测**：本机无 `gh` CLI；按仓内 `docs/04-internal/github-fetch-guide.md` §〇，
     GitHub 域 `web_fetch` 定死 `fetch failed`，无可用通道核对「页面互相指向」
@@ -163,17 +163,17 @@ _本清单由「落差清账·文本可信度批」创建（2026-10-16）。_
 
 | # | 检查 | 命令（可复核） | 2026-10-21 实测结果 |
 |---|---|---|---|
-| E-1 | 二进制版本输出 | `target\debug\apeireth.exe --version` | `apeireth 2.0.0-rc.4`，exit 0 |
-| E-2 | 安装包文件名 | `Get-ChildItem target\desktop-nsis` | `Apeireth Companion_2.0.0-rc.4_x64-setup.exe`（13,472,128 B） |
+| E-1 | 二进制版本输出 | `target\debug\apeireth.exe --version` | `apeireth 2.0.0-rc.5`，exit 0 |
+| E-2 | 安装包文件名 | `Get-ChildItem target\desktop-nsis` | `Apeireth Companion_2.0.0-rc.5_x64-setup.exe`（13,472,128 B） |
 | E-3 | Authenticode 状态 | `Get-AuthenticodeSignature '<exe>'` | `Status = NotSigned` |
 | E-4 | sidecar 哈希一致 | `Get-FileHash '<exe>' -Algorithm SHA256` | `AE1447…A0406` = 同目录 `.sha256` 值 |
-| E-5 | 清单生成 | `scripts\generate-release-manifest.ps1 -DistDir <temp> -Version 2.0.0-rc.4 -ReleaseTag v2.0.0-rc.4` | exit 0，产出 `SHA256SUMS` + `releaseon` |
+| E-5 | 清单生成 | `scripts\generate-release-manifest.ps1 -DistDir <temp> -Version 2.0.0-rc.5 -ReleaseTag v2.0.0-rc.5` | exit 0，产出 `SHA256SUMS` + `releaseon` |
 | E-6 | 资产校验正路 | `scripts\verify-release-assets.ps1 -ArtifactPath <exe> -ManifestPath <SHA256SUMS>` | `PASS`，exit 0 |
 | E-7 | 资产校验反路 | 同上，对篡改末字节的 exe 副本 | `FAIL`，exit 1（fail-closed） |
 | E-8 | 版本一致性门禁脚本 | `pwsh -NoProfile -File scripts/check-release-version.ps1`；`-Json`；`-ExpectedVersion 9.9.9` | **2026-10-22 修复后 exit 0**：PASS 33 行 + `[SKIP]` 2 行（fuzz 子工程），JSON passed=true；反证 9.9.9 → exit 1（见 R-1 已收敛） |
 | E-9 | 文档真源门禁 | `python scripts/docs_truth.py --verify --check` | `OK: STATUS.md matches claims.yaml; README badges match baseline`，exit 0 |
-| E-10 | crate 口径 | `python -c "import tomllib; ... print(len(d['workspace']['members']))"` | `30`（版本 `2.0.0-rc.4`） |
-| E-11 | tag ↔ 版本 | `git tag --list`；`git show v2.0.0-rc.4:Cargo.toml` | tag `v2.0.0-rc.4` 存在（→ commit `2a8b46fe`），version = `2.0.0-rc.4` |
+| E-10 | crate 口径 | `python -c "import tomllib; ... print(len(d['workspace']['members']))"` | `30`（版本 `2.0.0-rc.5`） |
+| E-11 | tag ↔ 版本 | `git tag --list`；`git show v2.0.0-rc.5:Cargo.toml` | tag `v2.0.0-rc.5` 存在（→ commit `2a8b46fe`），version = `2.0.0-rc.5` |
 | E-12 | 全量门禁记录（只复核） | `logs/gate-full.log`；`artifacts/wave4-close-full-2026-10-21.log` 尾部 | `GATE FULL PASSED (2026-10-21 15:52:59)`；`GATE FULL PASSED` |
 
 E-5/E-6/E-7 在 `%TEMP%\apeireth-relcheck-20261021` 复现（临时目录，不落仓库）；E-7 篡改方式 =
@@ -196,7 +196,7 @@ L57 tag ↔ Release 页互相指向（只有 tag 侧，E-11）。
   正文曾写「18-Crate Kernel + Assembly, 3600+ Verified Tests」（旧口径）——**已改**为
   「30-Member Workspace (29 crates + 1 bench harness), 8570+ Verified Tests (2026-10-21)」；
   下载段**新增 Unsigned build notice**（NotSigned + 先核对 SHA-256/从源码构建提示）。
-  残留：已发布的 `v2.0.0-rc.4` Release 页正文仍是旧文案（本机无 gh/Release 面通道）⇒ 待发布线编辑/重发。
+  残留：已发布的 `v2.0.0-rc.5` Release 页正文仍是旧文案（本机无 gh/Release 面通道）⇒ 待发布线编辑/重发。
 - **R-3（已收敛，2026-10-22）** 资产名漂移：指南 `docs/beta/rc2-beta-guide.md:8` 引
   `SHA256SUMS.txt` —— **已统一**为 `SHA256SUMS`（= 流水线产物名）；仓库侧零漂移。
   残留：已发布 Release 页资产清单需发布线核对（无 Release 面通道）。
@@ -210,4 +210,4 @@ L57 tag ↔ Release 页互相指向（只有 tag 侧，E-11）。
 - **R-6（已收敛，2026-10-22）** L29 的 `cargo run` 直跑路径曾被他线在途编译红阻断（E0308，
   `GovernanceChain::new` 期望 `Arc<GovernanceChain>`）；安全线 R8-B2/B3 收口（`4e380a69`/`e812fda9`）
   后 **已复跑**：`cargo run -p apeireth-cli --bin apeireth --locked -j 2 -- --version` →
-  编译成功、输出 `apeireth 2.0.0-rc.4`、exit 0。
+  编译成功、输出 `apeireth 2.0.0-rc.5`、exit 0。

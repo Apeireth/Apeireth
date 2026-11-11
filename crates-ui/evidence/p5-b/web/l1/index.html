@@ -1,0 +1,11 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>L1 probe</title>
+<!-- ⭐⭐⭐ E-181 可见性证据：**class 驱动**的隐藏 ⇒ ⇒ 引擎自己不知道这条规则
+     ⇒ ⇒ 只能由浏览器的**计算样式**判出来 ⇒ ⇒ ⇒ 这条路只有浏览器能验。
+     ⇒ ⇒ 探针树里的 `button#fm-hidden`（class="fm-hidden"）必须被 Tab **跳过**
+     ⇒ ⇒ 判据：Tab 之后焦点落在 `fm-b2`（不是 `fm-hidden`）。 -->
+<style>
+  .fm-hidden { display: none; }
+</style>
+</head>
+<body><div id="host"></div><script type="module" src="./main.js"></script></body></html>

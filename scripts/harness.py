@@ -173,7 +173,7 @@ def now_iso() -> str:
 
 def rel_path(path: Path) -> str:
     try:
-        return str(path.relative_to(ROOT))
+        return path.relative_to(ROOT).as_posix()
     except ValueError:
         return str(path)
 

@@ -1,0 +1,30 @@
+{
+  "passed": true,
+  "t1_pixel_ratio": 0.0,
+  "t1_pixel_different": 0,
+  "t1_pixel_total": 1296000,
+  "t1_pixel_exact_zero": true,
+  "t1_size_mismatch": false,
+  "t2_dom_equal": true,
+  "t2_dom_diffs": [],
+  "t3_same_width": true,
+  "t3b_same_height": true,
+  "t3_reference_box": {
+    "x": 0,
+    "y": 0,
+    "w": 1440,
+    "h": 900
+  },
+  "t3_engine_box": {
+    "x": 0,
+    "y": 0,
+    "w": 1440,
+    "h": 900
+  },
+  "t3_reference_width": 1440,
+  "t3_engine_width": 1440,
+  "t3_reference_height": 900,
+  "t3_engine_height": 900,
+  "section": "api-key-modal",
+  "crop": "整视口"
+}

@@ -1,4 +1,4 @@
-# Apeireth docker-compose（当前基线 v2.0.0-rc.4）
+# Apeireth docker-compose（当前基线 v2.0.0-rc.5）
 #
 # 单服务编排: apeireth canonical gateway（SQLite 持久化 + 数据卷）。
 # - 镜像由根目录 Dockerfile 构建（构建当前工作区 CLI 并以 `apeireth gateway serve` 启动）
@@ -12,7 +12,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: apeireth/apeireth:2.0.0-rc.4
+    image: apeireth/apeireth:2.0.0-rc.5
     container_name: apeireth
     restart: unless-stopped
     ports:

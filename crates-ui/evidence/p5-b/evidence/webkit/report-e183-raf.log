@@ -1,0 +1,73 @@
+→ 构建引擎 harness（wasm32）…
+→ wasm-bindgen 打包…
+→ 编译 Tauri 壳（WebKitGTK）…
+→ 起真实 WebKitGTK 窗口（Xvfb）…
+❌ 不是 WebKitGTK（UA=''）⇒ ⇒ 这次**不算** WebKitGTK 证据
+── 机器负载 ──
+7.97 57.12 71.45 2/1616 21308
+── 页面阶段 ──
+'wasm-ready'
+── 宿主 stdout ──
+
+── 宿主 stderr（末段） ──
+libEGL warning: DRI3 error: Could not get DRI3 device
+libEGL warning: Ensure your X server supports DRI3 to get accelerated rendering
+[probe] url=tauri://localhost
+[probe] url=tauri://localhost#result=%7B%22stage%22%3A%22wasm-ready%22%2C%22keyboardSemantics%22%3A%7B%22plain_key%22%3A%22Enter%22%2C%22plain_shift%22%3Afalse%2C%22plain_ctrl%22%3Afalse%2C%22plain_composing%22%3Afalse%2C%22shifted_key%22%3A%22Enter%22%2C%22shifted_shift%22%3Atrue%2C%22shifted_ctrl%22%3Afalse%2C%22shifted_composing%22%3Afalse%2C%22composing_key%22%3A%22Enter%22%2C%22composing_flag%22%3Atrue%2C%22ok%22%3Atrue%7D%2C%22focusModal%22%3A%7B%22installed%22%3Atrue%2C%22focus_after_first%22%3A%22fm-b1%22%2C%22focus_after_tab%22%3A%22fm-b2%22%2C%22focus_after_shift_tab%22%3A%22fm-b1%22%2C%22focus_in_modal%22%3A%22fm-inside%22%2C%22focus_after_close%22%3A%22fm-b1%22%2C%22modal_restored%22%3Atrue%2C%22empty_window_ok%22%3Atrue%2C%22ok%22%3Atrue%7D%2C%22dom%22%3A%7B%22ok%22%3Atrue%2C%22failures%22%3A%5B%5D%2C%22payload%22%3A%22value%3DSome(%5C%22a%5C%22)%3Bpos%3DNone%3Bchecked%3DSome(false)%22%2C%22g8_error_boundary_ok%22%3Atrue%2C%22g8_captured_error%22%3A%22Unsupported%3A%20create_element()%20%E5%A4%B1%E8%B4%A5%EF%BC%9AJsValue(InvalidCharacterError%3A%20The%20string%20contains%20invalid%20characters.%5CncreateElement%40%5Bnative%20code%5D%5Cn%40tauri%3A%2F%2Flocalhost%2Fengine%2Fpkg%2Fp5b_harness.js%3A1250%3A43%5CnhandleError%40tauri%3A%2F%2Flocalhost%2Fengine%2Fpkg%2Fp5b_harness.js%3A3616%3A23%5Cn%3Cweb_sys%5B87fce178bfa1bdc9%5D%3A%3Afeatures%3A%3Agen_Document%3A%3ADocument%3E%3A%3Acreate_element%3A%3A__wbg_createElement_74049073a11f9c31%20externref%20shim%40p5b_harness.wasm%3Awasm-function%5B7447%5D%5Cn%3Cweb_sys%5B87fce178bfa1bdc9%5D%3A%3Afeatures%3A%3Agen_Document%3A%3ADocument%3E%3A%3Acreate_element%40p5b_harness.wasm%3Awasm-function%5B6244%5D%5Cn%3Capeireth_ui_dom%5Bcb50d36515770dc0%5D%3A%3Aweb%3A%3AWebDom%20as%20apeireth_ui_dom%5Bcb50d36515770dc0%5D%3A%3Adom%3A%3ADom%3E%3A%3Acreate_element%40p5b_harness.wasm%3Awasm-function%5B3842%5D%5Cn%3Capeireth_ui_dom%5Bcb50d36515770dc0%5D%3A%3Arenderer%3A%3ARenderer%3Capeireth_ui_dom%5Bcb50d36515770dc0%5D%3A%3Aweb%3A%3AWebDom%3E%3E%3A%3Amount_node%40p5b_harness.wasm%3Awasm-function%5B821%5D%5Cn2100%40wasm-function%5B2100%5D%5Cn1589%40wasm-function%5B1589%5D%5Cn696%40wasm-function%5B696%5D%5Cn5691%40wasm-function%5B5691%5D%5Cn6907%40wasm-function%5B6907%5D%5Cnl1_probe%40tauri%3A%2F%2Flocalhost%2Fengine%2Fpkg%2Fp5b_harness.js%3A502%3A30%5Cnmain%40tauri%3A%2F%2Flocalhost%3A124%3A37)%22%2C%22g8_panic_hook%22%3A%22installed%22%2C%22engine_form%22%3A%7B%22x%22%3A16%2C%22y%22%3A179%2C%22w%22%3A1248%2C%22h%22%3A25%7D%2C%22js_form%22%3A%7B%22x%22%3A16%2C%22y%22%3A179%2C%22w%22%3A1248%2C%22h%22%3A25%7D%2C%22device_input%22%3A%7B%22x%22%3A40%2C%22y%22%3A447.5%2C%22w%22%3A387.5%2C%22h%22%3A62.5%7D%7D%2C%22asyncLineArm%22%3A%7B%22armed%22%3Atrue%7D%2C%22asyncTick%22%3A2%7D
+{
+  "stage": "wasm-ready",
+  "keyboardSemantics": {
+    "plain_key": "Enter",
+    "plain_shift": false,
+    "plain_ctrl": false,
+    "plain_composing": false,
+    "shifted_key": "Enter",
+    "shifted_shift": true,
+    "shifted_ctrl": false,
+    "shifted_composing": false,
+    "composing_key": "Enter",
+    "composing_flag": true,
+    "ok": true
+  },
+  "focusModal": {
+    "installed": true,
+    "focus_after_first": "fm-b1",
+    "focus_after_tab": "fm-b2",
+    "focus_after_shift_tab": "fm-b1",
+    "focus_in_modal": "fm-inside",
+    "focus_after_close": "fm-b1",
+    "modal_restored": true,
+    "empty_window_ok": true,
+    "ok": true
+  },
+  "dom": {
+    "ok": true,
+    "failures": [],
+    "payload": "value=Some(\"a\");pos=None;checked=Some(false)",
+    "g8_error_boundary_ok": true,
+    "g8_captured_error": "Unsupported: create_element() 失败：JsValue(InvalidCharacterError: The string contains invalid characters.\ncreateElement@[native code]\n@tauri://localhost/engine/pkg/p5b_harness.js:1250:43\nhandleError@tauri://localhost/engine/pkg/p5b_harness.js:3616:23\n<web_sys[87fce178bfa1bdc9]::features::gen_Document::Document>::create_element::__wbg_createElement_74049073a11f9c31 externref shim@p5b_harness.wasm:wasm-function[7447]\n<web_sys[87fce178bfa1bdc9]::features::gen_Document::Document>::create_element@p5b_harness.wasm:wasm-function[6244]\n<apeireth_ui_dom[cb50d36515770dc0]::web::WebDom as apeireth_ui_dom[cb50d36515770dc0]::dom::Dom>::create_element@p5b_harness.wasm:wasm-function[3842]\n<apeireth_ui_dom[cb50d36515770dc0]::renderer::Renderer<apeireth_ui_dom[cb50d36515770dc0]::web::WebDom>>::mount_node@p5b_harness.wasm:wasm-function[821]\n2100@wasm-function[2100]\n1589@wasm-function[1589]\n696@wasm-function[696]\n5691@wasm-function[5691]\n6907@wasm-function[6907]\nl1_probe@tauri://localhost/engine/pkg/p5b_harness.js:502:30\nmain@tauri://localhost:124:37)",
+    "g8_panic_hook": "installed",
+    "engine_form": {
+      "x": 16,
+      "y": 179,
+      "w": 1248,
+      "h": 25
+    },
+    "js_form": {
+      "x": 16,
+      "y": 179,
+      "w": 1248,
+      "h": 25
+    },
+    "device_input": {
+      "x": 40,
+      "y": 447.5,
+      "w": 387.5,
+      "h": 62.5
+    }
+  },
+  "asyncLineArm": {
+    "armed": true
+  },
+  "asyncTick": 2
+}

@@ -2,7 +2,14 @@
 # 生成: python scripts/arch_guard.py --update-baseline
 # 规则: 新指纹不在本文件 = 违规; 本文件中已消失的指纹 = 可缩表。
 
-# --- edge (125) ---
+# --- edge (132) ---
+edge apeireth -> apeireth-core
+edge apeireth -> apeireth-guard
+edge apeireth -> apeireth-memory
+edge apeireth -> apeireth-orchestration
+edge apeireth -> apeireth-protocol
+edge apeireth -> apeireth-runtime
+edge apeireth -> apeireth-tools-canonical
 edge apeireth-bench-harness -> apeireth-core
 edge apeireth-bench-harness -> apeireth-gateway
 edge apeireth-bench-harness -> apeireth-memory

@@ -11,10 +11,13 @@
 #   4. 不替代、不修改 LOCKED 5 项; 与 LOCKED 冲突时以 LOCKED 为准。
 #
 # 0 装边界 (实测来源; 2026-11-04 文档真源批按当前树复测):
-#   - 依赖边: cargo metadata --no-deps (kind != dev, workspace 内) = 111 条生产边
-#              （= scripts/arch-baseline.txt 的 111 条 edge 条目；arch_guard --strict 报 edges=111）
-#   - 开关名: `rg -o 'APEIRETH_[A-Z0-9_]+' crates --glob '*.rs'` = 173 distinct（全 crates 含 tests 口径）；
-#              守卫按 workspace src 口径实测 = 160（见 [env] max_distinct_names）
+#   - 依赖边: cargo metadata --no-deps (kind != dev, workspace 内) = 132 条生产边
+#              （= scripts/arch-baseline.txt 的 132 条 edge 条目；arch_guard --strict 报 edges=132）
+#              （2026-11-11 **合并后树**重测：111 -> 118（门面 crate apeireth，ADR-0019）
+#                -> 132（mesh 线 4 个 crate，ADR-0024，新增 14 条））
+#   - 开关名: `rg -o 'APEIRETH_[A-Z0-9_]+' crates --glob '*.rs'` = 179 distinct（全 crates 含 tests 口径）；
+#              守卫按 workspace src 口径实测 = 152（能力开关口径，2026-11-11 合并后树重测；
+#              原始 findall = 164；登记面 164 全部登记 ⇒ 见 [env] max_distinct_names）
 #   - 最大 src 文件: 实测 6255 行 (crates/capabilities/tools/src/doc_ops.rs)
 # ============================================================================
 
@@ -30,10 +33,10 @@ wave_note = "Wave 4 收口 (2026-10-21): R1b 交付（R1b-1a 总线/桥/开关�
 rolling_report_only_until = "2026-11-03"   # 灰度期: 此日期前 CI/commit 仅报告, 之后 blocking
 
 [workspace]
-members = 34          # 34 = 30 + 4 个 mesh crate（ADR-0024）；另一条线（门面 crate，ADR-0019）若后合入，须 rebase 后按合并后树重测本值
-product_crates = 33   # 33 = 34 - bench harness
+members = 35          # 35 = main 侧 31（含门面 crate apeireth，ADR-0019）+ mesh 线 4 个 crate（ADR-0024）；**合并后树实测 35**（2026-11-11）
+product_crates = 34   # 34 = 35 - bench harness
 bench_crates = 1
-version = "2.0.0-rc.4"
+version = "2.0.0-rc.5"
 test_baseline = "docs/03-reference/test-baseline.md（单一真源；本契约不抄写测试数字）"
 
 [[workspace.independent_workspaces]]
@@ -42,7 +45,7 @@ path = "crates-ui"
 crates = 1
 ci = ".github/workflows/ui-core-ci.yml"
 adr = "docs/adr/0021-consolidation-ui-core-slice.md"
-note = "Independent Cargo workspace: NOT one of the 30 root members, no dependency edge to/from the root workspace; holds 1 crate (apeireth-ui-core). IMPLEMENTED pure reactive library only; no production frontend consumer/DOM/GPU wiring; root metadata and budgets unchanged."
+note = "Independent Cargo workspace: NOT one of the 35 root members, no dependency edge to/from the root workspace; holds 1 crate (apeireth-ui-core). IMPLEMENTED pure reactive library only; no production frontend consumer/DOM/GPU wiring; root metadata and budgets unchanged."
 
 [locked]
 # 只引用, 不复制数值; 守卫检查契约批不触碰这些文件。
@@ -63,6 +66,11 @@ foundation = [
 engine = [
   "apeireth-runtime", "apeireth-runtime-assembly", "apeireth-provider",
   "apeireth-storage", "apeireth-memory", "apeireth-organ", "apeireth-guard",
+  # 门面（ADR-0019）：纯 re-export，出边 -> foundation/engine/capabilities 均在允许表内
+  "apeireth",
+  # Mesh 跨节点栈（ADR-0024）：mesh / mesh-quic / mesh-rendezvous 同归 engine 层
+  # （mesh-rendezvous 虽在 crates/services/ 下，但契约无 services 层 ⇒ 归 engine，
+  #   与 ADR-0024 的层归属一致；出边只指向 foundation 层 mesh-protocol）
   "apeireth-mesh", "apeireth-mesh-quic", "apeireth-mesh-rendezvous",
 ]
 capabilities = ["apeireth-tools-canonical"]
@@ -285,6 +293,10 @@ target = "R2（ADR-0008 Accepted）: 公共面 2026-10-20 收敛；plugin 内部
 # 逐条登记字段迁移见 R3。
 policy = "所有 APEIRETH_* 开关必须登记; 新增必须默认关 + 关时零变化测试"
 max_distinct_names = 154            # 棘轮: 只减不增（按 src 口径 · **只数能力开关**）
+# ⚠️ **2026-11-11 合并后树重测（PR #117 并入 main 后按合并后树重测）**：
+#   能力开关实测 **152**（原始 findall **164**；登记面 164 条**全部已登记** ⇒ 登记面零缺口）
+#   ⇒ ⇒ 预算 **154 保持不变**（**未放宽**，余 2 个名额；棘轮只减不增）
+#   ⇒ ⇒ 下方 **162 / 150 是 2026-11-07 的历史口径，保留不追溯改写**。
 # ⚠️ **162 => 154**（2026-11-07，owner 口头授权「env 可以扩增一点」+ 主指挥落地）：**口径修正 + 名额裁决**。
 #   **旧判据错在哪**：env 预算原先按 `src/**/*.rs` **全文 findall** 的 `APEIRETH_*` 名字数计
 #   ⇒ ⇒ 把**测试 / 基准夹具与密钥标记**（`APEIRETH_IMAGE_UNSHARP_*` 族、`APEIRETH_REG_*` 族、
@@ -349,8 +361,8 @@ allowed_read_locations = []         # 空 = v0.1 只按名字卡, 不按位置�
 
 [budgets]
 max_file_loc = 6300                 # 现状最大 src 6255 (doc_ops.rs, 2026-11-04 实测); 只减不增
-max_workspace_crates = 34           # 上限 == 实测（棘轮，只减不增；新增需 ADR）；现行实测 34（2026-11-11 mesh 线新增 4 个 crate，ADR-0024）
-max_production_edges = 125          # 上限（棘轮，只减不增；新增需 ADR）；现行实测 125（2026-11-11 mesh 线新增 14 条生产边，ADR-0024；口径同「上限 == 实测」，env 名额另有 4 个受控口子，见 [env] 段） ⇒ ⇒ 任何新增生产边都会被拦下 ⇒ ⇒ 真要加边先问总指挥）
+max_workspace_crates = 35           # 上限 == 实测（棘轮，只减不增；新增需 ADR）；现行实测 35（2026-11-11 **合并后树**重测 = main 侧 31 + mesh 线 4 个 crate，ADR-0024；口径同「上限 == 实测」，env 名额另有 4 个受控口子，见 [env] 段）
+max_production_edges = 132          # 上限（棘轮，只减不增；新增需 ADR）；现行实测 132（2026-11-11 **合并后树**重测：111 -> 118（门面 crate apeireth 新增 7 条，ADR-0019）-> 132（mesh 线 4 个 crate 新增 14 条，ADR-0024）⇒ 上限随之回到「上限 == 实测」口径（与 max_workspace_crates=35 同口径；env 名额另有 4 个受控口子，见 [env] 段） ⇒ ⇒ 任何新增生产边都会被拦下 ⇒ ⇒ 真要加边先问总指挥）
 
 [exceptions]
 # 例外预算 — 已裁决 (ADR-0001, owner 授权代裁 2026-10-20)

@@ -4,7 +4,7 @@
 
 > 唯一真源：`docs/architecture/contract.toml`；数据：`cargo metadata --no-deps`（生产边，kind != dev）。
 > 重新生成：`python scripts/arch_doc.py --gen`；漂移检查：`python scripts/arch_doc.py --check`（CI）。
-> 实测：workspace members = 34，生产依赖边 = 125。
+> 实测：workspace members = 35，生产依赖边 = 132。
 
 ## 1. 层 → crate
 
@@ -13,7 +13,7 @@
 | **adapters** | `apeireth-cli`, `apeireth-gateway`, `apeireth-sdk`, `apeireth-tui` |
 | **bench** | `apeireth-bench-harness` |
 | **capabilities** | `apeireth-tools-canonical` |
-| **engine** | `apeireth-guard`, `apeireth-memory`, `apeireth-mesh`, `apeireth-mesh-quic`, `apeireth-mesh-rendezvous`, `apeireth-organ`, `apeireth-provider`, `apeireth-runtime`, `apeireth-runtime-assembly`, `apeireth-storage` |
+| **engine** | `apeireth`, `apeireth-guard`, `apeireth-memory`, `apeireth-mesh`, `apeireth-mesh-quic`, `apeireth-mesh-rendezvous`, `apeireth-organ`, `apeireth-provider`, `apeireth-runtime`, `apeireth-runtime-assembly`, `apeireth-storage` |
 | **foundation** | `apeireth-core`, `apeireth-credentials`, `apeireth-governance`, `apeireth-mesh-protocol`, `apeireth-orchestration`, `apeireth-plugin`, `apeireth-protocol` |
 | **image_family**（vendored 家族，门禁隔离见 ADR-0005 R4a） | `apeireth-image-algo`, `apeireth-image-cms`, `apeireth-image-codecs`, `apeireth-image-color`, `apeireth-image-compose`, `apeireth-image-core`, `apeireth-image-doc`, `apeireth-image-geom`, `apeireth-image-psd`, `apeireth-image-raster`, `apeireth-image-vector` |
 
@@ -21,6 +21,13 @@
 
 | from | to | 层方向 |
 |---|---|---|
+| `apeireth` | `apeireth-core` | engine → foundation ✅ |
+| `apeireth` | `apeireth-guard` | engine → engine ✅ |
+| `apeireth` | `apeireth-memory` | engine → engine ✅ |
+| `apeireth` | `apeireth-orchestration` | engine → foundation ✅ |
+| `apeireth` | `apeireth-protocol` | engine → foundation ✅ |
+| `apeireth` | `apeireth-runtime` | engine → engine ✅ |
+| `apeireth` | `apeireth-tools-canonical` | engine → capabilities ✅ |
 | `apeireth-bench-harness` | `apeireth-core` | bench → foundation ✅ |
 | `apeireth-bench-harness` | `apeireth-gateway` | bench → adapters ✅ |
 | `apeireth-bench-harness` | `apeireth-memory` | bench → engine ✅ |

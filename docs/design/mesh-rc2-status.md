@@ -96,7 +96,10 @@ Author: Xephylos
 - ✅ **Mesh crate 登记进架构契约**（2026-11-11）：`docs/adr/0024-mesh-line-contract-registration.md`
   把 `crates/foundation/mesh-protocol` 登记为 foundation、`crates/engine/mesh`、`crates/engine/mesh-quic`、
   `crates/services/mesh-rendezvous` 登记为 engine，并让 `[kernel].allowed_production_deps` 与 `[budgets]`
-  上限对齐实测（34 crate / 125 生产边）⇒ `python3 scripts/arch_guard.py --strict` 归零。
+  上限对齐实测 ⇒ `python3 scripts/arch_guard.py --strict` 归零。
+- ✅ **合并后树重测**（2026-11-11，upstream/main@`7abfa282` 已合入本分支）：契约上限按**合并后树**
+  实测更新为 **35 crate / 132 生产边**（门面 crate `apeireth` 7 条边 + mesh 线 14 条边在合并树上相加），
+  `[env]` 能力开关实测 152 ≤ 预算 154 ⇒ **预算未放宽**；明细见 ADR-0024 §2.5。
 
 ## 守卫命令（机器判对错）
 

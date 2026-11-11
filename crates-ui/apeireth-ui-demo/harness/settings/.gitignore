@@ -1,0 +1,16 @@
+# 生成物（构建期产出，不入库）
+node_modules
+dist/
+out/
+# 抽取产物（按子面分片的 scoped CSS + 共享设计层 CSS）⇒ 与批一同口径：不入库
+public/design/
+public/settings-*.css
+!public/settings-test.css
+# wasm 胶水与二进制（构建期产物）
+public/engine/
+
+# 主仓根 .gitignore 全局忽略 `*.py` ⇒ 本 harness 的对照驱动（唯一的对照装置）
+# 必须**显式放行**，否则设置页的像素 / DOM 证据无法入库、无法复核。
+# （本目录的规则比根目录更深 ⇒ 优先级更高。）
+!tools/
+!tools/*.py

@@ -1,0 +1,370 @@
+//! ⭐⭐ **native 侧「每节点成本」测量**（2026-11-01；E-151 的下一步）。
+//!
+//! ## 它回答什么
+//!
+//! 浏览器侧实测（真实 Chromium，37,477 个真实 DOM 节点）：
+//! **改一个叶子 ⇒ 差分 patch ≈ 84 ms** ⇒ ⇒ ≈ **2.2 µs/节点**。
+//!
+//! ⭐ 那个数字里**混着两段完全不同的成本**：
+//!
+//! 1. **纯 Rust 逻辑**（树比对、属性比较、集合分配…）—— 与平台无关；
+//! 2. **wasm ⇄ JS 边界往返**（每次 `set_property` / `get_property` /
+//!    `classList` 操作都要跨界）—— **只存在于浏览器**。
+//!
+//! ⇒ ⇒ 本探针在 **native**（无 wasm、无 JS、无真实 DOM）上跑**同一棵树**
+//! ⇒ ⇒ **差值就是边界成本** ⇒ ⇒ ⇒ 由此决定「该优化纯 Rust 逻辑」还是
+//! ⇒ ⇒ ⇒ 「该减少跨界次数」。
+//!
+//! ## 为什么是 `examples/` 而不是 `tests/`
+//!
+//! 计时**会抖**（见 E-145：同一次测量波动可达 10 倍）⇒ ⇒ 断言计时
+//! ⇒ ⇒ **必然偶发红** ⇒ ⇒ ⇒ 故本探针**只打印、不断言**（⇒ 不进 CI 门禁），
+//! ⇒ ⇒ 数字靠**多次运行取中位数**（复跑命令见文末）。
+//!
+//! ## 复跑
+//!
+//! ```text
+//! cargo run --release -p apeireth-ui-dom --example patch_cost_probe
+//! ```
+//!
+//! 浏览器侧同口径（真实 Chromium）：
+//! `crates-ui/evidence/p5-b` 下 `APEIRETH_L1_SERVE_ROOT=$PWD/web python3 drive_l1.py`
+
+use std::time::Instant;
+
+use apeireth_ui_core::Runtime;
+use apeireth_ui_dom::binding::Binding;
+use apeireth_ui_dom::dom::{Dom, InMemoryDom};
+use apeireth_ui_dom::renderer::Renderer;
+use apeireth_ui_dom::vnode::VNode;
+
+/// ⭐ **单调微秒时钟**（native）。
+///
+/// 为什么不写在引擎里：本 workspace 的 **wasm** 环境里 `std::time::Instant::now()`
+/// **会 panic**（E-137 实测）⇒ ⇒ 时钟必须由**宿主/探针**注入
+/// ⇒ ⇒ 引擎只管调用（见 `Renderer::set_segment_clock`）。
+fn micros_clock() -> u128 {
+    use std::sync::OnceLock;
+    use std::time::Instant;
+    static START: OnceLock<Instant> = OnceLock::new();
+    START.get_or_init(Instant::now).elapsed().as_micros()
+}
+
+/// 与浏览器侧 perf 探针**同形**的树（`WIDTH = 8` / `DEPTH = 4`）。
+fn build(
+    width: usize,
+    depth: usize,
+    leaf: &apeireth_ui_core::Signal<String>,
+    first: bool,
+) -> VNode {
+    let mut children = Vec::with_capacity(width);
+    for index in 0..width {
+        if depth == 0 {
+            children.push(
+                VNode::element("span")
+                    .attr("data-i", index.to_string())
+                    .build(),
+            );
+            if first {
+                children.push(
+                    VNode::element("input")
+                        .bind(Binding::text(leaf.clone()))
+                        .build(),
+                );
+            }
+        } else {
+            children.push(build(width, depth - 1, leaf, first && index == 0));
+        }
+    }
+    VNode::element("div")
+        .attr("class", "perf-row")
+        .child(VNode::Fragment(children))
+        .build()
+}
+
+/// 数**真实 DOM 节点**（`InMemoryDom` 的树形后端）—— **含文本节点**。
+fn count_nodes(dom: &InMemoryDom, node: apeireth_ui_dom::dom::InMemoryNodeId) -> usize {
+    let children = dom.children(&node).unwrap_or_default();
+    let mut total = 1;
+    for child in children {
+        total += count_nodes(dom, child);
+    }
+    total
+}
+
+/// ⭐⭐⭐ 数**元素节点**（native **树内**口径）。
+///
+/// ⚠️ 与浏览器侧的**边界差异**（E-166 已查清，勿再误判）：
+/// - **native**：从**渲染树根**递归 ⇒ ⇒ 数的是**树内**元素；
+/// - **浏览器**：`document.querySelectorAll('*')` ⇒ ⇒ 数的是**整页**元素
+///   （树 + 页面骨架 `html`/`head`/`body`/`meta`/`script`/`title` 等）。
+///
+/// ⇒ ⇒ 实测（同一棵树 `8×4`）：native 树内 **37,458** / 浏览器整页 **37,477**
+/// ⇒ ⇒ **差 19 = 页面骨架元素** ⇒ ⇒ ⇒ **不是结构差异**。
+///
+/// ⇒ ⇒ ✅ **可比的口径是 `.perf-row` 计数**：两端都是 **4,681** ⇒ ⇒ **完全一致**
+/// ⇒ ⇒ ⇒ 树的**结构**两端相同 ⇒ ⇒ ⇒ 「每节点成本」的两端数字**可以互比**。
+///
+/// ## 为什么需要这个口径说明（E-166）
+///
+/// - 浏览器侧数的是 `document.querySelectorAll('*')` ⇒ ⇒ **只数元素**（**不含文本节点**）；
+/// - native 侧原先的 `count_nodes` ⇒ ⇒ **含文本节点**。
+///
+/// ⇒ ⇒ 两个数字**口径不同** ⇒ ⇒ **不能直接比** ⇒ ⇒ ⇒ 「37,458 vs 37,477」
+/// ⇒ ⇒ ⇒ 那个「接近」是**巧合**（两边各自的口径误差方向相反）⇒ ⇒ ⇒ **必须写清口径**。
+///
+/// ⇒ ⇒ 现在**两个口径都输出** ⇒ ⇒ 以后谁拿这两个数字对比，都不会再误判。
+fn count_rows(dom: &InMemoryDom, node: apeireth_ui_dom::dom::InMemoryNodeId) -> usize {
+    let children = dom.children(&node).unwrap_or_default();
+    let mut total = usize::from(
+        dom.tag(node).as_deref() == Some("div")
+            && dom.attribute(node, "class").as_deref() == Some("perf-row"),
+    );
+    for child in children {
+        total += count_rows(dom, child);
+    }
+    total
+}
+
+fn count_elements(dom: &InMemoryDom, node: apeireth_ui_dom::dom::InMemoryNodeId) -> usize {
+    let children = dom.children(&node).unwrap_or_default();
+    // `tag()` 返回 `Some` ⇒ 元素；`None` ⇒ 文本节点（**不计入元素数**）。
+    let mut total = usize::from(dom.tag(node).is_some());
+    for child in children {
+        total += count_elements(dom, child);
+    }
+    total
+}
+
+fn main() {
+    const WIDTH: usize = 8;
+    const DEPTH: usize = 4;
+    const REPEATS: usize = 5;
+
+    realistic_first_screen_probe();
+
+    let runtime = Runtime::new();
+    let leaf = runtime.signal(String::from("初始"));
+    let dom = InMemoryDom::new();
+    let root = dom.create_element("main").expect("建根必须成功");
+    let mut renderer = Renderer::new(dom, root);
+    // ⭐ 打开**段级计时**（默认关闭 ⇒ 零开销；打开后每次 `patch_node` 会累加到 `SegmentTimings`）。
+    renderer.set_segment_clock(Some(micros_clock));
+    let view = || build(WIDTH, DEPTH, &leaf, true);
+
+    let start_mount = Instant::now();
+    renderer.mount(view()).expect("挂载必须成功");
+    let mount_micros = start_mount.elapsed().as_micros();
+
+    let nodes = count_nodes(renderer.dom(), root);
+    let elements = count_elements(renderer.dom(), root);
+    let rows = count_rows(renderer.dom(), root);
+
+    println!("== native 侧 patch 成本（{WIDTH}×{DEPTH}）==");
+    println!(
+        "挂载 = {} ms | 树内节点 = {nodes} | **树内元素 = {elements}** | **树内 .perf-row = {rows}**（浏览器侧 `.perf-row` 实测 4681 ⇒ 同口径）",
+        mount_micros / 1000,
+    );
+
+    let mut samples: Vec<u128> = Vec::with_capacity(REPEATS);
+    for round in 0..REPEATS {
+        renderer.reset_patch_stats();
+        renderer.reset_segment_timings();
+        leaf.set(format!("改后-{round}"));
+        let start = Instant::now();
+        renderer.patch(view()).expect("打补丁必须成功");
+        let micros = start.elapsed().as_micros();
+        let stats = renderer.patch_stats();
+        samples.push(micros);
+        println!(
+            "  第 {} 次: patch = {} µs | 比对 = {} | 写入 = {}",
+            round + 1,
+            micros,
+            stats.compared_nodes,
+            stats.written_nodes
+        );
+    }
+    samples.sort_unstable();
+    let median = samples[samples.len() / 2];
+    println!(
+        "中位数 = {median} µs | 每节点 ≈ {:.3} µs",
+        median as f64 / nodes as f64
+    );
+    // ⭐⭐ **段级归因**（E-154）：把中位数拆成 7 段 ⇒ ⇒ 看谁是**大头**。
+    //
+    // ⚠️ `children` 这一段**含递归** ⇒ ⇒ 它必然吃掉子树的时间
+    // ⇒ ⇒ 所以「children 占比高」本身不是结论，要看**剩下的直接段**谁大。
+    let seg = renderer.segment_timings();
+    let total = seg.attrs
+        + seg.handlers
+        + seg.rebind
+        + seg.children
+        + seg.props
+        + seg.bindings
+        + seg.rebuild;
+    let pct = |v: u128| {
+        if total == 0 {
+            0.0
+        } else {
+            v as f64 * 100.0 / total as f64
+        }
+    };
+    println!("── 段级归因（最后一次，累计 µs / 占比）──");
+    println!(
+        "   attrs     {:>10} µs  {:>5.1}%",
+        seg.attrs,
+        pct(seg.attrs)
+    );
+    println!(
+        "   handlers  {:>10} µs  {:>5.1}%",
+        seg.handlers,
+        pct(seg.handlers)
+    );
+    println!(
+        "   rebind    {:>10} µs  {:>5.1}%",
+        seg.rebind,
+        pct(seg.rebind)
+    );
+    println!(
+        "   children  {:>10} µs  {:>5.1}%  ⚠️ 含递归",
+        seg.children,
+        pct(seg.children)
+    );
+    println!(
+        "   props     {:>10} µs  {:>5.1}%",
+        seg.props,
+        pct(seg.props)
+    );
+    println!(
+        "   bindings  {:>10} µs  {:>5.1}%",
+        seg.bindings,
+        pct(seg.bindings)
+    );
+    println!(
+        "   ensure    {:>10} µs  {:>5.1}%  （keyed 可判定性校验）",
+        seg.ensure,
+        pct(seg.ensure)
+    );
+    println!(
+        "   rebuild   {:>10} µs  {:>5.1}%",
+        seg.rebuild,
+        pct(seg.rebuild)
+    );
+    println!(
+        "   ── 段合计 {:>10} µs（⚠️ **大于** patch 时间 = 嵌套造成的，见下）",
+        total
+    );
+
+    // ⭐⭐ **嵌套陷阱与正确读法**（必读，否则会误判）
+    //
+    // `children` 段包的是 `patch_children`，而它**递归**调回 `patch_node`
+    // ⇒ ⇒ 同一棵子树的耗时会被它的**每个祖先各累加一次**
+    // ⇒ ⇒ 所以「段合计 > patch 总时间」是**必然的**，`children` 的占比**不可直接读**。
+    //
+    // ✅ 正确读法：
+    //   ① 把**直接段**求和（不含 `children`）⇒ 这是「真正逐节点做的细活」；
+    //   ② 用 `patch 中位数 − Σ直接段` ⇒ 得到 **`patch_children` 自身逻辑**的耗时
+    //      （key 扫描 / 位置配对 / 块锚点计算 / `Vec` 构建）。
+    let direct =
+        seg.attrs + seg.handlers + seg.rebind + seg.props + seg.bindings + seg.rebuild + seg.ensure;
+    let patch_total = samples[samples.len() / 2];
+    let children_self = patch_total.saturating_sub(direct);
+    println!("── ⭐ 正确读法（去嵌套）──");
+    println!(
+        "   直接段合计 {:>10} µs  {:>5.1}%  （attrs/handlers/rebind/props/bindings/rebuild/ensure）",
+        direct,
+        direct as f64 * 100.0 / patch_total as f64
+    );
+    println!(
+        "   children 自身 {:>10} µs  {:>5.1}%  ⭐ ← **真大头**（key 扫描 / 位置配对 / 锚点 / Vec）",
+        children_self,
+        children_self as f64 * 100.0 / patch_total as f64
+    );
+    println!("   （patch 中位数 {patch_total} µs）");
+
+    // ⭐ **结论按实测写，不按预期写**（2026-11-01 实测更正）。
+    //
+    // 预期：「native 快 ⇒ 差值 = wasm⇄JS 边界成本」
+    // ⇒ ⇒ **实测反过来**：native（`InMemoryDom`）比浏览器（真实 Chromium + `WebDom`）
+    //        **还慢** ⇒ ⇒ ⇒ **边界不是成本来源** ⇒ ⇒ 瓶颈在**纯 Rust 侧**。
+    //
+    // ⚠️ 归因限制：两个后端**不是同一个东西**——`InMemoryDom` 是测试用的内存树
+    //   （节点以 `Vec` 存放 + 索引查找）本身就可能比真实 DOM 慢
+    //   ⇒ ⇒ ⇒ **本探针只能证明「Rust 侧不便宜」，不能单独归因到边界或某一段**。
+    println!(
+        "（参考：同树在真实 Chromium 上 ≈ 84 ms ⇒ ⇒ ⭐ native **不更快** \
+         ⇒ ⇒ 瓶颈不在 wasm⇄JS 边界，在 Rust 侧 / 后端实现）"
+    );
+}
+
+/// ⭐⭐ **真实首屏规模**的 patch 成本（2026-11-03）。
+///
+/// ## 为什么加这个
+///
+/// 上面的压测树（`WIDTH=8 / DEPTH=4` ⇒ 37,458 节点）是**合成压力树**，
+/// **不是**真实首屏 ⇒ ⇒ 用它当性能标尺会**做错优化**。
+///
+/// 真实首屏（`w0_first_screen()`）是 **1000 行的虚拟列表**
+/// ⇒ ⇒ 走 `patch_windowed_at_path` ⇒ ⇒ **DOM 里只有窗口内的行**
+/// ⇒ ⇒ 真实 patch 规模 ≈ **窗口行数 × 每行节点数**（几十行），**不是 1000 行**。
+///
+/// ## 这个函数测什么
+///
+/// 用**首屏真实形状**（容器 + 窗口内 N 行）建树 ⇒ ⇒ 量「改一个叶子」的 patch 成本
+/// ⇒ ⇒ 与压测树的数字**并列** ⇒ ⇒ 即可回答：
+/// 「真实首屏到底卡不卡？」
+fn realistic_first_screen(window_rows: usize) -> (VNode, usize) {
+    let mut rows = Vec::with_capacity(window_rows);
+    for index in 0..window_rows {
+        rows.push(
+            VNode::element("div")
+                .attr("class", "row")
+                .attr("style", "height: 40px")
+                .child(VNode::text(format!("行 {index}")))
+                .build(),
+        );
+    }
+    let list = VNode::element("div")
+        .attr("class", "list")
+        .child(VNode::Fragment(rows))
+        .build();
+    let root = VNode::element("div")
+        .attr("id", "w0-root")
+        .child(list)
+        .build();
+    let nodes = window_rows * 2 + 2; // 每行 = 1 元素 + 1 文本
+    (root, nodes)
+}
+
+/// ⭐ **真实首屏规模**的 patch 成本（窗口行数 × 每行节点）。
+fn realistic_first_screen_probe() {
+    println!();
+    println!("== ⭐ 真实首屏规模（虚拟列表窗口化）==");
+    // 视口 800px / 行高 40px ⇒ 窗口 ≈ 20 行；+overscan 2 ⇒ ≈ 22 行。
+    for window_rows in [20usize, 22, 40] {
+        let dom = InMemoryDom::new();
+        let root = dom.create_element("main").expect("建根必须成功");
+        let mut renderer = Renderer::new(dom, root);
+        renderer.set_segment_clock(Some(micros_clock));
+
+        let (view, nodes) = realistic_first_screen(window_rows);
+        renderer.mount(view.clone()).expect("挂载必须成功");
+
+        // 改一个叶子（第一行的文本）⇒ ⇒ 触发一次「改一个叶子」的 patch。
+        let start = Instant::now();
+        let mut changed = view.clone();
+        if let VNode::Element(element) = &mut changed {
+            if let Some(VNode::Fragment(children)) = element.children.first_mut() {
+                if let Some(VNode::Element(row)) = children.first_mut() {
+                    if let Some(VNode::Text(text)) = row.children.first_mut() {
+                        text.data = "行 0（改了）".to_string();
+                    }
+                }
+            }
+        }
+        renderer.patch(changed).expect("打补丁必须成功");
+        let micros = start.elapsed().as_micros();
+        println!("  窗口 {window_rows:>3} 行（≈{nodes} 节点）⇒ 改一个叶子 = {micros} µs");
+    }
+    println!("  ⇒ ⇒ 对照：合成压测树（37,458 节点）= 84~94 ms");
+}

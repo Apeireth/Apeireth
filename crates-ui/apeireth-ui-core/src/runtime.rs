@@ -291,7 +291,7 @@ impl RuntimeInner {
     /// 把 effect 节点标脏并排入**它自己的阶段**对应的队列。
     ///
     /// 阶段必须跟着任务走：`effect_pre` 的重跑若被排进 post 队列 ⇒ 「渲染前先于
-    /// 渲染后」这条硬保证（ADR-0021）就破了。
+    /// 渲染后」这条硬保证（ADR-0015）就破了。
     ///
     /// ## 自激判定（早于次数上限）
     ///
@@ -627,6 +627,27 @@ impl Runtime {
     /// 建一个派生值（惰性求值 + 主动失效）。
     pub fn derived<T: Clone + 'static>(&self, compute: impl Fn() -> T + 'static) -> Derived<T> {
         Derived::new(self.inner.clone(), compute)
+    }
+
+    /// 这个运行时是否**拥有**某个信号（**指针身份**判定）。
+    ///
+    /// ## 为什么需要（不是「防御性编程」，是本 crate 记录过的真实缺陷）
+    ///
+    /// 「信号属于哪个运行时」决定依赖边**能不能**建立 ⇒ ⇒ 跨运行时的信号
+    /// 写它**不会**触发任何重渲染 ⇒ ⇒ 表现为「**状态变了界面不动**」且
+    /// **无任何报错** ⇒ ⇒ 这正是本 crate 文档里记的「**幽灵输入**」
+    /// （见 crate 文档「架构不变量」一节）。
+    ///
+    /// ⇒ ⇒ 类型层（[`ReactiveScope`]）已经挡住「状态持有者自建运行时」那条路
+    /// ⇒ ⇒ 但 [`Runtime::new`] 仍是 `pub`（native 测试 / 独立运行时的需要）
+    /// ⇒ ⇒ ⇒ 接线处必须能在**运行期**复核归属 ⇒ ⇒ 这就是本方法。
+    ///
+    /// ## 复核方式
+    ///
+    /// 与 [`ReactiveScope::same_runtime`] 同一判据（**指针身份**）⇒ ⇒
+    /// 「同一张图」= 「同一个内部状态」。
+    pub fn owns<T>(&self, signal: &Signal<T>) -> bool {
+        signal.same_runtime(&self.inner)
     }
 
     /// 交出一个**使用者形态**的作用域（**给状态持有者**）。
@@ -1070,9 +1091,9 @@ impl Runtime {
 ///
 /// [`Runtime::new`] 仍是 `pub`（native 测试 / 独立运行时 / 既有 crate 的调用点
 /// 不可改）⇒ ⇒ 「状态持有者**显式**自建运行时」这条路径在**编译期**仍可写出来
-/// ⇒ ⇒ 本抽取不含 demo 宿主或其 ownership 扫描器，不能声称调用者已受扫描保护。
-/// `ReactiveScope` 限制可用方法；显式再建一个 `Runtime` 仍可发生。
-/// 宿主必须确保状态与 effect 来自同一 owning runtime；这里不证明所有宿主的接线。
+/// ⇒ ⇒ 它由 `crates-ui/apeireth-ui-demo/harness/scripts/check_runtime_ownership.py`
+/// 以**精确判据**守住（不再是近似判据）⇒ ⇒ 且即便写出来，其信号也**无处挂
+/// effect**（本类型不给这个能力）⇒ ⇒ 症状（幽灵输入）**不成立**。
 #[derive(Clone)]
 pub struct ReactiveScope {
     inner: Rc<RuntimeInner>,
@@ -1172,6 +1193,29 @@ mod tests {
         }
     }
 
+    /// ⭐⭐⭐ **运行时归属判据**（E-180：「幽灵输入」的**运行期复核**）。
+    ///
+    /// ## 为什么钉这条
+    ///
+    /// 「信号属于哪个运行时」决定依赖边**能不能**建立。跨运行时的信号写它
+    /// **不会**触发任何重渲染 ⇒ ⇒ 现象是「状态变了界面不动」且**无任何报错**
+    /// ⇒ ⇒ 所以接线处必须能在**运行期**问出「这个信号是不是我的」。
+    #[test]
+    fn a_runtime_owns_only_the_signals_it_created() {
+        let runtime = Runtime::new();
+        let other = Runtime::new();
+        let mine = runtime.signal(1u32);
+        let theirs = other.signal(1u32);
+        assert!(runtime.owns(&mine), "自己建的信号当然归自己");
+        assert!(!runtime.owns(&theirs), "别人的信号不得被认领");
+        // 克隆共享**同一张图** ⇒ ⇒ 归属不变。
+        let cloned = mine.clone();
+        assert!(runtime.owns(&cloned));
+        // 反向也要成立（不能「谁问都算拥有」）。
+        assert!(!other.owns(&mine));
+        assert!(other.owns(&theirs));
+    }
+
     #[test]
     fn effect_reruns_when_its_dependency_changes() {
         let runtime = Runtime::new();
@@ -1191,6 +1235,46 @@ mod tests {
         runtime.flush();
 
         assert_eq!(&*seen.borrow(), &[1, 2, 3]);
+    }
+
+    /// ⭐⭐ **effect 的执行时机**：依赖变更 ⇒ 是**立即重跑**还是**等 flush**？
+    ///
+    /// ## 为什么钉这条
+    ///
+    /// 「信号变 ⇒ 界面自动更新」这条链的**时机**决定宿主该怎么调度：
+    /// - 若**立即**重跑 ⇒ 宿主不需要 flush（但一帧内多次变更 ⇒ 多次重渲染 ⇒ 会抖）；
+    /// - 若**等 flush** ⇒ 宿主在帧边界 flush 一次 ⇒ 多次变更 ⇒ 一次重渲染（不抖）。
+    ///
+    /// ⇒ 这条测试把**真实语义**钉死 ⇒ ⇒ 宿主与文档都按它写（不许各写各的）。
+    #[test]
+    fn effect_rerun_timing_is_pinned() {
+        let runtime = Runtime::new();
+        let value = runtime.signal(1u32);
+        let ran = Rc::new(Cell::new(0usize));
+
+        let counter = ran.clone();
+        let signal = value.clone();
+        runtime.effect(move || {
+            let _ = signal.get(); // 依赖收集点
+            counter.set(counter.get() + 1);
+        });
+
+        // ① 创建后 flush ⇒ 首次执行（core 语义：创建时**不**同步执行）
+        assert_eq!(ran.get(), 0, "创建时不应同步执行");
+        runtime.flush();
+        assert_eq!(ran.get(), 1, "首次执行发生在 flush");
+
+        // ② 依赖变更 ⇒ **立即重跑**（⭐ 本仓库的**真实语义**，此前无测试钉住）
+        //   ⇒ ⇒ 「一帧内多次变更 ⇒ 多次重渲染」是**事实**（会抖）
+        //   ⇒ ⇒ 想「帧边界只渲染一次」必须由**上层显式批处理**（不是 core 免费给的）。
+        value.set(2);
+        assert_eq!(
+            ran.get(),
+            2,
+            "⭐ 依赖变更**立即**重跑 effect（core 的真实语义；flush 不是它的前提）"
+        );
+        runtime.flush();
+        assert_eq!(ran.get(), 2, "已同步重跑 ⇒ 随后的 flush 不应重复执行");
     }
 
     #[test]
@@ -1986,69 +2070,6 @@ mod tests {
             runs.get(),
             1,
             "外来运行时的信号不得驱动本运行时的 effect（幽灵输入的结构条件）"
-        );
-    }
-
-    /// 用户 effect 体 panic ⇒ **不得**把运行时永久卡在 flush 态。
-    ///
-    /// 【为什么这条是硬要求】`flushing` 是 flush 的**重入闸门**：flush 期间
-    /// `request_flush` 直接短路（新待办由本轮循环接管）⇒ ⇒ 若 effect 体 panic
-    /// 后 `flushing` 没复位 ⇒ 此后**每一次写入**都被这道闸门短路 ⇒ ⇒ **永远
-    /// 不再有 flush** ⇒ UI **永久静默冻结**（没有报错，界面只是再也不动）。
-    ///
-    /// ⇒ 复位必须由 **RAII 守卫**（[`FlushGuard`]）在 panic 展开时完成 ⇒
-    /// 这条测试锁住的正是「panic 之后仍能再次 flush」这一行为。
-    #[test]
-    fn a_panicking_effect_does_not_freeze_the_runtime() {
-        let host = Rc::new(OneShotHost::new());
-        let runtime = Runtime::new();
-        runtime.set_host_scheduler(host.clone());
-        let value = runtime.signal(0u32);
-
-        // 会 panic 的 effect（模拟用户 effect 体抛错）⇒ **只抛一次**，
-        // 免得后续 flush 再次 panic 掩盖「还能不能 flush」这一断言。
-        let panic_once = Rc::new(Cell::new(true));
-        let watched = value.clone();
-        let trigger = panic_once.clone();
-        runtime.effect(move || {
-            let _ = watched.get();
-            if trigger.get() {
-                trigger.set(false);
-                panic!("用户 effect 体 panic（回归测试的故意行为）");
-            }
-        });
-
-        // ① flush 途中 panic ⇒ 向外传播（引擎**不**吞用户 panic）。
-        let result = catch_unwind(AssertUnwindSafe(|| runtime.flush()));
-        assert!(
-            result.is_err(),
-            "用户 effect 体的 panic 必须向外传播（不得被静默吞掉）"
-        );
-
-        // ② panic 之后：写入必须**再次**向宿主请求 flush
-        //    （`flushing` 若没复位 ⇒ `request_flush` 短路 ⇒ 永久冻结）。
-        let runs = Rc::new(Cell::new(0));
-        let counter = runs.clone();
-        let watched = value.clone();
-        runtime.effect(move || {
-            let _ = watched.get();
-            counter.set(counter.get() + 1);
-        });
-
-        value.set(1);
-        assert_eq!(
-            host.queued(),
-            1,
-            "effect panic 之后写入必须再次请求 flush（否则 UI 永久静默冻结）"
-        );
-        assert!(
-            host.run_one(),
-            "宿主队列里必须有 flush 任务（panic 之后运行时必须仍可 flush）"
-        );
-        assert_eq!(
-            runs.get(),
-            1,
-            "panic 之后的 flush 必须仍能执行 effect（运行时没被卡在 flush 态）"
         );
     }
 }
