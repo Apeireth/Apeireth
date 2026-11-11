@@ -364,23 +364,7 @@ impl<V: PluginManagerView + 'static> MeshCapabilityExecutor for ManagerExecutor<
         let tool = self
             .view
             .with_manager(|manager| manager.tool(capability))
-            .map_err(|error| match error {
-                PluginError::NotActive {
-                    capability,
-                    plugin,
-                    state,
-                } => MeshExecError::NotAvailable {
-                    capability,
-                    reason: format!("owning plugin {plugin} is {state}"),
-                },
-                PluginError::UnknownCapability(capability) => {
-                    MeshExecError::UnknownCapability { capability }
-                }
-                other => MeshExecError::Internal {
-                    capability: capability.clone(),
-                    message: other.to_string(),
-                },
-            })?;
+            .map_err(|error| plugin_lookup_error(error, capability))?;
 
         if ctx.cancelled.is_cancelled() {
             return Err(MeshExecError::Cancelled {
@@ -415,23 +399,7 @@ impl<V: PluginManagerView + 'static> MeshCapabilityExecutor for ManagerExecutor<
         let provider = self
             .view
             .with_manager(|manager| manager.provider(capability))
-            .map_err(|error| match error {
-                PluginError::NotActive {
-                    capability,
-                    plugin,
-                    state,
-                } => MeshExecError::NotAvailable {
-                    capability,
-                    reason: format!("owning plugin {plugin} is {state}"),
-                },
-                PluginError::UnknownCapability(capability) => {
-                    MeshExecError::UnknownCapability { capability }
-                }
-                other => MeshExecError::Internal {
-                    capability: capability.clone(),
-                    message: other.to_string(),
-                },
-            })?;
+            .map_err(|error| plugin_lookup_error(error, capability))?;
 
         // Best-effort interruption: a cancelled long inference drops the
         // provider future (aborting the backend call at the transport layer)
@@ -458,6 +426,27 @@ impl<V: PluginManagerView + 'static> MeshCapabilityExecutor for ManagerExecutor<
     ) -> Result<(), MeshExecError> {
         self.authorize_completion_action(ctx, model, message_count)
             .await
+    }
+}
+
+/// Tools and providers share the canonical lookup failure contract.
+fn plugin_lookup_error(error: PluginError, capability: &CapabilityId) -> MeshExecError {
+    match error {
+        PluginError::NotActive {
+            capability,
+            plugin,
+            state,
+        } => MeshExecError::NotAvailable {
+            capability,
+            reason: format!("owning plugin {plugin} is {state}"),
+        },
+        PluginError::UnknownCapability(capability) => {
+            MeshExecError::UnknownCapability { capability }
+        }
+        other => MeshExecError::Internal {
+            capability: capability.clone(),
+            message: other.to_string(),
+        },
     }
 }
 

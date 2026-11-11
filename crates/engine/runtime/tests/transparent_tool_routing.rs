@@ -664,6 +664,33 @@ async fn remote_catalog_respects_session_capability_scope() {
 }
 
 #[tokio::test]
+async fn session_catalog_preserves_legacy_owner_labels_outside_plugin_id_grammar() {
+    let runtime = Runtime::builder().build().await.unwrap();
+    let id = CapabilityId::new("tool.legacy.echo").unwrap();
+    runtime
+        .register_dynamic_tool(
+            "Legacy owner label",
+            Arc::new(EchoTool {
+                id: id.clone(),
+                name: "legacy_echo".into(),
+                runs: Arc::new(AtomicUsize::new(0)),
+            }),
+        )
+        .unwrap();
+    let session = SessionId::new();
+    runtime
+        .tool_dispatcher()
+        .set_scope(session, ToolScope::Only(BTreeSet::from([id])));
+    let catalog = runtime.tool_declarations_for_session(session);
+    assert_eq!(catalog.len(), 1);
+    assert_eq!(catalog[0].name, "legacy_echo");
+    runtime
+        .tool_dispatcher()
+        .set_scope(session, ToolScope::Only(BTreeSet::new()));
+    assert!(runtime.tool_declarations_for_session(session).is_empty());
+}
+
+#[tokio::test]
 async fn remote_scope_denial_sends_no_rpc_for_a_guessed_tool_call() {
     let rig = rig(
         "mesh_echo",
