@@ -249,3 +249,17 @@ cd evidence\p5-b; bash build.sh; python drive_l1.py     # 期望 EXIT 0
 - ⚠️ **未做逐像素对照**（r10 原型 HTML 未搬入私有仓）⇒ 符合性是**结构 + 计算样式**级。
 - ⚠️ 探针依赖**浏览器路径**；换机需设 `CHROME` / `CHROME_PATH`。
 - ⚠️ 引擎**未跑**真实 GPU 硬件矩阵（只跑过软件后端与 Chromium WebGL/WebGPU 探针）。
+
+## 2026-11-11 模态作用域能力（feat/engine-modal-scope-2026-11-11）
+
+**做了什么**：引擎的模态作用域改按「子树身份」打开 —— 应用只声明「这棵子树是模态作用域」，引擎负责枚举该子树内的可聚焦项、独占 Tab 消费、把初始焦点落在指定元素、关闭时归还焦点。
+
+**为什么在引擎层**：宿主侧原先自建了一套捕获阶段的 Tab 陷阱（等于第二套焦点系统，且让引擎的 Tab 通路完全失效）；引擎真缺口是「陷阱内只剩一个可聚焦项时 `FocusOrder::next` 返回 None ⇒ 浏览器原生 Tab 接手 ⇒ 焦点跑出作用域」。
+
+**新增 API**（`crates-ui/apeireth-ui-dom/src/renderer.rs`）：`open_modal_scope` / `open_modal_scope_at_identity` / `focusable_paths_under` / `should_consume_tab`；`ModalLayer` 增 `scope_root`；`focus_next` 每次 Tab 重新枚举子树内可聚焦项且焦点在作用域外时拉回；`focus_at_path` 按作用域判定；`keyboard.rs` 的 `KeyNavigation::install` 改用 `should_consume_tab` ⇒ 模态激活期间独占 Tab。
+
+**0 装口径**：IMPLEMENTED（引擎能力层）。`cargo test -p apeireth-ui-dom --locked --lib` ⇒ 241 passed / 0 failed（236 ⇒ 241，新增 5 条）；`cargo test -p apeireth-ui-dom -p apeireth-ui-kit -p apeireth-ui-app --locked -j 2` 全绿；clippy 三 crate 0 警告；`cargo fmt -p apeireth-ui-dom --check` 0 diff；`scripts/arch_guard.py --strict` VIOLATIONS 0。**未实测**：真实 WebView2 / WKWebView 宿主、真人输入法、macOS、非 Chromium 内核。
+
+**反向验伪**：三处接线各一组红 → 绿（摘「每次 Tab 重新枚举」⇒ 4 passed/1 failed；摘「焦点在作用域外拉回」⇒ 4 passed/1 failed；摘「模态激活时即使没动也消费 Tab」⇒ 4 passed/1 failed ⇒ 装回各 5 passed/0 failed）。
+
+**下一步**：本分支开 PR（base 挂 `ui-engine-p0-2026-10-24`）；合入后宿主侧把引擎 pin 抬到合并后的 SHA。
