@@ -74,6 +74,15 @@ jobs:
         with:
           shared-key: claims-verify
 
+      # ⚠️ **2026-11-11 补（PR #78 首跑实测）**：`docs/status/claims.yaml` 有 **2 条**声明的
+      # `verify_cmd` 用的是 `cargo nextest run`（`rt.system_one_internal` /
+      # `mem.failure_learning_bridge`）⇒ ⇒ 而本 job 原先**没装 nextest**
+      # ⇒ ⇒ 那 2 条会因「no such command: nextest」**假红**（不是声明内容问题）。
+      # ⇒ ⇒ 与 `rust.yml`（:99-100）**同口径**装：`taiki-e/install-action` 取预编译二进制
+      #      （不重编译 ⇒ 不吃 runner 磁盘 ⇒ 不撞 claims-verify 已知的磁盘爆问题）。
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@nextest
+
       # ⭐ **磁盘减负**（2026-11-05 · CI runner 曾因磁盘爆而 exit 101）：
       # 预构建两个 workspace 会吃掉 runner 的全部空间 ⇒ ⇒ `rustls`/`reqwest` 编译期
       # archive 写失败 ⇒ ⇒ claims-verify 假红（**不是** claim 内容问题）。

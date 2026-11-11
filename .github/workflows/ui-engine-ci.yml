@@ -51,7 +51,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.97.1
 
       - name: Cache cargo (crates-ui)
         uses: Swatinem/rust-cache@v2
@@ -77,8 +77,14 @@ jobs:
             echo "::error::找不到根 Cargo.toml（守门路径写错 ⇒ 会假绿）"
             exit 1
           fi
-          if grep -q 'crates-ui' ../Cargo.toml; then
-            echo "::error::root Cargo.toml 提及 crates-ui (污染主 workspace)"
+          # ⚠️ **2026-11-11 修（PR #78 首跑实测 · 真因 = 守门扫全文命中一条注释）**：
+          # 初版 `grep -q 'crates-ui' ../Cargo.toml` 扫**整个文件** ⇒ ⇒ 命中根 Cargo.toml:194
+          # 那条**纯注释**（`# 注：…属独立 workspace crates-ui/，不入本表（见 crates-ui/Cargo.toml）。`）
+          # ⇒ ⇒ **误报**：crates-ui **并不在** `[workspace].members` 里 ⇒ 主依赖图其实没被污染
+          # ⇒ ⇒ 守门红了但没病（而且那条注释**保留** —— 它是有用的说明，删注释才是倒退）。
+          # ⇒ ⇒ 改为**只查 members 列表**（真正决定依赖图归属的地方）⇒ 判定更准、注释不删。
+          if sed -n '/^\[workspace\]/,/^\[/p' ../Cargo.toml | grep -Eq '"crates-ui(/|")'; then
+            echo "::error::root Cargo.toml 的 [workspace].members 含 crates-ui (污染主 workspace)"
             exit 1
           fi
           echo "✅ crates-ui 是独立 workspace"
@@ -113,7 +119,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.97.1
 
       - name: Cache cargo (crates-ui)
         uses: Swatinem/rust-cache@v2
@@ -137,7 +143,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.97.1
 
       - name: cargo fmt --check (crates-ui)
         run: cargo fmt --all -- --check
@@ -156,7 +162,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.97.1
 
       - name: Cache cargo (crates-ui)
         uses: Swatinem/rust-cache@v2
@@ -244,9 +250,9 @@ jobs:
         uses: actions/checkout@v4
 
       # ⚠️ 必须显式加 wasm32 target：runner 的默认 toolchain 不含它，
-      # 而 dtolnay/rust-toolchain@stable 只装 default host target。
+      # 而 dtolnay/rust-toolchain@1.97.1 只装 default host target。
       - name: Install Rust stable + wasm32 target
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.97.1
         with:
           targets: wasm32-unknown-unknown
 
@@ -323,10 +329,10 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.97.1
 
       - name: Cache cargo (crates-ui)
-        uses: Swatinym/rust-cache@v2
+        uses: Swatinem/rust-cache@v2
         with:
           workspaces: 'crates-ui -> target'
 
@@ -364,7 +370,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.97.1
 
       - name: Cache cargo (crates-ui)
         # ⚠️ 初版写 `Swatinem/cargo-cache@v1` ⇒ **该 action 仓库不存在**
@@ -395,7 +401,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Rust stable + wasm32 target
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.97.1
         with:
           targets: wasm32-unknown-unknown
 
@@ -507,7 +513,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Rust stable + wasm32 target
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.97.1
         with:
           targets: wasm32-unknown-unknown
 
