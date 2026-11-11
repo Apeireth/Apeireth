@@ -73,6 +73,11 @@ jobs:
         uses: dtolnay/rust-toolchain@1.97.1
 
       # keyring/dbus/wayland/pipewire/egl 需要系统库 (仅 Linux)
+      - name: Bootstrap Ubuntu DNS for system dependencies
+        if: runner.os == 'Linux' && (matrix.os == 'ubuntu-latest')
+        working-directory: ${{ github.workspace }}
+        run: python3 scripts/provision_ci_dns.py
+
       - name: "Install system deps (Linux: libdbus + libwayland + libpipewire + libegl)"
         if: matrix.os == 'ubuntu-latest'
         run: |
@@ -458,6 +463,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0  # scan-history 需要全历史
+
+      - name: Bootstrap Ubuntu DNS for system dependencies
+        if: runner.os == 'Linux'
+        working-directory: ${{ github.workspace }}
+        run: python3 scripts/provision_ci_dns.py
 
       - name: Ensure PowerShell (runner images preinstall pwsh; apt is a fallback)
         # ⚠️ **2026-10-31 合并批（两条线独立发现了同一个缺陷）**：原写法是无条件

@@ -48,6 +48,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.97.1
       - uses: Swatinem/rust-cache@v2
+      - name: Bootstrap Ubuntu DNS for system dependencies
+        if: runner.os == 'Linux'
+        working-directory: ${{ github.workspace }}
+        run: python3 scripts/provision_ci_dns.py
+
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
 

@@ -65,6 +65,11 @@ jobs:
       # 「failed to build fuzz script: ASAN_OPTIONS=… RUSTFLAGS=…」，但真因在上面的 panic）。
       #
       # ⇒ 装上系统依赖 ⇒ 冷构建也能过（**不依赖缓存是否命中**）。
+      - name: Bootstrap Ubuntu DNS for system dependencies
+        if: runner.os == 'Linux'
+        working-directory: ${{ github.workspace }}
+        run: python3 scripts/provision_ci_dns.py
+
       - name: Install system deps (libdbus-1-dev for keyring/secret-service)
         run: |
           sudo apt-get update
@@ -180,6 +185,11 @@ jobs:
           workspaces: fuzz
       # 同上：`libdbus-sys` 的 build.rs 用 pkg-config 找 `dbus-1`，找不到就 panic
       # ⇒ 冷构建时必须装（不依赖缓存是否命中）。
+      - name: Bootstrap Ubuntu DNS for system dependencies
+        if: runner.os == 'Linux'
+        working-directory: ${{ github.workspace }}
+        run: python3 scripts/provision_ci_dns.py
+
       - name: Install system deps (libdbus-1-dev for keyring/secret-service)
         run: |
           sudo apt-get update

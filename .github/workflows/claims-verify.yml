@@ -79,6 +79,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Bootstrap Ubuntu DNS for system dependencies
+        if: runner.os == 'Linux'
+        working-directory: ${{ github.workspace }}
+        run: python3 scripts/provision_ci_dns.py
+
       - name: 安装系统依赖（dbus / wayland / pipewire / egl / **Tauri 桌面壳**）
         # ⚠️ Tauri 那几条声明（`sec.sql_readonly_gate` / `sec.provider_proxy_ssrf` /
         # `sec.desktop_file_roots`）要跑 `cd frontend/companion-desktop/src-tauri && cargo test --locked`
