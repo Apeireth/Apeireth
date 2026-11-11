@@ -30,7 +30,9 @@ jobs:
   coverage:
     name: cargo tarpaulin (current workspace)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # 时限按实测重定（2026-11-11）：同一覆盖率范围三次实测 22m39s / 30m18s / 超限 30 分钟
+    # ⇒ 是墙钟预算贴边 + runner 抖动，不是测试内容变慢 ⇒ 预算上调，采集范围与棘轮判定一字不动
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
