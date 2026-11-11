@@ -781,6 +781,96 @@ impl<D: Dom> Renderer<D> {
         self.open_modal_scope(&root, initial.as_deref())
     }
 
+    /// ⭐⭐⭐ **子树内按 key 定位元素**（2026-11-11）。
+    ///
+    /// ## 为什么需要（这是「模态作用域接不上」的真根因）
+    ///
+    /// 引擎的身份是**逐层**的（[`Self::resolve_identity_path`] 逐段匹配**直接子节点**）
+    /// ⇒ ⇒ 而应用手里通常只有「某个控件的 key」⇒ ⇒
+    /// 控件埋在 `dialog → frame → header → button` 里时
+    /// ⇒ ⇒ 应用要么得知道引擎的中间层口径（树形一变就失效）⇒ ⇒ 要么就放弃定位
+    /// ⇒ ⇒⇒ 而「放弃定位」的实际后果是**模态作用域根本没建立**
+    /// ⇒ ⇒⇒ 引擎于是没有独占 `Tab` ⇒ ⇒⇒ 浏览器原生 `Tab` 接管 ⇒ ⇒⇒ 焦点停滞或乱跑。
+    ///
+    /// ⇒ ⇒ 所以引擎提供「**在这棵子树里找这个 key**」⇒ ⇒ **调用方只说 key**。
+    ///
+    /// ## 口径
+    ///
+    /// - **深度优先、文档序**（与引擎的可聚焦序列同序）⇒ ⇒ 命中第一个同 key 的后代；
+    /// - 只找**后代**（不含子树根本身）⇒ ⇒ 子树根由调用方自己给；
+    /// - 找不到 ⇒ 返回 `None`（**不猜**）⇒ ⇒ 调用方必须处理。
+    pub fn path_for_key_under(
+        &self,
+        root: &[usize],
+        key: &crate::vnode::Key,
+    ) -> Option<Vec<usize>> {
+        let tree = self.tree.as_ref()?;
+        let mut node = tree;
+        for index in root {
+            node = Self::mounted_children(node)?.get(*index)?;
+        }
+        let mut prefix = root.to_vec();
+        Self::find_key_descendant(node, &mut prefix, key)
+    }
+
+    /// 深度优先找「key 相同的后代」（内部用）。
+    fn find_key_descendant(
+        node: &MountedNode<D>,
+        prefix: &mut Vec<usize>,
+        key: &crate::vnode::Key,
+    ) -> Option<Vec<usize>> {
+        let children = Self::mounted_children(node)?;
+        for (index, child) in children.iter().enumerate() {
+            prefix.push(index);
+            if child.key_ref() == Some(key) {
+                return Some(prefix.clone());
+            }
+            if let Some(found) = Self::find_key_descendant(child, prefix, key) {
+                return Some(found);
+            }
+            prefix.pop();
+        }
+        None
+    }
+
+    /// 已挂载节点的子节点列表（内部用；文本节点没有子节点）。
+    fn mounted_children(node: &MountedNode<D>) -> Option<&[MountedNode<D>]> {
+        match node {
+            MountedNode::Element(element) => Some(&element.children),
+            MountedNode::Fragment(fragment) => Some(&fragment.children),
+            MountedNode::Text(_) => None,
+        }
+    }
+
+    /// ⭐⭐⭐ **按子树身份 + 子树内 key 打开一层子树作用域模态**（2026-11-11）。
+    ///
+    /// ## 与 [`Self::open_modal_scope_at_identity`] 的差别
+    ///
+    /// 初始焦点**按子树内的 key 定位** ⇒ ⇒ 调用方不需要知道中间容器
+    /// （`dialog → frame → header → button` 这种）⇒ ⇒ 这就是上一版接不上的真根因。
+    ///
+    /// ## 失败口径
+    ///
+    /// 子树根身份解析不到 ⇒ 报错；子树内找不到那个 key ⇒ 报错
+    /// ⇒ ⇒ **调用方必须处理这个错误**
+    /// ⇒ ⇒⇒（静默忽略 = 模态作用域没建立 = `Tab` 失控 ⇒ ⇒⇒ 这是上一轮的真实事故）
+    pub fn open_modal_scope_at_key(
+        &mut self,
+        identity: &[IdentitySegment],
+        initial_key: Option<&crate::vnode::Key>,
+    ) -> Result<(), DomError> {
+        let root = self.path_for_identity(identity).ok_or_else(|| {
+            DomError::Unsupported(String::from("焦点作用域：子树根身份解析不到路径"))
+        })?;
+        let initial = match initial_key {
+            Some(key) => Some(self.path_for_key_under(&root, key).ok_or_else(|| {
+                DomError::Unsupported(String::from("焦点作用域：子树内找不到初始焦点的 key"))
+            })?),
+            None => None,
+        };
+        self.open_modal_scope(&root, initial.as_deref())
+    }
+
     /// ⭐⭐⭐ **子树内的可聚焦路径**（2026-11-11）。
     ///
     /// 口径：按引擎自己的可聚焦序列（`focus_order`）过滤出 `root` 子树内的项
@@ -4208,6 +4298,115 @@ mod tests {
         assert!(
             renderer.has_modal(),
             "⭐ 模态必须仍然激活（调用方据此消费这次 Tab，不许放行给浏览器）"
+        );
+    }
+
+    /// ⭐⭐⭐ **子树内按 key 定位：初始焦点埋在多层容器里也能找到**（2026-11-11）。
+    ///
+    /// ## 它锁住什么
+    ///
+    /// 上一轮的真实事故：宿主把「初始焦点身份」写成 `[Key(dialog), Key(close)]`
+    /// ⇒ ⇒ 而关闭键实际在 `dialog → frame → header → button` 里
+    /// ⇒ ⇒ 引擎逐段匹配**直接子节点** ⇒ ⇒ 解析失败 ⇒ ⇒ 模态作用域**根本没建立**
+    /// ⇒ ⇒⇒ `Tab` 失控（浏览器原生接管）。
+    ///
+    /// ⇒ ⇒ 所以引擎提供「子树内按 key 找」⇒ ⇒ 调用方只说 key。
+    #[test]
+    fn modal_scope_at_key_finds_a_nested_control() {
+        let (mut renderer, _root) = renderer_with_dom();
+        renderer
+            .mount(
+                VNode::element("div")
+                    .child(
+                        VNode::element("button")
+                            .attr("id", "outside")
+                            .child(VNode::text("外"))
+                            .build(),
+                    )
+                    .child(
+                        VNode::element("div")
+                            .key(crate::vnode::Key::str("dialog"))
+                            .attr("id", "dialog")
+                            .child(
+                                VNode::element("div")
+                                    .attr("id", "frame")
+                                    .child(
+                                        VNode::element("header")
+                                            .child(
+                                                VNode::element("button")
+                                                    .key(crate::vnode::Key::str("deep-close"))
+                                                    .attr("id", "deep-close")
+                                                    .child(VNode::text("关"))
+                                                    .build(),
+                                            )
+                                            .build(),
+                                    )
+                                    .build(),
+                            )
+                            .build(),
+                    )
+                    .build(),
+            )
+            .expect("挂载必须成功");
+        // 焦点先落在子树外
+        renderer.focus_at_path(&[0]).expect("聚焦必须成功");
+        // 按「子树身份 + 子树内 key」开模态：中间容器不许出现在调用方的口径里
+        let root_identity = vec![IdentitySegment::from_key(&crate::vnode::Key::str("dialog"))];
+        renderer
+            .open_modal_scope_at_key(&root_identity, Some(&crate::vnode::Key::str("deep-close")))
+            .expect("按子树内 key 开模态必须成功");
+        assert!(renderer.has_modal(), "⭐ 应当有模态层");
+        assert_eq!(
+            renderer.current_focus_path(),
+            Some(vec![1, 0, 0, 0]),
+            "⭐ 初始焦点必须落在那个埋在多层容器里的按钮上"
+        );
+        assert_eq!(
+            renderer.focusable_paths_under(&[1]),
+            vec![vec![1, 0, 0, 0]],
+            "⭐ 子树内可聚焦项只有那个深层按钮"
+        );
+    }
+
+    /// ⭐⭐⭐ **子树内按 key 定位：找不到就报错，不许静默**（2026-11-11）。
+    ///
+    /// ## 它锁住什么
+    ///
+    /// 「静默忽略」= 模态作用域没建立 = `Tab` 失控
+    /// ⇒ ⇒⇒ 所以引擎必须**把失败显式报出来** ⇒ ⇒ 调用方无从假装成功。
+    #[test]
+    fn modal_scope_at_key_reports_a_missing_key() {
+        let (mut renderer, _root) = renderer_with_dom();
+        renderer
+            .mount(
+                VNode::element("div")
+                    .child(
+                        VNode::element("div")
+                            .key(crate::vnode::Key::str("dialog"))
+                            .attr("id", "dialog")
+                            .child(
+                                VNode::element("button")
+                                    .attr("id", "a")
+                                    .child(VNode::text("甲"))
+                                    .build(),
+                            )
+                            .build(),
+                    )
+                    .build(),
+            )
+            .expect("挂载必须成功");
+        let root_identity = vec![IdentitySegment::from_key(&crate::vnode::Key::str("dialog"))];
+        let outcome = renderer
+            .open_modal_scope_at_key(&root_identity, Some(&crate::vnode::Key::str("not-there")));
+        let error = outcome.expect_err("子树内找不到那个 key 时必须报错（不许静默忽略）");
+        assert!(
+            error.to_string().contains("子树内找不到初始焦点的 key"),
+            "⭐ 错误必须点名是「子树内找不到 key」，实测：{error}"
+        );
+        assert_eq!(
+            renderer.path_for_key_under(&[0], &crate::vnode::Key::str("not-there")),
+            None,
+            "⭐ 找不到就是找不到（不猜）"
         );
     }
 
