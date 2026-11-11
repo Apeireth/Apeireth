@@ -37,6 +37,13 @@ on:
       - 'frontend/**/src-tauri/**'
       - 'frontend/**/package.json'
       - 'frontend/**/pnpm-lock.yaml'
+      # crates-ui 是**独立 cargo workspace**（2026-11-11 实测：crates-ui/** 的 PR 不触发本 workflow）
+      # ⇒ ⇒ 只改 crates-ui 的 PR 上，本 workflow 的 required 门禁（nextest / 硬墙 / 钉版）
+      #   永不产出结论 ⇒ ⇒ PR 永久 BLOCKED（2026-11-11 实测 PR #118：
+      #   "3 of 7 required status checks are expected." ⇒ 仓库级治理缺口，不是代码问题）
+      # ⇒ ⇒ 把 crates-ui/** 纳入过滤：只改 crates-ui 的 PR 也要跑本仓主工作区的门禁
+      #   （crates-ui 自己的门禁在 ui-engine-ci.yml，那是另一套）⇒ **只加触发，不减门禁、不放宽判定**。
+      - 'crates-ui/**'
       - '.github/workflows/rust.yml'
     branches: ['**']
   workflow_dispatch:
