@@ -320,7 +320,11 @@ bound and will not silently prefer one path.
   tests (`peer_from_record`) that run on every platform. Nothing here promises
   that an arbitrary host observes a LAN peer.
 
-## Known repository failures unrelated to the mesh
+## Historical workspace verification (2026-10-11)
+
+The following failures and counts describe the historical October 11 runs,
+not the current main branch. Current PR-closeout verification is recorded in
+[the Mesh RC2 closeout page](../status/mesh-rc2-closeout-2026-11-11.md).
 
 Both fail on a clean upstream checkout of the same base:
 
@@ -329,7 +333,7 @@ Both fail on a clean upstream checkout of the same base:
 - `apeireth-tools-canonical` `apply_patch::tests::apply_with_gate_records_observations_and_enforces_version_cas`.
 
 
-## Running the full workspace suite
+### Historical full workspace suite
 
 A full cargo test --workspace with cargo's default job count dies silently
 part-way through linking on a 16 GB / 12-core machine. Each link.exe for a test
