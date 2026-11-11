@@ -1,5 +1,12 @@
 # Apeireth Mesh — Phase 0 设计（分析 A–F）
 
+[Document-Meta]
+Document: docs/design/mesh-phase-0.md
+Class: SPEC
+Status: 🟢 活跃
+Last-Modified: 2026-11-10
+Author: Jimmyxiao2009
+
 > 状态：设计定稿，随 `feature/module-plugin-unification` 实现。
 > 范围：最小、正确、可扩展的网络运行时骨架。**不是**把 Apeireth 做成分布式系统。
 
@@ -247,12 +254,19 @@ crates/foundation/core/src/kernel/ids.rs          （NodeId）
 crates/foundation/core/src/kernel/mod.rs          （导出 NodeId）
 crates/foundation/governance/src/lib.rs           （ActionSource + GovernanceRequest.source）
 crates/foundation/plugin/src/manifest.rs          （capability_ownership 声明字段）
-crates/foundation/plugin/src/module.rs            （方法默认读 manifest）
+crates/foundation/plugin/src/module.rs            （方法默认读 manifest；**历史布局**，上游把 Module 命名收敛到 Plugin 后该路径已不存在，见下方注）
 crates/foundation/plugin/src/manager.rs           （以 manifest 为唯一事实；测试同步）
 crates/engine/runtime-assembly/src/canonical/tool_modules.rs（McpModule 走 manifest 声明）
 crates/engine/runtime/src/canonical/mod.rs        （+ pub mod mesh）
 crates/engine/runtime/Cargo.toml                  （+ apeireth-mesh）
 ```
 
-明确不改：`ProviderRouter`/`NormalizedRequest`/`NormalizedResponse`、execute.rs 派发主路径、
+> 注：以上「修改」清单是 **Phase 0 当时的文件布局**。`crates/foundation/plugin/src/module.rs`
+> 只存在于已废弃的 `feature/module-plugin-unification` 分支；上游把 Module 命名收敛到 Plugin 后
+> 该文件已不存在（现址：`crates/foundation/plugin/src/module_contract.rs`）⇒ 本设计稿记录**当批次的计划**，
+> 不改写历史（例外登记见 `scripts/doc-path-baseline.txt`）。
+
+## 明确不改（本批次不做的事）
+
+`ProviderRouter`/`NormalizedRequest`/`NormalizedResponse`、execute.rs 派发主路径、
 `p2p_mesh.rs`（v1 遗留愿景稿，与本轮无关）、adapters/*。

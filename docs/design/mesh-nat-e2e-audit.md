@@ -1,5 +1,12 @@
 # Mesh NAT E2E — 定向审计与 Gap Matrix
 
+[Document-Meta]
+Document: docs/design/mesh-nat-e2e-audit.md
+Class: AUDIT
+Status: 🟢 活跃
+Last-Modified: 2026-11-10
+Author: Jimmyxiao2009
+
 > 任务 MESH-NAT-E2E-1 第一阶段产物。审计对象：`replay/mesh-on-rc2` @ `938921f43`（基线，bundle 备份于
 > `apeireth-mesh-nat-e2e-backups/baseline-938921f43-allrefs.bundle`）。
 > 方法：沿任务给定的链路逐步读代码（非假设），每格回答"存在 / 接入正式路径 / 验证 / 缺失"。
@@ -48,3 +55,25 @@
 ## 环境事实
 
 - 本机 Windows，无 root/CAP_NET_ADMIN：**Linux namespace NAT 测试不可在本机执行**。harness 可实现、可审查、附可运行命令，但不得声称已运行。
+
+## 处置汇总（已修 / 未修 / 暂缓）
+
+> 本表把上面 Gap Matrix 的缺口逐条落到「已修 / 未修 / 暂缓」；依据是配套报告
+> [`mesh-nat-e2e-report.md`](mesh-nat-e2e-report.md)（§A 修改的模块、§B 验证矩阵）。
+
+| Gap | 处置 | 依据 |
+|---|---|---|
+| G1 `MeshNode` 持有 `PunchCoordinator` + `PresenceStore`，并提供生产入口 `connect_punched()` | 已修 | 报告 §A：`mesh/src/node.rs` 新增两字段与 `connect_punched()`；§B 表第 1 行 PASS |
+| G2 `PresenceStore` 的 `Replaced` / 吊销 → `invalidate_incarnation`/`peer` | 已修 | 报告 §A：`revoke_peer` 级联清理 presence 与 punch；§B 表第 6、7 行 PASS |
+| G3 punch 失败返回可区分错误 `MeshError::PunchFailed` | 已修 | 报告 §A：`mesh/src/error.rs` 新增 `PunchFailed`；§B 表第 3 行 PASS |
+| G4 harness 穿透半边（`nat_probe` punch 模式 + `test-mesh-nat.sh` TEST B/C/D） | 未修（脚本已写，**未执行**） | 报告 §B 表：TEST A–E 全部 `NOT RUN`（本机 Windows，无 root/CAP_NET_ADMIN）；§D.1 |
+| G5 loopback 全链路集成测试证明 G1–G3 成立 | 已修（8 项 loopback 集成测试全部 PASS） | 报告 §B 表前 8 行（`mesh-quic/tests/punched_connect.rs`） |
+
+暂缓项：无独立暂缓项；G4 的「未执行」按上面口径记 **未修**，不按暂缓记账。
+
+## 复核命令
+
+- `cargo test -p apeireth-mesh-quic --test punched_connect -j 2` —— G1–G3 的 loopback 证据（8 项）
+- `bash scripts/test-mesh-nat.sh` —— G4 的 Linux namespace NAT harness（需 root/CAP_NET_ADMIN；**本机未执行**）
+- `python3 scripts/audit_unwired.py --check` —— 孤儿 API 殓轮：机制已就位但生产未接线的部分留在基线里
+- `python3 scripts/docs_truth.py --verify --block-stale` —— 状态声明自洽

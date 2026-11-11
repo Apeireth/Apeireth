@@ -1,5 +1,12 @@
 # Apeireth Mesh RC2 Status
 
+[Document-Meta]
+Document: docs/design/mesh-rc2-status.md
+Class: STATUS
+Status: 🟢 活跃
+Last-Modified: 2026-11-10
+Author: Xephylos
+
 > 冻结时点快照（2026-10-11）。权威现状以 [`mesh-architecture.md`](mesh-architecture.md)
 > 为准；本文只是一页纸摘要。证据记录见
 > [`mesh-nat-e2e-report.md`](mesh-nat-e2e-report.md)。
@@ -68,3 +75,24 @@
   connect/accept convergence) — loopback verified only.
 - Not implemented: automatic transport orchestration, the direct → punch →
   relay state machine, production gateway discovery integration.
+
+## 还差什么（open gaps，2026-11-10 复核）
+
+- ❌ **真实 NAT 未实测**：打洞只在 Windows loopback 验过；Linux namespace harness
+  （`scripts/test-mesh-nat.sh`）已写但未执行，真实 NAT 设备未测。
+- ❌ **直连 → 打洞 → 中继的自动编排未实现**：当前无自动回退
+  （`PeerConnector::direct_then_relay` 机制在，生产装配不在）。
+- ❌ **生产网关发现未接线**：`connect_punched` 的首个调用方仍是测试夹具；
+  生产拨号仍是 `maintain_connection` 静态 endpoint + 入站 `serve`。
+- ❌ **远端准入不经本地 scope 校验、远端审批路径失败关闭**：本阶段的有意取舍。
+- ❌ **Mesh crate 未登记进架构契约**：`crates/foundation/mesh-protocol`、`crates/engine/mesh`、
+  `crates/engine/mesh-quic`、`crates/services/mesh-rendezvous` 未进 `docs/architecture/contract.toml` 的 `[layers]`
+  ⇒ `arch_guard` 的 W10 是**待 ADR 的架构债**，不是本批次的回归。
+
+## 守卫命令（机器判对错）
+
+- `cargo test -p apeireth-mesh -p apeireth-mesh-protocol -p apeireth-mesh-quic -p apeireth-mesh-rendezvous -j 2` —— mesh 栈回归
+- `cargo test -p apeireth-runtime --test transparent_tool_routing --test transparent_provider_routing -j 2` —— 远端工具 / provider 路由
+- `python3 scripts/check_dead_code.py` —— 死代码豁免只减不增
+- `python3 scripts/audit_unwired.py --check` —— 孤儿 API 殓轮
+- `python3 scripts/docs_truth.py --verify --block-stale` —— 状态声明自洽

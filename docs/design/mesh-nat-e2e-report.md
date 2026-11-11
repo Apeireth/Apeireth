@@ -1,5 +1,12 @@
 # MESH-NAT-E2E-1 — 最终报告
 
+[Document-Meta]
+Document: docs/design/mesh-nat-e2e-report.md
+Class: EVIDENCE
+Status: 🟢 活跃
+Last-Modified: 2026-11-10
+Author: Jimmyxiao2009
+
 > **状态分类：experimental NAT traversal（best-effort direct connectivity），未在真实 NAT 下验证。**
 > 本文是 2026-10-11 的时点记录；当前权威状态以 `mesh-architecture.md`
 > 顶部的实验性横幅与 "Experimental: NAT traversal (capability boundary)"
@@ -68,7 +75,7 @@
 | **TEST E 有界失败** | 同上 | **未执行** | **NOT RUN** | 同上 |
 | 真实 NAT 设备 | — | 未执行 | NOT RUN | 需要真实网络环境 |
 
-**未执行即未通过。** Linux harness 已实现、bash 语法校验通过、行尾为 LF、可执行位已修正，但本环境不具备 root/CAP_NET_ADMIN 与 Linux，**不得**将 loopback 结果外推为 NAT 穿透证据。
+**未执行即未通过。** Linux harness 已实现、bash 语法校验通过、行尾为 LF、可执行位已修正，但本环境不具备 root/CAP_NET_ADMIN 与 Linux，**不得**将 loopback 结果外推为 NAT 穿透证据。（口径：IMPLEMENTED —— harness 代码本身已达 IMPLEMENTED，但未执行 ⇒ 不构成 HARDWARE VALIDATED。）
 
 ## C. Git Report
 
@@ -89,7 +96,7 @@
 2. **真实 NAT 未测（阻塞"L3"）。** nft masquerade 是 endpoint-independent mapping；address/port-dependent mapping/filtering 未模拟，不得冒充。下一步：在家庭路由器/移动网络后的两台机器间运行同一 harness（observer 需公网可达或改为双方互观）。
 3. **无生产宿主装配 presence→punch 调用方。** `connect_punched` 的第一个调用方是 harness；gateway/CLI 尚无"发现 presence 即拨号"的装配（生产拨号仍只有 `maintain_connection` 静态 endpoint 与 CLI pair）。证据：全仓 grep，`connect_punched` 调用方仅测试与 example。阻塞程度：中（机制就绪，缺接线）。下一步：在 gateway mesh 装配处加 presence 源（rendezvous lookup → `note_presence`）与 `connect_punched` 调用，PunchFailed → relay。
 4. **多对端节点上 punch accept 半边可能接到非目标对端。** 若收敛规则保留了这条"陌生人"链，握手失败（fail closed，可用性损失）。harness 无双对端拓扑未暴露。下一步最小解：`punch()` 的 inbound 半边加"对端身份预检"（accept 后先做 Hello 前的 lightweight 校验，或将非目标连接交还 serve 循环）。
-5. **relay fallback 未与 punch 组成单一生产函数。** 决策点（PunchFailed 信号、`PeerConnector::direct_then_relay`、relay 路径本身）均已实现且分别有测试；但没有一个生产函数走完整状态机，harness 也未跑 relay（拓扑无 relay server）。证据：wan_integration 覆盖 relay-only 路径。下一步：随 D3 的装配一并完成（punch 失败 → RelayMeshTransport.dial → `node.connect`）。
+5. **relay fallback 未与 punch 组成单一生产函数。** 决策点（PunchFailed 信号、`PeerConnector::direct_then_relay`、relay 路径本身）均已实现且分别有测试；但没有一个生产函数走完整状态机，harness 也未跑 relay（拓扑无 relay server）。证据：wan_integration 覆盖 relay-only 路径。下一步：随 D3 的装配一并完成（punch 失败 → RelayMeshTransport.dial → `node.connect`）。（口径：三个决策点各自为 IMPLEMENTED；**生产编排**仍未实现。）
 6. **两个基线失败测试未修**（core rc.1 断言、tools-canonical apply_patch）——基线旧账，与本任务无关，按任务要求仅确认"仍为相同测试、现象一致"。
 
 ## E. Final Verdict
@@ -97,5 +104,19 @@
 **NAT traversal implemented but not verified.**
 
 - 实现：从 `VerifiedPresence` 到已认证 QUIC 再到 canonical runtime 远端工具调用的完整链路已在**生产连接路径**上打通并被 loopback 集成测试证明（含内容级结果校验与单次执行保证）；失败有界、fail-closed 面覆盖。
-- 验证：Linux namespace NAT harness（TEST A–E）已实现、可复现、附准确命令，**未执行**；本环境（Windows，无可用 Linux）不能提供 L2 证据，本报告也不将 loopback 结果当作 NAT 证据。
+- 验证：Linux namespace NAT harness（TEST A–E）已实现、可复现、附准确命令，**未执行**；本环境（Windows，无可用 Linux）不能提供 L2 证据，本报告也不将 loopback 结果当作 NAT 证据。（口径：IMPLEMENTED —— 未执行 ⇒ 不构成 HARDWARE VALIDATED。）
 - 距离 L2 只差一次 `sudo scripts/test-mesh-nat.sh` 的真实运行；距离 L3 需要真实 NAT 设备环境。
+
+## 边界（没测什么）
+
+本报告只证明**机制在生产连接路径上可走通**，不证明**穿透**。以下明确**没测**：
+
+- **没测真实 NAT**：nft masquerade 是 endpoint-independent mapping；address/port-dependent
+  mapping 与 filtering 未模拟，真实 NAT 设备未测（§D.2）。
+- **没测 Linux namespace harness**：脚本已写但未执行（§B 表 TEST A–E 全部 `NOT RUN`）。
+- **没测多对端拓扑**：punch 的 accept 半边接到**另一个已 pin 对端**的场景未在 harness 里出现
+  （§D.4）；该场景当前是 fail-closed 的可用性损失，不是信任问题。
+- **没测生产宿主装配**：presence → punch 的生产调用方只有 harness 与测试
+  （§D.3）；relay fallback 的自动编排也没有生产函数（§D.5）。
+- **没测的量化口径**：全量回归数字是 2026-10-11 的时点值（`4935 passed / 2 failed / 21 ignored`），
+  与本报告其它结论一样按「历史记录」看待，不作现行基线。

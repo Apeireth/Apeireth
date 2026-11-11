@@ -1,5 +1,12 @@
 # Mesh architecture and invariants
 
+[Document-Meta]
+Document: docs/design/mesh-architecture.md
+Class: SPEC
+Status: 🟢 活跃
+Last-Modified: 2026-11-10
+Author: Jimmyxiao2009
+
 Status: living document. It records what the mesh guarantees today, the rules
 every change must keep, and what is still missing. The phase documents
 (`mesh-phase-0.md`, `mesh-phase-2c1.md`) describe how the pieces arrived; this
@@ -273,7 +280,7 @@ Until that flow exists in a host, callers of `connect_punched` must decide
 their own fallback policy on `PunchFailed`; the mesh will not retry without
 bound and will not silently prefer one path.
 
-## Not covered by this document's guarantees
+## 不做保证的范围（Not covered by this document's guarantees）
 
 - **MCP and other dynamic tools are not advertised over the mesh.** They live
   in the runtime's own `CapabilityRegistry` (module-id strings), not in

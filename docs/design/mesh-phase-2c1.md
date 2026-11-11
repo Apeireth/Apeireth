@@ -1,5 +1,12 @@
 # Mesh Phase 2C1 — Secure WAN Rendezvous + Encrypted Relay
 
+[Document-Meta]
+Document: docs/design/mesh-phase-2c1.md
+Class: SPEC
+Status: 🟢 活跃
+Last-Modified: 2026-11-10
+Author: Jimmyxiao2009
+
 > 历史阶段文档：记录 Phase 2C1 落地时的设计与决策。其中 "Deliberately
 > absent (Phase 2C2+)" 清单里的 UDP hole punching 等项此后已以**实验性**
 > 形态部分落地（`PunchCoordinator` / `punch` / `MeshNode::connect_punched`），
@@ -11,7 +18,7 @@
 > *where*; neither answers *who to trust* — that stays with the local
 > `TrustStore`, and cryptography proves who is on the other end.
 
-## 0. Scope
+## 0. Scope（批次：Phase 2C1）
 
 Two trusted nodes (already paired via the Phase 2B `TrustStore`) reach each
 other over the public internet when neither is directly dialable:
@@ -25,10 +32,11 @@ no `ModuleId`, no `CapabilityId`, no `ModuleRegistry`, no `CapabilityRegistry`,
 no `KnownPeer` trust; it never executes tools/providers; and because Mesh traffic
 is end-to-end encrypted by the two nodes, it never decrypts a `MeshEnvelope`.
 
-**Deliberately absent (Phase 2C2+):** STUN, TURN protocol compatibility, UDP hole
-punching, ICE, UPnP, NAT-PMP, PCP, DHT, automatic scheduling, distributed memory,
-agent migration. Relay is the correctness path; traversal may later become an
-*optimization*, never a prerequisite.
+## Deliberately absent (Phase 2C2+)（本批次不做的项）
+
+STUN, TURN protocol compatibility, UDP hole punching, ICE, UPnP, NAT-PMP, PCP, DHT,
+automatic scheduling, distributed memory, agent migration. Relay is the correctness
+path; traversal may later become an *optimization*, never a prerequisite.
 
 ## A. Current direct-connect path (Phase 2A/2B)
 

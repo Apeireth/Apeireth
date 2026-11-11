@@ -4,7 +4,7 @@
 
 > 唯一真源：`docs/architecture/contract.toml`；数据：`cargo metadata --no-deps`（生产边，kind != dev）。
 > 重新生成：`python scripts/arch_doc.py --gen`；漂移检查：`python scripts/arch_doc.py --check`（CI）。
-> 实测：workspace members = 30，生产依赖边 = 111。
+> 实测：workspace members = 34，生产依赖边 = 125。
 
 ## 1. 层 → crate
 
@@ -36,6 +36,8 @@
 | `apeireth-cli` | `apeireth-governance` | adapters → foundation ✅ |
 | `apeireth-cli` | `apeireth-guard` | adapters → engine ✅ |
 | `apeireth-cli` | `apeireth-memory` | adapters → engine ✅ |
+| `apeireth-cli` | `apeireth-mesh` | adapters → ? |
+| `apeireth-cli` | `apeireth-mesh-quic` | adapters → ? |
 | `apeireth-cli` | `apeireth-orchestration` | adapters → foundation ✅ |
 | `apeireth-cli` | `apeireth-organ` | adapters → engine ✅ |
 | `apeireth-cli` | `apeireth-plugin` | adapters → foundation ✅ |
@@ -93,6 +95,17 @@
 | `apeireth-memory` | `apeireth-plugin` | engine → foundation ✅ |
 | `apeireth-memory` | `apeireth-protocol` | engine → foundation ✅ |
 | `apeireth-memory` | `apeireth-storage` | engine → engine ✅ |
+| `apeireth-mesh` | `apeireth-core` | ? → foundation |
+| `apeireth-mesh` | `apeireth-governance` | ? → foundation |
+| `apeireth-mesh` | `apeireth-mesh-protocol` | ? → ? |
+| `apeireth-mesh` | `apeireth-plugin` | ? → foundation |
+| `apeireth-mesh` | `apeireth-protocol` | ? → foundation |
+| `apeireth-mesh-protocol` | `apeireth-core` | ? → foundation |
+| `apeireth-mesh-protocol` | `apeireth-protocol` | ? → foundation |
+| `apeireth-mesh-quic` | `apeireth-core` | ? → foundation |
+| `apeireth-mesh-quic` | `apeireth-mesh` | ? → ? |
+| `apeireth-mesh-quic` | `apeireth-mesh-protocol` | ? → ? |
+| `apeireth-mesh-rendezvous` | `apeireth-mesh-protocol` | ? → ? |
 | `apeireth-orchestration` | `apeireth-core` | foundation → foundation ✅ |
 | `apeireth-organ` | `apeireth-core` | engine → foundation ✅ |
 | `apeireth-organ` | `apeireth-governance` | engine → foundation ✅ |
@@ -110,6 +123,7 @@
 | `apeireth-provider` | `apeireth-protocol` | engine → foundation ✅ |
 | `apeireth-runtime` | `apeireth-core` | engine → foundation ✅ |
 | `apeireth-runtime` | `apeireth-governance` | engine → foundation ✅ |
+| `apeireth-runtime` | `apeireth-mesh` | engine → ? |
 | `apeireth-runtime` | `apeireth-orchestration` | engine → foundation ✅ |
 | `apeireth-runtime` | `apeireth-plugin` | engine → foundation ✅ |
 | `apeireth-runtime` | `apeireth-protocol` | engine → foundation ✅ |
