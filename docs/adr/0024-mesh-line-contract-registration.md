@@ -98,6 +98,12 @@ PR #117（`feature/mesh-rc2-integration-rebased`）把 mesh 跨节点栈并入�
   ⇒ ⇒ 由 `arch_guard --strict` 的 **VIOLATIONS: 0** 证明（合并后树实测 `crates=35 edges=132 env=152`）。
 - **基线重生成**：合并后树变了 ⇒ `scripts/arch-baseline.txt`（`arch_guard.py --update-baseline`）与
   `scripts/crate-budget-baseline.json`（`check_crate_budget.py --gen`）**按脚本重生成**，未手改基线。
+- **二次合并后树复核（2026-11-11，upstream/main@`72f826634`（PR #115 已合入）再次并入本分支）**：
+  按合并后树重跑 `python scripts/arch_guard.py --strict` ⇒ EXIT=0、`VIOLATIONS: 0`、
+  `crates=35 edges=132 env=152 max_src_loc=6255`
+  ⇒ ⇒ **实测与 §2.5 表一致（35 crate / 132 生产边 / 152 能力开关）⇒ 契约现值无需改动**
+  （`[budgets].max_workspace_crates = 35`、`max_production_edges = 132`、`[env].max_distinct_names = 154`
+  全部保持原值 ⇒ **未放宽任何棘轮**）。
 
 ## 3. O-6 三阶审查
 
@@ -127,6 +133,9 @@ python3 scripts/gen_gate_manifest.py --gen
 - [x] `python3 scripts/arch_guard.py --strict` 通过，VIOLATIONS: 0（本次 +4 crate / +14 边已在本文明示）
 - [x] **合并后树重测**（2026-11-11，upstream/main@`7abfa282` 已合入）：`crates=35 edges=132 env=152`，
       契约现值 35 / 132 已按 §2.5 更新（`[env]` 预算 154 未放宽）
+- [x] **二次合并后树重测**（2026-11-11，upstream/main@`72f826634`，PR #115 已合入）：
+      `crates=35 edges=132 env=152` ⇒ **数字与 §2.5 一致 ⇒ 契约现值无需改动**
+      （`max_workspace_crates = 35` / `max_production_edges = 132` / `[env] max_distinct_names = 154` 全部保持）
 - [x] `python3 scripts/check_crate_budget.py --check` / `gen_gate_manifest.py --check` / `arch_doc.py --check` 通过
 - [x] 契约条款更新（Status: Accepted）
 - [ ] 文档随行：`docs/status/mesh-rc2-status.md`「还差什么」中的 arch-strict 条目改为已决

@@ -321,7 +321,7 @@ size crates/capabilities/tools/src/backup.rs 1236
 size crates/capabilities/tools/src/device/device_control.rs 3250
 size crates/capabilities/tools/src/device/guard_watch.rs 1341
 size crates/capabilities/tools/src/doc_ops.rs 6255
-size crates/capabilities/tools/src/external.rs 2655
+size crates/capabilities/tools/src/external.rs 2637
 size crates/capabilities/tools/src/git_write.rs 1256
 size crates/capabilities/tools/src/image_ops.rs 2233
 size crates/capabilities/tools/src/process/mod.rs 1228

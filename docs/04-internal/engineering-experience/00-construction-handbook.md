@@ -74,7 +74,7 @@ Author:          经验总装批施工者
 ```powershell
 cargo test  --workspace --all-targets --locked --no-fail-fast -j 2   # 期望 0 failed（现行口径见 test-baseline，只引不抄）
 cargo clippy --workspace --all-targets --locked -- -D warnings      # 期望 0 警告
-cargo fmt --check                                                    # 期望 0 diff
+cargo fmt --check                                                    # 期望 0 diff（Windows 改用 scripts/fmt-check.ps1，见 §3.3）
 cd frontend/companion-desktop; pnpm check; pnpm test                 # 前端两件
 powershell scripts/check-neutral-terms.ps1                           # 期望 0 命中（豁免计数公开）
 # 判定一律基于落盘 log：命令 > xx.log 2>&1，再 grep 落盘文件
@@ -106,6 +106,7 @@ powershell scripts/check-neutral-terms.ps1                           # 期望 0 
 | `\\?\` 前缀 / canonical 键分叉 | 路径归一只认一把尺；悬案走示踪三选一 | ops §6.2 / 02 矿 4a |
 | CRLF 吃替换 | 正则容 `\r?$`；替换后断言命中数；批量手术后配平校验 | 02 矿 4b |
 | CI 绿 ≠ 本地绿 | cfg(unix) 块本地不编译；动跨平台代码后 WSL 侧过一遍 check | ops §6 |
+| `cargo fmt --all` 超命令行长度上限（os error 206） | cargo-fmt 把每个目标文件当 argv 传给 rustfmt ⇒ 超 Windows 命令行长度上限 ⇒ 报「文件名或扩展名太长。 (os error 206)」并打印 rustfmt usage ⇒ 是**调用方式坏了**，不是格式坏了；Windows 侧改用 `pwsh -NoProfile -File scripts/fmt-check.ps1`（逐 crate `cargo fmt -p <crate> --check`，覆盖 30 个 member，实测全 0 diff） | 本册实测（2026-11-10，Windows 11 · rustc 1.97.1） |
 
 ### 3.4 跨线共树（多 AI 同树施工呼吸规则）
 

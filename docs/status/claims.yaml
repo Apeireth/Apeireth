@@ -90,11 +90,11 @@ claims:
       - crates/capabilities/tools/src/mcp_bridge/catalog.rs
       - crates/engine/runtime-assembly/tests/production_mcp_factory.rs
       - crates/engine/runtime-assembly/tests/convergence_mcp.rs
-    verified_at: 8c77c7de
+    verified_at: 4da6ee8a1
     verify_cmd: "cargo test -p apeireth-tools-canonical mcp_bridge"
     owner: tools
     next_review: "2026-11-20"
-    notes: "服务器配置 = APEIRETH_MCP_SERVERS env + mcp-servers.json（拒开）；管理 UI/健康检查面未接线。；2026-10-22 批次复核：tools-canonical mcp_bridge 15 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立；2026-10-28 Phase 3 复核：生产工具通过普通 ToolModule 装配；动态 MCP 仍通过同一 CapabilityRegistry/Dispatcher 的独立取消 scope 兼容入口。transport 与动态 owner 完整 Plugin 生命周期未迁移，默认开关保持 OFF。；本批复核：ProductionModules 注册拥有生命周期的 McpPlugin；动态目录 generation 撤销、描述符审批 pin、只读预设撤销、断线/停止/原生进程清理真实 Runtime 回归通过。显式 shutdown 是完整 join/drain 入口，外部 Arc 保留的放弃路径未全部收口。；2026-10-28 生产收敛：默认 opt-in MCP 接线改为 McpDefinition 资源工厂；外部 Arc 保留时关闭/回收、旧工具代次、受管热控制与实际 stdio 生产回归已验证。配置预览用 mcp_definition，mcp_bridge 仅初始化后返回 Arc；完整全量证据见本批验收报告。；2026-10-29 S4 复核：production.rs 只新增可选 Profile 映射装配，原工具模块工厂、MCP 生命周期与默认开关不变；前轮微调前全量与本轮指定窄门禁的证据边界见 kernel-convergence-s4-2026-10-29.md。"
+    notes: "服务器配置 = APEIRETH_MCP_SERVERS env + mcp-servers.json（拒开）；管理 UI/健康检查面未接线。；2026-10-22 批次复核：tools-canonical mcp_bridge 15 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立；2026-10-28 Phase 3 复核：生产工具通过普通 ToolModule 装配；动态 MCP 仍通过同一 CapabilityRegistry/Dispatcher 的独立取消 scope 兼容入口。transport 与动态 owner 完整 Plugin 生命周期未迁移，默认开关保持 OFF。；本批复核：ProductionModules 注册拥有生命周期的 McpPlugin；动态目录 generation 撤销、描述符审批 pin、只读预设撤销、断线/停止/原生进程清理真实 Runtime 回归通过。显式 shutdown 是完整 join/drain 入口，外部 Arc 保留的放弃路径未全部收口。；2026-10-28 生产收敛：默认 opt-in MCP 接线改为 McpDefinition 资源工厂；外部 Arc 保留时关闭/回收、旧工具代次、受管热控制与实际 stdio 生产回归已验证。配置预览用 mcp_definition，mcp_bridge 仅初始化后返回 Arc；完整全量证据见本批验收报告。；2026-10-29 S4 复核：production.rs 只新增可选 Profile 映射装配，原工具模块工厂、MCP 生命周期与默认开关不变；前轮微调前全量与本轮指定窄门禁的证据边界见 kernel-convergence-s4-2026-10-29.md。；2026-11-10 批次复核：本 claim 的 sources（mcp_bridge/transport.rs）随 Windows clippy 死码收口改了一处调用点（unix-only 的 configure），MCP 语义、默认开关与治理边界未变；复核命令 cargo test -p apeireth-tools-canonical --lib mcp_bridge ⇒ 26 passed / 0 failed。"
 
   - id: tool.voice_speak
     title: "发声工具面（系统 TTS 合成即播 + 播放纪律 + 账本）"

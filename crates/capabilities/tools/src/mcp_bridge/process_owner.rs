@@ -15,14 +15,11 @@ pub(super) struct ProcessOwner {
 unsafe impl Send for ProcessOwner {}
 
 impl ProcessOwner {
+    /// Unix：把子进程放进独立进程组 ⇒ 终止时能整组 kill（非 Unix 侧由 Job Object 收敛）。
+    #[cfg(unix)]
     pub(super) fn configure(command: &mut tokio::process::Command) {
-        #[cfg(unix)]
-        {
-            use std::os::unix::process::CommandExt;
-            command.as_std_mut().process_group(0);
-        }
-        #[cfg(not(unix))]
-        let _ = command;
+        use std::os::unix::process::CommandExt;
+        command.as_std_mut().process_group(0);
     }
     pub(super) fn attach(child: &tokio::process::Child) -> Result<Self, McpError> {
         #[cfg(unix)]

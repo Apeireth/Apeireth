@@ -89,6 +89,14 @@ import time
 from pathlib import Path
 from typing import Any
 
+# ⭐ **控制台可能不是 UTF-8**（Windows：`cp1252` / `cp936`）⇒ ⇒ `print` 会抛
+# `UnicodeEncodeError` ⇒ ⇒ 门禁 exit 1 ⇒ ⇒ **把本来通过的 CI job 判成红**
+# ⇒ ⇒ 这里在**任何打印之前**把 stdout/stderr 重配成 UTF-8（守卫见 `scripts/utf8_stdout.py`）。
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from utf8_stdout import force_utf8_stdout  # noqa: E402
+
+force_utf8_stdout()
+
 try:  # Python 3.11+
     import tomllib
 except ModuleNotFoundError:  # pragma: no cover - 老 Python 走回退集
@@ -522,6 +530,8 @@ def run_gate(gate: dict[str, Any], timeout: int) -> dict[str, Any]:
                 cwd=str(ROOT),
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=300,
                 check=False,
             )
@@ -829,7 +839,8 @@ def impact_plan(base: str | None) -> dict:
         cmd += ["--base", base]
     try:
         proc = subprocess.run(
-            cmd, cwd=ROOT, capture_output=True, text=True, timeout=300
+            cmd, cwd=ROOT, capture_output=True, text=True,
+            encoding="utf-8", errors="replace", timeout=300
         )
         if proc.returncode == 0:
             data = json.loads(proc.stdout)
@@ -1160,6 +1171,8 @@ def cmd_check(args: argparse.Namespace) -> int:
             cwd=str(ROOT),
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=180,
             check=False,
         )

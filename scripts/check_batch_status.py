@@ -35,6 +35,14 @@ import re
 import sys
 from pathlib import Path
 
+# ⭐ **控制台可能不是 UTF-8**（Windows：`cp1252` / `cp936`）⇒ ⇒ `print` 会抛
+# `UnicodeEncodeError` ⇒ ⇒ 门禁 exit 1 ⇒ ⇒ **把本来通过的 CI job 判成红**
+# ⇒ ⇒ 这里在**任何打印之前**把 stdout/stderr 重配成 UTF-8（守卫见 `scripts/utf8_stdout.py`）。
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from utf8_stdout import force_utf8_stdout  # noqa: E402
+
+force_utf8_stdout()
+
 ROOT = Path(__file__).resolve().parent.parent
 PAGE = ROOT / "docs" / "status" / "spec-batch-status.md"
 CLAIMS = ROOT / "docs" / "status" / "claims.yaml"
@@ -256,6 +264,8 @@ if "--gen" in sys.argv or "--update" in sys.argv:
             ],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=300,
             check=False,
         )
