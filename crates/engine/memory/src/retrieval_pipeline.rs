@@ -676,6 +676,7 @@ fn is_cjk(ch: char) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::retrieval_tuning::tests::lock_effective;
     use crate::{MemoryProvenance, ScoreComponents};
 
     fn candidate(id: &str, content: &str, scope: MemoryScope) -> MemoryCandidate {
@@ -713,6 +714,7 @@ mod tests {
     /// 修法：每路按**自己的 max** 归一化 ⇒ ⇒ **各路顶分都是 1.0** ⇒ ⇒ **同台竞技**。
     #[test]
     fn per_source_normalization_lets_a_small_magnitude_channel_compete() {
+        let _guard = lock_effective();
         let scope = MemoryScope::Global;
         // 路 A：词法信号强（`lexical` = 1.0 ⇒ 贡献 0.20）
         let lexical = FixedSource(vec![MemoryCandidate {
@@ -761,6 +763,7 @@ mod tests {
     /// ⚠️ **单路时逐字不变**（归一化是**恒等变换** ⇒ ⇒ ⇒ 既有行为不动）。
     #[test]
     fn single_source_normalization_is_identity() {
+        let _guard = lock_effective();
         let scope = MemoryScope::Global;
         let source = BasicLexicalCandidateSource::new(vec![
             candidate("a", "alpha beta", scope.clone()),
@@ -777,6 +780,7 @@ mod tests {
 
     #[test]
     fn mmr_suppresses_near_duplicates_and_populates_novelty() {
+        let _guard = lock_effective();
         let scope = MemoryScope::Global;
         let source = BasicLexicalCandidateSource::new(vec![
             candidate("a", "rust memory retrieval design", scope.clone()),
@@ -804,6 +808,7 @@ mod tests {
 
     #[test]
     fn mmr_tie_order_is_stable_and_character_budget_is_strict() {
+        let _guard = lock_effective();
         let scope = MemoryScope::Global;
         let source = BasicLexicalCandidateSource::new(vec![
             candidate("b", "alpha", scope.clone()),
@@ -830,6 +835,7 @@ mod tests {
 
     #[test]
     fn invalid_vector_metadata_is_ignored_by_lexical_pipeline() {
+        let _guard = lock_effective();
         let scope = MemoryScope::Global;
         let source = BasicLexicalCandidateSource::new(vec![candidate(
             "invalid",
@@ -847,6 +853,7 @@ mod tests {
     }
     #[test]
     fn chinese_lexical_fallback_and_scope_filter_are_deterministic() {
+        let _guard = lock_effective();
         let source = BasicLexicalCandidateSource::new(vec![
             candidate(
                 "a",
@@ -950,9 +957,7 @@ mod tests {
     /// V4-c 调权真生效: 条目显著性生效值真进检索排序 (无 override 时零改动回落)。
     #[test]
     fn installed_entry_salience_changes_retrieval_ordering() {
-        let _guard = crate::retrieval_tuning::EFFECTIVE_TEST_GUARD
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _guard = lock_effective();
         crate::retrieval_tuning::clear_effective();
         let scope = MemoryScope::Global;
         let source = BasicLexicalCandidateSource::new(vec![
@@ -1009,9 +1014,7 @@ mod tests {
     /// ⚠️ 显式调用**故意在作用域外**做 ⇒ ⇒ 证明它真的不依赖线程局部作用域。
     #[test]
     fn explicit_session_and_scope_session_read_the_same_salience() {
-        let _guard = crate::retrieval_tuning::EFFECTIVE_TEST_GUARD
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _guard = lock_effective();
         crate::retrieval_tuning::clear_effective();
         let scope = MemoryScope::Global;
         let source = BasicLexicalCandidateSource::new(vec![
@@ -1080,9 +1083,7 @@ mod tests {
     /// 只吃到 B 的 ⇒ ⇒ 互不影响。
     #[test]
     fn explicit_session_does_not_see_another_session_salience() {
-        let _guard = crate::retrieval_tuning::EFFECTIVE_TEST_GUARD
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _guard = lock_effective();
         crate::retrieval_tuning::clear_effective();
         let scope = MemoryScope::Global;
         let source = BasicLexicalCandidateSource::new(vec![
@@ -1164,9 +1165,7 @@ mod tests {
     /// 调用不会因为作用域失效而静默串扰。
     #[test]
     fn explicit_session_wins_over_the_ambient_session_scope() {
-        let _guard = crate::retrieval_tuning::EFFECTIVE_TEST_GUARD
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _guard = lock_effective();
         crate::retrieval_tuning::clear_effective();
         let scope = MemoryScope::Global;
         let source = BasicLexicalCandidateSource::new(vec![
