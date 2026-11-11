@@ -1,8 +1,8 @@
 {
   "schema": "apeireth.gate-manifest.v1",
   "generated_from": "docs/architecture/contract.toml [ci_gates]",
-  "workspace_version": "2.0.0-rc.4",
-  "workspace_members": 30,
+  "workspace_version": "2.0.0-rc.5",
+  "workspace_members": 31,
   "locked_sources": [
     "crates/foundation/core/src/eight_anchors.rs",
     "crates/foundation/core/src/onion.rs",

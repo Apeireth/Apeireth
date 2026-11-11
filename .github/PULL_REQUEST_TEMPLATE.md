@@ -19,8 +19,8 @@
 
 ### 仓库事实（**自动生成** · 真源 = `docs/architecture/contract.toml`）
 
-- **workspace.version**：`2.0.0-rc.4`（契约 `1.0` · 状态 `adjudicated`）
-- **workspace 成员**：`30`（产品 crate `29`）
+- **workspace.version**：`2.0.0-rc.5`（契约 `1.0` · 状态 `adjudicated`）
+- **workspace 成员**：`31`（产品 crate `30`）
 - **受锁源码（0 触碰 · CI hard-walls 实际清单）**：
   - `crates/foundation/core/src/eight_anchors.rs`
   - `crates/foundation/core/src/onion.rs`

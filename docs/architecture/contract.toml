@@ -11,8 +11,9 @@
 #   4. 不替代、不修改 LOCKED 5 项; 与 LOCKED 冲突时以 LOCKED 为准。
 #
 # 0 装边界 (实测来源; 2026-11-04 文档真源批按当前树复测):
-#   - 依赖边: cargo metadata --no-deps (kind != dev, workspace 内) = 111 条生产边
-#              （= scripts/arch-baseline.txt 的 111 条 edge 条目；arch_guard --strict 报 edges=111）
+#   - 依赖边: cargo metadata --no-deps (kind != dev, workspace 内) = 118 条生产边
+#              （= scripts/arch-baseline.txt 的 118 条 edge 条目；arch_guard --strict 报 edges=118）
+#              （2026-11-11 合并 main 后重测：门面 crate apeireth（ADR-0019）新增 7 条生产边 ⇒ 111 -> 118）
 #   - 开关名: `rg -o 'APEIRETH_[A-Z0-9_]+' crates --glob '*.rs'` = 173 distinct（全 crates 含 tests 口径）；
 #              守卫按 workspace src 口径实测 = 160（见 [env] max_distinct_names）
 #   - 最大 src 文件: 实测 6255 行 (crates/capabilities/tools/src/doc_ops.rs)
@@ -30,10 +31,10 @@ wave_note = "Wave 4 收口 (2026-10-21): R1b 交付（R1b-1a 总线/桥/开关�
 rolling_report_only_until = "2026-11-03"   # 灰度期: 此日期前 CI/commit 仅报告, 之后 blocking
 
 [workspace]
-members = 30
-product_crates = 29
+members = 31
+product_crates = 30
 bench_crates = 1
-version = "2.0.0-rc.4"
+version = "2.0.0-rc.5"
 test_baseline = "docs/03-reference/test-baseline.md（单一真源；本契约不抄写测试数字）"
 
 [[workspace.independent_workspaces]]
@@ -42,7 +43,7 @@ path = "crates-ui"
 crates = 1
 ci = ".github/workflows/ui-core-ci.yml"
 adr = "docs/adr/0021-consolidation-ui-core-slice.md"
-note = "Independent Cargo workspace: NOT one of the 30 root members, no dependency edge to/from the root workspace; holds 1 crate (apeireth-ui-core). IMPLEMENTED pure reactive library only; no production frontend consumer/DOM/GPU wiring; root metadata and budgets unchanged."
+note = "Independent Cargo workspace: NOT one of the 31 root members, no dependency edge to/from the root workspace; holds 1 crate (apeireth-ui-core). IMPLEMENTED pure reactive library only; no production frontend consumer/DOM/GPU wiring; root metadata and budgets unchanged."
 
 [locked]
 # 只引用, 不复制数值; 守卫检查契约批不触碰这些文件。
@@ -348,8 +349,8 @@ allowed_read_locations = []         # 空 = v0.1 只按名字卡, 不按位置�
 
 [budgets]
 max_file_loc = 6300                 # 现状最大 src 6255 (doc_ops.rs, 2026-11-04 实测); 只减不增
-max_workspace_crates = 31           # 上限 == 实测（合并 main 后 workspace crates 31 = 30 + 门面 crate apeireth，ADR-0019）; 只减不增
-max_production_edges = 118          # 上限（棘轮，只减不增；新增需 ADR）；现行实测 111（2026-11-05 收紧 118 → 111：与 max_workspace_crates=30 同为「上限 == 实测」口径（env 名额另有 4 个受控口子，见 [env] 段） ⇒ ⇒ 任何新增生产边都会被拦下 ⇒ ⇒ 真要加边先问总指挥）
+max_workspace_crates = 31           # 上限 == 实测（合并 main 后 workspace members 31 = main 侧 30 + 门面 crate apeireth，ADR-0019）; 只减不增
+max_production_edges = 118          # 上限（棘轮，只减不增；新增需 ADR）；现行实测 118（2026-11-05 收紧 118 → 111；2026-11-11 合并 main + 门面 crate apeireth（ADR-0019）新增 7 条生产边 ⇒ 111 → 118 ⇒ 上限随之回到「上限 == 实测」口径（与 max_workspace_crates=31 同口径；env 名额另有 4 个受控口子，见 [env] 段） ⇒ ⇒ 任何新增生产边都会被拦下 ⇒ ⇒ 真要加边先问总指挥）
 
 [exceptions]
 # 例外预算 — 已裁决 (ADR-0001, owner 授权代裁 2026-10-20)
