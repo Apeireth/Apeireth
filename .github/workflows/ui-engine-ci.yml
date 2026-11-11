@@ -50,8 +50,29 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Rust stable
+      # ⚠️ **2026-11-11 修（PR #78 第二轮实测 · 真因 = 缺 wasm32 target）**：
+      #   本 job 下面的「feature 门」要编 wasm32 目标
+      #   （`cargo check -p apeireth-ui-app --target wasm32-unknown-unknown …`）
+      #   ⇒ ⇒ 而 dtolnay/rust-toolchain@1.97.1 **只装 default host target**
+      #   ⇒ ⇒ 2026-11-11 实测报错：
+      #     `error[E0463]: can't find crate for 'core' / 'std'`
+      #     note: `the 'wasm32-unknown-unknown' target may not be installed`
+      #   ⇒ ⇒ （看着像编译错，实为环境错 —— 与本文件 wasm job 2026-10-24 的实测同款）。
+      - name: Install Rust stable + wasm32 target
         uses: dtolnay/rust-toolchain@1.97.1
+        with:
+          targets: wasm32-unknown-unknown
+
+      # ⚠️ **不信任 action 的 `targets:`**（同文件 wasm job 2026-10-24 实测结论）：
+      #   显式安装 + 机械断言 ⇒ 装不上就当场红，而不是让后面的构建报一个
+      #   与真因无关的错（E0463 看着像编译问题，实为环境问题）。
+      - name: 确保 wasm32 target 就位（显式安装 + 断言）
+        run: |
+          rustup target add wasm32-unknown-unknown
+          if ! rustup target list --installed | grep -q '^wasm32-unknown-unknown'; then
+            echo "::error::wasm32-unknown-unknown target 未装上（feature 门会报 E0463）"
+            exit 1
+          fi
 
       - name: Cache cargo (crates-ui)
         uses: Swatinem/rust-cache@v2
