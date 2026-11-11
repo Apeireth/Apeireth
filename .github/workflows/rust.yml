@@ -154,11 +154,11 @@ jobs:
         if: matrix.os != 'macos-latest'
         run: cargo nextest run --workspace --profile ci --locked
 
-      - name: cargo nextest run --workspace --profile ci --locked (macOS: 排除 live mDNS 探针)
+      - name: "cargo nextest run --workspace --profile ci --locked (macOS: 排除 live mDNS 探针)"
         if: matrix.os == 'macos-latest'
         run: cargo nextest run --workspace --profile ci --locked -E 'all() - test(mdns_smoke_advertised_presence_is_observed_on_the_local_network)'
 
-      - name: Live mDNS probe (macOS: root — Apple TN3179 豁免 root 进程)
+      - name: "Live mDNS probe (macOS: root — Apple TN3179 豁免 root 进程)"
         if: matrix.os == 'macos-latest'
         env:
           CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER: sudo -E
