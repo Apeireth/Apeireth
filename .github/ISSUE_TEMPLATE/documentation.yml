@@ -1,0 +1,40 @@
+name: 文档与文案反馈 · Docs
+description: 发现错字、失效链接、难懂的说明，或文档与实际行为不符？在这里反馈。
+title: "[DOCS] "
+labels:
+  - docs
+body:
+  - type: markdown
+    attributes:
+      value: |
+        不需要运行代码或给出修正方案，告诉我们哪一页、哪里让你困惑就可以。
+        请在上方标题的 `[DOCS]` 后补一句具体问题，例如“安装指南中的链接失效”。也可以先[搜索已有文档反馈](https://github.com/Apeireth/Apeireth/issues?q=is%3Aissue%20label%3Adocs)。
+        使用求助请到 [Q&A](https://github.com/Apeireth/Apeireth/discussions/categories/q-a)；程序或页面功能异常请用[问题反馈](https://github.com/Apeireth/Apeireth/issues/new?template=bug_report.yml)。
+
+        **这里的内容会公开。** 请勿提交密钥、令牌、私人对话或身份信息；链接请移除私密参数，截图请先脱敏。
+        疑似安全漏洞请使用[私密漏洞报告](https://github.com/Apeireth/Apeireth/security/advisories/new)。社区举报或申诉请查看[行为准则](https://github.com/Apeireth/Apeireth/blob/main/CODE_OF_CONDUCT.md)。
+
+  - type: input
+    id: location
+    attributes:
+      label: 哪一页或哪一段？
+      description: 填写公开页面链接、仓库文件路径或页面名称；有具体小节时请一并说明。不要包含令牌等私密参数。
+      placeholder: 例如：README 的“如何开始”，或 INSTALL.md 的 Windows 部分
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: 哪里有问题或让你困惑？
+      description: 描述错字、链接错误、看不懂的说明或与实际行为不符的地方；不确定正确答案也可以反馈。
+    validations:
+      required: true
+
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: 修改建议或截图（选填）
+      description: 如果已有想法，可写希望怎样说明，或提供经过脱敏的截图。没有建议可以留空。
+    validations:
+      required: false

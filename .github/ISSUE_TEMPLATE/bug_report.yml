@@ -1,176 +1,78 @@
-# ============================================================================
-# Bug Report — Apeireth 1.0+ issue form (R26 工程化补全)
-# ============================================================================
-# 模式: qdrant/tokio 业界惯例 (GitHub Issue Forms 2024+ YAML 1:1)
-# 参考: https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/syntax-for-issue-forms
-# 硬约束 (per CONTRIBUTING.md + rust.yml hard-walls job):
-#   - 0 触碰 24 LOCKED crate (per hard-walls job 实际清单, 含 apeireth-graph)
-#   - 0 改 workspace version (1.2.0 semver 严守)
-#   - 0 改 R11 baseline 3 值 (V1141=0.8682 / V1131=0.8532 / V1136=0.9063)
-#   - R11 在 `legacy/donor/apeireth-asi/tests/integration_r_measure.rs`
-# 字段验证: 必填项 = 复现步骤 + 期望行为 + 实际行为 + version + severity + OS (跟业界 1:1)
-# 跟 .github/ISSUE_TEMPLATE/bug.md (R20 写, 1.0 release 阶段 bug) 共存, 不删 (向后兼容)
-
-name: Bug Report
-description: Report a bug in Apeireth (Rust 85 + 1 desktop crate backend, 24 LOCKED + 9 organ + 5 重守门)
+name: 问题反馈 · Bug
+description: 遇到了错误、异常或与预期不符的行为？请告诉我们发生了什么。
 title: "[BUG] "
 labels:
   - bug
-  - triage
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for reporting a bug. Please fill out the template below — it helps us reproduce and fix faster.
+        谢谢你帮助改进 Apeireth。用自己的话描述即可，不需要了解内部架构或编译命令。
+        可以先[搜索已有反馈](https://github.com/Apeireth/Apeireth/issues)；不确定如何使用时，欢迎到 [Q&A 提问](https://github.com/Apeireth/Apeireth/discussions/categories/q-a)。
+        文档错字、说明不清或失效链接请使用[文档反馈](https://github.com/Apeireth/Apeireth/issues/new?template=documentation.yml)。请在上方标题的 `[BUG]` 后补一句具体问题，例如“导出文稿时提示路径不存在”。
+
+        **这里的内容会公开。** 请勿提交 API Key、密码、令牌、完整配置、私人对话或他人的个人信息；截图和日志请先遮盖或删除敏感内容。
+        疑似安全漏洞请改用[私密漏洞报告](https://github.com/Apeireth/Apeireth/security/advisories/new)。社区举报或申诉请查看[行为准则](https://github.com/Apeireth/Apeireth/blob/main/CODE_OF_CONDUCT.md)。
 
   - type: input
     id: version
     attributes:
-      label: Apeireth version
-      description: Output of `apeireth --version` or `cargo run -p apeireth-cli -- --version`
-      placeholder: e.g. 1.2.0 (workspace semver) / 1.0.0 (product axis)
-    validations:
-      required: true
-
-  - type: dropdown
-    id: severity
-    attributes:
-      label: Severity
-      description: How severe is the bug?
-      options:
-        - Critical (data loss / crash / 1.0 release blocker)
-        - High (1.0 release 0-优先级)
-        - Medium (post-1.0 fix)
-        - Low (cosmetic / docs)
-    validations:
-      required: true
-
-  - type: dropdown
-    id: os
-    attributes:
-      label: Operating system
-      options:
-        - Linux (Ubuntu 22.04)
-        - Linux (Ubuntu 24.04)
-        - macOS (latest stable)
-        - Windows 10
-        - Windows 11
-        - Other (specify in description)
+      label: 版本或页面来源
+      description: 软件请填版本号与获取来源；官网或原型请填页面名称或不含私密参数的链接。找不到版本可写“不清楚”；自行构建可附提交号（选填）。
+      placeholder: 版本号与来源 / 官网或原型页面名称
     validations:
       required: true
 
   - type: input
-    id: rustc
+    id: environment
     attributes:
-      label: Rust toolchain
-      placeholder: e.g. stable 1.81.0 / nightly-2026-08-01
-      description: Output of `rustc --version` and `rustup show`
+      label: 设备与使用环境
+      description: 系统及版本、使用入口（命令行、API、历史桌面包、官网或设计原型）；网页问题请补充浏览器名称。不需要设备序列号。
+      placeholder: 例如：Windows 11，官网，Edge；或 macOS，API 调用
+    validations:
+      required: true
 
   - type: textarea
     id: repro
     attributes:
-      label: Reproduction steps
-      description: Minimal sequence to reproduce the bug
+      label: 问题是怎样出现的？
+      description: 尽量列出最少的操作步骤。偶发或无法再次复现也可以提交，请说明发生前做了什么，不必猜测原因。
       placeholder: |
-        1. cargo build --workspace
-        2. cargo run -p apeireth-cli -- chat
-        3. Send message: "..."
-        4. Observe: ...
+        1. 我正在做……
+        2. 执行了……
+        3. 出现了……
     validations:
       required: true
 
   - type: textarea
     id: expected
     attributes:
-      label: Expected behavior
-      description: What you expected to happen
+      label: 你原本希望发生什么？
+      description: 简单描述你期待的结果。
     validations:
       required: true
 
   - type: textarea
     id: actual
     attributes:
-      label: Actual behavior
-      description: What actually happened
+      label: 实际发生了什么？
+      description: 描述看到的结果或错误提示；如果方便，也请说明发生频率，以及是否阻止你继续操作。
     validations:
       required: true
 
   - type: textarea
     id: logs
     attributes:
-      label: Relevant logs / output
-      description: Paste `RUST_LOG=debug` output, stack traces, or screenshots
-      render: shell
+      label: 错误信息或日志（选填）
+      description: 仅粘贴与问题相关且已去除敏感信息的片段，不需要开启调试模式或提交完整日志。没有日志可以留空。
+      render: text
+    validations:
+      required: false
 
-  - type: markdown
+  - type: textarea
+    id: context
     attributes:
-      value: |
-        ## 0 触碰实查 (per [CONTRIBUTING.md §0 触碰实查](https://github.com/apeireth/apeireth-rust/blob/main/CONTRIBUTING.md))
-
-        Run before submitting:
-
-        ```bash
-        # 0 改 24 LOCKED crate (per hard-walls job, 跟 .github/workflows/rust.yml LOCKED 1:1, 含 graph)
-        # 23 -> 24 修于 commit 9bd81be6 (发现 hard-walls 漏 graph)
-        git diff main..HEAD -- crates/apeireth-{supervisor,agent,council,bus,protocol,mcp,tool-registry,tool-runtime,graph,pipeline,tool-approval,extension,evolution,api,core,memory,asi,tools,cli,bench,cognition,action,life-force,constraint}/
-        # 必须 0 行
-        ```
-
-  - type: checkboxes
-    id: locked_check
-    attributes:
-      label: 0 触碰实查确认
-      description: Confirm no hard-locked items were modified (per rust.yml hard-walls job)
-      options:
-        - label: 0 改 24 LOCKED crate (mtime 实查, per hard-walls job 实际清单, 含 graph)
-          required: false
-        - label: 0 改 workspace version (1.2.0)
-          required: false
-        - label: 0 改 R11 baseline 3 值 (V1141=0.8682 / V1131=0.8532 / V1136=0.9063, in `tests/integration_r_measure.rs`)
-          required: false
-        - label: 0 改 7 LOCKED 文档 (per `docs/conventions/10-locked.md`)
-          required: false
-
-  - type: markdown
-    attributes:
-      value: |
-        ## 6 哲学 anchor 影响 (per `docs/conventions/09-anchor.md`)
-
-        - **S-1** 北极星导向: 跟既定产品哲学与设计口径冲突吗?
-        - **S-2** 实事求是: 实查 5 决策点 (loc / files / deps / hardcode / 0 触碰) 了吗?
-        - **O-2** 走在前人肩上: 复用 std / tokio / 业界标准了吗?
-        - **O-3** 干到底: cargo check 0 error + cargo test pass 了吗?
-        - **O-4** 任何人都能接手: doc 顶部 30+ 行 + 编译期 hardcode 守门了吗?
-        - **O-5** 不假装: skeleton 标 ⏳ + 不假装已实现了吗?
-
-  - type: checkboxes
-    id: philosophy_check
-    attributes:
-      label: 6 哲学 anchor 穿透
-      options:
-        - label: S-1 北极星导向 穿透
-          required: false
-        - label: S-2 实事求是 穿透
-          required: false
-        - label: O-2 走在前人肩上 穿透
-          required: false
-        - label: O-3 干到底 穿透
-          required: false
-        - label: O-4 任何人都能接手 穿透
-          required: false
-        - label: O-5 不假装 穿透
-          required: false
-
-  - type: markdown
-    attributes:
-      value: |
-        ## 8 项不修改承诺影响 (per `docs/conventions/10-locked.md`)
-
-        - ✅ 不假装已实现
-        - ✅ 编译期 hardcode
-        - ✅ 不改 LOCKED 24 crate
-        - ✅ 不改 workspace version
-        - ✅ 6 哲学 anchor 穿透
-        - ✅ 不依赖 NewAPI
-        - ✅ 不重复造轮子
-        - ✅ 诚实标缺
+      label: 截图与其他补充（选填）
+      description: 可补充已遮盖敏感信息的截图、相关反馈链接、你尝试过的办法；不需要上传完整配置或私人对话。
+    validations:
+      required: false

@@ -1,31 +1,25 @@
-# ============================================================================
-# Issue Chooser — Apeireth (R26 工程化补全)
-# ============================================================================
-# 模式: qdrant/tokio 业界惯例 (GitHub Issue Chooser 2024+ YAML 1:1)
-# 参考: https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/configuring-issue-templates-for-your-repository
-# 作用: 控制用户新建 issue 时看到的 chooser (隐藏 blank issue + 加 contact links)
-# 跟 .github/ISSUE_TEMPLATE/{bug,feature,1.0-blocker}.md (R20 写) 共存, 不删 (向后兼容)
-#   - .yml 优先显示 (GitHub 2024+ 行为)
-#   - .md 仍可被选 (但优先级低)
-#   - 1.0-blocker.md 是 1.0 release 专用, 跟 1.0 release 12 项 checklist 强绑定, 保留
-
-# 关闭 blank issue (强制走模板, 跟 qdrant 1:1)
 blank_issues_enabled: false
-
-# contact links: 用户在 chooser 看到的额外链接
 contact_links:
-  - name: Apeireth Discussions
-    url: https://github.com/Apeireth/Apeireth/discussions
-    about: General questions, design discussions, and community chat (替代裸 issue)
+  - name: 使用求助 · Q&A
+    url: https://github.com/Apeireth/Apeireth/discussions/categories/q-a
+    about: 不知道怎样使用，或不确定是不是问题？在这里提问。
 
-  - name: Apeireth Documentation
+  - name: 想法交流 · Ideas
+    url: https://github.com/Apeireth/Apeireth/discussions/categories/ideas
+    about: 交流使用场景与初步想法；明确的功能需求可使用上方的功能建议表单。
+
+  - name: 经验分享 · Show and tell
+    url: https://github.com/Apeireth/Apeireth/discussions/categories/show-and-tell
+    about: 分享你的使用经验、作品或实践。发布前请去除个人信息与密钥。
+
+  - name: Apeireth 文档
     url: https://github.com/Apeireth/Apeireth/tree/main/docs
-    about: Read the docs first — conventions, versioning, glossary, 6 哲学 anchor, 8 项不修改承诺
+    about: 查看使用指南、能力说明与开发文档。
 
-  - name: Security vulnerability
+  - name: 私密报告安全漏洞
     url: https://github.com/Apeireth/Apeireth/security/advisories/new
-    about: Report security issues privately (per `.well-known/security.txt` RFC 9116) — do NOT use public issues
+    about: 疑似数据泄露、权限绕过等漏洞请走此私密入口，不要公开提交 Issue。
 
-  - name: 1.0 release blocker
-    url: https://github.com/Apeireth/Apeireth/issues/new?template=1.0-blocker.md
-    about: 1.0 release 必须 1.0 前修的 blocker (跟 1.0 release 12 项 checklist 强绑定, 跟 bug report 区分)
+  - name: 社区规范、举报与申诉
+    url: https://github.com/Apeireth/Apeireth/blob/main/CODE_OF_CONDUCT.md
+    about: 社区行为举报与申诉请私密联系 yintasde@qq.com；处理规则见行为准则，请勿公开敏感材料。

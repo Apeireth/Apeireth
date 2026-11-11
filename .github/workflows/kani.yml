@@ -28,29 +28,8 @@ on:
   push:
     branches: [main]
   pull_request:
-    # ⭐ **paths 过滤**（2026-11-04 加）：CI 积压的根因是**PR 侧无过滤**
-    # ⇒ ⇒ 每个 push 都触发全部 34 个 workflow（含 Kani / Miri / Coverage / OS matrix）
-    # ⇒ ⇒ GitHub runner 排队 ⇒ ⇒ 积压 32 个。
-    # ⇒ ⇒ 纯文档/台账改动**不触发**本 workflow（它守的是代码）
-    # ⇒ ⇒ 代码 / 依赖 / 工具链 / 本 workflow 自身的改动**照跑**。
-    paths:
-      - 'crates/**'
-      - 'Cargo.toml'
-      - 'Cargo.lock'
-      - 'rust-toolchain.toml'
-      - '.cargo/**'
-      - 'fuzz/**'
-      - 'frontend/**/src-tauri/**'
-      - 'frontend/**/package.json'
-      - 'frontend/**/pnpm-lock.yaml'
-      # crates-ui 是**独立 cargo workspace**（2026-11-11 实测：crates-ui/** 的 PR 不触发本 workflow）
-      # ⇒ ⇒ 只改 crates-ui 的 PR 上，本 workflow 的 required 门禁（nextest / 硬墙 / 钉版）
-      #   永不产出结论 ⇒ ⇒ PR 永久 BLOCKED（2026-11-11 实测 PR #118：
-      #   "3 of 7 required status checks are expected." ⇒ 仓库级治理缺口，不是代码问题）
-      # ⇒ ⇒ 把 crates-ui/** 纳入过滤：只改 crates-ui 的 PR 也要跑本仓主工作区的门禁
-      #   （crates-ui 自己的门禁在 ui-engine-ci.yml，那是另一套）⇒ **只加触发，不减门禁、不放宽判定**。
-      - 'crates-ui/**'
-      - '.github/workflows/kani.yml'
+    # Required check 必须为每个 PR 产出结论，不能在顶层 paths 过滤整个 workflow。
+    # 是否触碰证明面仍由 changes 判定，verify 与汇总门的原有验证规则保持不变。
   workflow_dispatch:
 
 env:
