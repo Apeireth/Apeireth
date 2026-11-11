@@ -706,6 +706,7 @@ impl<D: Dom> Renderer<D> {
             allowed: ids.clone(),
             anchor: anchor.to_vec(),
             scope_root: None,
+            scope_identity: None,
         });
         // ⭐ 本层的允许集合 = **本层** ∪ **下面那层**（嵌套时下面那层仍要有效）。
         let mut effective = ids;
@@ -747,6 +748,7 @@ impl<D: Dom> Renderer<D> {
             allowed: ids.clone(),
             anchor: root.to_vec(),
             scope_root: Some(root.to_vec()),
+            scope_identity: self.identity_segments(root),
         });
         // ⭐ 本层的允许集合 = **本层** ∪ **下面那层**（嵌套时下面那层仍要有效）。
         let mut effective = ids;
@@ -915,6 +917,29 @@ impl<D: Dom> Renderer<D> {
         moved || self.has_modal()
     }
 
+    /// ⭐⭐⭐ **子树作用域的根路径（按当前树重新解析）**（2026-11-11）。
+    ///
+    /// ## 为什么不能只用打开那一刻记下的路径
+    ///
+    /// 路径 = **子节点下标链** ⇒ ⇒ 树一变（前面插一个兄弟节点、遮罩撤掉、
+    /// 条件块切换…）⇒ ⇒ 下标全变 ⇒ ⇒ 打开时记下的路径会指向**另一个元素**
+    /// ⇒ ⇒ ⇒ 作用域判定的子树根跑偏 ⇒ ⇒ Tab 在错的子树里走 ⇒ ⇒⇒ 焦点卡住。
+    ///
+    /// ## 口径
+    ///
+    /// 根记**稳定身份段**（有 key 的层记 key、没有的记下标）
+    /// ⇒ ⇒ 每次用时**重新解析** ⇒ ⇒ 元素搬家也跟得住
+    /// （与 E-169 的焦点身份口径一致）。
+    fn scope_root_path(&self) -> Option<Vec<usize>> {
+        let layer = self.modal_layers.last()?;
+        if let Some(segments) = layer.scope_identity.as_ref() {
+            if let Some(path) = self.resolve_identity_path(segments) {
+                return Some(path);
+            }
+        }
+        layer.scope_root.clone()
+    }
+
     /// ⭐⭐⭐ **子树作用域：这个路径当前允许获得焦点吗**（2026-11-11）。
     ///
     /// ## 为什么不用陷阱快照
@@ -922,14 +947,15 @@ impl<D: Dom> Renderer<D> {
     /// 陷阱集合是**打开那一刻**的快照 ⇒ ⇒ 弹层**后渲染**的内容进不来
     /// ⇒ ⇒ ⇒ 所以子树作用域的判定必须**按当前树**算。
     fn scope_allows_path(&self, path: &[usize]) -> bool {
-        let Some(layer) = self.modal_layers.last() else {
+        if self.modal_layers.last().is_none() {
             return true;
-        };
-        let Some(root) = &layer.scope_root else {
+        }
+        // ⭐⭐⭐ 根按**当前树**重新解析（树位移后作用域仍跟着同一个元素）。
+        let Some(root) = self.scope_root_path() else {
             // 旧口径（应用自列路径数组）⇒ ⇒ 仍由陷阱集合自己管。
             return true;
         };
-        if path.starts_with(root) {
+        if path.starts_with(&root) {
             return true;
         }
         // ⭐ 嵌套模态：下面那层的允许集合**仍然有效**。
@@ -949,10 +975,11 @@ impl<D: Dom> Renderer<D> {
     /// 陷阱集合若停在打开那一刻 ⇒ ⇒ 后渲染出来的可聚焦项
     /// ⇒ ⇒ 一边进不了允许集合、一边过不了陷阱判定 ⇒ ⇒ ⇒ 所以每次都重算。
     fn sync_scope_trap(&mut self, order: &crate::keyboard::FocusOrder) {
-        let Some(layer) = self.modal_layers.last() else {
+        if self.modal_layers.last().is_none() {
             return;
-        };
-        let Some(root) = layer.scope_root.clone() else {
+        }
+        // ⭐⭐⭐ 根按**当前树**重新解析（树位移后作用域仍跟着同一个元素）。
+        let Some(root) = self.scope_root_path() else {
             return;
         };
         let mut ids = self.focusable_ids_under_in(order, &root);
@@ -1120,10 +1147,12 @@ impl<D: Dom> Renderer<D> {
             .and_then(|segments| self.resolve_identity_path(&segments));
         // ⭐ 闭包**不能捕获 `self`**（`&dyn Fn` 要求 `'static`）⇒ ⇒
         //   ⇒ 允许集合改用**路径**（不是 id）⇒ ⇒ 闭包只捕获这个 Vec ⇒ ⇒ 无借用冲突。
+        // ⭐⭐⭐ 根按**当前树**重新解析（树位移后作用域仍跟着同一个元素）。
+        let scope_root = self.scope_root_path();
         let allowed_paths: Option<Vec<Vec<usize>>> = self.modal_layers.last().map(|layer| {
             // ⭐⭐ 子树作用域 ⇒ ⇒ **每次都重新枚举**
-            //   （弹层内容可能在打开之后才渲染完 ⇒ 允许集合要跟着变）。
-            let mut paths: Vec<Vec<usize>> = match &layer.scope_root {
+            //   （弹层内容可能在打开之后才渲染完 ⇒ ⇒ 允许集合要跟着变）。
+            let mut paths: Vec<Vec<usize>> = match &scope_root {
                 Some(root) => Self::focusable_paths_under_in(&order, root),
                 None => layer
                     .allowed
@@ -1154,7 +1183,7 @@ impl<D: Dom> Renderer<D> {
         // ⇒ ⇒ 那焦点就永远进不了作用域（还停在背景元素上）⇒ ⇒
         // ⇒ ⇒ 所以「进作用域」这件事由作用域自己负责 ⇒ ⇒ 与「在作用域内怎么循环」分开。
         let pull_in: Option<Vec<usize>> = match self.modal_layers.last() {
-            Some(layer) => match layer.scope_root.clone() {
+            Some(_) => match scope_root.clone() {
                 Some(root) => {
                     let inside = current_path
                         .as_ref()
@@ -3134,6 +3163,18 @@ pub struct ModalLayer {
     /// ⇒ ⇒ ⇒ 改成「应用只说**这棵子树是模态作用域**」⇒ ⇒
     /// ⇒ ⇒ **枚举后代可聚焦项由引擎做**（且每次 Tab 重新算 ⇒ 弹层后渲染的内容也进得来）。
     pub scope_root: Option<Vec<usize>>,
+    /// ⭐⭐⭐ **子树作用域根的稳定身份段**（2026-11-11）。
+    ///
+    /// ## 为什么要有它
+    ///
+    /// `scope_root` 是**子节点下标链** ⇒ ⇒ 树一变（前面插一个兄弟节点、
+    /// 抽屉遮罩撤掉、条件块切换…）⇒ ⇒ 下标全变
+    /// ⇒ ⇒ 打开那一刻记下的路径会指向**另一个元素**
+    /// ⇒ ⇒ ⇒ 作用域判定跑偏 ⇒ ⇒ Tab 在错的子树里走 ⇒ ⇒⇒ 焦点卡住。
+    ///
+    /// ⇒ ⇒ 所以根还要记一份**稳定身份**（有 key 的层记 key、没有的记下标）
+    /// ⇒ ⇒ 每次用时**重新解析** ⇒ ⇒ 元素搬家也跟得住。
+    pub scope_identity: Option<Vec<IdentitySegment>>,
 }
 
 /// 子节点路径 ⇒ 稳定 `FocusId`（FNV-1a）。
@@ -4251,6 +4292,109 @@ mod tests {
             let current = renderer.current_focus_path().expect("焦点必须在");
             assert!(
                 current.starts_with(&[1]),
+                "⭐ 第 {} 次 Tab 后焦点跑出了作用域：{:?}",
+                step + 1,
+                current
+            );
+        }
+    }
+
+    /// ⭐⭐⭐ **子树作用域跟着子树根的稳定身份走**（2026-11-11）。
+    ///
+    /// ## 它锁住什么
+    ///
+    /// 上一轮的真实事故：弹窗打开期间窗口从窄屏拉宽 ⇒ ⇒ 抽屉遮罩撤掉
+    /// ⇒ ⇒ 弹窗在父节点里的**下标变了** ⇒ ⇒ 作用域若只记打开那一刻的路径
+    /// ⇒ ⇒ 就会指向**另一个元素** ⇒ ⇒ Tab 在错的子树里走 ⇒ ⇒⇒ 焦点卡住。
+    #[test]
+    fn modal_scope_follows_the_root_after_the_tree_shifts() {
+        let (mut renderer, _root) = renderer_with_dom();
+        renderer
+            .mount(
+                VNode::element("div")
+                    .child(
+                        VNode::element("button")
+                            .attr("id", "outside")
+                            .child(VNode::text("外"))
+                            .build(),
+                    )
+                    .child(
+                        VNode::element("div")
+                            .key(crate::vnode::Key::str("dialog"))
+                            .attr("id", "dialog")
+                            .child(
+                                VNode::element("button")
+                                    .attr("id", "a")
+                                    .child(VNode::text("甲"))
+                                    .build(),
+                            )
+                            .child(
+                                VNode::element("button")
+                                    .attr("id", "b")
+                                    .child(VNode::text("乙"))
+                                    .build(),
+                            )
+                            .build(),
+                    )
+                    .build(),
+            )
+            .expect("挂载必须成功");
+        renderer
+            .open_modal_scope(&[1], Some(&[1, 0]))
+            .expect("开作用域模态必须成功");
+        // ⭐ 树变：dialog 前面插入一个兄弟节点 ⇒ ⇒ dialog 的下标从 1 变成 2。
+        renderer
+            .patch(
+                VNode::element("div")
+                    .child(
+                        VNode::element("button")
+                            .attr("id", "outside")
+                            .child(VNode::text("外"))
+                            .build(),
+                    )
+                    .child(
+                        VNode::element("div")
+                            .attr("id", "mask")
+                            .child(VNode::text("遮罩"))
+                            .build(),
+                    )
+                    .child(
+                        VNode::element("div")
+                            .key(crate::vnode::Key::str("dialog"))
+                            .attr("id", "dialog")
+                            .child(
+                                VNode::element("button")
+                                    .attr("id", "a")
+                                    .child(VNode::text("甲"))
+                                    .build(),
+                            )
+                            .child(
+                                VNode::element("button")
+                                    .attr("id", "b")
+                                    .child(VNode::text("乙"))
+                                    .build(),
+                            )
+                            .build(),
+                    )
+                    .build(),
+            )
+            .expect("打补丁必须成功");
+        // ⭐ 作用域仍跟着同一个 dialog（它现在在 [2]）⇒ ⇒ Tab 仍只在 dialog 里走。
+        assert_eq!(
+            renderer.scope_root_path(),
+            Some(vec![2]),
+            "⭐ 作用域根必须跟着稳定身份走到新下标"
+        );
+        for step in 0..4 {
+            let moved = renderer.focus_next(false).expect("Tab 必须成功");
+            assert!(
+                moved,
+                "⭐ 第 {} 次 Tab 必须真的移动（作用域没跟住子树根时引擎不动）",
+                step + 1
+            );
+            let current = renderer.current_focus_path().expect("焦点必须在");
+            assert!(
+                current.starts_with(&[2]),
                 "⭐ 第 {} 次 Tab 后焦点跑出了作用域：{:?}",
                 step + 1,
                 current
