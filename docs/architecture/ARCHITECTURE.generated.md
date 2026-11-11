@@ -13,8 +13,8 @@
 | **adapters** | `apeireth-cli`, `apeireth-gateway`, `apeireth-sdk`, `apeireth-tui` |
 | **bench** | `apeireth-bench-harness` |
 | **capabilities** | `apeireth-tools-canonical` |
-| **engine** | `apeireth-guard`, `apeireth-memory`, `apeireth-organ`, `apeireth-provider`, `apeireth-runtime`, `apeireth-runtime-assembly`, `apeireth-storage` |
-| **foundation** | `apeireth-core`, `apeireth-credentials`, `apeireth-governance`, `apeireth-orchestration`, `apeireth-plugin`, `apeireth-protocol` |
+| **engine** | `apeireth-guard`, `apeireth-memory`, `apeireth-mesh`, `apeireth-mesh-quic`, `apeireth-mesh-rendezvous`, `apeireth-organ`, `apeireth-provider`, `apeireth-runtime`, `apeireth-runtime-assembly`, `apeireth-storage` |
+| **foundation** | `apeireth-core`, `apeireth-credentials`, `apeireth-governance`, `apeireth-mesh-protocol`, `apeireth-orchestration`, `apeireth-plugin`, `apeireth-protocol` |
 | **image_family**（vendored 家族，门禁隔离见 ADR-0005 R4a） | `apeireth-image-algo`, `apeireth-image-cms`, `apeireth-image-codecs`, `apeireth-image-color`, `apeireth-image-compose`, `apeireth-image-core`, `apeireth-image-doc`, `apeireth-image-geom`, `apeireth-image-psd`, `apeireth-image-raster`, `apeireth-image-vector` |
 
 ## 2. 生产依赖边（实测）
@@ -36,8 +36,8 @@
 | `apeireth-cli` | `apeireth-governance` | adapters → foundation ✅ |
 | `apeireth-cli` | `apeireth-guard` | adapters → engine ✅ |
 | `apeireth-cli` | `apeireth-memory` | adapters → engine ✅ |
-| `apeireth-cli` | `apeireth-mesh` | adapters → ? |
-| `apeireth-cli` | `apeireth-mesh-quic` | adapters → ? |
+| `apeireth-cli` | `apeireth-mesh` | adapters → engine ✅ |
+| `apeireth-cli` | `apeireth-mesh-quic` | adapters → engine ✅ |
 | `apeireth-cli` | `apeireth-orchestration` | adapters → foundation ✅ |
 | `apeireth-cli` | `apeireth-organ` | adapters → engine ✅ |
 | `apeireth-cli` | `apeireth-plugin` | adapters → foundation ✅ |
@@ -95,17 +95,17 @@
 | `apeireth-memory` | `apeireth-plugin` | engine → foundation ✅ |
 | `apeireth-memory` | `apeireth-protocol` | engine → foundation ✅ |
 | `apeireth-memory` | `apeireth-storage` | engine → engine ✅ |
-| `apeireth-mesh` | `apeireth-core` | ? → foundation |
-| `apeireth-mesh` | `apeireth-governance` | ? → foundation |
-| `apeireth-mesh` | `apeireth-mesh-protocol` | ? → ? |
-| `apeireth-mesh` | `apeireth-plugin` | ? → foundation |
-| `apeireth-mesh` | `apeireth-protocol` | ? → foundation |
-| `apeireth-mesh-protocol` | `apeireth-core` | ? → foundation |
-| `apeireth-mesh-protocol` | `apeireth-protocol` | ? → foundation |
-| `apeireth-mesh-quic` | `apeireth-core` | ? → foundation |
-| `apeireth-mesh-quic` | `apeireth-mesh` | ? → ? |
-| `apeireth-mesh-quic` | `apeireth-mesh-protocol` | ? → ? |
-| `apeireth-mesh-rendezvous` | `apeireth-mesh-protocol` | ? → ? |
+| `apeireth-mesh` | `apeireth-core` | engine → foundation ✅ |
+| `apeireth-mesh` | `apeireth-governance` | engine → foundation ✅ |
+| `apeireth-mesh` | `apeireth-mesh-protocol` | engine → foundation ✅ |
+| `apeireth-mesh` | `apeireth-plugin` | engine → foundation ✅ |
+| `apeireth-mesh` | `apeireth-protocol` | engine → foundation ✅ |
+| `apeireth-mesh-protocol` | `apeireth-core` | foundation → foundation ✅ |
+| `apeireth-mesh-protocol` | `apeireth-protocol` | foundation → foundation ✅ |
+| `apeireth-mesh-quic` | `apeireth-core` | engine → foundation ✅ |
+| `apeireth-mesh-quic` | `apeireth-mesh` | engine → engine ✅ |
+| `apeireth-mesh-quic` | `apeireth-mesh-protocol` | engine → foundation ✅ |
+| `apeireth-mesh-rendezvous` | `apeireth-mesh-protocol` | engine → foundation ✅ |
 | `apeireth-orchestration` | `apeireth-core` | foundation → foundation ✅ |
 | `apeireth-organ` | `apeireth-core` | engine → foundation ✅ |
 | `apeireth-organ` | `apeireth-governance` | engine → foundation ✅ |
@@ -123,7 +123,7 @@
 | `apeireth-provider` | `apeireth-protocol` | engine → foundation ✅ |
 | `apeireth-runtime` | `apeireth-core` | engine → foundation ✅ |
 | `apeireth-runtime` | `apeireth-governance` | engine → foundation ✅ |
-| `apeireth-runtime` | `apeireth-mesh` | engine → ? |
+| `apeireth-runtime` | `apeireth-mesh` | engine → engine ✅ |
 | `apeireth-runtime` | `apeireth-orchestration` | engine → foundation ✅ |
 | `apeireth-runtime` | `apeireth-plugin` | engine → foundation ✅ |
 | `apeireth-runtime` | `apeireth-protocol` | engine → foundation ✅ |

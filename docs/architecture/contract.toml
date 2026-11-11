@@ -30,8 +30,8 @@ wave_note = "Wave 4 收口 (2026-10-21): R1b 交付（R1b-1a 总线/桥/开关�
 rolling_report_only_until = "2026-11-03"   # 灰度期: 此日期前 CI/commit 仅报告, 之后 blocking
 
 [workspace]
-members = 30
-product_crates = 29
+members = 34          # 34 = 30 + 4 个 mesh crate（ADR-0024）；另一条线（门面 crate，ADR-0019）若后合入，须 rebase 后按合并后树重测本值
+product_crates = 33   # 33 = 34 - bench harness
 bench_crates = 1
 version = "2.0.0-rc.4"
 test_baseline = "docs/03-reference/test-baseline.md（单一真源；本契约不抄写测试数字）"
@@ -58,10 +58,12 @@ r11_baseline = "legacy/ (历史归档, 只引用, 不改)"
 foundation = [
   "apeireth-core", "apeireth-protocol", "apeireth-plugin",
   "apeireth-governance", "apeireth-credentials", "apeireth-orchestration",
+  "apeireth-mesh-protocol",
 ]
 engine = [
   "apeireth-runtime", "apeireth-runtime-assembly", "apeireth-provider",
   "apeireth-storage", "apeireth-memory", "apeireth-organ", "apeireth-guard",
+  "apeireth-mesh", "apeireth-mesh-quic", "apeireth-mesh-rendezvous",
 ]
 capabilities = ["apeireth-tools-canonical"]
 adapters = ["apeireth-gateway", "apeireth-cli", "apeireth-sdk", "apeireth-tui"]
@@ -130,6 +132,7 @@ allowed_production_deps = [
   "apeireth-plugin",
   "apeireth-governance",
   "apeireth-orchestration",
+  "apeireth-mesh",
 ]
 forbidden_production_deps = [
   "apeireth-organ",
@@ -346,8 +349,8 @@ allowed_read_locations = []         # 空 = v0.1 只按名字卡, 不按位置�
 
 [budgets]
 max_file_loc = 6300                 # 现状最大 src 6255 (doc_ops.rs, 2026-11-04 实测); 只减不增
-max_workspace_crates = 30           # 目标: 图像家族移出后 20; 只减不增
-max_production_edges = 111          # 上限（棘轮，只减不增；新增需 ADR）；现行实测 111（2026-11-05 收紧 118 → 111：与 max_workspace_crates=30 同为「上限 == 实测」口径（env 名额另有 4 个受控口子，见 [env] 段） ⇒ ⇒ 任何新增生产边都会被拦下 ⇒ ⇒ 真要加边先问总指挥）
+max_workspace_crates = 34           # 上限 == 实测（棘轮，只减不增；新增需 ADR）；现行实测 34（2026-11-11 mesh 线新增 4 个 crate，ADR-0024）
+max_production_edges = 125          # 上限（棘轮，只减不增；新增需 ADR）；现行实测 125（2026-11-11 mesh 线新增 14 条生产边，ADR-0024；口径同「上限 == 实测」，env 名额另有 4 个受控口子，见 [env] 段） ⇒ ⇒ 任何新增生产边都会被拦下 ⇒ ⇒ 真要加边先问总指挥）
 
 [exceptions]
 # 例外预算 — 已裁决 (ADR-0001, owner 授权代裁 2026-10-20)
