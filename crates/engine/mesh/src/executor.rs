@@ -311,6 +311,11 @@ impl<V: PluginManagerView + 'static> MeshCapabilityExecutor for ManagerExecutor<
                             .tools()
                             .into_iter()
                             .find(|tool| tool.id() == &id)
+                            // Remote model catalogs obey the same restrictions
+                            // as the local Runtime's model-facing declarations.
+                            .filter(|tool| {
+                                tool.model_visible() && tool.module_contract().model_visible()
+                            })
                             .map(|tool| tool.declaration())
                     });
                     if declaration.is_none()

@@ -6,7 +6,7 @@
 //! mesh transports the invocation; the remote module still owns the
 //! implementation.**
 
-use std::collections::VecDeque;
+use std::collections::{BTreeSet, VecDeque};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -27,6 +27,7 @@ use apeireth_protocol::canonical::{
     ModelDescriptor, ModelFeature, NormalizedRequest, NormalizedResponse, NormalizedTool,
     NormalizedUsage, ToolCall, ToolParameters, ToolResult,
 };
+use apeireth_runtime::canonical::dispatcher::{DispatchErrorCode, DispatchFailure, ToolScope};
 use apeireth_runtime::canonical::{runtime_mesh_executor, Runtime, TurnRequest};
 use async_trait::async_trait;
 
@@ -594,6 +595,119 @@ async fn test_15_executor_deny_invokes_no_implementation() {
     let round2 = serde_json::to_string(&rig.captured_a.lock().unwrap()[1]).unwrap();
     assert!(round2.contains("refused by governance"), "{round2}");
     assert_eq!(response.text, "final answer");
+}
+
+#[tokio::test]
+async fn runtime_catalog_excludes_local_remote_name_collisions() {
+    let rig = rig(
+        "mesh_echo",
+        CountingHook::allowing(ECHO_CAP),
+        CountingHook::allowing(ECHO_CAP),
+    )
+    .await;
+    let runtime = Runtime::builder()
+        .with_plugin(echo_module(
+            "builtin.local",
+            "tool.local.echo",
+            "mesh_echo",
+            Arc::new(AtomicUsize::new(0)),
+        ))
+        .build()
+        .await
+        .unwrap();
+    runtime.set_remote_port(rig.node_a.clone());
+    assert!(!runtime
+        .tool_declarations()
+        .iter()
+        .any(|t| t.name == "mesh_echo"));
+    assert!(!runtime
+        .tool_declarations_for_session(SessionId::new())
+        .iter()
+        .any(|t| t.name == "mesh_echo"));
+}
+
+#[tokio::test]
+async fn remote_catalog_respects_session_capability_scope() {
+    let rig = rig(
+        "mesh_echo",
+        CountingHook::allowing(ECHO_CAP),
+        CountingHook::allowing(ECHO_CAP),
+    )
+    .await;
+    let session = SessionId::new();
+    rig.runtime_a
+        .tool_dispatcher()
+        .set_scope(session, ToolScope::Only(BTreeSet::new()));
+    assert!(rig
+        .runtime_a
+        .tool_declarations_for_session(session)
+        .is_empty());
+    rig.runtime_a.tool_dispatcher().set_scope(
+        session,
+        ToolScope::Only(BTreeSet::from([CapabilityId::new(ECHO_CAP).unwrap()])),
+    );
+    assert!(rig
+        .runtime_a
+        .tool_declarations_for_session(session)
+        .iter()
+        .any(|t| t.name == "mesh_echo"));
+}
+
+#[tokio::test]
+async fn remote_scope_denial_sends_no_rpc_for_a_guessed_tool_call() {
+    let rig = rig(
+        "mesh_echo",
+        CountingHook::allowing(ECHO_CAP),
+        CountingHook::allowing(ECHO_CAP),
+    )
+    .await;
+    let session = SessionId::new();
+    rig.runtime_a
+        .tool_dispatcher()
+        .set_scope(session, ToolScope::Only(BTreeSet::new()));
+    rig.runtime_a
+        .execute_outcome(TurnRequest::new(session, "hi").with_model("fake-model-1"))
+        .await
+        .unwrap()
+        .completed()
+        .unwrap();
+    assert_eq!(rig.invoke_sends.load(Ordering::SeqCst), 0);
+    assert_eq!(rig.runs_b.load(Ordering::SeqCst), 0);
+    assert_eq!(rig.hook_a.dispatch_count(), 0);
+    assert_eq!(rig.hook_b.dispatch_count(), 0);
+    let captured = rig.captured_a.lock().unwrap();
+    assert!(captured.iter().all(|request| request.tools.is_empty()));
+    let message = captured[1].messages.last().unwrap();
+    assert_eq!(message.tool_call_id.as_deref(), Some("call_1"));
+    let text = apeireth_protocol::canonical::ContentPart::join_text(&message.content);
+    let error: DispatchFailure =
+        serde_json::from_str(text.strip_prefix("error: ").unwrap()).unwrap();
+    assert_eq!(error.code, DispatchErrorCode::ScopeDenied);
+}
+
+#[tokio::test]
+async fn remote_scope_explicit_grant_preserves_governed_execution() {
+    let rig = rig(
+        "mesh_echo",
+        CountingHook::allowing(ECHO_CAP),
+        CountingHook::allowing(ECHO_CAP),
+    )
+    .await;
+    let session = SessionId::new();
+    rig.runtime_a.tool_dispatcher().set_scope(
+        session,
+        ToolScope::Only(BTreeSet::from([CapabilityId::new(ECHO_CAP).unwrap()])),
+    );
+    rig.runtime_a
+        .execute_outcome(TurnRequest::new(session, "hi").with_model("fake-model-1"))
+        .await
+        .unwrap()
+        .completed()
+        .unwrap();
+    assert_eq!(rig.invoke_sends.load(Ordering::SeqCst), 1);
+    assert_eq!(rig.runs_b.load(Ordering::SeqCst), 1);
+    assert_eq!(rig.hook_a.dispatch_count(), 1);
+    assert_eq!(rig.hook_b.dispatch_count(), 1);
 }
 
 // ---------------------------------------------------------------------------

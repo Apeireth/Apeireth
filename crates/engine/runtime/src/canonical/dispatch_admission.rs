@@ -665,6 +665,16 @@ impl Runtime {
     ) -> RuntimeResult<ToolAdmission> {
         let clock = self.clock.as_ref();
 
+        if !self.dispatcher.allows(*session_id, &capability) {
+            return Ok(ToolAdmission::Resolved(
+                crate::canonical::dispatcher::failure(
+                    call,
+                    crate::canonical::dispatcher::DispatchErrorCode::ScopeDenied,
+                    "remote tool is outside this session's tool scope",
+                ),
+            ));
+        }
+
         if preapproved {
             // Fail closed: a remote tool has no locally freezable effective
             // invocation, so it cannot resume a frozen approval yet.

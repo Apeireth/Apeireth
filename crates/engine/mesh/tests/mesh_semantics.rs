@@ -43,6 +43,7 @@ struct EchoTool {
     id: CapabilityId,
     name: String,
     recorder: Arc<ExecRecorder>,
+    model_visible: bool,
 }
 
 #[async_trait]
@@ -58,6 +59,10 @@ impl ToolCapability for EchoTool {
             parameters: ToolParameters::new(),
             strict: false,
         }
+    }
+
+    fn model_visible(&self) -> bool {
+        self.model_visible
     }
 
     async fn invoke(&self, call: &ToolCall) -> ToolResult {
@@ -216,6 +221,7 @@ async fn node_with_echo_and_trust(
             id: CapabilityId::new(ECHO_CAP).unwrap(),
             name: "mesh_echo".into(),
             recorder: Arc::clone(&recorder),
+            model_visible: true,
         }) as Arc<dyn ToolCapability>]),
     });
     manager.register(module).unwrap();
@@ -1146,4 +1152,96 @@ async fn test_22_local_dispatch_through_the_canonical_path_still_works() {
     let result = tool.invoke(&echo_call("call_direct")).await;
     assert!(result.is_ok());
     assert_eq!(holder_a.recorder.count.load(Ordering::SeqCst), 2);
+}
+
+#[tokio::test]
+async fn catalog_visibility_excludes_hidden_tools_without_hiding_public_contracts() {
+    use apeireth_plugin::module_contract::{
+        ContractTool, EffectClass, ExecutionMode, ModuleToolContract, ToolSurface,
+    };
+    use apeireth_plugin::CapabilityDescriptor;
+
+    let public = "tool.mesh.public";
+    let protected = "tool.mesh.protected";
+    let recorder = Arc::new(ExecRecorder::default());
+    let mut manifest = PluginManifest::new(
+        PluginId::new(TEST_MODULE).unwrap(),
+        "1.0.0",
+        "catalog visibility test",
+    );
+    let mut tools = Vec::new();
+    for (id, model_visible, contract) in [
+        (public, true, ModuleToolContract::default()),
+        ("tool.mesh.hidden", false, ModuleToolContract::default()),
+        (
+            "tool.mesh.internal",
+            true,
+            ModuleToolContract {
+                surface: ToolSurface::Internal,
+                effect: EffectClass::Protected,
+                ..ModuleToolContract::default()
+            },
+        ),
+        (
+            protected,
+            true,
+            ModuleToolContract::logical(ExecutionMode::Direct, EffectClass::Protected),
+        ),
+    ] {
+        let id = CapabilityId::new(id).unwrap();
+        manifest = manifest
+            .declare(
+                CapabilityDescriptor::new(id.clone(), CapabilityKind::Tool, "visibility fixture")
+                    .unwrap()
+                    .with_module_tool_contract(&contract)
+                    .unwrap(),
+            )
+            .unwrap();
+        let tool: Arc<dyn ToolCapability> = Arc::new(EchoTool {
+            name: id.as_str().replace('.', "_"),
+            id,
+            recorder: Arc::clone(&recorder),
+            model_visible,
+        });
+        tools.push(ContractTool::wrap(tool, contract).unwrap());
+    }
+    let mut manager = PluginManager::new();
+    manager
+        .register(Arc::new(MeshTestModule {
+            manifest,
+            tools: RwLock::new(tools),
+        }))
+        .unwrap();
+    let holder = Arc::new(Holder {
+        manager: RwLock::new(manager),
+        governance: RecordingGovernance::allow_all(),
+        clock: system_clock(),
+        recorder,
+    });
+    let executor = ManagerExecutor::new(Arc::clone(&holder));
+    for available in [false, true] {
+        if available {
+            let mut manager = std::mem::take(&mut *holder.manager.write().unwrap());
+            let ctx = PluginContext::new(
+                system_clock(),
+                Arc::new(apeireth_plugin::NoCredentials),
+                TraceId::new(),
+            );
+            manager.start_all(&ctx).await.unwrap();
+            *holder.manager.write().unwrap() = manager;
+        }
+        let catalog = executor.catalog();
+        let mut ids: Vec<_> = catalog.iter().map(|entry| entry.id.as_str()).collect();
+        ids.sort_unstable();
+        assert_eq!(ids, vec![protected, public]);
+        assert!(catalog.iter().all(|entry| entry.available == available));
+        assert!(catalog.iter().all(|entry| entry.declaration.is_some()));
+        let adverts = apeireth_mesh::catalog_to_modules(catalog);
+        assert_eq!(adverts.len(), 1);
+        assert_eq!(adverts[0].capabilities.len(), 2);
+    }
+    // Visibility restricts projection only; it neither removes local ownership
+    // nor invokes any capability while constructing an advertisement.
+    assert_eq!(holder.manager.read().unwrap().records().len(), 4);
+    assert_eq!(holder.recorder.count.load(Ordering::SeqCst), 0);
 }
