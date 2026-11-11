@@ -81,7 +81,7 @@ Author: Xephylos
 - Not implemented: automatic transport orchestration, the direct → punch →
   relay state machine, production gateway discovery integration.
 
-## 还差什么（open gaps，2026-11-10 复核）
+## 还差什么（open gaps，2026-11-11 复核）
 
 - ❌ **真实 NAT 未实测**：打洞只在 Windows loopback 验过；Linux namespace harness
   （`scripts/test-mesh-nat.sh`）已写但未执行，真实 NAT 设备未测。
@@ -90,9 +90,13 @@ Author: Xephylos
 - ❌ **生产网关发现未接线**：`connect_punched` 的首个调用方仍是测试夹具；
   生产拨号仍是 `maintain_connection` 静态 endpoint + 入站 `serve`。
 - ❌ **远端准入不经本地 scope 校验、远端审批路径失败关闭**：本阶段的有意取舍。
-- ❌ **Mesh crate 未登记进架构契约**：`crates/foundation/mesh-protocol`、`crates/engine/mesh`、
-  `crates/engine/mesh-quic`、`crates/services/mesh-rendezvous` 未进 `docs/architecture/contract.toml` 的 `[layers]`
-  ⇒ `arch_guard` 的 W10 是**待 ADR 的架构债**，不是本批次的回归。
+
+## 已决的架构债（本批次收口）
+
+- ✅ **Mesh crate 登记进架构契约**（2026-11-11）：`docs/adr/0024-mesh-line-contract-registration.md`
+  把 `crates/foundation/mesh-protocol` 登记为 foundation、`crates/engine/mesh`、`crates/engine/mesh-quic`、
+  `crates/services/mesh-rendezvous` 登记为 engine，并让 `[kernel].allowed_production_deps` 与 `[budgets]`
+  上限对齐实测（34 crate / 125 生产边）⇒ `python3 scripts/arch_guard.py --strict` 归零。
 
 ## 守卫命令（机器判对错）
 

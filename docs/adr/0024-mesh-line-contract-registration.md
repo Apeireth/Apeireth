@@ -2,6 +2,7 @@
 
 [Document-Meta]
 Document: docs/adr/0024-mesh-line-contract-registration.md
+Class: DECISION
 Version: 0.1
 Last-Modified: 2026-11-11
 Status: Accepted
@@ -56,6 +57,15 @@ PR #117（`feature/mesh-rc2-integration-rebased`）把 mesh 跨节点栈并入�
 契约里的上限是「上限 == 实测」。本决策只登记**本树实测值**（34 / 125）。另一条线（门面 crate `apeireth`，ADR-0019，
 其分支实测 31 / 118）与本线并发推进 ⇒ ⇒ **合入顺序上，后合入者必须 rebase 到新的 main 并按合并后树重新测量**，
 再更新 `[budgets]`（例如后合入者需把上限更新为两条线合并后的实测值）⇒ ⇒ 任何一条线都不得预支另一条线的名额。
+
+### 2.4 备选选项与建议（owner 拍板依据）
+
+| 选项 | 做法 | 后果 | 建议 |
+|---|---|---|---|
+| A | 把 mesh 线登记进契约：层归属 + 内核依赖 + 上限对齐实测 | 7 条违规清零；上限一次性上调 4 crate / 14 边并写进本 ADR，不再是隐性膨胀 | **建议采用** |
+| B | 加例外条目压住违规 | 契约明文禁止结构/方向类走例外通道（`structural_budget_weight = 0`）⇒ 走不通 | 建议拒 |
+| C | 把 mesh 栈拆成独立 cargo workspace | `apeireth-runtime` 生产依赖它 ⇒ 制造跨 workspace 生产边，守卫与语义都更糟 | 建议拒 |
+| D | 撤掉 mesh crate / 删 mesh 线代码让门禁过 | 删功能换绿灯，PR #117 的既定目标作废 | 建议拒 |
 
 ## 3. O-6 三阶审查
 
