@@ -1,170 +1,49 @@
-# ============================================================================
-# Feature Request — Apeireth 1.0+ issue form (R26 工程化补全)
-# ============================================================================
-# 模式: qdrant/tokio 业界惯例 (GitHub Issue Forms 2024+ YAML 1:1)
-# 参考: https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/syntax-for-issue-forms
-# 字段验证: 必填项 = 问题描述 + 提议方案 + 替代方案 (跟业界 1:1)
-# 跟 .github/ISSUE_TEMPLATE/feature.md (R20 写, R20 阶段 1-6) 共存, 不删 (向后兼容)
-
-name: Feature Request
-description: Propose a new feature for Apeireth (Rust 85 + 1 desktop crate backend, 24 LOCKED + 9 organ)
+name: 功能建议 · Feature
+description: 描述你想解决的问题，以及希望 Apeireth 帮你做到的事。
 title: "[FEATURE] "
 labels:
   - enhancement
-  - triage
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for proposing a feature. Please describe the problem and the proposed solution.
+        你的使用场景比技术方案更重要：不需要了解内部模块，也不需要指定实现方式或发布时间。
+        已有具体需求，可以填写下面的表单；想先交流灵感，欢迎到 [Ideas 讨论](https://github.com/Apeireth/Apeireth/discussions/categories/ideas)。提交前可以[搜索已有建议](https://github.com/Apeireth/Apeireth/issues?q=is%3Aissue%20label%3Aenhancement)。
 
-  - type: dropdown
-    id: target
-    attributes:
-      label: Target release
-      description: Which release cycle does this target?
-      options:
-        - post-1.0 patch (e.g. 1.0.1)
-        - v1.5 mid-term (e.g. 1.5.0)
-        - v2.0 major (breaking changes)
-        - Backlog (no timeline)
-    validations:
-      required: true
-
-  - type: dropdown
-    id: crate
-    attributes:
-      label: Affected crate(s)
-      description: Which crate(s) does this feature touch?
-      options:
-        - apeireth-supervisor (24 LOCKED — 0 触碰!)
-        - apeireth-agent (24 LOCKED — 0 触碰!)
-        - apeireth-council (24 LOCKED — 0 触碰!)
-        - apeireth-bus (24 LOCKED — 0 触碰!)
-        - apeireth-protocol (24 LOCKED — 0 触碰!)
-        - apeireth-mcp (24 LOCKED — 0 触碰!)
-        - apeireth-tool-registry (24 LOCKED — 0 触碰!)
-        - apeireth-tool-runtime (24 LOCKED — 0 触碰!)
-        - apeireth-graph (24 LOCKED — 0 触碰!)
-        - apeireth-pipeline (24 LOCKED — 0 触碰!)
-        - apeireth-tool-approval (24 LOCKED — 0 触碰!)
-        - apeireth-extension (24 LOCKED — 0 触碰!)
-        - apeireth-evolution (24 LOCKED — 0 触碰!)
-        - apeireth-api (24 LOCKED — 0 触碰!)
-        - apeireth-core (24 LOCKED — 0 触碰!)
-        - apeireth-memory (semantic_search + user_profile)
-        - apeireth-asi (24 LOCKED — 0 触碰!)
-        - apeireth-tools (24 LOCKED — 0 触碰!)
-        - apeireth-cli (24 LOCKED — 0 触碰!)
-        - apeireth-bench (24 LOCKED — 0 触碰!)
-        - apeireth-cognition (24 LOCKED — 0 触碰!)
-        - apeireth-action (24 LOCKED — 0 触碰!)
-        - apeireth-life-force (24 LOCKED — 0 触碰!)
-        - apeireth-constraint (24 LOCKED — 0 触碰!)
-        - apeireth-tui (瘦客户端)
-        - apeireth-vector (sqlite-vec backend)
-        - apeireth-pipeline-g5 (5 阶段 pipeline 框架)
-        - workspace-level (CI / docs / tooling)
-    validations:
-      required: true
-
-  - type: dropdown
-    id: anchor
-    attributes:
-      label: 6 哲学 anchor 主驱动
-      description: Which philosophy anchor is the primary driver?
-      options:
-        - S-1 走在前人经验上 (北极星)
-        - S-2 实事求是
-        - O-2 走在前人肩上
-        - O-3 干到底
-        - O-4 任何人都能接手
-        - O-5 不假装
-    validations:
-      required: true
+        **这里的内容会公开。** 请勿提交 API Key、密码、令牌、完整配置、私人对话或他人的个人信息；示例与截图请先去除敏感内容。
+        疑似安全漏洞请使用[私密漏洞报告](https://github.com/Apeireth/Apeireth/security/advisories/new)。社区举报或申诉请查看[行为准则](https://github.com/Apeireth/Apeireth/blob/main/CODE_OF_CONDUCT.md)。
 
   - type: textarea
     id: problem
     attributes:
-      label: Problem statement
-      description: What problem does this feature solve? Be specific.
+      label: 你想解决什么问题？
+      description: 描述一个具体场景：你想做什么、哪里不方便、它对你有什么影响。
       placeholder: |
-        I'm always frustrated when [...]
-        This affects my workflow because [...]
-        Currently I have to [...]
+        当我……时，需要……
+        目前遇到的困难是……
     validations:
       required: true
 
   - type: textarea
     id: proposed
     attributes:
-      label: Proposed solution
-      description: What do you want to happen?
+      label: 你希望 Apeireth 怎样帮助你？
+      description: 描述你期待的使用体验或结果即可，不必提供技术方案。
     validations:
       required: true
 
   - type: textarea
     id: alternatives
     attributes:
-      label: Alternatives considered
-      description: What other solutions did you consider? Why this one over those?
+      label: 你目前怎样处理？（选填）
+      description: 是否有暂时可用的办法？它还有什么不方便的地方？没有也可以留空。
     validations:
-      required: true
+      required: false
 
   - type: textarea
     id: context
     attributes:
-      label: Additional context
-      description: Links, screenshots, prior art (e.g. tokio / qdrant / wasmtime analogues), benchmark data
-      render: markdown
-
-  - type: markdown
-    attributes:
-      value: |
-        ## 0 触碰实查 (per [CONTRIBUTING.md §0 触碰实查](https://github.com/apeireth/apeireth-rust/blob/main/CONTRIBUTING.md))
-
-        If this feature touches a LOCKED crate, **DO NOT propose direct changes**. Propose an extension crate or feature flag instead.
-
-        24 LOCKED crate (per `CODEOWNERS` 1:1 跟 hard-walls job, 含 apeireth-graph):
-
-        ```
-        apeireth-supervisor  apeireth-agent       apeireth-council
-        apeireth-bus         apeireth-protocol    apeireth-mcp
-        apeireth-tool-registry  apeireth-tool-runtime
-        apeireth-graph       apeireth-pipeline    apeireth-tool-approval
-        apeireth-extension   apeireth-evolution   apeireth-api
-        apeireth-core        apeireth-memory      apeireth-asi
-        apeireth-tools       apeireth-cli         apeireth-bench
-        apeireth-cognition   apeireth-action      apeireth-life-force
-        apeireth-constraint  apeireth-formal
-        ```
-
-  - type: checkboxes
-    id: locked_check
-    attributes:
-      label: 0 触碰实查确认 (per rust.yml hard-walls job)
-      options:
-        - label: 0 触碰 24 LOCKED crate (mtime 实查, per hard-walls job 实际清单, 含 graph)
-          required: true
-        - label: 0 改 workspace version (1.2.0)
-          required: true
-        - label: 0 改 R11 baseline 3 值 (V1141=0.8682 / V1131=0.8532 / V1136=0.9063)
-          required: true
-        - label: 0 改 7 LOCKED 文档
-          required: true
-        - label: 0 改 6 哲学锚 (S-1 / S-2 / O-2 / O-3 / O-4 / O-5)
-          required: true
-
-  - type: markdown
-    attributes:
-      value: |
-        ## 8 项不修改承诺验证
-
-        - ✅ 不假装已实现 (skeleton 标 ⏳)
-        - ✅ 编译期 hardcode (守门)
-        - ✅ 不改 LOCKED 24 crate
-        - ✅ 不改 workspace version
-        - ✅ 6 哲学 anchor 穿透
-        - ✅ 不依赖 NewAPI
-        - ✅ 不重复造轮子 (复用 std / tokio / 业界标准)
-        - ✅ 诚实标缺
+      label: 示例与其他补充（选填）
+      description: 可提供去除敏感信息后的示例、草图、相关讨论链接；若与特定版本或设备有关，也可在这里说明。
+    validations:
+      required: false

@@ -4,7 +4,7 @@
 Document: docs/status/workline-registry.md
 Class: STATUS
 Status: 🟢 活跃
-Last-Modified: 2026-11-10
+Last-Modified: 2026-11-11
 Author: lead
 
 > **用途**：`AGENTS.md` §0 要求「开工前先认领工作线」⇒ 本表就是那张**认领清单**。
@@ -18,6 +18,7 @@ Author: lead
 
 | 工作线 | 设计稿（目标形态） | **进度页（做到哪了）** | 守卫（机器判对错） |
 |---|---|---|---|
+| **官网与社区入口收口**（2026-11-11） | [community-ops.md](../development/community-ops.md) §9（目标与边界） | 同文件 §9（核验与待办） | `python scripts/verify_changed.py` · `python scripts/docs_links.py --check` · `python scripts/docs_index.py --check` · Issue 表单 YAML 结构检查 |
 | **记忆与知识纵深**（D0–D5 / B0–B4） | [memory-knowledge-depth-system-spec.md](../01-architecture/memory-knowledge-depth-system-spec.md) | [spec-batch-status.md](spec-batch-status.md) | `python3 scripts/d4_ledger.py --check`（B0-c 候选池）· `python3 scripts/check_quality_metrics.py`（§6.1 十八项）· `python3 scripts/docs_truth.py --verify --block-stale`（状态声明） |
 | **护栏接线 / 越权拦截** | [guard-wiring-audit-2026-10-27.md](guard-wiring-audit-2026-10-27.md)（审计即设计依据 + 缺口清单） | [guard-wiring-audit-2026-10-27.md](guard-wiring-audit-2026-10-27.md) §4（缺口清单，逐条标「已修/未修」） | `python3 scripts/check_guard_wiring.py`（台账↔代码互校） |
 | **记忆质量路线**（已证/已否的路） | [memory-quality-route-map-2026-10-27.md](memory-quality-route-map-2026-10-27.md) | 同文件（§〇 2026-10-28 更新块） | `python3 scripts/check_golden_baseline.py`（准确度不许降 + 送达率观察项） |
