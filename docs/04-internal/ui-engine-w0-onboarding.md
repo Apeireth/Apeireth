@@ -150,15 +150,38 @@ if signal.take() {
 ```
 > 已验证来源：`l1_integration_probe()`（同款 API 组合，浏览器 EXIT 0）。
 
-### 2.4 焦点陷阱（弹层/模态）
+### 2.4 焦点与模态（弹层/模态）—— ⭐ 一等口径（2026-11-11 改）
 
 ```rust
-renderer.open_focus_trap(&[&[0], &[0, 1]]);   // 允许聚焦的路径白名单
-renderer.focus_at_path(&[0, 1])?;             // 聚焦
-// …关闭时
-renderer.close_focus_trap();
+// ⭐ 模态作用域：**按子树身份**打开，初始焦点是引擎的一等参数
+renderer.open_modal_scope_at_identity(
+    &[IdentitySegment::from_key(&Key::Str("command-palette".into()))], // 作用域根（子树根）
+    Some(&[IdentitySegment::from_key(&Key::Str("command-palette-close".into()))]), // 初始焦点
+)?;
+// 关闭：close_modal() 会关陷阱 + 归还焦点（restore_focus）
+renderer.close_modal();
 ```
-> 已验证来源：`l1_probe()`（`document.activeElement` 被引擎驱动）。
+
+> ⭐ **为什么是这套口径（真实事故，2026-11-11）**：旧的四调用
+> （`open_focus_trap` + `focus_at_path` + `close_focus_trap`）把**三件事**推给调用方 ——
+> ① 路径白名单要自己算；② 初始焦点要自己算路径；③ 关闭时的焦点归还要自己存。
+> ⇒ 真实产品线第一次用满一轮时，这三件事**分别出了三次错**（见 `ui-engine-defect-ledger.md` 的 E-193/E-195 与
+> `engineering-experience/02-failure-anatomy.md` 死法 8）⇒ ⇒ **模态编排是引擎的一等能力，调用方只描述意图**。
+
+**调用方必须知道的五条（都是实测踩出来的）**：
+
+1. ⭐ **别在宿主自建第二套焦点系统** —— 引擎已有模态作用域 + Tab 归属；
+   宿主若自己接管 Tab（捕获阶段拦截 + 自己算可聚焦元素），结果是**引擎的 Tab 彻底失效**
+   （根节点收到 0 次 Tab）⇒ 两套系统互相拆台。
+2. ⭐ **身份是「逐层直配」** —— `IdentitySegment` 逐段匹配**直接子节点**：
+   元素藏在 `dialog → frame → header → button` 时，身份要**逐段给**，不能只给首尾两段。
+   ⇒ 想省心就用 `*_at_identity` 系列，**不要自己拼 `[root, leaf]`**。
+3. ⭐ **作用域根按身份跟随** —— 树在模态打开期间发生位移（窄屏拉宽、遮罩撤掉导致下标变化）时，
+   引擎按**身份**重新解析根的位置 ⇒ Tab 不会跑偏；⇒ 这条是 E-193 修完才成立的。
+4. ⭐ **模态激活期间 Tab 由引擎独占** —— 引擎在模态激活时**即使没移动焦点也会消费 Tab**
+   （`should_consume_tab`）⇒ 浏览器原生 Tab 不会逃出陷阱（E-194 修完才成立）。
+5. ⭐ **「调用返回成功」≠「焦点真的移动」** —— `focus()` 对 `inert` 子树**静默无效**；
+   ⇒ 宿主拿到焦点请求后要**读回 `document.activeElement` 对账**，对不上就**不消费请求**（下一帧再试）。
 
 ### 2.5 字体/图片未就绪 ⇒ 别急着算布局
 
@@ -284,6 +307,8 @@ contextmenu / compositionstart / compositionend`
 | 3 | 字体没加载就窗口化 | 窗口位置错、加载完跳一下 | 字体未就绪时**显式** `set_metrics_status(Unknown)`，ready 后 `Ready`（⚠️ 渲染器**默认是 `Ready`** —— DOM 度量是真实几何；「度量未定」只有宿主知道 ⇒ 必须由宿主显式声明） |
 | 4 | 以为 `scroll` 会冒泡 | 委托根上收不到滚动 | 直连容器 |
 | 5 | `path` 下标语义搞错 | 读不到度量（`NotImplemented`） | `node_at_path(&[0])` = **树根的第 0 个子节点**；度量必须落在**同一个**节点上 |
+| 6 | ⭐ **宿主自建焦点陷阱**（2026-11-11 实测） | 两套焦点系统互相拆台：引擎根节点收到 **0 次 Tab**，模态期焦点乱跑 | 用引擎的 `open_modal_scope*` / `close_modal`；宿主只描述意图，不接管 Tab |
+| 7 | ⭐ **身份路径按「跳中间容器」拼**（2026-11-11 实测） | 模态作用域**根本没建立**（解析失败被静默忽略）⇒ Tab 在错的子树里走 | 身份**逐层直配**；用 `*_at_identity`；**解析失败必须报错，不许静默忽略** |
 
 ---
 
@@ -301,6 +326,8 @@ cd evidence/p5-b && python3 drive_l1.py    # L1 浏览器探针（EXIT 0 = 全�
 - [ ] 受控输入：改状态 ⇒ DOM 值跟着变；DOM 手动改 ⇒ 下一帧被引擎改回（受控）
 - [ ] IME：中文输入法组合中不丢字、不打断
 - [ ] 焦点：模态打开 ⇒ Tab 走不出；关闭 ⇒ 焦点还原
+- [ ] ⭐ 模态作用域：打开 ⇒ 引擎**自己**消费 Tab（根节点 keydown 的 `defaultPrevented` 为真）⇒ Tab 落点全在作用域内 ⇒ 跳禁用项 ⇒ 可循环回起点
+- [ ] ⭐ 焦点请求：请求一个目标 ⇒ **读回 `document.activeElement` 对账** ⇒ 对不上就不算生效（`inert` 子树里 `focus()` 静默无效）
 - [ ] 长列表：滚到底/顶 ⇒ 窗口位置对、内容不空白、总高度恒定
 - [ ] 错误边界：故意让一屏抛错 ⇒ 看到兜底 UI，不是白屏
 - [ ] 布局跳动：CLS 累计在预算内（亚像素噪声不计）
@@ -311,6 +338,10 @@ cd evidence/p5-b && python3 drive_l1.py    # L1 浏览器探针（EXIT 0 = 全�
 
 **可以依赖**（有浏览器/真实 GPU 证据）：受控输入、事件面与载荷、焦点与陷阱、IME 静默期、
 测量与命中（含 DPR 乘数）、虚拟列表、错误边界、像素等价（五面 + intro 逐像素 0 差异）。
+
+**模态作用域（2026-11-11 新增，真实产品线用满一轮后）**：`open_modal_scope` / `open_modal_scope_at_identity`
+/ `close_modal` / `focusable_paths_under` / `should_consume_tab` —— 作用域按**子树身份**打开、**初始焦点是引擎参数**、
+**模态期间 Tab 由引擎独占**、**根按身份跟随树位移** ⇒ 宿主不再需要自建陷阱或自管焦点栈。
 
 **不能依赖**（尚未验证）：
 - 真实 Tauri 宿主（macOS WKWebView / Linux WebKitGTK / Windows WebView2）上的行为
