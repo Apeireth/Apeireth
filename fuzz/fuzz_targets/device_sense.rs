@@ -1098,19 +1098,47 @@ fn assert_case(case: &Case, observed: &Observed, table: Option<&DevicesBody>, pl
 /// 审计行恒 `denied` 且授权人留空 (模型给的 `authorized_by` 不作数)。
 fn assert_host_decision_is_the_only_gate(case: &Case, observed: &Observed, plan: &Plan) {
     // 模型自称的两样东西都**只解析、不作数** (声明面里根本没有它们)。
-    let parsed = parse_args(&case.args).ok();
-    assert_eq!(
-        parsed.as_ref().and_then(|p| p.authorized_by.as_deref()),
-        case.args.get("authorized_by").and_then(Value::as_str),
-        "解析面收 `authorized_by` 只解析不作数 (值原样保留, 不进声明面)"
-    );
-    assert_eq!(
-        parsed.as_ref().and_then(|p| p.sensitive_read_authorized),
-        case.args
-            .get("sensitive_read_authorized")
-            .and_then(Value::as_bool),
-        "授权旗是模型的*请求*, 只解析不作数 (真正放行看宿主决定账)"
-    );
+    //
+    // ⚠️ 2026-11-11 修正本臂自己的红: 「原样保留」这句话**只对解析成功的调用成立**。
+    // 解析失败 = **整份参数被拒** (`sense.rs:496-501`; 未知字段/类型不符都走这条),
+    // 这时不存在「只解析」这回事 ⇒ 拿「解析失败 ⇒ authorized_by 为空」去比
+    // 「参数里确实带着 authorized_by」会把「整份被拒」误判成「字段被吞了」。
+    // 所以按**解析结果的两种形态**分别断言, 不放宽任何一条:
+    //   · 解析成功 ⇒ 两个自称字段**逐字原样保留** (只解析, 不作数);
+    //   · 解析失败 ⇒ 整份作废 ⇒ 下面「没读到摄像头类 / 审计行恒 denied / 授权人留空」
+    //     那几条**照常**必须成立 (它们才是「不作数」的真正落点)。
+    match parse_args(&case.args) {
+        Ok(parsed) => {
+            assert_eq!(
+                parsed.authorized_by.as_deref(),
+                case.args.get("authorized_by").and_then(Value::as_str),
+                "解析面收 `authorized_by` 只解析不作数 (值原样保留, 不进声明面)"
+            );
+            assert_eq!(
+                parsed.sensitive_read_authorized,
+                case.args
+                    .get("sensitive_read_authorized")
+                    .and_then(Value::as_bool),
+                "授权旗是模型的*请求*, 只解析不作数 (真正放行看宿主决定账)"
+            );
+        }
+        Err(()) => {
+            // 整份参数被拒 ⇒ 模型自称的授权旗/人 连「被解析」这一步都没走到,
+            // 更谈不上构成授权 ⇒ **任何审计行的授权人都必须留空**。
+            //
+            // 这里**不**写成「解析失败 ⇒ 一条审计行都不许落」: 审计面在拒之前有没有
+            // 记账是产品自己的判断, 本臂不替它下结论; 这里只断言「模型自称的授权人
+            // 不作数」这条真正的不变量 (与上面 Ok 分支互为两态, 谁也不放宽)。
+            if let Some(rows) = observed.rows.as_ref() {
+                for row in rows {
+                    assert_eq!(
+                        row.authorized_by, None,
+                        "模型自称的授权人不作数 ⇒ 任何审计行的授权人都必须留空: {row:?}"
+                    );
+                }
+            }
+        }
+    }
 
     if plan.sensitive.is_empty() {
         return;
