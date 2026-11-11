@@ -23,7 +23,7 @@
 | `gov.chain_skeleton` | PRODUCTION WIRED | ON | - | `d59a9c01bb00` | 2026-11-20 |
 | `gov.chain_hook_adapter` | PRODUCTION WIRED | ON | - | `d59a9c01bb00` | 2026-11-20 |
 | `gov.reflection_queue` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_REFLECTION_QUEUE` | `a3c0c2f4` | 2026-11-20 |
-| `gov.chain_drill_ci` | PRODUCTION WIRED | - | - | `08029a80e` | 2026-11-20 |
+| `gov.chain_drill_ci` | PRODUCTION WIRED | - | - | `a9bcc86da49f` | 2026-11-20 |
 | `sec.governance_chain_drill` | PRODUCTION WIRED | - | - | `dae505fb` | 2026-11-20 |
 | `rel.release_asset_verify` | PRODUCTION WIRED | - | - | `dae505fb` | 2026-11-20 |
 | `sec.sql_readonly_gate` | PRODUCTION WIRED | ON | - | `c9251271` | 2026-11-20 |
@@ -50,11 +50,11 @@
 | `mem.registered_namespace` | PRODUCTION WIRED | - | - | `8bee1e90d` | 2026-11-20 |
 | `rt.desktop_managed_main` | PRODUCTION WIRED | ON | - | `d59a9c01bb00` | 2026-11-20 |
 | `rt.module_execution_contract` | PRODUCTION WIRED | OFF | - | `d59a9c01bb00` | 2026-11-20 |
-| `rt.system_one_internal` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_SYSTEM_ONE` | `d59a9c01bb00` | 2026-11-20 |
+| `rt.system_one_internal` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_SYSTEM_ONE` | `a9bcc86da49f` | 2026-11-20 |
 | `rt.module_messages` | PRODUCTION WIRED | OFF | - | `d59a9c01bb00` | 2026-11-20 |
 | `rt.mesh_local_worker` | PRODUCTION WIRED | OFF | - | `d59a9c01bb00` | 2026-11-20 |
 | `mem.retrieval_ranking` | PRODUCTION WIRED | ON | - | `822d3cac` | 2026-12-04 |
-| `mem.failure_learning_bridge` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_RETRIEVAL_TUNING` | `52009d5f` | 2026-12-04 |
+| `mem.failure_learning_bridge` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_RETRIEVAL_TUNING` | `a9bcc86da49f` | 2026-12-04 |
 | `mem.injection_contract` | PRODUCTION WIRED | ON | - | `822d3cac` | 2026-12-04 |
 | `mem.contract_view` | PRODUCTION WIRED | ON | - | `2a807e63f` | 2026-12-05 |
 | `mem.shadow_swap` | PRODUCTION WIRED | OFF | - | `05759be1` | 2026-12-05 |
