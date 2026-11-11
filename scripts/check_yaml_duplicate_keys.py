@@ -33,6 +33,14 @@ import argparse
 import sys
 from pathlib import Path
 
+# ⭐ **控制台可能不是 UTF-8**（Windows：`cp1252` / `cp936`）⇒ ⇒ `print` 会抛
+# `UnicodeEncodeError` ⇒ ⇒ 门禁 exit 1 ⇒ ⇒ **把本来通过的 CI job 判成红**
+# ⇒ ⇒ 这里在**任何打印之前**把 stdout/stderr 重配成 UTF-8（守卫见 `scripts/utf8_stdout.py`）。
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from utf8_stdout import force_utf8_stdout  # noqa: E402
+
+force_utf8_stdout()
+
 try:
     import yaml
 except ImportError:  # pragma: no cover - 环境缺依赖时给出可执行的提示

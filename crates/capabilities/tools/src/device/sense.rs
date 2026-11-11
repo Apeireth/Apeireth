@@ -21,6 +21,11 @@
 //! `DeviceControlApprovalHook` 同形态) 承载宿主人批, 工具面只认决定账里的
 //! 宿主署名。
 //!
+//! **2026-11-10 撤除**: 原先那条「开了授权旗却给不出非空 `authorized_by` ⇒ 拒」
+//! 的边界 Guard 已撤 —— `authorized_by` **不在声明面** ⇒ 模型无权提供 ⇒ 规则
+//! 永不可满足 ⇒ 摄像头类敏感读成了**死面**, 且 Guard 先拒会吃掉工具面的审计
+//! 留痕。详见 [`DeviceSenseApprovalHook`] 的文档。
+//!
 //! # 治理 (风险档 = 低-中, 读面)
 //!
 //! 权力面 = **只读 + append 敏感读审计账**: 零执行、零外联、零设备控制
@@ -39,9 +44,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use apeireth_core::kernel::CapabilityId;
-use apeireth_governance::{
-    Action, Decision, GovernanceHook, GovernanceRequest, ToolGuard, ToolGuardRequest,
-};
+use apeireth_governance::{Action, Decision, GovernanceHook, GovernanceRequest};
 use apeireth_plugin::ToolCapability;
 use apeireth_protocol::canonical::{NormalizedTool, ToolCall, ToolParameters, ToolResult};
 use async_trait::async_trait;
@@ -93,6 +96,9 @@ struct DeviceSenseParams {
     /// 模型自称的授权人 —— **一律不作数** (2026-11-01 安全审计: 原实现直接
     /// 取这个模型参数当授权人 ⇒ 模型可自称「已获授权」读摄像头, 且审计账里的
     /// 授权人不可信)。保留解析只为旧提示词不硬失败; 真授权只认宿主决定账。
+    ///
+    /// 2026-11-10: 撤除单调边界 Guard 后只剩**解析**; 下面 `sense()` 里有一处
+    /// 显式读 (只读不采信), 让「解析了也不作数」这件事落在代码里而不是注释里。
     authorized_by: Option<String>,
 }
 
@@ -287,6 +293,10 @@ impl DeviceSenseTool {
     }
 
     fn sense(&self, call: &ToolCall, params: &DeviceSenseParams) -> ToolResult {
+        // 模型自称的授权人: **只解析不采信** (旧提示词兼容, 声明面已无该字段)。
+        // 这里显式读一次 —— 既让「解析到了也不作数」落在代码里, 也让该字段不是死代码
+        // (不新增 `#[allow(dead_code)]` 豁免, 死代码棘轮只减不增)。
+        let _model_claimed_authorizer = params.authorized_by.as_deref();
         let body = match self.registry.load() {
             Ok(body) => body,
             Err(error) => return self.refuse(call, format!("设备表拒开 (不回退默认表): {error}")),
@@ -557,61 +567,6 @@ impl ToolCapability for DeviceSenseTool {
     }
 }
 
-/// 单调边界 Guard (只拒不放): 模型自称授权的**诚实性** —— 开了授权旗却给不出
-/// 授权人 = 拒 (任何后续阶段都不能翻回放行)。
-///
-/// **口径说明 (2026-11-01 安全审计)**: 模型的授权旗/授权人**一律不作数**
-/// (放行只认宿主决定账, 见 [`host_approval`]); 本 Guard 只拦最不诚实的一档
-/// (开了旗却给不出授权人), 免得审计账里出现无主的授权声明。真正的放行判定
-/// 在工具面 (宿主拍板 + 审计留痕)。
-pub struct DeviceSenseBoundaryGuard;
-
-impl DeviceSenseBoundaryGuard {
-    /// 感知面边界 Guard (无状态)。
-    pub fn new() -> Self {
-        Self
-    }
-}
-
-impl Default for DeviceSenseBoundaryGuard {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl ToolGuard for DeviceSenseBoundaryGuard {
-    fn name(&self) -> &str {
-        "device_sense_boundary"
-    }
-
-    fn deny(&self, request: &ToolGuardRequest<'_>) -> Option<String> {
-        if request.capability.as_str() != DEVICE_SENSE_CAPABILITY_ID {
-            return None;
-        }
-        // 解析失败不归边界 Guard (由工具即帧报解析错误), 只判授权参数诚实性。
-        let Ok(params) = serde_json::from_value::<DeviceSenseParams>(request.arguments.clone())
-        else {
-            return None;
-        };
-        if params.action.as_deref() == Some(ACTION_SENSE)
-            && params.sensitive_read_authorized == Some(true)
-            && params
-                .authorized_by
-                .as_deref()
-                .map(str::trim)
-                .unwrap_or_default()
-                .is_empty()
-        {
-            return Some(
-                "拒绝感知: sensitive_read_authorized=true 必须配非空 authorized_by \
-                 (模型自称的授权人不作数, 放行只认宿主拍板)"
-                    .to_string(),
-            );
-        }
-        None
-    }
-}
-
 /// 敏感读面的**宿主审批门** (治理链, 与执行面 `DeviceControlApprovalHook`
 /// 同形态): 摄像头类敏感读 = [`Decision::require_approval`] (宿主人批, 无
 /// 自动放行档); 其余读面 (白名单视图 / 非敏感设备) 放行。
@@ -620,6 +575,16 @@ impl ToolGuard for DeviceSenseBoundaryGuard {
 /// 自称「已获授权」即可读摄像头 (注册即 grant, 零审批)。
 /// **现在为什么这样**: 敏感读先停宿主人批 (无自动档), 且真正的放行判定在
 /// 工具面查**宿主决定账** (模型的授权旗/授权人一律不作数)。
+///
+/// **为什么本面不挂单调边界 Guard (2026-11-10 撤除)**: 原
+/// `DeviceSenseBoundaryGuard` 只拒一档 —— 「开了 `sensitive_read_authorized`
+/// 却给不出非空 `authorized_by`」。但 `authorized_by` **不在声明面** (声明面
+/// 3 字段 + `additionalProperties: false`) ⇒ 模型**无权**提供它 ⇒ 那条规则
+/// **永不可满足** ⇒ 按 schema 调用的模型**永远过不了** ⇒ 摄像头类敏感读成了
+/// **死面**; 且 Guard 在工具之前拒 ⇒ 工具面那行**审计留痕** (每次尝试必落
+/// 一行) 也会被吃掉 ⇒ 「拒绝也要留痕」这条纪律同样丢。
+/// ⇒ ⇒ 撤除该 Guard: 放行判定只认**宿主决定账** (本 Hook + 工具面审计账),
+/// 模型的授权旗/授权人**一律不作数**。
 #[derive(Debug, Clone)]
 pub struct DeviceSenseApprovalHook {
     registry: DeviceRegistry,
@@ -705,11 +670,14 @@ impl GovernanceHook for DeviceSenseApprovalHook {
     }
 }
 
-/// 组装感知面五段流水线: 读面 (低风险档) → 单调边界 Guard → 超时 → 输出归一合同。
+/// 组装感知面流水线: 读面 (低风险档) → 超时 → 输出归一合同。
+///
+/// **本面不挂单调边界 Guard** (撤除理由见 [`DeviceSenseApprovalHook`] 的文档:
+/// 模型侧无权提供授权人 ⇒ 任何「模型自称」型规则都不可执行 ⇒ 只会把敏感读
+/// 变成死面, 还会吃掉工具面的审计留痕)。
 pub fn device_sense_pipeline() -> Arc<crate::exec_pipeline::ToolExecutionPipeline> {
     Arc::new(
         crate::exec_pipeline::ToolExecutionPipeline::new()
-            .with_guard(Arc::new(DeviceSenseBoundaryGuard::new()))
             .with_around(
                 AroundPolicy::new().with_timeout(DEVICE_SENSE_TIMEOUT_MS, DEFAULT_MAX_TIMEOUT_MS),
             )

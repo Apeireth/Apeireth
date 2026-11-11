@@ -89,6 +89,14 @@ import sys
 from pathlib import Path
 from typing import Any
 
+# ⭐ **控制台可能不是 UTF-8**（Windows：`cp1252` / `cp936`）⇒ ⇒ `print` 会抛
+# `UnicodeEncodeError` ⇒ ⇒ 门禁 exit 1 ⇒ ⇒ **把本来通过的 CI job 判成红**
+# ⇒ ⇒ 这里在**任何打印之前**把 stdout/stderr 重配成 UTF-8（守卫见 `scripts/utf8_stdout.py`）。
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from utf8_stdout import force_utf8_stdout  # noqa: E402
+
+force_utf8_stdout()
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 BASELINE_PATH = REPO_ROOT / "scripts" / "golden-baseline.json"
 
@@ -167,6 +175,7 @@ def run_current_scores(k_spec: str = "10") -> dict[str, Any]:
             cwd=REPO_ROOT,
             capture_output=True,
             text=True,
+            encoding="utf-8", errors="replace",
             check=False,
         )
     except OSError as error:

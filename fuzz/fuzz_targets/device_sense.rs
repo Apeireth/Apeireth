@@ -5,7 +5,7 @@
 //! # 被测面
 //!
 //! - 主被测: `crates/capabilities/tools/src/device/sense.rs`
-//!   (`DeviceSenseTool::invoke` / `DeviceSenseBoundaryGuard` / `device_presence_status`
+//!   (`DeviceSenseTool::invoke` / `device_presence_status`
 //!   / `DeviceSenseActivity` / `device_sense_enabled_from_env`)。
 //! - 只读（**不改**）: `crates/capabilities/tools/src/device/{registry,audit,adapter}.rs`
 //!   的公开 API —— 本 target 只**消费**它们（设备表 / 审计账 / 适配器插槽图）。
@@ -29,14 +29,14 @@
 //! | ① | 参数面闭合: 未知字段 / 类型不符 / `action` 缺失 / `action` 词表外 ⇒ **拒绝即帧** | `sense.rs:74`「调用参数 (未知字段拒绝)」; `sense.rs:71-72`「闭合动作词表 (list / sense)」; `sense.rs:502-504`「拒绝感知: 必须显式给 action (list / sense)」; `sense.rs:468-469` 声明 `"required": ["action"]` + `"additionalProperties": false` |
 //! | ② | 白名单制 (底线①): 表外 id / 停用 id / 空 `device_ids` ⇒ **拒绝即帧** | `sense.rs:5-8`「只读**白名单设备**的状态 … 表外 / 停用设备一律拒绝即帧」; `sense.rs:400-402`「指定 id 时逐台核白名单。表外 / 停用设备 = `Err(拒绝即帧文案)`」; `sense.rs:410-413` 空列表拒绝 |
 //! | ③ | 适配器词表: 词表外适配器 / 真实协议插槽 ⇒ **拒绝即帧** | `sense.rs:7`「词表外适配器拒绝即帧」; `adapter.rs:8-12` 插槽图; `adapter.rs:15-16`「解析到插槽名 = 结构化 `AdapterError::SlotNotWired` 拒绝 (0 装诚实)」 |
-//! | ④ | 敏感面授权: 摄像头类必须 `sensitive_read_authorized: true` **且** `authorized_by` 非空, 缺任一 ⇒ **拒绝即帧 + 审计行 `denied`** | `sense.rs:10-15`「放行要**显式授权** (`sensitive_read_authorized: true` + 非空 `authorized_by`), 缺任一 = 拒绝即帧 + 审计行 `denied`」; `audit.rs:5-6`「每一次感知尝试 (无论放行还是拒绝) 都落一行审计」 |
+//! | ④ | 敏感面授权: 授权 = **宿主决定账**的批准记录; 无记录 ⇒ **拒绝即帧 + 审计行 `denied`** (授权人留空)。模型自称的 `authorized_by` **不作数** (声明面也没有它) | `sense.rs:10-16`「放行要**宿主拍板** … 模型面**无权提供授权人** (授权旗 `sensitive_read_authorized` 只是模型的*请求*, 真正放行看**宿主决定账**的批准记录) … 缺拍板 = 拒绝即帧 + 审计行 `denied`」; `audit.rs:5-6`「每一次感知尝试 (无论放行还是拒绝) 都落一行审计」 |
 //! | ⑤ | 每次敏感面尝试都入审计账 (放行 `granted` / 拒绝 `denied`), 行的 `action` 恒 `sense`、类别恒摄像头、授权人如实 | `audit.rs:55`「设备类别 (敏感面判定依据; 摄像头类恒入账)」; `audit.rs:57`「动作 (`sense`)」; `audit.rs:59`「谁给的显式授权 (`None` = 无授权人, 对应 `denied`)」 |
 //! | ⑥ | **审计账写不进 = 不放行** (fail-closed), 且此时不得读任何设备 | `sense.rs:15`「审计账写不进 = 不放行 (fail-closed)」; `sense.rs:318-324` |
 //! | ⑦ | 拒绝即帧 = **永久错误** (不可重试) + 真因非空 | `sense.rs:394-397`「拒绝即帧 (真因如实, 不静默降级)」→ `ToolResult::permanent_error` (`protocol/src/canonical/tool_result.rs:90-99`, `retryable: false`) |
 //! | ⑧ | 输出归一合同: 结构化输出是对象且 `action` / `status` 恒在场 | `sense.rs:218-223`「输出归一合同: 结构化输出必须是对象且 `action` / `status` 恒在场」 |
 //! | ⑨ | `list` = **零适配器读 + 零审计行 + 无读数面** (只回白名单视图) | `sense.rs:66`「动作: 读白名单视图 (零适配器读)」; `sense.rs:191`「`list` 只回白名单视图」; 审计行的 `action` 恒 `sense` (`audit.rs:57`) ⇒ `list` 不入账 |
 //! | ⑩ | 自述在场节与工具面**同表同计数** (设备数 / 白名单数 / 最近感知) | `sense.rs:23-27`「与工具面同一本设备表同一进程内感知计数」; `sense.rs:158-160`「在场节真值 … 与工具面同表同计数」; `registry.rs:150-156` / `registry.rs:163` 白名单与设备数口径 |
-//! | ⑪ | 边界 Guard 单调: 开了授权旗却没给授权人 ⇒ **拒**; 且拒了不得被后续阶段翻回放行 | `sense.rs:519-521`「单调边界 Guard (只拒不放) … 开了授权旗但没给授权人 = 拒 (任何后续阶段都不能翻回放行)」; `sense.rs:541-566` |
+//! | ⑪ | 敏感面**只认宿主决定账**: 没有宿主的批准记录 ⇒ 一律**拒** (模型自称的授权旗/授权人**不作数**); 且拒了不得被后续阶段翻回放行 | `sense.rs:10-16`「放行要**宿主拍板** … 模型面**无权提供授权人**」; `sense.rs:289-358`（宿主批准 + 旗 ⇒ 放行; 否则拒） |
 //! | ⑫ | 坏表拒开**不回退默认表**: 表存在但拒开 ⇒ 工具必须拒 (不得当成零设备放行) | `sense.rs:238`「设备表拒开 (不回退默认表)」; `registry.rs:12-15`「畸形 JSON / 串档身份 / 未来版本 / 坏条目 … 一律 `DeviceStoreError` 拒开, 不静默迁移、不回退默认表」 |
 //! | ⑬ | 摄像头 fixture 永不回图像内容; 数据源如实标注 `mock-fixture` | `adapter.rs:128`「摄像头类 fixture 只回**存在性/事件位**, 永不回图像内容」; `adapter.rs:47` / `adapter.rs:53`「数据源如实标注 (`mock-fixture` / `live:<适配器名>`)」; `audit.rs:11`「图像内容永不出适配器」 |
 //! | ⑭ | 开关 fail-closed: 只认显式 `"1"`（前后空白容忍）, 其它任何取值 = 关 | `sense.rs:60-63`「只认显式 `"1"` (前后空白容忍); 未设 / `"0"` / 其它任何取值 = 关」; `sense.rs:642-650` |
@@ -45,8 +45,8 @@
 //!
 //! - **五段流水线的 Around 段（超时）没实跑**: `apeireth_core::deadline::Deadline::after`
 //!   要 tokio 运行时上下文 (`core/src/deadline.rs:150`), 而 fuzz crate 按约定**零外部依赖**
-//!   ⇒ 流水线拆成三段**分别直测**: Guard 段直测 `DeviceSenseBoundaryGuard::deny`,
-//!   Normalize 段直测 `DeviceSenseTool::output_schema().validate`
+//!   ⇒ 流水线拆成两段**分别直测**: Normalize 段直测
+//!   `DeviceSenseTool::output_schema().validate`
 //!   （即 `exec_pipeline/contract.rs:76-81` 做的同一件事）, 执行段直测 `tool.invoke`。
 //! - **「`list` 只回白名单视图」的措辞与实现有张力**（实现把**停用设备也列出来**, 只带
 //!   `enabled` 标记）⇒ 本 target **不断言**「`list` 只能出现启用设备」, 只断言
@@ -65,8 +65,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::task::{Context, Poll, Wake, Waker};
 
-use apeireth_core::kernel::CapabilityId;
-use apeireth_governance::{ToolGuard, ToolGuardRequest};
 use apeireth_plugin::ToolCapability;
 use apeireth_protocol::canonical::{ToolCall, ToolOutcome, ToolResult};
 use apeireth_tools_canonical::device::adapter::{
@@ -82,9 +80,8 @@ use apeireth_tools_canonical::device::registry::{
 };
 use apeireth_tools_canonical::device::sense::{
     device_presence_status, device_sense_enabled_from_env, DeviceSenseActivity,
-    DeviceSenseBoundaryGuard, DeviceSenseConfig, DeviceSenseTool, ACTION_LIST, ACTION_SENSE,
-    DEVICE_SENSE_ACTIONS, DEVICE_SENSE_CAPABILITY_ID, DEVICE_SENSE_ENABLE_ENV,
-    DEVICE_SENSE_TOOL_NAME,
+    DeviceSenseConfig, DeviceSenseTool, ACTION_LIST, ACTION_SENSE, DEVICE_SENSE_ACTIONS,
+    DEVICE_SENSE_ENABLE_ENV, DEVICE_SENSE_TOOL_NAME,
 };
 use libfuzzer_sys::fuzz_target;
 use serde_json::{json, Value};
@@ -529,12 +526,10 @@ fn plan(table: Option<&DevicesBody>, args: &Value, audit_broken: bool) -> Plan {
         }
     };
 
-    let authorizer = parsed
-        .authorized_by
-        .as_deref()
-        .map(str::trim)
-        .filter(|text| !text.is_empty())
-        .map(str::to_string);
+    // 2026-11-10: 授权 = **宿主决定账**的批准记录 (`sense.rs:289-358`)。
+    // 本 harness **从不写宿主批准记录** ⇒ `authorized` 恒 false, 审计行的授权人恒空。
+    // 模型自称的 `authorized_by` **不构成授权** (声明面根本没有这个字段, 解析面多出的
+    // 值只解析不作数) ⇒ 这里**不再**从模型参数推导授权。
     let mut plan = Plan {
         refusal: Refusal::None,
         targets: targets.iter().map(|device| device.id.clone()).collect(),
@@ -543,14 +538,14 @@ fn plan(table: Option<&DevicesBody>, args: &Value, audit_broken: bool) -> Plan {
             .filter(|device| device.kind.is_sensitive())
             .map(|device| device.id.clone())
             .collect(),
-        authorized: parsed.sensitive_read_authorized == Some(true) && authorizer.is_some(),
-        authorizer,
+        authorized: false,
+        authorizer: None,
         expected_reads: Vec::new(),
     };
 
-    // ── ⑤ 敏感面闸: 显式授权缺位 ⇒ 拒; 审计账写不进 ⇒ 不放行 ──────────────
+    // ── ⑤ 敏感面闸: **宿主没拍板** ⇒ 拒; 审计账写不进 ⇒ 不放行 ──────────────
     //
-    // 闸序（`sense.rs:308-336`）: **先落审计行, 再判授权** ⇒ 审计写不进时
+    // 闸序（`sense.rs:289-358`）: **先落审计行, 再判授权** ⇒ 审计写不进时
     // 先死在「审计缺位不放行」, 根本走不到授权判定。
     if !plan.sensitive.is_empty() {
         if audit_broken {
@@ -878,8 +873,8 @@ fn assert_case(case: &Case, observed: &Observed, table: Option<&DevicesBody>, pl
                 for row in rows {
                     assert_eq!(
                         row.outcome,
-                        SensitiveReadOutcome::Granted,
-                        "授权齐备时审计行必须记 `granted` (sense.rs:294-297): {row:?}"
+                        SensitiveReadOutcome::Denied,
+                        "宿主没拍板 ⇒ 敏感面审计行必须记 `denied` (sense.rs:289-358): {row:?}"
                     );
                     assert_eq!(
                         row.action, ACTION_SENSE,
@@ -892,7 +887,7 @@ fn assert_case(case: &Case, observed: &Observed, table: Option<&DevicesBody>, pl
                     );
                     assert_eq!(
                         row.authorized_by, plan.authorizer,
-                        "审计行要如实记授权人 (audit.rs:59 / sense.rs:313): {row:?}"
+                        "审计行的授权人只来自宿主决定账 (本 harness 无批准记录 ⇒ 留空): {row:?}"
                     );
                 }
             }
@@ -1030,8 +1025,8 @@ fn assert_case(case: &Case, observed: &Observed, table: Option<&DevicesBody>, pl
                         for row in rows {
                             assert_eq!(
                                 row.outcome,
-                                SensitiveReadOutcome::Granted,
-                                "授权齐备时审计行必须记 `granted` (sense.rs:294-297): {row:?}"
+                                SensitiveReadOutcome::Denied,
+                                "宿主没拍板 ⇒ 审计行恒 `denied` (sense.rs:289-358): {row:?}"
                             );
                         }
                     }
@@ -1097,56 +1092,79 @@ fn assert_case(case: &Case, observed: &Observed, table: Option<&DevicesBody>, pl
     }
 }
 
-/// 判据 ⑪: 边界 Guard 单调（只拒不放, 拒了不得被翻回放行）。
-fn assert_guard(case: &Case, observed: &Observed, plan: &Plan) {
-    let guard = DeviceSenseBoundaryGuard::new();
-    let capability = CapabilityId::new(DEVICE_SENSE_CAPABILITY_ID).expect("valid capability id");
-    let request = ToolGuardRequest::new(&capability, DEVICE_SENSE_TOOL_NAME, &case.args);
-    let denial = guard.deny(&request);
-
-    // 预期: 仅当「参数能解析 ∧ action=sense ∧ 授权旗=true ∧ 授权人为空」时拒
-    // (`sense.rs:550-564`)。
-    let expected = match parse_args(&case.args) {
-        Err(()) => false,
+/// 判据 ⑪: 敏感面**只认宿主决定账** —— 模型自称的授权旗/授权人**不构成授权**。
+///
+/// 本 harness **从不写宿主批准记录** ⇒ 命中摄像头类时一律拒: 不得读到摄像头类设备,
+/// 审计行恒 `denied` 且授权人留空 (模型给的 `authorized_by` 不作数)。
+fn assert_host_decision_is_the_only_gate(case: &Case, observed: &Observed, plan: &Plan) {
+    // 模型自称的两样东西都**只解析、不作数** (声明面里根本没有它们)。
+    //
+    // ⚠️ 2026-11-11 修正本臂自己的红: 「原样保留」这句话**只对解析成功的调用成立**。
+    // 解析失败 = **整份参数被拒** (`sense.rs:496-501`; 未知字段/类型不符都走这条),
+    // 这时不存在「只解析」这回事 ⇒ 拿「解析失败 ⇒ authorized_by 为空」去比
+    // 「参数里确实带着 authorized_by」会把「整份被拒」误判成「字段被吞了」。
+    // 所以按**解析结果的两种形态**分别断言, 不放宽任何一条:
+    //   · 解析成功 ⇒ 两个自称字段**逐字原样保留** (只解析, 不作数);
+    //   · 解析失败 ⇒ 整份作废 ⇒ 下面「没读到摄像头类 / 审计行恒 denied / 授权人留空」
+    //     那几条**照常**必须成立 (它们才是「不作数」的真正落点)。
+    match parse_args(&case.args) {
         Ok(parsed) => {
-            parsed.action.as_deref() == Some(ACTION_SENSE)
-                && parsed.sensitive_read_authorized == Some(true)
-                && parsed
-                    .authorized_by
-                    .as_deref()
-                    .map(str::trim)
-                    .unwrap_or_default()
-                    .is_empty()
+            assert_eq!(
+                parsed.authorized_by.as_deref(),
+                case.args.get("authorized_by").and_then(Value::as_str),
+                "解析面收 `authorized_by` 只解析不作数 (值原样保留, 不进声明面)"
+            );
+            assert_eq!(
+                parsed.sensitive_read_authorized,
+                case.args
+                    .get("sensitive_read_authorized")
+                    .and_then(Value::as_bool),
+                "授权旗是模型的*请求*, 只解析不作数 (真正放行看宿主决定账)"
+            );
         }
-    };
-    assert_eq!(
-        denial.is_some(),
-        expected,
-        "边界 Guard 的判定必须与契约一致 (sense.rs:550-564): args={}",
-        brief(&case.args)
-    );
+        Err(()) => {
+            // 整份参数被拒 ⇒ 模型自称的授权旗/人 连「被解析」这一步都没走到,
+            // 更谈不上构成授权 ⇒ **任何审计行的授权人都必须留空**。
+            //
+            // 这里**不**写成「解析失败 ⇒ 一条审计行都不许落」: 审计面在拒之前有没有
+            // 记账是产品自己的判断, 本臂不替它下结论; 这里只断言「模型自称的授权人
+            // 不作数」这条真正的不变量 (与上面 Ok 分支互为两态, 谁也不放宽)。
+            if let Some(rows) = observed.rows.as_ref() {
+                for row in rows {
+                    assert_eq!(
+                        row.authorized_by, None,
+                        "模型自称的授权人不作数 ⇒ 任何审计行的授权人都必须留空: {row:?}"
+                    );
+                }
+            }
+        }
+    }
 
-    // 只拒不放: 别的能力一概不拒 (`sense.rs:542-544`)。
-    let other = CapabilityId::new("tool.other_face").expect("valid capability id");
-    let other_request = ToolGuardRequest::new(&other, DEVICE_SENSE_TOOL_NAME, &case.args);
+    if plan.sensitive.is_empty() {
+        return;
+    }
+    // 宿主没拍板 ⇒ 不得读到摄像头类设备 (`sense.rs:289-358`)。
+    let sensitive_read = observed.reads.iter().any(|id| plan.sensitive.contains(id));
     assert!(
-        guard.deny(&other_request).is_none(),
-        "边界 Guard 只管本能力 (sense.rs:542-544)"
+        !sensitive_read,
+        "宿主没拍板 ⇒ 不得读到摄像头类设备 (sense.rs:289-358): {:?}",
+        observed.reads
     );
-
-    // 拒了不得被后续阶段翻回放行 (`sense.rs:520`「任何后续阶段都不能翻回放行」)。
-    if denial.is_some() {
-        let sensitive_read = observed.reads.iter().any(|id| plan.sensitive.contains(id));
-        assert!(
-            !sensitive_read,
-            "Guard 拒了之后不得仍读到摄像头类设备 (sense.rs:520): {:?}",
-            observed.reads
-        );
-        if let Some(rows) = observed.rows.as_ref() {
-            let granted = rows
-                .iter()
-                .any(|row| row.outcome == SensitiveReadOutcome::Granted);
-            assert!(!granted, "Guard 拒了之后不得留下放行审计行 (sense.rs:520)");
+    assert!(
+        !plan.authorized,
+        "授权只由宿主决定账给 ⇒ 本 harness 无批准记录 ⇒ 恒未授权 (sense.rs:289-358)"
+    );
+    if let Some(rows) = observed.rows.as_ref() {
+        for row in rows {
+            assert_eq!(
+                row.outcome,
+                SensitiveReadOutcome::Denied,
+                "宿主没拍板 ⇒ 审计行恒 `denied` (sense.rs:289-358): {row:?}"
+            );
+            assert_eq!(
+                row.authorized_by, None,
+                "模型自称的授权人不作数 ⇒ 审计行授权人留空: {row:?}"
+            );
         }
     }
 }
@@ -1370,36 +1388,12 @@ fn fixture_suite() {
         "输出归一合同必须要求 action/status 两个字符串 (sense.rs:219-222): {required:?}"
     );
 
-    // (c) 边界 Guard: 名字 + 只管本能力 + 「旗开人空必拒」
-    //     (`sense.rs:537-544` / `sense.rs:550-564`)。
-    let guard = DeviceSenseBoundaryGuard::new();
-    assert_eq!(
-        guard.name(),
-        "device_sense_boundary",
-        "边界 Guard 的稳定名 (sense.rs:537-539)"
+    // (c) 声明面**不含**授权人字段: 模型无权自称授权人
+    //     (`sense.rs:488-530`, `additionalProperties: false`; 授权只认宿主决定账)。
+    assert!(
+        !declared.contains(&"authorized_by"),
+        "声明面不得含授权人字段 (模型无权自称授权人): {declared:?}"
     );
-    let capability = CapabilityId::new(DEVICE_SENSE_CAPABILITY_ID).expect("valid capability id");
-    let other = CapabilityId::new("tool.other_face").expect("valid capability id");
-    for args in [
-        json!({ "action": "sense", "sensitive_read_authorized": true, "authorized_by": "owner" }),
-        json!({ "action": "list" }),
-    ] {
-        let request = ToolGuardRequest::new(&other, DEVICE_SENSE_TOOL_NAME, &args);
-        assert!(
-            guard.deny(&request).is_none(),
-            "边界 Guard 只管本能力 (sense.rs:542-544)"
-        );
-    }
-    for dishonest in [
-        json!({ "action": "sense", "sensitive_read_authorized": true, "authorized_by": "   " }),
-        json!({ "action": "sense", "sensitive_read_authorized": true }),
-    ] {
-        let request = ToolGuardRequest::new(&capability, DEVICE_SENSE_TOOL_NAME, &dishonest);
-        assert!(
-            guard.deny(&request).is_some(),
-            "开了授权旗却没给授权人必须被拒 (sense.rs:550-564): {dishonest}"
-        );
-    }
 
     // (d) 开关 fail-closed: 只认显式 `"1"` (`sense.rs:60-63` / `sense.rs:642-650`)。
     let original = std::env::var(DEVICE_SENSE_ENABLE_ENV).ok();
@@ -1541,6 +1535,6 @@ fuzz_target!(|data: &[u8]| {
         let (observed, table_body) = run_case(case);
         let expected = plan(table_body.as_ref(), &case.args, case.broken_audit);
         assert_case(case, &observed, table_body.as_ref(), &expected);
-        assert_guard(case, &observed, &expected);
+        assert_host_decision_is_the_only_gate(case, &observed, &expected);
     }
 });

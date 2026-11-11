@@ -1,13 +1,12 @@
 //! K 轴 L1 在场感知骨架 (`tool.device_sense` + `tool.weather`) 回归:
 //! 白名单零设备默认 / 设备表拒开 (StoredDoc) / mock 感知真值 (固定 fixture) /
-//! 非白名单拒读 / 摄像头敏感面显式授权 + 审计 / 天气 mock 如实标注数据源 /
+//! 非白名单拒读 / 摄像头敏感面 = 宿主决定账放行 + 逐次审计 / 天气 mock 如实标注数据源 /
 //! 提醒信号格式 (只交信号) / 真实协议与 live 插槽留位不接 / 开关 fail-closed /
 //! 自述在场节同表同源。
 
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use apeireth_governance::{ToolGuard, ToolGuardRequest};
 use apeireth_plugin::ToolCapability;
 use apeireth_protocol::canonical::ToolCall;
 use apeireth_tools_canonical::device::adapter::{AdapterRegistry, RESERVED_PROTOCOL_SLOTS};
@@ -20,8 +19,7 @@ use apeireth_tools_canonical::device::registry::{
 };
 use apeireth_tools_canonical::device::sense::{
     device_presence_status, device_sense_enabled_from_env, sense_plan_id, DeviceSenseActivity,
-    DeviceSenseBoundaryGuard, DeviceSenseConfig, DeviceSenseTool, DEVICE_SENSE_CAPABILITY_ID,
-    DEVICE_SENSE_ENABLE_ENV,
+    DeviceSenseConfig, DeviceSenseTool, DEVICE_SENSE_ENABLE_ENV,
 };
 use apeireth_tools_canonical::device::weather::{
     reminder_signal_id, weather_signals, LiveWeatherSource, MockWeatherSource, ReminderSignal,
@@ -248,31 +246,59 @@ async fn camera_reads_need_the_host_approval_and_land_in_the_audit() {
     }
 }
 
-/// ⑥ 敏感读面授权诚实性: 开了授权旗但没给授权人 = 拒 (工具边界 + 单调 Guard 双侧)。
+/// ⑥ 敏感读面: 放行只认**宿主决定账** —— 模型自称的授权人**一律不作数**。
+///
+/// **2026-11-10 撤除的旧规则**: 边界 Guard 曾要求「开了 `sensitive_read_authorized`
+/// 就必须配非空 `authorized_by`」⇒ 但 `authorized_by` **不在声明面**
+/// (`additionalProperties: false`) ⇒ 模型**无权**提供 ⇒ 规则**永不可满足** ⇒
+/// 按 schema 调用的模型**永远过不了** ⇒ 摄像头类敏感读成了**死面**; 且 Guard
+/// 在工具之前拒 ⇒ 工具面那行**审计留痕**也会被吃掉。
+///
+/// **现在的口径**: 授权旗 = 模型的*请求*; 授权 = 宿主决定账的批准记录。
 #[tokio::test]
-async fn sensitive_authorization_needs_an_honest_authorizer() {
+async fn sensitive_read_follows_the_host_decision_not_the_model_claim() {
     let (data_dir, tool, _activity) = tool_with("camera-honest");
-    write_table(
-        &data_dir,
-        vec![mock_device("cam-1", DeviceKind::Camera, true)],
-    );
-    let frame = refused(
+    let camera = mock_device("cam-1", DeviceKind::Camera, true);
+    write_table(&data_dir, vec![camera.clone()]);
+    let audit = DeviceSenseAuditLedger::under_data_dir(&data_dir);
+
+    // 宿主没拍板: 模型自称的授权人给不给、给什么, 一律拒 (走的是宿主审批门)。
+    for claimed in ["  ", "模型自称的主人"] {
+        let frame = refused(
+            &tool,
+            json!({"action": "sense", "sensitive_read_authorized": true, "authorized_by": claimed}),
+        )
+        .await;
+        assert!(frame.contains("敏感读面"), "{frame}");
+        let scan = audit.scan().expect("审计账可读");
+        let row = &scan.records.last().expect("审计行在场").body;
+        assert_eq!(row.outcome.as_str(), "denied");
+        assert_eq!(
+            row.authorized_by, None,
+            "模型自称的授权人不作数 ⇒ 审计行留空"
+        );
+    }
+
+    // 宿主拍板: 放行, 且审计行的授权人 = 宿主署名 (不是模型给的那串)。
+    host_approves(&data_dir, &[&camera], "宿主:面板@local");
+    let ok = ok_value(
         &tool,
-        json!({"action": "sense", "sensitive_read_authorized": true, "authorized_by": "  "}),
+        json!({
+            "action": "sense",
+            "sensitive_read_authorized": true,
+            "authorized_by": "模型自称的主人",
+        }),
     )
     .await;
-    assert!(frame.contains("敏感读面"), "{frame}");
-
-    // 单调边界 Guard 同判 (只拒不放, 任何后续阶段不能翻回)。
-    let guard = DeviceSenseBoundaryGuard::new();
-    let arguments = json!({"action": "sense", "sensitive_read_authorized": true});
-    let request = ToolGuardRequest {
-        capability: &apeireth_core::kernel::CapabilityId::new(DEVICE_SENSE_CAPABILITY_ID).unwrap(),
-        tool_name: "device_sense",
-        arguments: &arguments,
-    };
-    let refusal = guard.deny(&request).expect("不诚实授权必须被 Guard 拒");
-    assert!(refusal.contains("authorized_by"), "{refusal}");
+    assert_eq!(ok["states"].as_array().unwrap().len(), 1);
+    let scan = audit.scan().expect("审计账可读");
+    let row = &scan.records.last().expect("审计行在场").body;
+    assert_eq!(row.outcome.as_str(), "granted");
+    assert_eq!(
+        row.authorized_by.as_deref(),
+        Some("宿主:面板@local"),
+        "审计账里的授权人 = 宿主的值, 不是模型给的字符串"
+    );
 }
 
 /// ⑦ 天气 mock 档如实标注数据源: `mock-fixture` + 非实测注记, 每帧恒在场。
