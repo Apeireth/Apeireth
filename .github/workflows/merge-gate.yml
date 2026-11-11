@@ -61,6 +61,12 @@ jobs:
         with:
           python-version: '3.12'
 
+      # 每次使用 RUNNER_TEMP 下的新目录，避免 runner 共享工具链的半装残留。
+      # channel / profile / components 只读根 rust-toolchain.toml；保留原 CARGO_HOME 代理。
+      # --force 允许缺少可下载组件，不负责清理文件冲突，因此这里不使用它。
+      - name: Provision pinned toolchain (deterministic)
+        run: python scripts/provision_ci_toolchain.py
+
       # ⚠️ `setup-python` 装的解释器**不带 PyYAML**（系统 python3 有，它没有）
       # ⇒ ⇒ 任何 `import yaml` 的门禁在 CI 上**必然退出码 2**
       # ⇒ ⇒ 实测红的两个：`verify-ledger`（既有门禁 ⇒ merge-gate 本来就红）

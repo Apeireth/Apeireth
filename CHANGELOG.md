@@ -4,6 +4,11 @@
 
 - 远端工具目录与调用复用会话权限收窄；本地和远端重名不发布到模型目录；Mesh 广告沿用工具与模块契约的可见性。验证进度与未验边界见 [收口页](docs/status/mesh-rc2-closeout-2026-11-11.md)。
 
+## [Unreleased] — 合并裁决工具链隔离（2026-11-11）
+
+- 合并裁决每次在 CI 临时目录中按根工具链声明装配，核对版本与组件后导出；保留已有代理，不修改 runner 共享工具链。
+- 钉版守卫补装配行为自检和红/绿反证；当前 head 远端检查与合并仍待完成，见[收口进度](docs/status/merge-gate-toolchain-closeout-2026-11-11.md)。
+
 ## [Unreleased] — 版本轴递进 2.0.0-rc.5（自研 UI 引擎线 · 门面 crate 登记 + crates-ui 发布化）
 
 - **版本轴**：根 `[workspace.package].version` 由 `2.0.0-rc.4` 递进到 `2.0.0-rc.5`（owner 2026-10-31 授权，见 `fe4ee5169` / `005b8ef73`）。
