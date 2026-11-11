@@ -25,6 +25,7 @@ Author: lead
 | resident control 保留名 | IMPLEMENTED；远端投影排除已注册 control 的保留名，原本地拦截语义不变；两项新增回归旧实现失败、修复后通过。 |
 | crate 体量预算 | CI 抓到新增代码超额后，统一会话 scope 路径并复用 Mesh 错误映射；新增 unit fixture 归测试目录、保持原 unit 模块身份，未移动既有生产逻辑。Runtime `src` 为 26206/26206 行，Mesh 为 9618 行并收紧基线至 9618；文件数不增，生命周期逻辑未改。`python3 scripts/check_crate_budget.py --check` 通过。 |
 | 依赖审计 | `rustix` 锁定到 `1.1.6`；按既有 workflow 策略本机审计通过，未增加 ignore。失败摘要和 SARIF 均包含 warning，真实失败 JSON 的旧实现三项反证失败、修复后通过。 |
+| CI DNS 装配 | IMPLEMENTED；仅在 GitHub Actions Linux 的既有 APT 步骤前预检。健康时不改 DNS；失败时按默认路由接口临时配置备用 DNS 并复验，失败回滚且保持非零退出。原 APT、测试、runner、permissions、TLS 与签名验证不变；真实 runner 恢复结论仍须由当前 CI 证明。 |
 | 当前提交证据 | 定向红/绿与范围审查已完成；全工作区测试、clippy、doctest、fmt 和声明 verify_cmd 由本地波次与当前 head 的 CI 验证。合并须同时满足本地检查与所有适用 CI 通过。 |
 
 ## 行为证据与范围复核
