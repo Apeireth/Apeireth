@@ -91,9 +91,9 @@ cargo run --locked -p apeireth-cli --bin apeireth -- --help
 | 报告缺陷、提交明确的功能请求 | [问题与建议表单](https://github.com/Apeireth/Apeireth/issues/new/choose) |
 | 修改代码、文档或素材 | [贡献指南](CONTRIBUTING.md) |
 | 报告产品安全漏洞 | [GitHub 私密漏洞报告](https://github.com/Apeireth/Apeireth/security/advisories/new) · [安全政策](SECURITY.md) |
-| 行为举报与申诉 | [行为准则中的渠道说明](CODE_OF_CONDUCT.md#报告与申诉渠道)；项目私密联系入口尚未启用、待确认 |
+| 行为举报与申诉 | [yintasde@qq.com](mailto:yintasde@qq.com) · [行为准则中的渠道与处理安排](CODE_OF_CONDUCT.md#报告与申诉渠道) |
 
-参与 GitHub 问答和反馈需要账号。公开内容请先移除密钥、私人对话和身份信息；不要在公开 Issue 中发布漏洞或敏感举报材料。`apeireth-security@apeireth.org` 尚未启用，请勿向它发送报告。
+参与 GitHub 问答和反馈需要账号。公开内容请先移除密钥、私人对话和身份信息；不要在公开 Issue 中发布漏洞或敏感举报材料。
 
 发布资产以 [Apeireth/Apeireth Releases](https://github.com/Apeireth/Apeireth/releases) 为准，校验信息以对应版本提供的文件为准。项目维护者不会要求你在公开反馈或私人支持对话中交出 API key。官网设计预览和历史截图都不是发布渠道。
 

@@ -91,9 +91,9 @@ Your first question is as welcome as your first contribution. See the [support g
 | Report a bug or request a specific feature | [Issue forms](https://github.com/Apeireth/Apeireth/issues/new/choose) |
 | Improve code, documentation, or assets | [Contributing guide](CONTRIBUTING.md) |
 | Report a product security vulnerability | [GitHub private vulnerability reporting](https://github.com/Apeireth/Apeireth/security/advisories/new) · [Security policy](SECURITY.md) |
-| Report misconduct or appeal a decision | [Reporting channels in the Code of Conduct](CODE_OF_CONDUCT.md#报告与申诉渠道); the project's private contact channel is not yet active and remains to be confirmed |
+| Report misconduct or appeal a decision | [yintasde@qq.com](mailto:yintasde@qq.com) · [Reporting and handling arrangements in the Code of Conduct](CODE_OF_CONDUCT.md#报告与申诉渠道) |
 
-A GitHub account is required to participate in discussions and submit feedback. Remove keys, private conversations, and identifying information before posting publicly. Do not put vulnerability details or sensitive misconduct reports in public Issues. `apeireth-security@apeireth.org` is not active; do not send reports to it.
+A GitHub account is required to participate in discussions and submit feedback. Remove keys, private conversations, and identifying information before posting publicly. Do not put vulnerability details or sensitive misconduct reports in public Issues.
 
 Use [Apeireth/Apeireth Releases](https://github.com/Apeireth/Apeireth/releases) for release assets, and consult the verification files supplied with the relevant version. Project maintainers will not ask you to hand over API keys in public feedback or private support conversations. Website design previews and historical screenshots are not distribution channels.
 

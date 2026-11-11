@@ -45,15 +45,15 @@ Apeireth 是一个开源免费的个人 AI 助手项目，希望成为会成长�
 
 ## 报告与申诉渠道
 
-**2026-11-11 核验：项目的社区行为举报与申诉私密渠道尚未启用、待确认。** `apeireth-security@apeireth.org` 尚不能作为收件入口，请勿向它发送报告。此前文档中的“GitHub 私信”也不是可用的收件方式，已移除。
+**社区行为举报与申诉请私密联系 [yintasde@qq.com](mailto:yintasde@qq.com)。** 当前不承诺固定响应时限。
 
 - **GitHub 上的骚扰或违规内容**：可使用 GitHub 的 “Report abuse / Report content” 功能；具体入口与权限见 [GitHub 举报说明](https://docs.github.com/en/communities/maintaining-your-safety-on-github/reporting-abuse-or-spam)。这是平台处理渠道，不等同于项目申诉渠道。
 - **产品安全漏洞**：使用已开启的 [GitHub 私密漏洞报告](https://github.com/Apeireth/Apeireth/security/advisories/new)，详见 [SECURITY.md](SECURITY.md)。不要用它提交与产品漏洞无关的行为争议。
-- **项目行为举报与申诉**：待可实际收信的私密入口、接收人及回避安排确认后，在本节公布。在此之前请保留相关链接与证据，不要在公开 Issue 或 Discussion 中发布私人信息或举报细节；当前不承诺报告可送达或固定响应时限。
+- **项目行为举报与申诉**：请发送至上述邮箱，并保留相关链接与证据；不要在公开 Issue 或 Discussion 中发布私人信息或举报细节。
 
-渠道启用后，报告可提供事件链接、时间、行为描述及必要的脱敏证据；无需公开真实身份或无关私人对话。申诉应说明原处理决定、异议与补充信息，由未参与事件且可回避利益冲突的维护者复核；若暂无合适复核人，应说明限制，不宣称已完成独立复核。
+报告可提供事件链接、时间、行为描述及必要的脱敏证据；无需公开真实身份或无关私人对话。申诉应说明原处理决定、异议与补充信息。涉及接收人的申诉，其回避与独立复核安排将在确定后公布。
 
-待办与启用验收记录见 [社区运营手册](docs/development/community-ops.md) §八、§九。维护者处理报告时应尽量保护当事人隐私，仅在调查和保护社区所必需的范围内分享信息。
+相关运营安排见 [社区运营手册](docs/development/community-ops.md) §八、§九。维护者处理报告时应尽量保护当事人隐私，仅在调查和保护社区所必需的范围内分享信息。
 
 ## 适用范围
 

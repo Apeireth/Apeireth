@@ -15,7 +15,7 @@
 | 查看版本、平台要求和可用安装文件 | [版本发布页](https://github.com/Apeireth/Apeireth/releases) |
 | 修改代码、文档或素材 | [贡献指南](CONTRIBUTING.md) |
 | 发现产品安全漏洞 | [私密报告](https://github.com/Apeireth/Apeireth/security/advisories/new) · [安全政策](SECURITY.md) |
-| 遭遇骚扰、举报不当行为、对处理结果申诉 | [行为准则：渠道与当前限制](CODE_OF_CONDUCT.md#报告与申诉渠道) |
+| 遭遇骚扰、举报不当行为、对处理结果申诉 | [yintasde@qq.com](mailto:yintasde@qq.com) · [行为准则：渠道与当前限制](CODE_OF_CONDUCT.md#报告与申诉渠道) |
 
 参与 GitHub 问答和反馈需要 GitHub 账号。其他面向普通用户的交流入口尚在筹备；不必加入未公布的群组或联系自称官方的私人账号。新前端仍在开发，源码构建见 [INSTALL.md](INSTALL.md)，不要把官网预览中的演示理解为已经发布的客户端。
 
@@ -33,4 +33,4 @@ Issue 和 Discussion 是公开空间。发布前移除 API key、token、密码�
 
 维护者会按影响范围和可用时间处理问题，提问不等于承诺立即实现功能。响应目标见 [贡献指南](CONTRIBUTING.md#issue-分诊规则响应目标)。同一问题无需反复开帖；等待时可在原帖补充新信息。
 
-**2026-11-11：`apeireth-security@apeireth.org` 尚未启用、待确认；社区行为举报与申诉的项目私密渠道也待确认。** 不要向未启用邮箱发送敏感报告。GitHub 平台违规可按 [GitHub 举报说明](https://docs.github.com/en/communities/maintaining-your-safety-on-github/reporting-abuse-or-spam) 提交给平台；这不替代项目申诉流程。
+**社区行为举报与申诉请私密联系 [yintasde@qq.com](mailto:yintasde@qq.com)。** 只提供处理所需的信息，不要发送密钥或无关私人对话；当前不承诺固定响应时限。GitHub 平台违规可按 [GitHub 举报说明](https://docs.github.com/en/communities/maintaining-your-safety-on-github/reporting-abuse-or-spam) 提交给平台；这不替代项目申诉流程。

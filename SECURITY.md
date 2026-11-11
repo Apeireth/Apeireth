@@ -6,7 +6,7 @@ Apeireth 团队欢迎负责任的安全报告。请使用 **[GitHub 私密漏洞
 
 **不要**通过公开 Issue 或 Discussion 发布漏洞细节、可利用代码、密钥或私人数据。报告可包含受影响版本或 commit、运行环境、预期与实际行为、最小复现和可能影响；不确定的部分如实说明，附件先脱敏。
 
-`apeireth-security@apeireth.org` **尚未启用、待确认**，请勿向该邮箱发送报告。社区骚扰与申诉请查看 [行为准则](CODE_OF_CONDUCT.md)，不要与产品漏洞报告混用。普通使用问题见 [SUPPORT.md](SUPPORT.md)。
+旧邮箱 `apeireth-security@apeireth.org` 尚未启用，请勿向它发送报告。社区行为举报与申诉请私密联系 [yintasde@qq.com](mailto:yintasde@qq.com)，处理规则见 [行为准则](CODE_OF_CONDUCT.md#报告与申诉渠道)；产品安全漏洞仍优先使用上方 GitHub 私密漏洞报告。普通使用问题见 [SUPPORT.md](SUPPORT.md)。
 
 ## 漏洞协调 (Vulnerability coordination)
 
