@@ -167,12 +167,17 @@ jobs:
           except Exception as error:  # 报告本身坏掉也要说清
               print(f"::error::无法读取 audit-report.json: {error}")
               raise SystemExit(1)
-          vulns = (data.get("vulnerabilities") or {}).get("list") or []
-          print(f"::error::命中 {len(vulns)} 条 advisory:")
-          for item in vulns:
+          # --deny warnings 同样会因 unsound / unmaintained / notice 等告警退出非零。
+          findings = [("vulnerability", item) for item in ((data.get("vulnerabilities") or {}).get("list") or [])]
+          for kind, items in (data.get("warnings") or {}).items():
+              findings.extend((kind, item) for item in (items or []))
+          print(f"::error::命中 {len(findings)} 条审计发现（漏洞与告警）:")
+          for kind, item in findings:
               advisory = item.get("advisory") or {}
               package = item.get("package") or {}
-              print(f"::error::  {advisory.get('id')} {package.get('name')} {package.get('version')} — {advisory.get('title','')}")
+              print(f"::error::  [{kind}] {advisory.get('id', '无 advisory 编号')} {package.get('name')} {package.get('version')} — {advisory.get('title', item.get('reason', kind))}")
+          if not findings:
+              print("::error::报告未列出审计发现；非零退出仍为失败，请检查审计命令的错误输出。")
           raise SystemExit(1)
           PYEOF
           fi
@@ -186,8 +191,8 @@ jobs:
         # 兜底 —— `or []` 只兜 falsy, 兜不住 true, 所以 0 漏洞时正常、一旦真有漏洞就
         # TypeError: 'bool' object is not iterable (2026-09-23 首次真实漏洞暴露:
         # run 35835024572 步骤 "Convert JSON report to SARIF" 失败)。
-        # 守门机制必须能在"发现漏洞"这一时刻工作, 故改为迭代 list; severity 缺省/为
-        # null 时按 1 (warning) 处理, 不因缺字段崩。
+        # 守门机制必须在发现漏洞或 --deny warnings 告警时工作：两类条目都导出，
+        # 漏洞标 error、告警标 warning，执行成败仍以真实 AUDIT_STATUS 为准。
         # 2026-10-24 修「证据链断裂」: 审计失败时本步原本被 skip, 于是 upload-sarif 步
         # 报 `Path does not exist: audit-report.sarif` 二次失败 (PR #64 run 40058519140 实测),
         # 与 workflow 注释里「报告已先落盘, 上传步骤用 if: always() 保证失败时也留证据」相悖。
@@ -205,24 +210,28 @@ jobs:
         if: always()
         run: |
           python3 - <<'PYEOF'
-          import json, sys, datetime, hashlib
+          import json, os, datetime
           with open("audit-report.json") as f:
               report = json.load(f)
           findings = []
           vuln_index = {}
           vulns = report.get("vulnerabilities") or {}
-          for v in (vulns.get("list") or []):
-              advisory = v.get("advisory", {})
-              aid = advisory.get("id", "UNKNOWN")
-              pkg = v.get("package", {})
+          entries = [("vulnerability", item) for item in (vulns.get("list") or [])]
+          for kind, items in (report.get("warnings") or {}).items():
+              entries.extend((kind, item) for item in (items or []))
+          for kind, v in entries:
+              advisory = v.get("advisory") or {}
+              aid = advisory.get("id")
+              pkg = v.get("package") or {}
               pkg_name = pkg.get("name", "unknown")
               pkg_version = pkg.get("version", "unknown")
-              rule_id = f"rustsec/{aid}"
-              vuln_index[rule_id] = {"package": pkg_name, "version": pkg_version}
+              rule_id = f"rustsec/{aid}" if aid else f"cargo-audit/{kind}"
+              level = "error" if kind == "vulnerability" else "warning"
+              vuln_index[rule_id] = {"package": pkg_name, "version": pkg_version, "level": level, "advisory": aid}
               findings.append({
                   "ruleId": rule_id,
-                  "level": "error" if (advisory.get("severity") or 1) >= 5 else "warning",
-                  "message": {"text": advisory.get("description", advisory.get("title", aid))},
+                  "level": level,
+                  "message": {"text": f"{pkg_name}@{pkg_version}: {advisory.get('description') or advisory.get('title') or v.get('reason') or kind}"},
                   "locations": [{
                       "physicalLocation": {
                           "artifactLocation": {"uri": f"Cargo.toml"},
@@ -245,8 +254,8 @@ jobs:
                                   "name": rid,
                                   "shortDescription": {"text": f"RUSTSEC advisory affecting {meta['package']}@{meta['version']}"},
                                   "fullDescription": {"text": f"RUSTSEC advisory affecting {meta['package']}@{meta['version']}"},
-                                  "defaultConfiguration": {"level": "error"},
-                                  "helpUri": f"https://rustsec.org/advisories/{rid.replace('rustsec/', '')}"
+                                  "defaultConfiguration": {"level": meta['level']},
+                                  "helpUri": f"https://rustsec.org/advisories/{meta['advisory']}" if meta['advisory'] else "https://github.com/rustsec/rustsec"
                               }
                               for rid, meta in vuln_index.items()
                           ]
@@ -254,7 +263,7 @@ jobs:
                   },
                   "results": findings,
                   "invocations": [{
-                      "executionSuccessful": report.get("vulnerabilities", {}).get("count", 0) == 0,
+                      "executionSuccessful": os.environ.get("AUDIT_STATUS", "1") == "0",
                       "endTimeUtc": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
                   }]
               }]
