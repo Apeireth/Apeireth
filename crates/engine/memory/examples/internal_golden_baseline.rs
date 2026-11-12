@@ -29,6 +29,7 @@
 use apeireth_memory::delivery_metrics::measure_delivery;
 use apeireth_memory::golden_run::{run, IndexRecord, InjectionMode};
 use apeireth_memory::golden_set::GoldenSet;
+use sha2::{Digest, Sha256};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -93,6 +94,9 @@ fn main() -> ExitCode {
     };
 
     println!("════════ 内部卷基线（B0-b）════════");
+    println!("考卷版本：{}", golden.version);
+    println!("考卷 SHA256：{:x}", Sha256::digest(golden_text.as_bytes()));
+    println!("语料 SHA256：{:x}", Sha256::digest(records_text.as_bytes()));
     println!(
         "记录 **{}** 条（文档章节）· 考卷 **{}** 题 · k = {K} · 生产 BM25",
         index.len(),
@@ -132,10 +136,15 @@ fn main() -> ExitCode {
     println!("  ⚠️ 边界（如实）：");
     println!("    ① ⚠️⚠️ **自造卷红利**：题是**读着这些文档**写的 ⇒ 用词与正文接近");
     println!("       ⇒ ⇒ `recall` 会**偏高**（和当年「两部小说自造卷」是同一类问题）");
-    println!("       ⇒ 干净的外部对照请看 LoCoMo（人工标注 evidence / 非自造卷）；");
+    println!("       ⇒ 此内部卷只验证自有工程知识场景，外部泛化能力仍需独立评测；");
     println!("    ② 记录 = **文档章节**（不是对话轮次）⇒ 长度与「对话记忆」不同形态；");
+    let count_status = if golden.cases.len() >= 300 {
+        "已达到数量目标"
+    } else {
+        "尚未达到数量目标"
+    };
     println!(
-        "    ② 考卷目前 {} 条 ⇒ **未到 300 条**（B0-b 仍在进行中）；",
+        "    ③ 考卷目前 {} 条，目标 300 条：{count_status}；",
         golden.cases.len()
     );
     println!("    ④ 只测检索+注入，**不测答案正确性**（生成侧不在本轮范围）。");
