@@ -1045,12 +1045,7 @@ impl MemoryCoordinator {
                 break;
             }
             if qualified {
-                let normalized: String = cand
-                    .content
-                    .chars()
-                    .filter(|ch| ch.is_alphanumeric())
-                    .flat_map(char::to_lowercase)
-                    .collect();
+                let normalized = Self::qualified_content_key(&cand.content);
                 if normalized.is_empty() || !seen_content.insert(normalized) {
                     continue;
                 }

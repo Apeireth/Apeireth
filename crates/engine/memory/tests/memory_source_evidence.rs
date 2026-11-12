@@ -495,6 +495,17 @@ async fn applied_state_change() -> (
     apeireth_memory::automatic_correction::AutomaticCorrectionPlan,
     Episode,
 ) {
+    applied_state_change_with_evidence("我在2026-11-10搬到南汀市。").await
+}
+
+async fn applied_state_change_with_evidence(
+    evidence: &str,
+) -> (
+    Arc<SqliteBackend>,
+    Arc<SqliteWritebackJournal>,
+    apeireth_memory::automatic_correction::AutomaticCorrectionPlan,
+    Episode,
+) {
     use apeireth_memory::automatic_correction::{
         correction_evidence_id, correction_operation_id, AutomaticCorrectionKind,
         AutomaticCorrectionPlan, AutomaticCorrectionTarget,
@@ -527,7 +538,7 @@ async fn applied_state_change() -> (
             id: correction_evidence_id(&namespace, &request),
             timestamp: 1794441600,
             role: "user".into(),
-            content: "我在2026-11-10搬到南汀市。".into(),
+            content: evidence.into(),
             session_id: namespace.clone(),
         },
         provenance: MemoryProvenance {
@@ -573,6 +584,114 @@ async fn applied_state_change() -> (
         .unwrap();
     backend.apply_automatic_correction(&plan).unwrap();
     (backend, journal, plan, old)
+}
+
+#[tokio::test]
+async fn duplicate_writeback_cannot_hide_the_exact_applied_correction_source_and_edge() {
+    use apeireth_memory::{MemoryLayerKind, MemoryRecallQuery};
+    for (raw, ordinary_is_factual) in [
+        ("我在2026-11-10搬到南汀市。", true),
+        ("我于2026年11月10日搬到了新家。我住在南汀市。", false),
+    ] {
+        let (backend, journal, plan, old) = applied_state_change_with_evidence(raw).await;
+        let writer = MemoryCoordinator::new(backend.clone(), backend.clone());
+        let request = plan.provenance.source_request.as_ref().unwrap();
+        let source_session = plan.provenance.source_session.as_ref().unwrap();
+        let source_trace = plan.provenance.source_trace.as_ref().unwrap();
+        let source = serde_json::json!({"input":{"session":source_session,"request":request,"trace":source_trace,"principal":null,"authorization_epoch":null,"at":"2026-11-12T00:00:00Z","messages":[{"role":"user","content":[{"type":"text","text":raw}]}],"origin":"direct_user"},"response_id":"ordinary-writeback-response","response_content":"已收到。","committed_at":"2026-11-12T00:00:00Z","cursor":"ordinary-writeback-cursor"});
+        let job_id = format!("writeback-{request}");
+        journal
+            .register_page(
+                &plan.namespace,
+                None,
+                &[RecoveryJob {
+                    id: job_id.clone(),
+                    namespace: plan.namespace.clone(),
+                    source_session: source_session.clone(),
+                    source_request: request.clone(),
+                    source_hash: payload_hash(&source).unwrap(),
+                    source,
+                    created_ms: plan.recorded_at_ms,
+                    plan: None,
+                    next_operation: 0,
+                    state: "pending".into(),
+                    attempts: 0,
+                    last_error: None,
+                }],
+                None,
+            )
+            .unwrap();
+        let ordinary = Episode {
+            id: format!("{job_id}-user"),
+            content: raw.into(),
+            ..plan.evidence.clone()
+        };
+        let provenance = MemoryProvenance {
+            source: "cognitive.memory_writeback".into(),
+            ..plan.provenance.clone()
+        };
+        writer
+            .writeback_scoped_episode(
+                &ordinary,
+                &MemoryScope::session(&plan.namespace),
+                &provenance,
+            )
+            .unwrap();
+        let ordinary_source = journal
+            .evidence_for(&ordinary.id, &ordinary.content)
+            .unwrap();
+        let correction_source = journal.evidence_for(&plan.evidence.id, raw).unwrap();
+        assert_eq!(ordinary_source.citable_as_fact, ordinary_is_factual);
+        assert!(ordinary_source.correction_support.is_empty());
+        assert_eq!(
+            ordinary_source.source_group, correction_source.source_group,
+            "both episodes come from the same immutable committed user request"
+        );
+        assert!(correction_source.citable_as_fact);
+        assert_eq!(correction_source.correction_support.len(), 1);
+        drop(writer);
+        let coordinator = MemoryCoordinator::new(backend.clone(), backend.clone())
+            .with_scoped_backend(backend.clone())
+            .with_evidence_source(journal.clone());
+        let mut query =
+            MemoryRecallQuery::new(&plan.namespace, "核对居住城市 南汀 北岚 更正及历史");
+        query.layers = vec![MemoryLayerKind::Episodic];
+        query.limit = 5;
+        query.max_chars = 1000;
+        query.as_of_ms = Some(plan.recorded_at_ms);
+        let recall = coordinator.recall(&query).unwrap();
+        assert!(
+            recall.items.iter().any(|item| item.id == plan.evidence.id),
+            "a weaker duplicate cannot claim the factual evidence's content key"
+        );
+        assert!(recall.items.iter().all(|item| item.id != ordinary.id));
+        let access = coordinator
+            .compile_prompt_overlay_with_selected_access(&query)
+            .unwrap()
+            .unwrap();
+        assert!(access.overlay.chars().count() <= query.max_chars);
+        assert!(
+            access.selected_candidate_ids.contains(&plan.evidence.id),
+            "the actual applied raw ID must survive both selection budgets: {}",
+            access.overlay
+        );
+        assert!(
+            access.selected_candidate_ids.contains(&old.id),
+            "the current canonical target is still delivered"
+        );
+        let exact = journal.evidence_for(&plan.evidence.id, raw).unwrap();
+        assert_eq!(
+            exact.correction_support[0].source_episode_id,
+            plan.evidence.id
+        );
+        assert_eq!(exact.correction_support[0].target_episode_id, old.id);
+        assert_eq!(exact.correction_support[0].target_revision, 1);
+        query.min_score = 2.0;
+        assert!(
+            coordinator.recall(&query).unwrap().items.is_empty(),
+            "an applied receipt does not bypass the original minimum relevance score"
+        );
+    }
 }
 
 #[tokio::test]

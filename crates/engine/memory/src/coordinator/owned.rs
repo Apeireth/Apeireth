@@ -22,6 +22,13 @@ impl MemoryCoordinator {
             })
             .unwrap_or_default()
     }
+    pub(super) fn qualified_content_key(content: &str) -> String {
+        content
+            .chars()
+            .filter(|ch| ch.is_alphanumeric())
+            .flat_map(char::to_lowercase)
+            .collect()
+    }
     pub(super) fn source_coverage(
         &self,
         candidates: Vec<MemoryCandidate>,
@@ -38,6 +45,34 @@ impl MemoryCoordinator {
                     candidate.id.clone(),
                     self.source_evidence(&candidate.id, &candidate.content),
                 )
+            })
+            .collect();
+        // Resolve evidence dominance before source strata and either budget.
+        // Otherwise a non-factual duplicate in the dialogue stratum can claim
+        // the global content key before its factual correction alias arrives.
+        // The caller already bounded, scoped and score-filtered this pool.
+        let strength = |candidate: &MemoryCandidate| {
+            let source = &evidence[&candidate.id];
+            (
+                source.citable_as_fact,
+                source.citable_as_fact && !source.correction_support.is_empty(),
+            )
+        };
+        let mut strongest = HashMap::new();
+        for candidate in &candidates {
+            let key = Self::qualified_content_key(&candidate.content);
+            if !key.is_empty() {
+                let value = strongest.entry(key).or_insert(strength(candidate));
+                *value = (*value).max(strength(candidate));
+            }
+        }
+        // Retain the input order and all equal-strength alternatives; existing
+        // source representatives, MMR and deterministic ties choose those.
+        let candidates: Vec<_> = candidates
+            .into_iter()
+            .filter(|candidate| {
+                let key = Self::qualified_content_key(&candidate.content);
+                key.is_empty() || strongest[&key] == strength(candidate)
             })
             .collect();
         let group = |candidate: &MemoryCandidate| {
@@ -320,5 +355,79 @@ mod tests {
             candidates.iter().map(|item| &item.id).collect::<Vec<_>>(),
             "without the evidence port the original candidate order is untouched"
         );
+    }
+
+    #[test]
+    fn same_content_weaker_sources_cannot_remove_a_current_correction_alias() {
+        use crate::context_compiler::VerifiedCorrectionSupport;
+        for weak_is_factual in [false, true] {
+            let store = Arc::new(crate::fresh_store());
+            let mut correction = source(SourceRole::User, "correction-request");
+            correction.claim_kind = MemoryClaimKind::GovernedCorrection;
+            correction
+                .correction_support
+                .push(VerifiedCorrectionSupport {
+                    source_episode_id: "correction".into(),
+                    source_content_sha256: "a".repeat(64),
+                    target_episode_id: "canonical".into(),
+                    target_revision: 1,
+                    target_content_sha256: "b".repeat(64),
+                    namespace: "owned".into(),
+                    operation_id: "operation".into(),
+                    payload_hash: "c".repeat(64),
+                });
+            let mut weak = source(SourceRole::User, "correction-request");
+            weak.citable_as_fact = weak_is_factual;
+            let mut dialogue = source(SourceRole::User, "independent-dialogue");
+            dialogue.citable_as_fact = false;
+            dialogue.claim_kind = MemoryClaimKind::Question;
+            let coordinator = MemoryCoordinator::new(store.clone(), store).with_evidence_source(
+                Arc::new(Sources(HashMap::from([
+                    (
+                        "canonical".into(),
+                        source(SourceRole::User, "correction-request"),
+                    ),
+                    ("correction".into(), correction),
+                    ("weak".into(), weak),
+                    ("dialogue".into(), dialogue),
+                ]))),
+            );
+            let candidates = vec![
+                candidate("weak", "same complete correction evidence", 10.0),
+                candidate("canonical", "canonical current self fact", 1.0),
+                candidate("correction", "same complete correction evidence", 0.8),
+                candidate("dialogue", "which object did the request identify", 0.7),
+            ];
+            let selected =
+                coordinator.source_coverage(candidates.clone(), &MemoryRankingConfig::default());
+            assert_eq!(
+                selected
+                    .iter()
+                    .map(|item| item.id.as_str())
+                    .collect::<Vec<_>>(),
+                vec!["canonical", "dialogue", "correction"]
+            );
+            assert!(selected.iter().all(|item| item.id != "weak"));
+            for item in selected {
+                assert_eq!(
+                    item.score,
+                    candidates
+                        .iter()
+                        .find(|candidate| candidate.id == item.id)
+                        .unwrap()
+                        .score
+                );
+            }
+            assert!(!coordinator.source_evidence("dialogue", "").citable_as_fact);
+            let legacy = Arc::new(crate::fresh_store());
+            let legacy = MemoryCoordinator::new(legacy.clone(), legacy);
+            assert_eq!(
+                legacy
+                    .source_coverage(candidates, &MemoryRankingConfig::default())
+                    .len(),
+                4,
+                "without the qualified port there is no new dominance pass"
+            );
+        }
     }
 }
