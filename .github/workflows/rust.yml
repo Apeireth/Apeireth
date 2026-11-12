@@ -90,10 +90,17 @@ jobs:
       - name: Install cargo-nextest
         uses: taiki-e/install-action@nextest
 
+      - name: Verify nextest retry evidence (isolated probe)
+        run: python3 scripts/test_nextest_reporting.py
+
       - uses: Swatinem/rust-cache@v2
         with:
           # FIXME: macOS cache bin 临时关 (Swatinem/rust-cache#341)
           cache-bin: ${{ matrix.os != 'macos-latest' }}
+
+      - name: Prepare fresh workspace JUnit evidence
+        id: prepare-junit
+        run: python3 scripts/test_nextest_reporting.py --prepare-workspace-report
 
       - name: cargo build --workspace --tests --locked
         run: cargo build --workspace --tests --locked
@@ -159,11 +166,12 @@ jobs:
         run: cargo test -p apeireth-tools-canonical --test process_executor --locked -- --nocapture
 
       - name: Upload JUnit report
-        if: always()
+        if: always() && steps.prepare-junit.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
-          name: nextest-junit-${{ matrix.os }}.xml
+          name: nextest-junit-${{ matrix.os }}-${{ github.sha }}-attempt-${{ github.run_attempt }}
           path: target/nextest/ci/junit.xml
+          if-no-files-found: error
           retention-days: 14
 
       # ── ⭐ 回收测试二进制（治 runner 磁盘爆 / ENOSPC）────────────────
