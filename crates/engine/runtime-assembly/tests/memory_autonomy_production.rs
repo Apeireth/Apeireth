@@ -329,7 +329,8 @@ fn source_records(request: &NormalizedRequest) -> Vec<(String, serde_json::Value
         text.contains("</governed_memory>"),
         "actual disclosure must preserve the complete structured frame: {text}"
     );
-    text.lines()
+    let records: Vec<_> = text
+        .lines()
         .filter_map(|line| {
             let (header, body) = line.strip_prefix("[mem:")?.split_once("] ")?;
             Some((
@@ -337,7 +338,16 @@ fn source_records(request: &NormalizedRequest) -> Vec<(String, serde_json::Value
                 serde_json::from_str(body).expect("engine evidence is one closed JSON record"),
             ))
         })
-        .collect()
+        .collect();
+    let header = text
+        .lines()
+        .find(|line| line.starts_with("<governed_memory "))
+        .unwrap();
+    assert!(
+        header.ends_with(&format!(" count=\"{}\">", records.len())),
+        "the actual model request header must count delivered records: {header}"
+    );
+    records
 }
 
 fn asserted_parent(backend: &SqliteBackend, delivered: &str, original: &str) -> bool {
@@ -543,6 +553,13 @@ async fn cold_profile_recall_covers_independent_user_facts_before_same_request_a
             assert_eq!(body["citable_as_fact"], false);
         }
     }
+    let dialogue = records
+        .iter()
+        .find(|(_, body)| body["text"] == AMBIGUOUS)
+        .expect("real ambiguous user dialogue must survive assistant echo pressure");
+    assert_eq!(dialogue.1["source_role"], "user");
+    assert_eq!(dialogue.1["claim_kind"], "ambiguous_instruction");
+    assert_eq!(dialogue.1["citable_as_fact"], false);
     assert!(
         calls[0]
             .request
@@ -552,6 +569,188 @@ async fn cold_profile_recall_covers_independent_user_facts_before_same_request_a
             .all(|message| !ContentPart::join_text(&message.content).contains(OLD)),
         "cold answer must obtain old facts through Recall, not the source transcript"
     );
+}
+
+fn dialogue_mappings(
+    backend: &Arc<SqliteBackend>,
+    journal: Arc<SqliteWritebackJournal>,
+    owner: &AgentPrincipal,
+) -> Arc<ProfileMemoryMappings> {
+    let mappings = Arc::new(ProfileMemoryMappings::default());
+    let access = ProfileMemoryAccess {
+        coordinator: Arc::new(
+            MemoryCoordinator::new(backend.clone(), backend.clone())
+                .with_scoped_backend(backend.clone())
+                .with_evidence_source(journal.clone()),
+        ),
+        read_scopes: vec![],
+        writable_private: true,
+    };
+    let modules = access
+        .recoverable_modules(
+            owner,
+            clock(),
+            journal,
+            mappings.clone(),
+            "verified-dialogue",
+        )
+        .unwrap();
+    mappings.grant(owner, Some(access), modules).unwrap();
+    mappings
+}
+
+#[tokio::test]
+async fn reopened_production_delivers_verified_dialogue_without_executing_it_or_restoring_forgotten_text(
+) {
+    for (name, old_city, project_city, proposed_city, query) in [
+        (
+            "许茵",
+            "青梧市",
+            "雁川市",
+            "松泉市",
+            "之前那次城市修改针对哪个主体？",
+        ),
+        (
+            "顾澜",
+            "云浦市",
+            "白岩市",
+            "青禾市",
+            "刚才的更新到底要改谁？",
+        ),
+        (
+            "陆鸣",
+            "岚谷市",
+            "榆湾市",
+            "霁川市",
+            "请复核上条指令有没有指定对象？",
+        ),
+    ] {
+        let dir = tempfile::tempdir().unwrap();
+        let owner = principal();
+        let source_session = SessionId::new();
+        let home = format!("我叫{name}，我住在{old_city}。");
+        let project = format!("远航项目的联络城市是{project_city}。");
+        let dialogue = format!("把城市改成{proposed_city}吧。");
+        let db = dir.path().join("memory.sqlite3");
+        let originals = {
+            let (backend, journal) = database(&db).await;
+            let mappings = dialogue_mappings(&backend, journal, &owner);
+            let provider = Provider::abstaining("该修改已执行，现行城市已经更新，事项处理完毕。");
+            let (runtime, sessions) =
+                mapped_runtime(dir.path(), mappings, provider, vec![owner.clone()]).await;
+            host_session(&sessions, source_session, owner.clone()).await;
+            for input in [&home, &project, &dialogue] {
+                runtime
+                    .kernel()
+                    .await
+                    .execute(TurnRequest::new(source_session, input.as_str()))
+                    .await
+                    .unwrap();
+            }
+            let originals: Vec<_> = backend
+                .recent_episodes(&namespace_key(&owner), 64)
+                .unwrap()
+                .into_iter()
+                .filter(|episode| episode.role == "user")
+                .collect();
+            assert_eq!(originals.len(), 3);
+            originals
+        };
+        // A new database pool, coordinator, mapping and Runtime have no working
+        // ring or prior transcript to borrow from. The source is durable SQL.
+        let (backend, journal) = database(&db).await;
+        let mappings = dialogue_mappings(&backend, journal.clone(), &owner);
+        let provider = Provider::abstaining("检索完成。");
+        let (runtime, sessions) =
+            mapped_runtime(dir.path(), mappings, provider.clone(), vec![owner.clone()]).await;
+        let cold = SessionId::new();
+        host_session(&sessions, cold, owner.clone()).await;
+        runtime
+            .kernel()
+            .await
+            .execute(TurnRequest::new(cold, query))
+            .await
+            .unwrap();
+        let calls = provider.calls();
+        assert_eq!(
+            calls.len(),
+            1,
+            "conversational retrieval is not a new semantic proposal or answer repair call"
+        );
+        let request = &calls[0].request;
+        let records = source_records(request);
+        assert!(records.len() <= 5);
+        assert!(
+            memory_text(request).chars().count() <= 1000,
+            "real Runtime per-source budget remains bounded"
+        );
+        let original = originals
+            .iter()
+            .find(|episode| episode.content == dialogue)
+            .unwrap();
+        let actual = records
+            .iter()
+            .find(|(id, body)| id == &original.id && body["text"] == dialogue)
+            .unwrap_or_else(|| {
+                panic!("the complete real user instruction must reach the cold model: {records:?}")
+            });
+        assert_eq!(actual.1["source_role"], "user");
+        assert_eq!(actual.1["claim_kind"], "ambiguous_instruction");
+        assert_eq!(actual.1["citable_as_fact"], false);
+        let qualification = apeireth_memory::context_compiler::MemoryEvidenceSource::evidence_for(
+            journal.as_ref(),
+            &original.id,
+            &original.content,
+        )
+        .unwrap();
+        assert!(qualification.source_group.is_some());
+        assert!(!qualification.citable_as_fact);
+        for fact_text in [&home, &project] {
+            let fact = originals
+                .iter()
+                .find(|episode| &episode.content == fact_text)
+                .unwrap();
+            assert!(
+                records
+                    .iter()
+                    .any(|(id, body)| body["citable_as_fact"] == true
+                        && asserted_parent(&backend, id, &fact.id)),
+                "independent facts keep priority over conversational context: {records:?}"
+            );
+            assert_eq!(
+                backend.get_governed(&fact.id).unwrap().unwrap().revision,
+                0,
+                "the recalled ambiguous request does not authorize a mutation"
+            );
+        }
+        assert!(
+            request
+                .messages
+                .iter()
+                .filter(|message| message.role == MessageRole::User)
+                .all(|message| ContentPart::join_text(&message.content) == query),
+            "the previous transcript is absent from the cold primary user messages"
+        );
+        backend
+            .forget_episode(&original.id, Some("withdraw dialogue evidence"), 0)
+            .unwrap();
+        let after_forget = SessionId::new();
+        host_session(&sessions, after_forget, owner.clone()).await;
+        runtime
+            .kernel()
+            .await
+            .execute(TurnRequest::new(after_forget, query))
+            .await
+            .unwrap();
+        let calls = provider.calls();
+        let after = source_records(&calls.last().unwrap().request);
+        assert!(
+            after
+                .iter()
+                .all(|(id, body)| id != &original.id && body["text"] != dialogue),
+            "forgotten dialogue must not return through the former working ring or cold read"
+        );
+    }
 }
 
 #[tokio::test]

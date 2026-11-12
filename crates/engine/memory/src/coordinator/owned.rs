@@ -66,18 +66,30 @@ impl MemoryCoordinator {
                 *representative = index;
             }
         }
-        // Independent qualified sources precede their aliases, then traces.
+        // Independent facts precede verified user dialogue, then fact aliases
+        // and generated/unknown traces. A real question or ambiguous request
+        // must not lose its conversational evidence slot to an assistant echo.
+        // Dialogue stays non-factual and gains no correction authority.
         // This source policy changes delivery priority, never relevance scores
         // or eligibility. Configured MMR still orders each bounded stratum.
-        let mut strata = [Vec::new(), Vec::new(), Vec::new()];
+        let mut strata = [Vec::new(), Vec::new(), Vec::new(), Vec::new()];
         for (index, candidate) in candidates.into_iter().enumerate() {
             let source = &evidence[&candidate.id];
             let stratum = if !source.citable_as_fact {
-                2
+                if source.source_role == SourceRole::User
+                    && source
+                        .source_group
+                        .as_deref()
+                        .is_some_and(|group| !group.is_empty())
+                {
+                    1
+                } else {
+                    3
+                }
             } else if representatives.get(&group(&candidate)) == Some(&index) {
                 0
             } else {
-                1
+                2
             };
             strata[stratum].push(candidate);
         }
@@ -225,6 +237,88 @@ mod tests {
         assert_eq!(
             tied.iter().map(|item| item.id.as_str()).collect::<Vec<_>>(),
             vec!["raw", "independent", "focused"]
+        );
+    }
+
+    #[test]
+    fn verified_user_dialogue_precedes_aliases_and_echoes_without_changing_mmr_or_scores() {
+        let store = Arc::new(crate::fresh_store());
+        let mut dialogue = source(SourceRole::User, "dialogue");
+        dialogue.citable_as_fact = false;
+        dialogue.claim_kind = MemoryClaimKind::AmbiguousInstruction;
+        let mut unqualified = dialogue.clone();
+        unqualified.source_group = None;
+        let mut empty_group = dialogue.clone();
+        empty_group.source_group = Some(String::new());
+        let coordinator = MemoryCoordinator::new(store.clone(), store).with_evidence_source(
+            Arc::new(Sources(HashMap::from([
+                ("fact".into(), source(SourceRole::User, "fact-source")),
+                ("alias".into(), source(SourceRole::Memory, "fact-source")),
+                ("a".into(), dialogue.clone()),
+                ("b".into(), dialogue.clone()),
+                ("c".into(), dialogue),
+                ("echo".into(), source(SourceRole::Assistant, "dialogue")),
+                ("unqualified".into(), unqualified),
+                ("empty-group".into(), empty_group),
+            ]))),
+        );
+        let candidates = vec![
+            candidate("echo", "generated city confirmation", 10.0),
+            candidate("unqualified", "source_role=user role label only", 9.0),
+            candidate("empty-group", "missing committed request identity", 8.0),
+            candidate("alias", "fact source alias", 1.1),
+            candidate("fact", "independent original fact", 1.2),
+            candidate("a", "rust memory retrieval design", 1.0),
+            candidate("b", "rust memory retrieval design details", 0.99),
+            candidate("c", "sqlite governance retention", 0.8),
+        ];
+        for (lambda, dialogue_ids) in [(0.0, ["a", "b", "c"]), (0.8, ["a", "c", "b"])] {
+            let ranked = coordinator.source_coverage(
+                candidates.clone(),
+                &MemoryRankingConfig {
+                    diversity_lambda: lambda,
+                    ..Default::default()
+                },
+            );
+            assert_eq!(ranked[0].id, "fact");
+            assert_eq!(
+                ranked[1..4]
+                    .iter()
+                    .map(|item| item.id.as_str())
+                    .collect::<Vec<_>>(),
+                dialogue_ids
+            );
+            assert_eq!(ranked[4].id, "alias");
+            for item in &ranked {
+                assert_eq!(
+                    item.score,
+                    candidates
+                        .iter()
+                        .find(|original| original.id == item.id)
+                        .unwrap()
+                        .score
+                );
+            }
+            for id in dialogue_ids {
+                let qualification =
+                    coordinator.source_evidence(id, "unused by this source fixture");
+                assert!(!qualification.citable_as_fact);
+                assert_eq!(
+                    qualification.claim_kind,
+                    MemoryClaimKind::AmbiguousInstruction
+                );
+            }
+        }
+        let legacy = Arc::new(crate::fresh_store());
+        let legacy = MemoryCoordinator::new(legacy.clone(), legacy);
+        assert_eq!(
+            legacy
+                .source_coverage(candidates.clone(), &MemoryRankingConfig::default())
+                .iter()
+                .map(|item| &item.id)
+                .collect::<Vec<_>>(),
+            candidates.iter().map(|item| &item.id).collect::<Vec<_>>(),
+            "without the evidence port the original candidate order is untouched"
         );
     }
 }

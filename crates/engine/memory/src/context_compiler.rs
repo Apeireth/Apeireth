@@ -332,7 +332,8 @@ impl ClosedWorldContextCompiler {
         evidence: Option<&std::collections::HashMap<String, MemorySourceEvidence>>,
     ) -> Option<SelectedMemoryAccess> {
         // ⭐ **B2 接线**：选中集**先过读契约**（窄面 + 纯数据标注）⇒ 生产路径真的走契约。
-        // ⚠️ 视图是**无损投影** ⇒ ⇒ 下面的编译产物与接线前**逐字节相同**。
+        // 视图是无损投影；legacy 无来源渲染保留原格式，qualified
+        // 输出另受确切来源、完整记录及实际送达计数合同约束。
         let contract_items = self.contract_view(&recalled.items).items();
         if contract_items.is_empty() {
             return None;
@@ -455,6 +456,16 @@ impl ClosedWorldContextCompiler {
             wiki_lines += 1;
         }
 
+        if qualified {
+            // The closed-world header describes delivered engine records, not
+            // the pre-budget candidate pool. Keep the original digit-width
+            // reservation: the final count can only occupy fewer characters.
+            lines[usize::from(options.numbered)] = format!(
+                "<governed_memory provenance=\"{}\" count=\"{}\">",
+                session_id,
+                selected_candidate_ids.len()
+            );
+        }
         lines.push(closing.to_owned());
         if options.numbered {
             lines.push(rules.to_owned());
@@ -1221,6 +1232,15 @@ mod tests {
                     .filter(|line| line.starts_with("[mem:"))
                     .collect();
                 assert_eq!(records.len(), access.selected_candidate_ids.len());
+                let header = access
+                    .overlay
+                    .lines()
+                    .find(|line| line.starts_with("<governed_memory "))
+                    .unwrap();
+                assert!(
+                    header.ends_with(&format!(" count=\"{}\">", records.len())),
+                    "the qualified header counts actual delivered records: {header}"
+                );
                 if max_chars == 1000 {
                     assert_eq!(records.len(), 3);
                     assert!(access.overlay.len() > max_chars);
@@ -1273,8 +1293,42 @@ mod tests {
                         "{numbered}/{max_chars}: {}",
                         access.overlay.chars().count()
                     );
+                    let count = access
+                        .overlay
+                        .lines()
+                        .filter(|line| line.starts_with("[mem:"))
+                        .count();
+                    assert_eq!(count, access.selected_candidate_ids.len());
+                    assert!(access
+                        .overlay
+                        .lines()
+                        .find(|line| line.starts_with("<governed_memory "))
+                        .unwrap()
+                        .ends_with(&format!(" count=\"{count}\">")));
+                    if access.selected_candidate_ids.is_empty() {
+                        assert!(!access.overlay.contains("[mem:"), "a framing-only result retains the existing empty selected-access contract");
+                    }
                 }
             }
         }
+    }
+
+    #[test]
+    fn legacy_header_and_budget_keep_the_original_candidate_count() {
+        let compiler = ClosedWorldContextCompiler::new();
+        let recalled = recalled(vec![
+            ("first", "第一条事实"),
+            ("second", "第二条事实"),
+            ("third", "第三条事实"),
+        ]);
+        let budget = max_chars_for_first_candidate(&recalled, "legacy-count");
+        let selected = compiler
+            .compile_with_selected_access(&recalled, "legacy-count", budget)
+            .unwrap();
+        assert_eq!(selected.selected_candidate_ids, vec!["first"]);
+        assert!(selected
+            .overlay
+            .starts_with("<governed_memory provenance=\"legacy-count\" count=\"3\">"));
+        assert!(selected.overlay.len() <= budget);
     }
 }
