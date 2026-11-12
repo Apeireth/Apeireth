@@ -1273,6 +1273,7 @@ docs/design/mesh-phase-0.md,L3,4,Apeireth Mesh — Phase 0 设计（分析 A–F
 docs/design/mesh-phase-2c1.md,L3,4,Mesh Phase 2C1 — Secure WAN Rendezvous + Encrypted Relay,2026-11-10,现行,4,保留,
 docs/design/mesh-rc2-status.md,L3,4,Apeireth Mesh RC2 Status,2026-11-11,现行,4,保留,
 docs/design/pet-resident-projection.md,L3,4,桌宠常驻投影 — 施工设计与批次记录,2026-10-11,现行,7,保留,
+docs/design/production-test-reliability.md,L3,4,生产装配回归的存储与阶段隔离,2026-11-12,现行,5,保留,
 docs/design/readme-research-notes.md,L3,6,README 小巧思研究笔记（2026-10-18）,2026-10-18,现行,4,保留,
 docs/design/readme-term-lineage-audit-2026-10-18.md,L3,7,README 术语血统镊子批 · 术语血统对照表 + 镊子改动清单（2026-10-18）,2026-10-18,现行,2,保留,
 docs/design/reference-language-analysis-2026-10-28.md,L3,4,新前端视觉参考 · 语言分析（2026-10-28）,2026-10-28,现行,5,保留,

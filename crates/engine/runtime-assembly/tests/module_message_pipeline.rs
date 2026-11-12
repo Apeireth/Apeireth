@@ -14,7 +14,9 @@ use apeireth_plugin::{
 };
 use apeireth_protocol::canonical::{NormalizedTool, ToolCall, ToolResult};
 use apeireth_runtime::canonical::module_messages::{ModuleMessageGrant, ModuleMessagePolicy};
-use apeireth_runtime::{AgentHostPolicy, ModuleAgentGrant};
+use apeireth_runtime::{
+    AgentHostPolicy, InMemorySessionStore, ModuleAgentGrant, SessionEventKind, SessionStore,
+};
 use async_trait::async_trait;
 use serde_json::json;
 use std::sync::{
@@ -391,62 +393,103 @@ async fn loop_detection_precedes_reentrant_mailbox_and_idempotency_refuses_dupli
 }
 
 #[tokio::test]
-async fn bounded_admission_cancellation_and_timeout_report_uncertain_execution() {
-    for cancel in [true, false] {
-        let a = Arc::new(State::default());
-        let b = Arc::new(State::default());
-        let release = Arc::new(tokio::sync::Notify::new());
-        *b.hold.lock().unwrap() = Some(release.clone());
-        let mut p = policy(&[("module.a", "module.b", &["hold"])]);
-        p.message_policy.as_mut().unwrap().limits.in_flight = 1;
-        let _runtime = builder(Provider::new(vec![]))
-            .with_plugin(Module::new("module.a", &[], a.clone()))
-            .with_plugin(Module::new(
-                "module.b",
-                &[("hold", logical(EffectClass::Pure))],
-                b.clone(),
-            ))
-            .build_agent_runtime(p)
-            .await
-            .unwrap();
-        let mut r = request("module.b", "hold");
-        r.timeout = Duration::from_millis(100);
-        r.idempotency_key = Some("pending".into());
-        let token = r.cancellation.clone();
-        let port = a.port();
-        let pending = tokio::spawn(async move { port.send(r).await });
-        // ⚠️ **2026-11-06 放宽护栏**（主指挥）：这里是「等请求进入准入」的**同步点**，
-        // ⭐ **不是**在测 2 秒这个数（真测超时路径的是上面 `r.timeout = 100ms` 那个参数）
-        // ⇒ ⇒ 而 2 秒在**全量并发 / CI 2 核 runner** 下会被负载打穿（实测 2.021s ⇒ 撞线）
-        // ⇒ ⇒ ⇒ 放宽到 10 秒（10 倍余量）⇒ ⇒ **产品语义与断言一字不动**。
-        tokio::time::timeout(Duration::from_secs(10), b.entered.notified())
-            .await
-            .unwrap();
-        assert_eq!(
-            a.port()
-                .send(request("module.b", "hold"))
-                .await
-                .unwrap_err()
-                .code,
-            ModuleMessageErrorCode::Backpressure
-        );
-        if cancel {
-            token.cancel();
+async fn bounded_admission_cancellation_reports_uncertain_execution_after_handler_entry() {
+    let a = Arc::new(State::default());
+    let b = Arc::new(State::default());
+    let release = Arc::new(tokio::sync::Notify::new());
+    *b.hold.lock().unwrap() = Some(release.clone());
+    let mut p = policy(&[("module.a", "module.b", &["hold"])]);
+    p.message_policy.as_mut().unwrap().limits.in_flight = 1;
+    let _runtime = builder(Provider::new(vec![]))
+        .with_plugin(Module::new("module.a", &[], a.clone()))
+        .with_plugin(Module::new(
+            "module.b",
+            &[("hold", logical(EffectClass::Pure))],
+            b.clone(),
+        ))
+        .build_agent_runtime(p)
+        .await
+        .unwrap();
+    let mut r = request("module.b", "hold");
+    r.idempotency_key = Some("pending".into());
+    let token = r.cancellation.clone();
+    let port = a.port();
+    let mut pending = tokio::spawn(async move { port.send(r).await });
+    // Admission/cancellation is synchronized by entry, independently of the timeout case.
+    tokio::time::timeout(Duration::from_secs(10), async {
+        tokio::select! {
+            biased;
+            result = &mut pending => panic!("held request ended before handler entry: {result:?}"),
+            _ = b.entered.notified() => {}
         }
-        let error = pending.await.unwrap().unwrap_err();
-        assert_eq!(
-            error.code,
-            if cancel {
-                ModuleMessageErrorCode::Cancelled
-            } else {
-                ModuleMessageErrorCode::Timeout
-            }
-        );
-        assert!(error.may_have_executed);
-        release.notify_waiters();
-        tokio::task::yield_now().await;
-        assert_eq!(b.calls.load(Ordering::SeqCst), 0);
-        assert!(b.contexts.lock().unwrap()[0].cancellation.is_cancelled());
+    })
+    .await
+    .expect("handler entry was not observed within the diagnostic guard");
+    assert_eq!(
+        a.port()
+            .send(request("module.b", "hold"))
+            .await
+            .unwrap_err()
+            .code,
+        ModuleMessageErrorCode::Backpressure
+    );
+    token.cancel();
+    let error = pending.await.unwrap().unwrap_err();
+    assert_eq!(error.code, ModuleMessageErrorCode::Cancelled);
+    assert!(error.may_have_executed);
+    release.notify_waiters();
+    tokio::task::yield_now().await;
+    assert_eq!(b.calls.load(Ordering::SeqCst), 0);
+    assert!(b.contexts.lock().unwrap()[0].cancellation.is_cancelled());
+}
+
+#[tokio::test]
+async fn message_timeout_reports_the_recorded_execution_phase_without_requiring_handler_entry() {
+    let a = Arc::new(State::default());
+    let b = Arc::new(State::default());
+    let release = Arc::new(tokio::sync::Notify::new());
+    *b.hold.lock().unwrap() = Some(release.clone());
+    let store = Arc::new(InMemorySessionStore::new());
+    let _runtime = builder(Provider::new(vec![]))
+        .with_session_store(store.clone())
+        .with_plugin(Module::new("module.a", &[], a.clone()))
+        .with_plugin(Module::new(
+            "module.b",
+            &[("hold", logical(EffectClass::Pure))],
+            b.clone(),
+        ))
+        .build_agent_runtime(policy(&[("module.a", "module.b", &["hold"])]))
+        .await
+        .unwrap();
+    let cancelled = request("module.b", "hold");
+    cancelled.cancellation.cancel();
+    let error = a.port().send(cancelled).await.unwrap_err();
+    assert_eq!(error.code, ModuleMessageErrorCode::Cancelled);
+    assert!(!error.may_have_executed);
+    assert!(b.contexts.lock().unwrap().is_empty());
+
+    let mut r = request("module.b", "hold");
+    r.timeout = Duration::from_millis(100);
+    let error = tokio::time::timeout(Duration::from_secs(10), a.port().send(r))
+        .await
+        .expect("message deadline did not finish within the diagnostic guard")
+        .unwrap_err();
+    assert_eq!(error.code, ModuleMessageErrorCode::Timeout);
+    // On this current-thread runtime, the in-memory Started save becomes Ready
+    // immediately before the execution flag is set, without an intervening await.
+    let started = store
+        .list()
+        .await
+        .unwrap()
+        .iter()
+        .flat_map(|session| &session.events)
+        .any(|entry| matches!(&entry.event, SessionEventKind::ModuleMessageStarted { .. }));
+    assert_eq!(error.may_have_executed, started);
+    release.notify_waiters();
+    tokio::task::yield_now().await;
+    assert_eq!(b.calls.load(Ordering::SeqCst), 0);
+    for context in b.contexts.lock().unwrap().iter() {
+        assert!(context.cancellation.is_cancelled());
     }
 }
 

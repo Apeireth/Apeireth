@@ -38,6 +38,10 @@ artifact 名使用实际 checkout 的 SHA 与 workflow attempt；PR 工作流的
 
 E1/E2 软件验证通过（IMPLEMENTED）：保留原重试与超时配置，记录重试身份和首次失败输出，探针独立于产品工作区。
 E3 上传接线由现有三平台工作流承载；合并条件是对应提交的三份实际 XML 可下载、可解析且名称绑定 SHA/attempt。
+2026-11-12，[PR #123](https://github.com/Apeireth/Apeireth/pull/123) 已完成该条件并合并，验证面为 PRODUCTION WIRED。
+实际 checkout 为 `51baedd47cfec840ce41f24330037a73d88712f1`，run `43155215071` attempt 1；
+三份 XML 均解析成功、与日志逐项对应，探针未混入产品用例。
+本轮具名 flaky 的后续修复见[生产装配回归稳定性](production-test-reliability.md)，不覆盖历史未知身份。
 既有重试成功只说明该轮最终通过，不证明第一次执行成功，也不证明根因已清除。
 
 2026-11-12 本地实测：Windows、Rust 1.97.1、cargo-nextest 0.9.151；
