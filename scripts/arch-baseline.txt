@@ -370,7 +370,7 @@ size crates/engine/organ/src/prompt_assembly.rs 1492
 size crates/engine/organ/src/world_model.rs 1332
 size crates/engine/runtime-assembly/src/canonical/bio_tone.rs 1319
 size crates/engine/runtime-assembly/src/canonical/cognitive.rs 5731
-size crates/engine/runtime-assembly/src/canonical/memory_correction.rs 1385
+size crates/engine/runtime-assembly/src/canonical/memory_correction.rs 1535
 size crates/engine/runtime-assembly/src/canonical/orchestrator.rs 2432
 size crates/engine/runtime-assembly/src/canonical/play_tools.rs 1412
 size crates/engine/runtime-assembly/src/canonical/production.rs 1953

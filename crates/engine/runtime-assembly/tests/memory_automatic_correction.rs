@@ -33,13 +33,14 @@ use apeireth_runtime::canonical::subloop::{
 use apeireth_runtime::canonical::{Runtime, TurnRequest};
 use apeireth_runtime_assembly::canonical::cognitive::{MemoryRecallModule, MemoryWritebackModule};
 use apeireth_runtime_assembly::canonical::memory_correction::{
-    CorrectionRejection, MemoryCorrectionModule, CORRECTION_PROPOSAL_SYSTEM,
+    CorrectionPolicy, CorrectionRejection, MemoryCorrectionModule, CORRECTION_PROPOSAL_SYSTEM,
     CORRECTION_RECEIPT_PROTOCOL,
 };
+use apeireth_runtime_assembly::canonical::memory_recovery::MemoryRecoveryModule;
 use apeireth_runtime_assembly::SqliteSessionStore;
 use apeireth_storage::SqliteConnectionPool;
 use async_trait::async_trait;
-use chrono::{TimeZone, Utc};
+use chrono::{FixedOffset, NaiveDate, TimeZone, Utc};
 use serde_json::{json, Value};
 use tempfile::tempdir;
 
@@ -162,6 +163,16 @@ async fn runtime(
     provider: Arc<SemanticProvider>,
     clock: Arc<dyn Clock>,
 ) -> (Runtime, Arc<SqliteMemoryStore>, Arc<MemoryCorrectionModule>) {
+    runtime_with_policy(root, provider, clock, CorrectionPolicy::default(), false).await
+}
+
+async fn runtime_with_policy(
+    root: &Path,
+    provider: Arc<SemanticProvider>,
+    clock: Arc<dyn Clock>,
+    policy: CorrectionPolicy,
+    recover: bool,
+) -> (Runtime, Arc<SqliteMemoryStore>, Arc<MemoryCorrectionModule>) {
     let path = root.join("memory.sqlite3");
     let store = Arc::new(SqliteMemoryStore::open(&path).unwrap());
     let coordinator = Arc::new(
@@ -170,26 +181,39 @@ async fn runtime(
     let pool = Arc::new(SqliteConnectionPool::open(&path).await.unwrap());
     let journal = Arc::new(SqliteWritebackJournal::from_pool(pool));
     let correction = Arc::new(
-        MemoryCorrectionModule::new(coordinator.clone(), clock.clone()).with_journal(journal),
+        MemoryCorrectionModule::new(coordinator.clone(), clock.clone())
+            .with_policy(policy)
+            .with_journal(journal.clone()),
     );
     let sessions = Arc::new(
         SqliteSessionStore::open(root.join("sessions.sqlite3"))
             .await
             .unwrap(),
     );
-    let runtime = Runtime::builder()
+    let mut writer = MemoryWritebackModule::new(store.clone(), clock.clone())
+        .with_coordinator(coordinator.clone());
+    if recover {
+        writer = writer.with_recovery_journal(journal);
+    }
+    let writer = Arc::new(writer);
+    let mut builder = Runtime::builder()
         .with_clock(clock.clone())
         .with_session_store(sessions)
         .with_governance(Arc::new(AllowAll))
         .with_plugin(ProviderPlugin::new(provider))
-        .with_default_model(MODEL)
+        .with_default_model(MODEL);
+    if recover {
+        // Match production ordering: settle frozen corrections before this
+        // turn can propose another correction or prepare a recall overlay.
+        builder =
+            builder.with_registered_behavior(Arc::new(MemoryRecoveryModule::new(writer.clone())));
+    }
+    let runtime = builder
         .with_registered_behavior(correction.clone())
         .with_registered_behavior(Arc::new(
             MemoryRecallModule::new(store.clone()).with_coordinator(coordinator.clone()),
         ))
-        .with_registered_behavior(Arc::new(
-            MemoryWritebackModule::new(store.clone(), clock).with_coordinator(coordinator),
-        ))
+        .with_registered_behavior(writer)
         .build()
         .await
         .unwrap();
@@ -207,6 +231,41 @@ fn memory_text(request: &NormalizedRequest) -> String {
         .map(|m| ContentPart::join_text(&m.content))
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+fn delivered_memory_record(request: &NormalizedRequest, id: &str) -> Option<Value> {
+    let prefix = format!("[mem:{id} layer=");
+    let contexts = request
+        .messages
+        .iter()
+        .filter(|message| message.role == MessageRole::Tool)
+        .filter_map(|message| {
+            serde_json::from_str::<Value>(&ContentPart::join_text(&message.content)).ok()
+        })
+        .filter(|frame| {
+            frame["version"] == 1
+                && frame["origin"] == "module"
+                && frame["module_id"] == "compat.cognitive.memory_recall"
+                && frame["hook"] == "turn_start"
+                && frame["payload"]["status"] == "ok"
+                && frame["payload"]["value"]["untrusted_data"] == true
+        })
+        .flat_map(|frame| {
+            frame["payload"]["value"]["context"]
+                .as_array()
+                .cloned()
+                .unwrap_or_default()
+        })
+        .filter(|context| context["source"] == "memory_recall")
+        .filter_map(|context| context["text"].as_str().map(str::to_owned))
+        .collect::<Vec<_>>()
+        .join("\n");
+    contexts.lines().find_map(|line| {
+        let (_, body) = line.strip_prefix(&prefix)?.split_once("] ")?;
+        // Qualified recall carries a JSON record. Legacy recall carries its
+        // plain text directly after the same source-ID marker.
+        Some(serde_json::from_str(body).unwrap_or_else(|_| json!({"text": body})))
+    })
 }
 
 fn correction_receipt(request: &NormalizedRequest) -> Option<Value> {
@@ -1166,7 +1225,7 @@ async fn chinese_absolute_date_and_adjacent_self_assertions_preserve_history_and
                 .content,
         ))
         .unwrap();
-        assert_eq!(proposal_input["protocol"], "apeireth.memory-correction.v2");
+        assert_eq!(proposal_input["protocol"], "apeireth.memory-correction.v3");
         assert_eq!(
             proposal_input["source_time_utc"],
             clock
@@ -1854,4 +1913,506 @@ async fn semantic_output_cannot_choose_an_unlisted_target_or_rewrite_an_unrelate
             "{forged}"
         );
     }
+}
+
+#[tokio::test]
+async fn equivalent_absolute_date_formats_use_the_unique_source_day_and_host_offset_after_restart()
+{
+    let old = "我叫余禾，我住在北岚市。";
+    for (raw_date, proposed_date, iso_date, offset_seconds, marker) in [
+        ("2026年11月10日", "2026-11-10", "2026-11-10", 0, ""),
+        ("2026-11-10", "2026年11月10日", "2026-11-10", 28_800, ""),
+        ("2024年2月29日", "2024-02-29", "2024-02-29", -19_800, ""),
+        ("2026年2月9日", "2026-02-09", "2026-02-09", 20_700, ""),
+        ("2026年02月09日", "2026-02-09", "2026-02-09", 0, ""),
+        ("2026-02-09", "2026年02月09日", "2026-02-09", 0, ""),
+        ("2026年2月9日 ", "2026-02-09", "2026-02-09", 0, ""),
+        ("2026年11月10日", "2026-11-10", "2026-11-10", 0, "更正："),
+    ] {
+        let dir = tempdir().unwrap();
+        let session = SessionId::new();
+        let date = NaiveDate::parse_from_str(iso_date, "%Y-%m-%d").unwrap();
+        let effective = FixedOffset::east_opt(offset_seconds)
+            .unwrap()
+            .from_local_datetime(&date.and_hms_opt(0, 0, 0).unwrap())
+            .single()
+            .unwrap()
+            .with_timezone(&Utc);
+        let clock = Arc::new(VirtualClock::new(effective - chrono::Duration::days(20)));
+        let evidence = format!("我于{raw_date}搬到了新家。我住在银桥市。");
+        let input = format!("{marker}{evidence}");
+        let mut response = proposal("我住在北岚市", &evidence, "北岚市", "银桥市");
+        response["decision"] = json!("state_change");
+        response["effective_time"] = json!(proposed_date);
+        let provider = SemanticProvider::new(response);
+        let policy = CorrectionPolicy {
+            utc_offset_seconds: offset_seconds,
+            ..Default::default()
+        };
+        let (first, store, module) =
+            runtime_with_policy(dir.path(), provider.clone(), clock.clone(), policy, false).await;
+        first.execute(TurnRequest::new(session, old)).await.unwrap();
+        let original = EpisodeStore::recent_episodes(store.as_ref(), &session.to_string(), 20)
+            .unwrap()
+            .into_iter()
+            .find(|episode| episode.role == "user" && episode.content == old)
+            .unwrap();
+        clock.set(effective + chrono::Duration::days(2));
+        first
+            .execute(TurnRequest::new(session, &input))
+            .await
+            .unwrap();
+        assert_eq!(module.metrics().applied, 1, "{raw_date} -> {proposed_date}");
+        let current = store.get_governed(&original.id).unwrap().unwrap();
+        assert_eq!(current.revision, 1);
+        assert_eq!(current.episode.content, old.replace("北岚市", "银桥市"));
+        assert_eq!(
+            EpisodeStore::get_episode(store.as_ref(), &original.id)
+                .unwrap()
+                .unwrap()
+                .content,
+            old
+        );
+        let sessions = SqliteSessionStore::open(dir.path().join("sessions.sqlite3"))
+            .await
+            .unwrap();
+        let intents = apeireth_runtime::SessionStore::operation_evidence(&sessions, &session)
+            .await
+            .unwrap();
+        assert_eq!(intents.len(), 1);
+        let plan: apeireth_memory::automatic_correction::AutomaticCorrectionPlan =
+            serde_json::from_value(intents[0].payload.clone()).unwrap();
+        assert_eq!(plan.valid_from_ms, effective.timestamp_millis());
+        assert_eq!(
+            plan.evidence.content, input,
+            "normalizing a proposal cannot rewrite the original input"
+        );
+        let history = EpisodeStore::recent_episodes(store.as_ref(), &session.to_string(), 40)
+            .unwrap()
+            .into_iter()
+            .find(|episode| episode.role == "fact_history")
+            .unwrap();
+        assert!(
+            history
+                .content
+                .contains(&effective.to_rfc3339_opts(chrono::SecondsFormat::Millis, true)),
+            "{}",
+            history.content
+        );
+        assert!(history.content.ends_with(old));
+        let calls = provider.calls();
+        assert_eq!(calls.iter().filter(|(side, _)| *side).count(), 1);
+        assert_eq!(
+            correction_receipt(&calls.last().unwrap().1).unwrap()["outcome"],
+            "applied"
+        );
+        drop(first);
+        drop(store);
+        drop(module);
+        drop(sessions);
+        let provider = SemanticProvider::new(json!({"decision":"abstain"}));
+        let (second, store, module) = runtime(dir.path(), provider.clone(), clock).await;
+        second
+            .execute(TurnRequest::new(session, "请核对变化前后住处与生效日期。"))
+            .await
+            .unwrap();
+        assert_eq!(module.metrics().proposals, 0);
+        assert_eq!(
+            provider.calls().len(),
+            1,
+            "restart must not reinterpret or repropose the date"
+        );
+        assert_eq!(
+            store.get_governed(&original.id).unwrap().unwrap().revision,
+            1
+        );
+        assert!(memory_text(&provider.calls()[0].1).contains(&history.content));
+    }
+}
+
+#[tokio::test]
+async fn equivalent_date_proposals_cannot_choose_missing_multiple_or_unrelated_source_dates() {
+    let old = "我住在北岚市。";
+    let valid = "我于2026年11月10日搬到了新家。我住在银桥市。";
+    for (input, evidence, proposed_date, new_value) in [
+        (
+            "我现在住在银桥市。",
+            "我现在住在银桥市。",
+            "2026-11-10",
+            "银桥市",
+        ),
+        (valid, valid, "2026-11-09", "银桥市"),
+        (valid, valid, "2026-11-10T00:00:00Z", "银桥市"),
+        (valid, valid, "昨天", "银桥市"),
+        (valid, "我住在银桥市", "2026-11-10", "银桥市"),
+        (
+            "我昨天搬到了新家。我住在银桥市。",
+            "我昨天搬到了新家。我住在银桥市。",
+            "2026-11-11",
+            "银桥市",
+        ),
+        (
+            "我于2026年11月13日搬到了新家。我住在银桥市。",
+            "我于2026年11月13日搬到了新家。我住在银桥市。",
+            "2026-11-13",
+            "银桥市",
+        ),
+        (
+            "我于2026年2月30日搬到了新家。我住在银桥市。",
+            "我于2026年2月30日搬到了新家。我住在银桥市。",
+            "2026-02-28",
+            "银桥市",
+        ),
+        (
+            "我于2026/11/10搬到了新家。我住在银桥市。",
+            "我于2026/11/10搬到了新家。我住在银桥市。",
+            "2026-11-10",
+            "银桥市",
+        ),
+        (
+            "我于2026年11月10号搬到了新家。我住在银桥市。",
+            "我于2026年11月10号搬到了新家。我住在银桥市。",
+            "2026-11-10",
+            "银桥市",
+        ),
+        (
+            "我于2026年11月9日搬家。我于2026年11月10日搬到了新家。我住在银桥市。",
+            "我于2026年11月10日搬到了新家。我住在银桥市。",
+            "2026-11-10",
+            "银桥市",
+        ),
+        (
+            "我于2026年11月9日搬家。我于2026年11月10日搬到了新家。我住在银桥市。",
+            "我于2026年11月9日搬家。我于2026年11月10日搬到了新家。我住在银桥市。",
+            "2026-11-10",
+            "银桥市",
+        ),
+        (
+            "我于2026年11月10日搬家。我于2026-11-10搬到了新家。我住在银桥市。",
+            "我于2026年11月10日搬家。我于2026-11-10搬到了新家。我住在银桥市。",
+            "2026-11-10",
+            "银桥市",
+        ),
+        (
+            "我于2026年11月10日搬家。我于2026年11月10日搬家。我住在银桥市。",
+            "我于2026年11月10日搬家。我住在银桥市。",
+            "2026-11-10",
+            "银桥市",
+        ),
+        (
+            "我于2026年11月10日搬到了新家。我于2026年11月10日搬到了新家。我住在银桥市。",
+            "我于2026年11月10日搬到了新家。我住在银桥市。",
+            "2026-11-10",
+            "银桥市",
+        ),
+        (
+            "我于2026年11月10日搬家。我住在银桥市。我于2026年11月9日搬家。",
+            "我于2026年11月10日搬家。我住在银桥市。",
+            "2026-11-10",
+            "银桥市",
+        ),
+        (
+            "我于2026年11月10日搬到了新家。我住在银桥市。我于2026年11月9日搬家。",
+            "我于2026年11月10日搬到了新家。我住在银桥市。",
+            "2026-11-10",
+            "银桥市",
+        ),
+        (
+            "我于2026年11月10日换了邮箱。我住在银桥市。",
+            "我于2026年11月10日换了邮箱。我住在银桥市。",
+            "2026-11-10",
+            "银桥市",
+        ),
+        (
+            "同事于2026年11月10日搬到了新家。我住在银桥市。",
+            "同事于2026年11月10日搬到了新家。我住在银桥市。",
+            "2026-11-10",
+            "银桥市",
+        ),
+        (
+            "我住在2026-11-10路。",
+            "我住在2026-11-10路。",
+            "2026-11-10",
+            "2026-11-10路",
+        ),
+        (
+            "我现在住在2026-11-10路。",
+            "我现在住在2026-11-10路。",
+            "2026-11-10",
+            "2026-11-10路",
+        ),
+    ] {
+        let dir = tempdir().unwrap();
+        let session = SessionId::new();
+        let clock = clock();
+        let mut response = proposal("我住在北岚市", evidence, "北岚市", new_value);
+        response["decision"] = json!("state_change");
+        response["effective_time"] = json!(proposed_date);
+        let provider = SemanticProvider::new(response);
+        let (runtime, store, module) = runtime(dir.path(), provider.clone(), clock.clone()).await;
+        runtime
+            .execute(TurnRequest::new(session, old))
+            .await
+            .unwrap();
+        let original = EpisodeStore::recent_episodes(store.as_ref(), &session.to_string(), 20)
+            .unwrap()
+            .into_iter()
+            .find(|episode| episode.role == "user" && episode.content == old)
+            .unwrap();
+        clock.set(
+            Utc.with_ymd_and_hms(2026, 11, 12, 12, 0, 0)
+                .single()
+                .unwrap(),
+        );
+        runtime
+            .execute(TurnRequest::new(session, input))
+            .await
+            .unwrap();
+        // These unmarked statements have no proposal trigger. Preserve their
+        // early abstention; adjacent cases exercise the dated side-call path.
+        let expected_proposals = u64::from(
+            ![
+                "我于2026年11月10日搬家。我于2026年11月10日搬家。我住在银桥市。",
+                "我于2026年11月10日搬家。我住在银桥市。我于2026年11月9日搬家。",
+                "我住在2026-11-10路。",
+            ]
+            .contains(&input),
+        );
+        assert_eq!(module.metrics().proposals, expected_proposals, "{input}");
+        assert_eq!(module.metrics().applied, 0, "{input} / {proposed_date}");
+        assert_no_correction_effects(dir.path(), session, store.as_ref(), &original.id, old).await;
+        let calls = provider.calls();
+        assert_eq!(
+            calls.len(),
+            2 + expected_proposals as usize,
+            "no hidden repair call: {input}"
+        );
+        if expected_proposals == 1 {
+            assert_eq!(
+                correction_receipt(&calls.last().unwrap().1).unwrap()["outcome"],
+                "no_mutation"
+            );
+        } else {
+            assert!(correction_receipt(&calls.last().unwrap().1).is_none());
+        }
+    }
+}
+
+#[tokio::test]
+async fn absolute_calendar_syntax_is_strict_and_malformed_adjacent_dates_cannot_default_to_today() {
+    let old = "我住在北岚市。";
+    let valid = "我于2026年2月9日搬到了新家。我住在银桥市。";
+    let mut cases = Vec::new();
+    for proposed in [
+        "2026-2-9",
+        "2026-02-9",
+        "2026-2-09",
+        " 2026-02-09",
+        "2026-02-09 ",
+        "2026- 2-09",
+        "2026-02- 9",
+        "+2026-02-09",
+        "12026-02-09",
+        "+2026年2月9日",
+        "2026 年2月9日",
+        "2026年 2月9日",
+        "2026年2月 9日",
+        "2026年002月9日",
+        "2026年2月009日",
+        "２０２６年2月9日",
+        "2026年2月9日 ",
+        "2026年2月9号",
+    ] {
+        cases.push((valid.to_owned(), valid.to_owned(), Some(proposed)));
+    }
+    for source_date in [
+        "2026-2-9",
+        " 2026-02-09",
+        "2026- 2-09",
+        "+2026-02-09",
+        "12026-02-09",
+        "2026年002月9日",
+        "2026年2月009日",
+        "2026年 2月9日",
+        "２０２６-０２-０９",
+        "2026-02-09T00:00:00Z",
+        "2026-02-09T00:00:00+08:00",
+    ] {
+        let input = format!("我于{source_date}搬到了新家。我住在银桥市。");
+        // Neither a complete malformed assertion nor its omission may be
+        // replaced with a valid proposed date or with the Host's current time.
+        cases.push((input.clone(), input.clone(), Some("2026-02-09")));
+        cases.push((input, "我住在银桥市。".to_owned(), None));
+    }
+    for (input, evidence, proposed) in cases {
+        let dir = tempdir().unwrap();
+        let session = SessionId::new();
+        let clock = Arc::new(VirtualClock::new(
+            Utc.with_ymd_and_hms(2026, 1, 1, 12, 0, 0).single().unwrap(),
+        ));
+        let mut response = proposal("我住在北岚市", &evidence, "北岚市", "银桥市");
+        response["decision"] = json!("state_change");
+        response["effective_time"] = json!(proposed);
+        let provider = SemanticProvider::new(response);
+        let (runtime, store, module) = runtime(dir.path(), provider.clone(), clock.clone()).await;
+        runtime
+            .execute(TurnRequest::new(session, old))
+            .await
+            .unwrap();
+        let original = EpisodeStore::recent_episodes(store.as_ref(), &session.to_string(), 20)
+            .unwrap()
+            .into_iter()
+            .find(|episode| episode.role == "user" && episode.content == old)
+            .unwrap();
+        clock.set(
+            Utc.with_ymd_and_hms(2026, 2, 11, 12, 0, 0)
+                .single()
+                .unwrap(),
+        );
+        runtime
+            .execute(TurnRequest::new(session, &input))
+            .await
+            .unwrap();
+        assert_eq!(module.metrics().proposals, 1, "{input} / {proposed:?}");
+        assert_eq!(module.metrics().applied, 0, "{input} / {proposed:?}");
+        assert_no_correction_effects(dir.path(), session, store.as_ref(), &original.id, old).await;
+        let calls = provider.calls();
+        assert_eq!(calls.len(), 3, "no hidden repair call: {input}");
+        assert_eq!(
+            correction_receipt(&calls.last().unwrap().1).unwrap()["outcome"],
+            "no_mutation"
+        );
+    }
+}
+
+#[tokio::test]
+async fn normalized_absolute_date_is_frozen_before_failed_registration_and_recovered_without_reproposal(
+) {
+    let dir = tempdir().unwrap();
+    let session = SessionId::new();
+    let clock = Arc::new(VirtualClock::new(
+        Utc.with_ymd_and_hms(2026, 11, 1, 12, 0, 0)
+            .single()
+            .unwrap(),
+    ));
+    let old = "我叫青禾，我住在北岚市。";
+    let evidence = "我于2026年11月10日搬到了新家。我住在银桥市。";
+    let mut response = proposal("我住在北岚市", evidence, "北岚市", "银桥市");
+    response["decision"] = json!("state_change");
+    response["effective_time"] = json!("2026-11-10");
+    let provider = SemanticProvider::new(response);
+    let (first, store, module) = runtime_with_policy(
+        dir.path(),
+        provider.clone(),
+        clock.clone(),
+        CorrectionPolicy {
+            utc_offset_seconds: 28_800,
+            ..Default::default()
+        },
+        true,
+    )
+    .await;
+    first.execute(TurnRequest::new(session, old)).await.unwrap();
+    let original = EpisodeStore::recent_episodes(store.as_ref(), &session.to_string(), 20)
+        .unwrap()
+        .into_iter()
+        .find(|episode| episode.role == "user" && episode.content == old)
+        .unwrap();
+    store.conn().unwrap().execute_batch("CREATE TRIGGER reject_date_registration BEFORE INSERT ON memory_writeback_jobs WHEN NEW.id LIKE 'correction/%' BEGIN SELECT RAISE(ABORT,'controlled registration failure'); END;").unwrap();
+    clock.set(
+        Utc.with_ymd_and_hms(2026, 11, 12, 12, 0, 0)
+            .single()
+            .unwrap(),
+    );
+    assert!(first
+        .execute(TurnRequest::new(session, evidence))
+        .await
+        .is_err());
+    let sessions = SqliteSessionStore::open(dir.path().join("sessions.sqlite3"))
+        .await
+        .unwrap();
+    let before = apeireth_runtime::SessionStore::operation_evidence(&sessions, &session)
+        .await
+        .unwrap();
+    assert_eq!(before.len(), 1);
+    let plan: apeireth_memory::automatic_correction::AutomaticCorrectionPlan =
+        serde_json::from_value(before[0].payload.clone()).unwrap();
+    let expected = Utc
+        .with_ymd_and_hms(2026, 11, 9, 16, 0, 0)
+        .single()
+        .unwrap()
+        .timestamp_millis();
+    assert_eq!(plan.valid_from_ms, expected);
+    assert_eq!(plan.evidence.content, evidence);
+    assert_eq!(
+        store.get_governed(&original.id).unwrap().unwrap().revision,
+        0
+    );
+    assert_eq!(provider.calls().iter().filter(|(side, _)| *side).count(), 1);
+    store
+        .conn()
+        .unwrap()
+        .execute_batch("DROP TRIGGER reject_date_registration")
+        .unwrap();
+    drop(first);
+    drop(store);
+    drop(module);
+    drop(sessions);
+    let provider = SemanticProvider::new(json!({"decision":"abstain"}));
+    // The new Host uses another offset. Recovery must consume the frozen UTC
+    // result, not reinterpret its source date or ask the model again.
+    let (second, store, module) = runtime_with_policy(
+        dir.path(),
+        provider.clone(),
+        clock,
+        CorrectionPolicy::default(),
+        true,
+    )
+    .await;
+    second
+        .execute(TurnRequest::new(session, "请核对前后住处与生效日期。"))
+        .await
+        .unwrap();
+    assert_eq!(module.metrics().proposals, 0);
+    assert_eq!(provider.calls().len(), 1);
+    assert_eq!(
+        store.get_governed(&original.id).unwrap().unwrap().revision,
+        1
+    );
+    let sessions = SqliteSessionStore::open(dir.path().join("sessions.sqlite3"))
+        .await
+        .unwrap();
+    let after = apeireth_runtime::SessionStore::operation_evidence(&sessions, &session)
+        .await
+        .unwrap();
+    assert_eq!(after[0].payload, before[0].payload);
+    assert_eq!(after[0].payload_hash, before[0].payload_hash);
+    let history = EpisodeStore::recent_episodes(store.as_ref(), &session.to_string(), 40)
+        .unwrap()
+        .into_iter()
+        .find(|episode| episode.role == "fact_history")
+        .unwrap();
+    assert!(
+        history.content.contains("2026-11-09T16:00:00.000Z"),
+        "{}",
+        history.content
+    );
+    let calls = provider.calls();
+    let delivered = memory_text(&calls[0].1);
+    let record = delivered_memory_record(&calls[0].1, &history.id).unwrap_or_else(|| {
+        panic!(
+            "recovered history source {} missing: {delivered}",
+            history.id
+        )
+    });
+    let text = record["text"].as_str().expect("memory record text");
+    assert_eq!(
+        text, history.content,
+        "recovered history projection: {delivered}"
+    );
+    assert!(
+        text.contains("[2026-11-01T12:00:00.000Z, 2026-11-09T16:00:00.000Z)"),
+        "frozen original interval missing: {delivered}"
+    );
+    assert!(text.ends_with(old));
 }

@@ -37,6 +37,7 @@ pub struct Plan {
     pub system_sha256: String,
     pub seed_system_sha256: String,
     pub proposal_system_sha256: String,
+    #[serde(default)]
     pub proposal_protocol: String,
     pub source_hashes: BTreeMap<String, String>,
     pub git_head: Option<String>,
@@ -132,7 +133,7 @@ fn plan(config: Config, mode: &str) -> EvalResult<Plan> {
         notes: vec![
             format!("{wired} lifecycle routes are connected in source; real-model quality is unmeasured until run-live completes."),
             "One delegate cap includes setup, main, Q5 isolated proposals, unknown and failed invocations. Protocol classification uses server-owned system contracts.".into(),
-            "Proposal protocol v2 exposes the Host-owned committed input UTC time and policy UTC offset for relative/future-date interpretation. This clock protocol differs from v1; scores across these mechanisms are not a same-condition comparison.".into(),
+            "Proposal protocol v3 retains the Host-owned committed input UTC time and policy UTC offset. It adds finite calendar equivalence for one supported absolute date inside the validated original evidence; relative expressions still require exact source text. Prior proposal protocols require their original executable; scores across these mechanisms are not a same-condition comparison.".into(),
             "Every repetition is retained. No best-of selection; blocked/missing/error/invalid_setup/unwired slots remain in the denominator.".into(),
             "The request byte bound is on normalized JSON, not a provider tokenizer or currency guarantee. Missing usage is unknown.".into(),
             "Prices and model versions are caller supplied. No paid endpoint/model is selected implicitly; top_p and seed are absent because the canonical request has no such fields.".into(),
@@ -303,6 +304,8 @@ fn rescore(path: &Path) -> EvalResult<bool> {
     let manifest: Plan = read(&path.join("manifest.json"))?;
     if manifest.schema_version != 2
         || manifest.scoring_protocol != SCORING_PROTOCOL
+        || manifest.proposal_protocol
+            != apeireth_runtime_assembly::canonical::memory_correction::CORRECTION_PROPOSAL_PROTOCOL
         || manifest.proposal_system_sha256
             != hash(
                 apeireth_runtime_assembly::canonical::memory_correction::CORRECTION_PROPOSAL_SYSTEM,
@@ -311,7 +314,7 @@ fn rescore(path: &Path) -> EvalResult<bool> {
         || manifest.source_hashes != source_hashes()
     {
         return Err(
-            "scoring protocol/fixture/evaluator source differs from the run manifest; use the run's original executable; refusing silent regrading"
+            "scoring/proposal protocol, system, fixture or evaluator source differs from the run manifest; use the run's original executable; refusing silent regrading"
                 .into(),
         );
     }
@@ -540,6 +543,72 @@ mod tests {
             "no old report is overwritten"
         );
     }
+
+    #[test]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "read-only byte comparison of isolated temporary evaluation reports"
+    )]
+    fn prior_proposal_protocol_cannot_be_regraded_with_current_hashes() {
+        for previous in [
+            Some("apeireth.memory-correction.v1"),
+            Some("apeireth.memory-correction.v2"),
+            Some(""),
+            None,
+        ] {
+            let temporary = tempfile::tempdir().unwrap();
+            let mut manifest = serde_json::to_value(
+                plan(Config::offline(temporary.path().into()), "offline_contract").unwrap(),
+            )
+            .unwrap();
+            if let Some(protocol) = previous {
+                manifest["proposal_protocol"] = serde_json::json!(protocol);
+            } else {
+                manifest
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("proposal_protocol");
+            }
+            // Every digest and the scoring version remain current. The
+            // proposal version must reject this before reading any case.
+            let retained = serde_json::json!({"retained_prior_report":true});
+            write_new(&temporary.path().join("manifest.json"), &manifest).unwrap();
+            write_new(&temporary.path().join("report.json"), &retained).unwrap();
+            let before = std::fs::read(temporary.path().join("report.json")).unwrap();
+            let error = rescore(temporary.path()).unwrap_err().to_string();
+            assert!(
+                error.contains("original executable"),
+                "{previous:?}: {error}"
+            );
+            assert_eq!(
+                std::fs::read(temporary.path().join("report.json")).unwrap(),
+                before,
+                "an old report remains byte-identical"
+            );
+            assert!(!temporary.path().join("case-e01-000.json").exists());
+        }
+    }
+
+    #[test]
+    fn mismatched_proposal_system_or_evaluator_digest_cannot_regrade_a_run() {
+        for field in ["proposal_system_sha256", "source_hashes"] {
+            let temporary = tempfile::tempdir().unwrap();
+            let mut manifest = serde_json::to_value(
+                plan(Config::offline(temporary.path().into()), "offline_contract").unwrap(),
+            )
+            .unwrap();
+            if field == "proposal_system_sha256" {
+                manifest[field] = serde_json::json!(hash("retained previous proposal system"));
+            } else {
+                manifest[field]["call_protocol"] =
+                    serde_json::json!(hash("retained previous evaluator source"));
+            }
+            write_new(&temporary.path().join("manifest.json"), &manifest).unwrap();
+            let error = rescore(temporary.path()).unwrap_err().to_string();
+            assert!(error.contains("original executable"), "{field}: {error}");
+            assert!(!temporary.path().join("report.json").exists());
+        }
+    }
     #[test]
     fn offline_falsification_rejects_answer_and_capture_mutations() {
         scorer_contract_check().unwrap();
@@ -548,6 +617,9 @@ mod tests {
     #[test]
     fn plan_keeps_unwired_slots_and_total_call_cost_bound() {
         let p = plan(Config::offline("not-created".into()), "plan").unwrap();
+        assert_eq!(p.schema_version, 2);
+        assert_eq!(p.scoring_protocol, "apeireth.memory-answer-scoring.v2");
+        assert_eq!(p.proposal_protocol, "apeireth.memory-correction.v3");
         assert_eq!(p.planned_slots, 12);
         assert_eq!(p.wired_slots, 12);
         assert_eq!(p.unwired_slots, 0);

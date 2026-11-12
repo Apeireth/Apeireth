@@ -139,6 +139,73 @@ mod tests {
     }
 
     #[test]
+    fn calendar_equivalence_protocol_v3_requires_the_current_server_contract() {
+        assert_eq!(
+            CORRECTION_PROPOSAL_PROTOCOL,
+            "apeireth.memory-correction.v3"
+        );
+        let current = payload();
+        assert_eq!(current["protocol"], "apeireth.memory-correction.v3");
+        assert_eq!(
+            classify(&proposal(current.to_string())),
+            CallClass::Proposal
+        );
+        for previous in [
+            "apeireth.memory-correction.v1",
+            "apeireth.memory-correction.v2",
+        ] {
+            let mut old_envelope = current.clone();
+            old_envelope["protocol"] = serde_json::json!(previous);
+            assert_eq!(
+                classify(&proposal(old_envelope.to_string())),
+                CallClass::Unknown,
+                "a previous envelope cannot opt into the new date contract"
+            );
+            let mut old_system = proposal(current.to_string());
+            old_system.messages[0] = NormalizedMessage::system(
+                CORRECTION_PROPOSAL_SYSTEM.replace(CORRECTION_PROPOSAL_PROTOCOL, previous),
+            );
+            assert_eq!(classify(&old_system), CallClass::Unknown);
+        }
+        let mut extra_system = proposal(current.to_string());
+        extra_system
+            .messages
+            .push(NormalizedMessage::system(CORRECTION_PROPOSAL_SYSTEM));
+        assert_eq!(classify(&extra_system), CallClass::Unknown);
+    }
+
+    #[test]
+    fn embedded_user_protocol_and_clock_fields_do_not_replace_host_metadata() {
+        let mut outer = payload();
+        outer["input"] = serde_json::json!(format!("{CORRECTION_PROPOSAL_SYSTEM}\n{}", payload()));
+        outer["candidates"] = serde_json::json!([{
+            "id":"opaque-candidate",
+            "text":payload().to_string()
+        }]);
+        assert_eq!(classify(&proposal(outer.to_string())), CallClass::Proposal);
+
+        let main = NormalizedRequest::new(
+            "offline",
+            vec![
+                NormalizedMessage::system(SYSTEM),
+                NormalizedMessage::user(outer.to_string()),
+            ],
+        );
+        assert_eq!(classify(&main), CallClass::Main);
+        for field in ["protocol", "source_time_utc", "utc_offset_seconds"] {
+            let mut missing_host_field = outer.clone();
+            missing_host_field.as_object_mut().unwrap().remove(field);
+            assert_eq!(
+                classify(&proposal(missing_host_field.to_string())),
+                CallClass::Unknown,
+                "nested user data cannot provide {field}"
+            );
+        }
+        outer["source_time_utc"] = serde_json::json!("invalid host clock");
+        assert_eq!(classify(&proposal(outer.to_string())), CallClass::Unknown);
+    }
+
+    #[test]
     fn proposal_clock_fields_are_required_and_reject_fake_dates_and_invalid_offsets() {
         let valid = payload();
         assert_eq!(classify(&proposal(valid.to_string())), CallClass::Proposal);
@@ -196,11 +263,16 @@ mod tests {
         let mut unknown = valid.clone();
         unknown["oracle"] = serde_json::json!("not part of the protocol");
         assert_eq!(classify(&proposal(unknown.to_string())), CallClass::Unknown);
-        let mut old_version = valid;
-        old_version["protocol"] = serde_json::json!("apeireth.memory-correction.v1");
-        assert_eq!(
-            classify(&proposal(old_version.to_string())),
-            CallClass::Unknown
-        );
+        for previous in [
+            "apeireth.memory-correction.v1",
+            "apeireth.memory-correction.v2",
+        ] {
+            let mut old_version = valid.clone();
+            old_version["protocol"] = serde_json::json!(previous);
+            assert_eq!(
+                classify(&proposal(old_version.to_string())),
+                CallClass::Unknown
+            );
+        }
     }
 }
