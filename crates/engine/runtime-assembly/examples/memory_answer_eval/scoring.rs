@@ -71,11 +71,39 @@ pub struct SourceEvidence {
     pub revision: i64,
     pub content_sha256: String,
     pub delivered_content_sha256: String,
+    pub expected_projection_sha256: String,
+    pub delivered_text: String,
+    pub projection_verified: bool,
+    pub source_role: String,
+    pub claim_kind: String,
+    pub citable_as_fact: bool,
     pub active: bool,
     pub authorized: bool,
     pub runtime_source_verified: bool,
     pub scope: serde_json::Value,
     pub provenance: serde_json::Value,
+}
+
+impl SourceEvidence {
+    /// The oracle pins the complete durable source; delivery additionally has to
+    /// match the production projection and retain the actual expected value.
+    /// Visible substring presence alone never establishes a correct fact.
+    pub fn supports(&self, expected: &ExpectedFact) -> bool {
+        self.active
+            && self.authorized
+            && self.runtime_source_verified
+            && self.projection_verified
+            && self.citable_as_fact
+            && self.source_role != "assistant"
+            && self.source_role != "tool"
+            && self.expected_projection_sha256 == self.delivered_content_sha256
+            && super::io::hash(&self.delivered_text) == self.delivered_content_sha256
+            && expected
+                .supporting_content_hashes
+                .contains(&self.content_sha256)
+            && !expected.fact.value.is_empty()
+            && self.delivered_text.contains(&expected.fact.value)
+    }
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -92,6 +120,71 @@ pub struct Grade {
     pub facts_correct: bool,
     pub evidence_correct: bool,
     pub hard_failures: Vec<String>,
+    /// Additional diagnostics never turn a failing grade into a passing grade.
+    pub field_diagnostics: FactFieldDiagnostics,
+    pub citation_diagnostics: Vec<CitationDiagnostic>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct FactFieldDiagnostics {
+    pub predicate_only_mismatch: bool,
+    pub differing_fields: Vec<String>,
+    pub missing_expected: Vec<FactValue>,
+    pub unexpected_observed: Vec<FactValue>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct CitationDiagnostic {
+    pub fact_index: usize,
+    pub source_id: String,
+    pub issues: Vec<String>,
+}
+
+fn field_diagnostics(
+    expected: &BTreeSet<FactValue>,
+    observed: &BTreeSet<FactValue>,
+) -> FactFieldDiagnostics {
+    let mut diagnostics = FactFieldDiagnostics {
+        missing_expected: expected.difference(observed).cloned().collect(),
+        unexpected_observed: observed.difference(expected).cloned().collect(),
+        ..FactFieldDiagnostics::default()
+    };
+    if expected == observed {
+        return diagnostics;
+    }
+    // Compare unordered multisets after removing exactly one field. This avoids
+    // assigning one answer fact to an unrelated oracle fact by array position.
+    for field in ["subject", "predicate", "value", "valid_from", "valid_to"] {
+        let project = |facts: &BTreeSet<FactValue>| {
+            let mut rows: Vec<_> = facts
+                .iter()
+                .cloned()
+                .map(|mut fact| {
+                    match field {
+                        "subject" => fact.subject.clear(),
+                        "predicate" => fact.predicate.clear(),
+                        "value" => fact.value.clear(),
+                        "valid_from" => fact.valid_from = None,
+                        "valid_to" => fact.valid_to = None,
+                        _ => unreachable!(),
+                    }
+                    fact
+                })
+                .collect();
+            rows.sort();
+            rows
+        };
+        if project(expected) == project(observed) {
+            diagnostics.differing_fields.push(field.into());
+        }
+    }
+    diagnostics.predicate_only_mismatch = diagnostics.differing_fields == ["predicate"];
+    if diagnostics.differing_fields.is_empty() {
+        diagnostics
+            .differing_fields
+            .push("multiple_fields_or_fact_count".into());
+    }
+    diagnostics
 }
 
 /// Strict structured facts and independent durable/request receipts; no model judge.
@@ -110,6 +203,14 @@ pub fn score(raw: &str, oracle: &Oracle, request: &RequestEvidence) -> Grade {
             grade
                 .hard_failures
                 .push(format!("unauthorized_or_inactive_source:{}", source.id));
+        }
+        if !source.projection_verified
+            || source.expected_projection_sha256 != source.delivered_content_sha256
+            || super::io::hash(&source.delivered_text) != source.delivered_content_sha256
+        {
+            grade
+                .hard_failures
+                .push(format!("invalid_source_projection:{}", source.id));
         }
     }
     let answer: Answer = match serde_json::from_str(raw) {
@@ -135,6 +236,7 @@ pub fn score(raw: &str, oracle: &Oracle, request: &RequestEvidence) -> Grade {
     }
     let expected: BTreeSet<_> = oracle.facts.iter().map(|f| f.fact.clone()).collect();
     let observed: BTreeSet<_> = answer.facts.iter().map(AnswerFact::value).collect();
+    grade.field_diagnostics = field_diagnostics(&expected, &observed);
     grade.facts_correct = expected == observed && observed.len() == answer.facts.len();
     if !grade.facts_correct {
         grade
@@ -142,7 +244,7 @@ pub fn score(raw: &str, oracle: &Oracle, request: &RequestEvidence) -> Grade {
             .push("wrong_subject_value_time_or_duplicate_fact".into());
     }
     let mut evidence_correct = true;
-    for fact in &answer.facts {
+    for (fact_index, fact) in answer.facts.iter().enumerate() {
         let unique: BTreeSet<_> = fact.sources.iter().collect();
         if unique.is_empty() || unique.len() != fact.sources.len() {
             evidence_correct = false;
@@ -153,18 +255,58 @@ pub fn score(raw: &str, oracle: &Oracle, request: &RequestEvidence) -> Grade {
             .find(|expected| expected.fact == fact.value());
         for id in &fact.sources {
             let supported = sources.get(id.as_str()).is_some_and(|source| {
-                source.active
-                    && source.authorized
-                    && source.runtime_source_verified
-                    && source.content_sha256 == source.delivered_content_sha256
-                    && expected_fact.is_some_and(|expected| {
-                        expected
-                            .supporting_content_hashes
-                            .contains(&source.content_sha256)
-                    })
+                expected_fact.is_some_and(|expected| source.supports(expected))
             });
             if !supported {
                 evidence_correct = false;
+                let mut issues = Vec::new();
+                if expected_fact.is_none() {
+                    issues.push("fact_tuple_not_in_oracle".into());
+                }
+                match sources.get(id.as_str()) {
+                    None => {
+                        issues.push("id_not_delivered".into());
+                        if id
+                            .strip_prefix("mem:")
+                            .is_some_and(|bare| sources.contains_key(bare))
+                        {
+                            issues.push("display_prefix_is_not_part_of_source_id".into());
+                        }
+                    }
+                    Some(source) => {
+                        if !source.citable_as_fact
+                            || matches!(source.source_role.as_str(), "assistant" | "tool")
+                        {
+                            issues.push("source_not_eligible_as_fact".into());
+                        }
+                        if !source.active || !source.authorized || !source.runtime_source_verified {
+                            issues.push("source_not_active_authorized_and_runtime_verified".into());
+                        }
+                        if !source.projection_verified
+                            || source.expected_projection_sha256 != source.delivered_content_sha256
+                            || super::io::hash(&source.delivered_text)
+                                != source.delivered_content_sha256
+                        {
+                            issues.push("delivery_does_not_match_exact_projection".into());
+                        }
+                        if let Some(expected) = expected_fact {
+                            if !expected
+                                .supporting_content_hashes
+                                .contains(&source.content_sha256)
+                            {
+                                issues.push("durable_content_not_an_oracle_support".into());
+                            }
+                            if !source.delivered_text.contains(&expected.fact.value) {
+                                issues.push("expected_value_not_visible_in_delivery".into());
+                            }
+                        }
+                    }
+                }
+                grade.citation_diagnostics.push(CitationDiagnostic {
+                    fact_index,
+                    source_id: id.clone(),
+                    issues,
+                });
             }
         }
     }
@@ -194,7 +336,7 @@ mod tests {
             status: AnswerStatus::Known,
             facts: vec![ExpectedFact {
                 fact,
-                supporting_content_hashes: vec!["durable-content-hash".into()],
+                supporting_content_hashes: vec![super::super::io::hash("我住在上海。")],
             }],
         };
         let evidence = RequestEvidence {
@@ -203,8 +345,14 @@ mod tests {
                 id: "typed:episode:actual".into(),
                 episode_id: "actual".into(),
                 revision: 2,
-                content_sha256: "durable-content-hash".into(),
-                delivered_content_sha256: "durable-content-hash".into(),
+                content_sha256: super::super::io::hash("我住在上海。"),
+                delivered_content_sha256: super::super::io::hash("我住在上海。"),
+                expected_projection_sha256: super::super::io::hash("我住在上海。"),
+                delivered_text: "我住在上海。".into(),
+                projection_verified: true,
+                source_role: "user".into(),
+                claim_kind: "direct_user_assertion".into(),
+                citable_as_fact: true,
                 active: true,
                 authorized: true,
                 runtime_source_verified: true,
@@ -311,5 +459,79 @@ mod tests {
         parsed.facts.pop();
         parsed.facts[0].valid_from = Some("2026-12-01".into());
         assert!(!score(&serde_json::to_string(&parsed).unwrap(), &oracle, &evidence).passed);
+    }
+
+    #[test]
+    fn diagnostics_separate_predicate_only_value_and_id_format_without_accepting_them() {
+        let (oracle, evidence, answer) = fixture();
+        let predicate = score(&answer.replace("居住城市", "居住地"), &oracle, &evidence);
+        assert!(!predicate.passed);
+        assert!(predicate.field_diagnostics.predicate_only_mismatch);
+        assert!(!predicate.evidence_correct);
+        let wrong_value = score(&answer.replace("上海", "武汉"), &oracle, &evidence);
+        assert!(!wrong_value.passed);
+        assert!(!wrong_value.field_diagnostics.predicate_only_mismatch);
+        assert_eq!(
+            wrong_value.field_diagnostics.differing_fields,
+            vec!["value"]
+        );
+        let prefix = score(
+            &answer.replace("typed:episode:actual", "mem:typed:episode:actual"),
+            &oracle,
+            &evidence,
+        );
+        assert!(!prefix.passed);
+        assert!(prefix.citation_diagnostics[0]
+            .issues
+            .iter()
+            .any(|s| s == "display_prefix_is_not_part_of_source_id"));
+    }
+
+    #[test]
+    fn exact_projection_requires_visible_support_and_fact_authority() {
+        let (mut oracle, mut evidence, answer) = fixture();
+        let full = format!("我住在上海。{}", "附加上下文".repeat(100));
+        oracle.facts[0].supporting_content_hashes = vec![super::super::io::hash(&full)];
+        let source = &mut evidence.sources[0];
+        source.content_sha256 = super::super::io::hash(&full);
+        source.delivered_text = apeireth_memory::context_compiler::project_memory_content(
+            &full,
+            apeireth_memory::context_compiler::DELIVERY_SPAN_CHARS,
+        );
+        source.delivered_content_sha256 = super::super::io::hash(&source.delivered_text);
+        source.expected_projection_sha256 = source.delivered_content_sha256.clone();
+        assert!(score(&answer, &oracle, &evidence).passed);
+
+        let mut changed = evidence.clone();
+        changed.sources[0].delivered_text.push('伪');
+        changed.sources[0].delivered_content_sha256 =
+            super::super::io::hash(&changed.sources[0].delivered_text);
+        assert!(!score(&answer, &oracle, &changed).passed);
+
+        let hidden = format!("{}我住在上海。", "无关".repeat(110));
+        oracle.facts[0].supporting_content_hashes = vec![super::super::io::hash(&hidden)];
+        evidence.sources[0].content_sha256 = super::super::io::hash(&hidden);
+        evidence.sources[0].delivered_text =
+            apeireth_memory::context_compiler::project_memory_content(
+                &hidden,
+                apeireth_memory::context_compiler::DELIVERY_SPAN_CHARS,
+            );
+        evidence.sources[0].delivered_content_sha256 =
+            super::super::io::hash(&evidence.sources[0].delivered_text);
+        evidence.sources[0].expected_projection_sha256 =
+            evidence.sources[0].delivered_content_sha256.clone();
+        let hidden_grade = score(&answer, &oracle, &evidence);
+        assert!(!hidden_grade.passed);
+        assert!(hidden_grade.citation_diagnostics[0]
+            .issues
+            .iter()
+            .any(|s| s == "expected_value_not_visible_in_delivery"));
+
+        let (oracle, mut evidence, answer) = fixture();
+        evidence.sources[0].source_role = "assistant".into();
+        // Even a forged eligibility bit cannot turn an assistant echo into a
+        // factual authority. The request audit also checks this against SQL.
+        evidence.sources[0].citable_as_fact = true;
+        assert!(!score(&answer, &oracle, &evidence).passed);
     }
 }

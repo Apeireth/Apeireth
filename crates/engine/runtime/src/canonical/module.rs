@@ -81,6 +81,9 @@ pub struct PromptOverlay {
     /// funnel; `None` marks text the caller owns (or text that already is an
     /// envelope disclosure), which passes the funnel byte-for-byte.
     cross_source: Option<String>,
+    /// Host-selected structured data must remain whole at every budget gate.
+    /// This affects retention only; it never changes the data's authority.
+    atomic_context: bool,
 }
 
 impl PromptOverlay {
@@ -89,6 +92,7 @@ impl PromptOverlay {
         Self {
             message: NormalizedMessage::system(content),
             cross_source: None,
+            atomic_context: false,
         }
     }
 
@@ -102,7 +106,21 @@ impl PromptOverlay {
         Self {
             message: NormalizedMessage::system(content),
             cross_source: Some(source.into()),
+            atomic_context: false,
         }
+    }
+
+    /// Keep this context block whole, or omit it when a budget would cut it.
+    /// Cross-source blocks still pass through the untrusted disclosure envelope.
+    #[must_use]
+    pub fn with_atomic_context(mut self) -> Self {
+        self.atomic_context = true;
+        self
+    }
+
+    /// Whether the Host selected whole-block retention for this overlay.
+    pub fn is_atomic_context(&self) -> bool {
+        self.atomic_context
     }
 
     /// The cross-source label, when the block carries cross-source content.
@@ -342,6 +360,12 @@ impl From<&str> for ModuleError {
 /// Runtime-owned side-call capability exposed to modules.
 #[async_trait]
 pub trait ModuleInvoker: Send + Sync {
+    /// Existing Runtime injected-context budget, when this is a Runtime-owned
+    /// invoker. Compatibility implementations do not invent a fallback budget.
+    fn context_budget_chars(&self) -> Option<usize> {
+        None
+    }
+
     /// Commit a frozen, validated module plan beside its canonical accepted input.
     async fn prepare_operation(
         &self,
@@ -751,6 +775,10 @@ impl RuntimeModuleInvoker {
 
 #[async_trait]
 impl ModuleInvoker for RuntimeModuleInvoker {
+    fn context_budget_chars(&self) -> Option<usize> {
+        Some(self.runtime.config.context_budget_chars)
+    }
+
     async fn prepare_operation(
         &self,
         operation_id: String,

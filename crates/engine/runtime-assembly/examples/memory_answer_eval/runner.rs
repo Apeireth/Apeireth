@@ -264,6 +264,7 @@ impl Environment {
                 ),
                 memory_governance: Some(backend.clone() as Arc<dyn MemoryGovernanceStore>),
                 scoped_memory: Some(backend.clone() as Arc<dyn ScopedMemoryBackend>),
+                memory_evidence_source: Some(journal.clone()),
                 memory_recovery: (!state.read_only).then_some(journal),
                 typed_recall: Some(Arc::new(
                     SqliteTypedMemoryRecallSource::new().with_episodes(store),
@@ -372,7 +373,7 @@ mod tests {
                 self.before_model_hooks.fetch_add(1, Ordering::SeqCst);
             }
             if hook == HookPoint::TurnStart {
-                let payload=serde_json::json!({"protocol":CORRECTION_PROPOSAL_PROTOCOL,"input":"opaque probe input","candidates":[]}).to_string();
+                let payload=serde_json::json!({"protocol":CORRECTION_PROPOSAL_PROTOCOL,"source_time_utc":"2000-01-02T03:04:05.006Z","utc_offset_seconds":0,"input":"opaque probe input","candidates":[]}).to_string();
                 let response = context
                     .invoker()
                     .invoke(ModuleInvocationRequest::isolated(self.system, payload))

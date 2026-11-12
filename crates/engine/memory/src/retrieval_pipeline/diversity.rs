@@ -50,6 +50,22 @@ pub(crate) fn fit(spent: usize, content: &str, budget: usize, span: usize) -> Op
     }
 }
 
+/// Order a discovered source stratum using the configured MMR. Its known,
+/// finite material size only prevents premature delivery-budget selection;
+/// callers still enforce the real output budget after merging the strata.
+pub(crate) fn order_bounded(
+    ranking: &MemoryRankingConfig,
+    candidates: Vec<MemoryCandidate>,
+) -> Vec<MemoryCandidate> {
+    debug_assert!(candidates.len() <= super::RANKED_POOL_CAP);
+    let chars = candidates
+        .iter()
+        .map(|candidate| billed_chars(&candidate.content, ranking.candidate_span_chars))
+        .sum();
+    let limit = candidates.len();
+    select(ranking, candidates, limit, chars)
+}
+
 /// 贪心、确定性的多样性选择：按 MMR（相关性-多样性折中）挑，再受 `max_chars` 预算约束。
 ///
 /// # 预算的**计费口径**（2026-11-08 修「静默全失」）

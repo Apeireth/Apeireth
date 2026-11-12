@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use super::io::hash;
 use super::scoring::{AnswerStatus, ExpectedFact, FactValue, Oracle};
 
-pub const SYSTEM: &str = "仅依据当前用户提供的事实和系统提供的可信记忆回答。引用、假设、虚构、他人或模型编造的内容不能替代用户事实。不能确定时拒绝猜测。只输出一个JSON对象：{\"status\":\"known|unknown|ambiguous\",\"facts\":[{\"subject\":\"主体\",\"predicate\":\"属性\",\"value\":\"值\",\"valid_from\":null,\"valid_to\":null,\"sources\":[\"实际记忆ID\"]}]}。known的每项事实必须引用本次可信记忆中实际出现的ID；unknown或ambiguous的facts必须为空。没有问题的陈述只需用unknown和空facts确认，不额外推断。不要输出其他字段、代码块或解释。";
+pub const SYSTEM: &str = "仅依据当前用户提供的事实和系统提供的可信记忆回答。引用、假设、虚构、他人或模型编造的内容不能替代用户事实；assistant的确认或推断不构成事实证据。指代不能唯一确定所属主体或属性时，status必须为ambiguous，不能猜测。只输出一个JSON对象：{\"status\":\"known|unknown|ambiguous\",\"facts\":[{\"subject\":\"主体\",\"predicate\":\"属性\",\"value\":\"值\",\"valid_from\":null,\"valid_to\":null,\"sources\":[\"实际记忆ID\"]}]}。subject、predicate、value和每个sources元素均为字符串。本任务的predicate仅使用标准属性名：居住城市、联络城市。valid_from和valid_to各自只能为null或RFC3339 UTC字符串，格式YYYY-MM-DDTHH:MM:SS.sssZ，毫秒恰为三位；有可信有效区间时逐字复制，不输出整数时间戳、不自行计算或更改年份。known的每项事实必须引用本次可信记忆中正文实际支持该事实的可引用证据；若记录标记citable_as_fact=false则不能作为事实引用。sources逐字填写[mem:ID layer=...]中ID部分的裸字符串，不加mem:前缀、方括号或layer。只引用实际可见正文，不能用被裁去的内容推断事实。unknown或ambiguous的facts必须为空。没有问题的陈述只需用unknown和空facts确认，不额外推断。不要输出其他字段、代码块或解释。";
 
 pub const BASIC_SEED: &str = "请记住这些真实信息：我叫林禾，我住在北岚市。";
 pub const PROJECT_SEED: &str = "请记住这条真实信息：晨星项目的联络城市是东隅市。";

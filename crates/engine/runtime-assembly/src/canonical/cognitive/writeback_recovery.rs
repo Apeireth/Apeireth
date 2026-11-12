@@ -476,18 +476,16 @@ impl MemoryWritebackModule {
         &self,
         job: &RecoveryJob,
     ) -> Result<PreparedWritebackPlan, MemoryError> {
-        let snapshot = match serde_json::from_value::<CommittedTurnSnapshot>(job.source.clone()) {
-            Ok(snapshot) => snapshot,
-            Err(_) => {
-                let plan: apeireth_memory::automatic_correction::AutomaticCorrectionPlan =
-                    serde_json::from_value(job.source.clone())?;
-                let mut dependencies = vec![plan.evidence.id.clone()];
-                dependencies.extend(plan.targets.iter().map(|t| t.id.clone()));
-                return Ok(PreparedWritebackPlan {
-                    operations: vec![WritebackOperation::Correction(plan)],
-                    source_episode_ids: dependencies,
-                });
-            }
+        let Ok(snapshot) = serde_json::from_value::<CommittedTurnSnapshot>(job.source.clone())
+        else {
+            let plan: apeireth_memory::automatic_correction::AutomaticCorrectionPlan =
+                serde_json::from_value(job.source.clone())?;
+            let mut dependencies = vec![plan.evidence.id.clone()];
+            dependencies.extend(plan.targets.iter().map(|t| t.id.clone()));
+            return Ok(PreparedWritebackPlan {
+                operations: vec![WritebackOperation::Correction(plan)],
+                source_episode_ids: dependencies,
+            });
         };
         if source_hash(&snapshot)? != job.source_hash {
             return Err(MemoryError::Invalid(

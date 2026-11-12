@@ -120,7 +120,7 @@ fn plan(config: Config, mode: &str) -> EvalResult<Plan> {
         unwired_slots: (scenarios.len()-wired)*config.repetitions,
         wired_primary_turns: scenarios.iter().filter(|s|s.live_wired).map(|s|s.input.primary_turns()).sum::<usize>()*config.repetitions,
         total_delegate_call_cap: config.max_calls,
-        output_token_cap: (config.max_calls as u64).saturating_mul(config.max_output_tokens as u64),
+        output_token_cap: (config.max_calls as u64).saturating_mul(u64::from(config.max_output_tokens)),
         selected_slots:scenarios.iter().filter(|s|config.selected(&s.id)).count()*config.repetitions,
         selected_primary_turns:scenarios.iter().filter(|s|s.live_wired && config.selected(&s.id)).map(|s|s.input.primary_turns()).sum::<usize>()*config.repetitions,
         selected_model_call_upper_bound:scenarios.iter().filter(|s|s.live_wired && config.selected(&s.id)).map(|s|s.input.primary_turns()).sum::<usize>()*config.repetitions*2,
@@ -128,6 +128,7 @@ fn plan(config: Config, mode: &str) -> EvalResult<Plan> {
         notes: vec![
             format!("{wired} lifecycle routes are connected in source; real-model quality is unmeasured until run-live completes."),
             "One delegate cap includes setup, main, Q5 isolated proposals, unknown and failed invocations. Protocol classification uses server-owned system contracts.".into(),
+            "Proposal protocol v2 exposes the Host-owned committed input UTC time and policy UTC offset for relative/future-date interpretation. This clock protocol differs from v1; scores across these mechanisms are not a same-condition comparison.".into(),
             "Every repetition is retained. No best-of selection; blocked/missing/error/invalid_setup/unwired slots remain in the denominator.".into(),
             "The request byte bound is on normalized JSON, not a provider tokenizer or currency guarantee. Missing usage is unknown.".into(),
             "Prices and model versions are caller supplied. No paid endpoint/model is selected implicitly; top_p and seed are absent because the canonical request has no such fields.".into(),
@@ -185,13 +186,13 @@ fn offline_receipt_valid(record: &CallRecord, scenario: &Scenario) -> bool {
             .request_evidence
             .sources
             .iter()
-            .all(|s| s.active && s.authorized && s.runtime_source_verified)
+            .all(|s| s.active && s.authorized && s.runtime_source_verified && s.projection_verified)
         && scenario.oracle.facts.iter().all(|fact| {
-            record.request_evidence.sources.iter().any(|source| {
-                fact.supporting_content_hashes
-                    .contains(&source.content_sha256)
-                    && source.content_sha256 == source.delivered_content_sha256
-            })
+            record
+                .request_evidence
+                .sources
+                .iter()
+                .any(|source| source.supports(fact))
         })
 }
 
@@ -417,6 +418,12 @@ fn scorer_contract_check() -> EvalResult<()> {
         revision: 0,
         content_sha256: hash(fixtures::BASIC_SEED),
         delivered_content_sha256: hash(fixtures::BASIC_SEED),
+        expected_projection_sha256: hash(fixtures::BASIC_SEED),
+        delivered_text: fixtures::BASIC_SEED.into(),
+        projection_verified: true,
+        source_role: "user".into(),
+        claim_kind: "direct_user_assertion".into(),
+        citable_as_fact: true,
         active: true,
         authorized: true,
         runtime_source_verified: true,
@@ -435,7 +442,9 @@ fn scorer_contract_check() -> EvalResult<()> {
     let mut variants = vec![
         answer.replace("北岚市", "不是北岚市"),
         answer.replace("林禾", "周青"),
+        answer.replace("居住城市", "居住地"),
         answer.replace("typed:episode:contract", "forged"),
+        answer.replace("typed:episode:contract", "mem:typed:episode:contract"),
         format!("{answer} extra"),
     ];
     variants.push(answer.replacen("\"status\":", "\"status\":\"unknown\",\"status\":", 1));
@@ -444,6 +453,17 @@ fn scorer_contract_check() -> EvalResult<()> {
         .any(|raw| score(raw, &scenario.oracle, &evidence).passed)
     {
         return Err("scorer falsification accepted invalid answer".into());
+    }
+    let mut assistant = evidence.clone();
+    assistant.sources[0].citable_as_fact = false;
+    assistant.sources[0].source_role = "assistant".into();
+    let mut bad_projection = evidence.clone();
+    bad_projection.sources[0].expected_projection_sha256 = "unmatched-projection".into();
+    if [assistant, bad_projection]
+        .iter()
+        .any(|altered| score(answer, &scenario.oracle, altered).passed)
+    {
+        return Err("source qualification or projection falsification accepted".into());
     }
     let mut removed = evidence;
     removed.sources.clear();

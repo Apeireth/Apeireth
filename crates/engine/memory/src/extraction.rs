@@ -505,7 +505,7 @@ fn direct_statement_head(text: &str) -> bool {
     })
 }
 
-fn unquoted_surface(text: &str) -> Option<String> {
+pub(crate) fn unquoted_surface(text: &str) -> Option<String> {
     let mut surface = String::with_capacity(text.len());
     let mut quoted = String::new();
     let mut close = None;

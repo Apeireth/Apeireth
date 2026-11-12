@@ -329,6 +329,10 @@ impl SubLoopSpawner for RuntimeSubLoopSpawner {
 
 #[async_trait]
 impl ModuleInvoker for RuntimeSubLoopSpawner {
+    fn context_budget_chars(&self) -> Option<usize> {
+        self.module_invoker().context_budget_chars()
+    }
+
     async fn committed_input(
         &self,
     ) -> Result<Option<super::CommittedUserInput>, ModuleInvocationError> {

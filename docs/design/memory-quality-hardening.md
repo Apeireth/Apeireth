@@ -107,8 +107,9 @@ Provider 测试从独立 SQLite 读取发送 ID 对应的治理状态、作用�
 | Q6 | 记忆写入失败自动恢复 | 持久待办、故障后重试、进程重启、重复消费、部分成功、作用域隔离及遗忘后不得复活；失败不发布未提交内容 |
 | Q7 | 真实模型答题评测 | 本地确定性评测器验证后，再用用户临时 key 实际运行；保留逐例回答与失败，硬失败不得被均分抵消；无 key 记未测，不用录制 Provider 代替 |
 
-当前状态：Q5/Q6 已实现并接入条件性生产组合，正式集成和回归仍在验证；Q7 评测入口正在补齐完整生命周期。
-真实模型调用尚未执行；本地确定性 Provider 和回环 HTTP 只用于验证软件契约。
+当前状态：Q5/Q6 已实现并接入条件性生产组合，Beta 本地定向软件验收及下文红绿反证已通过；
+完整工作区、真实模型复验及同提交 CI 尚未完成。Q7 首次真实调用未通过，原报告保留。
+本地确定性 Provider 和回环 HTTP 仍只用于验证软件契约，不能代替真实答题结果。
 当前无外部可运行实例，Q4 同条件比较仍独立记未测。
 
 #### 本轮合同与限制
@@ -123,6 +124,11 @@ Provider 测试从独立 SQLite 读取发送 ID 对应的治理状态、作用�
   不宣称按地区时区规则重算所有历史夏令时边界。
   语义判定来自模型，不是数学证明，也不宣称通用自然语言纠错完备。
   `CorrectPrior` 保留原文和修订审计；`StateChange` 另生成可正常召回的有界历史状态，不能把原误值说成曾经正确。
+  同主体、同属性的相邻声明已有明确变更日期时，模型不得只截取新值并以空日期退回当前时间；
+  方案缺少所需日期时拒绝，不从证据片段外替模型补填日期。不同属性或他人日期不能借用。
+  提案协议 v2 传入 Runtime 已提交的 UTC 时间及 Host 固定偏移，作为相对日期和未来日期的判断参考，
+  不能替代用户原文中的明确生效日期；用户正文中的同名字段不覆盖这些元数据。
+  更正模块通过固定原因及 `applied` / `no_mutation` 回执报告结果；回执不授予记忆引用资格，模型弃权也不触发无条件覆盖。
 - 已验证纠错方案在修改前写入正式 SessionStore 的不可变操作证据，沿用会话封缄；正式存储迁移为 V4。
   认知库 V20 journal 保存冻结方案、依赖、进度及终态；情节依靠稳定身份、元数据及链的原子提交重放，
   可变累积 sink 的效果与其操作回执在同一事务提交。journal 在效果成功后确认进度，不宣称跨 sink 全局事务。
@@ -140,11 +146,87 @@ Provider 测试从独立 SQLite 读取发送 ID 对应的治理状态、作用�
   真实 HTTP 复用生产协议转换；额外思考模式参数仅属于显式评测配置，不代表生产 Provider 已提供该配置口。
   临时 key 只进入交互启动器的子进程环境和授权头；没有隐式付费模型或凭据发现。
 
+#### 首次真实评测记录与后续修复
+
+首次真实运行（记为 live01）对应源码提交 `43c136d9d9ab646402524efa2215e5c02a26986a`，
+执行文件 SHA256 为 `5028E6AD26144F226D6B22EE04FB6D899CC6654AE20C961C1E6A2CB350221ADE`。
+仓外证据根为 `C:\Apeireth\logs\memory-autonomy-20261112`；汇总文件 `live-01-summary.json` 与
+运行目录内的 `report.json`、逐次请求、响应及生命周期记录共同保留，不以修复后重评分覆盖原报告。
+该轮 36 个槽位为 **14 passed、19 hard_failure、3 runtime_error**；
+报告 `complete=false`、`live_quality_passed=false`，不能写成质量验收通过。
+
+失败按实际边界分开记录，单个槽位可同时有多种问题：
+
+- 更正场景的三次 `runtime_error` 均在模型发送前被来源审计拒绝；原审计将生产裁剪后的正文与完整持久正文比较，
+  不能把这种拒绝计为模型收到问题后的答题失败，也不能因此绕过发送前审计。
+- 状态变化场景两次模型提案主动弃权，属于语义判定未完成；另一次提案遗漏相邻声明的明确日期，
+  旧实现以当前时间提交，导致历史区间错误。这是需要修复的产品接受边界，不能归为日期解析器不认识合法中文日期。
+- 主答存在错误事实、状态、引用或无支持引用；时间输出还暴露了整数与字符串合同不清、个别年份错误。
+  原始失败仍按当时判据保留，输出约定澄清不把错误年份、错误事实或无支持引用转为通过。
+
+后续修复批（Beta）源码已冻结，本地定向软件验收通过；真实模型质量尚无通过结论。变更边界如下：
+
+- 生产记忆正文增加机器可读的 `source_role`、`claim_kind`、`citable_as_fact` 与 `text` 字段，
+  依据持久来源、派生关系和正式治理回执生成，不从评测答案或用户伪造标签授予资格。
+  来源资格是数据归属与引用提示，不是执行授权，也不证明正文事实为真；保守分类不表示通用语义理解完备。
+  模型与工具输出仍可保留为记录，但不能仅凭确认文字充当用户事实证据。
+- 候选原始分值不因该批变更而抬高；来源覆盖规则会调整交付顺序，避免同请求的模型回声挤占可引用的独立来源。
+  此行为属于生产召回变化，须重跑既有检索门禁，不由本轮案例推定一般排名收益。
+  预算前候选池上限为 64，按独立可引用来源代表、其别名和其他记录分层，各层复用当前配置的 MMR。
+  来源覆盖及各层 MMR 的定向回归已通过，候选原始分与 `min_score` 准入条件保持；不允许以来源资格越过最低分。
+- 发送前审计复用生产正文投影函数，核对脱敏与字符裁剪后的确切可见正文，并独立核对持久来源资格。
+  评分仍要求完整持久正文的预定支持哈希、真实送达且可引用的来源、正文实际可见的目标值以及精确事实元组同时成立；
+  仅有同值子串不能证明引用正确，已裁去内容不能用来支持答案。
+- 正式接线发现并修复类型化来源 ID 的存储身份解析与下游预算单位不一致。
+  `typed:episode:` 是显示身份前缀，来源核验使用对应的实际存储 ID；缺少可信来源时角色仍为 `unknown`，不由前缀授予资格。
+  Recall 从 Runtime 的通用读口获取实际预算，按现有每来源比例换算后编译完整记录；新来源格式按 Unicode 字符计费。
+  认证模块可显式声明整块投影，跨来源披露与现有全局裁剪都不交付半条结构化数据；
+  省略在派生 Tool 上标记 `context_budget`，持久原文不变，正文自报标记不能选择该策略。
+  整块策略来自正式模块 ToolEvent 的外层元数据，来源正文仍是不可信数据，不因此获得执行权限。
+  保留既有不可信包裹、安全转义、每来源硬限额及无 spill 时全局 advisory 语义，不宣称新建全局硬上限。
+- 主答合同明确属性字段、裸来源 ID 及带三位毫秒的 RFC3339 UTC 字符串；不将整数时间戳或带显示前缀的 ID 自动改写为合格答案。
+  新增诊断只分辨字段、引用和投影错误，不放宽通过判据。期望事实、日期与支持正文不因此更改，也不把评分标签发送给模型。
+- 新运行必须保留新的源码、配置和提示词哈希，并使用新输出目录；此次合同澄清、来源呈现与产品修复并行发生，
+  不能将前后通过率差异单独归因于某项记忆算法。完整工作区、真实模型复验和同提交 CI 仍待最终登记。
+
+#### Beta 本地定向验收与反向验伪（2026-11-12）
+
+本节只登记已读取的本地日志，不汇总为新的全仓测试数。以下定向命令对应的软件测试已通过：
+
+| 仓外日志 | 实际覆盖 |
+|---|---|
+| `beta-memory-final-targeted.log` | Memory 库测试及 `memory_source_evidence`；包括预算前来源覆盖、最低分保护、来源分层保留配置 MMR、确切来源及历史核验 |
+| `beta-assembly-eval-v4.log` | `memory_automatic_correction`、`memory_autonomy_production`、`memory_writeback_recovery`、`profile_memory_evidence_authority`、`session_operation_evidence` 与回答评测 example 软件测试 |
+| `beta-runtime-budget-evidence.log` | Runtime `committed_evidence` 与 `context_budget` 的实际接线；新增省略元数据还由下述 atomic 恢复绿色日志覆盖 |
+
+测试修正按正式合同保留了更强的可判真断言：
+
+- 双时间查询将有效时间与获知时间分开：历史与现行状态查询显式设置记录时刻的 belief cutoff，
+  另外保留默认 belief 为事件时刻时仍返回旧值的断言；没有把晚报状态伪装成当时已经获知。
+- 隔离 `SingleShot` 子调用不执行父 Runtime 行为钩子；恢复验收重新装配 Host 后，
+  通过实际授权的新 `TurnStart` 消费冻结意图，不以直接模块调用冒充生产恢复。
+- 实际送达可引用经 SQL 核验父正文、提交来源和治理回执的派生别名；
+  不要求预算选择必须同时送达全部原文 ID，但现行正文、实际 ID、来源支持及授权断言保持。
+
+`reverse-wiring-beta.json` 记录下表四项均发生真实断言失败（退出码 101），
+随后恢复原源码逐字节一致并退出 0；已复核四处当前源码散列与该记录一致。
+各 `reverse-<control>-red.log` / `reverse-<control>-green.log` 的实际测试行如下：
+
+| control | RED 实际输出 | GREEN 实际输出 |
+|---|---|---|
+| `runtime-post-read-lease` | `test revocation_during_the_owning_store_read_cannot_release_committed_input ... FAILED` | `test revocation_during_the_owning_store_read_cannot_release_committed_input ... ok` |
+| `production-source-port` | `test production_source_option_delivers_verified_user_and_nonfactual_assistant_records ... FAILED` | `test production_source_option_delivers_verified_user_and_nonfactual_assistant_records ... ok` |
+| `correction-required-date` | `test a_live_proposal_that_omits_the_adjacent_change_date_cannot_silently_write_today ... FAILED` | `test a_live_proposal_that_omits_the_adjacent_change_date_cannot_silently_write_today ... ok` |
+| `authenticated-atomic-policy` | `test atomic_per_source_overflow_is_omitted_but_body_cannot_select_atomic_policy ... FAILED` | `test atomic_per_source_overflow_is_omitted_but_body_cannot_select_atomic_policy ... ok` |
+
+这些证据支持本地定向软件验收，不能转写成真实模型 Beta 成功、全仓通过或适用 CI 已完成。
+
 #### 本轮验收入口
 
 ```sh
-cargo test -p apeireth-runtime --test committed_evidence --locked -j 2
-cargo test -p apeireth-memory --test memory_automatic_correction --test writeback_recovery --locked -j 2
+cargo test -p apeireth-runtime --test committed_evidence --test context_budget --locked -j 2
+cargo test -p apeireth-memory --lib context_compiler --locked -j 2
+cargo test -p apeireth-memory --test memory_source_evidence --test memory_automatic_correction --test writeback_recovery --locked -j 2
 cargo test -p apeireth-runtime-assembly --test memory_automatic_correction --test memory_writeback_recovery --test memory_autonomy_production --test profile_memory_evidence_authority --test session_operation_evidence --locked -j 2
 cargo test -p apeireth-runtime-assembly --example memory_answer_eval --locked -j 2
 cargo run -p apeireth-runtime-assembly --example memory_answer_eval --locked -j 2 -- offline-check --output NEW_DIRECTORY

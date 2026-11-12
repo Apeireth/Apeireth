@@ -1518,9 +1518,15 @@ impl BehaviorModule for MemoryRecallModule {
             if let Some(coord) = &self.coordinator {
                 let topic = topic_from_messages(ctx.messages);
                 let limit = morphology_recall_limit(&topic, self.limit, self.morphology_recall);
+                let context_chars = ctx
+                    .invoker()
+                    .context_budget_chars()
+                    .map(apeireth_orchestration::untrusted_envelope::per_source_budget_chars)
+                    .unwrap_or(self.max_context_chars)
+                    .min(self.max_context_chars);
                 let mut query = MemoryRecallQuery::new(session.clone(), topic.clone())
                     .with_limit(limit)
-                    .with_max_chars(self.max_context_chars);
+                    .with_max_chars(context_chars);
                 if let Some(scopes) = &self.authorized_scopes {
                     query.visible_scopes = scopes.clone();
                     query.exact_scope_authorization = true;
@@ -1575,14 +1581,19 @@ impl BehaviorModule for MemoryRecallModule {
                         }
                         let mut overlay = selected.overlay.clone();
                         if let Some(community) = self.community_overlay(&topic) {
-                            overlay.push_str("\n\n");
-                            overlay.push_str(&community);
+                            if overlay.chars().count() + 2 + community.chars().count()
+                                <= context_chars
+                            {
+                                overlay.push_str("\n\n");
+                                overlay.push_str(&community);
+                            }
                         }
                         // Recalled memory content is cross-source input: the
                         // provider-request funnel discloses it through the
                         // untrusted reference envelope.
                         ModuleOutcome::continue_().with_prompt_overlay(
-                            PromptOverlay::system_cross_source("memory_recall", overlay),
+                            PromptOverlay::system_cross_source("memory_recall", overlay)
+                                .with_atomic_context(),
                         )
                     }
                     Ok(None) => {

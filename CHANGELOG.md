@@ -5,7 +5,7 @@
 - **IMPLEMENTED / 条件性 PRODUCTION WIRED**：已提交直接用户证据经受限语义提案、来源/作用域/权限及 CAS 校验进入纠错事务；保留原始证据，区分误记修订与带有效区间的状态历史。保守中文语法及日期规则不表示通用语义完备，旧记录缺少来源标记时不补造授权。
 - 官方同库 journal 装配及显式 Host 私有映射接入恢复 → 纠错 → 召回；冻结操作意图、持久待办与幂等回执供下一次有权 TurnStart / AfterTurn 有界恢复。兼容组合缺少 journal 时不启用新模块；撤权、冲突及遗忘须阻止旧操作重放，不声明独立后台 daemon。
 - 个人记忆派生增加直接声明边界，原始引用保留在 D0；新增手动回答评测入口，保存真实请求、响应、语义提案调用、失败及预算证据。评测传输的 thinking 控制不等于生产 Provider 参数能力。
-- **正式集成仍在验证，真实模型答题质量未测**；本条不改写前批历史验收或检索基线，当前证据与限制见[质量批进度](docs/design/memory-quality-hardening.md)及[批次看板](docs/status/spec-batch-status.md)。
+- **首次真实模型评测未通过，修复及复验中，正式集成仍在验证**；原始失败报告保留，本条不改写前批历史验收或检索基线。失败分型、后续合同与来源呈现变更见[质量批进度](docs/design/memory-quality-hardening.md)及[批次看板](docs/status/spec-batch-status.md)。
 
 ## [Unreleased] — 生产装配测试夹具（2026-11-12）
 

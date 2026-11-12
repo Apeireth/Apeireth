@@ -275,6 +275,21 @@ pub struct SqliteWritebackJournal {
     pool: Arc<SqliteConnectionPool>,
 }
 
+impl crate::context_compiler::MemoryEvidenceSource for SqliteWritebackJournal {
+    fn evidence_for(
+        &self,
+        id: &str,
+        content: &str,
+    ) -> MemoryResult<crate::context_compiler::MemorySourceEvidence> {
+        self.pool
+            .read(|conn| {
+                crate::context_compiler::memory_source_evidence_on_connection(conn, id, content)
+                    .map_err(|e| StorageError::Serialization(e.to_string()))
+            })
+            .map_err(|e| MemoryError::Other(e.to_string()))
+    }
+}
+
 impl SqliteWritebackJournal {
     /// Recovery sinks must share this official writer pool. Separate pools,
     /// including independently opened handles to one path, are not certified.

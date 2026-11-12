@@ -297,7 +297,13 @@ impl ToolCapability for BehaviorTool {
         }
         let result = match &outcome {
             Ok(outcome) => {
-                let data=outcome.prompt_overlays.iter().map(|overlay|serde_json::json!({"source":overlay.cross_source_label(),"text":ContentPart::join_text(&overlay.message().content)})).collect::<Vec<_>>();
+                let data = outcome.prompt_overlays.iter().map(|overlay| {
+                    let mut block = serde_json::json!({"source":overlay.cross_source_label(),"text":ContentPart::join_text(&overlay.message().content)});
+                    if overlay.is_atomic_context() {
+                        block["atomic"] = serde_json::Value::Bool(true);
+                    }
+                    block
+                }).collect::<Vec<_>>();
                 ToolResult::ok(
                     &call.id,
                     serde_json::json!({"untrusted_data":true,"context":data}),

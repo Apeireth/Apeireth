@@ -539,6 +539,9 @@ pub struct ProductionBackends {
     pub memory_data_root: Option<PathBuf>,
     /// Calendar interpretation selected by the Host; absent uses UTC.
     pub memory_correction_policy: Option<super::memory_correction::CorrectionPolicy>,
+    /// Read-only source qualification, including hosts that disable writeback.
+    pub memory_evidence_source:
+        Option<Arc<dyn apeireth_memory::context_compiler::MemoryEvidenceSource>>,
     /// Optional progressive-disclosure wiki store.
     pub wiki: Option<Arc<dyn WikiEntryStore>>,
     /// Optional knowledge graph store.
@@ -1492,6 +1495,9 @@ impl ProductionModules {
                 (&backends.typed_recall, &backends.typed_recall_identity)
             {
                 coordinator = coordinator.with_typed_recall(Arc::clone(source), identity.clone());
+            }
+            if let Some(source) = &backends.memory_evidence_source {
+                coordinator = coordinator.with_evidence_source(source.clone());
             }
             let sinks = (&mut tool_modules, &mut capabilities);
             let (slot, shared) = memory_assembly::wire(sinks.0, sinks.1, coordinator, &clock);

@@ -63,7 +63,7 @@ mod tests {
     #[test]
     fn date_and_city_are_inside_the_exact_continuous_evidence_span() {
         let input = super::super::fixtures::STATE_CHANGE;
-        let payload=json!({"protocol":CORRECTION_PROPOSAL_PROTOCOL,"input":input,"candidates":[{"id":"real-target","text":super::super::fixtures::BASIC_SEED}]}).to_string();
+        let payload=json!({"protocol":CORRECTION_PROPOSAL_PROTOCOL,"source_time_utc":"2000-01-02T03:04:05.006Z","utc_offset_seconds":0,"input":input,"candidates":[{"id":"real-target","text":super::super::fixtures::BASIC_SEED}]}).to_string();
         let request = NormalizedRequest::new(
             "offline",
             vec![

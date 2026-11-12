@@ -2292,12 +2292,14 @@ async fn build_cognitive_modules_at(
         apeireth_memory::SqliteMemoryStore::open(path.clone())
             .map_err(|error| format!("persona memory store open failed: {error}"))?,
     );
+    let writeback_journal = Arc::new(
+        apeireth_memory::writeback_recovery::SqliteWritebackJournal::from_pool(pool.clone()),
+    );
     let backends = CognitiveBackends {
         memory: Some(memory.clone()),
         memory_governance: Some(memory_governance),
-        memory_recovery: Some(Arc::new(
-            apeireth_memory::writeback_recovery::SqliteWritebackJournal::from_pool(pool.clone()),
-        )),
+        memory_recovery: Some(writeback_journal.clone()),
+        memory_evidence_source: Some(writeback_journal),
         memory_data_root: None,
         memory_correction_policy: Some(
             apeireth_runtime_assembly::canonical::memory_correction::CorrectionPolicy {

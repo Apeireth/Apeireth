@@ -574,7 +574,7 @@ async fn agent_task_body_stays_in_the_canonical_session_and_is_not_copied_into_t
     use apeireth_runtime::{ModuleInvocationRequest, ModuleInvoker};
     let dir = tempfile::tempdir().unwrap();
     let session = SessionId::new();
-    let (runtime, _writer, backend, journal) = assemble(dir.path()).await;
+    let (runtime, writer, backend, journal) = assemble(dir.path()).await;
     let runtime = Arc::new(runtime);
     let completed = runtime
         .execute(TurnRequest::new(session, "ordinary direct input"))
@@ -647,14 +647,35 @@ async fn agent_task_body_stays_in_the_canonical_session_and_is_not_copied_into_t
     );
     let page = reader.committed_turns(None, 64).await.unwrap();
     assert!(page.turns.iter().any(|turn|turn.input.origin==apeireth_runtime::CommittedInputOrigin::AgentTask&&turn.input.messages.iter().any(|m|apeireth_protocol::canonical::ContentPart::join_text(&m.content).contains("TASK-ONLY-CANARY"))),"the real committed source port must expose the completed Task to its authorized recovery owner");
+    let task_id = task.id;
+    // SingleShot children do not mount the parent's behavior hooks, and a
+    // running Host cannot adopt another instance's accounting ownership.
+    // Reopen the official session and exercise its real TurnStart recovery.
+    drop(reader);
+    drop(invoker);
+    drop(runtime);
+    drop(writer);
+    drop(backend);
+    drop(journal);
+    let observed = Arc::new(Mutex::new(None));
+    let (runtime, _writer, backend, _journal) =
+        assemble_with_capture(dir.path(), Some(observed.clone())).await;
+    runtime
+        .execute(TurnRequest::new(
+            task_id,
+            "ordinary Host followup after restart",
+        ))
+        .await
+        .unwrap();
     let watermark: serde_json::Value = serde_json::from_str(
-        &journal
-            .cursor(&task.id.to_string())
+        observed
+            .lock()
             .unwrap()
-            .expect("actual Task recovery hook registered its scan watermark"),
+            .as_deref()
+            .expect("actual Host TurnStart recovery hook registered its scan watermark"),
     )
     .unwrap();
-    assert!(watermark["streams"][format!("turn:{}",task.id)].as_u64().unwrap()>=response_index as u64,"the actual recovery hook scanned past the completed Task marker before the no-copy assertion");
+    assert!(watermark["streams"][format!("turn:{task_id}")].as_u64().unwrap()>=response_index as u64,"the actual recovery hook scanned past the completed Task marker before the no-copy assertion");
     let copied=backend.pool().read(|conn|Ok(conn.query_row::<i64,_,_>("SELECT COUNT(*) FROM memory_writeback_jobs WHERE source_json LIKE '%TASK-ONLY-CANARY%'",[],|r|r.get(0))?)).unwrap();
     assert_eq!(
         copied, 0,
