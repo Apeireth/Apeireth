@@ -55,11 +55,11 @@ Author: lead
 
 | 层 | 契约（承诺什么） | 状态 | 证据 |
 |---|---|---|---|
-| **D0 原始证据** | 原文 + 结构 + 双时间 + 出处 + 关系 + 上下文 + **访问史**（**唯一"绝不"可丢**） | ✅ **最扎实** | `episode`/`append_only`/`provenance`/`access_history` 生产接线；**哈希链进写入路径** `backend/sqlite.rs:120` → `memory_chain::put_chained_episode`；`memory verify` CLI 可定位坏记录；`docs/status/d0-fidelity-audit.md`（11 KB 缺口清单） |
+| **D0 原始证据** | 原文 + 结构 + 双时间 + 出处 + 关系 + 上下文 + **访问史**（**唯一"绝不"可丢**） | ✅ **最扎实** | `episode`/`append_only`/`provenance`/`access_history` 生产接线；**哈希链进写入路径** `MemoryCoordinator::persist_episode` → `put_episode_with_metadata` → `memory_chain::put_chained_episode_record`；`memory verify` CLI 可定位坏记录；`docs/status/d0-fidelity-audit.md`（11 KB 缺口清单） |
 | **D1 结构化** | 目录树 / 段落切分 / **实体** / 图谱边 | 🟡 **部分已接** | `wiki_corpus`、图谱及 `MemoryMaterializer`/`RuleMemoryExtractor` 已由 `canonical/cognitive.rs` 的 AfterTurn 路径调用；typed 承诺、人格、关系分别受既有 sink 契约约束。自然语言关系识别不等于已获准写入结构化图。 |
 | **D2 语义索引** | 向量 / 关键词 / 主题；**可重建且可换代** | 🟡 **词面默认，可选嵌入端点** | `hybrid_search`/`retrieval_pipeline`、`persistent_vector`、`vector_rebuild` 已有实现；CLI 配置 URL 与 model 时装配 `OpenAiCompatibleEmbeddingProvider`，key 可选，支持本地兼容端点。未配置则走词面回落；当前仍需补向量增量缓存和模型换代运行验收。 |
 | **D3 提炼** | 摘要 / 里程碑 / 教训 / 原则；每条带 provenance 指回 D0 | 🟡 **一部分** | ✅ `milestone`（3 处）· `lesson`（1 处）· ❌ `daily_summary` / `principles` / `chronicle_crystallizer` **生产 0 调用** |
-| **D4 模式** | **只产标注，不产记忆**；默认关；**不接线也能离线量增量价值** | 🟡 **挖了坑没量** | ✅ `betti_hole_detector` / `kuramoto_resonance` / `semantic_axis` = **生产已接但 DEFAULT OFF**（`APEIRETH_ENABLE_ABSORPTION_INSIGHT=1` 才开）· ❌ 五维 / 程序性 / 做梦 / 社区分层 / `hallways` / `layered_memo` / `ensemble` 未接 · ❌ **`d4_eval` 评估器已写好（405 行），但「各一行数字」= 0 行** |
+| **D4 模式** | **只产标注，不产记忆**；默认关；**不接线也能离线量增量价值** | 🟡 **已有测量记录，尚未全面验收** | ✅ `betti_hole_detector` / `kuramoto_resonance` / `semantic_axis` = **生产已接但 DEFAULT OFF**（`APEIRETH_ENABLE_ABSORPTION_INSIGHT=1` 才开）· ❌ 五维 / 程序性 / 做梦 / 社区分层 / `hallways` / `layered_memo` / `ensemble` 未接 · `d4_eval` 离线评测已有实现；当前已测及测法无效记录以自动事实块和候选台账为准，已有记录不等于本批复跑或可上线收益 |
 | **D5 判断** | 置信度 / 校准 / **降权权重** | 🟡 **骨架** | ✅ `confidence.rs` · 双时间衰减（`bitemporal_graph`）· recency 衰减（`coordinator`，含 2026-10-27 接的相对时间锚点）· ❌ `calibration*` / `intent_brier` / `online_calibration` / `calibration_critic` **生产 0 调用**；**D-9 降权权重模型未接生产** |
 
 ⚠️ **判断口径**：本页**不**用「crate 外调用数」当接线判据（**该指标会误判**：

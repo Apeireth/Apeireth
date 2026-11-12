@@ -25,7 +25,7 @@
 {"id": "ig-v1-025", "query": "抗漂移审计结论里对「健康度」的判断是什么？", "expect_ids": ["doc:91913cb76caa"], "expect_fragments": ["健康度：有慢性红"], "tags": ["audit", "结论"]}
 {"id": "ig-v1-026", "query": "设计稿批次看板里 D0 哈希链的状态是什么？", "expect_ids": ["doc:71d04b109c2d"], "expect_fragments": ["哈希链进写入路径"], "tags": ["status", "D0"]}
 {"id": "ig-v1-027", "query": "D2 语义索引的真实状态是什么？", "expect_ids": ["doc:71d04b109c2d"], "expect_fragments": ["词面默认，可选嵌入端点"], "tags": ["status", "D2"]}
-{"id": "ig-v1-028", "query": "D4 模式的现状被怎么描述？", "expect_ids": ["doc:71d04b109c2d"], "expect_fragments": ["挖了坑没量"], "tags": ["status", "D4"]}
+{"id": "ig-v1-028", "query": "D4 模式的现状被怎么描述？", "expect_ids": ["doc:71d04b109c2d"], "expect_fragments": ["已有测量记录，尚未全面验收"], "tags": ["status", "D4"]}
 {"id": "ig-v1-029", "query": "B0-c 的验收标准是什么？", "expect_ids": ["doc:f25a6d5e6450"], "expect_fragments": ["36 个模块进候选池，各有一行数字"], "tags": ["status", "B0-c"]}
 {"id": "ig-v1-030", "query": "为什么记忆评测仍需要先形成基线？", "expect_ids": ["doc:0c23e756f9bf"], "expect_fragments": ["没有基线，\"变好\"无法证明"], "tags": ["status", "B0"]}
 {"id": "ig-v1-031", "query": "B0-c 的两个实测发现被称作什么级别的问题？", "expect_ids": ["doc:b1ccfabde538"], "expect_fragments": ["都是架构级"], "tags": ["status", "B0-c"]}
