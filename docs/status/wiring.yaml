@@ -3,8 +3,8 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: 61eec961a6c6e561ef02d9e18d5e9681a4e7263741d560896b6ed3857ec5d89f
-claims_total: 54
+claims_sha256: 19e48fe3946a1a902c0cbc2d06088d0fd3f259818a5985cc0e48cc94afc0eece
+claims_total: 59
 items:
   - id: "rt.provider_router"
     capability: "跨 provider fallback + 健康态（运行时路由）"
@@ -1281,9 +1281,13 @@ items:
         - "crates/engine/memory/src/hybrid_search.rs"
         - "crates/engine/memory/src/retrieval_pipeline.rs"
         - "crates/engine/memory/src/coordinator.rs"
+        - "crates/engine/memory/src/coordinator/owned.rs"
+        - "crates/engine/memory/src/context_compiler/evidence.rs"
     wired:
       production_refs:
+        - "crates/engine/memory/src/context_compiler/evidence.rs"
         - "crates/engine/memory/src/coordinator.rs"
+        - "crates/engine/memory/src/coordinator/owned.rs"
         - "crates/engine/memory/src/hybrid_search.rs"
         - "crates/engine/memory/src/retrieval_pipeline.rs"
     default_enabled: true
@@ -1291,6 +1295,8 @@ items:
       tests:
         - "crates/engine/memory/src/retrieval_pipeline.rs"
         - "crates/engine/memory/src/coordinator.rs"
+        - "crates/engine/memory/tests/memory_source_evidence.rs"
+        - "crates/engine/runtime-assembly/tests/memory_autonomy_production.rs"
       claims_id: "mem.retrieval_ranking"
     gaps:
       []
@@ -1319,18 +1325,23 @@ items:
     gaps:
       []
   - id: "mem.injection_contract"
-    capability: "注入契约（召回片段按预算硬上限截断，预算不可超）"
+    capability: "记忆注入编译预算硬限额与完整记录投影（Runtime 总预算另循现有语义）"
     implemented:
       sources:
         - "crates/engine/memory/src/coordinator.rs"
         - "crates/engine/memory/tests/golden_injection2.rs"
+        - "crates/engine/memory/src/context_compiler.rs"
+        - "crates/engine/runtime-assembly/src/canonical/cognitive.rs"
     wired:
       production_refs:
+        - "crates/engine/memory/src/context_compiler.rs"
         - "crates/engine/memory/src/coordinator.rs"
+        - "crates/engine/runtime-assembly/src/canonical/cognitive.rs"
     default_enabled: true
     validated:
       tests:
         - "crates/engine/memory/tests/golden_injection2.rs"
+        - "crates/engine/memory/src/context_compiler.rs"
       claims_id: "mem.injection_contract"
     gaps:
       []
@@ -1369,6 +1380,234 @@ items:
       claims_id: "mem.shadow_swap"
     gaps:
       []
+  - id: "rt.committed_evidence"
+    capability: "按主体授权的已提交输入与冻结操作证据端口"
+    implemented:
+      sources:
+        - "crates/engine/runtime/src/canonical/committed_evidence.rs"
+        - "crates/engine/runtime/src/canonical/module.rs"
+        - "crates/engine/runtime/src/canonical/subloop.rs"
+        - "crates/engine/runtime/src/canonical/execute.rs"
+        - "crates/engine/runtime/src/canonical/session.rs"
+        - "crates/engine/runtime/src/canonical/session_events.rs"
+        - "crates/engine/runtime-assembly/src/sqlite_session.rs"
+        - "crates/engine/storage/src/migrations.rs"
+    wired:
+      production_refs:
+        - "crates/engine/runtime-assembly/src/sqlite_session.rs"
+        - "crates/engine/runtime/src/canonical/committed_evidence.rs"
+        - "crates/engine/runtime/src/canonical/execute.rs"
+        - "crates/engine/runtime/src/canonical/module.rs"
+        - "crates/engine/runtime/src/canonical/session.rs"
+        - "crates/engine/runtime/src/canonical/session_events.rs"
+        - "crates/engine/runtime/src/canonical/subloop.rs"
+        - "crates/engine/storage/src/migrations.rs"
+    default_enabled: "n/a"
+    validated:
+      tests:
+        - "crates/engine/runtime/tests/committed_evidence.rs"
+        - "crates/engine/runtime-assembly/tests/memory_autonomy_production.rs"
+      claims_id: "rt.committed_evidence"
+    gaps:
+      []
+  - id: "mem.automatic_correction"
+    capability: "受限用户自述自动更正（治理事务、现行事实与有效时间历史）"
+    implemented:
+      sources:
+        - "crates/engine/memory/src/automatic_correction.rs"
+        - "crates/engine/memory/src/memory_governance.rs"
+        - "crates/engine/memory/src/memory_chain.rs"
+        - "crates/engine/memory/src/temporal_graph_store.rs"
+        - "crates/engine/memory/src/extraction.rs"
+        - "crates/engine/runtime-assembly/src/canonical/memory_correction.rs"
+        - "crates/engine/runtime-assembly/src/canonical/production.rs"
+        - "crates/engine/runtime-assembly/src/profile_memory.rs"
+        - "crates/adapters/cli/src/lib.rs"
+    wired:
+      production_refs:
+        - "crates/adapters/cli/src/lib.rs"
+        - "crates/engine/memory/src/automatic_correction.rs"
+        - "crates/engine/memory/src/extraction.rs"
+        - "crates/engine/memory/src/memory_chain.rs"
+        - "crates/engine/memory/src/memory_governance.rs"
+        - "crates/engine/memory/src/temporal_graph_store.rs"
+        - "crates/engine/runtime-assembly/src/canonical/memory_correction.rs"
+        - "crates/engine/runtime-assembly/src/canonical/production.rs"
+        - "crates/engine/runtime-assembly/src/profile_memory.rs"
+    default_enabled: "n/a"
+    validated:
+      tests:
+        - "crates/engine/memory/tests/memory_automatic_correction.rs"
+        - "crates/engine/runtime-assembly/tests/memory_automatic_correction.rs"
+        - "crates/engine/runtime-assembly/tests/memory_autonomy_production.rs"
+      claims_id: "mem.automatic_correction"
+    gaps:
+      []
+  - id: "mem.writeback_recovery"
+    capability: "同库 journal 的有界记忆写回恢复与修订失效"
+    implemented:
+      sources:
+        - "crates/engine/memory/src/writeback_recovery.rs"
+        - "crates/engine/memory/src/migrations/list.rs"
+        - "crates/engine/memory/src/memory_governance.rs"
+        - "crates/engine/memory/src/memory_chain.rs"
+        - "crates/engine/memory/src/memory_materializer.rs"
+        - "crates/engine/memory/src/coordinator.rs"
+        - "crates/engine/memory/src/coordinator/owned.rs"
+        - "crates/engine/memory/src/scope.rs"
+        - "crates/engine/memory/src/commitments.rs"
+        - "crates/engine/memory/src/persona_store_sqlite.rs"
+        - "crates/engine/memory/src/persona_layer.rs"
+        - "crates/engine/memory/src/temporal_graph_store.rs"
+        - "crates/engine/memory/src/experience_store_sqlite.rs"
+        - "crates/engine/memory/src/freshness/hash_gate.rs"
+        - "crates/engine/runtime-assembly/src/canonical/cognitive.rs"
+        - "crates/engine/runtime-assembly/src/canonical/cognitive/writeback_recovery.rs"
+        - "crates/engine/runtime-assembly/src/canonical/memory_recovery.rs"
+        - "crates/engine/runtime-assembly/src/canonical/memory_typed_sink.rs"
+        - "crates/engine/runtime-assembly/src/canonical/production.rs"
+        - "crates/engine/runtime-assembly/src/profile_memory.rs"
+        - "crates/adapters/cli/src/lib.rs"
+    wired:
+      production_refs:
+        - "crates/adapters/cli/src/lib.rs"
+        - "crates/engine/memory/src/commitments.rs"
+        - "crates/engine/memory/src/coordinator.rs"
+        - "crates/engine/memory/src/coordinator/owned.rs"
+        - "crates/engine/memory/src/experience_store_sqlite.rs"
+        - "crates/engine/memory/src/freshness/hash_gate.rs"
+        - "crates/engine/memory/src/memory_chain.rs"
+        - "crates/engine/memory/src/memory_governance.rs"
+        - "crates/engine/memory/src/memory_materializer.rs"
+        - "crates/engine/memory/src/migrations/list.rs"
+        - "crates/engine/memory/src/persona_layer.rs"
+        - "crates/engine/memory/src/persona_store_sqlite.rs"
+        - "crates/engine/memory/src/scope.rs"
+        - "crates/engine/memory/src/temporal_graph_store.rs"
+        - "crates/engine/memory/src/writeback_recovery.rs"
+        - "crates/engine/runtime-assembly/src/canonical/cognitive.rs"
+        - "crates/engine/runtime-assembly/src/canonical/cognitive/writeback_recovery.rs"
+        - "crates/engine/runtime-assembly/src/canonical/memory_recovery.rs"
+        - "crates/engine/runtime-assembly/src/canonical/memory_typed_sink.rs"
+        - "crates/engine/runtime-assembly/src/canonical/production.rs"
+        - "crates/engine/runtime-assembly/src/profile_memory.rs"
+    default_enabled: "n/a"
+    validated:
+      tests:
+        - "crates/engine/memory/tests/writeback_recovery.rs"
+        - "crates/engine/memory/tests/memory_automatic_correction.rs"
+        - "crates/engine/runtime-assembly/tests/memory_writeback_recovery.rs"
+        - "crates/engine/runtime-assembly/tests/memory_autonomy_production.rs"
+      claims_id: "mem.writeback_recovery"
+    gaps:
+      []
+  - id: "mem.source_qualified_context"
+    capability: "记忆上下文的持久来源资格、确切正文投影与来源覆盖"
+    implemented:
+      sources:
+        - "crates/engine/memory/src/context_compiler.rs"
+        - "crates/engine/memory/src/context_compiler/evidence.rs"
+        - "crates/engine/memory/src/coordinator.rs"
+        - "crates/engine/memory/src/coordinator/owned.rs"
+        - "crates/engine/memory/src/writeback_recovery.rs"
+        - "crates/engine/memory/src/automatic_correction.rs"
+        - "crates/engine/runtime-assembly/src/canonical/cognitive.rs"
+        - "crates/engine/runtime-assembly/src/canonical/production.rs"
+        - "crates/adapters/cli/src/lib.rs"
+        - "crates/engine/runtime/src/canonical/behavior_projection.rs"
+        - "crates/engine/runtime/src/canonical/behavior_adapter.rs"
+        - "crates/engine/runtime/src/canonical/module.rs"
+        - "crates/engine/runtime/src/canonical/subloop.rs"
+        - "crates/engine/runtime/src/canonical/execute.rs"
+        - "crates/foundation/orchestration/src/untrusted_envelope.rs"
+        - "crates/engine/memory/src/retrieval_pipeline.rs"
+        - "crates/engine/memory/src/retrieval_pipeline/diversity.rs"
+    wired:
+      production_refs:
+        - "crates/adapters/cli/src/lib.rs"
+        - "crates/engine/memory/src/automatic_correction.rs"
+        - "crates/engine/memory/src/context_compiler.rs"
+        - "crates/engine/memory/src/context_compiler/evidence.rs"
+        - "crates/engine/memory/src/coordinator.rs"
+        - "crates/engine/memory/src/coordinator/owned.rs"
+        - "crates/engine/memory/src/retrieval_pipeline.rs"
+        - "crates/engine/memory/src/retrieval_pipeline/diversity.rs"
+        - "crates/engine/memory/src/writeback_recovery.rs"
+        - "crates/engine/runtime-assembly/src/canonical/cognitive.rs"
+        - "crates/engine/runtime-assembly/src/canonical/production.rs"
+        - "crates/engine/runtime/src/canonical/behavior_adapter.rs"
+        - "crates/engine/runtime/src/canonical/behavior_projection.rs"
+        - "crates/engine/runtime/src/canonical/execute.rs"
+        - "crates/engine/runtime/src/canonical/module.rs"
+        - "crates/engine/runtime/src/canonical/subloop.rs"
+        - "crates/foundation/orchestration/src/untrusted_envelope.rs"
+    default_enabled: "n/a"
+    validated:
+      tests:
+        - "crates/engine/memory/src/coordinator/owned.rs"
+        - "crates/engine/memory/src/retrieval_pipeline.rs"
+        - "crates/engine/memory/src/context_compiler/evidence.rs"
+        - "crates/engine/memory/tests/memory_source_evidence.rs"
+        - "crates/engine/runtime-assembly/tests/memory_autonomy_production.rs"
+        - "crates/engine/memory/src/context_compiler.rs"
+        - "crates/engine/runtime/tests/context_budget.rs"
+      claims_id: "mem.source_qualified_context"
+    gaps:
+      []
+  - id: "mem.answer_eval_contract"
+    capability: "手动记忆回答评测与逐调用证据契约（三轮实测未通过，Delta 待验）"
+    implemented:
+      sources:
+        - "crates/engine/runtime-assembly/examples/memory_answer_eval.rs"
+        - "crates/engine/runtime-assembly/examples/memory_answer_eval/mod.rs"
+        - "crates/engine/runtime-assembly/examples/memory_answer_eval/config.rs"
+        - "crates/engine/runtime-assembly/examples/memory_answer_eval/fixtures.rs"
+        - "crates/engine/runtime-assembly/examples/memory_answer_eval/runner.rs"
+        - "crates/engine/runtime-assembly/examples/memory_answer_eval/capture.rs"
+        - "crates/engine/runtime-assembly/examples/memory_answer_eval/audit.rs"
+        - "crates/engine/runtime-assembly/examples/memory_answer_eval/protocol.rs"
+        - "crates/engine/runtime-assembly/examples/memory_answer_eval/scoring.rs"
+        - "crates/engine/runtime-assembly/examples/memory_answer_eval/wire.rs"
+        - "crates/engine/runtime-assembly/examples/memory_answer_eval/io.rs"
+        - "crates/engine/runtime-assembly/examples/memory_answer_eval/run-live.ps1"
+        - "crates/engine/runtime-assembly/examples/memory_answer_eval/source_proof.rs"
+        - "crates/engine/runtime-assembly/examples/memory_answer_eval/lifecycle.rs"
+        - "crates/engine/runtime-assembly/examples/memory_answer_eval/offline.rs"
+        - "crates/engine/memory/src/coordinator.rs"
+        - "crates/engine/memory/src/coordinator/owned.rs"
+        - "crates/engine/memory/src/context_compiler.rs"
+        - "crates/engine/memory/src/context_compiler/evidence.rs"
+    wired:
+      production_refs:
+        - "crates/engine/memory/src/context_compiler.rs"
+        - "crates/engine/memory/src/context_compiler/evidence.rs"
+        - "crates/engine/memory/src/coordinator.rs"
+        - "crates/engine/memory/src/coordinator/owned.rs"
+        - "crates/engine/runtime-assembly/examples/memory_answer_eval.rs"
+        - "crates/engine/runtime-assembly/examples/memory_answer_eval/audit.rs"
+        - "crates/engine/runtime-assembly/examples/memory_answer_eval/capture.rs"
+        - "crates/engine/runtime-assembly/examples/memory_answer_eval/config.rs"
+        - "crates/engine/runtime-assembly/examples/memory_answer_eval/fixtures.rs"
+        - "crates/engine/runtime-assembly/examples/memory_answer_eval/io.rs"
+        - "crates/engine/runtime-assembly/examples/memory_answer_eval/lifecycle.rs"
+        - "crates/engine/runtime-assembly/examples/memory_answer_eval/mod.rs"
+        - "crates/engine/runtime-assembly/examples/memory_answer_eval/offline.rs"
+        - "crates/engine/runtime-assembly/examples/memory_answer_eval/protocol.rs"
+        - "crates/engine/runtime-assembly/examples/memory_answer_eval/runner.rs"
+        - "crates/engine/runtime-assembly/examples/memory_answer_eval/scoring.rs"
+        - "crates/engine/runtime-assembly/examples/memory_answer_eval/source_proof.rs"
+        - "crates/engine/runtime-assembly/examples/memory_answer_eval/wire.rs"
+    default_enabled: false
+    validated:
+      tests:
+        - "crates/engine/runtime-assembly/examples/memory_answer_eval/mod.rs"
+        - "crates/engine/runtime-assembly/examples/memory_answer_eval/capture.rs"
+        - "crates/engine/runtime-assembly/examples/memory_answer_eval/scoring.rs"
+        - "crates/engine/runtime-assembly/examples/memory_answer_eval/wire.rs"
+        - "crates/engine/runtime-assembly/examples/memory_answer_eval/runner.rs"
+      claims_id: "mem.answer_eval_contract"
+    gaps:
+      - "未达 PRODUCTION WIRED：2026-11-12 IMPLEMENTED，仅显式手动 example，不是默认产品请求入口。复用真实 Runtime/SQLite/Recall/ModuleInvoker，服务端完整协议标识区分主答、纠错提案与未知请求，所有已尝试调用共享不可退还预算；输入与 oracle 分离，失败、缺失与保…"
   - id: "sec.output_injection_guard"
     capability: "回合层消费工具**输出侧**的提示注入标记 ⇒ 可见告警（固定措辞，恒不阻断）"
     implemented:

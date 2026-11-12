@@ -107,8 +107,9 @@ Provider 测试从独立 SQLite 读取发送 ID 对应的治理状态、作用�
 | Q6 | 记忆写入失败自动恢复 | 持久待办、故障后重试、进程重启、重复消费、部分成功、作用域隔离及遗忘后不得复活；失败不发布未提交内容 |
 | Q7 | 真实模型答题评测 | 本地确定性评测器验证后，再用用户临时 key 实际运行；保留逐例回答与失败，硬失败不得被均分抵消；无 key 记未测，不用录制 Provider 代替 |
 
-当前状态：Q5/Q6 已实现并接入条件性生产组合；Beta 和 Gamma 已完成下文所列本地定向软件验收。
-真实评测 live01、live02 均未通过，原报告保留；Gamma 全仓、模型03及同提交 CI 尚未完成。
+当前状态：Q5/Q6 为 **IMPLEMENTED / 条件性 PRODUCTION WIRED**；Beta 和 Gamma 已完成下文所列本地定向软件验收。
+真实评测 live01、live02、live03 均未通过，原报告保留；Gamma 全仓软件回归已通过。
+Delta 已完成下文所列定向软件验收，全仓、LIVE04 及最终同提交 CI 仍待验。
 Beta 红绿反证属于当次实现；Gamma 六项红绿反证见下表，不能由定向结果推出新源码全部通过。
 本地确定性 Provider 和回环 HTTP 仍只用于验证软件契约，不能代替真实答题结果。
 当前无外部可运行实例，Q4 同条件比较仍独立记未测。
@@ -240,7 +241,8 @@ e03 三次原 grade 均为事实及时间正确、额外引用不在原支持正
 
 Gamma 实现来源固定到 `3cb47ef9e9f17c89d6f4d620b590546fa0844150`，
 源码树为 `a79e19b9862c15427ced4fc19339b3082a2308a3`；
-下述软件证据支持本地接线与受限合同，完整工作区、模型03及同提交远端 CI 仍待验。
+下述软件证据支持本地接线与受限合同；Gamma 全仓软件回归及第三轮真实结果见下文，
+不能据 Gamma 的全仓结果替代 Delta 源码的最终验收。
 
 Gamma 的产品修复及边界如下：
 
@@ -291,7 +293,7 @@ Gamma 已读取的本地定向证据为：
 此前 `workspace-tests-final.log` 的 Beta 全仓运行实际失败，涉及两项旧测试假设：
 数据根回退测试忽略了外部显式 `APEIRETH_DATA_DIR`；最小 Kernel 仍硬编码旧 revision 值，未计入新增通用证据事件。
 前者改用纯解析器验证既有环境优先级，生产行为保留且不全局改环境；后者明确断言通用来源/响应标记、顺序、请求与 trace，
-并按消息与事件账核对修订。定向修复通过不能代替 Gamma 全仓、模型03或 CI。
+并按消息与事件账核对修订。定向修复通过不能代替 Gamma 全仓、真实模型复验或 CI。
 
 `reverse-wiring-gamma.json` 已记录六项反向验伪：摘除相应接线时均真实断言失败、退出 101，
 恢复后逐字节一致且退出 0；当次恢复的各被测源文件散列均与收据一致；后续源码变更不能复用这些散列作为最终验收。
@@ -332,6 +334,130 @@ Gamma 已读取的本地定向证据为：
 题号、题数、原文严格子串判据与阈值保持，其他题目不变；这属于文档与问题同步，不能计为算法收益。
 旧内部卷分数保留作历史，不能把新旧内部卷分数直接对照为算法变化。
 独立真实回答评测仍固定 12 题 × 3 次；其语料、Oracle 及支持哈希集合未因此修改。
+
+#### 第三轮真实评测与 Delta 待验边界（2026-11-12）
+
+live03 的运行时仓库提交为 `bbe03f5100f07a727f8dedf752f66daf45e1120f`，
+运行树为 `ff5384063726ccdf76f86bec631212b0e57df94f`；
+实现来源仍为上文 Gamma 源码提交 `3cb47ef9e9f17c89d6f4d620b590546fa0844150`。
+冻结执行文件 SHA256 为 `b21d9ee6839d7fb45825d22ff6bda667c6c969c79e195001b5da577e2c0d3a83`，
+评分协议为 `apeireth.memory-answer-scoring.v2`。
+依据同一仓外证据根的 `live-03-summary.json`、`eval-executable-gamma-03.json` 及原始逐调用记录，
+完整 36 个槽位为 **35 passed、1 hard_failure**，`complete=true` 而 `live_quality_passed=false`。
+114 次实际 HTTP 调用均为 200 且有用量记录，总计 **81125 tokens**，没有发送前阻断。
+该轮仍未满足真实质量闸门；live01、live02、live03 的原回答、失败与 grade 均保留，不回改旧结果。
+
+唯一失败为 `e07` 的 repetition 2、主答 query call 100：回答是 `{"status":"unknown","facts":[]}`，
+Oracle 要求 `ambiguous`，原 grade 的硬失败为 `wrong_answer_status`。
+parse、事实集合及来源检查通过只说明这些子项没有失败，不能抵消状态分类的硬失败。
+实际送达请求只有当前追问“刚才的修改究竟针对哪一个主体？”和记忆上下文，
+缺少先前那次未能唯一指向主体的修改语句；模型因此没有获得区分“缺信息”和“主体歧义”所需的修改上下文。
+其余 11 类均为三次通过，e07 为两次通过一次失败；这不构成满分或一般质量证明。
+
+Gamma 全仓已完成：`workspace-tests-gamma-final-summary.json` 固定实现来源为
+`3cb47ef9e9f17c89d6f4d620b590546fa0844150`、执行提交为 `bbe03f5100f07a727f8dedf752f66daf45e1120f`，
+`cargo test --workspace --all-targets --locked --no-fail-fast -j 2` 在 Windows、rustc 1.97.1 下退出 0。
+该次运行快照为 **572 suites、11050 passed、0 failed、49 个原有 ignored**。
+此数只描述上述 Gamma 运行，不改写全局 test-baseline、历史徽章或其他提交的结果；Delta 的全仓仍须独立验收。
+
+#### Delta 对话证据交付与实际记录计数（2026-11-12）
+
+Delta 初版源码检查点 E 为 `706cabcfe174d4642f1afee5c5a6199d68b52150`，
+源码树为 `e60aa15d65c149c1f5384fccfdbb2844fab08285`；后续 E2 修复及当前验证见下文。
+它在既有 Recall/来源端口内保留已提交用户对话，让歧义修改的原始语句有机会进入后续实际请求；
+没有把该语句提升为用户事实、成功写入回执或新的纠错权限。
+
+预算前有界候选仍沿既有相关性准入，官方来源组合的送达优先级细分为四层：
+
+1. 独立可引用事实的来源代表。
+2. 官方来源核验可归属已提交用户请求的非事实对话；须为 user 来源且有非空 source_group。
+3. 同一事实来源的其他可引用别名。
+4. 生成内容、工具/助手确认及缺乏上述可核验归属的记录。
+
+各层仍调用原配置的 MMR；候选原始分、打分权重、最低分、候选上限及总交付预算保持。
+四层策略改变送达优先级，但不使低于最低分的对话获得准入，也不保证每条对话都能装入预算。
+对话仍为 `citable_as_fact=false`；只有 user 角色标签、Task 来源或空来源组不能获得第二层优先级。
+无来源端口的 legacy 分支保持原候选顺序与既有渲染/预算口径，不能据新策略推定旧后端已具备来源资格。
+
+qualified 编译结果的 `<governed_memory count=...>` 改为实际交付的完整 `[mem:...]` 记录数量，
+与 selected_candidate_ids 一致；只有 framing 而没有记录时为 0，不再用预算前候选数量表示实际送达量。
+计费继续保留原候选计数的数字宽度预留，实际数字只可能更短，完整 JSON 及字符硬预算不放宽。
+legacy 无来源渲染保留原候选数量标题；本修正不改变读契约投影与纯数据标注的职责。
+
+以下定向证据对应 Delta 初版 E，均为软件验收，不能替代 E2、真实模型或最终 CI：
+
+| 仓外日志 | 已确认范围 |
+|---|---|
+| `delta-memory-targeted.log` / 同名 `.exit.txt` | Memory lib 975 passed、保留 1 个原有 ignored；来源核验 8 passed，退出 0 |
+| `delta-production-targeted.log` / 同名 `.exit.txt` | 7 项实际生产装配回归通过、退出 0；含重开后对话送达、不执行歧义修改、遗忘后不恢复及来源隔离 |
+| `delta-workspace-clippy.log` / 同名 `.exit.txt` | 全工作区、all-targets、locked、`-D warnings` 退出 0 |
+| `delta-fmt-check.log` | Windows 逐 crate 检查覆盖 35 crate、全部 0 diff |
+| `delta-feature-memory.log` / `delta-feature-profile.log` / `delta-feature-memory-profile.log` | 无默认特性的 memory、profile-store 独立及组合配置均编译完成；只表示这些软件配置可编译 |
+
+`reverse-wiring-delta.json` 的两项反向验伪均真实断言失败、退出 101，随后逐字节恢复、退出 0；
+当次两处源文件散列与 E 一致；E2 的 owned.rs 已变化，当前对话接线反证见后文，
+compiler 的计数源文件散列仍与该计数收据逐字节一致：
+
+| control | RED 实际输出 | GREEN 实际输出 |
+|---|---|---|
+| `delta-verified-user-dialogue` | `test reopened_production_delivers_verified_dialogue_without_executing_it_or_restoring_forgotten_text ... FAILED` | 同名测试 `... ok` |
+| `delta-delivered-record-count` | `test context_compiler::tests::qualified_chinese_records_share_the_runtime_character_budget_without_partial_json ... FAILED` | 同名测试 `... ok` |
+
+`accepted-size-growth-delta.json` 记录尺寸脚本口径下 Memory 源文件净增 148 行，
+其中生产逻辑净增 23 行，其余为 src 内回归；其他相关 crate 源文件无净增，未增加文件数。
+本批明确更新非 LOCKED 尺寸预算，不通过搬移测试隐藏成本；质量阈值及检索基线不变。
+
+#### E2：同文强度筛选与最终软件检查点（2026-11-12）
+
+Delta 初版追加运行 `delta-eval-tests.log` 实际为 **41 passed、1 failed**，失败测试为
+`correction_edges_have_independent_sql_receipts_and_never_enter_model_messages`，原日志保留。
+新用户对话层中的同文弱记录先占用全局正文去重键，正式更正原始证据及其单跳关系因此没有送达。
+这个软件失败不能写成初版评测器已通过，也不回改此前真实模型报告。
+
+E2 源码检查点为 `76ce2d4dcd17f580071f6f5b57ac19b358df6778`，
+源码树为 `ba624d7642e65d726c58c67fe27db298c8321e4d`。
+修复在四层分组及预算之前，仅过滤**原规范化正文 key 等价类**中被更强证据支配的副本：
+
+- 同 key 下，`citable_as_fact=true` 强于 false。
+- 同为 true 时，具有当前经核验 correction_support 的来源强于没有该关系的同文来源。
+- 等强候选全部保留原输入顺序，再由既有来源代表、各层 MMR 与确定性规则处理；不按新强度给原始分加分。
+- 原去重循环与新筛选共用完全相同的规范化函数；不同 key 不互相支配，空 key 沿原处理路径。
+  无来源端口的 legacy 分支不运行新筛选；已有 scope、最低分、64 个有界候选及总预算限制不变。
+
+E2 没有修改固定 capture、回答语料、Oracle、提示词或协议；改变的是生产候选选择中的证据保留。
+四层对话仍不能获得事实或写入权限，qualified 实际记录计数的源文件也没有变化。
+
+本次失败同时暴露声明跟踪缺口：`mem.answer_eval_contract` 原 sources 仅列 15 个 example 文件，
+E 未改这些文件仍打坏其原 verify_cmd，因此原 staleness 未捕获该直接依赖变化。
+现仅补列 Memory 的 coordinator.rs、coordinator/owned.rs、context_compiler.rs、context_compiler/evidence.rs
+四个已证明影响答题证据交付或核验的源文件，并将本条 pin 到 E2；等级、默认值及 verify_cmd 保持。
+该修补让这些已知直接依赖的后续变化能够触发 STALE，不作全工作区传递依赖展开。
+
+| 仓外日志 | E2 已确认范围 |
+|---|---|
+| `delta2-memory-targeted.log` / 同名 `.exit.txt` | Memory lib 976 passed、保留 1 个原有 ignored；SQL 来源核验 9 passed，退出 0 |
+| `delta2-production-eval.log` / 同名 `.exit.txt` | 7 项生产装配及 42 项回答评测 example 软件测试通过、退出 0；包含先前失败的原断言 |
+| `delta2-workspace-clippy.log` / 同名 `.exit.txt` | 全工作区、all-targets、locked、`-D warnings` 退出 0 |
+| `delta2-fmt-check.log` | Windows 逐 crate 35 crate 全部 0 diff |
+| `delta2-feature-memory-profile.log` | 无默认特性的 memory/profile-store 组合编译完成；不扩大便携宿主功能声明 |
+
+`reverse-wiring-delta2.json` 两项控制均真实断言失败、退出 101，随后源码逐字节恢复、退出 0；
+owned.rs 的当前散列与 E2 收据一致。此前实际记录计数控制的 compiler 散列仍为
+`0464a10332180281b274bde89cba97ea7529d883d389b989bc3eb54be2cdb924`，源码未变：
+
+| control | RED 实际输出 | GREEN 实际输出 |
+|---|---|---|
+| `delta2-verified-user-dialogue` | `test reopened_production_delivers_verified_dialogue_without_executing_it_or_restoring_forgotten_text ... FAILED` | 同名测试 `... ok` |
+| `delta2-stronger-content-evidence` | `test duplicate_writeback_cannot_hide_the_exact_applied_correction_source_and_edge ... FAILED` | 同名测试 `... ok` |
+
+`accepted-size-growth-delta2.json` 记录 Memory 源文件由 E 到 E2 再净增 104 行，含 src 内回归；
+相关其他 crate 源文件与文件数均无净增。coordinator.rs 随实际缩短将单文件 cap 从 2423 收紧为 2418，
+原非 LOCKED 总量预算按真实增量调整，不合并或吸收既有债务。
+
+E2 已完成上述软件检查；**Delta 最终全仓、完整 LIVE04 及当前提交 CI 仍待验**。
+模型弃权仍不能自动写入；固定 12 题 × 3 次的语料、Oracle、日期和支持哈希集合保持。
+初版 41/42 软件失败、live03 的 35/36 及前三轮真实失败均保留，不重判旧报告，
+不把软件回归或源码修复写成真实模型答题已通过。
 
 #### 本轮验收入口
 

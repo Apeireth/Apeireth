@@ -47,22 +47,22 @@
 | `bio.capacity` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_SELF_STATUS` | `52009d5f` | 2026-11-20 |
 | `rt.registered_module_v1` | PRODUCTION WIRED | ON | - | `ba5466500aca` | 2026-11-28 |
 | `rt.owned_agents` | PRODUCTION WIRED | - | - | `ba5466500aca` | 2026-11-20 |
-| `mem.registered_namespace` | PRODUCTION WIRED | - | - | `ba5466500aca` | 2026-11-20 |
+| `mem.registered_namespace` | PRODUCTION WIRED | - | - | `76ce2d4dcd17` | 2026-11-20 |
 | `rt.desktop_managed_main` | PRODUCTION WIRED | ON | - | `ba5466500aca` | 2026-11-20 |
 | `rt.module_execution_contract` | PRODUCTION WIRED | OFF | - | `11feb868ced8` | 2026-11-20 |
 | `rt.system_one_internal` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_SYSTEM_ONE` | `ba5466500aca` | 2026-11-20 |
 | `rt.module_messages` | PRODUCTION WIRED | OFF | - | `11feb868ced8` | 2026-11-20 |
 | `rt.mesh_local_worker` | PRODUCTION WIRED | OFF | - | `3cb47ef9e9f1` | 2026-11-20 |
-| `mem.retrieval_ranking` | PRODUCTION WIRED | ON | - | `3cb47ef9e9f1` | 2026-12-04 |
+| `mem.retrieval_ranking` | PRODUCTION WIRED | ON | - | `76ce2d4dcd17` | 2026-12-04 |
 | `mem.failure_learning_bridge` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_RETRIEVAL_TUNING` | `ba5466500aca` | 2026-12-04 |
-| `mem.injection_contract` | PRODUCTION WIRED | ON | - | `3cb47ef9e9f1` | 2026-12-04 |
-| `mem.contract_view` | PRODUCTION WIRED | ON | - | `3cb47ef9e9f1` | 2026-12-05 |
+| `mem.injection_contract` | PRODUCTION WIRED | ON | - | `76ce2d4dcd17` | 2026-12-04 |
+| `mem.contract_view` | PRODUCTION WIRED | ON | - | `706cabcfe174` | 2026-12-05 |
 | `mem.shadow_swap` | PRODUCTION WIRED | OFF | - | `05759be1` | 2026-12-05 |
 | `rt.committed_evidence` | PRODUCTION WIRED | - | - | `ba5466500aca` | 2026-11-26 |
 | `mem.automatic_correction` | PRODUCTION WIRED | - | - | `3cb47ef9e9f1` | 2026-11-26 |
-| `mem.writeback_recovery` | PRODUCTION WIRED | - | - | `3cb47ef9e9f1` | 2026-11-26 |
-| `mem.source_qualified_context` | PRODUCTION WIRED | - | - | `3cb47ef9e9f1` | 2026-11-26 |
-| `mem.answer_eval_contract` | IMPLEMENTED | OFF | - | `3cb47ef9e9f1` | 2026-11-26 |
+| `mem.writeback_recovery` | PRODUCTION WIRED | - | - | `76ce2d4dcd17` | 2026-11-26 |
+| `mem.source_qualified_context` | PRODUCTION WIRED | - | - | `76ce2d4dcd17` | 2026-11-26 |
+| `mem.answer_eval_contract` | IMPLEMENTED | OFF | - | `76ce2d4dcd17` | 2026-11-26 |
 | `sec.output_injection_guard` | PRODUCTION WIRED | ON | - | `ba5466500aca` | 2026-12-05 |
 
 ## 使用
