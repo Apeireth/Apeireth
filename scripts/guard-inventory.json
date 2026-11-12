@@ -1117,6 +1117,27 @@
       "flags": []
     },
     {
+      "id": "test-nextest-reporting",
+      "path": "scripts/test_nextest_reporting.py",
+      "kind": "generator",
+      "is_guard": false,
+      "blocking": true,
+      "invocation": [
+        "python3 scripts/test_nextest_reporting.py",
+        "python3 scripts/test_nextest_reporting.py --prepare-workspace-report"
+      ],
+      "ci_workflows": [
+        ".github/workflows/rust.yml"
+      ],
+      "has_baseline": false,
+      "notes": "Exercise CI retry evidence with an isolated, dependency-free Rust test.",
+      "flags": [
+        "--help",
+        "--prepare-workspace-report",
+        "-h"
+      ]
+    },
+    {
       "id": "test-real-query-baseline",
       "path": "scripts/test_real_query_baseline.py",
       "kind": "generator",
