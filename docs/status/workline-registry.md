@@ -18,6 +18,7 @@ Author: lead
 
 | 工作线 | 设计稿（目标形态） | **进度页（做到哪了）** | 守卫（机器判对错） |
 |---|---|---|---|
+| **生产装配回归稳定性**（2026-11-12） | [production-test-reliability.md](../design/production-test-reliability.md) §批次与验收 | 同文件 §进度与验收（可追溯重试及隔离边界） | `cargo test -p apeireth-cli --test parallel_dispatch_production --locked -j 2` · `cargo test -p apeireth-runtime-assembly --test module_message_pipeline --locked -j 2` · 三平台实际 JUnit |
 | **CI 测试报告与重试证据**（2026-11-12） | [ci-test-evidence.md](../design/ci-test-evidence.md) §目标与批次 | 同文件 §进度与验收（历史取证缺口与实际报告） | `python scripts/test_nextest_reporting.py` · `python scripts/check_yaml_duplicate_keys.py` · 三平台 nextest JUnit artifact 检查 |
 | **记忆质量与持久一致性**（2026-11-12） | [memory-quality-hardening.md](../design/memory-quality-hardening.md) §目标与批次 | 同文件 §进度与验收（含未测边界） | `cargo test -p apeireth-memory --tests --locked -j 2` · `cargo test -p apeireth-runtime-assembly --test memory_provider_e2e --locked -j 2` · `python scripts/check_quality_metrics.py` · `python scripts/check_golden_baseline.py` |
 | **Mesh RC2 PR 收口**（2026-11-11） | [mesh-architecture.md](../design/mesh-architecture.md) · [ADR-0024](../adr/0024-mesh-line-contract-registration.md) | [mesh-rc2-closeout-2026-11-11.md](mesh-rc2-closeout-2026-11-11.md)（缺口、验证与待办） | `cargo test -p apeireth-runtime --test transparent_tool_routing --locked -j 2` · `cargo test -p apeireth-mesh --test mesh_semantics --locked -j 2` · `python scripts/harness.py verify` |

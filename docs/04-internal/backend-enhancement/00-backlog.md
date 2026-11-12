@@ -46,7 +46,9 @@
 
 ## 债栏（登记债落账，宪章 §一.2「见债必还」的登记面）
 
-- **D36（2026-11-12，CI 测试证据）**：已有上传步骤未实际生成 JUnit；重试成功后只保留汇总。**软件修复（IMPLEMENTED）**：保留判定政策，补明细、XML、独立报告探针、缺文件失败和提交绑定；三平台真实产物作为合并条件。现状与验收见 [ci-test-evidence.md](../../design/ci-test-evidence.md)。PR #122 的 Windows/macOS 各一个历史 flaky 用例身份无法从既有证据恢复，不据此声称根因已清除。
+- **D37（2026-11-12，生产装配测试夹具）**：PR #123 实际报告定位到网关装配共享会话库锁冲突与消息短截止下的阶段等待错误，修复见 [production-test-reliability.md](../../design/production-test-reliability.md)。相邻 `local_read_tools_knob`、`self_status_e2e`、`trait_cli`、`production_knobs` 仍有默认数据根写面，尚未全面隔离；不把本批局部修复作为全测试面已清的依据。
+
+- **D36（2026-11-12，CI 测试证据）**：已有上传步骤未实际生成 JUnit；重试成功后只保留汇总。**验证面生产接线（PRODUCTION WIRED）**：[PR #123](https://github.com/Apeireth/Apeireth/pull/123) 已合并，三平台真实 XML 与日志对账完成，保留判定政策、重试明细、首次失败输出和提交/轮次绑定。现状与验收见 [ci-test-evidence.md](../../design/ci-test-evidence.md)。本轮具名重试另入 D37；PR #122 的 Windows/macOS 各一个历史 flaky 身份仍无法恢复，不据此声称根因已清除。
 
 > 清偿/留账全文见 [zero-debt-opening-clearance-2026-10-12.md](04-delivery/zero-debt-opening-clearance-2026-10-12.md)（清偿对照表 + 门禁证据）。
 > **零债开场白已收**（2026-10-12）：src-tauri clippy 55→0、ratatui 0.30 迁移（P11 根治）、file_lock 负载 flake 定根、全局槽竞态复核闭合、孤儿/死面清理。

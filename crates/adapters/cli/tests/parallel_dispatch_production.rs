@@ -15,9 +15,50 @@
 //! （`is_provably_read_only`），所以这里的断言同时在守卫登记正确性。
 
 use apeireth_orchestration::call_scheduler::ConcurrencySafety as _;
+use std::ffi::OsString;
+use std::path::Path;
+
+// Process environment is shared by libtest cases in this binary. Each case
+// still owns separate stores when nextest runs it in a separate process.
+static ENV_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+struct StorageEnvGuard {
+    previous: [(&'static str, Option<OsString>); 3],
+}
+
+impl StorageEnvGuard {
+    fn under(root: &Path) -> Self {
+        let guard = Self {
+            previous: [
+                "APEIRETH_SESSION_DB",
+                "APEIRETH_COGNITIVE_DB",
+                "APEIRETH_DATA_DIR",
+            ]
+            .map(|key| (key, std::env::var_os(key))),
+        };
+        std::env::set_var("APEIRETH_SESSION_DB", root.join("sessions.sqlite3"));
+        std::env::set_var("APEIRETH_COGNITIVE_DB", root.join("cognitive.sqlite3"));
+        std::env::set_var("APEIRETH_DATA_DIR", root);
+        guard
+    }
+}
+
+impl Drop for StorageEnvGuard {
+    fn drop(&mut self) {
+        for (key, previous) in &self.previous {
+            match previous {
+                Some(value) => std::env::set_var(key, value),
+                None => std::env::remove_var(key),
+            }
+        }
+    }
+}
 
 #[tokio::test]
 async fn production_runtime_installs_a_conservative_parallel_scheduler() {
+    let _lock = ENV_LOCK.lock().await;
+    let dir = tempfile::tempdir().expect("independent production runtime storage");
+    let _env = StorageEnvGuard::under(dir.path());
     // 生产装配（与 CLI 同一入口；keyless 也能构建，不触网）。
     let runtime = apeireth_cli::build_canonical_runtime_from_env()
         .await
@@ -64,6 +105,9 @@ async fn production_runtime_installs_a_conservative_parallel_scheduler() {
 /// 把「装配根共用」这句话钉成机检。
 #[tokio::test]
 async fn gateway_assembly_shares_the_same_composition_root() {
+    let _lock = ENV_LOCK.lock().await;
+    let dir = tempfile::tempdir().expect("independent gateway assembly storage");
+    let _env = StorageEnvGuard::under(dir.path());
     let parts = apeireth_cli::build_canonical_runtime_assembly_from_env()
         .await
         .expect("keyless gateway-side assembly builds without network");
