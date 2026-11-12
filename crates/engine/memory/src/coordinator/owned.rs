@@ -144,6 +144,7 @@ mod tests {
             claim_kind: MemoryClaimKind::DirectUserAssertion,
             citable_as_fact: role != SourceRole::Assistant,
             source_group: Some(group.into()),
+            ..Default::default()
         }
     }
 

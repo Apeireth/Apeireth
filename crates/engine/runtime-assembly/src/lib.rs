@@ -14,6 +14,7 @@ pub mod portable;
 // 本模块 main 侧**不存在**，且 `apeireth-cli` 与 e2e 测试都按
 // **根级路径**引用（`apeireth_runtime_assembly::consequence_backfill::…`）
 // ⇒ 只能留在根上。
+#[cfg(feature = "desktop")]
 pub mod consequence_backfill;
 // 数据根路径解析 (同理由根级公开): `apeireth_runtime_assembly::paths::default_data_root()`
 // 被 CLI 与 `foundation/core` 的文档交叉引用。
@@ -38,6 +39,7 @@ pub use desktop::*;
 pub mod memory_module;
 #[cfg(all(feature = "memory", feature = "desktop"))]
 pub use canonical::memory_module;
+#[cfg(feature = "desktop")]
 pub use canonical::shadow_wire;
 
 #[cfg(all(feature = "profile-store", not(feature = "desktop")))]

@@ -13,12 +13,13 @@ use apeireth_protocol::canonical::{
     NormalizedUsage,
 };
 use async_trait::async_trait;
+use rusqlite::OptionalExtension;
 use serde::{Deserialize, Serialize};
 
 use super::audit::SourceAudit;
 use super::config::Config;
 use super::io::{hash, write_new};
-use super::scoring::{RequestEvidence, SourceEvidence};
+use super::scoring::{CorrectionSupportProof, RequestEvidence, SourceEvidence, SCORING_PROTOCOL};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct CallContext {
@@ -302,6 +303,109 @@ fn has_unlisted_rendered_source(context: &str) -> bool {
         .any(|line| line.starts_with("[wiki:") || line.starts_with("[diary:"))
 }
 
+struct SupportSqlRow {
+    role: String,
+    namespace: String,
+    content: String,
+    timestamp: i64,
+    status: String,
+    revision: i64,
+    content_override: Option<String>,
+    updated_by: Option<String>,
+    metadata: String,
+}
+
+fn support_sql_row(connection: &rusqlite::Connection, id: &str) -> Result<SupportSqlRow, String> {
+    connection.query_row("SELECT e.role,e.session_id,e.content,e.timestamp,COALESCE(g.status,'active'),COALESCE(g.revision,0),g.content_override,g.updated_by,m.metadata_json FROM episodes e LEFT JOIN episode_governance g ON g.episode_id=e.id JOIN episode_memory_metadata m ON m.episode_id=e.id WHERE e.id=?1",[id],|row|Ok(SupportSqlRow {role:row.get(0)?,namespace:row.get(1)?,content:row.get(2)?,timestamp:row.get(3)?,status:row.get(4)?,revision:row.get(5)?,content_override:row.get(6)?,updated_by:row.get(7)?,metadata:row.get(8)?})).map_err(|error|error.to_string())
+}
+
+fn read_correction_support(
+    connection: &rusqlite::Connection,
+    source: &SourceEvidence,
+    target: &SourceEvidence,
+    edge: apeireth_memory::context_compiler::VerifiedCorrectionSupport,
+) -> Result<CorrectionSupportProof, String> {
+    let row: Option<(String,String,String,String,String,String)> = connection.query_row(
+        "SELECT j.source_json,r.payload_hash,j.namespace,j.source_session,j.source_request,j.source_hash FROM memory_writeback_jobs j JOIN memory_recovery_operation_receipts r ON r.operation_id=?1 WHERE j.id=?2 AND (j.state<>'suppressed' OR j.last_error='source_revision_changed')",
+        rusqlite::params![edge.operation_id,format!("correction/{}",edge.operation_id)],
+        |row|Ok((row.get(0)?,row.get(1)?,row.get(2)?,row.get(3)?,row.get(4)?,row.get(5)?)),
+    ).optional().map_err(|error|error.to_string())?;
+    let Some((serialized, applied_payload_hash, owner, session, request, source_hash)) = row else {
+        return Err("applied_correction_receipt_missing".into());
+    };
+    let frozen_plan: apeireth_memory::automatic_correction::AutomaticCorrectionPlan =
+        serde_json::from_str(&serialized).map_err(|error| error.to_string())?;
+    if owner != edge.namespace
+        || source_hash != applied_payload_hash
+        || frozen_plan.provenance.source_session.as_deref() != Some(session.as_str())
+        || frozen_plan.provenance.source_request.as_deref() != Some(request.as_str())
+    {
+        return Err("correction_journal_identity_mismatch".into());
+    }
+    let proof = CorrectionSupportProof {
+        scoring_protocol: SCORING_PROTOCOL.into(),
+        edge,
+        frozen_plan,
+        applied_payload_hash,
+    };
+    if !proof.binds(source, target) {
+        return Err("correction_support_binding_mismatch".into());
+    }
+    let source_row = support_sql_row(connection, &source.episode_id)?;
+    let target_row = support_sql_row(connection, &target.episode_id)?;
+    let source_meta: serde_json::Value =
+        serde_json::from_str(&source_row.metadata).map_err(|error| error.to_string())?;
+    let target_meta: serde_json::Value =
+        serde_json::from_str(&target_row.metadata).map_err(|error| error.to_string())?;
+    let source_operation = source_meta["correction_operation"]
+        .as_str()
+        .or_else(|| source_meta["correction"]["operation"].as_str());
+    if source_row.role != "user"
+        || source.source_role != "user"
+        || source.claim_kind != "governed_correction"
+        || source_row.namespace != proof.edge.namespace
+        || source_row.status != "active"
+        || source_row.content_override.is_some()
+        || source_row.revision != source.revision
+        || source_row.content != proof.frozen_plan.evidence.content
+        || source_row.timestamp != proof.frozen_plan.evidence.timestamp
+        || source_meta["scope"] != source.scope
+        || source_meta["provenance"] != source.provenance
+        || source_meta["provenance"]
+            != serde_json::to_value(&proof.frozen_plan.provenance)
+                .map_err(|error| error.to_string())?
+        || source_operation != Some(proof.edge.operation_id.as_str())
+        || source_meta["content_hash"].as_str()
+            != Some(apeireth_memory::canonical::vector::content_hash(&source_row.content).as_str())
+        || !matches!(target_row.role.as_str(), "user" | "memory")
+        || target.claim_kind != "governed_correction"
+        || target_row.namespace != proof.edge.namespace
+        || target_row.status != "active"
+        || target_row.revision != target.revision
+        || target_row.updated_by.as_deref() != Some("direct_user_correction")
+        || target_row
+            .content_override
+            .as_deref()
+            .is_none_or(|content| hash(content) != target.content_sha256)
+        || target_meta["scope"] != target.scope
+        || target_meta["provenance"] != target.provenance
+        || target_meta["correction"]["operation"].as_str() != Some(proof.edge.operation_id.as_str())
+        || target_meta["correction"]["evidence"].as_str() != Some(source.episode_id.as_str())
+        || target_meta["correction"]["recorded_at_ms"].as_i64()
+            != Some(proof.frozen_plan.recorded_at_ms)
+        || target_meta["content_hash"].as_str()
+            != Some(
+                apeireth_memory::canonical::vector::content_hash(
+                    target_row.content_override.as_deref().unwrap_or(""),
+                )
+                .as_str(),
+            )
+    {
+        return Err("correction_support_current_sql_mismatch".into());
+    }
+    Ok(proof)
+}
+
 /// IDs come from the actual tool message; metadata is read independently from SQL.
 pub fn receipt(
     request: &NormalizedRequest,
@@ -311,6 +415,7 @@ pub fn receipt(
     forbidden: &[String],
 ) -> RequestEvidence {
     let mut receipt = RequestEvidence {
+        scoring_protocol: SCORING_PROTOCOL.into(),
         closed_tool_context_valid: apeireth_protocol::canonical::validate_closed_tool_context(
             &request.messages,
         )
@@ -364,6 +469,7 @@ pub fn receipt(
             receipt.issues.push("unlisted_non_episode_source".into());
         }
     }
+    let mut support_candidates = Vec::new();
     for delivery in delivered_entries(request) {
         let id = delivery.id;
         let delivered = delivery.text;
@@ -493,7 +599,17 @@ pub fn receipt(
         if receipt.sources.iter().any(|source| source.id == id) {
             continue;
         }
+        if qualified_record
+            && !delivery.proposal_candidate
+            && !independent_qualification.correction_support.is_empty()
+        {
+            support_candidates.push((
+                receipt.sources.len(),
+                independent_qualification.correction_support,
+            ));
+        }
         receipt.sources.push(SourceEvidence {
+            scoring_protocol: SCORING_PROTOCOL.into(),
             id: id.clone(),
             episode_id: episode_id.into(),
             revision: governed.revision,
@@ -514,7 +630,29 @@ pub fn receipt(
             runtime_source_verified,
             scope,
             provenance,
+            correction_support: vec![],
         });
+    }
+    for (source_index, edges) in support_candidates {
+        let source = &receipt.sources[source_index];
+        let mut verified = Vec::new();
+        for edge in edges {
+            let Some(target) = receipt.sources.iter().find(|target| {
+                target.episode_id == edge.target_episode_id
+                    && target.revision == edge.target_revision
+                    && target.content_sha256 == edge.target_content_sha256
+            }) else {
+                continue;
+            };
+            match read_correction_support(&evidence_connection, source, target, edge) {
+                Ok(proof) => verified.push(proof),
+                Err(error) => receipt.issues.push(format!(
+                    "correction_support_sql_rejected:{}:{error}",
+                    source.id
+                )),
+            }
+        }
+        receipt.sources[source_index].correction_support = verified;
     }
     receipt
 }
@@ -937,6 +1075,95 @@ mod tests {
             .any(|issue| issue
                 .starts_with("delivered_body_does_not_match_exact_production_projection:")));
         assert!(!rejected.sources.iter().any(|source| source.supports(&fact)));
+    }
+
+    #[tokio::test]
+    async fn correction_edges_have_independent_sql_receipts_and_never_enter_model_messages() {
+        let temporary = tempfile::tempdir().unwrap();
+        let output = temporary.path().join("support-run");
+        super::super::io::create_run(&output).unwrap();
+        let environment = super::super::runner::Environment {
+            config: Config::offline(output.clone()),
+            live: false,
+            budget: Arc::new(Mutex::new(CallBudget::default())),
+            redactor: Arc::new(Redactor::default()),
+        };
+        let scenario = super::super::fixtures::scenarios()
+            .into_iter()
+            .find(|scenario| scenario.id == "e03")
+            .unwrap();
+        let record = environment
+            .execute_case(&scenario.id, 0, &scenario.input)
+            .await
+            .unwrap();
+        assert!(
+            record.request_evidence.issues.is_empty(),
+            "{:?}",
+            record.request_evidence.issues
+        );
+        let source = record
+            .request_evidence
+            .sources
+            .iter()
+            .find(|source| !source.correction_support.is_empty())
+            .expect("real raw correction evidence has a verified edge");
+        let proof = &source.correction_support[0];
+        let target = record
+            .request_evidence
+            .sources
+            .iter()
+            .find(|target| target.episode_id == proof.edge.target_episode_id)
+            .expect("canonical target actually delivered");
+        assert!(proof.binds(source, target));
+        assert_eq!(source.scoring_protocol, SCORING_PROTOCOL);
+        let request_text = serde_json::to_string(&record.original_request).unwrap();
+        for private_field in ["correction_support", "frozen_plan", "applied_payload_hash"] {
+            assert!(
+                !request_text.contains(private_field),
+                "support metadata is audit-only: {private_field}"
+            );
+        }
+        for entry in delivered_entries(&record.original_request) {
+            assert!(!entry.malformed_record);
+            assert!(
+                entry.qualification.is_some(),
+                "formal four-field record remains readable"
+            );
+        }
+        let db = output.join("e03-000.sqlite3");
+        let reader =
+            rusqlite::Connection::open_with_flags(&db, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+                .unwrap();
+        assert!(read_correction_support(&reader, source, target, proof.edge.clone()).is_ok());
+        let writer = rusqlite::Connection::open(&db).unwrap();
+        writer
+            .execute(
+                "UPDATE episode_governance SET revision=revision+1 WHERE episode_id=?1",
+                [&target.episode_id],
+            )
+            .unwrap();
+        assert!(
+            read_correction_support(&reader, source, target, proof.edge.clone()).is_err(),
+            "captured old target version cannot validate against changed SQL"
+        );
+        writer
+            .execute(
+                "UPDATE episode_governance SET revision=?1 WHERE episode_id=?2",
+                rusqlite::params![target.revision, target.episode_id],
+            )
+            .unwrap();
+        writer
+            .execute(
+                "DELETE FROM memory_recovery_operation_receipts WHERE operation_id=?1",
+                [&proof.edge.operation_id],
+            )
+            .unwrap();
+        let error =
+            read_correction_support(&reader, source, target, proof.edge.clone()).unwrap_err();
+        assert_eq!(
+            error, "applied_correction_receipt_missing",
+            "a typed edge without an actual applied receipt is rejected"
+        );
     }
     #[test]
     fn a_scope_canary_is_a_failure_even_without_a_cited_memory_id() {

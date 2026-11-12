@@ -22,11 +22,13 @@ use config::Config;
 use fixtures::{scenarios, Scenario};
 use io::{hash, read, write_new, EvalResult};
 use runner::Environment;
-use scoring::{score, Grade};
+use scoring::{score, Grade, SCORING_PROTOCOL};
 
 #[derive(Clone, Deserialize, Serialize)]
 pub struct Plan {
     pub schema_version: u32,
+    #[serde(default)]
+    pub scoring_protocol: String,
     pub mode: String,
     pub case_root: std::path::PathBuf,
     pub config: Config,
@@ -64,6 +66,7 @@ pub struct CaseResult {
 
 #[derive(Serialize)]
 pub struct RunReport {
+    pub scoring_protocol: String,
     pub mode: String,
     pub complete: bool,
     pub live_quality_passed: bool,
@@ -103,7 +106,8 @@ fn plan(config: Config, mode: &str) -> EvalResult<Plan> {
     let scenarios = scenarios();
     let wired = scenarios.iter().filter(|s| s.live_wired).count();
     Ok(Plan {
-        schema_version: 1,
+        schema_version: 2,
+        scoring_protocol: SCORING_PROTOCOL.into(),
         mode: mode.into(),
         case_root:config.output.clone(),
         fixture_sha256: hash(serde_json::to_vec(&scenarios)?),
@@ -133,6 +137,7 @@ fn plan(config: Config, mode: &str) -> EvalResult<Plan> {
             "The request byte bound is on normalized JSON, not a provider tokenizer or currency guarantee. Missing usage is unknown.".into(),
             "Prices and model versions are caller supplied. No paid endpoint/model is selected implicitly; top_p and seed are absent because the canonical request has no such fields.".into(),
             "Offline contract mode never measures real-model answer quality.".into(),
+            "Scoring v2 keeps each fact's original gold anchor and admits only independently SQL-verified direct correction-evidence support for extra citations. Old runs require their original executable; this protocol never silently regrades them.".into(),
         ],
     })
 }
@@ -146,6 +151,7 @@ fn summarize(mode: &str, cases: Vec<CaseResult>) -> RunReport {
         .iter()
         .all(|r| r.status == "passed" || r.status == "hard_failure");
     RunReport {
+        scoring_protocol: SCORING_PROTOCOL.into(),
         mode: mode.into(),
         complete,
         live_quality_passed: mode == "live"
@@ -295,7 +301,8 @@ async fn execute(config: Config, live: bool) -> EvalResult<bool> {
 
 fn rescore(path: &Path) -> EvalResult<bool> {
     let manifest: Plan = read(&path.join("manifest.json"))?;
-    if manifest.schema_version != 1
+    if manifest.schema_version != 2
+        || manifest.scoring_protocol != SCORING_PROTOCOL
         || manifest.proposal_system_sha256
             != hash(
                 apeireth_runtime_assembly::canonical::memory_correction::CORRECTION_PROPOSAL_SYSTEM,
@@ -304,7 +311,7 @@ fn rescore(path: &Path) -> EvalResult<bool> {
         || manifest.source_hashes != source_hashes()
     {
         return Err(
-            "fixture/evaluator source differs from the run manifest; refusing silent regrading"
+            "scoring protocol/fixture/evaluator source differs from the run manifest; use the run's original executable; refusing silent regrading"
                 .into(),
         );
     }
@@ -328,6 +335,16 @@ fn rescore(path: &Path) -> EvalResult<bool> {
             };
             if row.scenario != scenario.id || row.repetition != repetition {
                 return Err("case identity mismatch".into());
+            }
+            if row
+                .grade
+                .as_ref()
+                .is_some_and(|grade| grade.scoring_protocol != SCORING_PROTOCOL)
+            {
+                return Err(
+                    "saved grade uses another scoring protocol; use the run's original executable"
+                        .into(),
+                );
             }
             if !manifest.config.selected(&scenario.id) {
                 row.status = "not_selected".into();
@@ -413,6 +430,7 @@ fn scorer_contract_check() -> EvalResult<()> {
     let mut scenario = scenarios().remove(0);
     scenario.oracle.facts.truncate(1);
     let source = scoring::SourceEvidence {
+        scoring_protocol: SCORING_PROTOCOL.into(),
         id: "typed:episode:contract".into(),
         episode_id: "contract".into(),
         revision: 0,
@@ -429,8 +447,10 @@ fn scorer_contract_check() -> EvalResult<()> {
         runtime_source_verified: true,
         scope: serde_json::json!({}),
         provenance: serde_json::json!({}),
+        correction_support: vec![],
     };
     let evidence = scoring::RequestEvidence {
+        scoring_protocol: SCORING_PROTOCOL.into(),
         closed_tool_context_valid: true,
         sources: vec![source],
         issues: vec![],
@@ -502,6 +522,24 @@ pub async fn run(args: Vec<String>) -> EvalResult<bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn prior_scoring_manifest_requires_its_original_executable() {
+        let temporary = tempfile::tempdir().unwrap();
+        let mut old = serde_json::to_value(
+            plan(Config::offline(temporary.path().into()), "offline_contract").unwrap(),
+        )
+        .unwrap();
+        old["schema_version"] = serde_json::json!(1);
+        old.as_object_mut().unwrap().remove("scoring_protocol");
+        write_new(&temporary.path().join("manifest.json"), &old).unwrap();
+        let error = rescore(temporary.path()).unwrap_err().to_string();
+        assert!(error.contains("original executable"));
+        assert!(
+            !temporary.path().join("report.json").exists(),
+            "no old report is overwritten"
+        );
+    }
     #[test]
     fn offline_falsification_rejects_answer_and_capture_mutations() {
         scorer_contract_check().unwrap();

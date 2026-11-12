@@ -192,12 +192,14 @@ async fn official_snapshot_qualifies_direct_named_reports_but_not_echoes_or_lega
     );
     let evidence = journal.evidence_for(&user.id, &user.content).unwrap();
     assert!(evidence.citable_as_fact);
+    assert!(evidence.correction_support.is_empty());
     assert_eq!(evidence.claim_kind, MemoryClaimKind::DirectUserAssertion);
     let trace = journal
         .evidence_for(&assistant.id, &assistant.content)
         .unwrap();
     assert_eq!(trace.source_role, SourceRole::Assistant);
     assert!(!trace.citable_as_fact);
+    assert!(trace.correction_support.is_empty());
     assert_eq!(trace.source_group, evidence.source_group);
     let (project, _) = submitted(
         &journal,
@@ -317,13 +319,9 @@ async fn derived_sources_need_an_actual_submitted_span_and_corrupt_snapshot_hash
             ..user.clone()
         };
         coordinator.writeback_scoped_episode_with_metadata(&derived,&MemoryScope::session(&user.session_id),&MemoryProvenance::default(),serde_json::json!({"derived_from_episode_id":user.id,"extraction_class":"Fact","extraction":{"content":extracted}})).unwrap();
-        assert_eq!(
-            journal
-                .evidence_for(id, &derived.content)
-                .unwrap()
-                .citable_as_fact,
-            expected
-        );
+        let evidence = journal.evidence_for(id, &derived.content).unwrap();
+        assert_eq!(evidence.citable_as_fact, expected);
+        assert!(evidence.correction_support.is_empty());
     }
     backend.pool().write_sync(|conn|{conn.execute("UPDATE memory_writeback_jobs SET source_hash='corrupted' WHERE id='writeback-parent'",[])?;Ok(())}).unwrap();
     assert!(
@@ -334,12 +332,15 @@ async fn derived_sources_need_an_actual_submitted_span_and_corrupt_snapshot_hash
     );
 }
 
-#[tokio::test]
-async fn correction_history_qualification_checks_exact_body_intervals_receipt_and_current_revision()
-{
+async fn applied_state_change() -> (
+    Arc<SqliteBackend>,
+    Arc<SqliteWritebackJournal>,
+    apeireth_memory::automatic_correction::AutomaticCorrectionPlan,
+    Episode,
+) {
     use apeireth_memory::automatic_correction::{
-        correction_evidence_id, correction_history_id, correction_operation_id,
-        AutomaticCorrectionKind, AutomaticCorrectionPlan, AutomaticCorrectionTarget,
+        correction_evidence_id, correction_operation_id, AutomaticCorrectionKind,
+        AutomaticCorrectionPlan, AutomaticCorrectionTarget,
     };
     let (backend, journal, coordinator) = fixture().await;
     let namespace = SessionId::new().to_string();
@@ -414,8 +415,27 @@ async fn correction_history_qualification_checks_exact_body_intervals_receipt_an
         )
         .unwrap();
     backend.apply_automatic_correction(&plan).unwrap();
+    (backend, journal, plan, old)
+}
+
+#[tokio::test]
+async fn correction_history_qualification_checks_exact_body_intervals_receipt_and_current_revision()
+{
+    use apeireth_memory::automatic_correction::correction_history_id;
+    let (backend, journal, plan, old) = applied_state_change().await;
+    let namespace = &plan.namespace;
     let history_id = correction_history_id(&namespace, &old.id, &plan.operation_id);
     let history = backend.get_episode(&history_id).unwrap().unwrap();
+    assert!(journal
+        .evidence_for(&history_id, &history.content)
+        .unwrap()
+        .correction_support
+        .is_empty());
+    assert!(journal
+        .evidence_for(&old.id, "我住在南汀市。")
+        .unwrap()
+        .correction_support
+        .is_empty());
     assert!(
         journal
             .evidence_for(&history_id, &history.content)
@@ -448,5 +468,286 @@ async fn correction_history_qualification_checks_exact_body_intervals_receipt_an
             .claim_kind,
         MemoryClaimKind::GovernedEdit,
         "an old correction receipt cannot bless a later manual revision even with the same text"
+    );
+    assert!(
+        journal
+            .evidence_for(&plan.evidence.id, &plan.evidence.content)
+            .unwrap()
+            .correction_support
+            .is_empty(),
+        "a later target revision invalidates even a same-body correction edge"
+    );
+}
+
+#[tokio::test]
+async fn raw_correction_support_binds_the_exact_frozen_plan_and_current_canonical_target() {
+    use apeireth_memory::context_compiler::VerifiedCorrectionSupport;
+    use sha2::{Digest, Sha256};
+    let (_backend, journal, plan, old) = applied_state_change().await;
+    let evidence = journal
+        .evidence_for(&plan.evidence.id, &plan.evidence.content)
+        .unwrap();
+    assert!(evidence.citable_as_fact);
+    let expected = VerifiedCorrectionSupport {
+        source_episode_id: plan.evidence.id.clone(),
+        source_content_sha256: format!("{:x}", Sha256::digest(plan.evidence.content.as_bytes())),
+        target_episode_id: old.id,
+        target_revision: 1,
+        target_content_sha256: format!(
+            "{:x}",
+            Sha256::digest(plan.targets[0].replacement_content.as_bytes())
+        ),
+        namespace: plan.namespace.clone(),
+        operation_id: plan.operation_id.clone(),
+        payload_hash: payload_hash(&plan).unwrap(),
+    };
+    assert_eq!(evidence.correction_support, vec![expected.clone()]);
+    assert_eq!(expected.source_content_sha256.len(), 64);
+    assert!(!expected.target_content_sha256.starts_with("sha256:"));
+    let mut serialized = serde_json::to_value(&expected).unwrap();
+    assert_eq!(serialized.as_object().unwrap().len(), 8);
+    serialized["untrusted_extra"] = serde_json::json!(true);
+    assert!(serde_json::from_value::<VerifiedCorrectionSupport>(serialized).is_err());
+}
+
+#[tokio::test]
+async fn correction_support_rejects_stale_or_cross_scope_targets_corrupt_receipts_and_source_forgery(
+) {
+    let (backend, journal, plan, old) = applied_state_change().await;
+    let support = || {
+        journal
+            .evidence_for(&plan.evidence.id, &plan.evidence.content)
+            .unwrap()
+            .correction_support
+    };
+    assert_eq!(support().len(), 1);
+    for (sql, restore, id) in [
+        (
+            "UPDATE episode_governance SET revision=2 WHERE episode_id=?1",
+            "UPDATE episode_governance SET revision=1 WHERE episode_id=?1",
+            old.id.clone(),
+        ),
+        (
+            "UPDATE episode_governance SET status='forgotten' WHERE episode_id=?1",
+            "UPDATE episode_governance SET status='active' WHERE episode_id=?1",
+            old.id.clone(),
+        ),
+        (
+            "UPDATE episode_governance SET updated_by='panel' WHERE episode_id=?1",
+            "UPDATE episode_governance SET updated_by='direct_user_correction' WHERE episode_id=?1",
+            old.id.clone(),
+        ),
+        (
+            "UPDATE episodes SET session_id='cross-scope' WHERE id=?1",
+            "UPDATE episodes SET session_id=?2 WHERE id=?1",
+            old.id.clone(),
+        ),
+        (
+            "UPDATE episodes SET role='assistant' WHERE id=?1",
+            "UPDATE episodes SET role='user' WHERE id=?1",
+            plan.evidence.id.clone(),
+        ),
+        (
+            "UPDATE episodes SET timestamp=timestamp+1 WHERE id=?1",
+            "UPDATE episodes SET timestamp=timestamp-1 WHERE id=?1",
+            plan.evidence.id.clone(),
+        ),
+        (
+            "UPDATE episode_governance SET status='forgotten' WHERE episode_id=?1",
+            "UPDATE episode_governance SET status='active' WHERE episode_id=?1",
+            plan.evidence.id.clone(),
+        ),
+    ] {
+        let mutation_id = id.clone();
+        let mutation = backend.pool().write_sync(move |conn| {
+            conn.execute(sql, [mutation_id])?;
+            Ok(())
+        });
+        let trigger_sql = if sql.starts_with("UPDATE episodes ") {
+            assert!(
+                matches!(mutation, Err(apeireth_storage::StorageError::Db(rusqlite::Error::SqliteFailure(ref error, _))) if error.extended_code == 1811),
+                "official append-only protection must reject {sql}"
+            );
+            assert_eq!(
+                support().len(),
+                1,
+                "a rejected raw mutation preserves the verified edge"
+            );
+            let saved: String = backend.pool().read(|conn| Ok(conn.query_row(
+                "SELECT sql FROM sqlite_master WHERE type='trigger' AND name='episodes_no_update' AND tbl_name='episodes'",
+                [], |row| row.get(0),
+            )?)).unwrap();
+            assert!(saved.contains("BEFORE UPDATE ON episodes"));
+            // This in-memory fixture alone simulates an already damaged DB.
+            // Retain the exact official trigger and restore it with the row.
+            let mutation_id = id.clone();
+            backend
+                .pool()
+                .write_sync(move |conn| {
+                    conn.execute_batch("DROP TRIGGER episodes_no_update")?;
+                    conn.execute(sql, [mutation_id])?;
+                    Ok(())
+                })
+                .unwrap();
+            Some(saved)
+        } else {
+            mutation.unwrap();
+            None
+        };
+        assert!(support().is_empty(), "{sql}");
+        let namespace = plan.namespace.clone();
+        let expected_trigger_sql = trigger_sql.clone();
+        backend
+            .pool()
+            .write_sync(move |conn| {
+                if restore.contains("?2") {
+                    conn.execute(restore, rusqlite::params![id, namespace])?;
+                } else {
+                    conn.execute(restore, [id])?;
+                }
+                if let Some(saved) = trigger_sql {
+                    conn.execute_batch(&saved)?;
+                }
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(support().len(), 1, "{restore}");
+        if let Some(expected) = expected_trigger_sql {
+            let restored: String = backend.pool().read(|conn| Ok(conn.query_row(
+                "SELECT sql FROM sqlite_master WHERE type='trigger' AND name='episodes_no_update' AND tbl_name='episodes'",
+                [], |row| row.get(0),
+            )?)).unwrap();
+            assert_eq!(
+                restored, expected,
+                "the fixture must restore its exact official append-only trigger"
+            );
+        }
+    }
+    let mutation_id = old.id.clone();
+    backend.pool().write_sync(move |conn|{conn.execute("UPDATE episode_governance SET content_override='我住在另一座城市。' WHERE episode_id=?1",[mutation_id])?;Ok(())}).unwrap();
+    assert!(
+        support().is_empty(),
+        "a different current full replacement body is not supported"
+    );
+    let mutation_id = old.id.clone();
+    let replacement_content = plan.targets[0].replacement_content.clone();
+    backend
+        .pool()
+        .write_sync(move |conn| {
+            conn.execute(
+                "UPDATE episode_governance SET content_override=?2 WHERE episode_id=?1",
+                rusqlite::params![mutation_id, replacement_content],
+            )?;
+            Ok(())
+        })
+        .unwrap();
+    assert_eq!(support().len(), 1);
+    let metadata = backend.get_episode_metadata(&old.id).unwrap().unwrap();
+    for (pointer, replacement) in [
+        ("/scope/session_id", serde_json::json!("another-owner")),
+        (
+            "/provenance/source_session",
+            serde_json::json!("unrelated-session"),
+        ),
+        (
+            "/provenance/source_request",
+            serde_json::json!("unrelated-request"),
+        ),
+        (
+            "/correction/operation",
+            serde_json::json!("other-operation"),
+        ),
+        ("/correction/evidence", serde_json::json!("other-evidence")),
+        ("/correction/recorded_at_ms", serde_json::json!(0)),
+        ("/content_hash", serde_json::json!("sha256:forged")),
+    ] {
+        let mut changed = metadata.clone();
+        *changed.pointer_mut(pointer).unwrap() = replacement;
+        backend.put_episode_metadata(&old.id, changed).unwrap();
+        assert!(support().is_empty(), "{pointer}");
+        backend
+            .put_episode_metadata(&old.id, metadata.clone())
+            .unwrap();
+        assert_eq!(support().len(), 1);
+    }
+    let operation_id = plan.operation_id.clone();
+    backend.pool().write_sync(move |conn|{conn.execute("UPDATE memory_recovery_operation_receipts SET payload_hash='forged' WHERE operation_id=?1",[operation_id])?;Ok(())}).unwrap();
+    assert!(support().is_empty());
+    let operation_id = plan.operation_id.clone();
+    let operation_hash = payload_hash(&plan).unwrap();
+    backend.pool().write_sync(move |conn|{conn.execute("UPDATE memory_recovery_operation_receipts SET payload_hash=?2 WHERE operation_id=?1",rusqlite::params![operation_id,operation_hash])?;Ok(())}).unwrap();
+    assert_eq!(support().len(), 1);
+    let job_id = format!("correction/{}", plan.operation_id);
+    let mutation_id = job_id.clone();
+    backend
+        .pool()
+        .write_sync(move |conn| {
+            conn.execute(
+                "UPDATE memory_writeback_jobs SET source_hash='forged' WHERE id=?1",
+                [mutation_id],
+            )?;
+            Ok(())
+        })
+        .unwrap();
+    assert!(
+        support().is_empty(),
+        "the journal's frozen-plan hash must also match its receipt"
+    );
+    let mutation_id = job_id.clone();
+    let operation_hash = payload_hash(&plan).unwrap();
+    backend
+        .pool()
+        .write_sync(move |conn| {
+            conn.execute(
+                "UPDATE memory_writeback_jobs SET source_hash=?2 WHERE id=?1",
+                rusqlite::params![mutation_id, operation_hash],
+            )?;
+            Ok(())
+        })
+        .unwrap();
+    let mutation_id = job_id.clone();
+    backend.pool().write_sync(move |conn|{conn.execute("UPDATE memory_writeback_jobs SET source_json=json_set(source_json,'$.targets[0].replacement_content','forged') WHERE id=?1",[mutation_id])?;Ok(())}).unwrap();
+    assert!(
+        support().is_empty(),
+        "a modified plan cannot borrow the original receipt"
+    );
+    let serialized_plan = serde_json::to_string(&plan).unwrap();
+    backend
+        .pool()
+        .write_sync(move |conn| {
+            conn.execute(
+                "UPDATE memory_writeback_jobs SET source_json=?2 WHERE id=?1",
+                rusqlite::params![job_id, serialized_plan],
+            )?;
+            Ok(())
+        })
+        .unwrap();
+    assert_eq!(support().len(), 1);
+    let operation_id = plan.operation_id.clone();
+    backend
+        .pool()
+        .write_sync(move |conn| {
+            conn.execute(
+                "DELETE FROM memory_recovery_operation_receipts WHERE operation_id=?1",
+                [operation_id],
+            )?;
+            Ok(())
+        })
+        .unwrap();
+    assert!(
+        support().is_empty(),
+        "a frozen plan without a committed operation receipt creates no edge"
+    );
+    let operation_id = plan.operation_id.clone();
+    let operation_hash = payload_hash(&plan).unwrap();
+    let recorded_at_ms = plan.recorded_at_ms;
+    backend.pool().write_sync(move |conn|{conn.execute("INSERT INTO memory_recovery_operation_receipts(operation_id,payload_hash,applied_ms) VALUES(?1,?2,?3)",rusqlite::params![operation_id,operation_hash,recorded_at_ms])?;Ok(())}).unwrap();
+    assert_eq!(support().len(), 1);
+    backend
+        .update_episode_content(&old.id, "我住在南汀市。", Some("panel"), 1)
+        .unwrap();
+    assert!(
+        support().is_empty(),
+        "a same-content manual revision cannot reuse a completed operation edge"
     );
 }

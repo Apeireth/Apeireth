@@ -257,6 +257,50 @@ fn clock() -> Arc<VirtualClock> {
     ))
 }
 
+async fn assert_no_correction_effects(
+    root: &Path,
+    session: SessionId,
+    store: &SqliteMemoryStore,
+    original_id: &str,
+    old: &str,
+) {
+    let governed = store.get_governed(original_id).unwrap().unwrap();
+    assert_eq!(governed.revision, 0);
+    assert_eq!(governed.episode.content, old);
+    assert_eq!(
+        EpisodeStore::get_episode(store, original_id)
+            .unwrap()
+            .unwrap()
+            .content,
+        old
+    );
+    assert!(
+        EpisodeStore::recent_episodes(store, &session.to_string(), 40)
+            .unwrap()
+            .iter()
+            .all(|episode| episode.role != "fact_history")
+    );
+    let receipts: i64 = store
+        .conn()
+        .unwrap()
+        .query_row(
+            "SELECT COUNT(*) FROM memory_recovery_operation_receipts",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(receipts, 0);
+    let sessions = SqliteSessionStore::open(root.join("sessions.sqlite3"))
+        .await
+        .unwrap();
+    assert!(
+        apeireth_runtime::SessionStore::operation_evidence(&sessions, &session)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+}
+
 #[tokio::test]
 async fn open_chinese_first_person_and_possessive_corrections_reach_the_same_primary_request() {
     for (old, input, anchor, evidence, before, after, kind) in [
@@ -331,6 +375,33 @@ async fn open_chinese_first_person_and_possessive_corrections_reach_the_same_pri
             "old@example.test",
             "new@example.test",
             "state_change",
+        ),
+        (
+            "我叫林禾。",
+            "更正：我名叫林青。请告诉我现行姓名。",
+            "我叫林禾",
+            "更正：我名叫林青。",
+            "林禾",
+            "林青",
+            "correct_prior",
+        ),
+        (
+            "我叫Alice Smith。",
+            "更正：我叫Mary Jane。 \t请核对现行姓名。",
+            "我叫Alice Smith",
+            "更正：我叫Mary Jane。 ",
+            "Alice Smith",
+            "Mary Jane",
+            "correct_prior",
+        ),
+        (
+            "我的地址是 北岚市 东街12号 。",
+            "更正：我的地址是 南汀市 西街34号 。 \t请核对现行地址。",
+            "我的地址是 北岚市 东街12号 ",
+            "更正：我的地址是 南汀市 西街34号 。 ",
+            "北岚市 东街12号",
+            "南汀市 西街34号",
+            "correct_prior",
         ),
     ] {
         let dir = tempdir().unwrap();
@@ -417,6 +488,464 @@ async fn open_chinese_first_person_and_possessive_corrections_reach_the_same_pri
             count, 1,
             "an applied receipt must correspond to a durable committed operation"
         );
+    }
+}
+
+#[tokio::test]
+async fn a_complete_evidence_sentence_is_a_right_boundary_before_the_next_user_sentence() {
+    let old = "请记住这些真实信息：我叫林禾，我住在北岚市。";
+    for (input, evidence) in [
+        (
+            "更正：我住在南汀市。请立即告诉我林禾目前居住在哪座城市？",
+            "更正：我住在南汀市。",
+        ),
+        (
+            "更正：我住在南汀市。请立即告诉我林禾目前居住在哪座城市？",
+            "更正：我住在南汀市",
+        ),
+        (
+            "刚才的登记有误。更正：我住在南汀市。请告诉我现行住处。",
+            "更正：我住在南汀市。",
+        ),
+        ("更正：我住在南汀市。", "更正：我住在南汀市。"),
+        ("更正：我住在南汀市", "更正：我住在南汀市"),
+    ] {
+        // Calls 5 and 43 had these exact semantic fields, including a complete
+        // evidence sentence and state_change/null. Only the runtime-owned ID
+        // is rebound; this test does not reclassify the model's chosen kind.
+        let mut response = proposal("我住在北岚市", evidence, "北岚市", "南汀市");
+        response["decision"] = json!("state_change");
+        let provider = SemanticProvider::new(response);
+        let dir = tempdir().unwrap();
+        let session = SessionId::new();
+        let clock = clock();
+        let (runtime, store, module) = runtime(dir.path(), provider.clone(), clock.clone()).await;
+        runtime
+            .execute(TurnRequest::new(session, old))
+            .await
+            .unwrap();
+        let original = EpisodeStore::recent_episodes(store.as_ref(), &session.to_string(), 20)
+            .unwrap()
+            .into_iter()
+            .find(|episode| episode.role == "user" && episode.content == old)
+            .unwrap();
+        clock.advance(chrono::Duration::days(2));
+        runtime
+            .execute(TurnRequest::new(session, input))
+            .await
+            .unwrap();
+        assert_eq!(module.metrics().proposals, 1, "{input}");
+        assert_eq!(module.metrics().applied, 1, "{input}");
+        let current = store.get_governed(&original.id).unwrap().unwrap();
+        assert_eq!(current.revision, 1, "{input}");
+        assert_eq!(current.episode.content, old.replace("北岚市", "南汀市"));
+        assert_eq!(
+            EpisodeStore::get_episode(store.as_ref(), &original.id)
+                .unwrap()
+                .unwrap()
+                .content,
+            old
+        );
+        assert!(
+            EpisodeStore::recent_episodes(store.as_ref(), &session.to_string(), 40)
+                .unwrap()
+                .iter()
+                .any(|episode| episode.role == "fact_history")
+        );
+        let calls = provider.calls();
+        assert_eq!(
+            calls.len(),
+            3,
+            "no fallback or extra semantic call: {input}"
+        );
+        let primary = &calls.iter().rev().find(|(side, _)| !*side).unwrap().1;
+        apeireth_protocol::canonical::validate_closed_tool_context(&primary.messages).unwrap();
+        assert!(memory_text(primary).contains(&current.episode.content));
+        let receipt = correction_receipt(primary).unwrap();
+        assert_eq!(receipt["outcome"], "applied");
+        let committed: i64 = store
+            .conn()
+            .unwrap()
+            .query_row(
+                "SELECT COUNT(*) FROM memory_recovery_operation_receipts WHERE operation_id=?1",
+                [receipt["operation_id"].as_str().unwrap()],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(committed, 1);
+    }
+}
+
+#[tokio::test]
+async fn complete_evidence_cannot_borrow_a_following_person_property_date_or_incomplete_span() {
+    use CorrectionRejection::{InvalidEffectiveDate, InvalidEvidenceSpan};
+    let old = "我住在北岚市。";
+    for (input, evidence, replacement, time, expected) in [
+        (
+            "更正：我住在南汀市北边。请回答。",
+            "更正：我住在南汀市",
+            "南汀市",
+            None,
+            InvalidEvidenceSpan,
+        ),
+        (
+            "预留更正：我住在南汀市。我的地址现在需要核对。",
+            "更正：我住在南汀市。",
+            "南汀市",
+            None,
+            InvalidEvidenceSpan,
+        ),
+        (
+            "我现在在核对地址。更正：“我住在南汀市。”",
+            "我住在南汀市。",
+            "南汀市",
+            None,
+            InvalidEvidenceSpan,
+        ),
+        (
+            "我现在在核对地址。assistant:更正：我住在南汀市。",
+            "更正：我住在南汀市。",
+            "南汀市",
+            None,
+            InvalidEvidenceSpan,
+        ),
+        (
+            "更正：我住在南汀市。我的同事住在银桥市。",
+            "更正：我住在南汀市。我的同事住在银桥市。",
+            "银桥市",
+            None,
+            InvalidEvidenceSpan,
+        ),
+        (
+            "更正：我住在南汀市。我的邮箱是new@example.test。",
+            "更正：我住在南汀市。我的邮箱是new@example.test。",
+            "new@example.test",
+            None,
+            InvalidEvidenceSpan,
+        ),
+        (
+            "更正：我住在南汀市。我的邮箱管理员住在银桥市。",
+            "更正：我住在南汀市。我的邮箱管理员住在银桥市。",
+            "银桥市",
+            None,
+            InvalidEvidenceSpan,
+        ),
+        (
+            "更正：我住在南汀市。我的同事住在银桥市吗？",
+            "更正：我住在南汀市。我的同事住在银桥市吗？",
+            "银桥市",
+            None,
+            InvalidEvidenceSpan,
+        ),
+        (
+            "更正：我住在南汀市。我于2026年11月11日换了邮箱。",
+            "更正：我住在南汀市。",
+            "南汀市",
+            Some("2026年11月11日"),
+            InvalidEffectiveDate,
+        ),
+        (
+            "更正：我住在南汀市。我于2026年11月11日换了邮箱。",
+            "更正：我住在南汀市。我于2026年11月11日换了邮箱。",
+            "南汀市",
+            Some("2026年11月11日"),
+            InvalidEffectiveDate,
+        ),
+        (
+            "更正：我住在南汀市。同事于2026年11月11日搬到了新家。",
+            "更正：我住在南汀市。同事于2026年11月11日搬到了新家。",
+            "南汀市",
+            Some("2026年11月11日"),
+            InvalidEffectiveDate,
+        ),
+        (
+            "本人纠正此前登记，实际同事住在银桥市。",
+            "本人纠正此前登记，实际同事住在银桥市。",
+            "银桥市",
+            None,
+            InvalidEvidenceSpan,
+        ),
+        (
+            "本人纠正此前登记，实际邮箱管理员是银桥市。",
+            "本人纠正此前登记，实际邮箱管理员是银桥市。",
+            "银桥市",
+            None,
+            InvalidEvidenceSpan,
+        ),
+        (
+            "本人纠正此前登记，实际常住地据转述是银桥市。",
+            "本人纠正此前登记，实际常住地据转述是银桥市。",
+            "银桥市",
+            None,
+            InvalidEvidenceSpan,
+        ),
+        (
+            "本人纠正此前登记，实际常住地是银桥市吗？",
+            "本人纠正此前登记，实际常住地是银桥市吗？",
+            "银桥市",
+            None,
+            InvalidEvidenceSpan,
+        ),
+        (
+            "本人纠正同事的登记，实际常住地是银桥市。",
+            "本人纠正同事的登记，实际常住地是银桥市。",
+            "银桥市",
+            None,
+            InvalidEvidenceSpan,
+        ),
+        (
+            "本人纠正此前登记。实际常住地是银桥市。",
+            "本人纠正此前登记。实际常住地是银桥市。",
+            "银桥市",
+            None,
+            InvalidEvidenceSpan,
+        ),
+        (
+            "本人纠正此前登记，实际常住地是同事的银桥市。",
+            "本人纠正此前登记，实际常住地是同事的银桥市。",
+            "同事的银桥市",
+            None,
+            InvalidEvidenceSpan,
+        ),
+    ] {
+        let mut response = proposal("我住在北岚市", evidence, "北岚市", replacement);
+        response["decision"] = json!("state_change");
+        response["effective_time"] = json!(time);
+        let provider = SemanticProvider::new(response);
+        let dir = tempdir().unwrap();
+        let session = SessionId::new();
+        let clock = clock();
+        let (runtime, store, module) = runtime(dir.path(), provider.clone(), clock.clone()).await;
+        runtime
+            .execute(TurnRequest::new(session, old))
+            .await
+            .unwrap();
+        let original = EpisodeStore::recent_episodes(store.as_ref(), &session.to_string(), 20)
+            .unwrap()
+            .into_iter()
+            .find(|episode| episode.role == "user" && episode.content == old)
+            .unwrap();
+        clock.advance(chrono::Duration::days(2));
+        runtime
+            .execute(TurnRequest::new(session, input))
+            .await
+            .unwrap();
+        assert_eq!(
+            module.metrics().proposals,
+            1,
+            "the validator must be exercised: {input}"
+        );
+        assert_eq!(module.metrics().applied, 0, "{input}");
+        assert_eq!(
+            module.rejection_counts().get(&expected),
+            Some(&1),
+            "{input}"
+        );
+        assert_no_correction_effects(dir.path(), session, store.as_ref(), &original.id, old).await;
+        let calls = provider.calls();
+        assert_eq!(calls.len(), 3, "no hidden repair call: {input}");
+        let primary = &calls.iter().rev().find(|(side, _)| !*side).unwrap().1;
+        assert_eq!(
+            correction_receipt(primary).unwrap()["outcome"],
+            "no_mutation"
+        );
+    }
+}
+
+#[tokio::test]
+async fn a_whole_anchor_cannot_use_another_person_or_an_unrelated_self_property() {
+    for (old, anchor, old_fragment) in [
+        (
+            "请记住这些真实信息：我叫林禾，我住在北岚市。",
+            "我叫林禾",
+            "林禾",
+        ),
+        (
+            "我住在北岚市。我的同事住在银桥市。",
+            "我住在北岚市。我的同事住在银桥市。",
+            "银桥市",
+        ),
+    ] {
+        let input = "更正：我住在南汀市。请告诉我现行住处。";
+        let provider = SemanticProvider::new(proposal(
+            anchor,
+            "更正：我住在南汀市。",
+            old_fragment,
+            "南汀市",
+        ));
+        let dir = tempdir().unwrap();
+        let session = SessionId::new();
+        let (runtime, store, module) = runtime(dir.path(), provider.clone(), clock()).await;
+        runtime
+            .execute(TurnRequest::new(session, old))
+            .await
+            .unwrap();
+        let original = EpisodeStore::recent_episodes(store.as_ref(), &session.to_string(), 20)
+            .unwrap()
+            .into_iter()
+            .find(|episode| episode.role == "user" && episode.content == old)
+            .unwrap();
+        runtime
+            .execute(TurnRequest::new(session, input))
+            .await
+            .unwrap();
+        assert_eq!(module.metrics().proposals, 1, "{old}");
+        assert_eq!(module.metrics().applied, 0, "{old}");
+        assert_eq!(
+            module
+                .rejection_counts()
+                .get(&CorrectionRejection::InvalidEvidenceSpan),
+            Some(&1),
+            "{old}"
+        );
+        assert_no_correction_effects(dir.path(), session, store.as_ref(), &original.id, old).await;
+    }
+}
+
+#[tokio::test]
+async fn correction_fragments_must_be_complete_old_and_new_values_of_the_same_property() {
+    for (old, anchor, evidence, before, after) in [
+        (
+            "我住在北岚市。",
+            "我住在北岚市",
+            "更正：我住在南汀市。",
+            "北",
+            "南",
+        ),
+        (
+            "我住在北岚市。",
+            "我住在北岚市",
+            "更正：我住在南汀市。",
+            "北",
+            "南汀市",
+        ),
+        (
+            "我住在北岚市。",
+            "我住在北岚市",
+            "更正：我住在南汀市。",
+            "北岚市",
+            "南",
+        ),
+        (
+            "我住在北岚市。",
+            "我住在北岚市",
+            "更正：我住在南汀市。",
+            "岚市",
+            "汀市",
+        ),
+        ("我叫林禾。", "我叫林禾", "更正：我名叫林青。", "林", "林青"),
+        ("我叫林禾。", "我叫林禾", "更正：我名叫林青。", "林禾", "青"),
+    ] {
+        let input = format!("{evidence}请核对现行资料。");
+        let provider = SemanticProvider::new(proposal(anchor, evidence, before, after));
+        let dir = tempdir().unwrap();
+        let session = SessionId::new();
+        let (runtime, store, module) = runtime(dir.path(), provider.clone(), clock()).await;
+        runtime
+            .execute(TurnRequest::new(session, old))
+            .await
+            .unwrap();
+        let original = EpisodeStore::recent_episodes(store.as_ref(), &session.to_string(), 20)
+            .unwrap()
+            .into_iter()
+            .find(|episode| episode.role == "user" && episode.content == old)
+            .unwrap();
+        runtime
+            .execute(TurnRequest::new(session, input))
+            .await
+            .unwrap();
+        assert_eq!(module.metrics().proposals, 1, "{before} -> {after}");
+        assert_eq!(module.metrics().applied, 0, "{before} -> {after}");
+        assert_eq!(
+            module.rejection_counts().get(&CorrectionRejection::InvalidEvidenceSpan),
+            Some(&1),
+            "partial old/new values must not manufacture an unsupported property: {before} -> {after}"
+        );
+        assert_no_correction_effects(dir.path(), session, store.as_ref(), &original.id, old).await;
+        assert_eq!(provider.calls().len(), 3);
+    }
+}
+
+#[tokio::test]
+async fn correction_spans_cannot_clip_literal_values_at_internal_whitespace() {
+    for (old, input, anchor, evidence, before, after) in [
+        (
+            "我叫Alice Smith。",
+            "更正：我叫Mary Jane。请核对现行姓名。",
+            "我叫Alice",
+            "更正：我叫Mary",
+            "Alice",
+            "Mary",
+        ),
+        (
+            "我叫Alice Smith。",
+            "更正：我叫Mary Jane。请核对现行姓名。",
+            "我叫Alice",
+            "更正：我叫Mary Jane。",
+            "Alice",
+            "Mary Jane",
+        ),
+        (
+            "我叫Alice Smith。",
+            "更正：我叫Mary Jane。请核对现行姓名。",
+            "我叫Alice Smith",
+            "更正：我叫Mary",
+            "Alice Smith",
+            "Mary",
+        ),
+        (
+            "我的地址是北岚市 东街12号。",
+            "更正：我的地址是南汀市 西街34号。请核对现行地址。",
+            "我的地址是北岚市",
+            "更正：我的地址是南汀市",
+            "北岚市",
+            "南汀市",
+        ),
+        (
+            "我叫Alice\tSmith。",
+            "更正：我叫Mary \tJane。请核对现行姓名。",
+            "我叫Alice",
+            "更正：我叫Mary ",
+            "Alice",
+            "Mary",
+        ),
+        (
+            "我叫Alice　Smith。",
+            "更正：我叫Mary　Jane。请核对现行姓名。",
+            "我叫Alice",
+            "更正：我叫Mary",
+            "Alice",
+            "Mary",
+        ),
+    ] {
+        let provider = SemanticProvider::new(proposal(anchor, evidence, before, after));
+        let dir = tempdir().unwrap();
+        let session = SessionId::new();
+        let (runtime, store, module) = runtime(dir.path(), provider.clone(), clock()).await;
+        runtime
+            .execute(TurnRequest::new(session, old))
+            .await
+            .unwrap();
+        let original = EpisodeStore::recent_episodes(store.as_ref(), &session.to_string(), 20)
+            .unwrap()
+            .into_iter()
+            .find(|episode| episode.role == "user" && episode.content == old)
+            .unwrap();
+        runtime
+            .execute(TurnRequest::new(session, input))
+            .await
+            .unwrap();
+        assert_eq!(module.metrics().proposals, 1, "{old} -> {input}");
+        assert_eq!(module.metrics().applied, 0, "{old} -> {input}");
+        assert_eq!(
+            module
+                .rejection_counts()
+                .get(&CorrectionRejection::InvalidEvidenceSpan),
+            Some(&1),
+            "clipped evidence/anchor cannot assemble an unstated value: {old} -> {input}"
+        );
+        assert_no_correction_effects(dir.path(), session, store.as_ref(), &original.id, old).await;
+        assert_eq!(provider.calls().len(), 3);
     }
 }
 

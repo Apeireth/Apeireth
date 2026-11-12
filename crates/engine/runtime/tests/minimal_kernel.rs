@@ -14,7 +14,7 @@ use apeireth_plugin::{
 use apeireth_protocol::canonical::{
     ModelDescriptor, NormalizedFinishReason, NormalizedRequest, NormalizedResponse, NormalizedUsage,
 };
-use apeireth_runtime::{Runtime, TurnRequest};
+use apeireth_runtime::{CommittedInputOrigin, Runtime, SessionEventKind, TurnRequest};
 use async_trait::async_trait;
 
 struct PureChatProvider {
@@ -152,7 +152,26 @@ async fn minimal_kernel_without_standard_modules_completes_plain_chat_turn() {
         .expect("session exists");
 
     assert_eq!(session.messages.len(), 2);
-    assert_eq!(session.revision, 4);
+    let events = session
+        .events
+        .iter()
+        .map(|entry| entry.event.clone())
+        .collect::<Vec<_>>();
+    assert!(matches!(events.as_slice(), [
+        SessionEventKind::InputCommitted { version: 1, origin: CommittedInputOrigin::DirectUser, start_seq: 0, end_seq: 1 },
+        SessionEventKind::TurnStarted,
+        SessionEventKind::TurnResponseCommitted { version: 1, response_id, assistant_seq: 1 },
+        SessionEventKind::TurnCompleted { rounds: 1 },
+    ] if response_id == "chat_resp_1"), "minimal chat records only its generic accepted-input and completed-response evidence: {events:?}");
+    assert!(session
+        .events
+        .iter()
+        .all(|entry| entry.request == response.request && entry.trace == response.trace.trace));
+    assert_eq!(
+        session.revision,
+        u64::try_from(session.messages.len() + session.events.len()).unwrap(),
+        "revision accounts for both messages and generic evidence events"
+    );
 }
 
 struct RecordingSink {

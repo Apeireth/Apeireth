@@ -9,7 +9,7 @@ use crate::retrieval_tuning::{RetrievalDimension, SelectedAttribution};
 mod evidence;
 pub use evidence::{
     classify_user_statement, memory_source_evidence_on_connection, MemoryClaimKind,
-    MemoryEvidenceSource, MemorySourceEvidence, SourceRole,
+    MemoryEvidenceSource, MemorySourceEvidence, SourceRole, VerifiedCorrectionSupport,
 };
 
 /// 单次 overlay 最多渲染多少条**关联日记片段**行 (全局上限).
@@ -1095,6 +1095,16 @@ mod tests {
             claim_kind: MemoryClaimKind::AssistantUtterance,
             citable_as_fact: false,
             source_group: None,
+            correction_support: vec![VerifiedCorrectionSupport {
+                source_episode_id: "actual".into(),
+                source_content_sha256: "a".repeat(64),
+                target_episode_id: "audit-only-target".into(),
+                target_revision: 1,
+                target_content_sha256: "b".repeat(64),
+                namespace: "session".into(),
+                operation_id: "audit-only-operation".into(),
+                payload_hash: "c".repeat(64),
+            }],
         };
         let evidence = std::collections::HashMap::from([("actual".to_owned(), source)]);
         let access = ClosedWorldContextCompiler::new()
@@ -1109,6 +1119,8 @@ mod tests {
         let record: serde_json::Value =
             serde_json::from_str(lines[0].split_once("] ").unwrap().1).unwrap();
         assert_eq!(record["source_role"], "assistant");
+        assert_eq!(record.as_object().unwrap().len(), 4);
+        assert!(!access.overlay.contains("audit-only-target"));
         assert_eq!(record["citable_as_fact"], false);
         assert_eq!(
             record["text"],
@@ -1182,6 +1194,7 @@ mod tests {
                         claim_kind: MemoryClaimKind::DirectUserAssertion,
                         citable_as_fact: true,
                         source_group: None,
+                        correction_support: Vec::new(),
                     },
                 )
             })

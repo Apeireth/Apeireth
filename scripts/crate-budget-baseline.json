@@ -74,7 +74,7 @@
     },
     "crates/engine/memory": {
       "files": 193,
-      "loc": 89999
+      "loc": 90126
     },
     "crates/engine/mesh": {
       "files": 27,
@@ -98,7 +98,7 @@
     },
     "crates/engine/runtime-assembly": {
       "files": 91,
-      "loc": 50193
+      "loc": 50400
     },
     "crates/engine/storage": {
       "files": 27,
@@ -106,7 +106,7 @@
     },
     "crates/foundation/core": {
       "files": 28,
-      "loc": 14573
+      "loc": 14600
     },
     "crates/foundation/credentials": {
       "files": 10,
