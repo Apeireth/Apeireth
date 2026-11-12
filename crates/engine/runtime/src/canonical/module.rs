@@ -7,10 +7,15 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
+pub use super::committed_evidence::{
+    CommittedEvidenceAccess, CommittedEvidencePage, CommittedInputOrigin, CommittedOperationIntent,
+    CommittedTurnSnapshot, CommittedUserInput,
+};
 use apeireth_core::kernel::{CapabilityId, SessionId};
 use apeireth_governance::TurnSecurityContext;
 use apeireth_plugin::agents::{
-    AgentConfig, AgentError, AgentErrorCode, AgentExecutionMode, AgentTask, AgentTaskOrigin,
+    AgentConfig, AgentError, AgentErrorCode, AgentExecutionMode, AgentPrincipal, AgentTask,
+    AgentTaskOrigin,
 };
 use apeireth_protocol::canonical::{NormalizedMessage, NormalizedResponse, ToolCall, ToolResult};
 use async_trait::async_trait;
@@ -337,6 +342,42 @@ impl From<&str> for ModuleError {
 /// Runtime-owned side-call capability exposed to modules.
 #[async_trait]
 pub trait ModuleInvoker: Send + Sync {
+    /// Commit a frozen, validated module plan beside its canonical accepted input.
+    async fn prepare_operation(
+        &self,
+        _operation_id: String,
+        _payload: serde_json::Value,
+    ) -> Result<super::CommittedOperationIntent, ModuleInvocationError> {
+        Err(ModuleInvocationError::Denied {
+            reason: "operation evidence writer is unavailable".into(),
+        })
+    }
+    /// Read this Runtime-committed input without inferring authority from role strings.
+    async fn committed_input(
+        &self,
+    ) -> Result<Option<super::CommittedUserInput>, ModuleInvocationError> {
+        Ok(None)
+    }
+    /// Verify one historical source owned by the currently authorized principal.
+    async fn committed_input_for(
+        &self,
+        _session: SessionId,
+        _request: apeireth_core::kernel::RequestId,
+    ) -> Result<Option<super::CommittedUserInput>, ModuleInvocationError> {
+        Err(ModuleInvocationError::Denied {
+            reason: "committed source reader is unavailable".into(),
+        })
+    }
+    /// Enumerate a bounded page of owned, versioned committed turns.
+    async fn committed_turns(
+        &self,
+        _cursor: Option<String>,
+        _limit: usize,
+    ) -> Result<super::CommittedEvidencePage, ModuleInvocationError> {
+        Err(ModuleInvocationError::Denied {
+            reason: "committed history reader is unavailable".into(),
+        })
+    }
     /// Perform one isolated provider invocation.
     async fn invoke(
         &self,
@@ -426,6 +467,28 @@ use apeireth_plugin::ToolCapability;
 pub trait BehaviorModule: Send + Sync {
     /// Stable module identity.
     fn manifest(&self) -> &ModuleManifest;
+
+    fn persists_recoverable_operations(&self) -> bool {
+        false
+    }
+    fn persists_recoverable_operations_for_principal(
+        &self,
+        _principal: Option<&AgentPrincipal>,
+    ) -> bool {
+        self.persists_recoverable_operations()
+    }
+
+    /// Host registration must explicitly grant canonical evidence access.
+    fn committed_evidence_access(&self) -> super::CommittedEvidenceAccess {
+        super::CommittedEvidenceAccess::None
+    }
+    /// Wrappers resolve this owner's authority without unioning other owners' grants.
+    fn committed_evidence_access_for_principal(
+        &self,
+        _principal: Option<&AgentPrincipal>,
+    ) -> super::CommittedEvidenceAccess {
+        self.committed_evidence_access()
+    }
 
     /// Whether this module can expose a shared store without mutating it.
     /// Host mapping refuses read-only sharing unless the implementation opts in.
@@ -633,6 +696,15 @@ pub struct RuntimeModuleInvoker {
 }
 
 impl RuntimeModuleInvoker {
+    pub(super) fn evidence_runtime(&self) -> &Arc<super::Runtime> {
+        &self.runtime
+    }
+    pub(super) fn evidence_origin(&self) -> &AgentTaskOrigin {
+        &self.origin
+    }
+    pub(super) fn evidence_module_id(&self) -> &str {
+        &self.module_id
+    }
     /// Bind the invoker to the existing instance service and originating turn.
     /// A Runtime without that service fails closed; there is no provider fallback.
     pub fn new(
@@ -679,6 +751,32 @@ impl RuntimeModuleInvoker {
 
 #[async_trait]
 impl ModuleInvoker for RuntimeModuleInvoker {
+    async fn prepare_operation(
+        &self,
+        operation_id: String,
+        payload: serde_json::Value,
+    ) -> Result<super::CommittedOperationIntent, ModuleInvocationError> {
+        self.persist_operation(operation_id, payload).await
+    }
+    async fn committed_input(
+        &self,
+    ) -> Result<Option<super::CommittedUserInput>, ModuleInvocationError> {
+        self.read_committed_input().await
+    }
+    async fn committed_input_for(
+        &self,
+        session: SessionId,
+        request: apeireth_core::kernel::RequestId,
+    ) -> Result<Option<super::CommittedUserInput>, ModuleInvocationError> {
+        self.read_committed_input_for(session, request).await
+    }
+    async fn committed_turns(
+        &self,
+        cursor: Option<String>,
+        limit: usize,
+    ) -> Result<super::CommittedEvidencePage, ModuleInvocationError> {
+        self.read_committed_turns(cursor, limit).await
+    }
     async fn invoke(
         &self,
         request: ModuleInvocationRequest,

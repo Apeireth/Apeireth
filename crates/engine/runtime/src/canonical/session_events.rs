@@ -11,6 +11,19 @@ use serde::{Deserialize, Serialize};
 #[serde(tag = "event", rename_all = "snake_case")]
 #[non_exhaustive]
 pub enum SessionEventKind {
+    /// Versioned acceptance evidence; role labels do not establish input origin.
+    InputCommitted {
+        version: u8,
+        origin: super::CommittedInputOrigin,
+        start_seq: usize,
+        end_seq: usize,
+    },
+    /// Response identity and original sequence; committed with TurnCompleted.
+    TurnResponseCommitted {
+        version: u8,
+        response_id: String,
+        assistant_seq: usize,
+    },
     /// Private transport attempt checkpoint; it is not a completion or Provider turn.
     ModuleMessageStarted {
         agent: apeireth_core::kernel::AgentId,

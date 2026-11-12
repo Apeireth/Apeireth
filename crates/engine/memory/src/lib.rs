@@ -21,11 +21,13 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 mod append_only;
+pub mod automatic_correction;
 pub mod canonical;
 mod episode;
 mod identity;
 pub mod lesson;
 mod migrations;
+pub mod writeback_recovery;
 // N8: generation 绑定观测缓存 (自包含, 通用记忆运行时模式, artifact_sig 联动口; 移交续接; merge 吞行后二次补回)
 pub mod gen_cache;
 // R179 P1-10: Hallway — wing 内 entity-pair 跨位置走廊 (对齐同类记忆工程公开设计)

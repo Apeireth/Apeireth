@@ -830,6 +830,7 @@ impl Runtime {
                 session.append(NormalizedMessage::system(system.clone()), clock);
             }
         }
+        let committed_input_start = session.messages.len();
         if let Some(task) = &self.task {
             if let Some(system) = &task.input.system {
                 session.append(NormalizedMessage::system(system.clone()), clock);
@@ -840,6 +841,21 @@ impl Runtime {
         }
         // A user message clears any repetition streak (advisory channel).
         self.note_user_message(request.session);
+        session.record(
+            request_id,
+            trace_id,
+            SessionEventKind::InputCommitted {
+                version: 1,
+                origin: if self.task.is_some() {
+                    super::CommittedInputOrigin::AgentTask
+                } else {
+                    super::CommittedInputOrigin::DirectUser
+                },
+                start_seq: committed_input_start,
+                end_seq: session.messages.len(),
+            },
+            clock,
+        );
         session.record(request_id, trace_id, SessionEventKind::TurnStarted, clock);
         if let Some(origin) = self
             .task
@@ -4178,10 +4194,29 @@ impl Runtime {
         rounds: u32,
     ) -> RuntimeResult<TurnResponse> {
         let clock = self.clock.as_ref();
+        let assistant_seq = session.messages.len();
         session.append(
             NormalizedMessage::assistant(response.content.clone()),
             clock,
         );
+        if session.log.iter().any(|entry| {
+            entry.request == Some(request_id)
+                && matches!(
+                    entry.event,
+                    SessionEventKind::InputCommitted { version: 1, .. }
+                )
+        }) {
+            session.record(
+                request_id,
+                trace.trace,
+                SessionEventKind::TurnResponseCommitted {
+                    version: 1,
+                    response_id: response.id.clone(),
+                    assistant_seq,
+                },
+                clock,
+            );
+        }
         session.record(
             request_id,
             trace.trace,

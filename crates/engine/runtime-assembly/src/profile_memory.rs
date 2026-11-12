@@ -159,19 +159,47 @@ impl ProfileMemoryMappings {
                 extra.insert(id.clone(), module.manifest().clone());
             }
         }
+        let mut registered = Vec::new();
         for module in legacy {
             extra.remove(&module.manifest().id);
-            builder = builder.with_registered_behavior(self.wrap(module.clone()));
+            registered.push(self.wrap(module.clone()));
         }
         for manifest in extra.into_values() {
-            builder = builder.with_registered_behavior(Arc::new(MappedBehavior {
+            registered.push(Arc::new(MappedBehavior {
                 manifest,
                 legacy: None,
                 mappings: self.clone(),
-            }));
+            }) as Arc<dyn BehaviorModule>);
+        }
+        // These concrete memory slots form one ordered pipeline, including when
+        // only a mapped Profile supplies them. Other modules retain their order.
+        #[cfg(feature = "desktop")]
+        order_memory_modules(&mut registered);
+        for module in registered {
+            builder = builder.with_registered_behavior(module);
         }
         builder.with_principal_authorizations(self.authority())
     }
+}
+
+#[cfg(feature = "desktop")]
+fn order_memory_modules(modules: &mut Vec<Arc<dyn BehaviorModule>>) {
+    let mut prefix = Vec::new();
+    for id in ["cognitive.memory_recovery", "cognitive.memory_correction"] {
+        if let Some(index) = modules.iter().position(|module| module.manifest().id == id) {
+            prefix.push(modules.remove(index));
+        }
+    }
+    let index = modules
+        .iter()
+        .position(|module| {
+            matches!(
+                module.manifest().id.as_str(),
+                "cognitive.memory_recall" | "cognitive.memory_writeback"
+            )
+        })
+        .unwrap_or(modules.len());
+    modules.splice(index..index, prefix);
 }
 struct MappedBehavior {
     manifest: ModuleManifest,
@@ -182,6 +210,52 @@ struct MappedBehavior {
 impl BehaviorModule for MappedBehavior {
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
+    }
+    fn committed_evidence_access_for_principal(
+        &self,
+        principal: Option<&AgentPrincipal>,
+    ) -> apeireth_runtime::CommittedEvidenceAccess {
+        match principal {
+            None => self
+                .legacy
+                .as_ref()
+                .map(|module| module.committed_evidence_access_for_principal(None))
+                .unwrap_or_default(),
+            Some(principal) => self
+                .mappings
+                .bindings
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .targets
+                .get(&key(principal))
+                .filter(|lease| lease.authority.is_active())
+                .and_then(|lease| lease.modules.get(&self.manifest.id))
+                .map(|module| module.committed_evidence_access_for_principal(Some(principal)))
+                .unwrap_or_default(),
+        }
+    }
+    fn persists_recoverable_operations_for_principal(
+        &self,
+        principal: Option<&AgentPrincipal>,
+    ) -> bool {
+        match principal {
+            None => self
+                .legacy
+                .as_ref()
+                .is_some_and(|module| module.persists_recoverable_operations_for_principal(None)),
+            Some(principal) => self
+                .mappings
+                .bindings
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .targets
+                .get(&key(principal))
+                .filter(|lease| lease.authority.is_active())
+                .and_then(|lease| lease.modules.get(&self.manifest.id))
+                .is_some_and(|module| {
+                    module.persists_recoverable_operations_for_principal(Some(principal))
+                }),
+        }
     }
     async fn on_hook_authenticated(
         &self,
@@ -211,6 +285,43 @@ impl BehaviorModule for MappedBehavior {
 
 #[cfg(feature = "desktop")]
 impl ProfileMemoryAccess {
+    /// Host supplies the official journal for this private Cognitive DB.
+    /// Grant all returned bindings together; recovery and correction share the writer.
+    pub fn recoverable_modules(
+        &self,
+        principal: &AgentPrincipal,
+        clock: Arc<dyn apeireth_core::kernel::Clock>,
+        journal: Arc<apeireth_memory::writeback_recovery::SqliteWritebackJournal>,
+        mappings: Arc<ProfileMemoryMappings>,
+        store: &str,
+    ) -> Result<Vec<CognitiveStoreBinding>, String> {
+        let writer = Arc::new(
+            self.writeback_module(principal, clock.clone())?
+                .with_recovery_journal(journal.clone()),
+        );
+        writer.attach_profile_mappings(mappings.clone());
+        let correction = crate::canonical::memory_correction::MemoryCorrectionModule::new(
+            self.coordinator.clone(),
+            clock,
+        )
+        .with_journal(journal)
+        .with_profile_partition(crate::memory_module::namespace_key(principal))
+        .with_profile_mappings(mappings);
+        let modules: Vec<Arc<dyn BehaviorModule>> = vec![
+            Arc::new(crate::canonical::memory_recovery::MemoryRecoveryModule::new(writer.clone())),
+            Arc::new(correction),
+            Arc::new(self.recall_module(principal)),
+            writer,
+        ];
+        Ok(modules
+            .into_iter()
+            .map(|module| CognitiveStoreBinding {
+                store: store.into(),
+                access: StoreAccess::WritablePrivate,
+                module,
+            })
+            .collect())
+    }
     pub fn recall_module(
         &self,
         principal: &AgentPrincipal,

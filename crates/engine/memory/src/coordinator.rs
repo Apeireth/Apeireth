@@ -1127,17 +1127,26 @@ impl MemoryCoordinator {
         scope: &MemoryScope,
         provenance: &MemoryProvenance,
     ) -> Result<(), MemoryError> {
+        self.persist_episode_with_metadata(episode, scope, provenance, serde_json::json!({}))
+    }
+
+    fn persist_episode_with_metadata(
+        &self,
+        episode: &Episode,
+        scope: &MemoryScope,
+        provenance: &MemoryProvenance,
+        extra: serde_json::Value,
+    ) -> Result<(), MemoryError> {
+        let mut metadata = extra
+            .as_object()
+            .cloned()
+            .ok_or_else(|| MemoryError::Invalid("episode metadata must be an object".into()))?;
+        for (key,value) in serde_json::json!({"scope":scope,"provenance":provenance,"layer":"episodic","content_hash":crate::canonical::vector::content_hash(&episode.content)}).as_object().expect("literal object") {
+            metadata.insert(key.clone(),value.clone());
+        }
         let outcome = self
             .backend
-            .put_episode_with_metadata(
-                episode,
-                serde_json::json!({
-                    "scope": scope,
-                    "provenance": provenance,
-                    "layer": "episodic",
-                    "content_hash": crate::canonical::vector::content_hash(&episode.content),
-                }),
-            )
+            .put_episode_with_metadata(episode, serde_json::Value::Object(metadata))
             .map_err(|e| MemoryError::Invalid(e.to_string()))?;
         if outcome == EpisodeWriteOutcome::Existing {
             return Ok(());

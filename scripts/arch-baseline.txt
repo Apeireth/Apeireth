@@ -308,7 +308,7 @@ env APEIRETH_VOICE_SPEAK_SCOPE
 # --- size (85) ---
 size crates/adapters/cli/src/care_heartbeat.rs 1621
 size crates/adapters/cli/src/gateway_panels.rs 1526
-size crates/adapters/cli/src/lib.rs 3776
+size crates/adapters/cli/src/lib.rs 3786
 size crates/adapters/cli/src/main.rs 1492
 size crates/adapters/cli/src/onboarding.rs 1332
 size crates/adapters/gateway/src/canonical_entry.rs 2291
@@ -352,9 +352,9 @@ size crates/engine/image/doc/src/lib.rs 1520
 size crates/engine/image/geom/src/warp.rs 1374
 size crates/engine/image/psd/src/tiff.rs 2440
 size crates/engine/image/raster/src/lib.rs 1676
-size crates/engine/memory/src/coordinator.rs 2346
+size crates/engine/memory/src/coordinator.rs 2355
 size crates/engine/memory/src/golden_mining.rs 1352
-size crates/engine/memory/src/persona_layer.rs 1680
+size crates/engine/memory/src/persona_layer.rs 1738
 size crates/engine/memory/src/reflexion.rs 1239
 size crates/engine/memory/src/research_derived_memory.rs 1211
 size crates/engine/memory/src/retrieval_pipeline.rs 1220
@@ -371,11 +371,11 @@ size crates/engine/runtime-assembly/src/canonical/bio_tone.rs 1319
 size crates/engine/runtime-assembly/src/canonical/cognitive.rs 5720
 size crates/engine/runtime-assembly/src/canonical/orchestrator.rs 2432
 size crates/engine/runtime-assembly/src/canonical/play_tools.rs 1412
-size crates/engine/runtime-assembly/src/canonical/production.rs 1896
+size crates/engine/runtime-assembly/src/canonical/production.rs 1947
 size crates/engine/runtime-assembly/src/canonical/retrieval_tuning_wire.rs 1336
 size crates/engine/runtime-assembly/src/canonical/self_status_source.rs 2064
 size crates/engine/runtime-assembly/src/canonical/tool_modules.rs 1395
-size crates/engine/runtime/src/canonical/execute.rs 4905
+size crates/engine/runtime/src/canonical/execute.rs 4940
 size crates/engine/runtime/src/canonical/runtime.rs 1331
 size crates/foundation/core/src/cost_router.rs 1399
 size crates/foundation/core/src/lib.rs 2483

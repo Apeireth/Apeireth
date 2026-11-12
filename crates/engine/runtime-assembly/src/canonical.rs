@@ -104,6 +104,10 @@ pub mod invariant_registry;
 /// + **口径对齐自检**（分叉 ⇒ 拒绝装配）。
 #[path = "canonical/memory_contract_wire.rs"]
 pub mod memory_contract_wire;
+#[path = "canonical/memory_correction.rs"]
+pub mod memory_correction;
+#[path = "canonical/memory_recovery.rs"]
+pub mod memory_recovery;
 #[path = "canonical/memory_typed_sink.rs"]
 pub mod memory_typed_sink;
 /// `rt.module_execution_contract` 的**生产选举面**: 一张静态装配表 (无新 env

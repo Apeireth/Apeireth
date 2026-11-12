@@ -2,7 +2,7 @@
 
 [Document-Meta]
 Document: docs/design/memory-quality-hardening.md
-Version: 1.0
+Version: 1.1
 Class: SPEC
 Last-Modified: 2026-11-12
 Status: 🟢 活跃
@@ -93,6 +93,78 @@ Provider 测试从独立 SQLite 读取发送 ID 对应的治理状态、作用�
 
 ## 进度与验收
 
+### 2026-11-12 接续批次：自动纠错、失败恢复与真实回答
+
+本轮在既有记忆协调器、治理层、AfterTurn 和 Runtime → Provider 路径补齐自动化，
+不建立第二套记忆系统。自动纠错只能依据可归属的用户证据，不把模型回复、引用、工具结果或低可信文本当作覆盖权限。
+恢复使用稳定身份与持久待办，写前登记、提交后确认；重启及重复处理必须保持幂等，未恢复项保留可观测状态。
+真实回答评测复用实际运行链路，固定自有合成语料、模型、预算、配置和评分准则；标签不进入模型请求，
+记录真实回答、错误、延迟及用量。临时密钥仅在本机调用时读取，不进入仓库、命令行参数、报告或日志。
+
+| 批次 | 目标 | 验收 |
+|---|---|---|
+| Q5 | 自然语言纠错自动进入既有治理/调和路径 | 中文多轮新事实、明确纠正、有效时间、错主体/引用/模型伪造、歧义拒绝、重启与真实请求证据；旧接线红、新接线绿 |
+| Q6 | 记忆写入失败自动恢复 | 持久待办、故障后重试、进程重启、重复消费、部分成功、作用域隔离及遗忘后不得复活；失败不发布未提交内容 |
+| Q7 | 真实模型答题评测 | 本地确定性评测器验证后，再用用户临时 key 实际运行；保留逐例回答与失败，硬失败不得被均分抵消；无 key 记未测，不用录制 Provider 代替 |
+
+当前状态：Q5/Q6 已实现并接入条件性生产组合，正式集成和回归仍在验证；Q7 评测入口正在补齐完整生命周期。
+真实模型调用尚未执行；本地确定性 Provider 和回环 HTTP 只用于验证软件契约。
+当前无外部可运行实例，Q4 同条件比较仍独立记未测。
+
+#### 本轮合同与限制
+
+- Runtime 在接受输入及提交最终响应时记录版本化来源标记；`User` 角色本身不授予用户事实权限。
+  读口按当前主体、行为模块、权限 epoch 和显式声明解析，不能合并不同 Profile 同名模块的权限。
+  已遮蔽输入或输出、继承的 fork 记录和无来源标记的旧会话不成为新的覆盖证据。
+  旧数据仍可读取，但不自动补造来源；新增事件需要支持该事件的 reader。
+- 自动纠错在 Recall 前请求受限语义提案，再确定性核验原始输入、目标列表、确切片段、范围、授权、版本和时间。
+  支持有限的第一人称及所有格中文表达、ISO 和明确中文年月日；不确定主体、引用、转述、假设、未来日期或非法提案保守弃权。
+  相对日历由 Host 选择的固定 UTC 偏移解释；CLI 采用装配时本机偏移，其他 Host 缺省 UTC。
+  不宣称按地区时区规则重算所有历史夏令时边界。
+  语义判定来自模型，不是数学证明，也不宣称通用自然语言纠错完备。
+  `CorrectPrior` 保留原文和修订审计；`StateChange` 另生成可正常召回的有界历史状态，不能把原误值说成曾经正确。
+- 已验证纠错方案在修改前写入正式 SessionStore 的不可变操作证据，沿用会话封缄；正式存储迁移为 V4。
+  认知库 V20 journal 保存冻结方案、依赖、进度及终态；情节依靠稳定身份、元数据及链的原子提交重放，
+  可变累积 sink 的效果与其操作回执在同一事务提交。journal 在效果成功后确认进度，不宣称跨 sink 全局事务。
+  typed 恢复须共享官方 journal 的连接池；不同数据库或不声明该能力的 store 显式保持未恢复。
+  单条 episode 遗忘覆盖原文召回、派生 episode、Experience、Temporal 与未完成 typed 重放；
+  已成功形成的承诺对象和 Persona 聚合有各自的治理生命周期，不由单条 episode 遗忘推定已逐项撤回。
+  恢复发生在下一次获得授权的 `TurnStart` 和现行 `AfterTurn`，有界扫描和消费，无独立后台守护线程。
+  尚有已接受纠错或无法确认来源已扫描完时，下一轮不能把旧值作为当前答案继续交付。
+  普通 AfterTurn 故障保留当前已提交回答，待办及失败仍可观测。
+- Profile 写入要求显式 Host 映射、可写私有 lease 和同一协调器；模型侧调用还要求独立的模块 Agent grant。
+  未配置 journal 的兼容组合不增加纠错模型调用。自定义后端及兼容提取器必须分别验收，不由默认组合测试推定能力。
+  遗忘以治理隐藏、撤销依赖及抑制重放为边界，原始 SQL 审计和哈希链保留；不等同物理抹盘或清除备份。
+- 评测的个人数据根、会话库和认知库均隔离；不得从个人默认 wiki 读取未列入语料的内容。
+  标签只进入评分，原始请求、所有调用尝试、错误、回答、用量与延迟留在仓外评测目录。
+  真实 HTTP 复用生产协议转换；额外思考模式参数仅属于显式评测配置，不代表生产 Provider 已提供该配置口。
+  临时 key 只进入交互启动器的子进程环境和授权头；没有隐式付费模型或凭据发现。
+
+#### 本轮验收入口
+
+```sh
+cargo test -p apeireth-runtime --test committed_evidence --locked -j 2
+cargo test -p apeireth-memory --test memory_automatic_correction --test writeback_recovery --locked -j 2
+cargo test -p apeireth-runtime-assembly --test memory_automatic_correction --test memory_writeback_recovery --test memory_autonomy_production --test profile_memory_evidence_authority --test session_operation_evidence --locked -j 2
+cargo test -p apeireth-runtime-assembly --example memory_answer_eval --locked -j 2
+cargo run -p apeireth-runtime-assembly --example memory_answer_eval --locked -j 2 -- offline-check --output NEW_DIRECTORY
+```
+
+真实运行须显式指定服务地址、模型、采样/思考模式、输出和总调用上限、重复数及新输出目录。
+启动器为 `crates/engine/runtime-assembly/examples/memory_answer_eval/run-live.ps1`；密钥不能作为脚本参数。
+未运行、失败、无效设置或未接线的槽位不算答题通过；软件契约通过也不转写成模型质量分。
+
+#### 资源变更
+
+本轮新增可信提交证据、纠错事务、恢复 journal 和生产行为，确有源文件及行数增长。
+最终按实际变化更新相关非 LOCKED 尺寸预算，提交信息说明增量；不搬移测试或压缩注释掩盖增长。
+仅增加已有工作区 Provider 的开发依赖以复用正式协议转换，不引入外部包版本。
+历史质量阈值、小说卷、检索基线和 LOCKED 五项均不因本轮新增功能变动。
+
+### 前一批 Q1–Q4 历史快照
+
+以下状态与本地验收属于先前已合并的一致性批次，不作为本轮 Q5/Q6/Q7 的验收结果。
+
 | 项目 | 当前状态 | 证据 / 还差什么 |
 |---|---|---|
 | Q1 | PRODUCTION WIRED | 默认协调器调用组合写；两 SQLite 原文、sidecar、链头同事务，成功新插入后发布 Working；既存 ID 不回填工作环。故障注入、身份冲突、派生元数据保留、淘汰后重试及重开检查通过。legacy 默认顺序写仍可能留下原文，不承诺原子性；尚无 AfterTurn 自动恢复队列接线。 |
@@ -100,7 +172,7 @@ Provider 测试从独立 SQLite 读取发送 ID 对应的治理状态、作用�
 | Q3 | 部分完成 | Working 已应用治理后的正文；调和与物化 ID 使用结构化身份，不再由显示分隔符混淆主体；结构化事实/多值关系保留独立断言，临时 ID 不覆盖快照。一般自然语言自动纠错仍未实现，不能把本批当作完成该能力。 |
 | Q4 | 未测 | 暂无外部可运行实例；先完成自有实现与评测 |
 
-### 2026-11-12 本地验收
+### 2026-11-12 前一批本地验收
 
 工具链：`rustc 1.97.1` / `cargo 1.97.1`，Windows；所有 Cargo 命令清空 `RUSTC_WRAPPER`。
 `cargo test -p apeireth-memory -p apeireth-plugin -p apeireth-runtime-assembly --all-targets --locked --no-fail-fast -j 2`

@@ -417,14 +417,16 @@ fn migrations_reopen_preserves_data_and_idempotent() {
     // 断言演进 (2026-10-31, 合并批): 14 → 15 —— 总指挥线新增
     // V19__memory_chain_schema (哈希链: memory_chain_heads 表 + episodes 两列,
     // DDL 走 `idempotent` 钩子) ⇒ V5..V19 共 15 条, 语义仍是「无重复」。
+    // V20 adds the official writeback journal and phase receipts: 16 unique records.
     let applied = store.applied_migrations().unwrap();
     assert_eq!(
         applied.iter().filter(|v| **v >= 5).count(),
-        15,
-        "V5..V19 各一条 (V15 = dedup_fingerprints; V16 = persona_memory_*; \
+        16,
+        "V5..V20 各一条 (V15 = dedup_fingerprints; V16 = persona_memory_*; \
          V17 = 记忆保鲜 source_hash/ingest_queue/memory_fold_segments; V18 = lessons; \
-         V19 = 哈希链链头表 + episodes 的 chain_hash/chain_prev_hash)"
+         V19 = 哈希链链头表 + episodes 的 chain_hash/chain_prev_hash; V20 = writeback recovery)"
     );
+    assert!(applied.contains(&20));
 }
 
 #[test]

@@ -169,6 +169,40 @@ pub trait MemoryMaterializationSink: Send + Sync {
 /// is deliberately `Skipped`, so an unconfigured sink never claims persistence.
 #[async_trait]
 pub trait MemoryTypedMaterializationSink: Send + Sync {
+    fn supports_recovery_journal(
+        &self,
+        journal: &crate::writeback_recovery::SqliteWritebackJournal,
+    ) -> bool {
+        let _ = journal;
+        false
+    }
+    fn supports_durable_recovery(&self) -> bool {
+        false
+    }
+
+    async fn prepare_recovery(
+        &self,
+        candidate: &MemoryTypedCandidate,
+    ) -> Result<serde_json::Value, MemoryError> {
+        let _ = candidate;
+        Err(MemoryError::Invalid(
+            "typed sink does not support durable recovery".into(),
+        ))
+    }
+
+    async fn materialize_recovery(
+        &self,
+        candidate: &MemoryTypedCandidate,
+        operation_id: &str,
+        at_ms: i64,
+        frozen_context: &serde_json::Value,
+    ) -> Result<MemoryMaterializationOutcome, MemoryError> {
+        let _ = (candidate, operation_id, at_ms, frozen_context);
+        Err(MemoryError::Invalid(
+            "typed sink does not support durable recovery".into(),
+        ))
+    }
+
     async fn materialize_commitment(
         &self,
         candidate: &CommitmentCandidate,

@@ -2295,6 +2295,16 @@ async fn build_cognitive_modules_at(
     let backends = CognitiveBackends {
         memory: Some(memory.clone()),
         memory_governance: Some(memory_governance),
+        memory_recovery: Some(Arc::new(
+            apeireth_memory::writeback_recovery::SqliteWritebackJournal::from_pool(pool.clone()),
+        )),
+        memory_data_root: None,
+        memory_correction_policy: Some(
+            apeireth_runtime_assembly::canonical::memory_correction::CorrectionPolicy {
+                utc_offset_seconds: chrono::Local::now().offset().local_minus_utc(),
+                ..Default::default()
+            },
+        ),
         wiki: Some(wiki),
         graph: Some(graph),
         associations: Some(associations),

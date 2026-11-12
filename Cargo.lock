@@ -670,6 +670,7 @@ dependencies = [
  "apeireth-organ",
  "apeireth-plugin",
  "apeireth-protocol",
+ "apeireth-provider",
  "apeireth-runtime",
  "apeireth-storage",
  "apeireth-tools-canonical",

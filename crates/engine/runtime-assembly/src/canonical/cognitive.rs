@@ -1691,6 +1691,9 @@ impl BehaviorModule for MemoryRecallModule {
     }
 }
 
+#[path = "cognitive/writeback_recovery.rs"]
+mod writeback_recovery;
+
 /// Persist the current successful turn after the canonical transcript commit.
 pub struct MemoryWritebackModule {
     manifest: ModuleManifest,
@@ -1703,13 +1706,18 @@ pub struct MemoryWritebackModule {
     materializer: Arc<dyn MemoryMaterializerPort>,
     typed_sink: Option<Arc<dyn MemoryTypedMaterializationSink>>,
     consolidation: bool,
-    /// ⭐ **写侧去重门**（P1 接线 · 2026-11-07）：materializer 产物落库**之前**过门。
+    recovery_journal: Option<Arc<apeireth_memory::writeback_recovery::SqliteWritebackJournal>>,
+    recovery_lock: tokio::sync::Mutex<()>,
+    recovery_error: Mutex<Option<String>>,
+    recovery_source_state: Mutex<std::collections::BTreeMap<String, bool>>,
+    recovery_mappings: Mutex<Option<Arc<crate::profile_memory::ProfileMemoryMappings>>>,
+    /// 无 journal 兼容分支的写侧去重门：materializer 产物落库之前过门。
+    /// journal 分支使用提交后的持久指纹；本字段只服务旧组合。
     ///
     /// * **命名空间 = 归属锚点**（profile 私有分区 / 会话锚点）⇒ ⇒ **不跨来源误杀**；
     /// * **指纹** = `dedup::episode_fingerprint(role, content)`（角色 + 归一化正文）；
     /// * **窗口** = `dedup::DEFAULT_DEDUP_WINDOW_MS`（24h）⇒ ⇒ 窗口内相同内容**只落一次**；
-    /// * ⚠️ **进程内**窗口（LRU）⇒ ⇒ **重启后清空**（持久化门 `accept_persisted` 需要
-    ///   `&SqliteMemoryStore`，而本模块只持 `Arc<dyn MemoryBackend>` ⇒ 拿不到库句柄）。
+    /// * 此兼容字段是进程内窗口（LRU），重启后清空；不是 journal 的持久状态。
     dedup: DedupIndex,
     /// 去重门拦下的条数（**可观测** ⇒ 不许「静默少写」）。
     dedup_skipped: AtomicU64,
@@ -1739,6 +1747,11 @@ impl MemoryWritebackModule {
             materializer: Arc::new(MemoryMaterializer::default()),
             typed_sink: None,
             consolidation: false,
+            recovery_journal: None,
+            recovery_lock: tokio::sync::Mutex::new(()),
+            recovery_error: Mutex::new(None),
+            recovery_source_state: Mutex::new(std::collections::BTreeMap::new()),
+            recovery_mappings: Mutex::new(None),
             dedup: DedupIndex::new(),
             dedup_skipped: AtomicU64::new(0),
             persona: None,
@@ -1922,6 +1935,9 @@ impl MemoryWritebackModule {
 
 #[async_trait::async_trait]
 impl BehaviorModule for MemoryWritebackModule {
+    fn committed_evidence_access(&self) -> super::module::CommittedEvidenceAccess {
+        super::module::CommittedEvidenceAccess::OwnedHistory
+    }
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
     }
@@ -1959,6 +1975,17 @@ impl MemoryWritebackModule {
         execution: Option<&apeireth_plugin::ToolExecutionContext>,
     ) -> Result<ModuleOutcome, ModuleError> {
         let started = Instant::now();
+        if hook == HookPoint::AfterTurn && self.recovery_journal.is_some() {
+            let result = self.drain_recovery(ctx, execution).await;
+            self.metrics.record(
+                MEMORY_WRITEBACK_MODULE_ID,
+                hook,
+                &ModuleDirective::Continue,
+                started,
+                0,
+            );
+            return result;
+        }
         let result = if hook == HookPoint::AfterTurn {
             if let Some(candidate) = ctx.candidate {
                 let session = self

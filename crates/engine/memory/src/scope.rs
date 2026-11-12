@@ -448,6 +448,13 @@ pub struct PersonaGovernanceState {
 
 #[async_trait]
 pub trait PersonaProfileStore: Send + Sync {
+    fn supports_recovery_journal(
+        &self,
+        journal: &crate::writeback_recovery::SqliteWritebackJournal,
+    ) -> bool {
+        let _ = journal;
+        false
+    }
     async fn get_profile(
         &self,
         persona_id: &str,
@@ -507,6 +514,28 @@ pub trait PersonaProfileStore: Send + Sync {
         delta: PersonaProfileDelta,
         updated_at: Timestamp,
     ) -> Result<PersonaMemoryProfile, String>;
+
+    /// Durable implementations atomically retain the operation receipt with
+    /// the profile mutation. Compatibility stores must not pretend replay safety.
+    async fn apply_delta_once(
+        &self,
+        operation_id: &str,
+        persona_id: &str,
+        subject_id: &str,
+        expected_revision: u64,
+        delta: PersonaProfileDelta,
+        updated_at: Timestamp,
+    ) -> Result<PersonaMemoryProfile, String> {
+        let _ = (
+            operation_id,
+            persona_id,
+            subject_id,
+            expected_revision,
+            delta,
+            updated_at,
+        );
+        Err("durable persona recovery is not supported".into())
+    }
 }
 
 /// Process-local profile store used for deterministic tests and embeddings.

@@ -114,6 +114,67 @@ impl SqliteSessionStore {
 
 #[async_trait]
 impl SessionStore for SqliteSessionStore {
+    fn supports_operation_evidence(&self) -> bool {
+        true
+    }
+
+    async fn put_operation_evidence(
+        &self,
+        intent: &apeireth_runtime::CommittedOperationIntent,
+    ) -> RuntimeResult<apeireth_runtime::CommittedOperationIntent> {
+        if apeireth_runtime::canonical::committed_evidence::operation_payload_hash(&intent.payload)
+            .map_err(|error| RuntimeError::session_save(intent.input.session, error.to_string()))?
+            != intent.payload_hash
+        {
+            return Err(RuntimeError::session_save(
+                intent.input.session,
+                "operation evidence integrity mismatch",
+            ));
+        }
+        let intent = intent.clone();
+        let id = intent.input.session;
+        let sealer = self.sealer.clone();
+        self.pool.write(move |connection| {
+            use rusqlite::OptionalExtension;
+            let transaction = rusqlite::Transaction::new_unchecked(connection, rusqlite::TransactionBehavior::Immediate)?;
+            let existing: Option<(u64,String)> = transaction.query_row(
+                "SELECT seq,data FROM module_operation_evidence WHERE session_id=?1 AND operation_id=?2",
+                rusqlite::params![id.to_string(),intent.operation_id], |row|Ok((row.get(0)?,row.get(1)?))).optional()?;
+            if let Some((sequence,data)) = existing {
+                let json = match &sealer { Some(sealer)=>String::from_utf8(sealer.open_text(&data).map_err(StorageError::Serialization)?).map_err(|error|StorageError::Serialization(error.to_string()))?,None=>data };
+                let mut old: apeireth_runtime::CommittedOperationIntent = serde_json::from_str(&json).map_err(|error|StorageError::Serialization(error.to_string()))?;
+                if old.operation_id!=intent.operation_id || old.module_id!=intent.module_id || old.input!=intent.input || old.payload_hash!=intent.payload_hash || old.payload!=intent.payload {
+                    return Err(StorageError::Serialization("operation evidence identity conflict".into()));
+                }
+                old.sequence=sequence; transaction.commit()?; return Ok(old);
+            }
+            let json=serde_json::to_string(&intent).map_err(|error|StorageError::Serialization(error.to_string()))?;
+            let data=match &sealer {Some(sealer)=>sealer.seal_to_text(json.as_bytes()).map_err(StorageError::Serialization)?,None=>json};
+            transaction.execute("INSERT INTO module_operation_evidence(session_id,operation_id,data) VALUES (?1,?2,?3)",rusqlite::params![id.to_string(),intent.operation_id,data])?;
+            let mut result=intent;result.sequence=transaction.last_insert_rowid() as u64;transaction.commit()?;Ok(result)
+        }).await.map_err(|error|Self::storage_error(id,"save",error))
+    }
+
+    async fn operation_evidence(
+        &self,
+        id: &SessionId,
+    ) -> RuntimeResult<Vec<apeireth_runtime::CommittedOperationIntent>> {
+        let id = *id;
+        let sealer = self.sealer.clone();
+        self.pool.read(move |connection| {
+            let mut statement=connection.prepare("SELECT seq,data FROM module_operation_evidence WHERE session_id=?1 ORDER BY seq")?;
+            let rows=statement.query_map([id.to_string()],|row|Ok((row.get::<_,u64>(0)?,row.get::<_,String>(1)?)))?;
+            let mut out=Vec::new();
+            for row in rows {let(sequence,data)=row?;
+                let json=match &sealer {Some(sealer)=>String::from_utf8(sealer.open_text(&data).map_err(StorageError::Serialization)?).map_err(|error|StorageError::Serialization(error.to_string()))?,None=>data};
+                let mut value:apeireth_runtime::CommittedOperationIntent=serde_json::from_str(&json).map_err(|error|StorageError::Serialization(error.to_string()))?;
+                if value.input.session!=id || apeireth_runtime::canonical::committed_evidence::operation_payload_hash(&value.payload).map_err(|error|StorageError::Serialization(error.to_string()))?!=value.payload_hash {
+                    return Err(StorageError::Serialization("operation evidence integrity mismatch".into()));
+                }
+                value.sequence=sequence;out.push(value);
+            } Ok(out)
+        }).map_err(|error|Self::storage_error(id,"load",error))
+    }
     async fn load(&self, id: &SessionId) -> RuntimeResult<Option<Session>> {
         use rusqlite::OptionalExtension;
 
@@ -202,10 +263,19 @@ impl SessionStore for SqliteSessionStore {
         let id = *id;
         self.pool
             .write(move |connection| {
-                let affected = connection.execute(
+                let transaction = rusqlite::Transaction::new_unchecked(
+                    connection,
+                    rusqlite::TransactionBehavior::Immediate,
+                )?;
+                transaction.execute(
+                    "DELETE FROM module_operation_evidence WHERE session_id=?1",
+                    [id.to_string()],
+                )?;
+                let affected = transaction.execute(
                     "DELETE FROM sessions WHERE id = ?1",
                     rusqlite::params![id.to_string()],
                 )?;
+                transaction.commit()?;
                 Ok(affected > 0)
             })
             .await

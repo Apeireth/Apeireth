@@ -149,6 +149,16 @@ fn now_ms() -> i64 {
 
 /// 记忆治理存储接口.
 pub trait MemoryGovernanceStore: Send + Sync {
+    /// Apply one Host-validated correction atomically with its recovery receipt.
+    fn apply_automatic_correction(
+        &self,
+        _plan: &crate::automatic_correction::AutomaticCorrectionPlan,
+    ) -> Result<crate::automatic_correction::AutomaticCorrectionOutcome, MemoryGovernanceError>
+    {
+        Err(MemoryGovernanceError::Invalid(
+            "automatic correction store is not configured".into(),
+        ))
+    }
     /// 读取单 episode 的治理视图 (含 override content).
     fn get_governed(
         &self,
@@ -370,35 +380,144 @@ pub(crate) fn update_episode_content_impl(
     updated_by: Option<&str>,
     expected_rev: i64,
 ) -> Result<GovernedEpisode, MemoryGovernanceError> {
-    if episode_id.trim().is_empty() {
-        return Err(MemoryGovernanceError::Invalid("episode id is empty".into()));
-    }
-    if new_content.chars().count() > MAX_CONTENT_LEN {
-        return Err(MemoryGovernanceError::Invalid(format!(
-            "content too long (max {MAX_CONTENT_LEN} chars)"
-        )));
-    }
-    if fetch_governed_on_conn(conn, episode_id)?.is_none() {
-        return Err(MemoryGovernanceError::NotFound(episode_id.to_string()));
-    }
-    ensure_governance_on_conn(conn, episode_id)?;
-    let now = now_ms();
-    let updated = conn
-        .execute(
-            "UPDATE episode_governance SET content_override = ?1, revision = revision + 1, \
+    update_episode_content_for_operation_impl(
+        conn,
+        episode_id,
+        new_content,
+        updated_by,
+        expected_rev,
+        None,
+        &[],
+    )
+}
+
+pub(crate) fn update_episode_content_for_operation_impl(
+    conn: &rusqlite::Connection,
+    episode_id: &str,
+    new_content: &str,
+    updated_by: Option<&str>,
+    expected_rev: i64,
+    current_job: Option<&str>,
+    preserve_ids: &[String],
+) -> Result<GovernedEpisode, MemoryGovernanceError> {
+    conn.execute_batch("SAVEPOINT apeireth_update_episode")?;
+    let result = (|| {
+        if episode_id.trim().is_empty() {
+            return Err(MemoryGovernanceError::Invalid("episode id is empty".into()));
+        }
+        if new_content.chars().count() > MAX_CONTENT_LEN {
+            return Err(MemoryGovernanceError::Invalid(format!(
+                "content too long (max {MAX_CONTENT_LEN} chars)"
+            )));
+        }
+        if fetch_governed_on_conn(conn, episode_id)?.is_none() {
+            return Err(MemoryGovernanceError::NotFound(episode_id.to_string()));
+        }
+        ensure_governance_on_conn(conn, episode_id)?;
+        let now = now_ms();
+        let updated = conn
+            .execute(
+                "UPDATE episode_governance SET content_override = ?1, revision = revision + 1, \
              updated_at = ?2, updated_by = ?3 \
              WHERE episode_id = ?4 AND revision = ?5",
-            params![new_content, now, updated_by, episode_id, expected_rev],
-        )
-        .map_err(|e| MemoryGovernanceError::Invalid(e.to_string()))?;
-    if updated == 0 {
-        return Err(cas_failure_on_conn(conn, episode_id, expected_rev));
+                params![new_content, now, updated_by, episode_id, expected_rev],
+            )
+            .map_err(|e| MemoryGovernanceError::Invalid(e.to_string()))?;
+        if updated == 0 {
+            return Err(cas_failure_on_conn(conn, episode_id, expected_rev));
+        }
+        invalidate_revised_projection(conn, episode_id, current_job, preserve_ids, now)?;
+        fetch_governed_on_conn(conn, episode_id)?
+            .ok_or(MemoryGovernanceError::NotFound(episode_id.to_string()))
+    })();
+    match result {
+        Ok(governed) => {
+            conn.execute_batch("RELEASE apeireth_update_episode")?;
+            Ok(governed)
+        }
+        Err(error) => {
+            conn.execute_batch(
+                "ROLLBACK TO apeireth_update_episode; RELEASE apeireth_update_episode",
+            )?;
+            Err(error)
+        }
     }
-    fetch_governed_on_conn(conn, episode_id)?
-        .ok_or(MemoryGovernanceError::NotFound(episode_id.to_string()))
+}
+
+fn invalidate_revised_projection(
+    conn: &rusqlite::Connection,
+    source: &str,
+    current_job: Option<&str>,
+    preserve_ids: &[String],
+    at: i64,
+) -> Result<(), MemoryGovernanceError> {
+    let table = |name| {
+        crate::writeback_recovery::has_table(conn, name)
+            .map_err(|e| MemoryGovernanceError::Invalid(e.to_string()))
+    };
+    let mut affected = vec![source.to_owned()];
+    if table("episode_memory_metadata")? {
+        let mut statement = conn.prepare(
+            "WITH RECURSIVE derived(id) AS (
+          SELECT ?1 UNION SELECT e.id FROM episode_memory_metadata m
+          JOIN episodes e ON e.id=m.episode_id JOIN derived d
+          ON json_extract(m.metadata_json,'$.derived_from_episode_id')=d.id
+          WHERE e.session_id=(SELECT session_id FROM episodes WHERE id=?1))
+          SELECT e.id FROM derived d JOIN episodes e ON e.id=d.id
+          WHERE e.id<>?1 AND e.role IN ('memory','consolidation')",
+        )?;
+        let derived = statement
+            .query_map([source], |r| r.get::<_, String>(0))?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        for id in derived {
+            if preserve_ids.contains(&id) {
+                continue;
+            }
+            let state = fetch_governed_on_conn(conn, &id)?
+                .ok_or_else(|| MemoryGovernanceError::NotFound(id.clone()))?;
+            if state.protected {
+                return Err(MemoryGovernanceError::Protected(id));
+            }
+            if state.status == MemoryGovernanceStatus::Active {
+                ensure_governance_on_conn(conn, &id)?;
+                conn.execute("UPDATE episode_governance SET status='forgotten',forgotten_at=?1,reason='source_revision_changed',revision=revision+1,updated_at=?1 WHERE episode_id=?2",params![at,id])?;
+            }
+            affected.push(id);
+        }
+    }
+    if table("memory_writeback_jobs")? {
+        for id in affected {
+            conn.execute("UPDATE memory_writeback_jobs SET state='suppressed',last_error='source_revision_changed',updated_ms=?1 WHERE state='pending' AND (?2 IS NULL OR id<>?2) AND id IN (SELECT job_id FROM memory_writeback_dependencies WHERE episode_id=?3)",params![at,current_job,id])?;
+        }
+    }
+    Ok(())
 }
 
 pub(crate) fn forget_episode_impl(
+    conn: &rusqlite::Connection,
+    episode_id: &str,
+    reason: Option<&str>,
+    expected_rev: i64,
+) -> Result<GovernedEpisode, MemoryGovernanceError> {
+    // A savepoint preserves atomicity both for standalone callers and inside
+    // an owning operation transaction. Evidence rows themselves remain intact.
+    conn.execute_batch("SAVEPOINT apeireth_forget_episode")?;
+    let result = forget_episode_with_dependents(conn, episode_id, reason, expected_rev);
+    match result {
+        Ok(governed) => {
+            conn.execute_batch("RELEASE apeireth_forget_episode")?;
+            Ok(governed)
+        }
+        Err(error) => {
+            conn.execute_batch(
+                "ROLLBACK TO apeireth_forget_episode; RELEASE apeireth_forget_episode",
+            )?;
+            Err(error)
+        }
+    }
+}
+
+fn forget_episode_with_dependents(
     conn: &rusqlite::Connection,
     episode_id: &str,
     reason: Option<&str>,
@@ -430,6 +549,49 @@ pub(crate) fn forget_episode_impl(
         .map_err(|e| MemoryGovernanceError::Invalid(e.to_string()))?;
     if updated == 0 {
         return Err(cas_failure_on_conn(conn, episode_id, expected_rev));
+    }
+    let source = fetch_governed_on_conn(conn, episode_id)?
+        .ok_or_else(|| MemoryGovernanceError::NotFound(episode_id.into()))?;
+    let mut affected = vec![episode_id.to_owned()];
+    if crate::writeback_recovery::has_table(conn, "episode_memory_metadata")
+        .map_err(|e| MemoryGovernanceError::Invalid(e.to_string()))?
+    {
+        let mut statement = conn.prepare(
+            "WITH RECURSIVE affected(id) AS (
+          SELECT ?1 UNION SELECT e.id FROM episode_memory_metadata m
+          JOIN episodes e ON e.id=m.episode_id JOIN affected a
+          ON json_extract(m.metadata_json,'$.derived_from_episode_id')=a.id
+          OR json_extract(m.metadata_json,'$.correction_evidence_id')=a.id
+          OR json_extract(m.metadata_json,'$.correction.evidence')=a.id
+          WHERE e.session_id=?2) SELECT id FROM affected ORDER BY id",
+        )?;
+        affected = statement
+            .query_map(params![episode_id, source.episode.session_id], |r| {
+                r.get::<_, String>(0)
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+    }
+    let journal = crate::writeback_recovery::has_table(conn, "memory_writeback_jobs")
+        .map_err(|e| MemoryGovernanceError::Invalid(e.to_string()))?;
+    for id in affected {
+        if id != episode_id {
+            let state = fetch_governed_on_conn(conn, &id)?
+                .ok_or_else(|| MemoryGovernanceError::NotFound(id.clone()))?;
+            if state.protected {
+                return Err(MemoryGovernanceError::Protected(id));
+            }
+            if state.status == MemoryGovernanceStatus::Active {
+                ensure_governance_on_conn(conn, &id)?;
+                let changed=conn.execute("UPDATE episode_governance SET status='forgotten',forgotten_at=?1,reason=?2,revision=revision+1,updated_at=?1 WHERE episode_id=?3 AND revision=?4 AND protected=0 AND status='active'",params![now,reason,id,state.revision])?;
+                if changed == 0 {
+                    return Err(cas_failure_on_conn(conn, &id, state.revision));
+                }
+            }
+        }
+        if journal {
+            crate::writeback_recovery::suppress_source_jobs(conn, &id)
+                .map_err(|e| MemoryGovernanceError::Invalid(e.to_string()))?;
+        }
     }
     fetch_governed_on_conn(conn, episode_id)?
         .ok_or(MemoryGovernanceError::NotFound(episode_id.to_string()))
@@ -611,6 +773,14 @@ impl SqliteMemoryStore {
 }
 
 impl MemoryGovernanceStore for SqliteMemoryStore {
+    fn apply_automatic_correction(
+        &self,
+        plan: &crate::automatic_correction::AutomaticCorrectionPlan,
+    ) -> Result<crate::automatic_correction::AutomaticCorrectionOutcome, MemoryGovernanceError>
+    {
+        let conn = self.conn()?;
+        crate::automatic_correction::apply_on_conn(&conn, plan)
+    }
     fn forget_principal(
         &self,
         principal_id: &str,
@@ -738,6 +908,16 @@ impl MemoryGovernanceStore for SqliteMemoryStore {
 }
 
 impl MemoryGovernanceStore for crate::backend::sqlite::SqliteBackend {
+    fn apply_automatic_correction(
+        &self,
+        plan: &crate::automatic_correction::AutomaticCorrectionPlan,
+    ) -> Result<crate::automatic_correction::AutomaticCorrectionOutcome, MemoryGovernanceError>
+    {
+        let plan = plan.clone();
+        self.pool()
+            .write_sync(move |conn| Ok(crate::automatic_correction::apply_on_conn(conn, &plan)))
+            .map_err(|e| MemoryGovernanceError::Invalid(e.to_string()))?
+    }
     fn get_governed(
         &self,
         episode_id: &str,
@@ -1059,5 +1239,23 @@ mod tests {
         let err = s.forget_episode("ghost", None, 0).unwrap_err();
         assert!(matches!(err, MemoryGovernanceError::NotFound(_)));
         assert!(s.get_governed("ghost").unwrap().is_none());
+    }
+
+    #[test]
+    fn memory_forget_savepoint_obeys_its_owning_transaction() {
+        let s = store();
+        put(&s, "nested-source", "me", "original evidence");
+        let conn = s.conn().unwrap();
+        conn.execute_batch("BEGIN IMMEDIATE").unwrap();
+        assert_eq!(
+            forget_episode_impl(&conn, "nested-source", None, 0)
+                .unwrap()
+                .status,
+            MemoryGovernanceStatus::Forgotten
+        );
+        conn.execute_batch("ROLLBACK").unwrap();
+        let restored = get_governed_impl(&conn, "nested-source").unwrap().unwrap();
+        assert_eq!(restored.status, MemoryGovernanceStatus::Active);
+        assert_eq!(restored.revision, 0);
     }
 }

@@ -205,6 +205,23 @@ impl RuntimeSubLoopSpawner {
         }
     }
 
+    fn module_invoker(&self) -> RuntimeModuleInvoker {
+        RuntimeModuleInvoker::new(
+            self.execution.runtime.clone(),
+            apeireth_plugin::agents::AgentTaskOrigin {
+                agent: self.execution.agent,
+                session: self.session_id,
+                request: self.execution.request,
+                trace: self.trace_id,
+            },
+            self.execution.security.clone(),
+            self.current_model.clone(),
+            self.module_id.clone(),
+            self.state.clone(),
+            self.depth.saturating_sub(1),
+        )
+    }
+
     async fn spawn_bounded(&self, spec: SubLoopSpec) -> Result<SubLoopResult, SubLoopError> {
         let started = std::time::Instant::now();
         if self.depth > DEFAULT_MAX_INVOCATION_DEPTH {
@@ -312,25 +329,40 @@ impl SubLoopSpawner for RuntimeSubLoopSpawner {
 
 #[async_trait]
 impl ModuleInvoker for RuntimeSubLoopSpawner {
+    async fn committed_input(
+        &self,
+    ) -> Result<Option<super::CommittedUserInput>, ModuleInvocationError> {
+        self.module_invoker().committed_input().await
+    }
+    async fn committed_input_for(
+        &self,
+        session: SessionId,
+        request: apeireth_core::kernel::RequestId,
+    ) -> Result<Option<super::CommittedUserInput>, ModuleInvocationError> {
+        self.module_invoker()
+            .committed_input_for(session, request)
+            .await
+    }
+    async fn committed_turns(
+        &self,
+        cursor: Option<String>,
+        limit: usize,
+    ) -> Result<super::CommittedEvidencePage, ModuleInvocationError> {
+        self.module_invoker().committed_turns(cursor, limit).await
+    }
+    async fn prepare_operation(
+        &self,
+        operation_id: String,
+        payload: serde_json::Value,
+    ) -> Result<super::CommittedOperationIntent, ModuleInvocationError> {
+        self.module_invoker()
+            .prepare_operation(operation_id, payload)
+            .await
+    }
     async fn invoke(
         &self,
         request: ModuleInvocationRequest,
     ) -> Result<ModuleInvocationResponse, ModuleInvocationError> {
-        RuntimeModuleInvoker::new(
-            self.execution.runtime.clone(),
-            apeireth_plugin::agents::AgentTaskOrigin {
-                agent: self.execution.agent,
-                session: self.session_id,
-                request: self.execution.request,
-                trace: self.trace_id,
-            },
-            self.execution.security.clone(),
-            self.current_model.clone(),
-            self.module_id.clone(),
-            self.state.clone(),
-            self.depth.saturating_sub(1),
-        )
-        .invoke(request)
-        .await
+        self.module_invoker().invoke(request).await
     }
 }
