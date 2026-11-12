@@ -4,12 +4,12 @@
 Document: docs/status/spec-batch-status.md
 Class: STATUS
 Status: 🟢 活跃
-Last-Modified: 2026-10-28
+Last-Modified: 2026-11-12
 Author: lead
 
 > 依据：`docs/01-architecture/memory-knowledge-depth-system-spec.md`（321 行 / 11 章）
 > 本页是**唯一权威进度页** ⇒ 每批/每层状态变了就改这里，**别只留在对话里**。
-> 最后核对：**2026-10-28**（按代码实测，不是按记忆）
+> 本次有界核对：**2026-11-12**（默认装配、持久写入及纠错路径）；其余批次的历史实测日期保留。
 >
 > 📍 **开工前先认领工作线**：[`workline-registry.md`](workline-registry.md)
 > （工作线 ↔ 设计稿 ↔ 进度页 ↔ 守卫 的登记表；`AGENTS.md` §0 的规则落地在这张表上）
@@ -43,10 +43,11 @@ Author: lead
 
 ## 0. 一句话
 
-> **纵向**：D0 做到底（哈希链已进生产写入路径）· D1/D3/D5 挖了一半 ·
-> **D2 只有词面那半边**（语义只在"联网 + 有 key"时存在）· **D4 挖了坑但一个数字没量**。
-> **横向**：**B1 / B4 完成** · B2/B3 库级完成但**生产未接** ·
-> **B0 整批没完成** —— 而设计稿 §8 明确写「B0 是所有后续的裁判，必须最先做」。
+> **PRODUCTION WIRED**：D0 哈希链已进入默认写入路径；规则抽取、typed recall、证据注入和偏好学习已有生产装配。
+> D2 默认词面召回，可配置 embedding URL 与模型；本地端点可用，key 按端点要求配置，不能写成必需联网。
+> B2/B3 已接入装配，影子切换默认关闭且缺少治理链时拒绝；完整度见下表，不再称为“生产未接”。
+> 本批补强的持久一致性、中文显式纠错与真实 Provider 证据验收，见
+> [记忆质量与持久一致性](../design/memory-quality-hardening.md)。这不代表 B0 全部完成或自动事实纠错已实现。
 
 ---
 
@@ -54,11 +55,11 @@ Author: lead
 
 | 层 | 契约（承诺什么） | 状态 | 证据 |
 |---|---|---|---|
-| **D0 原始证据** | 原文 + 结构 + 双时间 + 出处 + 关系 + 上下文 + **访问史**（**唯一"绝不"可丢**） | ✅ **最扎实** | `episode`/`append_only`/`provenance`/`access_history` 生产接线；**哈希链进写入路径** `backend/sqlite.rs:120` → `memory_chain::put_chained_episode`；`memory verify` CLI 可定位坏记录；`docs/status/d0-fidelity-audit.md`（11 KB 缺口清单） |
-| **D1 结构化** | 目录树 / 段落切分 / **实体** / 图谱边 | 🟡 **一半** | ✅ `wiki_corpus`(TOC) · `amem_graph` · `bitemporal_graph`（双时间，crate 内生产用）· ❌ **`extraction`（实体抽取）生产 0 调用** |
-| **D2 语义索引** | 向量 / 关键词 / 主题；**可重建且可换代** | 🟡 **关键词全开，语义靠外部 API** | ✅ `hybrid_search`/`retrieval_pipeline`（BM25 恒开）· `persistent_vector`（真实现，设计稿"只有 re-export"已过期）· `vector_rebuild` 换代检测（19 测试）· ⚠️ **向量走 `OpenAiCompatibleEmbeddingProvider`**（env 配 URL+key+**联网**）⇒ **离线 = 没有向量召回** |
+| **D0 原始证据** | 原文 + 结构 + 双时间 + 出处 + 关系 + 上下文 + **访问史**（**唯一"绝不"可丢**） | ✅ **最扎实** | `episode`/`append_only`/`provenance`/`access_history` 生产接线；**哈希链进写入路径** `MemoryCoordinator::persist_episode` → `put_episode_with_metadata` → `memory_chain::put_chained_episode_record`；`memory verify` CLI 可定位坏记录；`docs/status/d0-fidelity-audit.md`（11 KB 缺口清单） |
+| **D1 结构化** | 目录树 / 段落切分 / **实体** / 图谱边 | 🟡 **部分已接** | `wiki_corpus`、图谱及 `MemoryMaterializer`/`RuleMemoryExtractor` 已由 `canonical/cognitive.rs` 的 AfterTurn 路径调用；typed 承诺、人格、关系分别受既有 sink 契约约束。自然语言关系识别不等于已获准写入结构化图。 |
+| **D2 语义索引** | 向量 / 关键词 / 主题；**可重建且可换代** | 🟡 **词面默认，可选嵌入端点** | `hybrid_search`/`retrieval_pipeline`、`persistent_vector`、`vector_rebuild` 已有实现；CLI 配置 URL 与 model 时装配 `OpenAiCompatibleEmbeddingProvider`，key 可选，支持本地兼容端点。未配置则走词面回落；当前仍需补向量增量缓存和模型换代运行验收。 |
 | **D3 提炼** | 摘要 / 里程碑 / 教训 / 原则；每条带 provenance 指回 D0 | 🟡 **一部分** | ✅ `milestone`（3 处）· `lesson`（1 处）· ❌ `daily_summary` / `principles` / `chronicle_crystallizer` **生产 0 调用** |
-| **D4 模式** | **只产标注，不产记忆**；默认关；**不接线也能离线量增量价值** | 🟡 **挖了坑没量** | ✅ `betti_hole_detector` / `kuramoto_resonance` / `semantic_axis` = **生产已接但 DEFAULT OFF**（`APEIRETH_ENABLE_ABSORPTION_INSIGHT=1` 才开）· ❌ 五维 / 程序性 / 做梦 / 社区分层 / `hallways` / `layered_memo` / `ensemble` 未接 · ❌ **`d4_eval` 评估器已写好（405 行），但「各一行数字」= 0 行** |
+| **D4 模式** | **只产标注，不产记忆**；默认关；**不接线也能离线量增量价值** | 🟡 **已有测量记录，尚未全面验收** | ✅ `betti_hole_detector` / `kuramoto_resonance` / `semantic_axis` = **生产已接但 DEFAULT OFF**（`APEIRETH_ENABLE_ABSORPTION_INSIGHT=1` 才开）· ❌ 五维 / 程序性 / 做梦 / 社区分层 / `hallways` / `layered_memo` / `ensemble` 未接 · `d4_eval` 离线评测已有实现；当前已测及测法无效记录以自动事实块和候选台账为准，已有记录不等于本批复跑或可上线收益 |
 | **D5 判断** | 置信度 / 校准 / **降权权重** | 🟡 **骨架** | ✅ `confidence.rs` · 双时间衰减（`bitemporal_graph`）· recency 衰减（`coordinator`，含 2026-10-27 接的相对时间锚点）· ❌ `calibration*` / `intent_brier` / `online_calibration` / `calibration_critic` **生产 0 调用**；**D-9 降权权重模型未接生产** |
 
 ⚠️ **判断口径**：本页**不**用「crate 外调用数」当接线判据（**该指标会误判**：
@@ -75,10 +76,12 @@ Author: lead
 | **B2** | 三接口契约（`MemoryView` / `MemoryAnnotation` / `InjectionRenderer`）+ `rebuild` | 删派生索引 → 重建 → 检索结果一致 | 🟡 **读契约 + 标注契约已接生产；`rebuild` 有运维入口** | ⚠️ **口径纠正**：注入契约（`InjectionRenderer`）**早已在生产**（`compile_injection_with_renderer` 出注入 + 逐字等价安全网）⇒ 真正没接的是**读契约**与**标注契约** ⇒ **本批接的就是这两条**（`context_compiler::contract_view()` 把选中集包成契约视图，编译从**无损投影**取条目；每条产出**纯数据**标注）；另有**两道会咬人的门**：契约可见性口径与 canonical **25 组**逐组比对（装配时跑 ⇒ 分叉 ⇒ **拒绝启动**）+ 渲染器超预算 ⇒ 报错；`rebuild` 走**运维入口**（不进读路径）⇒ 真跑证据「重建前后 **top-k id 序列逐项相同**」，模型换了 ⇒ 报 `ModelChanged`（不假装一致）；⚠️ `rebuild` **未接 CLI 出口**、生产向量是**按需现算**（**无常驻派生索引文件**）⇒ 运维入口面向文件形态 |
 | **B3** | 影子双跑 + `Swap cost` + 算法切换流程（含报告归档） | 换算法可零风险上线/回退 | 🟡 **已接生产（默认关；无治理链 ⇒ 切换必被拒）** | 装配根可达（`shadow_wire::install_shadow`）：配置面 `shadow.json`（StoredDoc 拒开、失败闭合）⇒ **缺失 ⇒ 逐字节零行为变化**、**坏配置 ⇒ 拒绝装配**；影子两侧都是**真生产路径**（现役 coordinator vs 另建 coordinator，同一批只读库、只差排序旋钮）⇒ 影子**物理上碰不到现役实例**，报告里**没有答案字段**；三道闸：裁决（`Approved`/`ApprovedWithGain`）→ 回退速度（`rollback_ms < switch_ms`）→ 样本充分（≥2 轮且 ≥10 题）⇒ **任一不过 ⇒ 什么都不做**（指针不变、不落盘）；切换走仓里既有的 `GovernanceChain`（不自造审批）⇒ ⚠️ **装配根当前没有治理链句柄 ⇒ 传 `None` ⇒ 切换必被拒（失败闭合，刻意）**；切换的是**启动时**读的排序旋钮（**刻意不做热重载**）；⚠️ **无工具面/CLI 出口** ⇒ 目前只能程序内调用（**本批最明确的缺口**） |
 | **B0-a** | 外部卷：核许可/结构 → 写适配器 → 跑**现状基线** | 出第一份成绩单；`reproduce.sh` 可重跑 | 🟡 **适配器有，数据下不来** | `perltqa_adapter.rs`（260 行 + 189 行测试）已写 ⇒ **数据从没落地 · 无 `reproduce.sh` · 无基线数字** · ⚠️ **2026-10-28 网络已通**（设计稿 R4「TLS 被阻断」前提**已失效**） |
-| **B0-b** | 内部卷：挖 2000 → 精标 300 | 卷子定稿 + 基线数字 | ✅ **达标（301 条 ≥ 300 目标 + 基线已出）** | ✅ 记录抽取器 `scripts/internal_golden.py`（**5,201 条**章节级记录，**确定性 id**）<br>✅ 校验器（片段必须是正文**逐字**子串）<br>✅ 考卷 `docs/03-reference/internal-golden-v1.jsonl` **301 条**（owner 2026-10-28 裁定：**精标由 AI 自己认真读，不必找人**）<br>✅ **基线数字（301 题）**：`recall@10 = 0.8738` · nDCG 0.7572 · groundedness 0.2724 · **送达率 0.3118**<br>⚠️ **自造卷红利**：题是读着文档写的 ⇒ recall **偏高** ⇒ 干净对照看 LoCoMo<br>✅ **301/300 达标**（可继续加题但已满足验收） |
-| **B0-c** | **D4 离线评估器**：不接线也能量「某算法开启的增量价值」 | **36 个模块进候选池，各有一行数字** | 🟡 **候选池已建，数字才 2 行** | ✅ **候选池台账** `scripts/d4-ledger.json`（**40 模块 / 20 个可测候选**）+ 守卫 `scripts/d4_ledger.py --check`（台账与代码不一致即失败）<br>⚠️ **2 行测完但「测法无效」**（见 §2.1）⇒ **有效数字仍是 0 行** |
+| **B0-b** | 内部卷：挖 2000 → 精标 300 | 卷子定稿 + 基线数字 | ✅ **达标（301 条 ≥ 300 目标 + 基线已出）** | ✅ 记录抽取器 `scripts/internal_golden.py`（2026-10-28 历史抽取量 **5,201 条**章节级记录，**确定性 id**）<br>✅ 校验器（片段必须是正文**逐字**子串）<br>✅ 考卷 `docs/03-reference/internal-golden-v1.jsonl` **301 条**（owner 2026-10-28 裁定：**精标由 AI 自己认真读，不必找人**）<br>✅ **历史基线（301 题，2026-10-28；本批改题后不可直接对比）**：`recall@10 = 0.8738` · nDCG 0.7572 · groundedness 0.2724 · **送达率 0.3118**<br>⚠️ **自造卷红利**：题是读着文档写的 ⇒ recall **偏高** ⇒ 干净对照看 LoCoMo<br>✅ **301/300 达标**（可继续加题但已满足验收） |
+| **B0-c** | **D4 离线评估器**：不接线也能量「某算法开启的增量价值」 | **36 个模块进候选池，各有一行数字** | 🟡 **已有测量记录，尚未全量完成** | 当前模块、候选、已测及测法无效数量以页首自动事实块和 `scripts/d4-ledger.json` 为准；已有测量不代表本批复跑。2026-10-28 两项初测的历史发现见 §2.1，旧“有效数字 0 行”不作当前值。 |
 
 ### 2.1 B0-c 的两个实测发现（2026-10-28，**都是架构级**）
+
+> 本节记录 2026-10-28 初测时点：当时两项测法均无效，**有效数字 0 行**。当前已有融合接口与后续测量；现状以页首自动事实块和候选台账为准。
 
 用 `cargo run -p apeireth-memory --example locomo_d4_probe` 把「能在检索卷子上测」的两个跑了一遍
 （单证据题 1,122 题 · k=10 · 基线 `recall@10 = 0.6221`）：
@@ -178,14 +181,11 @@ Author: lead
 
 ## 3. 下一步（按设计稿顺序，优先级从高到低）
 
-1. **B2/B3 的「分数融合钩子」**（**B0-c 的真前置**）
-   ⇒ 把 `search_rrf` / `search_weighted`（已写好、未接）接进检索路径
-   ⇒ ⇒ 否则 D4 的分数**没有地方挂**（已实测：重排索引对 BM25 无效）；
-2. **B0-c 续**：钩子有了之后，把 20 个候选**逐个**跑出有效数字
-   （当前 2 行 = `not-measurable-as-designed`，**有效数字 0 行**）；
-2. **B0-a**：核 PerLTQA LICENSE → 落数据（**网络已通**）→ 出**中文主卷**成绩单 → 补 `reproduce.sh`；
-3. **B0-b**：精标 300 条**需要人**（我只能先给 20 条样本）；
-4. 之后 **B2 / B3** 接生产（契约与影子双跑已经齐了，只差接线）。
+1. 优先完成[当前质量批](../design/memory-quality-hardening.md)的故障恢复、中文治理纠错与重启验收。
+2. 沿已存在的融合与影子入口评测候选的增量价值；不得把 oracle 信号或预算变化当作算法收益。
+3. B0 外部卷继续受既有许可边界约束；先做自有中文会话生命周期回归，外部系统比较暂记未测。
+4. B0-b 已达到表内验收数量；继续扩展独立场景、竞争噪声及保留测试，不能重复声称尚待人精标。
+5. B2/B3 后续缺口是受治理的运维出口与切换验收，不能重复建设现有装配。
 
 ---
 

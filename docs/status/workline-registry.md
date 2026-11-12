@@ -4,7 +4,7 @@
 Document: docs/status/workline-registry.md
 Class: STATUS
 Status: 🟢 活跃
-Last-Modified: 2026-11-11
+Last-Modified: 2026-11-12
 Author: lead
 
 > **用途**：`AGENTS.md` §0 要求「开工前先认领工作线」⇒ 本表就是那张**认领清单**。
@@ -18,6 +18,7 @@ Author: lead
 
 | 工作线 | 设计稿（目标形态） | **进度页（做到哪了）** | 守卫（机器判对错） |
 |---|---|---|---|
+| **记忆质量与持久一致性**（2026-11-12） | [memory-quality-hardening.md](../design/memory-quality-hardening.md) §目标与批次 | 同文件 §进度与验收（含未测边界） | `cargo test -p apeireth-memory --tests --locked -j 2` · `cargo test -p apeireth-runtime-assembly --test memory_provider_e2e --locked -j 2` · `python scripts/check_quality_metrics.py` · `python scripts/check_golden_baseline.py` |
 | **Mesh RC2 PR 收口**（2026-11-11） | [mesh-architecture.md](../design/mesh-architecture.md) · [ADR-0024](../adr/0024-mesh-line-contract-registration.md) | [mesh-rc2-closeout-2026-11-11.md](mesh-rc2-closeout-2026-11-11.md)（缺口、验证与待办） | `cargo test -p apeireth-runtime --test transparent_tool_routing --locked -j 2` · `cargo test -p apeireth-mesh --test mesh_semantics --locked -j 2` · `python scripts/harness.py verify` |
 | **合并裁决工具链收口**（2026-11-11，PR #121） | [merge-gate-toolchain-closeout-2026-11-11.md](merge-gate-toolchain-closeout-2026-11-11.md) §目标与范围 | 同文件 §进度与验收（全部适用 CI 通过，PR #121 已合并） | `python scripts/check_toolchain_pin.py` · `python scripts/test_provision_ci_toolchain.py` · `python scripts/check_yaml_duplicate_keys.py` · `python scripts/harness.py verify` |
 | **官网与社区入口收口**（2026-11-11） | [community-ops.md](../development/community-ops.md) §9（目标与边界） | 同文件 §9（核验与待办） | `python scripts/verify_changed.py` · `python scripts/docs_links.py --check` · `python scripts/docs_index.py --check` · Issue 表单 YAML 结构检查 |

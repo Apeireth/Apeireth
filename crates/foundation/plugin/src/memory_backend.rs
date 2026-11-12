@@ -1,30 +1,6 @@
-//! P-arch (2026-08-27): MemoryBackend trait (O-6 重构批次 Refactor-1, 撤占位 #17).
-//!
-//! **位置**: trait 抽象层在 `apeireth-plugin` (foundation), impl 留在 `apeireth-memory` (engine).
-//! 与 `CredentialResolver` 同位: 都是 capability 抽象, plugin 管 trait 边界,
-//! 业务方管 impl. 单向依赖 (memory → plugin, 不反向).
-//!
-//! **不重写 SQL**: impl 仍委托现有 `SqliteMemoryStore`, 0 触碰 24 个子模块的 public API.
-//!
-//! **0 装 PASS**: trait 是 0 装, v2.0.0-rc.1 接真 backend 时实现. 现在仅画边界.
-//!
-//! **架构最优依据 (O-6 锚 9)**:
-//! - 总体: trait 抽象在 foundation 与 ToolCapability/ProviderCapability/CredentialResolver 三件套对齐
-//! - 系统: trait 在 foundation, impl 在 engine (单向依赖, 与 plugin 体系一致)
-//! - 架构: backend registry 与 plugin registry 同一抽象层, 入口语义不歧义
-//!
-//! **v1 compat**: `apeireth-memory::backend::MemoryBackend` 通过 re-export 仍可访问,
-//! 现有 0 外部 user (15 测试全在 `apeireth-memory` 内部), 0 破坏.
-//!
-//! **3 阶审查** (commit message 必写明):
-//! 1. 总体: 在 v2 整体语境里, 4 个 capability 抽象 (Tool/Provider/CredentialResolver/MemoryBackend) 集中 foundation, 降低 v1 era 86-crate "registry 散在多处" 的风险
-//! 2. 系统: trait 在 foundation, impl 在 engine (单向, 与 plugin/Provider/Tool 一致)
-//! 3. 架构: 与 plugin manager 单 trait 边界, runtime 拿 `Arc<dyn MemoryBackend>` 注入, 不直接 import memory
-//!
-//! **O-6 锚 #2 兑现** (2026-08-27): trait method `append_stream` / `list_stream`
-//! 从 `&str` + `serde_json::Value` 占位 改为 `apeireth_core::kernel::StreamKind`
-//! typed enum + `serde_json::Value`. `StreamKind` 6 变体 canonical 已在 core kernel.
-//! HistoryEntry 字段仍走 JSON Value (rc 阶段评估 typed struct 是否值).
+//! Memory backend capability boundary: foundation owns the trait; engine owns adapters.
+//! The engine re-exports this trait for existing callers. Scope metadata remains JSON
+//! so this layer does not depend on concrete memory policy or storage implementations.
 
 use apeireth_core::kernel::{HistoryEntry, StreamKind};
 use apeireth_core::Episode;
@@ -62,6 +38,13 @@ impl BackendKind {
     }
 }
 
+/// Whether a combined write appended evidence or accepted an idempotent replay.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EpisodeWriteOutcome {
+    Inserted,
+    Existing,
+}
+
 /// 记忆后端抽象。
 ///
 /// **核心契约**：
@@ -80,6 +63,23 @@ pub trait MemoryBackend: Send + Sync {
     }
 
     fn put_episode(&self, ep: &Episode) -> CapabilityResult<()>;
+
+    /// Write an episode and its sidecar before publishing it to working memory.
+    ///
+    /// The compatibility default is sequential and may leave the episode persisted
+    /// if metadata fails. It does not add metadata support to legacy backends.
+    /// Transactional adapters override this method to commit both together.
+    /// Legacy success reports Inserted; replay detection requires an override.
+    fn put_episode_with_metadata(
+        &self,
+        ep: &Episode,
+        metadata: serde_json::Value,
+    ) -> CapabilityResult<EpisodeWriteOutcome> {
+        self.put_episode(ep)?;
+        self.put_episode_metadata(&ep.id, metadata)?;
+        Ok(EpisodeWriteOutcome::Inserted)
+    }
+
     fn get_episode(&self, id: &str) -> CapabilityResult<Option<Episode>>;
     fn recent_episodes(&self, session_id: &str, n: usize) -> CapabilityResult<Vec<Episode>>;
 

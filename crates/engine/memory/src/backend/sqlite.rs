@@ -1,28 +1,11 @@
-//! SQLite MemoryBackend impl (v2.0.0-rc.1 RC-1: 纯 SQL 重写)
-//!
-//! **位置**: P-arch (2026-08-27) + O-6 锚 #18 兑现后, trait 在 `apeireth_plugin::MemoryBackend`,
-//! impl 在本 crate (engine).
-//!
-//! **RC-1 真实实现** (2026-08-27): 绕开 `SqliteMemoryStore` 的 `Mutex<Connection>`,
-//! 直接走 `SqliteConnectionPool` (writer-async + reader-pool) 获得真并发 (send+sync 跨线程).
-//!
-//! **架构优势**:
-//! - trait 边界在 `apeireth_plugin` (Refactor-1, 2026-08-27), impl 在本 crate (engine)
-//! - 单向依赖: memory → plugin (不反向)
-//! - SqliteMemoryStore 保留作 legacy adapter (其他 crate 还在用), 不删除
-//! - 未来加 MongoDB / RocksDB = 新增本 crate 内的 adapter, 0 改 memory domain
-//!
-//! **Send + Sync**: 通过 `Arc<SqliteConnectionPool>` (pool 本身 Send+Sync).
-//!
-//! **0 触碰承诺**:
-//! - 现有 `SqliteMemoryStore` 不删, 仍是 v1 compat 入口
-//! - 现有 24 个 memory 子模块的 public API 不改
-//! - 0 装 PASS: 所有方法真实实现 (不假装), 加 `episode_index` 表 + tombstone 过滤
-//! - 性能: 1000 episode 写入 < 1s (per v2.0.0-rc-roadmap.md §3 RC-1 验收)
+//! SQLite adapter for the foundation memory capability.
+//! Writes use the pool's serialized writer; reads use pooled WAL connections.
+//! Combined episode/metadata writes share the append-only hash-chain transaction.
 
 use std::sync::Arc;
 
 use apeireth_core::kernel::memory::Episode;
+use apeireth_plugin::memory_backend::{CapabilityResult, EpisodeWriteOutcome};
 use apeireth_storage::SqliteConnectionPool;
 
 use crate::append_only::HistoryEntry;
@@ -30,26 +13,7 @@ use crate::MemoryResult;
 
 use super::{BackendKind, MemoryBackend};
 
-/// SQLite 后端（默认，v2.0.0-rc.1 纯 SQL 重写）。
-///
-/// 内部持 `Arc<SqliteConnectionPool>`. 所有方法走纯 SQL, 0 委托给 `SqliteMemoryStore`.
-///
-/// **并发模型 (诚实标注, per v2.0.0-rc-roadmap.md §3 RC-1 + 子代理审查 1.1 反馈)**:
-/// - **读**: `pool.read(|conn| ...)` 走 r2d2 reader pool (多连接, 真并发 SELECT)
-/// - **写**: `pool.read(|conn| ...)` 同样路径, 但 append-only `INSERT OR IGNORE` 保证
-///   唯一 id 不冲突. SQLite WAL 允许 reader + writer 并发, 但**多 writer 并发**
-///   在 r2d2 pool 多连接下会触发 `SQLITE_BUSY` (race 条件). 当前 impl 假设:
-///   **一个 SqliteBackend 实例 = 一个 logical writer** (per backend instance, not per
-///   conn). 多 thread 同时调 `put_episode` / `append_stream` = 单 backend = 顺序,
-///   因为 trait method 是 sync + `pool.read` 短借用. (真并发 writer 是 rc 阶段
-///   `pool.write().await` + trait async 重构; 当前 trait 是 sync.)
-/// - **0 委托 SqliteMemoryStore**: 不走其 `Mutex<Connection>`, 直接 SQL
-///
-/// **Send + Sync**: `Arc<SqliteConnectionPool>` 本身是 Send+Sync, 本结构所有
-/// 字段都是 `Send + Sync` 边界.
-///
-/// **0 装 PASS**: 5 方法真 SQL, 0 装占位. RC-1 验收: 1000 episode 写入 < 1s
-/// (perftest).
+/// Shared-pool SQLite backend; independent of the legacy Mutex-based store.
 pub struct SqliteBackend {
     pool: Arc<SqliteConnectionPool>,
 }
@@ -57,9 +21,7 @@ pub struct SqliteBackend {
 impl SqliteBackend {
     /// 从 `SqliteConnectionPool` 创建。
     pub fn new(pool: SqliteConnectionPool) -> Self {
-        Self {
-            pool: Arc::new(pool),
-        }
+        Self::from_arc(Arc::new(pool))
     }
 
     /// 从 `Arc<SqliteConnectionPool>` 创建（共享场景）。
@@ -93,7 +55,6 @@ impl MemoryBackend for SqliteBackend {
     }
 
     fn ping(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        // 0 装: 真实 SELECT 1 走 reader pool (Send+Sync 跨线程)
         self.pool
             .read(|conn| {
                 conn.query_row("SELECT 1", [], |_| Ok(()))
@@ -103,17 +64,7 @@ impl MemoryBackend for SqliteBackend {
     }
 
     fn put_episode(&self, ep: &Episode) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        // RC-1 真 SQL impl: 走 pool.write_sync() 短借用 connection. 单 backend 实例假设单
-        // logical writer (per backend doc). v2.0.0-rc 阶段切 `pool.write().await` +
-        // trait async 重构 (per 子代理审查 1.1 反馈, 见 backend/mod.rs 文档).
-        //
-        // **D0 哈希链接线 (B1-c)**: 本路径写的是权威层（D0）的原始证据 ⇒ 必须入链。
-        // 链摘要算不出来 / 落库失败 ⇒ **硬失败**（宁可拒写，不可无链写入：无链写入
-        // 等于缺口 G6 原地不动, 而调用方会以为数据受保护）。
-        //
-        // 链粒度 = subject（`continuity_id` 列）。本后端把 `continuity_id` 填成
-        // `session_id`（既有占位语义: 核心 `Episode` 无主体字段）⇒ 此路径上的
-        // 「主体」实际是会话；等主体口径落地后同一套链代码不用改。
+        // Preserve this adapter's existing session-based chain key.
         let ep = ep.clone();
         self.pool
             .write_sync(move |conn| {
@@ -123,6 +74,27 @@ impl MemoryBackend for SqliteBackend {
                     .map_err(map_memory_error)
             })
             .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })
+    }
+
+    fn put_episode_with_metadata(
+        &self,
+        ep: &Episode,
+        metadata: serde_json::Value,
+    ) -> CapabilityResult<EpisodeWriteOutcome> {
+        let ep = ep.clone();
+        self.pool
+            .write_sync(move |conn| {
+                let entry = crate::memory_chain::ChainEntry::from_episode(&ep, None);
+                crate::memory_chain::put_chained_episode_record(
+                    conn,
+                    &ep.session_id,
+                    &entry,
+                    Some(&metadata),
+                )
+                .map(Into::into)
+                .map_err(map_memory_error)
+            })
+            .map_err(Into::into)
     }
 
     fn get_episode(
@@ -199,28 +171,10 @@ impl MemoryBackend for SqliteBackend {
         metadata: serde_json::Value,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let episode_id = episode_id.to_string();
-        let metadata = serde_json::to_string(&metadata)?;
         self.pool
             .write_sync(move |conn| {
-                // Keep this self-healing for older test/embedded schemas that
-                // predate V9; the production migration creates the same table.
-                //
-                // M27 / L 组 (schema 所有权说明): `episode_memory_metadata` 的
-                // canonical 定义在 migrations **V11** (带 `updated_at` 列).
-                // 这里的懒建是 pre-V11 老库 self-heal 路径 — 只会建出 V9 时代的
-                // 两列形态 (无 updated_at); 新库 `updated_at` 始终由 V11 提供.
-                // 读取方不依赖 updated_at, 故两种形态行为一致; 但 schema 快照
-                // 以 V11 为准, 不允许在此新增列定义.
-                conn.execute_batch(
-                    "CREATE TABLE IF NOT EXISTS episode_memory_metadata (\
-                     episode_id TEXT PRIMARY KEY, metadata_json TEXT NOT NULL)",
-                )?;
-                conn.execute(
-                    "INSERT INTO episode_memory_metadata (episode_id, metadata_json)\
-                     VALUES (?1, ?2) ON CONFLICT(episode_id) DO UPDATE SET metadata_json = excluded.metadata_json",
-                    rusqlite::params![episode_id, metadata],
-                )?;
-                Ok(())
+                crate::memory_chain::put_episode_metadata(conn, &episode_id, &metadata)
+                    .map_err(map_memory_error)
             })
             .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })
     }
@@ -229,30 +183,12 @@ impl MemoryBackend for SqliteBackend {
         &self,
         episode_id: &str,
     ) -> Result<Option<serde_json::Value>, Box<dyn std::error::Error + Send + Sync>> {
-        let episode_id = episode_id.to_string();
-        let raw = self
-            .pool
-            .read(move |conn| {
-                let result = conn.query_row(
-                    "SELECT metadata_json FROM episode_memory_metadata WHERE episode_id = ?1",
-                    rusqlite::params![episode_id],
-                    |row| row.get::<_, String>(0),
-                );
-                match result {
-                    Ok(raw) => Ok(Some(raw)),
-                    Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-                    Err(rusqlite::Error::SqliteFailure(_, Some(message)))
-                        if message.contains("no such table") =>
-                    {
-                        Ok(None)
-                    }
-                    Err(error) => Err(error.into()),
-                }
+        self.pool
+            .read(|conn| {
+                crate::memory_chain::get_episode_metadata(conn, episode_id)
+                    .map_err(map_memory_error)
             })
-            .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
-        raw.map(|value| serde_json::from_str(&value))
-            .transpose()
-            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
+            .map_err(Into::into)
     }
 
     fn append_stream(
@@ -261,10 +197,7 @@ impl MemoryBackend for SqliteBackend {
         entry: HistoryEntry,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let table = crate::StreamKindExt::table_name_ext(kind);
-        // 0 装 PASS: 走 pool.read() 短借用. 单 backend 实例 = 单 logical writer
-        // (per backend doc). 真并发 writer 是 v2.0.0-rc 阶段 `pool.write().await` + trait async.
-        // INSERT OR IGNORE 保证同 id 重复 append 不冲突 (append-only 语义).
-        // composite payload (含原始字段 + tags + tombstone + session_id)
+        // Preserve the complete stream envelope; duplicate IDs remain append-only.
         let payload = serde_json::json!({
             "id": entry.id,
             "subject_id": entry.subject_id,
