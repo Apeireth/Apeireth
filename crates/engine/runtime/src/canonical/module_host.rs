@@ -30,13 +30,11 @@ impl Runtime {
     }
 
     pub(super) fn uses_v1_tool_events(&self) -> bool {
+        let plugins = self.plugins.plugins();
         self.v1_protocol
-            || self.plugins.plugins().ids().any(|id| {
-                self.plugins
-                    .plugins()
-                    .get(id)
-                    .is_ok_and(|plugin| plugin.uses_tool_events_v1())
-            })
+            || plugins
+                .ids()
+                .any(|id| plugins.get(id).is_ok_and(|p| p.uses_tool_events_v1()))
     }
 
     /// Policy view, not another catalog. A session scope only restricts authority.
@@ -55,19 +53,19 @@ impl Runtime {
         &self,
         session: SessionId,
     ) -> Vec<apeireth_protocol::canonical::NormalizedTool> {
-        self.tool_declarations()
+        let routes = self.tool_route_table();
+        self.local_tool_declarations()
             .into_iter()
+            .chain(routes.remote_model_catalog())
             .filter(|tool| {
-                self.capabilities
-                    .find_control_by_name(&tool.name)
-                    .map(|control| self.dispatcher.allows(session, control.id()))
-                    .or_else(|| {
-                        self.tools()
-                            .into_iter()
-                            .find(|candidate| candidate.declaration().name == tool.name)
-                            .map(|candidate| self.dispatcher.allows(session, candidate.id()))
-                    })
-                    .unwrap_or(false)
+                let name = &tool.name;
+                let control = self.capabilities.find_control_by_name(name);
+                let id = control
+                    .map(|c| c.id().clone())
+                    .or_else(|| self.resolve_tool(name).map(|t| t.id().clone()))
+                    .or_else(|| routes.resolve(name).ok().map(|r| r.capability_id.clone()));
+                !routes.is_ambiguous(name)
+                    && id.is_some_and(|id| self.dispatcher.allows(session, &id))
             })
             .collect()
     }
@@ -331,10 +329,8 @@ impl RuntimeBuilder {
         self,
         provider: &dyn super::capability::CapabilityProvider,
     ) -> RuntimeResult<Self> {
-        let module = provider
-            .tool_module()
-            .map_err(RuntimeError::misconfigured)?;
-        Ok(self.with_plugin(Arc::new(module)))
+        let module = provider.tool_module();
+        Ok(self.with_plugin(Arc::new(module.map_err(RuntimeError::misconfigured)?)))
     }
 }
 
@@ -366,3 +362,7 @@ pub(super) async fn populate_tool_catalog(
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "../../tests/support/module_host_scope.rs"]
+mod tests;

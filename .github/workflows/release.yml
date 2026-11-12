@@ -337,6 +337,11 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
+      - name: Bootstrap Ubuntu DNS for system dependencies
+        if: runner.os == 'Linux'
+        working-directory: ${{ github.workspace }}
+        run: python3 scripts/provision_ci_dns.py
+
       - name: Install jq (SBOM JSON 合法性验证)
         run: |
           if command -v jq >/dev/null 2>&1; then

@@ -57,7 +57,7 @@
 # --- G1（0 条）：集成测试辅助 API。保留合理，但**不应增长**。
 
 
-# --- G3（21 条）：生物 / 认知 / 编排的**观测与查询 API**。生物族默认关 ⇒ 打开前不会走到。
+# --- G3（20 条）：生物 / 认知 / 编排的**观测与查询 API**。生物族默认关 ⇒ 打开前不会走到。
 
 orphan bio_lifecycle_module_from_env_value  # G3  生物族默认关（`APEIRETH_ENABLE_BIO_LIFECYCLE=1` 才开 ⇒ fail-closed）⇒ 零引用是设计如此 ⇒ 触发: 宿主自带状态/写 env 档位测试需要时
 orphan deviation  # G3  organ 族未接生产（实测 `apeireth_organ::` 仅现于 tests/）⇒ 零引用是「族未接线」的结果，不是「没实现」 ⇒ 触发: 稳态族进生产装配时
@@ -73,7 +73,6 @@ orphan set_last_hold  # G3  organ 族未接生产（同上）⇒ 零引用源于
 orphan stop_all  # G3  生物/器官编排面默认关 ⇒ 零引用是设计如此 ⇒ 触发: 与 allow_all 对称性要求出现时（或确认无并行线要用 ⇒ 删）
 orphan to_prompt  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线 ⇒ 触发: 宿主实现 CareModelPort 并切模型判定档时（勿另写 prompt）
 orphan with_attrs  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线 ⇒ 触发: 因果世界模型族进生产装配时
-orphan with_deadline  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线 ⇒ 触发: 因果世界模型族进生产装配时
 orphan with_llm_proposer  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线 ⇒ 触发: 因果世界模型族进生产装配时
 orphan with_material_source  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线 ⇒ 触发: 关怀判定需要真实记忆素材时
 orphan with_miner  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线 ⇒ 触发: 因果世界模型族进生产装配时
@@ -81,7 +80,7 @@ orphan with_quorum_gate_probe  # G3  生物族默认关 ⇒ 零引用是设计�
 orphan with_system_markers  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线 ⇒ 触发: 提示词装配族进生产时
 orphan with_task_type  # G3  认知编排面默认关 ⇒ 零引用是设计如此 ⇒ 触发: 认知编排族进生产时
 
-# --- G4（20 条）：**注入点 / 探测口**（`with_*`）。生产装配走 `install_*`。
+# --- G4（22 条）：**注入点 / 探测口**（`with_*`）。生产装配走 `install_*`。
 
 orphan with_age  # G4  ⇒ 触发: 研究族进生产时
 orphan with_backend  # G4  ⇒ 触发: 语音感知族进生产装配时
@@ -103,8 +102,10 @@ orphan with_session_label  # G4  ⇒ 触发: 需要按会话区分内容流时
 orphan with_shell_executable  # G4  ⇒ 触发: 需要非 bash shell（pwsh/fish）的部署时
 orphan with_synchronous  # G4  ⇒ 触发: 需要 FULL（耐久性优先）档时
 orphan with_voices_error  # G4  ⇒ 触发: 写语音后端失败路径测试时
+orphan with_default_deadline  # G4  Mesh 线新增的 builder 注入点（MeshNodeConfig 的默认调用截止时间）；生产装配尚未设置该值 ⇒ 零引用源于「装配未接线」，不是「没实现」 ⇒ 触发: 网格节点需要按部署覆盖默认调用截止时间时（勿另开参数面）
+orphan with_remote_port  # G4  Mesh 线新增的注入点：Runtime 装入远端能力端口（不装则运行时全本地，与加端口前的构建逐字节等价）；生产装配未接线 ⇒ 触发: 网关侧装配 mesh 端口时（见 docs/design/mesh-nat-e2e-report.md §D.3 剩余缺口）
 
-# --- G5（7 条）：**待判**：其余。逐条要人回答「真没人调，还是判据看不见」。**还债从这里开始。**
+# --- G5（11 条）：**待判**：其余。逐条要人回答「真没人调，还是判据看不见」。**还债从这里开始。**
 
 orphan record_quality_metrics  # G5  待接线：docs/status/unwired-ledger.md §一 W13（引擎外部指标注入口 · deputy 2026-11-06 引入 · 已实现但零调用） ⇒ 触发: 漂移监控面接入外部指标时（须先定注入点边界防指标洪泛）
 orphan observe_failures  # G5  已被 `observe_failures_since` 取代（零调用）⇒ ⇒ 待接线：docs/status/unwired-ledger.md §一 W12（reflexion_tuning 整模块待接线） ⇒ 触发: 引入者(deputy)确认后删除该 deprecated 旧入口时
@@ -113,6 +114,10 @@ orphan research_coordinated_forget_with_permit  # G5  「被遗忘权」的**类
 orphan doc_ops_capability_shared  # G5  ⚠️ 2026-11-04 级联：删 `doc_ops_capability`（零调用点）后失去唯一调用者 ⇒ ⇒ 待判：**「不带 live 策略槽」这个装配变体还要不要**（生产用 `_shared_with_slot`） ⇒ 触发: 宿主需共享计数器但无 live 策略槽时（否则改判删除）
 orphan sheet_ops_capability_shared  # G5  ⚠️ 2026-11-04 级联：删 `sheet_ops_capability`（零调用点）后失去唯一调用者 ⇒ ⇒ 待判：**「不带 live 策略槽」这个装配变体还要不要**（生产用 `_shared_with_slot`） ⇒ 触发: 宿主需共享计数器但无 live 策略槽时（否则改判删除）
 orphan retrieve_with_reranker_for_session  # G5  **显式会话**的重排入口（`SessionContext::Explicit`）⇒ ⇒ 与 ambient 版**共用**内部实现 `retrieve_with_reranker_in` ⇒ ⇒ **刻意成对**（显式会话 vs 会话作用域兜底）⇒ ⇒ 零引用是「显式会话那条路还没被调用」的结果，**不是没实现** ⇒ 触发: 需要显式会话（SessionContext::Explicit）的重排时
+orphan ambiguous_names  # G5  诊断读口：同族的 `is_ambiguous` 才是生产主路径，本读口仅供宿主整体上报争议工具名；Mesh 线新增 ⇒ 零引用是「诊断口还没被宿主调用」的结果 ⇒ 触发: 网关要把争议工具名整组上报时
+orphan direct_then_relay  # G5  WAN 拨号策略装配（direct → relay 顺序）：机制与测试就位，但生产装配未接线（见 docs/design/mesh-nat-e2e-report.md §D.5 的剩余缺口） ⇒ 触发: 生产拨号把 relay 回退装进同一状态机时
+orphan mesh_routes_for  # G5  宿主内省转发（内部走 `node.routes_for`）：Mesh 线新增，供不直接依赖 mesh crate 的宿主查路由 ⇒ 触发: 宿主暴露网格路由诊断时
+orphan non_tool  # G5  协议构造器：非 tool 类型 capability（provider/model）的 advertise 入口；当前生产只 advertise tool ⇒ 零引用源于「网格还没 advertise 非 tool 能力」 ⇒ 触发: 网格开始 advertise provider/model 能力时
 
 # --- G6（35 条）：**冗余 API 表面 / 宿主入口**：同一能力有**主路径在用**，这些是并行入口或便利包装；或设计上是给宿主/外部调用的公开 API。已逐条核查（见 `unwired-debt-taxonomy-2026-10-24.md` 与 `unwired-debt-audit-2026-10-24.md`）。
 

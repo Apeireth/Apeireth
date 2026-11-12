@@ -64,6 +64,11 @@ jobs:
           components: rustfmt, clippy
 
       # clippy 编译 keyring/dbus/wayland/pipewire/egl 需要系统库
+      - name: Bootstrap Ubuntu DNS for system dependencies
+        if: runner.os == 'Linux'
+        working-directory: ${{ github.workspace }}
+        run: python3 scripts/provision_ci_dns.py
+
       - name: "Install system deps (Linux: libdbus + libwayland + libpipewire + libegl)"
         run: |
           sudo apt-get update && sudo apt-get install -y libdbus-1-dev libwayland-dev libpipewire-0.3-dev libspa-0.2-dev libegl1-mesa-dev libgbm-dev pkg-config

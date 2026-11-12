@@ -73,6 +73,11 @@ jobs:
         uses: dtolnay/rust-toolchain@1.97.1
 
       # keyring/dbus/wayland/pipewire/egl 需要系统库 (仅 Linux)
+      - name: Bootstrap Ubuntu DNS for system dependencies
+        if: runner.os == 'Linux' && (matrix.os == 'ubuntu-latest')
+        working-directory: ${{ github.workspace }}
+        run: python3 scripts/provision_ci_dns.py
+
       - name: "Install system deps (Linux: libdbus + libwayland + libpipewire + libegl)"
         if: matrix.os == 'ubuntu-latest'
         run: |
@@ -114,9 +119,41 @@ jobs:
       - name: Governance chain drill (R8-D)
         run: cargo test -p apeireth-governance --test governance_chain_drill --locked -- --nocapture
 
+      # ⚠️ **macOS 腿：live mDNS 组播探针摘出去单独跑（以 root）**（2026-11-11 加）
+      #
+      # 实测事实：`crates/engine/mesh/tests/mdns_smoke.rs` 的 live 组播往返在
+      #   ubuntu-latest / windows-latest **绿**，在 macos-latest **必红**
+      #   （nextest profile ci 重试 2 次 ⇒ TRY 3 全红 ⇒ 确定性失败，不是抖动）。
+      # 根因 = **Apple 本地网络隐私（Local Network Privacy, TN3179）**：
+      #   未签名进程在 LAN 接口上发组播被系统拦下（sendto → EHOSTUNREACH），
+      #   **root 进程豁免**。上游 mdns-sd 自己在 macos-15 也是靠
+      #   `CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER: sudo -E` 才跑得动自己的
+      #   组播集成测试（mdns-sd 仓库 `.github/workflows/build.yml` 的注释原文：
+      #   "Processes running as root are exempt, so run the test binaries via
+      #   sudo. See Apple TN3179."；CHANGELOG 0.21.7 "CI: move macOS tests to
+      #   macos-15, run test binaries as root (#531)"）。
+      #
+      # ⇒ ⇒ **不是放宽断言，也不是 #[ignore]**：断言一字未改，测试照样在 macOS 上
+      #   真跑真判；改的只是**执行身份**——换成 Apple 明确豁免的 root。
+      # ⇒ ⇒ nextest 腿用 filterset 把这**一个** live 探针摘出去，紧接由下一步
+      #   `cargo test` 以 root 单独跑（走 cargo 的 target runner 机制）。
+      # ⇒ ⇒ 语义覆盖不依赖组播：`crates/engine/mesh/src/mdns.rs` 的
+      #   `peer_from_record` 有确定性单元测试（真实 `mdns_sd::ServiceInfo` 构造），
+      #   三平台都跑。
       - name: cargo nextest run --workspace --profile ci --locked
         # profile "ci" 在 .config/nextest.toml 定义 (fail-fast + retries 2)
+        if: matrix.os != 'macos-latest'
         run: cargo nextest run --workspace --profile ci --locked
+
+      - name: "cargo nextest run --workspace --profile ci --locked (macOS: 排除 live mDNS 探针)"
+        if: matrix.os == 'macos-latest'
+        run: cargo nextest run --workspace --profile ci --locked -E 'all() - test(mdns_smoke_advertised_presence_is_observed_on_the_local_network)'
+
+      - name: "Live mDNS probe (macOS: root — Apple TN3179 豁免 root 进程)"
+        if: matrix.os == 'macos-latest'
+        env:
+          CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER: sudo -E
+        run: cargo test -p apeireth-mesh --test mdns_smoke --locked -- --nocapture
 
       - name: Canonical process isolation integration tests
         run: cargo test -p apeireth-tools-canonical --test process_executor --locked -- --nocapture
@@ -426,6 +463,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0  # scan-history 需要全历史
+
+      - name: Bootstrap Ubuntu DNS for system dependencies
+        if: runner.os == 'Linux'
+        working-directory: ${{ github.workspace }}
+        run: python3 scripts/provision_ci_dns.py
 
       - name: Ensure PowerShell (runner images preinstall pwsh; apt is a fallback)
         # ⚠️ **2026-10-31 合并批（两条线独立发现了同一个缺陷）**：原写法是无条件

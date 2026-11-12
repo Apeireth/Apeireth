@@ -16,6 +16,7 @@ apeireth-protocol = { path = "../../foundation/protocol" }
 apeireth-plugin = { path = "../../foundation/plugin" }
 apeireth-governance = { path = "../../foundation/governance" }
 apeireth-orchestration = { path = "../../foundation/orchestration" }
+apeireth-mesh = { path = "../mesh" }
 tokio = { workspace = true, features = ["full"] }
 serde = { workspace = true }
 serde_json = { workspace = true }

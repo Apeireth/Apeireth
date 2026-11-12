@@ -905,10 +905,10 @@ pub fn effective_installed_for_session(session_key: &str) -> bool {
 pub(crate) static EFFECTIVE_TEST_GUARD: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
-    fn lock_effective() -> std::sync::MutexGuard<'static, ()> {
+    pub(crate) fn lock_effective() -> std::sync::MutexGuard<'static, ()> {
         EFFECTIVE_TEST_GUARD
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())

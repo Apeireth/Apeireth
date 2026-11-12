@@ -3,7 +3,7 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: 7ab826a5346fb8066427e19c6978709c7707b7b9904c4c8fce2b89d46ed6ed3a
+claims_sha256: 17db124801fff6857fc6c5407b3b1997d560d748f2cbbf638c3a39c13a93c9bc
 claims_total: 54
 items:
   - id: "rt.provider_router"

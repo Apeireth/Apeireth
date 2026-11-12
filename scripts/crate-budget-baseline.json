@@ -1,8 +1,8 @@
 {
   "crates": {
     "crates/adapters/cli": {
-      "files": 39,
-      "loc": 18634
+      "files": 40,
+      "loc": 18879
     },
     "crates/adapters/gateway": {
       "files": 36,
@@ -22,7 +22,7 @@
     },
     "crates/capabilities/tools": {
       "files": 131,
-      "loc": 88419
+      "loc": 88351
     },
     "crates/engine/guard": {
       "files": 28,
@@ -76,6 +76,14 @@
       "files": 190,
       "loc": 86526
     },
+    "crates/engine/mesh": {
+      "files": 27,
+      "loc": 9618
+    },
+    "crates/engine/mesh-quic": {
+      "files": 7,
+      "loc": 1713
+    },
     "crates/engine/organ": {
       "files": 33,
       "loc": 27834
@@ -85,8 +93,8 @@
       "loc": 6290
     },
     "crates/engine/runtime": {
-      "files": 52,
-      "loc": 25036
+      "files": 54,
+      "loc": 26206
     },
     "crates/engine/runtime-assembly": {
       "files": 88,
@@ -98,7 +106,7 @@
     },
     "crates/foundation/core": {
       "files": 28,
-      "loc": 14551
+      "loc": 14573
     },
     "crates/foundation/credentials": {
       "files": 10,
@@ -106,7 +114,11 @@
     },
     "crates/foundation/governance": {
       "files": 24,
-      "loc": 15129
+      "loc": 15177
+    },
+    "crates/foundation/mesh-protocol": {
+      "files": 6,
+      "loc": 2709
     },
     "crates/foundation/orchestration": {
       "files": 54,
@@ -119,6 +131,10 @@
     "crates/foundation/protocol": {
       "files": 24,
       "loc": 8841
+    },
+    "crates/services/mesh-rendezvous": {
+      "files": 2,
+      "loc": 863
     }
   },
   "note": "每个 crate 的 src/ 总量；只减不增（--gen 只应在真的减少后跑）",

@@ -118,6 +118,10 @@ def run_command(command: str, timeout: int) -> tuple[bool, str]:
     tail = (proc.stdout + proc.stderr).strip().splitlines()
     summary = tail[-1][:160] if tail else "(无输出)"
     if proc.returncode != 0:
+        print(f"verify_cmd failed: {command[:2000]}", file=sys.stderr)
+        for label, output in (("stdout", proc.stdout), ("stderr", proc.stderr)):
+            excerpt = "\n".join(output.splitlines()[-120:])[-8000:]
+            print(f"--- {label} tail (max 120 lines / 8000 chars) ---\n{excerpt or '(no output)'}", file=sys.stderr)
         return False, f"退出码 {proc.returncode} · {summary}"
     combined = proc.stdout + proc.stderr
     if any(marker in command for marker in TEST_COMMANDS):

@@ -53,6 +53,7 @@ use std::sync::Arc;
 use apeireth_core::kernel::{ApprovalId, CapabilityId, RequestId, SessionId, Timestamp, TraceId};
 use apeireth_governance::{verify_action_binding, BindingMismatchAudit};
 use apeireth_governance::{Action, Decision, GovernanceRequest, TurnSecurityContext};
+use apeireth_mesh::{RemoteInvokeContext, RemoteToolRoute};
 use apeireth_orchestration::call_scheduler::{
     CallBatch, CallRunner, CallScheduler, CancelKind, ConcurrencySafety, ScheduledCall, SlotOutcome,
 };
@@ -100,6 +101,9 @@ use super::quota::QuotaExceeded;
 use super::runtime::Runtime;
 use super::session::{Session, SessionEventKind};
 use super::subloop::RuntimeSubLoopSpawner;
+use super::tool_route::{
+    resolve_model_route, ModelRouteResolution, ToolExecutionTarget, ToolRouteError,
+};
 use super::trace::{ExecutionTrace, TraceEvent};
 
 #[path = "dispatch_admission.rs"]
@@ -339,10 +343,19 @@ enum ToolAdmission {
     Pending(PendingDispatch),
 }
 
+/// How an admitted call executes: a live local implementation, or a remote
+/// route the capability port carries the call over. A remote target holds no
+/// implementation — only where the implementation lives.
+#[derive(Clone)]
+enum AdmittedTarget {
+    Local(Arc<dyn apeireth_plugin::ToolCapability>),
+    Remote(apeireth_mesh::RemoteToolRoute),
+}
+
 /// A call that passed admission and is cleared to invoke.
 struct AdmittedCall {
     capability: CapabilityId,
-    tool: Arc<dyn apeireth_plugin::ToolCapability>,
+    target: AdmittedTarget,
     call: ToolCall,
     frozen_invocation: Option<FrozenInvocation>,
     /// The session whose turn dispatches this call (session-scoped tool
@@ -367,7 +380,7 @@ enum WindowExecution {
     Resolved(ToolResult),
     Ready {
         capability: CapabilityId,
-        tool: Arc<dyn apeireth_plugin::ToolCapability>,
+        target: AdmittedTarget,
     },
 }
 
@@ -1600,19 +1613,19 @@ impl Runtime {
                     let provider_request =
                         NormalizedRequest::new(continuation.model.clone(), provider_messages);
                     let attempt = self
-                        .providers
-                        .complete_for_session_gated(
+                        .route_completion(
+                            &provider_request,
+                            &tools,
+                            stream_sink.as_ref(),
                             session.id,
                             request_id,
-                            &provider_request,
-                            Some(&tools),
-                            stream_sink.as_ref(),
+                            trace_id,
+                            continuation.round,
                             self.task
                                 .as_ref()
                                 .and_then(|task| task.input.request_gate.as_deref()),
                         )
                         .await;
-
                     let error = match attempt {
                         Ok(routed) => break Ok(routed),
                         Err(error) => error,
@@ -2567,10 +2580,12 @@ impl Runtime {
         messages: &[NormalizedMessage],
         model: &str,
     ) -> Vec<NormalizedMessage> {
-        match self
-            .context_projector
-            .project(messages, self.providers.model_context_tokens(model))
-        {
+        match self.context_projector.project(
+            messages,
+            self.providers
+                .model_context_tokens(model)
+                .or_else(|| self.remote_model_context_tokens(model)),
+        ) {
             Ok(projected) => projected,
             Err(_) => messages.to_vec(),
         }
@@ -2954,6 +2969,137 @@ impl Runtime {
         );
         self.sessions.save(session).await?;
         Ok(())
+    }
+
+    /// Route one provider round to its execution route.
+    ///
+    /// With no remote capability port this is the local router verbatim —
+    /// byte-equivalent behavior. With a port, the model resolves through one
+    /// combined policy (`resolve_model_route`): local-only models keep the
+    /// router's existing selection/fallback untouched; a model served by
+    /// exactly one remote route goes over the mesh's **already-authorized**
+    /// raw primitive (completion governance ran exactly once, in
+    /// `authorize_completion`); contested models fail closed.
+    async fn route_completion(
+        &self,
+        request: &NormalizedRequest,
+        tools: &[NormalizedTool],
+        stream_sink: Option<&Arc<dyn Fn(String) + Send + Sync>>,
+        session_id: SessionId,
+        request_id: RequestId,
+        trace_id: TraceId,
+        round: u32,
+        gate: Option<&dyn apeireth_plugin::agents::AgentRequestGate>,
+    ) -> RuntimeResult<super::provider::RoutedCompletion> {
+        // No port: exactly the pre-port path.
+        let Some(port) = self.remote_port().clone() else {
+            return self
+                .providers
+                .complete_for_session_gated(
+                    session_id,
+                    request_id,
+                    request,
+                    Some(tools),
+                    stream_sink,
+                    gate,
+                )
+                .await;
+        };
+
+        let local_supporting = self.providers.providers_supporting(&request.model);
+        let remote = port.remote_providers();
+        match resolve_model_route(&request.model, &local_supporting, &remote) {
+            ModelRouteResolution::LocalGroup { .. } => {
+                self.providers
+                    .complete_for_session_gated(
+                        session_id,
+                        request_id,
+                        request,
+                        Some(tools),
+                        stream_sink,
+                        gate,
+                    )
+                    .await
+            }
+            ModelRouteResolution::Remote(desc) => {
+                // Per-provider tool attachment, same rule as the local router:
+                // declarations travel only where the selected model can.
+                let mut candidate_request = request.clone();
+                candidate_request.tools.clear();
+                let supports_tools = desc.models.iter().any(|model| {
+                    model.id.as_str() == request.model
+                        && model.features.iter().any(|f| f == "tool_calls")
+                });
+                if supports_tools {
+                    candidate_request.tools = tools.to_vec();
+                }
+
+                let route = RemoteToolRoute {
+                    node: desc.node.clone(),
+                    module: desc.module.clone(),
+                    capability: desc.capability.clone(),
+                };
+                let ctx = RemoteInvokeContext {
+                    trace: trace_id,
+                    session: session_id,
+                    round,
+                    deadline_epoch_ms: None,
+                };
+                let response = port
+                    .invoke_provider(route, candidate_request, ctx)
+                    .await
+                    .map_err(map_remote_provider_error)?;
+
+                if let Some(sink) = stream_sink {
+                    // Canonical no-wire-streaming semantics (the same contract
+                    // `ProviderCapability::complete_streaming` offers providers
+                    // without a streaming wire): one final delta with the full
+                    // content, and the same full RoutedCompletion shape.
+                    if !response.content.is_empty() {
+                        sink(response.content.clone());
+                    }
+                }
+                Ok(super::provider::RoutedCompletion {
+                    served_by: desc.capability,
+                    response,
+                    failed_attempts: Vec::new(),
+                })
+            }
+            ModelRouteResolution::Ambiguous { candidates } => {
+                Err(RuntimeError::AmbiguousModelRoute {
+                    model: request.model.clone(),
+                    candidates,
+                })
+            }
+            ModelRouteResolution::None => Err(RuntimeError::NoProvider {
+                model: request.model.clone(),
+                available: self.providers_display(),
+            }),
+        }
+    }
+
+    /// Provider ids available locally, in the router's error-message format.
+    fn providers_display(&self) -> String {
+        let ids = self.providers.provider_ids();
+        if ids.is_empty() {
+            "none".to_string()
+        } else {
+            ids.iter()
+                .map(apeireth_core::kernel::CapabilityId::as_str)
+                .collect::<Vec<_>>()
+                .join(", ")
+        }
+    }
+
+    /// Context window for a remote-only model, when its advert carries one.
+    fn remote_model_context_tokens(&self, model: &str) -> Option<u32> {
+        self.remote_port()
+            .as_ref()?
+            .remote_providers()
+            .iter()
+            .flat_map(|desc| desc.models.iter())
+            .find(|m| m.id.as_str() == model || m.display_name.as_deref() == Some(model))
+            .and_then(|m| m.context_window)
     }
 
     /// Ask governance whether this round's completion may proceed.
@@ -3577,7 +3723,7 @@ impl Runtime {
                         call: call.clone(),
                         execution: WindowExecution::Ready {
                             capability: admitted.capability,
-                            tool: admitted.tool,
+                            target: admitted.target,
                         },
                         session: *session_id,
                     });
@@ -3603,6 +3749,13 @@ impl Runtime {
             .collect();
         let runner = Arc::new(WindowRunner {
             entries: entries.clone(),
+            remote_port: self.remote_port().clone(),
+            remote_ctx: apeireth_mesh::RemoteInvokeContext {
+                trace: trace_id,
+                session: *session_id,
+                round: continuation.round,
+                deadline_epoch_ms: None,
+            },
         });
         let mut batch = scheduler.start_batch(scheduled, runner);
         let mut flow: Option<WindowFlow> = None;
@@ -4051,6 +4204,27 @@ impl Runtime {
             rounds,
             trace,
         })
+    }
+}
+
+/// Remote provider failures map onto the canonical completion error surface:
+/// governance outcomes stay typed; availability/transport/cancellation collapse
+/// into one legible `Remote` error.
+fn map_remote_provider_error(error: apeireth_mesh::RemoteCapabilityError) -> RuntimeError {
+    use apeireth_mesh::RemoteCapabilityError as E;
+    let reason = error.to_string();
+    match &error {
+        E::Denied(_) => RuntimeError::Denied {
+            hook: "remote_governance".to_string(),
+            reason,
+        },
+        E::ApprovalRequired(_) => RuntimeError::ApprovalRequired {
+            hook: "remote_governance".to_string(),
+            reason,
+            approval: None,
+            session: None,
+        },
+        _ => RuntimeError::Remote { reason },
     }
 }
 

@@ -42,7 +42,7 @@ jobs:
   claims-verify:
     name: 状态声明 verify_cmd 真跑
     runs-on: ubuntu-latest
-    # ⚠️ **2026-11-11 调（PR #78 第二/三轮实测）**：45 分钟**从来不够** ——
+    # ⚠️ **2026-11-11 调（PR #78 第二/三轮实测；PR #117 合并后沿用）**：45 分钟**从来不够** ——
     #   这份 job 的真实工作量 = 编译声明要用的测试产物（~160 个二进制）+ 跑 52 条声明
     #   ⇒ ⇒ 45 分钟下**它连预构建都跑不完**（历史 60 次运行 0 次成功，见提交正文）。
     #   ⇒ ⇒ 本机实测（debug=0，单个 runtime-assembly 测试目标 199s、产物 95MB）：
@@ -65,6 +65,11 @@ jobs:
     #   ⇒ ⇒ ⇒ （debuginfo 不改测试集合 / 断言 / 编译目标；`debug_assertions` 是另一条
     #   ⇒ ⇒ ⇒   独立开关，不受影响 —— 仓里 image/algo 那几条 `run with --release`
     #   ⇒ ⇒ ⇒   断言的语义保持原样）。
+    # ⭐ **合并说明（2026-11-11 · PR #117 并入 main 时）**：PR #117 分支曾独立加过同款
+    #   磁盘减负（`CARGO_PROFILE_DEV_DEBUG/TEST_DEBUG=0` + `CARGO_INCREMENTAL=0`，
+    #   见下方 job 级 `env`）与 `timeout-minutes: 45` ⇒ ⇒ 两者指向**同一个真因**
+    #   （runner 磁盘被 cargo 产物的调试信息撑爆），⇒ ⇒ 此处**取 main 侧**（150 分钟
+    #   = 给足时间，不是放松验证；判定条件一条没改），**不保留 45 分钟**。
     env:
       CARGO_PROFILE_DEV_DEBUG: "0"
       CARGO_PROFILE_TEST_DEBUG: "0"
@@ -73,6 +78,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Bootstrap Ubuntu DNS for system dependencies
+        if: runner.os == 'Linux'
+        working-directory: ${{ github.workspace }}
+        run: python3 scripts/provision_ci_dns.py
 
       - name: 安装系统依赖（dbus / wayland / pipewire / egl / **Tauri 桌面壳**）
         # ⚠️ Tauri 那几条声明（`sec.sql_readonly_gate` / `sec.provider_proxy_ssrf` /
@@ -96,6 +106,11 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@1.97.1
 
+      # ⚠️ **合并说明（2026-11-11 · PR #117 并入 main 时）**：PR #117 分支曾在此处
+      #   **独立加过同一个步骤**（「Install cargo-nextest」+ 同款注释）⇒ ⇒ 自动合并后
+      #   会出现两条同源步骤 ⇒ ⇒ **只保留下方 rust-cache 之后的那一条**
+      #   （注释更完整）⇒ ⇒ **不删功能**：安装 nextest 仍然做，且它是两条 nextest
+      #   声明（rt.system_one_internal / mem.failure_learning_bridge）成立的前提。
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: claims-verify
@@ -222,22 +237,37 @@ jobs:
         working-directory: frontend/companion-desktop
         run: pnpm install --frozen-lockfile
 
+      # ⭐ **预热 cargo 索引缓存**（2026-11-11 · PR #117 红项 13 续）：
+      # 两条声明的 verify_cmd 直接调 `cargo nextest ... --offline`
+      #   （`rt.system_one_internal` / `mem.failure_learning_bridge`）
+      # ⇒ ⇒ nextest 每次先跑一次 **cargo metadata --all-features**
+      #    （实测命令：`cargo --color=always metadata --format-version=1
+      #      --all-features --filter-platform=<target> --offline`）
+      # ⇒ ⇒ `--offline` 下它要求 runner 的 cargo 索引里**有 optional-only 依赖的条目**
+      #    （本仓：`napi` / `napi-derive` / `pyo3` / `cbindgen` —— 都是 `apeireth-sdk`
+      #    的 optional 依赖，默认 feature 构建**不会**下载它们）
+      # ⇒ ⇒ runner 缓存里没有 ⇒ metadata 解析失败 ⇒ nextest 直接退出 **102**
+      #    ⇒ ⇒ 那两条声明在 CI 上**恒红**（不是声明内容问题）。
+      # ⇒ ⇒ 解法：**先在线解析一次全 feature 图**，把索引条目 + 依赖清单补进
+      #    cargo 缓存 ⇒ 之后 nextest 的 `--offline` metadata 才解析得动。
+      # ⇒ ⇒ **不降低任何验证强度**：两条声明的 verify_cmd 一字未改，测试照跑照判。
+      # ⇒ ⇒ 顺带说明：为什么不用「改成 cargo test」绕开？
+      #    `scripts/check_claims_verify.py` 的 `TEST_COMMANDS` 明确含 `cargo nextest`
+      #    ⇒ ⇒ 门禁**设计上就支持** nextest 声明 ⇒ ⇒ 该修的是**环境**，不是声明。
+      - name: 预热 cargo 索引缓存（nextest 的 cargo metadata --all-features --offline 依赖它）
+        run: cargo metadata --format-version=1 --all-features --locked > /dev/null
+
       # **H5 真值闸**：口径为 PRODUCTION WIRED / DEFAULT ENABLED / HARDWARE VALIDATED
       # 的声明**不许**靠「豁免 / 延后」成立 ⇒ 否则「已接线」只是个词。
       - name: 高口径声明必须真验（H5）
         run: python3 scripts/check_claims_verify.py --wired-gate
 
-      # nextest 启动前会先跑 `cargo metadata --format-version 1 --all-features ...`；
-      # 而两条 nextest 声明（rt.system_one_internal / mem.failure_learning_bridge）的
-      # verify_cmd 带 `--offline` ⇒ ⇒ 该 metadata 调用必须能在**离线**状态下解析整仓依赖图
-      # ⇒ ⇒ 但上面的预构建只取「声明真正用到的测试产物」⇒ 整仓（含可选依赖）的 manifest
-      #      并未全部落进本地 registry 缓存 ⇒ ⇒ 离线 metadata 失败：
-      #      error: command `cargo metadata --format-version=1 --all-features ...` failed
-      #      （nextest 退出码 102）
-      # 修法：先用联网的一次 metadata 把整仓全特性依赖图预热进本地缓存（只下 manifest，不编译）
-      #      ⇒ 声明语义不变（仍带 --offline）⇒ ⇒ 不降低任何验证强度。
-      - name: 预热全特性依赖缓存（nextest 的 cargo metadata --all-features 需要）
-        run: cargo metadata --format-version 1 --all-features --locked > /dev/null
+      # ⚠️ **合并说明（2026-11-11 · PR #117 并入 main 时）**：main 侧在同一 job 内另有一条
+      #   作用等价的预热步骤（`cargo metadata --format-version 1 --all-features --locked`，
+      #   注释同样指向 nextest 的 102 退出码）⇒ ⇒ 自动合并后变成**两条同源步骤**
+      #   ⇒ ⇒ **只保留上方那一条**（注释更完整、位置更靠前 ⇒ H5 真值闸之前索引已就绪）
+      #   ⇒ ⇒ **不删功能**：联网预热全特性依赖图这一步仍然做，且两条 nextest 声明
+      #   离线解析依赖图的前提仍然成立。
 
       - name: 跑每条 claim 的 verify_cmd
         run: python3 scripts/check_claims_verify.py --check --timeout 600

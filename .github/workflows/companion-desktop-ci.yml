@@ -41,6 +41,11 @@ jobs:
         uses: dtolnay/rust-toolchain@1.97.1
 
       # WebKitGTK-4.1 + librsvg + libdbus 系统库 (Tauri 2 链接)
+      - name: Bootstrap Ubuntu DNS for system dependencies
+        if: runner.os == 'Linux'
+        working-directory: ${{ github.workspace }}
+        run: python3 scripts/provision_ci_dns.py
+
       - name: "Install system deps (Tauri: webkit/gtk/dbus)"
         run: |
           sudo apt-get update

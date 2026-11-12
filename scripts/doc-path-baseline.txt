@@ -17,9 +17,10 @@
 #      历史文档判据剔除：`docs/archive/` 等目录 + 历史横幅 + 日期/round 命名）。
 #
 # ============================================================================
-# 已知例外（6 条，逐条有理由；**新增例外必须写理由**）
+# 已知例外（逐条有理由；**新增例外必须写理由**）
 # ============================================================================
 
 docs/01-architecture/v2-line-by-line-verification-and-upgrade-blueprint.md  # 蓝图里的「目标路径」= **待建**文件（3 条：digital_life_roamer / portable_vault / p2p_mesh_sync）⇒ 判据按「整 crate 存在但文件未建」不适用；等蓝图落地后应改为现址，届时本行可删
 docs/04-internal/05-plans/stored-doc-consumer-migration.md  # 迁移**计划**里写的「未来落点」（sandbox/quota.rs + lark/auth.rs）⇒ 计划文档描述的是**将要**写的文件，不是现状断言
+docs/design/mesh-phase-0.md  # Phase 0 设计稿记录的是**当批次的文件布局**：`crates/foundation/plugin/src/module.rs` 只存在于已废弃的 `feature/module-plugin-unification` 分支，上游把 Module 命名收敛到 Plugin 后该文件已删除（现址 `crates/foundation/plugin/src/module_contract.rs`）⇒ 历史批次设计稿不改写历史
 docs/04-internal/backend-enhancement/00-backlog.md  # 历史台账条目 D29 记录「claims.yaml 曾指向**已归档**文件」⇒ 引用的是**过去的事实**（原文件已移到 `legacy/archived/prompt-stabilizer/`）

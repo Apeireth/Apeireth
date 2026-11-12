@@ -2,7 +2,7 @@
   "schema": "apeireth.gate-manifest.v1",
   "generated_from": "docs/architecture/contract.toml [ci_gates]",
   "workspace_version": "2.0.0-rc.5",
-  "workspace_members": 31,
+  "workspace_members": 35,
   "locked_sources": [
     "crates/foundation/core/src/eight_anchors.rs",
     "crates/foundation/core/src/onion.rs",
@@ -11,7 +11,7 @@
   "repo_facts": {
     "philosophy_anchors": 9,
     "workflows": 50,
-    "crates": 30
+    "crates": 34
   },
   "gates": [
     {

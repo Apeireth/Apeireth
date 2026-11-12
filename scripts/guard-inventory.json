@@ -1015,6 +1015,42 @@
       "flags": []
     },
     {
+      "id": "provision-ci-dns",
+      "path": "scripts/provision_ci_dns.py",
+      "kind": "generator",
+      "is_guard": false,
+      "blocking": true,
+      "invocation": [
+        "python3 scripts/provision_ci_dns.py"
+      ],
+      "ci_workflows": [
+        ".github/workflows/bench-report.yml",
+        ".github/workflows/claims-verify.yml",
+        ".github/workflows/companion-desktop-ci.yml",
+        ".github/workflows/coverage.yml",
+        ".github/workflows/dead-code-ratchet.yml",
+        ".github/workflows/fuzz.yml",
+        ".github/workflows/kani.yml",
+        ".github/workflows/m2c-xv-shell-validation.yml",
+        ".github/workflows/m3a-canonical-fetch.yml",
+        ".github/workflows/miri.yml",
+        ".github/workflows/o6-anchor.yml",
+        ".github/workflows/protocol-e2e.yml",
+        ".github/workflows/release-1.0.0.yml",
+        ".github/workflows/release.yml",
+        ".github/workflows/rust-lint.yml",
+        ".github/workflows/rust.yml",
+        ".github/workflows/rustdoc-test.yml",
+        ".github/workflows/rustdoc.yml"
+      ],
+      "has_baseline": false,
+      "notes": "Bootstrap temporary Linux CI DNS before installing system dependencies.",
+      "flags": [
+        "--help",
+        "-h"
+      ]
+    },
+    {
       "id": "provision-ci-toolchain",
       "path": "scripts/provision_ci_toolchain.py",
       "kind": "generator",

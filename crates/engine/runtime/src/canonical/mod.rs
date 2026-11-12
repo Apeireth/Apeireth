@@ -56,6 +56,7 @@ pub mod events;
 pub mod execute;
 pub mod heartbeat;
 pub mod instances;
+pub mod mesh;
 mod message_execution;
 pub mod metrics;
 pub mod module;
@@ -87,6 +88,7 @@ pub mod session;
 mod session_events;
 pub mod session_locks;
 pub mod subloop;
+pub mod tool_route;
 pub mod trace;
 // L0-L5 自升级 cycle driver (Stage 5 完整化, per R11 §7 + v2-architecture-reflection.md §6).
 // **0 装诚实**: L0/L2/L3/L4 真接 governance + Orchestrator; L5 建议模式不自动跑 git tag;
@@ -122,6 +124,12 @@ pub use heartbeat::{
     HeartbeatProducerConfig, HeartbeatProducerStatus, HeartbeatScheduler, HeartbeatTask,
     HeartbeatTriggerSource,
 };
+pub use mesh::{
+    mesh_routes_for, runtime_mesh_executor, CallHandle, CallTarget, CapabilityCatalogEntry,
+    CapabilityRoute, InvokeMeta, ManagerExecutor, MeshCapabilityExecutor, MeshError, MeshExecError,
+    MeshInvokeContext, MeshNode, MeshNodeConfig, PluginLocation, PluginManagerView,
+    RemoteCapability, RouteSelection, RouteTable,
+};
 pub use metrics::{
     DistributionSummary, MetricsRegistry, MetricsSnapshot, SessionAggregate, TurnMetrics,
     TurnOutcomeKind, WindowAggregate, DEFAULT_METRICS_WINDOW_TURNS, MAX_TRACKED_SESSIONS,
@@ -154,4 +162,10 @@ pub use session_locks::SessionLocks;
 pub use subloop::{
     RuntimeSubLoopSpawner, SubLoopError, SubLoopResult, SubLoopSpawner, SubLoopSpec,
 };
+
+pub use tool_route::{
+    resolve_model_route, LocalToolView, ModelRouteResolution, ToolExecutionTarget, ToolRouteEntry,
+    ToolRouteError, ToolRouteTable,
+};
+
 pub use trace::{ExecutionTrace, TraceEntry, TraceEvent};

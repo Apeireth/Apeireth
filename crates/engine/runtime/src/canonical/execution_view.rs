@@ -1,5 +1,6 @@
 //! Immutable turn catalogs over the one lifecycle owner. Shared services remain shared.
 use super::Runtime;
+use std::sync::RwLock;
 impl Runtime {
     pub(super) fn execution_view(&self) -> Self {
         Self {
@@ -29,6 +30,15 @@ impl Runtime {
             call_scheduler: self.call_scheduler.clone(),
             metrics: self.metrics.clone(),
             tool_completion_observer: self.tool_completion_observer.clone(),
+            // The mesh capability port is a shared service like the others: the
+            // snapshot keeps the same Arc, so a view taken mid-turn still routes
+            // through the installed port instead of silently degrading to local.
+            remote_port: RwLock::new(
+                self.remote_port
+                    .read()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .clone(),
+            ),
         }
     }
 }

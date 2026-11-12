@@ -116,6 +116,11 @@ jobs:
           cache-bin: ${{ matrix.target != 'docker' }}
 
       # keyring -> dbus-secret-service -> libdbus-sys needs system libs (cargo build --locked links them)
+      - name: Bootstrap Ubuntu DNS for system dependencies
+        if: runner.os == 'Linux' && (matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-latest')
+        working-directory: ${{ github.workspace }}
+        run: python3 scripts/provision_ci_dns.py
+
       - name: "Install system deps (Linux: libdbus)"
         if: matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-latest'
         run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
@@ -317,6 +322,11 @@ jobs:
         uses: dtolnay/rust-toolchain@1.97.1
 
       # keyring → dbus-secret-service → libdbus-sys 需要系统库 (cargo bench 全编译)
+      - name: Bootstrap Ubuntu DNS for system dependencies
+        if: runner.os == 'Linux'
+        working-directory: ${{ github.workspace }}
+        run: python3 scripts/provision_ci_dns.py
+
       - name: "Install system deps (Linux: libdbus)"
         run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
 

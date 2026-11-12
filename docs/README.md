@@ -57,7 +57,7 @@ docs/
 ├── architecture/    L2     可执行契约（contract.toml / env-registry / 异常表 / 线路协调）
 ├── 01-architecture/ L3     架构说明（哲学/愿景/架构/安全/能力规范）
 ├── 02-guides/       L3     使用与操作指南（按场景分组）
-├── design/          L3     设计面（设计系统/形象/关系/交接）
+├── design/          L3     设计面（设计系统/形象/关系/交接 + Mesh 设计；mesh-architecture.md 是 mesh 权威现状）
 ├── development/     L3     开发流程（目录布局/加模块/RFC/社区运营）
 ├── packaging/  security/  integration/  beta/  rc/  vision/   L3  专项
 ├── 04-internal/     L4     在飞工作面
@@ -101,6 +101,20 @@ docs/
 | [packaging/release-asset-verification.md](packaging/release-asset-verification.md) | 发布资产校验与签名 |
 | [security/process-executor-threat-model.md](security/process-executor-threat-model.md) | 进程执行器威胁模型 |
 
+### Mesh 设计文档（RC2 冻结时点，2026-10-11）
+
+权威层级：`mesh-architecture.md` 是 mesh 当前状态的唯一权威；`mesh-nat-e2e-report.md` 只是证据记录；阶段文档是历史。
+
+| 文档 | 角色 |
+|---|---|
+| [design/mesh-architecture.md](design/mesh-architecture.md) | **权威现状**：mesh 保证什么、每条改动必须守什么、还缺什么；实验性 NAT 穿透的状态与能力边界以此为准 |
+| [design/mesh-rc2-status.md](design/mesh-rc2-status.md) | **RC2 状态摘要**：传输/安全/测试/已知限制一页纸（冻结时点快照） |
+| [design/mesh-nat-e2e-report.md](design/mesh-nat-e2e-report.md) | 证据与验证记录（2026-10-11 时点）：实现、测试矩阵、Git、缺口、结论 |
+| [design/mesh-nat-e2e-audit.md](design/mesh-nat-e2e-audit.md) | NAT 链路定向审计与 Gap Matrix（该轮次的历史证据） |
+| [design/mesh-phase-0.md](design/mesh-phase-0.md) | 历史阶段设计（Phase 0 定稿记录，勿当现状） |
+| [design/mesh-phase-2c1.md](design/mesh-phase-2c1.md) | 历史阶段设计（Phase 2C1；文首注记指向当前权威） |
+
+---
 ---
 
 ## 4. 文档纪律（写文档前必读）
