@@ -53,7 +53,7 @@
 | `rt.system_one_internal` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_SYSTEM_ONE` | `11feb868ced8` | 2026-11-20 |
 | `rt.module_messages` | PRODUCTION WIRED | OFF | - | `11feb868ced8` | 2026-11-20 |
 | `rt.mesh_local_worker` | PRODUCTION WIRED | OFF | - | `b5cea2bf673e` | 2026-11-20 |
-| `mem.retrieval_ranking` | PRODUCTION WIRED | ON | - | `822d3cac` | 2026-12-04 |
+| `mem.retrieval_ranking` | PRODUCTION WIRED | ON | - | `fdca24d977d1` | 2026-12-04 |
 | `mem.failure_learning_bridge` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_RETRIEVAL_TUNING` | `a9bcc86da49f` | 2026-12-04 |
 | `mem.injection_contract` | PRODUCTION WIRED | ON | - | `822d3cac` | 2026-12-04 |
 | `mem.contract_view` | PRODUCTION WIRED | ON | - | `2a807e63f` | 2026-12-05 |

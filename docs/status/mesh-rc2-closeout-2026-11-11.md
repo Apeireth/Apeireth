@@ -4,7 +4,7 @@
 Document: docs/status/mesh-rc2-closeout-2026-11-11.md
 Class: STATUS
 Status: 🟢 软件边界修复完成；CI 与合并状态见 PR
-Last-Modified: 2026-11-11
+Last-Modified: 2026-11-12
 Author: lead
 
 ## 目标与边界
@@ -26,6 +26,7 @@ Author: lead
 | crate 体量预算 | CI 抓到新增代码超额后，统一会话 scope 路径并复用 Mesh 错误映射；新增 unit fixture 归测试目录、保持原 unit 模块身份，未移动既有生产逻辑。Runtime `src` 为 26206/26206 行，Mesh 为 9618 行并收紧基线至 9618；文件数不增，生命周期逻辑未改。`python3 scripts/check_crate_budget.py --check` 通过。 |
 | 依赖审计 | `rustix` 锁定到 `1.1.6`；按既有 workflow 策略本机审计通过，未增加 ignore。失败摘要和 SARIF 均包含 warning，真实失败 JSON 的旧实现三项反证失败、修复后通过。 |
 | CI DNS 装配 | IMPLEMENTED；仅在 GitHub Actions Linux 的既有 APT 步骤前预检。健康时不改 DNS；失败时按默认路由接口临时配置备用 DNS 并复验，失败回滚且保持非零退出。原 APT、测试、runner、permissions、TLS 与签名验证不变；真实 runner 恢复结论仍须由当前 CI 证明。 |
+| 检索测试共享状态 | 仅 cfg(test)：默认调权读者与既有写入测试共用原测试锁，生产排序与断言不变；旧版本地压力回放复现 MMR 断言，修后同布局回放、Memory 单测和严格 clippy 通过。5cbc Linux 原失败具体断言未留存，不据本地结果断定远端同因，当前 head 仍须重验。 |
 | 当前提交证据 | 定向红/绿与范围审查已完成；全工作区测试、clippy、doctest、fmt 和声明 verify_cmd 由本地波次与当前 head 的 CI 验证。合并须同时满足本地检查与所有适用 CI 通过。 |
 
 ## 行为证据与范围复核
