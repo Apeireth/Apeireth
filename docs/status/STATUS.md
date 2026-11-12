@@ -52,17 +52,17 @@
 | `rt.module_execution_contract` | PRODUCTION WIRED | OFF | - | `11feb868ced8` | 2026-11-20 |
 | `rt.system_one_internal` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_SYSTEM_ONE` | `ba5466500aca` | 2026-11-20 |
 | `rt.module_messages` | PRODUCTION WIRED | OFF | - | `11feb868ced8` | 2026-11-20 |
-| `rt.mesh_local_worker` | PRODUCTION WIRED | OFF | - | `b5cea2bf673e` | 2026-11-20 |
-| `mem.retrieval_ranking` | PRODUCTION WIRED | ON | - | `ba5466500aca` | 2026-12-04 |
+| `rt.mesh_local_worker` | PRODUCTION WIRED | OFF | - | `3cb47ef9e9f1` | 2026-11-20 |
+| `mem.retrieval_ranking` | PRODUCTION WIRED | ON | - | `3cb47ef9e9f1` | 2026-12-04 |
 | `mem.failure_learning_bridge` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_RETRIEVAL_TUNING` | `ba5466500aca` | 2026-12-04 |
-| `mem.injection_contract` | PRODUCTION WIRED | ON | - | `ba5466500aca` | 2026-12-04 |
-| `mem.contract_view` | PRODUCTION WIRED | ON | - | `ba5466500aca` | 2026-12-05 |
+| `mem.injection_contract` | PRODUCTION WIRED | ON | - | `3cb47ef9e9f1` | 2026-12-04 |
+| `mem.contract_view` | PRODUCTION WIRED | ON | - | `3cb47ef9e9f1` | 2026-12-05 |
 | `mem.shadow_swap` | PRODUCTION WIRED | OFF | - | `05759be1` | 2026-12-05 |
 | `rt.committed_evidence` | PRODUCTION WIRED | - | - | `ba5466500aca` | 2026-11-26 |
-| `mem.automatic_correction` | PRODUCTION WIRED | - | - | `ba5466500aca` | 2026-11-26 |
-| `mem.writeback_recovery` | PRODUCTION WIRED | - | - | `ba5466500aca` | 2026-11-26 |
-| `mem.source_qualified_context` | PRODUCTION WIRED | - | - | `ba5466500aca` | 2026-11-26 |
-| `mem.answer_eval_contract` | IMPLEMENTED | OFF | - | `ba5466500aca` | 2026-11-26 |
+| `mem.automatic_correction` | PRODUCTION WIRED | - | - | `3cb47ef9e9f1` | 2026-11-26 |
+| `mem.writeback_recovery` | PRODUCTION WIRED | - | - | `3cb47ef9e9f1` | 2026-11-26 |
+| `mem.source_qualified_context` | PRODUCTION WIRED | - | - | `3cb47ef9e9f1` | 2026-11-26 |
+| `mem.answer_eval_contract` | IMPLEMENTED | OFF | - | `3cb47ef9e9f1` | 2026-11-26 |
 | `sec.output_injection_guard` | PRODUCTION WIRED | ON | - | `ba5466500aca` | 2026-12-05 |
 
 ## 使用

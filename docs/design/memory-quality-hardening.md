@@ -107,8 +107,9 @@ Provider 测试从独立 SQLite 读取发送 ID 对应的治理状态、作用�
 | Q6 | 记忆写入失败自动恢复 | 持久待办、故障后重试、进程重启、重复消费、部分成功、作用域隔离及遗忘后不得复活；失败不发布未提交内容 |
 | Q7 | 真实模型答题评测 | 本地确定性评测器验证后，再用用户临时 key 实际运行；保留逐例回答与失败，硬失败不得被均分抵消；无 key 记未测，不用录制 Provider 代替 |
 
-当前状态：Q5/Q6 已实现并接入条件性生产组合，Beta 本地定向软件验收及下文红绿反证已通过；
-完整工作区、真实模型复验及同提交 CI 尚未完成。Q7 首次真实调用未通过，原报告保留。
+当前状态：Q5/Q6 已实现并接入条件性生产组合；Beta 和 Gamma 已完成下文所列本地定向软件验收。
+真实评测 live01、live02 均未通过，原报告保留；Gamma 全仓、模型03及同提交 CI 尚未完成。
+Beta 红绿反证属于当次实现；Gamma 六项红绿反证见下表，不能由定向结果推出新源码全部通过。
 本地确定性 Provider 和回环 HTTP 仍只用于验证软件契约，不能代替真实答题结果。
 当前无外部可运行实例，Q4 同条件比较仍独立记未测。
 
@@ -209,7 +210,7 @@ Provider 测试从独立 SQLite 读取发送 ID 对应的治理状态、作用�
   不要求预算选择必须同时送达全部原文 ID，但现行正文、实际 ID、来源支持及授权断言保持。
 
 `reverse-wiring-beta.json` 记录下表四项均发生真实断言失败（退出码 101），
-随后恢复原源码逐字节一致并退出 0；已复核四处当前源码散列与该记录一致。
+随后恢复原源码逐字节一致并退出 0；当次四处源码散列与该记录一致。此记录对应 Beta，不替代 Gamma 源码复验。
 各 `reverse-<control>-red.log` / `reverse-<control>-green.log` 的实际测试行如下：
 
 | control | RED 实际输出 | GREEN 实际输出 |
@@ -220,6 +221,117 @@ Provider 测试从独立 SQLite 读取发送 ID 对应的治理状态、作用�
 | `authenticated-atomic-policy` | `test atomic_per_source_overflow_is_omitted_but_body_cannot_select_atomic_policy ... FAILED` | `test atomic_per_source_overflow_is_omitted_but_body_cannot_select_atomic_policy ... ok` |
 
 这些证据支持本地定向软件验收，不能转写成真实模型 Beta 成功、全仓通过或适用 CI 已完成。
+
+#### 第二轮真实评测与 Gamma 修复（2026-11-12）
+
+live02 的运行时仓库提交为 `6e479bd41128cfa31d25d43a6bf45025a10e6741`；
+冻结执行文件的实现来源提交为 `ba5466500aca57c6c1c5fe53a5d082ca85bca5cf`，
+执行文件 SHA256 为 `664321FDE0F8DC461FA38B72C55875B25CA0E32F59393276DAC8ABFBCF6E702A`。
+依据同一仓外证据根的 `live-02-summary.json` 与 `eval-executable-beta-02.json`，
+36 个槽位为 **30 passed、6 hard_failure**；`complete=true` 仅表示运行完整，`live_quality_passed=false`。
+114 次实际委托调用均为 HTTP 200、单次发送且有用量记录，总计 **79376 tokens**，没有发送前阻断。
+原运行、回答、逐例 grade 及六项硬失败保留，不能以 Gamma 评分器把旧结果改写为 36 项通过。
+
+e02 三次失败中，两次真实提案包含完整的“更正自述句＋末句号”，其后紧接用户提问；
+旧校验器只检查 span 外的下一字符，未承认 span 自身的句号已经封口，误报 `invalid_evidence_span`。
+另一次提案明确弃权，继续记为模型语义判定未完成，不能假称同一个解析错误。
+e03 三次原 grade 均为事实及时间正确、额外引用不在原支持正文哈希集合内而失败；
+该失败暴露了后续评分协议需要显式规定的证据关系，不是修改原报告的理由。
+
+Gamma 实现来源固定到 `3cb47ef9e9f17c89d6f4d620b590546fa0844150`，
+源码树为 `a79e19b9862c15427ced4fc19339b3082a2308a3`；
+下述软件证据支持本地接线与受限合同，完整工作区、模型03及同提交远端 CI 仍待验。
+
+Gamma 的产品修复及边界如下：
+
+- span 自身已由现有边界标点封口时，可以随后接完整用户句；未封口的截断片段仍拒绝。
+  唯一原文片段、引号、前后文、真实角色、主体、授权和日期校验继续适用。
+- 旧值及新值必须分别属于原始完整分句中的同一用户、同一已识别属性，且各为完整属性值。
+  不能从后句的他人、邮箱管理员、其他属性、提问或转述借值，也不能用城市的一字或后缀替换拼出未被声明的新值。
+  片段的值还须与原始完整自述分句中的值相等，不能利用姓名或其他属性值内部的空格截出部分值。
+  有限姓名及属性语法复用现有字段词表；未知或复杂结构保守拒绝。
+- 保留既有“明确本人纠正登记＋紧邻同属性省略句”的受限主体继承；不把它扩成一般代词或跨人物推断。
+  缺失或不支持日期的拒绝先于完整值解析，不借此掩盖 `MissingEffectiveDate`。
+- 通用提案提示澄清更正误记与真实状态变化的区别，不含语料答案、实体名或日期。
+  明确更正且没有迁移事件或先前有效时期时，不应仅因值不同而编造变化历史；真实歧义和模型弃权仍保留。
+  未增加确定性前置通道、模型弃权覆盖或额外修复调用；提案字段协议仍为 v2，提示词散列随实际修改变化。
+
+Gamma 的评分协议明确升级为 `apeireth.memory-answer-scoring.v2`：
+
+- 每项事实仍必须实际引用一个符合原 `supporting_content_hashes` 集合的直接 gold 锚，
+  不能拿另一项事实的锚、没有被答案引用的送达记录或一条关系边代替。
+- 在该事实已有直接锚后，额外的当前事实引用才可使用独立 SQL 核验的单跳更正原始证据支撑。
+  关系须绑定冻结方案、已提交操作回执、作用域、当前修订、双方正文哈希和实际可见来源；不允许任意图可达或传递闭包。
+  历史区间、一般派生链及模型自报关系不因此成为这种额外引用。
+- 这条额外引用通道仅接受能独立确认的**本人居住城市更正**：规范目标更正前后都须只有一个完整姓名和一个完整居住值，
+  姓名与预期主体相同且未改变，居住值实际改变；原始更正证据须唯一声明同一完整新值，若声明姓名则必须一致。
+  目标正文在居住值之外须逐字不变，实际送达文本还须含所需完整姓名及居住分句。
+  同一情节里另一属性恰好同值，不会因此取得该更正证据的支持；其他主体、属性、重复身份或多重居住值均不能走该通道。
+- 评分器采用有限审计语法；未知的第一人称旁句保守拒绝，不能忽略它们而漏掉另一个姓名或矛盾居住值。
+  支持的合法绝对日期加“搬到新家”旁句可以与另行明确声明的城市共存，但搬家事件本身不能推出城市值。
+  这不是对一般自然语言事实关系的完备验证，也不把产品的全部纠错能力收窄为仅支持城市。
+- 输入语料、Oracle 事实、日期和原支持哈希集合保持不变；接受额外引用的评分规则发生了版本化变更。
+  旧运行保留旧 grade 与原执行文件，重放器拒绝混用协议；不能把前后差异归因于单个记忆算法，或声称测法完全相同。
+
+Gamma 已读取的本地定向证据为：
+
+| 仓外日志 | 已确认的范围 |
+|---|---|
+| `gamma-correction-eval.log` | 当次 Q5 实际 Runtime 回归与回答评测 example 软件测试通过，包括完整证据句、跨主体/属性及局部值反例；不代替后续收紧版复验 |
+| `gamma-final-correction-eval.log` / 同名 `.exit.txt` | 17 项 Q5 与当次 42 项 example 软件测试通过、退出 0，包含空格属性值与同情节不同属性同值反例 |
+| `gamma-final-eval-v2.log` / 同名 `.exit.txt` | 最后收紧未知第一人称旁句后的 42 项 example 软件测试通过、退出 0；不代表真实模型答题通过 |
+| `gamma-memory-source-v3.log` | 来源资格与单跳更正支撑关系的定向测试通过 |
+| `gamma-memory-targeted-v2.log` | 其中 Memory 库测试臂通过并保留原有 ignored；同日志的来源测试曾失败，不能把该整份日志写成全绿，后续来源结论以上一行 v3 为准 |
+| `gamma-core-paths.log` | 数据根纯解析器与生产读取环境的定向测试通过，不修改全局环境变量 |
+| `gamma-runtime-targeted.log` | 已提交证据、上下文预算与最小 Kernel 的定向测试通过 |
+| `gamma-final-workspace-clippy.log` / 同名 `.exit.txt` | 工作区、all-targets、locked、`-D warnings` 退出 0 |
+| `gamma-final-fmt.log` | Windows 逐 crate 检查覆盖 35 crate，全部 0 diff |
+| `gamma-no-default-fixed.log` / `gamma-memory-profile-only-fixed.log` | 装配库无默认空特性及仅 memory/profile-store 两种配置编译均完成、退出 0；仅为软件编译证据 |
+
+此前 `workspace-tests-final.log` 的 Beta 全仓运行实际失败，涉及两项旧测试假设：
+数据根回退测试忽略了外部显式 `APEIRETH_DATA_DIR`；最小 Kernel 仍硬编码旧 revision 值，未计入新增通用证据事件。
+前者改用纯解析器验证既有环境优先级，生产行为保留且不全局改环境；后者明确断言通用来源/响应标记、顺序、请求与 trace，
+并按消息与事件账核对修订。定向修复通过不能代替 Gamma 全仓、模型03或 CI。
+
+`reverse-wiring-gamma.json` 已记录六项反向验伪：摘除相应接线时均真实断言失败、退出 101，
+恢复后逐字节一致且退出 0；当次恢复的各被测源文件散列均与收据一致；后续源码变更不能复用这些散列作为最终验收。
+对应 `reverse-gamma-<control>-red.log` / `reverse-gamma-<control>-green.log` 的实际输出如下：
+
+| control | RED 实际输出 | GREEN 实际输出 |
+|---|---|---|
+| `sentence-boundary` | `test a_complete_evidence_sentence_is_a_right_boundary_before_the_next_user_sentence ... FAILED` | 同名测试 `... ok` |
+| `whole-property-value` | `test correction_fragments_must_be_complete_old_and_new_values_of_the_same_property ... FAILED` | 同名测试 `... ok` |
+| `correction-support` | `test raw_correction_support_binds_the_exact_frozen_plan_and_current_canonical_target ... FAILED` | 同名测试 `... ok` |
+| `current-target-revision` | `test correction_support_rejects_stale_or_cross_scope_targets_corrupt_receipts_and_source_forgery ... FAILED` | 同名测试 `... ok` |
+| `data-root-override` | `test paths::tests::data_root_prefers_the_env_override ... FAILED` | 同名测试 `... ok` |
+| `minimal-input-origin` | `test minimal_kernel_without_standard_modules_completes_plain_chat_turn ... FAILED` | 同名测试 `... ok` |
+
+这些记录证明上述定向测试能识别被摘除的行为，不代表形式化完备证明、真实模型通过或全仓已通过。
+
+后续独立审查发现并修复两类边界：空格姓名可能被片段截成部分值；同一规范情节内另一属性同值时，
+情节级关系可能错误扩展为该无关事实的支持。后者由上述有限本人居住城市合同约束。
+对应新增反向验伪收据 `reverse-gamma-whole-source-clause.json`、`reverse-gamma-fact-binding.json` 均记录
+真实断言失败、退出 101，随后源码逐字节恢复一致、退出 0：
+
+| control | RED 实际输出 | GREEN 实际输出 |
+|---|---|---|
+| `whole-source-clause` | `test correction_spans_cannot_clip_literal_values_at_internal_whitespace ... FAILED` | 同名测试 `... ok` |
+| `fact-binding` | `test memory_answer_eval::scoring::tests::v2_extra_correction_binds_the_changed_self_fact_not_same_value_episode_neighbors ... FAILED` | 同名测试 `... ok` |
+
+上述反证按各自源码检查点收据保留；`fact-binding` 对应最终收紧版评分器，其源码散列与收据一致，软件回归见 `gamma-final-eval-v2.log`。
+这些日志与红绿反证不转写成最终源码的全仓或模型验收。
+
+无默认特性编译另发现基线已有的根级桌面专属导出未受 feature 条件限制：
+`consequence_backfill` 模块及 `shadow_wire` 重导出均补上 `#[cfg(feature = "desktop")]`。
+此修改只修正编译边界，不增加便携宿主功能；修复后的无默认空特性及仅 memory/profile-store 两种配置
+均已编译完成、退出 0，分别见上表两份日志；这不能代替便携宿主的功能、设备或模型验收。
+
+内部文档卷 `ig-v1-122/127/254` 随当前来源文档同步：122 去除“台账缺失”的过期前提，
+改问当前计数依据并指向批次表；127 使用当前 B0 整体验收边界原句；254 保留原问题，
+改指确实承载 `audit_unwired_modules.py` 复核命令的记录。
+题号、题数、原文严格子串判据与阈值保持，其他题目不变；这属于文档与问题同步，不能计为算法收益。
+旧内部卷分数保留作历史，不能把新旧内部卷分数直接对照为算法变化。
+独立真实回答评测仍固定 12 题 × 3 次；其语料、Oracle 及支持哈希集合未因此修改。
 
 #### 本轮验收入口
 
