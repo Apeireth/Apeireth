@@ -59,10 +59,10 @@
 | `mem.contract_view` | PRODUCTION WIRED | ON | - | `706cabcfe174` | 2026-12-05 |
 | `mem.shadow_swap` | PRODUCTION WIRED | OFF | - | `05759be1` | 2026-12-05 |
 | `rt.committed_evidence` | PRODUCTION WIRED | - | - | `ba5466500aca` | 2026-11-26 |
-| `mem.automatic_correction` | PRODUCTION WIRED | - | - | `3cb47ef9e9f1` | 2026-11-26 |
+| `mem.automatic_correction` | PRODUCTION WIRED | - | - | `05548244bf3b` | 2026-11-26 |
 | `mem.writeback_recovery` | PRODUCTION WIRED | - | - | `76ce2d4dcd17` | 2026-11-26 |
 | `mem.source_qualified_context` | PRODUCTION WIRED | - | - | `76ce2d4dcd17` | 2026-11-26 |
-| `mem.answer_eval_contract` | IMPLEMENTED | OFF | - | `76ce2d4dcd17` | 2026-11-26 |
+| `mem.answer_eval_contract` | IMPLEMENTED | OFF | - | `05548244bf3b` | 2026-11-26 |
 | `sec.output_injection_guard` | PRODUCTION WIRED | ON | - | `ba5466500aca` | 2026-12-05 |
 
 ## 使用

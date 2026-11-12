@@ -3,7 +3,7 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: 19e48fe3946a1a902c0cbc2d06088d0fd3f259818a5985cc0e48cc94afc0eece
+claims_sha256: 16aa2c53125c0d1ddb2e30525a035ee69076e18324265e203032930278d212f9
 claims_total: 59
 items:
   - id: "rt.provider_router"
@@ -1555,7 +1555,7 @@ items:
     gaps:
       []
   - id: "mem.answer_eval_contract"
-    capability: "手动记忆回答评测与逐调用证据契约（三轮实测未通过，Delta 待验）"
+    capability: "手动记忆回答评测与逐调用证据契约（四轮实测未通过，日期协议 v3 待实测）"
     implemented:
       sources:
         - "crates/engine/runtime-assembly/examples/memory_answer_eval.rs"
@@ -1577,6 +1577,7 @@ items:
         - "crates/engine/memory/src/coordinator/owned.rs"
         - "crates/engine/memory/src/context_compiler.rs"
         - "crates/engine/memory/src/context_compiler/evidence.rs"
+        - "crates/engine/runtime-assembly/src/canonical/memory_correction.rs"
     wired:
       production_refs:
         - "crates/engine/memory/src/context_compiler.rs"
@@ -1597,6 +1598,7 @@ items:
         - "crates/engine/runtime-assembly/examples/memory_answer_eval/scoring.rs"
         - "crates/engine/runtime-assembly/examples/memory_answer_eval/source_proof.rs"
         - "crates/engine/runtime-assembly/examples/memory_answer_eval/wire.rs"
+        - "crates/engine/runtime-assembly/src/canonical/memory_correction.rs"
     default_enabled: false
     validated:
       tests:
@@ -1605,6 +1607,7 @@ items:
         - "crates/engine/runtime-assembly/examples/memory_answer_eval/scoring.rs"
         - "crates/engine/runtime-assembly/examples/memory_answer_eval/wire.rs"
         - "crates/engine/runtime-assembly/examples/memory_answer_eval/runner.rs"
+        - "crates/engine/runtime-assembly/examples/memory_answer_eval/protocol.rs"
       claims_id: "mem.answer_eval_contract"
     gaps:
       - "未达 PRODUCTION WIRED：2026-11-12 IMPLEMENTED，仅显式手动 example，不是默认产品请求入口。复用真实 Runtime/SQLite/Recall/ModuleInvoker，服务端完整协议标识区分主答、纠错提案与未知请求，所有已尝试调用共享不可退还预算；输入与 oracle 分离，失败、缺失与保…"

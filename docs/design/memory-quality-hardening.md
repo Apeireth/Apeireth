@@ -107,10 +107,10 @@ Provider 测试从独立 SQLite 读取发送 ID 对应的治理状态、作用�
 | Q6 | 记忆写入失败自动恢复 | 持久待办、故障后重试、进程重启、重复消费、部分成功、作用域隔离及遗忘后不得复活；失败不发布未提交内容 |
 | Q7 | 真实模型答题评测 | 本地确定性评测器验证后，再用用户临时 key 实际运行；保留逐例回答与失败，硬失败不得被均分抵消；无 key 记未测，不用录制 Provider 代替 |
 
-当前状态：Q5/Q6 为 **IMPLEMENTED / 条件性 PRODUCTION WIRED**；Beta 和 Gamma 已完成下文所列本地定向软件验收。
-真实评测 live01、live02、live03 均未通过，原报告保留；Gamma 全仓软件回归已通过。
-Delta 已完成下文所列定向软件验收，全仓、LIVE04 及最终同提交 CI 仍待验。
-Beta 红绿反证属于当次实现；Gamma 六项红绿反证见下表，不能由定向结果推出新源码全部通过。
+当前状态：Q5/Q6 为 **IMPLEMENTED / 条件性 PRODUCTION WIRED**；Epsilon 日期协议 v3 的本地定向软件验收及五项红绿反证已通过。
+真实评测 live01、live02、live03、live04 均未通过，原报告保留；live04 为 35/36，失败分型见下文。
+Gamma 及 E2/F 的各自全仓软件快照已通过；新 v3 的最终全仓、LIVE05 及当前提交 CI 仍待验。
+历史红绿反证只对应其源码检查点，不能由定向结果推出新源码全部通过。
 本地确定性 Provider 和回环 HTTP 仍只用于验证软件契约，不能代替真实答题结果。
 当前无外部可运行实例，Q4 同条件比较仍独立记未测。
 
@@ -122,14 +122,16 @@ Beta 红绿反证属于当次实现；Gamma 六项红绿反证见下表，不能
   旧数据仍可读取，但不自动补造来源；新增事件需要支持该事件的 reader。
 - 自动纠错在 Recall 前请求受限语义提案，再确定性核验原始输入、目标列表、确切片段、范围、授权、版本和时间。
   支持有限的第一人称及所有格中文表达、ISO 和明确中文年月日；不确定主体、引用、转述、假设、未来日期或非法提案保守弃权。
-  相对日历由 Host 选择的固定 UTC 偏移解释；CLI 采用装配时本机偏移，其他 Host 缺省 UTC。
+  日历日期由 Host 选择的固定 UTC 偏移解释；CLI 采用装配时本机偏移，其他 Host 缺省 UTC。
   不宣称按地区时区规则重算所有历史夏令时边界。
   语义判定来自模型，不是数学证明，也不宣称通用自然语言纠错完备。
   `CorrectPrior` 保留原文和修订审计；`StateChange` 另生成可正常召回的有界历史状态，不能把原误值说成曾经正确。
   同主体、同属性的相邻声明已有明确变更日期时，模型不得只截取新值并以空日期退回当前时间；
   方案缺少所需日期时拒绝，不从证据片段外替模型补填日期。不同属性或他人日期不能借用。
-  提案协议 v2 传入 Runtime 已提交的 UTC 时间及 Host 固定偏移，作为相对日期和未来日期的判断参考，
-  不能替代用户原文中的明确生效日期；用户正文中的同名字段不覆盖这些元数据。
+  提案协议 v3 保留 Runtime 已提交的 UTC 时间及 Host 固定偏移，作为相对日期和未来日期的判断参考。
+  完整原始证据内唯一受支持绝对日期允许同日 ISO/中文形式等价，UTC 边界仍从原文和 Host 偏移确定；
+  相对表达须保留原文字面，多日期、证据外日期或非法格式拒绝。Host 时间不能替代用户原文中的明确生效日期，
+  用户正文中的同名字段不覆盖这些元数据。
   更正模块通过固定原因及 `applied` / `no_mutation` 回执报告结果；回执不授予记忆引用资格，模型弃权也不触发无条件覆盖。
 - 已验证纠错方案在修改前写入正式 SessionStore 的不可变操作证据，沿用会话封缄；正式存储迁移为 V4。
   认知库 V20 journal 保存冻结方案、依赖、进度及终态；情节依靠稳定身份、元数据及链的原子提交重放，
@@ -454,10 +456,83 @@ owned.rs 的当前散列与 E2 收据一致。此前实际记录计数控制的 
 相关其他 crate 源文件与文件数均无净增。coordinator.rs 随实际缩短将单文件 cap 从 2423 收紧为 2418，
 原非 LOCKED 总量预算按真实增量调整，不合并或吸收既有债务。
 
-E2 已完成上述软件检查；**Delta 最终全仓、完整 LIVE04 及当前提交 CI 仍待验**。
+以上记录截至 E2 定向检查完成时；当时 Delta 最终全仓、完整 LIVE04 及同提交 CI 仍待验，后续结果见下一节。
 模型弃权仍不能自动写入；固定 12 题 × 3 次的语料、Oracle、日期和支持哈希集合保持。
 初版 41/42 软件失败、live03 的 35/36 及前三轮真实失败均保留，不重判旧报告，
 不把软件回归或源码修复写成真实模型答题已通过。
+
+#### 第四轮真实评测与 Epsilon 日期协议 v3（2026-11-12）
+
+live04 固定实现来源 E2 `76ce2d4dcd17f580071f6f5b57ac19b358df6778`，
+执行提交 F `67701bbfa63a9c1c7b2a0d58b8055281791b2395`，运行树为
+`2e98ce34d9a6a7f57a6b2fe658b543e9cd273d8b`。
+冻结执行文件 SHA256 为 `e6df5bffea0dc8f8320b4faeca553e0c2e0a3c2b155c52a0dfea0d6a7ed6a612`。
+`live-deepseek-04/report.json` 完整 36 槽为 **35 passed、1 hard_failure**，
+`complete=true` 而 `live_quality_passed=false`；114 次实际 HTTP 为 108 次主调用及 6 次提案调用，
+总计 81864 tokens。独立核验 `audit-live-04-independent.json` 的来源、确切投影及传输审计错误为空，
+原执行文件只读重算的 36 项 grade 与保存值一致；这些审计通过不能抵消答题硬失败。
+
+唯一失败是 e03 repetition 2：提案 call 84 把原文 `2026年11月10日` 表示为同日 `2026-11-10`，
+旧协议的精确日期片段检查拒绝，未提交正式更正及历史。后续模型虽口头确认更新，
+存储仍为旧值；主答 call 86 因当前值、时间历史及支撑证据缺失而失败，原 grade 保留。
+此前 e07 的三次请求均已实际送达可核验的非事实修改语句并回答 ambiguous，
+但这不把 live04 视为质量通过。
+
+E2/F 全仓另由 `workspace-tests-delta-final-summary.json` 固定上述来源和执行提交，
+`cargo test --workspace --all-targets --locked --no-fail-fast -j 2` 在 Windows、rustc 1.97.1 下退出 0：
+**572 suites、11056 passed、0 failed、49 个原有 ignored**。该历史快照不替代新增 v3 全仓，
+也不改写全局 test-baseline 或其他提交的结果。
+
+Epsilon 源码检查点 G 为 `05548244bf3b2f0ce627cb8476a2fa40a254f342`，
+源码树为 `03612248bdf11fcc0edd36d61c47b221dee92cee`。提案协议显式升级为
+`apeireth.memory-correction.v3`，Host 在已验证的同主体、同属性完整原文中独立定位唯一受支持日期，
+只接受同一日历日的 ISO 与中文绝对日期表示。ISO 必须为固定十个 ASCII 字节 `YYYY-MM-DD`；
+中文日期保留明确年月日规则，日期合法性继续校验。UTC 从原文日期和固定 Host 偏移计算，
+相对表达仍须逐字保持，不由模型换算成绝对日。多日期、跨主体/属性、证据外日期、未来及畸形格式拒绝；
+畸形外形只能触发拒绝，不能成为被接受日期，也不能通过省略后回退今天。
+原有合法未注明日期的状态变化路径保持，模型弃权不能被自动覆盖。
+
+固定回答语料、主答 SYSTEM、Oracle、原支持哈希、12 题 × 3 次分母及评分协议 v2 均未改变；
+proposal contract/system 确有改变，所以旧协议与新协议结果不是同条件比较。
+旧 manifest（含空或缺失提案协议）必须使用原执行文件，新执行文件拒绝静默重判。
+`mem.answer_eval_contract` 补列直接决定提案及校验行为的本仓核心 memory_correction.rs，
+使该已识别依赖的后续变化能触发 STALE；等级、默认值和 verify_cmd 保持。
+
+`epsilon-v3-strict-targeted-v3.log` 及同名退出码记录 Q5 21 项、生产装配 7 项、恢复 9 项、
+回答评测 example 46 项全部通过；`epsilon-fmt.log` 记录 Windows 逐 crate 35 项全部 0 diff。
+`epsilon-clippy.log` 及退出码记录全工作区、all-targets、locked、`-j 2 -D warnings` 完成且退出 0；
+`epsilon-features-{bare,memory,profile,combined}.log` 四个无默认特性配置均编译完成、退出 0。
+这些特性编译只验证指定软件组合，不扩大便携 Host 的产品能力声明。
+新增恢复测试保留冻结 payload/hash、恢复时不重新提案、当前 revision、精确历史 ID/正文及 UTC 区间断言。
+测试 helper 的注册顺序校准为生产的恢复 → 纠错 → 召回，按实际 v1 module envelope 解码 recall context，
+不把这两处测试装配/解析修正记作产品故障，也不删除送达断言。
+
+五项 `reverse-epsilon-*.json` 均记录真实断言失败退出 101、逐字节恢复后退出 0，散列绑定本次源码：
+
+| control | RED 实际输出 | GREEN 实际输出 |
+|---|---|---|
+| `calendar-equivalence` | `equivalent_absolute_date_formats_use_the_unique_source_day_and_host_offset_after_restart ... FAILED` | 同名测试 `... ok` |
+| `malformed-date-refusal` | `absolute_calendar_syntax_is_strict_and_malformed_adjacent_dates_cannot_default_to_today ... FAILED` | 同名测试 `... ok` |
+| `proposal-classifier-v3` | `calendar_equivalence_protocol_v3_requires_the_current_server_contract ... FAILED` | 同名测试 `... ok` |
+| `prior-proposal-regrade-refusal` | `prior_proposal_protocol_cannot_be_regraded_with_current_hashes ... FAILED` | 同名测试 `... ok` |
+| `recovery-before-recall` | `normalized_absolute_date_is_frozen_before_failed_registration_and_recovered_without_reproposal ... FAILED`，实际历史送达断言失败 | 同名测试 `... ok` |
+
+`accepted-size-growth-epsilon.json` 记录 assembly src 50400→50550（净增 150 行），91 个文件不变；
+核心单文件 1385→1535，Q5 测试文件另净增 561 行，不计入 src 预算。其他相关 crate 的源码统计不变，
+仅按实际增长更新非 LOCKED 尺寸预算，既有 cognitive 例外债务不吸收，质量阈值及检索基线保持。
+
+#### 两阶段门禁证据聚合（2026-11-12）
+
+harness 独立检查点 `a8b7e971a6d72e01e9db2ddd910c679a709e61eb` 修复 fast/deep 结果文件被后阶段覆盖：
+绑定 commit/tree/base 和 dirty 状态，按契约顺序聚合完整 44 条，`phase_runs` 保留各阶段原记录。
+源漂移、缺失/重复记录或未执行阶段不能变成 PASS；fast 失败仍不执行 deep，
+原 required/scope、资源、超时及委托裁决保持。
+`harness-phase-aggregation-frozen.json` 与 `epsilon-harness-tests-main.log` 记录 17 项 Python 真链测试通过，
+摘除聚合输出真实 RED、恢复后 GREEN；其中外部 gate 为临时 Python 程序，资源守卫/清理器被 mock，
+不等同实际 44 项门禁已经完成。
+
+**当前 G 源码的最终全仓、完整 LIVE05 及最终同提交 CI 仍待验。**
+live01–live04 的失败、分型及 grade 均保留，不用软件通过或历史全仓替代新的真实质量结果。
 
 #### 本轮验收入口
 
