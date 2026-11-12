@@ -12,16 +12,9 @@
 //! 布局 ⇒ 两边算出来的摘要口径一致，也不会出现「两个链算法」的漂移。
 //! 本模块只负责**记忆层的策略**：链什么、按什么粒度分链、怎么写、怎么查。
 //!
-//! # 链的粒度：按 subject 分链（不是全局一条链）
-//!
-//! 记忆是多主体多会话的。一条全局链有两个硬伤：
-//!
-//! 1. **写阻塞**：A 主体写一条要等 B 主体写一条（链头是全局单点）。
-//! 2. **不可定位**：一条链上任何一处断裂，都说不清「是哪条记录被改」。
-//!
-//! ⇒ **每个 subject（`episodes.continuity_id`）一条独立链**，链头落在
-//! `memory_chain_heads` 表（`subject_id` 主键）。主体之间互不影响：A 主体被篡改
-//! 不会让 B 主体的链变红。
+//! # 链的粒度
+//! 每个 `episodes.continuity_id` 独立分链，链头以 `subject_id` 为键落在
+//! `memory_chain_heads`。这减少跨主体的链头竞争，也把损坏定位在所属主体。
 //!
 //! # 链什么：记录的全部内容
 //!
@@ -76,7 +69,7 @@
 //!
 //! # 边界（不假装）
 //!
-//! - 本模块**只管链**：不判业务合法性、不做归档/遗忘、不改检索结果。
+//! - 本模块管理链及同事务侧记写入；不做归档/遗忘、不改检索结果。
 //! - 治理侧 `episode_governance.content_override`（软删/修订内容）**不在摘要内**：
 //!   它是 sidecar，改它不改 `episodes` 行 ⇒ 链不会因此变红。治理改写另有 sidecar 审计，
 //!   两套账本职责不同（链证「原始行没被改」，sidecar 证「谁批的改」）。
@@ -153,6 +146,16 @@ pub struct ChainWriteOutcome {
     ///
     /// `false` = 该 id 的记录早已存在（幂等重写）⇒ 未重复入链、链头未推进。
     pub chained: bool,
+}
+
+impl From<ChainWriteOutcome> for apeireth_plugin::memory_backend::EpisodeWriteOutcome {
+    fn from(outcome: ChainWriteOutcome) -> Self {
+        if outcome.chained {
+            Self::Inserted
+        } else {
+            Self::Existing
+        }
+    }
 }
 
 /// 一条链的校验结果。
@@ -316,6 +319,16 @@ pub fn put_chained_episode(
     subject_id: &str,
     entry: &ChainEntry,
 ) -> MemoryResult<ChainWriteOutcome> {
+    put_chained_episode_record(conn, subject_id, entry, None)
+}
+
+/// Commit raw evidence, chain head and scope/provenance sidecar together.
+pub(crate) fn put_chained_episode_record(
+    conn: &Connection,
+    subject_id: &str,
+    entry: &ChainEntry,
+    metadata: Option<&serde_json::Value>,
+) -> MemoryResult<ChainWriteOutcome> {
     let subject = subject_id.trim();
     if subject.is_empty() {
         return Err(MemoryError::Invalid(
@@ -353,18 +366,42 @@ pub fn put_chained_episode(
 
     let digest = entry_digest(&previous_hash, entry);
     let changed = insert_episode(&tx, subject, entry, &digest, &previous_hash, &columns)?;
+    if let Some(metadata) = metadata {
+        if changed == 0 {
+            let same: bool = tx.query_row(
+                "SELECT EXISTS(SELECT 1 FROM episodes WHERE id=?1 AND continuity_id=?2 \
+                 AND content=?3 AND timestamp=?4 AND role=?5 AND session_id=?6)",
+                params![
+                    entry.id,
+                    subject,
+                    entry.content,
+                    entry.timestamp,
+                    entry.role,
+                    entry.session_id
+                ],
+                |row| row.get(0),
+            )?;
+            if !same {
+                return Err(MemoryError::Invalid(
+                    "episode ID conflicts with stored evidence".into(),
+                ));
+            }
+        }
+        if let Some(existing) = get_episode_metadata(&tx, &entry.id)? {
+            validate_metadata_retry(&existing, metadata)?;
+        } else {
+            put_episode_metadata(&tx, &entry.id, metadata)?;
+        }
+    }
 
     if changed == 0 {
         // 同 id 早已存在 ⇒ 不入链（否则链头会指向一条库里不存在的记录 = 自造断链）。
-        let existing: Option<(Option<String>, Option<String>)> = tx
-            .query_row(
-                "SELECT chain_hash, chain_prev_hash FROM episodes WHERE id = ?1",
-                params![entry.id],
-                |row| Ok((row.get(0)?, row.get(1)?)),
-            )
-            .optional()?;
+        let (chain_hash, chain_prev_hash): (Option<String>, Option<String>) = tx.query_row(
+            "SELECT chain_hash, chain_prev_hash FROM episodes WHERE id = ?1",
+            params![entry.id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
         tx.commit()?;
-        let (chain_hash, chain_prev_hash) = existing.unwrap_or((None, None));
         return Ok(ChainWriteOutcome {
             subject_id: subject.to_string(),
             episode_id: entry.id.clone(),
@@ -395,6 +432,66 @@ pub fn put_chained_episode(
         entry_count: new_count as u64,
         chained: true,
     })
+}
+
+fn ensure_episode_metadata_schema(conn: &Connection) -> MemoryResult<()> {
+    // V11 owns the canonical schema; this only preserves the pre-V11 two-column fallback.
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS episode_memory_metadata (\
+         episode_id TEXT PRIMARY KEY, metadata_json TEXT NOT NULL)",
+    )?;
+    Ok(())
+}
+
+pub(crate) fn put_episode_metadata(
+    conn: &Connection,
+    episode_id: &str,
+    metadata: &serde_json::Value,
+) -> MemoryResult<()> {
+    let metadata = serde_json::to_string(metadata)?;
+    ensure_episode_metadata_schema(conn)?;
+    conn.execute(
+        "INSERT INTO episode_memory_metadata (episode_id, metadata_json) VALUES (?1, ?2) \
+         ON CONFLICT(episode_id) DO UPDATE SET metadata_json=excluded.metadata_json",
+        params![episode_id, metadata],
+    )?;
+    Ok(())
+}
+
+pub(crate) fn get_episode_metadata(
+    conn: &Connection,
+    episode_id: &str,
+) -> MemoryResult<Option<serde_json::Value>> {
+    let raw = conn.query_row(
+        "SELECT metadata_json FROM episode_memory_metadata WHERE episode_id=?1",
+        params![episode_id],
+        |row| row.get::<_, String>(0),
+    );
+    match raw {
+        Ok(raw) => Ok(Some(serde_json::from_str(&raw)?)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(rusqlite::Error::SqliteFailure(_, Some(message)))
+            if message.contains("no such table") =>
+        {
+            Ok(None)
+        }
+        Err(error) => Err(error.into()),
+    }
+}
+
+pub(crate) fn validate_metadata_retry(
+    existing: &serde_json::Value,
+    incoming: &serde_json::Value,
+) -> MemoryResult<()> {
+    if ["scope", "provenance", "layer"]
+        .iter()
+        .any(|key| existing.get(*key) != incoming.get(*key))
+    {
+        return Err(MemoryError::Invalid(
+            "episode ID conflicts with stored metadata".into(),
+        ));
+    }
+    Ok(()) // Keep derived vectors/access counters from the stored sidecar on retries.
 }
 
 /// 一次 INSERT 落库（append-only 触发器只拦 UPDATE/DELETE ⇒ INSERT 安全）。

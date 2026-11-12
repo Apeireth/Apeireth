@@ -8,14 +8,13 @@
 
 use std::collections::{HashMap, VecDeque};
 use std::str::FromStr;
-use std::sync::Arc;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use apeireth_core::kernel::memory::Episode;
 use apeireth_core::kernel::SessionId;
 use apeireth_orchestration::runtime_invariants::{AuditEvent, AuditEventSink};
 use apeireth_plugin::experience::{AssociationStore, KnowledgeGraphStore};
-use apeireth_plugin::memory_backend::MemoryBackend;
+use apeireth_plugin::memory_backend::{EpisodeWriteOutcome, MemoryBackend};
 use apeireth_plugin::preference::PreferenceStore;
 
 use crate::access_history::ActivationSource;
@@ -457,7 +456,11 @@ impl MemoryCoordinator {
                         id,
                         layer: "working".to_string(),
                         scope,
-                        content: ep.content.clone(),
+                        content: match &decision {
+                            GovernanceDecision::Governed(gov) => gov.content_override.clone(),
+                            _ => None,
+                        }
+                        .unwrap_or_else(|| ep.content.clone()),
                         score: 0.0,
                         score_components: ScoreComponents {
                             recency: s_rec,
@@ -1124,29 +1127,10 @@ impl MemoryCoordinator {
         scope: &MemoryScope,
         provenance: &MemoryProvenance,
     ) -> Result<(), MemoryError> {
-        // 1. Update working memory ring buffer.
-        {
-            let mut working_lock = self
-                .working
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
-            let ring = working_lock
-                .entry(episode.session_id.clone())
-                .or_insert_with(|| VecDeque::with_capacity(WORKING_RING_BUFFER_CAP));
-            if ring.len() >= WORKING_RING_BUFFER_CAP {
-                ring.pop_front();
-            }
-            ring.push_back(episode.clone());
-        }
-
-        // 2. Persist to storage backend using the supplied ID.
-        self.backend
-            .put_episode(episode)
-            .map_err(|e| MemoryError::Invalid(e.to_string()))?;
-
-        self.backend
-            .put_episode_metadata(
-                &episode.id,
+        let outcome = self
+            .backend
+            .put_episode_with_metadata(
+                episode,
                 serde_json::json!({
                     "scope": scope,
                     "provenance": provenance,
@@ -1155,7 +1139,23 @@ impl MemoryCoordinator {
                 }),
             )
             .map_err(|e| MemoryError::Invalid(e.to_string()))?;
-
+        if outcome == EpisodeWriteOutcome::Existing {
+            return Ok(());
+        }
+        // Publish only accepted writes; an idempotent retry must not evict a turn.
+        let mut working = self
+            .working
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let ring = working
+            .entry(episode.session_id.clone())
+            .or_insert_with(|| VecDeque::with_capacity(WORKING_RING_BUFFER_CAP));
+        if !ring.iter().any(|existing| existing.id == episode.id) {
+            if ring.len() >= WORKING_RING_BUFFER_CAP {
+                ring.pop_front();
+            }
+            ring.push_back(episode.clone());
+        }
         Ok(())
     }
 

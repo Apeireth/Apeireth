@@ -98,7 +98,11 @@ impl MemoryReconciler {
         for candidate in ordered {
             let exact_match = working
                 .values()
-                .find(|record| exact_key(record) == exact_key_candidate(&candidate))
+                .find(|record| {
+                    record.class == candidate.class
+                        && record.scope == candidate.scope
+                        && normalized(&record.content) == normalized(&candidate.content)
+                })
                 .cloned();
             if let Some(record) = exact_match {
                 let next = record.reinforcement.saturating_add(1);
@@ -126,7 +130,11 @@ impl MemoryReconciler {
             let revised = if revisionable {
                 working
                     .values()
-                    .find(|record| revision_key(record) == revision_key_candidate(&candidate))
+                    .find(|record| {
+                        record.class == candidate.class
+                            && record.scope == candidate.scope
+                            && assertion_key(&record.content) == assertion_key(&candidate.content)
+                    })
                     .cloned()
             } else {
                 None
@@ -153,7 +161,10 @@ impl MemoryReconciler {
                 });
                 continue;
             }
-            let id = format!("candidate-{}", decisions.len());
+            let mut id = format!("candidate-{}", decisions.len());
+            while working.contains_key(&id) {
+                id.push('_');
+            }
             working.insert(
                 id.clone(),
                 MemoryReconciliationRecord {
@@ -185,58 +196,21 @@ fn normalized(content: &str) -> String {
         .join(" ")
         .to_lowercase()
 }
-fn class_name(class: &ExtractionClass) -> &'static str {
-    match class {
-        ExtractionClass::Preference => "preference",
-        ExtractionClass::Fact => "fact",
-        ExtractionClass::Event => "event",
-        ExtractionClass::Experience => "experience",
-        ExtractionClass::Relation => "relation",
-        ExtractionClass::PersonaDelta => "persona_delta",
-    }
-}
 fn scope_key(scope: &MemoryScope) -> String {
-    scope.to_string()
-}
-fn exact_key(record: &MemoryReconciliationRecord) -> String {
-    format!(
-        "{}|{}|{}",
-        class_name(&record.class),
-        scope_key(&record.scope),
-        normalized(&record.content)
-    )
-}
-fn exact_key_candidate(candidate: &ExtractedMemory) -> String {
-    format!(
-        "{}|{}|{}",
-        class_name(&candidate.class),
-        scope_key(&candidate.scope),
-        normalized(&candidate.content)
-    )
+    serde_json::json!(scope).to_string()
 }
 fn assertion_key(content: &str) -> String {
     let text = normalized(content);
+    // Structured triples do not declare a unique-valued predicate. A common
+    // marker is not an assertion identity; retain distinct subjects and values.
+    if text.starts_with("fact:") || text.starts_with("relation:") {
+        return text;
+    }
     let key = text
         .split_once('=')
         .or_else(|| text.split_once(':'))
         .map(|(key, _)| key);
     key.map_or(text.clone(), |key| key.trim().to_string())
-}
-fn revision_key(record: &MemoryReconciliationRecord) -> String {
-    format!(
-        "{}|{}|{}",
-        class_name(&record.class),
-        scope_key(&record.scope),
-        assertion_key(&record.content)
-    )
-}
-fn revision_key_candidate(candidate: &ExtractedMemory) -> String {
-    format!(
-        "{}|{}|{}",
-        class_name(&candidate.class),
-        scope_key(&candidate.scope),
-        assertion_key(&candidate.content)
-    )
 }
 fn candidate_sort_key(candidate: &ExtractedMemory) -> (u8, String, String, String) {
     let rank = match candidate.class {

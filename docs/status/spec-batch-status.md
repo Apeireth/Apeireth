@@ -4,12 +4,12 @@
 Document: docs/status/spec-batch-status.md
 Class: STATUS
 Status: 🟢 活跃
-Last-Modified: 2026-10-28
+Last-Modified: 2026-11-12
 Author: lead
 
 > 依据：`docs/01-architecture/memory-knowledge-depth-system-spec.md`（321 行 / 11 章）
 > 本页是**唯一权威进度页** ⇒ 每批/每层状态变了就改这里，**别只留在对话里**。
-> 最后核对：**2026-10-28**（按代码实测，不是按记忆）
+> 本次有界核对：**2026-11-12**（默认装配、持久写入及纠错路径）；其余批次的历史实测日期保留。
 >
 > 📍 **开工前先认领工作线**：[`workline-registry.md`](workline-registry.md)
 > （工作线 ↔ 设计稿 ↔ 进度页 ↔ 守卫 的登记表；`AGENTS.md` §0 的规则落地在这张表上）
@@ -43,10 +43,11 @@ Author: lead
 
 ## 0. 一句话
 
-> **纵向**：D0 做到底（哈希链已进生产写入路径）· D1/D3/D5 挖了一半 ·
-> **D2 只有词面那半边**（语义只在"联网 + 有 key"时存在）· **D4 挖了坑但一个数字没量**。
-> **横向**：**B1 / B4 完成** · B2/B3 库级完成但**生产未接** ·
-> **B0 整批没完成** —— 而设计稿 §8 明确写「B0 是所有后续的裁判，必须最先做」。
+> D0 哈希链已进入默认写入路径；规则抽取、typed recall、证据注入和偏好学习已有生产装配。
+> D2 默认词面召回，可配置 embedding URL 与模型；本地端点可用，key 按端点要求配置，不能写成必需联网。
+> B2/B3 已接入装配，影子切换默认关闭且缺少治理链时拒绝；完整度见下表，不再称为“生产未接”。
+> 本批补强的持久一致性、中文显式纠错与真实 Provider 证据验收，见
+> [记忆质量与持久一致性](../design/memory-quality-hardening.md)。这不代表 B0 全部完成或自动事实纠错已实现。
 
 ---
 
@@ -55,8 +56,8 @@ Author: lead
 | 层 | 契约（承诺什么） | 状态 | 证据 |
 |---|---|---|---|
 | **D0 原始证据** | 原文 + 结构 + 双时间 + 出处 + 关系 + 上下文 + **访问史**（**唯一"绝不"可丢**） | ✅ **最扎实** | `episode`/`append_only`/`provenance`/`access_history` 生产接线；**哈希链进写入路径** `backend/sqlite.rs:120` → `memory_chain::put_chained_episode`；`memory verify` CLI 可定位坏记录；`docs/status/d0-fidelity-audit.md`（11 KB 缺口清单） |
-| **D1 结构化** | 目录树 / 段落切分 / **实体** / 图谱边 | 🟡 **一半** | ✅ `wiki_corpus`(TOC) · `amem_graph` · `bitemporal_graph`（双时间，crate 内生产用）· ❌ **`extraction`（实体抽取）生产 0 调用** |
-| **D2 语义索引** | 向量 / 关键词 / 主题；**可重建且可换代** | 🟡 **关键词全开，语义靠外部 API** | ✅ `hybrid_search`/`retrieval_pipeline`（BM25 恒开）· `persistent_vector`（真实现，设计稿"只有 re-export"已过期）· `vector_rebuild` 换代检测（19 测试）· ⚠️ **向量走 `OpenAiCompatibleEmbeddingProvider`**（env 配 URL+key+**联网**）⇒ **离线 = 没有向量召回** |
+| **D1 结构化** | 目录树 / 段落切分 / **实体** / 图谱边 | 🟡 **部分已接** | `wiki_corpus`、图谱及 `MemoryMaterializer`/`RuleMemoryExtractor` 已由 `canonical/cognitive.rs` 的 AfterTurn 路径调用；typed 承诺、人格、关系分别受既有 sink 契约约束。自然语言关系识别不等于已获准写入结构化图。 |
+| **D2 语义索引** | 向量 / 关键词 / 主题；**可重建且可换代** | 🟡 **词面默认，可选嵌入端点** | `hybrid_search`/`retrieval_pipeline`、`persistent_vector`、`vector_rebuild` 已有实现；CLI 配置 URL 与 model 时装配 `OpenAiCompatibleEmbeddingProvider`，key 可选，支持本地兼容端点。未配置则走词面回落；当前仍需补向量增量缓存和模型换代运行验收。 |
 | **D3 提炼** | 摘要 / 里程碑 / 教训 / 原则；每条带 provenance 指回 D0 | 🟡 **一部分** | ✅ `milestone`（3 处）· `lesson`（1 处）· ❌ `daily_summary` / `principles` / `chronicle_crystallizer` **生产 0 调用** |
 | **D4 模式** | **只产标注，不产记忆**；默认关；**不接线也能离线量增量价值** | 🟡 **挖了坑没量** | ✅ `betti_hole_detector` / `kuramoto_resonance` / `semantic_axis` = **生产已接但 DEFAULT OFF**（`APEIRETH_ENABLE_ABSORPTION_INSIGHT=1` 才开）· ❌ 五维 / 程序性 / 做梦 / 社区分层 / `hallways` / `layered_memo` / `ensemble` 未接 · ❌ **`d4_eval` 评估器已写好（405 行），但「各一行数字」= 0 行** |
 | **D5 判断** | 置信度 / 校准 / **降权权重** | 🟡 **骨架** | ✅ `confidence.rs` · 双时间衰减（`bitemporal_graph`）· recency 衰减（`coordinator`，含 2026-10-27 接的相对时间锚点）· ❌ `calibration*` / `intent_brier` / `online_calibration` / `calibration_critic` **生产 0 调用**；**D-9 降权权重模型未接生产** |
@@ -178,14 +179,11 @@ Author: lead
 
 ## 3. 下一步（按设计稿顺序，优先级从高到低）
 
-1. **B2/B3 的「分数融合钩子」**（**B0-c 的真前置**）
-   ⇒ 把 `search_rrf` / `search_weighted`（已写好、未接）接进检索路径
-   ⇒ ⇒ 否则 D4 的分数**没有地方挂**（已实测：重排索引对 BM25 无效）；
-2. **B0-c 续**：钩子有了之后，把 20 个候选**逐个**跑出有效数字
-   （当前 2 行 = `not-measurable-as-designed`，**有效数字 0 行**）；
-2. **B0-a**：核 PerLTQA LICENSE → 落数据（**网络已通**）→ 出**中文主卷**成绩单 → 补 `reproduce.sh`；
-3. **B0-b**：精标 300 条**需要人**（我只能先给 20 条样本）；
-4. 之后 **B2 / B3** 接生产（契约与影子双跑已经齐了，只差接线）。
+1. 优先完成[当前质量批](../design/memory-quality-hardening.md)的故障恢复、中文治理纠错与重启验收。
+2. 沿已存在的融合与影子入口评测候选的增量价值；不得把 oracle 信号或预算变化当作算法收益。
+3. B0 外部卷继续受既有许可边界约束；先做自有中文会话生命周期回归，外部系统比较暂记未测。
+4. B0-b 已达到表内验收数量；继续扩展独立场景、竞争噪声及保留测试，不能重复声称尚待人精标。
+5. B2/B3 后续缺口是受治理的运维出口与切换验收，不能重复建设现有装配。
 
 ---
 

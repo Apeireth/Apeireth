@@ -296,41 +296,16 @@ pub(crate) fn provenance_for_role(role: &str) -> crate::Provenance {
     }
 }
 
-impl EpisodeStore for crate::SqliteMemoryStore {
-    fn put_episode(&self, ep: &Episode) -> MemoryResult<()> {
+impl crate::SqliteMemoryStore {
+    pub(crate) fn put_episode_record(
+        &self,
+        ep: &Episode,
+        metadata: Option<&serde_json::Value>,
+    ) -> MemoryResult<crate::memory_chain::ChainWriteOutcome> {
         Self::validate_episode(ep)?;
         let conn = self.conn()?;
-        // Note: 现有 schema 没有 continuity_id 列在 episodes 表上, 续作兼容.
-        // 主体引用通过 session_id 间接表达; 真正跨 session 的主体关联走 6 历史流.
-        //
-        // **V4 的 4 列一并写入**（`valid_from_ms` / `valid_until_ms` / `created_ms` /
-        // `provenance`）。此前本路径只写 6 列，那 4 列留 NULL ⇒ 读侧
-        // `normalize_meta` 一律兜底成 `Provenance::Manual` ⇒
-        // **「这条记忆从哪来」在生产上永远是假的**（工具产物与用户手写无法区分）。
-        // 那正是「记录 ≠ 负责」里最关键的一环断了 —— 可追溯性没有数据支撑。
-        //
-        // 来源按 `role` **保守推导**（不是精确追踪，如实标注）：
-        //   tool → Tool · user/assistant → Dialog · system → Observation
-        //   其它 → Manual（不假装）。
-        //
-        // **D0 哈希链 (W-10)**: 本路径是 v1 存储的**默认写入路径** ⇒ 产出的记录
-        // 必须**带链字段**（`chain_hash` / `chain_prev_hash`）。此前只写 10 列 ⇒
-        // 体检（`memory verify`）把这些记录算成「未纳管」⇒ 链覆盖率取决于调用方。
-        //
-        // **为什么只能在 INSERT 时写链列**: `episodes` 有 append-only 触发器
-        // （`BEFORE UPDATE` / `BEFORE DELETE` 直接 ABORT）⇒ 事后 UPDATE 补链字段
-        // **不可能** ⇒ 链摘要必须在插入前算好、和内容一起一次 INSERT。
-        //
-        // **链键 = `continuity_id`**（链按主体分链）⇒ 本路径沿用既有占位口径
-        // [`DEFAULT_CONTINUITY_ID`]（真实主体走 `put_episode_for_subject`）。
-        // 本批**不改口径**：占位值就是占位值，如实沿用。
-        //
-        // **失败语义**: 链算不出来 / 落库失败 ⇒ **硬失败**（宁可拒写，不可无链写入
-        // —— 无链写入 = 缺口原地不动，而调用方会以为数据受保护）。
-        //
-        // **口径**: 库级能力 = **IMPLEMENTED**（链摘要随内容一次 INSERT 落库, 有测试
-        // 覆盖）；生产接线 = **DEFAULT ENABLED**（默认写入路径自动入链, 无 feature
-        // 开关, 调用方零改动 ⇒ 链覆盖率不再取决于调用方）。
+        // Preserve V4 role-derived provenance and the legacy subject chain key.
+        // Raw evidence remains append-only; chain or sidecar failure rejects the write.
         let meta = EpisodeMeta {
             valid_from_ms: Some(ep.timestamp.saturating_mul(1000)),
             valid_until_ms: None,                          // 永久有效
@@ -338,7 +313,18 @@ impl EpisodeStore for crate::SqliteMemoryStore {
             provenance: provenance_for_role(&ep.role),
         };
         let entry = ChainEntry::from_episode(ep, Some(&meta));
-        put_chained_episode(&conn, DEFAULT_CONTINUITY_ID, &entry).map(|_| ())
+        crate::memory_chain::put_chained_episode_record(
+            &conn,
+            DEFAULT_CONTINUITY_ID,
+            &entry,
+            metadata,
+        )
+    }
+}
+
+impl EpisodeStore for crate::SqliteMemoryStore {
+    fn put_episode(&self, ep: &Episode) -> MemoryResult<()> {
+        self.put_episode_record(ep, None).map(|_| ())
     }
 
     fn get_episode(&self, id: &str) -> MemoryResult<Option<Episode>> {

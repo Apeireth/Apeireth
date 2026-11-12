@@ -512,12 +512,12 @@ fn typed_candidates(result: &MemoryExtractionResult) -> Vec<MemoryTypedCandidate
 
 fn stable_episode_id(timestamp_secs: i64, candidate: &ExtractedMemory) -> String {
     let mut hasher = Sha256::new();
+    // Structured encoding preserves scope and content field boundaries even
+    // when identifiers contain the punctuation used by diagnostic labels.
     hasher.update(
-        format!(
-            "{:?}|{}|{}",
-            candidate.class, candidate.scope, candidate.content
-        )
-        .as_bytes(),
+        serde_json::json!([candidate.class, candidate.scope, candidate.content])
+            .to_string()
+            .as_bytes(),
     );
     let digest = hasher.finalize();
     let mut suffix = String::new();

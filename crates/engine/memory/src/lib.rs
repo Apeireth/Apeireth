@@ -1,20 +1,9 @@
-//! apeireth-memory: 记忆子系统 (Episode/Note/Session SQLite 存储 + 6 历史流 Append-only Log + IdentityCard 跨载体唯一)
+//! Memory subsystem: Episode/Note/Session storage, six append-only history streams
+//! and continuity-unique identity cards. Direct SQL preserves time/session/subject
+//! indexes; UPDATE/DELETE triggers protect raw evidence. Combined SQLite writeback
+//! commits raw episodes, chain heads and scope/provenance sidecars together.
 //!
-//! R14 A4 成就落地:
-//! 1. SQLite schema = 6 历史流表 (思想/提案/行动/关系/演化/反思期)
-//!                  + `identity_cards` (continuity_id UNIQUE 跨载体)
-//!                  + `episodes` (按 session_id / time range / continuity_id 索引查询)
-//! 2. 6 个 Append-only Log trait: 思想/提案/行动/关系/演化/反思期
-//! 3. Append-only = `BEFORE UPDATE` / `BEFORE DELETE` triggers raise ABORT
-//! 4. IdentityCard.continuity_id = UNIQUE 约束, 跨载体去重
-//! 5. Episode 写入 + 查询 API (按 session_id / time range / continuity_id)
-//! 6. 直接 SQL (主人偏好: 不引入 ORM)
-//!
-//! 禁止:
-//! - ❌ 不修改 apeireth-core 任何已实装类型签名
-//! - ❌ 不引入 ORM (按主人偏好)
-//! - ❌ 不碰 R11 baseline 三值
-//! - ❌ 不碰 apeireth-legacy/
+//! Constraints: no ORM, no changes to core type signatures, R11 or apeireth-legacy.
 
 #![deny(unsafe_code)]
 
@@ -26,6 +15,7 @@ use apeireth_core::{
     kernel::memory::Episode, kernel::memory::IdentityCard, kernel::memory::Note,
     kernel::memory::Session,
 };
+use apeireth_plugin::memory_backend::{CapabilityResult, EpisodeWriteOutcome};
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -722,6 +712,16 @@ impl apeireth_plugin::memory_backend::MemoryBackend for SqliteMemoryStore {
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
     }
 
+    fn put_episode_with_metadata(
+        &self,
+        ep: &Episode,
+        metadata: serde_json::Value,
+    ) -> CapabilityResult<EpisodeWriteOutcome> {
+        self.put_episode_record(ep, Some(&metadata))
+            .map(Into::into)
+            .map_err(Into::into)
+    }
+
     fn get_episode(
         &self,
         id: &str,
@@ -744,47 +744,16 @@ impl apeireth_plugin::memory_backend::MemoryBackend for SqliteMemoryStore {
         episode_id: &str,
         metadata: serde_json::Value,
     ) -> apeireth_plugin::memory_backend::CapabilityResult<()> {
-        let conn = self
-            .conn()
-            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
-        let metadata_str = serde_json::to_string(&metadata)
-            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
-        // M27 / L 组: canonical 定义在 migrations V11 (带 updated_at 列);
-        // 这里仅是 pre-V11 老库 self-heal, 建 V9 时代两列形态. 新库的列集
-        // 以 V11 迁移为准, 懒建路径不得新增列.
-        conn.execute_batch(
-            "CREATE TABLE IF NOT EXISTS episode_memory_metadata (episode_id TEXT PRIMARY KEY, metadata_json TEXT NOT NULL)",
-        )
-        .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
-        conn.execute(
-            "INSERT INTO episode_memory_metadata (episode_id, metadata_json) VALUES (?1, ?2) ON CONFLICT(episode_id) DO UPDATE SET metadata_json = excluded.metadata_json",
-            rusqlite::params![episode_id, metadata_str],
-        )
-        .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
-        Ok(())
+        let conn = self.conn()?;
+        crate::memory_chain::put_episode_metadata(&conn, episode_id, &metadata).map_err(Into::into)
     }
 
     fn get_episode_metadata(
         &self,
         episode_id: &str,
     ) -> apeireth_plugin::memory_backend::CapabilityResult<Option<serde_json::Value>> {
-        let conn = self
-            .conn()
-            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
-        let mut stmt = conn
-            .prepare("SELECT metadata_json FROM episode_memory_metadata WHERE episode_id = ?1")
-            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
-        let result: rusqlite::Result<String> =
-            stmt.query_row(rusqlite::params![episode_id], |row| row.get(0));
-        match result {
-            Ok(raw) => {
-                let parsed = serde_json::from_str(&raw)
-                    .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
-                Ok(Some(parsed))
-            }
-            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-            Err(e) => Err(Box::new(e) as Box<dyn std::error::Error + Send + Sync>),
-        }
+        let conn = self.conn()?;
+        crate::memory_chain::get_episode_metadata(&conn, episode_id).map_err(Into::into)
     }
 
     fn append_stream(

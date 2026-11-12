@@ -10,6 +10,7 @@ use std::sync::Mutex;
 
 use apeireth_core::kernel::memory::Episode;
 use apeireth_core::kernel::StreamKind;
+use apeireth_plugin::memory_backend::{CapabilityResult, EpisodeWriteOutcome};
 
 use crate::append_only::HistoryEntry;
 use crate::MemoryResult;
@@ -62,6 +63,45 @@ impl MemoryBackend for InMemoryBackend {
         }
         map.insert(ep.id.clone(), ep.clone());
         Ok(())
+    }
+
+    fn put_episode_with_metadata(
+        &self,
+        ep: &Episode,
+        metadata: serde_json::Value,
+    ) -> CapabilityResult<EpisodeWriteOutcome> {
+        let mut episodes = self
+            .episodes_by_id
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        let mut sidecars = self
+            .metadata_by_episode
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        if let Some(existing) = episodes.get(&ep.id) {
+            if existing.content != ep.content
+                || existing.timestamp != ep.timestamp
+                || existing.role != ep.role
+                || existing.session_id != ep.session_id
+            {
+                return Err(crate::MemoryError::Invalid(
+                    "episode ID conflicts with stored evidence".into(),
+                )
+                .into());
+            }
+        }
+        if let Some(existing) = sidecars.get(&ep.id) {
+            crate::memory_chain::validate_metadata_retry(existing, &metadata)?;
+        }
+        let outcome = match episodes.entry(ep.id.clone()) {
+            std::collections::hash_map::Entry::Vacant(entry) => {
+                entry.insert(ep.clone());
+                EpisodeWriteOutcome::Inserted
+            }
+            _ => EpisodeWriteOutcome::Existing,
+        };
+        sidecars.entry(ep.id.clone()).or_insert(metadata);
+        Ok(outcome)
     }
 
     fn get_episode(

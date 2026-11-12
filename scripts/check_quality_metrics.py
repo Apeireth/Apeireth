@@ -4,16 +4,16 @@
 # 为什么要有这个脚本
 
 设计稿 `docs/01-architecture/memory-knowledge-depth-system-spec.md` §6.1 定了
-**五层 20 项**质量指标 ⇒ 它们是「**好用**」的裁判。
+**五层 18 项**质量指标 ⇒ 它们是「**好用**」的裁判。
 
-⚠️ **实测发现**：这 20 项里，**大量只存在于文档、代码里没有**：
+⚠️ **实测发现**：这 18 项里，**大量只存在于文档、代码里没有**：
 * L1 的「时间正确率」「矛盾检出率」⇒ 缺；
 * L2 的「Token 效率」「Citation coverage」⇒ 缺；
 * L3 四项 ⇒ 缺；
 * L4 的「影子胜率」「回退时间」⇒ 缺；
 * L5 的「handover 演练」⇒ 缺。
 
-⇒ 「指标体系」这件事**很容易悄悄烂掉**：文档写了 20 项 ⇒ 看起来很全
+⇒ 「指标体系」这件事**很容易悄悄烂掉**：文档写了 18 项 ⇒ 看起来很全
 ⇒ 实际只有 5 项能算 ⇒ **没人发现**。
 
 ⇒ 本脚本把「**哪些指标有实现**」变成**可机检的台账**：
@@ -56,7 +56,7 @@ force_utf8_stdout()
 REPO_ROOT = Path(__file__).resolve().parent.parent
 LEDGER_PATH = REPO_ROOT / "scripts" / "quality-metrics-ledger.json"
 
-# 设计稿 §6.1 的五层 20 项（**逐字照抄设计稿的指标名** ⇒ 不自创）。
+# 设计稿 §6.1 的五层 18 项（**逐字照抄设计稿的指标名** ⇒ 不自创）。
 LAYERS: dict[str, list[str]] = {
     "L1 定位": ["Recall@k", "nDCG@k", "时间正确率", "矛盾检出率"],
     "L2 注入": ["Evidence Precision", "Token 效率", "Groundedness", "Citation coverage"],
@@ -128,7 +128,7 @@ def main() -> int:
     missing = [m for m, found in hits.items() if not found]
 
     print("=" * 72)
-    print("质量度量体系覆盖率（设计稿 §6.1 五层 20 项）")
+    print("质量度量体系覆盖率（设计稿 §6.1 五层 18 项）")
     print("=" * 72)
     for layer, metrics in LAYERS.items():
         marks = []
