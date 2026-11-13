@@ -3,15 +3,15 @@
 [Document-Meta]
 Document: docs/design/ci-test-evidence.md
 Class: SPEC
-Version: 1.0
-Last-Modified: 2026-11-12
+Version: 1.1
+Last-Modified: 2026-11-13
 Status: 🟢 活跃
 Author: lead
 
 ## 目标与范围
 
 测试重试成功后仍应能追溯用例名称、失败输出和实际重试记录。
-沿用现有 nextest CI profile、三个操作系统矩阵和 artifact 上传流程，不改变测试判定政策。
+沿用现有 nextest CI profile、三个操作系统矩阵和 artifact 上传流程，保留重试次数、超时和判定断言。
 此次缺口在 [PR #122](https://github.com/Apeireth/Apeireth/pull/122) 的最终检查中被确认：
 Windows/macOS 汇总分别报告一个 flaky 用例，但逐例日志缺失，JUnit 上传步骤提示文件不存在。
 历史失败身份和具体重试次数无法恢复，不能据此宣称零重试或已修复这些用例。
@@ -23,6 +23,7 @@ Windows/macOS 汇总分别报告一个 flaky 用例，但逐例日志缺失，JU
 | E1 | 启用 CI JUnit 与重试/最终 flaky 明细 | CI 重试次数、超时、断言、忽略集合保持原值；日志与 XML 能保留重试证据 |
 | E2 | 独立报告契约探针 | 临时无依赖 Rust 包主动首错、随后成功；旧配置缺报告时真红，新配置包含用例和失败详情时真绿 |
 | E3 | 上传证据绑定提交与执行轮次 | 缓存恢复后先清理预期旧报告；三平台真实生成 JUnit；缺文件明确失败；artifact 名绑定 SHA 与 attempt |
+| E4 | 对完整故障扫描声明调度资源预算 | 仅重型单例占用当前测试线程预算；保留所有样本、断言、超时和重试；独立探针在 2/4 个线程下验证调度反证，最终实际用例核对首轮结果及执行区间 |
 
 探针独立于工作区测试，不计入产品通过用例数，不作为产品稳定性或能力分数。
 探针所有文件位于自己创建并验证的临时目录，结束后清理；不读取用户记忆或业务数据。
@@ -57,6 +58,49 @@ PASS: isolated nextest report probe retained retry identity and failed output in
 ```
 
 旧 PR 中不可追溯的历史用例仍在债栏 D36 留账；本批修复报告链路，不把未知根因标为已清。
+
+### E4：完整故障扫描的调度资源预算（2026-11-13）
+
+[PR #125](https://github.com/Apeireth/Apeireth/pull/125) 的检查点
+`90259f832cb50c45c72a0cd6d17aedb7356ce442` 最终 CI 检查成功，但 macOS 的实际 JUnit
+仍保留 `apeireth-image-codecs::tiff_pages` 中
+`zoo_decodes_and_never_panics_when_cut_or_corrupted` 的一次重试：首轮在 360.009 秒以
+`test timeout` 结束，随后以 142.234 秒通过。旧检查点 `fcb3b30fe` 的同一用例首轮耗时
+325.070 秒。该轮原 XML 与首次失败输出保留，最终成功不写成零重试或根因已清除。
+
+该用例使用固定构造文件，逐字节截断、三种字节翻转及固定种子的变异序列，
+原始测试没有依赖墙钟或外部服务。其解码路径会启动内部并行工作，原 CI 配置却仅为每个
+测试保留一个调度槽。旧 XML 的时间区间核对显示，该首轮与其他 7793 个成功用例有墙钟重叠，
+其中还包含耗时的内部并行图像测试。这是并发资源争用的线索；没有 CPU 遥测或独立负载重现，
+不能把这些区间直接解释成完整根因证明。
+
+E4 仅为该完整测试的确切名称设置 CI 资源权重 `threads-required = "num-test-threads"`。
+它按本次 nextest 实际线程预算保留调度槽，使这个单例执行时不与同一测试运行中的其他用例重叠；
+其余用例仍按原配置并行。使用实际线程预算，而非宿主 CPU 数，避免命令行或环境覆盖线程数后
+仍留下可并发的调度槽。原完整扫描的样本、循环、断言、360 秒终止边界、重试次数和 JUnit
+记录方式保持，不通过减少检查量或放宽判定来消除超时。产品 Rust 源码不在此调整范围。
+
+现有 `scripts/test_nextest_reporting.py` 的独立报告探针继续验证首次失败证据。
+新增的独立临时调度夹具用同名重型测试和普通同行测试记录实际进入、离开事件，分别用 2/4 个
+测试线程执行；这些探针不进入工作区 JUnit，不计入产品测试数。
+2026-11-13 本地在 Windows、Rust 1.97.1、nextest 0.9.151 下实跑：新配置通过；
+仅摘除资源声明后，8 个临时测试自身仍全部通过，但探针因 2 个线程下实际重叠退出 1；
+逐字节恢复原配置后，2/4 个线程下均无重型重叠且普通同行仍并行，探针退出 0。
+对应 `tiff-resource-probe-red.log`、`tiff-resource-probe-green-restored.log` 和
+`tiff-resource-scheduling-reverse.json`，不把这些临时用例加入产品测试总数。
+
+```text
+FAIL: nextest report probe: resource probe heavy case overlapped a peer with 2 workers
+PASS: isolated nextest resource probe reserved all 2/4-worker slots for its heavy case while ordinary peers ran concurrently.
+```
+
+验收须同时看到摘除该资源声明后探针因实际重叠失败、恢复后无重叠通过，以及最终 CI 中原完整
+TIFF 用例的首轮结果、重试明细和相对其他用例的执行区间。本节记录提交前的诊断和调度调整快照；
+探针红绿与最终用例区间按 [PR #125 的检查](https://github.com/Apeireth/Apeireth/pull/125/checks)
+及绑定 SHA 的证据裁决，不从旧轮成功重试预报新结论或合并状态。
+
+该资源声明只约束同一次 nextest 运行的调度，不承诺独占托管 runner 的全部系统资源，
+也不证明任意负载下的性能上界。具体语义依照工具的[重型测试资源配置](https://nexte.st/docs/configuration/threads-required/)。
 
 配置语义依照工具的[配置说明](https://nexte.st/docs/configuration/reference/)
 和[JUnit 输出接口](https://nexte.st/docs/machine-readable/junit/)。
