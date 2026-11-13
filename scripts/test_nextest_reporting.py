@@ -62,12 +62,15 @@ fn controlled_first_attempt_failure() {
 }
 '''
 
-RESOURCE_TEST = "zoo_decodes_and_never_panics_when_cut_or_corrupted"
+RESOURCE_TESTS = (
+    "zoo_decodes_and_never_panics_when_cut_or_corrupted",
+    "tests::effect_maps_with_nested_rayon_work_do_not_deadlock",
+)
 RESOURCE_PEERS = tuple(f"resource_peer_{index}" for index in range(7))
 RESOURCE_SOURCE = '''use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-const HEAVY: &str = "zoo_decodes_and_never_panics_when_cut_or_corrupted";
+const HEAVY: &str = "__HEAVY_LEAF__";
 const LABELS: [&str; 8] = [
     HEAVY, "resource_peer_0", "resource_peer_1", "resource_peer_2",
     "resource_peer_3", "resource_peer_4", "resource_peer_5", "resource_peer_6",
@@ -109,10 +112,7 @@ fn exercise(label: &str) {
     stamp(&root.join(format!("{label}.end")));
 }
 
-#[test]
-fn zoo_decodes_and_never_panics_when_cut_or_corrupted() {
-    exercise(HEAVY);
-}
+__HEAVY_DECLARATION__
 
 macro_rules! peer {
     ($name:ident) => { #[test] fn $name() { exercise(stringify!($name)); } };
@@ -266,28 +266,31 @@ def probe(root: Path) -> None:
         cleanup(temporary, parent)
 
 
-def verify_resource_report(report: Path, events: Path, workers: int) -> None:
+def verify_resource_report(
+    report: Path, events: Path, workers: int, qualified_name: str, event_name: str,
+) -> None:
     """Check actual execution intervals and active markers, not config text."""
     if not report.is_file():
         raise ValueError("resource probe did not create a fresh JUnit report")
     cases = ET.parse(report).findall(".//testcase")
-    names = {RESOURCE_TEST, *RESOURCE_PEERS}
+    names = {qualified_name, *RESOURCE_PEERS}
     if len(cases) != len(names) or {case.get("name") for case in cases} != names:
         raise ValueError("resource JUnit did not identify exactly the isolated fixture cases")
     forbidden = {"failure", "error", "skipped", "flakyFailure", "flakyError", "rerunFailure", "rerunError"}
     if any(node.tag in forbidden for case in cases for node in case):
         raise ValueError("resource probe contains a failure, skip or retry instead of a first-pass measurement")
     intervals = {}
-    for name in names:
+    # JUnit retains Rust module qualifiers; Windows event filenames use safe leaves.
+    for name in {event_name, *RESOURCE_PEERS}:
         start = int((events / f"{name}.start").read_text(encoding="utf-8"))
         end = int((events / f"{name}.end").read_text(encoding="utf-8"))
         if start >= end or (events / f"{name}.active").exists():
             raise ValueError("resource probe has an incomplete or invalid execution interval")
         intervals[name] = (start, end)
-    heavy = intervals[RESOURCE_TEST]
+    heavy = intervals[event_name]
     heavy_overlap = any(max(heavy[0], intervals[name][0]) < min(heavy[1], intervals[name][1]) for name in RESOURCE_PEERS)
     if heavy_overlap or (events / "heavy-overlap").exists():
-        raise ValueError(f"resource probe heavy case overlapped a peer with {workers} workers")
+        raise ValueError(f"resource probe {qualified_name} overlapped a peer with {workers} workers")
     peer_overlap = any(
         max(intervals[first][0], intervals[second][0]) < min(intervals[first][1], intervals[second][1])
         for index, first in enumerate(RESOURCE_PEERS) for second in RESOURCE_PEERS[index + 1:]
@@ -296,8 +299,15 @@ def verify_resource_report(report: Path, events: Path, workers: int) -> None:
         raise ValueError(f"resource probe did not demonstrate ordinary peer concurrency with {workers} workers")
 
 
-def resource_probe(root: Path) -> None:
-    """Exercise the exact heavy-case override in a second disposable fixture."""
+def resource_probe(root: Path, qualified_name: str) -> None:
+    """Exercise one real heavy-case selector in its own disposable fixture."""
+    if qualified_name not in RESOURCE_TESTS:
+        raise ValueError("resource probe requires a registered heavy-case identity")
+    event_name = qualified_name.rsplit("::", 1)[-1]
+    declaration = f"#[test]\nfn {event_name}() {{ exercise(HEAVY); }}"
+    if "::" in qualified_name:
+        declaration = f"#[cfg(test)]\nmod tests {{\n    use super::*;\n{declaration}\n}}"
+    source = RESOURCE_SOURCE.replace("__HEAVY_LEAF__", event_name).replace("__HEAVY_DECLARATION__", declaration)
     with (root / "rust-toolchain.toml").open("rb") as handle:
         channel = tomllib.load(handle)["toolchain"]["channel"]
     if not isinstance(channel, str) or not re.fullmatch(r"\d+\.\d+\.\d+", channel):
@@ -312,7 +322,7 @@ def resource_probe(root: Path) -> None:
         child(temporary, "src").mkdir()
         child(temporary, "Cargo.toml").write_text(MANIFEST, encoding="utf-8")
         child(temporary, "Cargo.lock").write_text(LOCKFILE, encoding="utf-8")
-        child(temporary, "src/lib.rs").write_text(RESOURCE_SOURCE, encoding="utf-8")
+        child(temporary, "src/lib.rs").write_text(source, encoding="utf-8")
         target = child(temporary, "target")
         report = child(temporary, "target/nextest/ci/junit.xml")
         for workers in (2, 4):
@@ -338,7 +348,7 @@ def resource_probe(root: Path) -> None:
             output = result.stdout + result.stderr
             if result.returncode:
                 raise ValueError(f"isolated resource run exited {result.returncode} with {workers} workers")
-            verify_resource_report(report, events, workers)
+            verify_resource_report(report, events, workers, qualified_name, event_name)
     except (OSError, ValueError, ET.ParseError, subprocess.TimeoutExpired) as error:
         detail = output[-20_000:]
         if detail:
@@ -363,12 +373,13 @@ def main() -> int:
             print(f"PASS: workspace JUnit path prepared; prior report {state}.")
             return 0
         probe(root)
-        resource_probe(root)
+        for qualified_name in RESOURCE_TESTS:
+            resource_probe(root, qualified_name)
     except (OSError, ValueError, KeyError, ET.ParseError, subprocess.TimeoutExpired) as error:
         print(f"FAIL: nextest report probe: {error}", file=sys.stderr)
         return 1
     print("PASS: isolated nextest report probe retained retry identity and failed output in JUnit and logs.")
-    print("PASS: isolated nextest resource probe reserved all 2/4-worker slots for its heavy case while ordinary peers ran concurrently.")
+    print("PASS: isolated nextest resource probes reserved all 2/4-worker slots for both heavy cases while ordinary peers ran concurrently.")
     return 0
 
 

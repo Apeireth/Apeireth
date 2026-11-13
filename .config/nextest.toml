@@ -40,3 +40,9 @@ path = "junit.xml"
 [[profile.ci.overrides]]
 filter = 'test(=zoo_decodes_and_never_panics_when_cut_or_corrupted)'
 threads-required = "num-test-threads"
+
+# The complete nested-Rayon regression also exercises internal worker pools.
+# Keep its original rounds and watchdog while reserving the CI worker budget.
+[[profile.ci.overrides]]
+filter = 'test(=tests::effect_maps_with_nested_rayon_work_do_not_deadlock)'
+threads-required = "num-test-threads"

@@ -546,13 +546,15 @@ async fn the_switch_is_fail_closed_and_depends_on_the_care_switch() {
 /// (停机后零 poll 零发起), 幂等。
 #[tokio::test]
 async fn shutdown_reaps_the_heartbeat_thread_without_leaking() {
-    let mut producers: Vec<CareHeartbeatProducer> = (0..4)
-        .map(|_| {
+    let ticks: Vec<_> = (0..4).map(|_| Arc::new(AtomicUsize::new(0))).collect();
+    let mut producers: Vec<CareHeartbeatProducer> = ticks
+        .iter()
+        .map(|ticks| {
             CareHeartbeatProducer::start(
                 &test_config(),
                 || T0,
                 QuietPoll {
-                    ticks: Arc::new(AtomicUsize::new(0)),
+                    ticks: Arc::clone(ticks),
                 },
                 CountingDispatch {
                     turns: Arc::new(AtomicUsize::new(0)),
@@ -565,13 +567,31 @@ async fn shutdown_reaps_the_heartbeat_thread_without_leaking() {
         assert!(producer.is_running(), "常驻心跳线程在跑");
         assert!(!producer.thread_reaped(), "运行中句柄未回收 (如实)");
     }
-    {
-        let producer = &producers[0];
-        let before = producer.status().polls;
-        tokio::time::sleep(Duration::from_millis(120)).await;
-        let after = producer.status().polls;
-        assert!(after > before, "停机前在 poll: {before} -> {after}");
-    }
+    let polls_before: Vec<_> = producers
+        .iter()
+        .map(|producer| producer.status().polls)
+        .collect();
+    let ticks_before: Vec<_> = ticks
+        .iter()
+        .map(|ticks| ticks.load(Ordering::SeqCst))
+        .collect();
+    // 等真实 poll 的观测, 不把短 sleep 当成后台线程已得到下一次调度。
+    // 至少两拍排除仅首拍成功; 四个线程都继续 poll 才进入停机断言。
+    wait_for(
+        "停机前所有心跳线程继续实际 poll",
+        Duration::from_secs(10),
+        || {
+            producers
+                .iter()
+                .zip(&polls_before)
+                .zip(ticks.iter().zip(&ticks_before))
+                .all(|((producer, before), (ticks, ticks_before))| {
+                    let after = ticks.load(Ordering::SeqCst);
+                    producer.status().polls > *before && after > *ticks_before && after >= 2
+                })
+        },
+    )
+    .await;
     for producer in &mut producers {
         assert!(producer.shutdown(), "第一次停机真收掉线程");
         assert!(!producer.is_running(), "停机后不僵尸");
@@ -581,13 +601,31 @@ async fn shutdown_reaps_the_heartbeat_thread_without_leaking() {
         assert!(!producer.shutdown(), "停机幂等");
     }
     // 停机后零 poll (不僵尸, 无幽灵 tick)。
-    let ticks_frozen_at = producers[0].status().polls;
+    let polls_frozen_at: Vec<_> = producers
+        .iter()
+        .map(|producer| producer.status().polls)
+        .collect();
+    let ticks_frozen_at: Vec<_> = ticks
+        .iter()
+        .map(|ticks| ticks.load(Ordering::SeqCst))
+        .collect();
     tokio::time::sleep(Duration::from_millis(120)).await;
-    assert_eq!(
-        producers[0].status().polls,
-        ticks_frozen_at,
-        "停机后零 poll (不僵尸, 无幽灵 tick)"
-    );
+    for ((producer, polls_frozen_at), (ticks, ticks_frozen_at)) in producers
+        .iter()
+        .zip(polls_frozen_at)
+        .zip(ticks.iter().zip(ticks_frozen_at))
+    {
+        assert_eq!(
+            producer.status().polls,
+            polls_frozen_at,
+            "停机后零 poll (不僵尸, 无幽灵 tick)"
+        );
+        assert_eq!(
+            ticks.load(Ordering::SeqCst),
+            ticks_frozen_at,
+            "停机后真实 poll 不再执行"
+        );
+    }
 }
 
 /// poll 间隔可配: 配 200 毫秒一拍, 自述「下次 poll 时刻」= 时钟 + 间隔 (如实)。

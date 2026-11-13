@@ -1,8 +1,9 @@
 # Changelog — Apeireth
 
-## [Unreleased] — 完整故障扫描的调度资源预算（2026-11-13）
+## [Unreleased] — 完整重型回归的调度预算与心跳观测（2026-11-13）
 
-- 对完整 TIFF 故障扫描声明 CI 调度资源预算，保留样本、断言、超时和重试政策；独立调度探针与最终提交的实际报告按[验收记录](docs/design/ci-test-evidence.md)核对，历史首次超时和重试成功证据保留。
+- 对完整 TIFF 故障扫描及嵌套 Rayon compose 回归声明 CI 调度资源预算，保留样本、轮数、断言、watchdog、超时和重试政策；两个真实测试名各自进入独立调度探针。
+- 心跳停机回归显式等四线程实际持续 poll 后验证回收、幂等及停机后零 poll；提交前定向验证与反证见[验收记录](docs/design/ci-test-evidence.md)。历史首次失败、重试成功及 SKIP 阻断保留，最终结果按 PR head 的完整证据裁决。
 
 ## [Unreleased] — 固定合成语料真实评测与当前源码本地验收（2026-11-13）
 
