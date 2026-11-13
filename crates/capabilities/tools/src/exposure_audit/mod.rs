@@ -39,7 +39,9 @@ pub use backup_surface::backup_exclusion_item;
 pub use binding_surface::{token_binding_item, BindingSurface};
 pub use credential_surface::{scan_credential_files, scan_plaintext_points};
 pub use listener_surface::{
-    listener_item, parse_netstat_snapshot, probe_netstat, Listener, ListenerScope, ListenerSnapshot,
+    listener_item, parse_netstat_snapshot, probe_netstat, probe_netstat_outcome,
+    resolve_trusted_tool_path, trusted_netstat_path, trusted_system_root,
+    validate_trusted_path_shape, Listener, ListenerProbeError, ListenerScope, ListenerSnapshot,
 };
 pub use report::{
     format_utc_ms, ExposureItem, ExposureReport, Finding, ItemStatus, OverallScore, RiskLevel,

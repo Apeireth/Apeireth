@@ -42,7 +42,10 @@ pub use binfmt::{parse as parse_binary, BinFmtError, BinaryReport};
 pub use dotnet::{detect as detect_dotnet, DotnetError, DotnetReport};
 pub use evidence::{rfc3339_utc, Evidence, EvidenceError, EvidenceItem};
 pub use js::{analyze_js, JsOptions, JsReport};
-pub use net::{scan as scan_ports, NetError, PortFinding, ScanOptions, ScanReport};
+pub use net::{
+    scan as scan_ports, scan_controlled, scan_controlled_blocking, NetError, PortFinding,
+    ScanOptions, ScanReport, BANNER_PROBE_BUDGET, SCAN_DEADLINE,
+};
 pub use pack::{analyze as analyze_pack, EmbeddedRegion, ExtractedString, PackOptions, PackReport};
 pub use platform::{current_host, HostOs, PlatformError, ToolPlatform};
 pub use proto::{parse_capture, parse_pcap, Flow, PcapError, PcapReport};

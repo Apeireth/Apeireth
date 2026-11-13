@@ -546,13 +546,16 @@ impl ToolCapability for ReconNetTool {
             max_ports: 1024,
             banner_probe: true,
         };
-        let report = match crate::recon::scan_ports(target, &requested, &self.scope, &options) {
-            Ok(report) => report,
-            Err(error) => {
-                return ToolResult::permanent_error(&call.id, format!("scan refused: {error}"))
-                    .with_name("re.net.recon")
-            }
-        };
+        let report =
+            match crate::recon::net::scan_controlled(target, &requested, &self.scope, &options)
+                .await
+            {
+                Ok(report) => report,
+                Err(error) => {
+                    return ToolResult::permanent_error(&call.id, format!("scan refused: {error}"))
+                        .with_name("re.net.recon")
+                }
+            };
         let claim = format!(
             "{} of {} ports open on {}",
             report.open,
