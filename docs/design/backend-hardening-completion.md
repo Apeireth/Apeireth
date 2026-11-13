@@ -64,7 +64,8 @@ Author: lead
   首跑撞出厂商协议缺口：端点默认开启推理模式，历史里带工具调用的助手轮缺 `reasoning_content`
   会被厂商拒绝（400）；本仓规范化协议没有该字段，本批只加**显式可选、默认不变**的厂商私有字段透传
   （`thinking` / `reasoning_effort`，并拒绝覆盖协议保留键），不改协议本体。凭据只经环境变量注入，
-  产物已逐文件核对不含密钥形态串。
+  产物已逐文件核对不含密钥形态串。该轮实测跑在收口前的最后一版代码上；此后只有两处行为等价的重构
+  （候选查询构造下沉、recon 调用写法），未再重跑真实模型。
 - B3：压力六阶段实跑数据见上表；首次红与修复过程一并记入。
 - B4：Windows 真实 netstat 采集跑通并被行级真值逐条对账；真跑暴露生产缺陷「清空环境 ⇒
   地址列整列为空 ⇒ 监听面被误报成已测零发现」并修复（只放行 `SystemRoot`，其余环境清空）。
@@ -74,6 +75,33 @@ Author: lead
   反向验伪 8 组（含极性翻转）摘线必红。实测 1 万条 episode 候选阶段 24.5ms → 42.7ms，
   增量几乎全在作用域逐行 JSON 解析（≈17.9ms），绝对值偏乐观（内存库、未优化 profile），
   作用域索引化列为下一轮候选。
+- 收口门禁（2026-11-13，本批最终树）：`cargo test --workspace --all-targets --locked --no-fail-fast -j 2`
+  退出码 0；`cargo test --workspace --doc --locked -j 2` 退出码 0；
+  `cargo clippy --workspace --all-targets --locked -j 2 -- -D warnings` 退出码 0（0 warning）；
+  `pwsh -NoProfile -File scripts/fmt-check.ps1` 35 个 crate 全部 0 diff；
+  `python scripts/arch_guard.py --strict` 违规 0；
+  `python scripts/check_golden_baseline.py` 通过：内部卷检索基线未劣化（redchamber recall@10=0.5305、
+  watershed recall@10=0.7319，证据送达率 Δ +0.0000）⇒ 本批的候选切片改动没有把检索分数压下去。
+  该门禁首次跑红的根因是**语料定位口径**（Rust 侧按 `$APEIRETH_DATA_DIR/novels` 找语料，本机 HOME 为空 ⇒
+  一份语料都没跑到 ⇒ 判「不能出分数」）；本批按 `APEIRETH_DATA_DIR` 指向本机语料后实跑，
+  不改门槛、不改「残缺语料⇒判红」的判定逻辑。
+  `python scripts/docs_truth.py --verify --check` claims=60 fail=0 stale=0 review_due=0
+  （suspected_missing=1：Linux 声明与同目录 Windows 文件的同目录启发式提示，已复核不硬塞）；
+  `python scripts/audit_unwired.py --check` 孤儿基线一致（90 条，无新增、无过期）；
+  `python scripts/wiring_report.py --check-env-registry` 覆盖 165/165（本批新增的
+  `APEIRETH_MEM_BENCH_ROWS` 是候选阶段基准夹具的测试旋钮，已登记为 test-only，不是产品开关）；
+  `python scripts/wiring_report.py --verify` 生成物与源一致。
+  `python scripts/wiring_report.py --crosscheck` 另有 2 条报告级提示（`sec.governance_chain_drill`、
+  `sec.terminal_permission_surfaces` 标 PRODUCTION WIRED 但能力矩阵无生产引用）：这两条声明与能力矩阵
+  本批均未改动，属上游既有提示，本批不处理。
+  体量基线按官方修法①用 `python scripts/check_crate_budget.py --gen` 重写（四个 crate 的增长来自本批
+  新增文件，不是口径放宽，理由写在该条提交信息里）。
+- 架构棘轮（`scripts/arch_guard.py --strict`）：本批改动让 `coordinator.rs`（2418→2424）与
+  `recon_tool.rs`（1664→1667）超了尺寸棘轮 ⇒ **不抬基线盖章**（棘轮只减不增，例外簿额度已满）⇒
+  改为把两文件压回基线以内（两条 refactor 提交，行为等价：候选查询构造下沉到 `scope.rs`、
+  recon 调用改用本批建好的再导出面），并把 `memory_correction.rs` 的指纹按实测从 1535 缩到 1413
+  （逻辑搬进新模块后该文件真实变小）。
+  本批按用户要求**只本地提交**（共 9 条提交），不推送、不开 PR、不合并。
 
 ### 已确认的待复现或待实施项
 

@@ -1689,3 +1689,13 @@ purpose = "rendezvous 服务的 audience 标识（自托管优先 ⇒ 不用硬�
 level = "PRODUCTION WIRED"
 status = "current"
 evidence = "direct:crates/services/mesh-rendezvous/src/main.rs:17"
+[[entries]]
+name = "APEIRETH_MEM_BENCH_ROWS"
+default = "2000"
+layer = "engine"
+owner = "apeireth-memory"
+purpose = "候选阶段规模测量夹具的行数（episode 条数）旋钮：默认 2000 条；只影响 crates/engine/memory 的 #[cfg(test)] 基准模块（候选阶段两条切片的修法前/修法后耗时对比与执行计划），不进入任何产品运行时路径，不是产品开关。未设、解析失败、设为 0 或负数时都回落到 2000。测试/基准夹具，非产品开关。"
+level = "IMPLEMENTED"
+status = "current"
+kind = "test-only"
+evidence = "scan-only:crates/engine/memory/src/backend/candidate.rs:552"
