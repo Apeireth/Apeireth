@@ -96,12 +96,21 @@ Author: lead
   本批均未改动，属上游既有提示，本批不处理。
   体量基线按官方修法①用 `python scripts/check_crate_budget.py --gen` 重写（四个 crate 的增长来自本批
   新增文件，不是口径放宽，理由写在该条提交信息里）。
+- 仓库统一验证入口（`python scripts/harness.py verify --base ca2b7b70f`，按整批 diff 判定）：
+  fast 阶段 30 条门禁全部 PASS；deep 阶段 claims-verify / arch-strict / unwired-groups / guard-wiring /
+  golden-baseline / real-query-baseline / d4-ledger 共 7 条 PASS，ci-rust / ci-nextest / ci-clippy /
+  ci-fmt / ci-doc-test / ci-cargo-deny / ci-promise-audit 共 7 条记 **DELEGATED（不是本地通过）**，
+  由 GitHub Actions 负责 ⇒ 合并前须补 Actions 结果。
+  首次按 HEAD~1 口径跑时 fast 阶段有两条红：`check_doc_caliber.py` 报 4 处「段落声称已实现/已接线
+  但同段没有四级口径标注」，`check_batch_status.py --check` 报进度页事实块写 59 条声明而代码事实 60 条
+  ⇒ 已按各自官方修法修掉（补同段口径标注 + `--gen` 重写事实块并还原 LF 行尾），复跑全绿；
+  未放宽任何门槛，也未手改生成物。
 - 架构棘轮（`scripts/arch_guard.py --strict`）：本批改动让 `coordinator.rs`（2418→2424）与
   `recon_tool.rs`（1664→1667）超了尺寸棘轮 ⇒ **不抬基线盖章**（棘轮只减不增，例外簿额度已满）⇒
   改为把两文件压回基线以内（两条 refactor 提交，行为等价：候选查询构造下沉到 `scope.rs`、
   recon 调用改用本批建好的再导出面），并把 `memory_correction.rs` 的指纹按实测从 1535 缩到 1413
   （逻辑搬进新模块后该文件真实变小）。
-  本批按用户要求**只本地提交**（共 10 条提交），不推送、不开 PR、不合并。
+  本批按用户要求**只本地提交**（共 11 条提交），不推送、不开 PR、不合并。
 
 ### 已确认的待复现或待实施项
 
