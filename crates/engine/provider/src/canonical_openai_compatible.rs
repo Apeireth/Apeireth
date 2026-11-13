@@ -120,6 +120,15 @@ pub struct OpenAiCompatibleProviderCapability {
     /// 默认由 `reasoning_adapter` 的 `from_env` 读取（`APEIRETH_REASONING_ENABLED`
     /// 等三个变量）且**默认关** ⇒ 关时响应解析与接线前逐字节一致（零行为变化）。
     reasoning: crate::reasoning_adapter::ReasoningAdapterConfig,
+    /// 厂商私有请求字段（**可选**，默认无 ⇒ 请求体与接线前逐字节一致）。
+    ///
+    /// 例：DeepSeek 的 `{"thinking": {"type": "disabled"}}` 与
+    /// `reasoning_effort`。这类字段**不在规范协议里** ⇒ 规范请求没有位置放
+    /// 它们；没有这条透传就只能绕开 provider 自己写 HTTP 客户端（协议重复）。
+    ///
+    /// 只允许写入**非保留**键（见 [`openai_chat::RESERVED_EXTRA_BODY_KEYS`]）：
+    /// `model` / `messages` / `stream` / `tools` / `tool_choice` 覆盖会被拒绝。
+    extra_body: RwLock<Option<serde_json::Value>>,
 }
 
 impl OpenAiCompatibleProviderCapability {
@@ -144,7 +153,28 @@ impl OpenAiCompatibleProviderCapability {
             credential_audience: RwLock::new(None),
             resolver,
             reasoning: crate::reasoning_adapter::ReasoningAdapterConfig::from_env(),
+            extra_body: RwLock::new(None),
         })
+    }
+
+    /// Attach vendor-private request fields to every request this capability
+    /// sends (e.g. `{"thinking": {"type": "disabled"}}`).
+    ///
+    /// ⭐ Opt-in: without a call to this method the request body is
+    /// byte-identical to what it was before the passthrough existed.
+    pub fn set_extra_body(&self, extra: serde_json::Value) {
+        *self
+            .extra_body
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(extra);
+    }
+
+    /// The vendor-private request fields currently attached, if any.
+    pub fn extra_body(&self) -> Option<serde_json::Value> {
+        self.extra_body
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone()
     }
 
     /// The current live base URL.
@@ -249,6 +279,11 @@ impl OpenAiCompatibleProviderCapability {
         let mut body = openai_chat::build_request_body(request, &wire_model, self.id.as_str())?;
         if body.get("max_tokens").is_none() {
             body["max_tokens"] = serde_json::json!(4096);
+        }
+        // 厂商私有字段（可选）：只写非保留键；覆盖 `model`/`messages`/`stream`/
+        // `tools`/`tool_choice` 会被拒绝，而不是悄悄改写规范层产出的请求。
+        if let Some(extra) = self.extra_body() {
+            openai_chat::merge_extra_body(&mut body, &extra, self.id.as_str())?;
         }
         Ok(body)
     }
@@ -659,6 +694,19 @@ impl OpenAiCompatibleProviderPlugin {
     /// The current live base URL (non-secret configuration).
     pub fn base_url(&self) -> String {
         self.capability.base_url()
+    }
+
+    /// Attach vendor-private request fields to every request this plugin sends.
+    ///
+    /// Example: `{"thinking": {"type": "disabled"}}` for the DeepSeek
+    /// OpenAI-compatible endpoint, whose reasoning mode otherwise requires the
+    /// caller to replay `reasoning_content` for every assistant turn that
+    /// carried tool calls — a field the canonical protocol does not model.
+    ///
+    /// ⭐ Opt-in and non-secret by contract: this is a request *shape* knob,
+    /// not a credential. Reserved protocol keys are refused, not overwritten.
+    pub fn set_extra_body(&self, extra: serde_json::Value) {
+        self.capability.set_extra_body(extra);
     }
 
     /// Attach a credential resolver without booting a full runtime (tests).
