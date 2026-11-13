@@ -211,6 +211,25 @@ impl MemoryBackend for InMemoryBackend {
 }
 
 impl crate::scope::ScopedMemoryBackend for InMemoryBackend {
+    /// 候选发现：**两条切片**（新鲜度 / 相关度），与 SQL 侧同一口径。
+    ///
+    /// # 为什么内存实现也要两条切片
+    ///
+    /// 三条后端路径（`backend/sqlite.rs` / `src/lib.rs` / 本文件）喂给
+    /// `MemoryCoordinator` 的是同一种候选 ⇒ ⇒ 若只有 SQL 路径两条切片，
+    /// 内存路径仍会「按最新截断」⇒ ⇒ 长期关键事实在内存路径上照样被挤掉
+    /// ⇒ ⇒ 三条路径口径必须一致。
+    ///
+    /// # 三条不变量怎么保住
+    ///
+    /// * **作用域**：可见性判定沿用 `scope.is_visible_in`（与 SQL 侧同一
+    ///   `MemoryScope` 语义）⇒ ⇒ 相关度切片不产生越权可见性；
+    /// * **治理状态**：本实现不持有治理行（治理在 `coordinator` 侧）
+    ///   ⇒ ⇒ 切片不新增也不放宽治理判定；
+    /// * **时间过滤**：`as_of` 仍在**进入切片之前**过滤 ⇒ ⇒ 两条切片都看不到
+    ///   时间锚点之后的记录；
+    /// * **预算**：合并后**总量仍 ≤ `query.limit`** ⇒ ⇒ 相关度切片**占用**
+    ///   预算里的位置，不是追加预算。
     fn query_candidates(
         &self,
         query: &crate::scope::MemoryCandidateQuery,
@@ -251,10 +270,66 @@ impl crate::scope::ScopedMemoryBackend for InMemoryBackend {
             }
         }
 
-        matched.sort_by(|a, b| b.timestamp.cmp(&a.timestamp).then_with(|| b.id.cmp(&a.id)));
-        matched.truncate(query.limit);
-        matched.reverse();
-        Ok(matched)
+        // ── 切片 1：新鲜度（既有行为，逐条不变）─────────────────────────────
+        let mut fresh_rows = matched.clone();
+        fresh_rows.sort_by(|a, b| b.timestamp.cmp(&a.timestamp).then_with(|| b.id.cmp(&a.id)));
+        fresh_rows.truncate(query.limit);
+        // ⚠️ 这里**不**再翻转：合并阶段按「相关度优先 → 新鲜度补位」取前 `limit` 条
+        // ⇒ ⇒ 翻转过会让补位从**最老**的一端开始 ⇒ ⇒ 被挤掉的是最新那条
+        // ⇒ ⇒ 与 SQL 侧（新鲜度切片保持时间倒序）不一致 ⇒ ⇒ 输出顺序由合并阶段统一排。
+
+        // ⚠️ 便宜先判（省一次全表扫描）：若新鲜度切片**没取满**预算 ⇒ ⇒ 可见历史
+        // 全部落在这条切片里 ⇒ ⇒ 相关度切片只可能返回**已经在池子里**的行
+        // ⇒ ⇒ 合并结果逐条相同 ⇒ ⇒ 直接跳过相关度切片。
+        // ⇒ 预算中性（不多取、不多花）、不改动任何不变量（作用域 / 治理 / 时间 / 来源）。
+        if fresh_rows.len() < query.limit {
+            return Ok(crate::backend::candidate::merge_candidates(
+                Vec::new(),
+                fresh_rows,
+                query.limit,
+            ));
+        }
+
+        // ── 切片 2：相关度（只收命中行；命中口径与 SQL 侧 LIKE 语义一致）─────
+        let relevance_limit = query.relevance_slice_limit();
+        let mut relevance_rows: Vec<Episode> = Vec::new();
+        if relevance_limit > 0 {
+            let terms = crate::backend::candidate::normalized_terms(&query.query_terms);
+            if !terms.is_empty() {
+                let mut scored: Vec<(usize, Episode)> = matched
+                    .into_iter()
+                    .filter_map(|ep| {
+                        let hits = crate::backend::candidate::hit_count(
+                            &ep.content.to_lowercase(),
+                            &terms,
+                        );
+                        if hits == 0 {
+                            None
+                        } else {
+                            Some((hits, ep))
+                        }
+                    })
+                    .collect();
+                // 命中多者优先；同命中数按时间新者优先（与 SQL 侧排序一致）。
+                scored.sort_by(|a, b| {
+                    b.0.cmp(&a.0)
+                        .then_with(|| b.1.timestamp.cmp(&a.1.timestamp))
+                        .then_with(|| b.1.id.cmp(&a.1.id))
+                });
+                relevance_rows = scored
+                    .into_iter()
+                    .take(relevance_limit)
+                    .map(|(_, ep)| ep)
+                    .collect();
+            }
+        }
+
+        // ── 合并：相关度切片优先 → 新鲜度切片补位 → 去重 → 总量 ≤ limit ──
+        Ok(crate::backend::candidate::merge_candidates(
+            relevance_rows,
+            fresh_rows,
+            query.limit,
+        ))
     }
 }
 

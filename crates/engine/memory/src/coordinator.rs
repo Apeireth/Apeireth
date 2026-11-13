@@ -487,6 +487,12 @@ impl MemoryCoordinator {
                     visible_scopes: query.visible_scopes.clone(),
                     limit: (query.limit * 8).max(64),
                     as_of_ms: query.as_of_ms,
+                    // ⭐ **相关词**：候选阶段只按最新时间截断 ⇒ ⇒ 早期确立的关键事实
+                    // 在进入正式排序**之前**就被近期记录挤掉 ⇒ ⇒ 检索层再强也救不回来
+                    // （它根本不在候选池里）⇒ ⇒ 把问句的相关词带下去 ⇒ ⇒ 存储层可以在
+                    // **同一个预算**内给「按词命中的老记录」留一条切片。
+                    // ⚠️ 预算不变（切片占用预算里的位置，不是追加）⇒ ⇒ 成本与时延有界。
+                    query_terms: crate::scope::relevance_terms(&query.query_text),
                 };
                 if let Ok(scoped_episodes) = scoped.query_candidates(&candidate_query) {
                     for ep in scoped_episodes {
