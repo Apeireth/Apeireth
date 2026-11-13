@@ -4,7 +4,7 @@
 Document: docs/status/spec-batch-status.md
 Class: STATUS
 Status: 🟢 活跃
-Last-Modified: 2026-11-12
+Last-Modified: 2026-11-13
 Author: lead
 
 > 依据：`docs/01-architecture/memory-knowledge-depth-system-spec.md`（321 行 / 11 章）
@@ -53,9 +53,9 @@ Author: lead
 
 | 项目 | 当前接线 | 正式验收边界 |
 |---|---|---|
-| Q5 自然语言纠错 | **IMPLEMENTED / 条件性 PRODUCTION WIRED**：官方同库 journal 装配按恢复 → 纠错 → 召回执行；直接用户证据经受限提案及来源、作用域、权限、CAS 校验进入事务；v3 对完整原文内唯一绝对日期允许同日 ISO/中文等价，UTC 仍由原文和 Host 偏移确定 | 相对日期须逐字保持；畸形、多日期、证据外或省略相关显式日期拒绝，模型弃权不覆盖。保守语法不等于一般语义完备。E2/F 历史全仓已过，四轮真实评测均未过；v3 定向软件及五项红绿反证通过，新源码最终全仓、LIVE05 和同提交 CI 待验 |
-| Q6 持久失败恢复 | **IMPLEMENTED / 条件性 PRODUCTION WIRED**：冻结意图、同库待办及操作回执供下一次有权 TurnStart / AfterTurn 有界处理；当前定向测试核对冻结日期/偏移重启后不重新提案，并在真实请求中交付精确历史 ID、正文及时间区间 | 不承诺独立后台 daemon、跨库原子事务或任意第三方 store 的 exactly-once；撤权、修订冲突与遗忘须阻止旧重放。E2/F 历史全仓已过；新源码最终全仓与同提交 CI 待验，测试装配/解析校准不记作产品故障 |
-| Q7 回答评测 | **IMPLEMENTED / OFF**：手动 example 复用真实 Runtime、SQLite、Recall 和 Provider，保存全部主答、提案、失败、来源及预算证据；当前 example 软件回归通过，实际已执行四轮真实模型评测 | 四轮均**未通过**，live04 为 35/36；e03 同日日期表示被旧合同拒绝的原失败保留。提案协议现为 v3，评分仍 v2，固定语料/主答 SYSTEM/Oracle/12×3不变；协议变化不属同条件比较，旧运行用原执行文件，不重判 grade。新源码最终全仓、LIVE05 与同提交 CI 待验，证据见[质量批进度](../design/memory-quality-hardening.md)。不据软件结果给出跨系统领先结论 |
+| Q5 自然语言纠错 | **IMPLEMENTED / 条件性 PRODUCTION WIRED**：官方同库 journal 装配按恢复 → 纠错 → 召回执行；直接用户证据经受限提案及来源、作用域、权限、CAS 校验进入事务；v3 对完整原文内唯一绝对日期允许同日 ISO/中文等价，UTC 仍由原文和 Host 偏移确定 | 相对日期须逐字保持；畸形、多日期、证据外或省略相关显式日期拒绝，模型弃权不覆盖。保守语法不等于一般语义完备。当前 G 源码本地全仓、doc tests 及五项红绿反证通过；LIVE05 固定合成语料36/36，旧四轮失败保留；本行为提交前验收快照；最终提交按[PR #125 的检查](https://github.com/Apeireth/Apeireth/pull/125/checks)及绑定 SHA 的完整门禁证据裁决 |
+| Q6 持久失败恢复 | **IMPLEMENTED / 条件性 PRODUCTION WIRED**：冻结意图、同库待办及操作回执供下一次有权 TurnStart / AfterTurn 有界处理；当前定向测试核对冻结日期/偏移重启后不重新提案，并在真实请求中交付精确历史 ID、正文及时间区间 | 不承诺独立后台 daemon、跨库原子事务或任意第三方 store 的 exactly-once；撤权、修订冲突与遗忘须阻止旧重放。当前 G 源码本地全仓与 doc tests 已过；本行为提交前验收快照；最终提交按[PR #125 的检查](https://github.com/Apeireth/Apeireth/pull/125/checks)及绑定 SHA 的完整门禁证据裁决，测试装配/解析校准不记作产品故障 |
+| Q7 回答评测 | **IMPLEMENTED / OFF**：手动 example 复用真实 Runtime、SQLite、Recall 和 Provider，保存全部主答、提案、失败、来源及预算证据；LIVE05 完整固定合成12类×3次为36/36，独立答题/来源审计及原执行文件只读复算通过 | 旧01–04失败、分型与grade保留。固定语料已用于开发，不是独立留出集，36/36不是通用质量保证；提案v3、评分v2，旧协议非同条件比较，无外部对照。当前 G 本地全仓/doc tests/严格检查已过；本行为提交前验收快照；最终提交按[PR #125 的检查](https://github.com/Apeireth/Apeireth/pull/125/checks)及绑定 SHA 的完整门禁证据裁决，见[质量批进度](../design/memory-quality-hardening.md) |
 
 未提供 journal 的兼容组合不启用新纠错/恢复模块；私有 Profile 还需 Host 映射、可写授权及独立模块执行授权。
 状态变化可产生带有效区间的派生历史证据；纠正误记不把旧误值记为曾经有效的事实。

@@ -4,7 +4,7 @@
 Document: docs/design/memory-quality-hardening.md
 Version: 1.1
 Class: SPEC
-Last-Modified: 2026-11-12
+Last-Modified: 2026-11-13
 Status: 🟢 活跃
 Author: lead
 
@@ -107,9 +107,9 @@ Provider 测试从独立 SQLite 读取发送 ID 对应的治理状态、作用�
 | Q6 | 记忆写入失败自动恢复 | 持久待办、故障后重试、进程重启、重复消费、部分成功、作用域隔离及遗忘后不得复活；失败不发布未提交内容 |
 | Q7 | 真实模型答题评测 | 本地确定性评测器验证后，再用用户临时 key 实际运行；保留逐例回答与失败，硬失败不得被均分抵消；无 key 记未测，不用录制 Provider 代替 |
 
-当前状态：Q5/Q6 为 **IMPLEMENTED / 条件性 PRODUCTION WIRED**；Epsilon 日期协议 v3 的本地定向软件验收及五项红绿反证已通过。
-真实评测 live01、live02、live03、live04 均未通过，原报告保留；live04 为 35/36，失败分型见下文。
-Gamma 及 E2/F 的各自全仓软件快照已通过；新 v3 的最终全仓、LIVE05 及当前提交 CI 仍待验。
+当前状态：Q5/Q6 为 **IMPLEMENTED / 条件性 PRODUCTION WIRED**；Epsilon 日期协议 v3 的定向软件验收及五项红绿反证已通过。
+live05 在自有固定 12 类合成语料、各保留 3 次重复中为 **36/36**，真实答题及独立来源审计通过；live01–live04 原失败报告保留。
+当前源码 G 的本地全仓与 doc tests 已通过；本节记录提交前的软件和模型验收，最终提交按[PR #125 的检查](https://github.com/Apeireth/Apeireth/pull/125/checks)及绑定 SHA 的完整门禁证据裁决，不预报检查结果或合并状态。该固定语料结果不推定一般质量或外部比较。
 历史红绿反证只对应其源码检查点，不能由定向结果推出新源码全部通过。
 本地确定性 Provider 和回环 HTTP 仍只用于验证软件契约，不能代替真实答题结果。
 当前无外部可运行实例，Q4 同条件比较仍独立记未测。
@@ -531,8 +531,45 @@ harness 独立检查点 `a8b7e971a6d72e01e9db2ddd910c679a709e61eb` 修复 fast/d
 摘除聚合输出真实 RED、恢复后 GREEN；其中外部 gate 为临时 Python 程序，资源守卫/清理器被 mock，
 不等同实际 44 项门禁已经完成。
 
-**当前 G 源码的最终全仓、完整 LIVE05 及最终同提交 CI 仍待验。**
+以上为 2026-11-12 软件检查点；当时 G 全仓、LIVE05 及最终同提交 CI 待验。后续实际结果见下一节。
 live01–live04 的失败、分型及 grade 均保留，不用软件通过或历史全仓替代新的真实质量结果。
+
+#### 第五轮固定合成语料与当前源码本地验收（2026-11-13）
+
+live05 的实现来源仍为 G `05548244bf3b2f0ce627cb8476a2fa40a254f342`，执行提交为
+`fcb3b30fec57afeca84d1ccaf76b375cf5af295a`，运行树为 `d5da9cc4723e729a87a4b3426a7c758e1a0abb1c`。
+冻结执行文件 SHA256 为 `8bdc08afcd1a3527acbfd3a8577850fbac0d6f70334e30ceca263258bbfa8295`，
+对应收据为 `eval-executable-epsilon-05.json`。
+`live-deepseek-05/report.json` 完整固定 12 类 × 3 次保留重复全部通过：**36 passed、0 hard_failure**，
+`complete=true`、`live_quality_passed=true`；这是本固定评测器的闸门结果，不是通用质量保证。
+此前 live01–live04 的原失败、回答、分型及 grade 均保留，不在新执行文件下重判。
+
+114 次实际 HTTP 均为单次发送且返回 200，包括 108 次主调用、6 次提案调用；
+实际记录 77962 输入、4788 输出，共 82750 tokens，已记录调用的中位耗时为 965.5 ms。
+`audit-live-05-independent.json` 及 root 复算 `audit-live-05-root-confirmed.json` 均无审计错误，
+36 槽独立答题/送达检查全部通过；原冻结执行文件只读复算退出 0，36 个 grade 无差异且未改原报告。
+199 条实际来源均核对 SQL 身份、来源标记及确切正文投影，其中 193 条对应当前 SQL，
+6 条对应正式 pre-CAS 来源；87 个 qualified 标题计数与实际交付记录一致。
+这些来源审计不宣称跨数据库原子快照、物理删除或一般自然语言语义证明。
+
+固定 fixture SHA256 仍为 `ab979c843c38d967ec888ccd50bf830e216d42d88ab8bfafec73c29d521b2ca7`，
+主答 SYSTEM SHA256 仍为 `0bd7a29b237bb4bfffbd04696ac222ab2850e814f3c6d96c59d9186b6299cade`；
+评分仍 v2，提案协议为 v3，Oracle、分母和原支持哈希不变。
+这些样本已用于开发和修复，不是独立留出集；三次保留重复不建立泛化率或统计优势。
+提案合同/system 与旧轮次不同，不能把前后差异单独归因于一个记忆算法。
+无外部运行实例，同条件比较仍未测，不据此发布跨系统领先结论。
+
+同一 G 源码、上述执行提交的最终本地全仓由 `workspace-tests-epsilon-final-summary.json` 记录：
+`cargo test --workspace --all-targets --locked --no-fail-fast -j 2` 在 Windows、rustc 1.97.1 下退出 0，
+**572 suites、11064 passed、0 failed、49 个原有 ignored**。
+`cargo test --workspace --doc --locked -j 2` 由 `workspace-doctests-epsilon-final.log` 与退出码记录完成，
+共 34 组、3 passed、0 failed、6 ignored；保留原有忽略，不增减测试范围。
+这些数字只描述当前源码和对应命令，不改写全局 test-baseline、历史徽章或此前快照。
+严格 Clippy、逐 crate fmt、指定特性组合与当前反证沿用上节同一源码的已核证据。
+
+本节记录提交前已完成的软件和模型验收；最终提交的适用 CI、harness/attest/merge-decision 按[PR #125 的检查](https://github.com/Apeireth/Apeireth/pull/125/checks)与绑定 SHA 的证据裁决，本文不预报其结果或合并状态。
+Q7 仍为手动 **IMPLEMENTED / OFF**；恢复仍限下一次有权 TurnStart / AfterTurn 的有界处理，
+不扩成独立后台 daemon、任意 store 的 exactly-once 或一般时区/DST 规则支持。
 
 #### 本轮验收入口
 

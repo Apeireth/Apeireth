@@ -1,5 +1,10 @@
 # Changelog — Apeireth
 
+## [Unreleased] — 固定合成语料真实评测与当前源码本地验收（2026-11-13）
+
+- LIVE05 在自有固定12类合成语料、每类保留3次重复中为36/36；真实请求、SQL来源及确切投影经独立审计和root复算通过。旧01–04全部失败记录与grade保留，提案协议v3、评分v2的变化边界保持。
+- 当前源码本地全仓、doc tests、严格Clippy、fmt与指定特性编译通过；本条记提交前验收，最终提交按[PR #125 的检查](https://github.com/Apeireth/Apeireth/pull/125/checks)及绑定SHA完整门禁证据裁决。Q7仍为手动IMPLEMENTED/OFF，结果不推定通用质量、独立留出表现或外部领先，详见[质量批进度](docs/design/memory-quality-hardening.md)。
+
 ## [Unreleased] — 日期协议 v3 与门禁证据聚合（2026-11-12 Epsilon）
 
 - 纠错提案允许完整原始证据内唯一受支持绝对日期的同日 ISO/中文表示，UTC 仍由原文日期及 Host 固定偏移确定；相对表达须逐字保留，畸形或遗漏相关显式日期不得回退今天。提案协议升级为 v3，评分 v2、固定语料及 Oracle 保持，旧运行必须使用原执行文件。
