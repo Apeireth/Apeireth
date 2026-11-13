@@ -11,6 +11,8 @@ use apeireth_core::kernel::Timestamp;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
+use crate::layers::MemoryRecallQuery;
+
 /// Visibility boundary for a memory record.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(tag = "scope", rename_all = "snake_case")]
@@ -109,6 +111,31 @@ pub fn relevance_terms(query: &str) -> Vec<String> {
 
 /// 候选发现查询的派生口径。
 impl MemoryCandidateQuery {
+    /// 由**召回查询**构造候选查询（候选预算与相关词口径的唯一真源）。
+    ///
+    /// # 为什么放在这里
+    ///
+    /// 候选预算与相关词口径是**存储层候选发现**的契约 ⇒ ⇒ 与
+    /// [`MemoryCandidateQuery`] 住在同一个模块 ⇒ ⇒ 调用方不再各写一遍
+    /// （三处后端共用这一份口径）。
+    ///
+    /// # 口径
+    ///
+    /// * **候选预算** = `limit × 8`（下限 64）⇒ ⇒ 存储层在**同一个预算**内给
+    ///   「新鲜度切片」与「相关度切片」分位置 ⇒ ⇒ 候选池总量不放大；
+    /// * **相关词** = 问句经 [`relevance_terms`] 抽出的词 ⇒ ⇒ 空 ⇒ ⇒ 只有
+    ///   新鲜度切片（未接相关度切片的后端行为不变）。
+    #[must_use]
+    pub fn for_recall(query: &MemoryRecallQuery) -> Self {
+        Self {
+            source_session: Some(query.session_id.clone()),
+            visible_scopes: query.visible_scopes.clone(),
+            limit: (query.limit * 8).max(64),
+            as_of_ms: query.as_of_ms,
+            query_terms: relevance_terms(&query.query_text),
+        }
+    }
+
     /// **相关度切片**能占用的条数（没有相关词 ⇒ 0 ⇒ 只有新鲜度切片）。
     ///
     /// # 上界从哪来
