@@ -532,6 +532,16 @@ pub struct ProductionBackends {
     pub memory: Option<Arc<dyn MemoryBackend>>,
     /// Memory governance store (active/forgotten status, protection, overrides).
     pub memory_governance: Option<Arc<dyn MemoryGovernanceStore>>,
+    /// Official Cognitive DB journal; enables recoverable writes and correction.
+    pub memory_recovery: Option<Arc<apeireth_memory::writeback_recovery::SqliteWritebackJournal>>,
+    /// Host-selected memory files (wiki and consolidation watermark).
+    /// Isolated evaluations supply a new root; normal hosts use their data root.
+    pub memory_data_root: Option<PathBuf>,
+    /// Calendar interpretation selected by the Host; absent uses UTC.
+    pub memory_correction_policy: Option<super::memory_correction::CorrectionPolicy>,
+    /// Read-only source qualification, including hosts that disable writeback.
+    pub memory_evidence_source:
+        Option<Arc<dyn apeireth_memory::context_compiler::MemoryEvidenceSource>>,
     /// Optional progressive-disclosure wiki store.
     pub wiki: Option<Arc<dyn WikiEntryStore>>,
     /// Optional knowledge graph store.
@@ -658,6 +668,8 @@ pub struct ProductionModules {
     /// 器官模块句柄 (`config.organs` 开才 `Some`), 供组合根迟绑定 guard 免疫记忆.
     organ_module: Option<Arc<OrganModule>>,
     memory_slot: Option<Arc<super::memory_module::MemoryModule>>, // 记忆工具面槽位（注册期迟绑定 Host 映射）
+    memory_writer: Option<Arc<MemoryWritebackModule>>,
+    memory_correction: Option<Arc<super::memory_correction::MemoryCorrectionModule>>,
     /// 生物机制族 W3.3: 调质状态句柄 (开关开才 `Some`, 与注册模块共享同一 `Arc`)。
     bio_tone_state: Option<Arc<ToneState>>,
     /// 生物机制族 W3.5 (SG-18): 生命周期状态句柄 (开关开才 `Some`, 与注册模块同一 `Arc`)。
@@ -1446,7 +1458,11 @@ impl ProductionModules {
             // ⚠️ **窗口 = 0** ⇒ **不设时间闸**（时间节奏仍由既有的
             // `APEIRETH_TUNE_CONSOLIDATION_CADENCE` 旋钮管）⇒ ⇒ 只剩「只整新料」这一条语义。
             // ⚠️ **装不上驱动 ⇒ 走旧路径**（`run_consolidation_at` 的降级分支）⇒ ⇒ 不阻断启动。
-            let watermark_path = default_data_root()
+            let memory_data_root = backends
+                .memory_data_root
+                .clone()
+                .unwrap_or_else(default_data_root);
+            let watermark_path = memory_data_root
                 .join("memory")
                 .join("consolidation-watermark.json");
             let watermark_dir = watermark_path.parent().unwrap_or(std::path::Path::new("."));
@@ -1474,15 +1490,90 @@ impl ProductionModules {
             }
             // 用户知识库接线 (只读): 语料根 = <data>/wiki。
             // 目录不存在 ⇒ 检索路径整段跳过 ⇒ 逐字节零行为变化。
-            coordinator = coordinator.with_wiki_root(default_data_root().join("wiki"));
+            coordinator = coordinator.with_wiki_root(memory_data_root.join("wiki"));
             if let (Some(source), Some(identity)) =
                 (&backends.typed_recall, &backends.typed_recall_identity)
             {
                 coordinator = coordinator.with_typed_recall(Arc::clone(source), identity.clone());
             }
+            if let Some(source) = &backends.memory_evidence_source {
+                coordinator = coordinator.with_evidence_source(source.clone());
+            }
             let sinks = (&mut tool_modules, &mut capabilities);
             let (slot, shared) = memory_assembly::wire(sinks.0, sinks.1, coordinator, &clock);
             (memory_slot, shared_coordinator) = (Some(slot), Some(shared));
+        }
+
+        let memory_writer = if config.memory_writeback {
+            instrument.constructed(ModuleFamily::MemoryWriteback);
+            let mut module = MemoryWritebackModule::new(
+                required(backends.memory.clone(), "memory_writeback", "memory")?,
+                clock.clone(),
+            );
+            if let Some(coord) = &shared_coordinator {
+                module = module.with_coordinator(Arc::clone(coord));
+            }
+            if let Some(materializer) = &backends.memory_materializer {
+                module = module.with_materializer(Arc::clone(materializer));
+            } else if let Some(extractor) = &backends.memory_extractor {
+                module = module.with_extractor(Arc::clone(extractor));
+            }
+            if let Some(sink) = &backends.typed_sink {
+                module = module.with_typed_sink(Arc::clone(sink));
+            }
+            if config.consolidation {
+                module = module.with_consolidation();
+            }
+            // V4-a 人格提取步: 开关 + 人格层落库面齐备才接 (默认未接线);
+            // 运行触发点 = 整编触发点 (with_consolidation), 同一条人格管线。
+            if config.persona_consolidation {
+                if let Some(persona) = &backends.persona_layer {
+                    module = module.with_persona_layer(Arc::clone(persona));
+                }
+            }
+            // V4-b 散列增量门: 开关 + 散列门落库面齐备才接 (默认未接线);
+            // 运行触发点 = 整编触发点 (with_consolidation), 同一条整编管线。
+            if config.consolidation_hash_gate {
+                if let Some(gate) = &backends.ingest_gate {
+                    module = module.with_ingest_gate(Arc::clone(gate));
+                }
+            }
+            if let (Some(wiki), Some(graph), Some(associations)) =
+                (&backends.wiki, &backends.graph, &backends.associations)
+            {
+                module = module.with_experience(
+                    Arc::clone(wiki),
+                    Arc::clone(graph),
+                    Arc::clone(associations),
+                );
+            }
+            if let Some(journal) = &backends.memory_recovery {
+                module = module.with_recovery_journal(journal.clone());
+            }
+            Some(Arc::new(module.with_telemetry(Arc::clone(&telemetry))))
+        } else {
+            None
+        };
+        let mut memory_correction = None;
+        if let (Some(writer), Some(journal), Some(coordinator)) = (
+            &memory_writer,
+            &backends.memory_recovery,
+            &shared_coordinator,
+        ) {
+            modules.push(Arc::new(super::memory_recovery::MemoryRecoveryModule::new(
+                writer.clone(),
+            )));
+            let mut correction = super::memory_correction::MemoryCorrectionModule::new(
+                coordinator.clone(),
+                clock.clone(),
+            )
+            .with_journal(journal.clone());
+            if let Some(policy) = &backends.memory_correction_policy {
+                correction = correction.with_policy(policy.clone());
+            }
+            let correction = Arc::new(correction);
+            modules.push(correction.clone());
+            memory_correction = Some(correction);
         }
 
         // Register cognitive modules
@@ -1686,50 +1777,8 @@ impl ProductionModules {
         bio_probe_slots.fill_homeostasis(bio_wiring.homeostasis_source.as_ref());
         bio_probe_slots.fill_social_repair(bio_wiring.social_repair_source.as_ref());
 
-        if config.memory_writeback {
-            instrument.constructed(ModuleFamily::MemoryWriteback);
-            let mut module = MemoryWritebackModule::new(
-                required(backends.memory, "memory_writeback", "memory")?,
-                clock,
-            );
-            if let Some(coord) = &shared_coordinator {
-                module = module.with_coordinator(Arc::clone(coord));
-            }
-            if let Some(materializer) = &backends.memory_materializer {
-                module = module.with_materializer(Arc::clone(materializer));
-            } else if let Some(extractor) = &backends.memory_extractor {
-                module = module.with_extractor(Arc::clone(extractor));
-            }
-            if let Some(sink) = &backends.typed_sink {
-                module = module.with_typed_sink(Arc::clone(sink));
-            }
-            if config.consolidation {
-                module = module.with_consolidation();
-            }
-            // V4-a 人格提取步: 开关 + 人格层落库面齐备才接 (默认未接线);
-            // 运行触发点 = 整编触发点 (with_consolidation), 同一条人格管线。
-            if config.persona_consolidation {
-                if let Some(persona) = &backends.persona_layer {
-                    module = module.with_persona_layer(Arc::clone(persona));
-                }
-            }
-            // V4-b 散列增量门: 开关 + 散列门落库面齐备才接 (默认未接线);
-            // 运行触发点 = 整编触发点 (with_consolidation), 同一条整编管线。
-            if config.consolidation_hash_gate {
-                if let Some(gate) = &backends.ingest_gate {
-                    module = module.with_ingest_gate(Arc::clone(gate));
-                }
-            }
-            if let (Some(wiki), Some(graph), Some(associations)) =
-                (&backends.wiki, &backends.graph, &backends.associations)
-            {
-                module = module.with_experience(
-                    Arc::clone(wiki),
-                    Arc::clone(graph),
-                    Arc::clone(associations),
-                );
-            }
-            modules.push(Arc::new(module.with_telemetry(Arc::clone(&telemetry))));
+        if let Some(writer) = &memory_writer {
+            modules.push(writer.clone());
         }
 
         // W3.6: 器官模块装配后把审议门账读取口交给自述槽 (未装配 = no-op).
@@ -1765,6 +1814,8 @@ impl ProductionModules {
         Ok(Self {
             modules,
             memory_slot,
+            memory_writer,
+            memory_correction,
             tool_modules,
             capabilities,
             telemetry,
@@ -1844,6 +1895,12 @@ impl ProductionModules {
     ) -> RuntimeBuilder {
         let mut builder = mappings.register_into(builder, &self.modules);
         memory_assembly::bind_profile_mappings(&self.memory_slot, &mappings);
+        if let Some(writer) = &self.memory_writer {
+            writer.attach_profile_mappings(mappings.clone());
+        }
+        if let Some(correction) = &self.memory_correction {
+            correction.attach_profile_mappings(mappings.clone());
+        }
         for module in self.tool_modules {
             builder = builder.with_plugin(module);
         }

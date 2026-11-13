@@ -253,6 +253,22 @@ impl SqliteTemporalGraphStore {
     /// returned in the value rather than trusting the caller's revision field.
     pub async fn append(
         &self,
+        fact: TemporalGraphFact,
+    ) -> Result<TemporalGraphFact, TemporalGraphError> {
+        self.append_inner(None, fact).await
+    }
+
+    pub async fn append_recovery(
+        &self,
+        operation_id: &str,
+        fact: TemporalGraphFact,
+    ) -> Result<TemporalGraphFact, TemporalGraphError> {
+        self.append_inner(Some(operation_id.to_owned()), fact).await
+    }
+
+    async fn append_inner(
+        &self,
+        operation_id: Option<String>,
         mut fact: TemporalGraphFact,
     ) -> Result<TemporalGraphFact, TemporalGraphError> {
         validate_fact(&fact)?;
@@ -262,11 +278,35 @@ impl SqliteTemporalGraphStore {
         let scope_json = canonical_json(&fact.scope)?;
         let provenance_json = canonical_json(&fact.provenance)?;
         let stored = fact.clone();
+        let hash = crate::writeback_recovery::payload_hash(&stored)
+            .map_err(|e| StorageError::Serialization(e.to_string()))?;
         let revision = self
             .pool
             .write(move |conn| {
                 let tx = conn.transaction()?;
+                if let Some(id) = &operation_id {
+                    if crate::writeback_recovery::operation_applied(&tx, id, &hash)
+                        .map_err(|e| StorageError::Serialization(e.to_string()))?
+                    {
+                        let revision = tx.query_row(
+                            "SELECT revision FROM temporal_graph_facts WHERE id=?1",
+                            [&stored.id],
+                            |r| r.get(0),
+                        )?;
+                        tx.commit()?;
+                        return Ok(revision);
+                    }
+                }
                 let revision = append_in_transaction(&tx, &stored, &scope_json, &provenance_json)?;
+                if let Some(id) = &operation_id {
+                    crate::writeback_recovery::record_operation_applied(
+                        &tx,
+                        id,
+                        &hash,
+                        stored.created_at_ms,
+                    )
+                    .map_err(|e| StorageError::Serialization(e.to_string()))?;
+                }
                 tx.commit()?;
                 Ok(revision)
             })
@@ -469,6 +509,11 @@ impl SqliteTemporalGraphStore {
                     }) else {
                         continue;
                     };
+                    // A hidden chosen revision never falls back to a stale
+                    // assertion. Corrections inherit their source ancestry.
+                    if !visible_sources(conn, &fact.id)? {
+                        continue;
+                    }
                     if query
                         .subject_id
                         .as_ref()
@@ -498,7 +543,8 @@ impl SqliteTemporalGraphStore {
             .map_err(Into::into)
     }
 
-    /// Returns all immutable revisions for one stable relation key.
+    /// Returns governance-visible revisions for one stable relation key.
+    /// The immutable SQL rows remain available to the owning audit surface.
     pub fn history(
         &self,
         relation_key: &str,
@@ -515,7 +561,14 @@ impl SqliteTemporalGraphStore {
                       ORDER BY revision ASC, id ASC",
                 )?;
                 let rows = statement.query_map(params![relation_key], row_fact)?;
-                Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+                let mut visible = Vec::new();
+                for fact in rows {
+                    let fact = fact?;
+                    if visible_sources(conn, &fact.id)? {
+                        visible.push(fact)
+                    }
+                }
+                Ok(visible)
             })
             .map_err(Into::into)
     }
@@ -580,12 +633,76 @@ impl SqliteTemporalGraphStore {
     }
 }
 
-fn append_in_transaction(
+fn visible_sources(conn: &rusqlite::Connection, id: &str) -> Result<bool, StorageError> {
+    let governed_correction = if crate::writeback_recovery::has_table(
+        conn,
+        "memory_recovery_operation_receipts",
+    )
+    .map_err(|e| StorageError::Serialization(e.to_string()))?
+    {
+        conn.query_row("SELECT EXISTS(SELECT 1 FROM temporal_graph_facts f JOIN memory_recovery_operation_receipts r ON r.operation_id=json_extract(f.provenance_json,'$.operation') WHERE f.id=?1)",[id],|r|r.get::<_,bool>(0))?
+    } else {
+        false
+    };
+    let mut statement = conn.prepare(
+        "WITH RECURSIVE ancestry(id,source_episode_id,supersedes_id) AS (
+      SELECT id,source_episode_id,supersedes_id FROM temporal_graph_facts WHERE id=?1
+      UNION SELECT f.id,f.source_episode_id,f.supersedes_id FROM temporal_graph_facts f
+      JOIN ancestry a ON f.id=a.supersedes_id)
+      SELECT DISTINCT source_episode_id FROM ancestry WHERE source_episode_id IS NOT NULL",
+    )?;
+    let sources = statement
+        .query_map([id], |r| r.get::<_, String>(0))?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    for source in sources {
+        match crate::writeback_recovery::assert_episode_source_allowed(conn, &source) {
+            Ok(()) => {}
+            Err(crate::MemoryError::Invalid(_)) => return Ok(false),
+            Err(error) => return Err(StorageError::Serialization(error.to_string())),
+        }
+        if !governed_correction
+            && crate::writeback_recovery::has_table(conn, "episode_governance")
+                .map_err(|e| StorageError::Serialization(e.to_string()))?
+        {
+            let revised:bool=conn.query_row("SELECT EXISTS(SELECT 1 FROM episode_governance WHERE episode_id=?1 AND content_override IS NOT NULL)",[&source],|r|r.get(0))?;
+            if revised {
+                return Ok(false);
+            }
+        }
+    }
+    Ok(true)
+}
+
+pub(crate) fn append_in_transaction(
     tx: &Transaction<'_>,
     fact: &TemporalGraphFact,
     scope_json: &str,
     provenance_json: &str,
 ) -> Result<i64, StorageError> {
+    if let Some(source) = &fact.source_episode_id {
+        crate::writeback_recovery::assert_episode_source_allowed(tx, source)
+            .map_err(|e| StorageError::Serialization(e.to_string()))?;
+    }
+    let existing = tx
+        .query_row(
+            "SELECT id, relation_key, subject_id, predicate, object_id,
+         valid_from_ms, valid_until_ms, believed_at_ms, source_episode_id,
+         scope_json, provenance_json, confidence, revision, supersedes_id,
+         retracted_at_ms, created_at_ms FROM temporal_graph_facts WHERE id=?1",
+            [&fact.id],
+            row_fact,
+        )
+        .optional()?;
+    if let Some(existing) = existing {
+        let mut replay = fact.clone();
+        replay.revision = existing.revision;
+        if replay != existing {
+            return Err(StorageError::Serialization(
+                "temporal fact identity conflict".into(),
+            ));
+        }
+        return Ok(existing.revision);
+    }
     let revision: i64 = tx.query_row(
         "SELECT COALESCE(MAX(revision), -1) + 1
            FROM temporal_graph_facts

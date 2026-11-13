@@ -332,4 +332,10 @@ CREATE INDEX IF NOT EXISTS idx_dedup_last_seen
         sql: "",
         idempotent: Some(v19_memory_chain_schema),
     },
+    Migration {
+        version: 20,
+        name: "V20__memory_writeback_recovery",
+        sql: crate::writeback_recovery::SCHEMA_SQL,
+        idempotent: None,
+    },
 ];

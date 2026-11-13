@@ -329,6 +329,15 @@ pub(crate) fn put_chained_episode_record(
     entry: &ChainEntry,
     metadata: Option<&serde_json::Value>,
 ) -> MemoryResult<ChainWriteOutcome> {
+    validate_chain_entry(subject_id, entry)?;
+    ensure_chain_schema(conn)?;
+    let tx = Transaction::new_unchecked(conn, TransactionBehavior::Immediate)?;
+    let result = put_chained_episode_in_transaction(&tx, subject_id, entry, metadata)?;
+    tx.commit()?;
+    Ok(result)
+}
+
+fn validate_chain_entry(subject_id: &str, entry: &ChainEntry) -> MemoryResult<()> {
     let subject = subject_id.trim();
     if subject.is_empty() {
         return Err(MemoryError::Invalid(
@@ -340,7 +349,20 @@ pub(crate) fn put_chained_episode_record(
             "memory chain episode id is empty".into(),
         ));
     }
-    ensure_chain_schema(conn)?;
+    Ok(())
+}
+
+/// Caller owns the transaction and has applied the formal memory migrations.
+/// No BEGIN/COMMIT is performed here, so a domain mutation and its evidence
+/// can share exactly one transaction.
+pub(crate) fn put_chained_episode_in_transaction(
+    conn: &Connection,
+    subject_id: &str,
+    entry: &ChainEntry,
+    metadata: Option<&serde_json::Value>,
+) -> MemoryResult<ChainWriteOutcome> {
+    validate_chain_entry(subject_id, entry)?;
+    let subject = subject_id.trim();
     let columns = EpisodeColumns::detect(conn)?;
     if !columns.chain_hash || !columns.chain_prev_hash {
         return Err(MemoryError::Other(
@@ -348,9 +370,10 @@ pub(crate) fn put_chained_episode_record(
         ));
     }
 
-    // IMMEDIATE 事务：先读链头再写 ⇒ 读-改-写必须原子，否则并发写会算出同一个前驱
-    // （两条记录指同一个前驱 = 链分叉）。
-    let tx = Transaction::new_unchecked(conn, TransactionBehavior::Immediate)?;
+    let tx = conn;
+    if let Some(metadata) = metadata {
+        crate::writeback_recovery::assert_metadata_source_allowed(tx, metadata)?;
+    }
 
     let head: Option<(String, i64)> = tx
         .query_row(
@@ -401,7 +424,6 @@ pub(crate) fn put_chained_episode_record(
             params![entry.id],
             |row| Ok((row.get(0)?, row.get(1)?)),
         )?;
-        tx.commit()?;
         return Ok(ChainWriteOutcome {
             subject_id: subject.to_string(),
             episode_id: entry.id.clone(),
@@ -422,8 +444,6 @@ pub(crate) fn put_chained_episode_record(
              updated_at_ms = excluded.updated_at_ms",
         params![subject, digest, new_count, now_ms()],
     )?;
-    tx.commit()?;
-
     Ok(ChainWriteOutcome {
         subject_id: subject.to_string(),
         episode_id: entry.id.clone(),

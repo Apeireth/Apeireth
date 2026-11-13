@@ -15,6 +15,7 @@ use crate::{
 use apeireth_orchestration::untrusted_envelope::{EnvelopeCompleteness, UntrustedEnvelope};
 
 pub(crate) mod diversity;
+pub(crate) const RANKED_POOL_CAP: usize = 64;
 mod first_pos;
 mod fusion;
 mod scoring;
@@ -289,7 +290,7 @@ impl Default for HybridRetrievalPipeline {
     fn default() -> Self {
         Self {
             ranking: MemoryRankingConfig::default(),
-            candidate_cap: 64,
+            candidate_cap: RANKED_POOL_CAP,
             max_rerank_tokens: 1_024,
             // ⚠️ **默认关闭**（见字段文档：模板卷会掉，真实查询卷会涨）
             first_pos_alpha: 0.0,
@@ -433,6 +434,39 @@ impl HybridRetrievalPipeline {
         limit: usize,
         max_chars: usize,
     ) -> Result<(Vec<MemoryCandidate>, RetrievalStatus), MemoryError> {
+        let (candidates, status) =
+            self.ranked_with_status_in(session, query, visible_scopes, sources)?;
+        let result = diversity::select(&self.ranking, candidates, limit, max_chars);
+        Ok((result, status))
+    }
+
+    /// Bounded discovery before content deduplication or delivery budgeting.
+    /// Source-qualified callers select their strata before applying MMR and
+    /// the real prompt budget. Scope, scores and score ordering are shared.
+    pub(crate) fn bounded_ranked_pool_for_session(
+        &self,
+        session_id: &str,
+        query: &str,
+        visible_scopes: &[MemoryScope],
+        sources: &[&dyn MemoryCandidateSource],
+    ) -> Result<(Vec<MemoryCandidate>, RetrievalStatus), MemoryError> {
+        let (mut candidates, status) = self.ranked_with_status_in(
+            SessionContext::Explicit(session_id),
+            query,
+            visible_scopes,
+            sources,
+        )?;
+        candidates.truncate(self.candidate_cap.min(RANKED_POOL_CAP));
+        Ok((candidates, status))
+    }
+
+    fn ranked_with_status_in(
+        &self,
+        session: SessionContext<'_>,
+        query: &str,
+        visible_scopes: &[MemoryScope],
+        sources: &[&dyn MemoryCandidateSource],
+    ) -> Result<(Vec<MemoryCandidate>, RetrievalStatus), MemoryError> {
         let mut by_id: HashMap<String, MemoryCandidate> = HashMap::new();
         let mut status = RetrievalStatus::default();
         // 两阶段顺序（主力先、填充后；理由见 `fusion.rs` 文件头）。
@@ -514,9 +548,7 @@ impl HybridRetrievalPipeline {
                 .then_with(|| a.id.cmp(&b.id))
         });
 
-        // 残差式多样性重排（相关性-多样性折中；机制与开关见 `diversity` 子模块）。
-        let result = diversity::select(&self.ranking, candidates, limit, max_chars);
-        Ok((result, status))
+        Ok((candidates, status))
     }
 
     /// Optional model reranking is bounded and falls back to deterministic
@@ -702,6 +734,44 @@ mod tests {
         ) -> Result<Vec<MemoryCandidate>, MemoryError> {
             Ok(self.0.clone())
         }
+    }
+
+    #[test]
+    fn bounded_ranked_discovery_preserves_source_aliases_and_scores_before_delivery_selection() {
+        let scope = MemoryScope::Global;
+        let source = FixedSource(
+            (0..80)
+                .map(|index| {
+                    candidate(
+                        &format!("source-{index:02}"),
+                        "same original body",
+                        scope.clone(),
+                    )
+                })
+                .collect(),
+        );
+        let pipeline = HybridRetrievalPipeline::default();
+        let (pool, _) = pipeline
+            .bounded_ranked_pool_for_session(
+                "bounded-discovery",
+                "body",
+                &[scope.clone()],
+                &[&source],
+            )
+            .unwrap();
+        assert_eq!(pool.len(), 64);
+        assert_eq!(pool[0].id, "source-00");
+        assert_eq!(pool[63].id, "source-63");
+        let legacy = pipeline
+            .retrieve_for_session("bounded-discovery", "body", &[scope], &[&source], 80, 1000)
+            .unwrap();
+        assert_eq!(
+            legacy.len(),
+            1,
+            "legacy content deduplication remains intact"
+        );
+        assert_eq!(pool[0].score, legacy[0].score);
+        assert_eq!(pool[0].content, legacy[0].content);
     }
 
     /// ⭐⭐ **按路归一化**（2026-11-06）：**量级小的那一路也能赢**。

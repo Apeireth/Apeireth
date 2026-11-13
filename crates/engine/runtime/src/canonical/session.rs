@@ -11,7 +11,7 @@
 //! is async from the start even though the only implementation here is in-memory.
 
 use std::collections::BTreeMap;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -611,6 +611,27 @@ fn rebuilt_event_stream(
 /// Where sessions live.
 #[async_trait]
 pub trait SessionStore: Send + Sync {
+    fn supports_operation_evidence(&self) -> bool {
+        false
+    }
+    async fn put_operation_evidence(
+        &self,
+        intent: &super::CommittedOperationIntent,
+    ) -> RuntimeResult<super::CommittedOperationIntent> {
+        Err(RuntimeError::session_save(
+            intent.input.session,
+            "operation evidence is unsupported",
+        ))
+    }
+    async fn operation_evidence(
+        &self,
+        id: &SessionId,
+    ) -> RuntimeResult<Vec<super::CommittedOperationIntent>> {
+        Err(RuntimeError::session_load(
+            *id,
+            "operation evidence is unsupported",
+        ))
+    }
     /// Load a session, or `None` if it does not exist.
     async fn load(&self, id: &SessionId) -> RuntimeResult<Option<Session>>;
 
@@ -647,6 +668,8 @@ pub trait SessionStore: Send + Sync {
 #[derive(Debug, Default)]
 pub struct InMemorySessionStore {
     sessions: Mutex<BTreeMap<SessionId, Session>>,
+    operations: Mutex<Vec<super::CommittedOperationIntent>>,
+    operation_sequence: AtomicU64,
 }
 
 impl InMemorySessionStore {
@@ -668,6 +691,62 @@ impl InMemorySessionStore {
 
 #[async_trait]
 impl SessionStore for InMemorySessionStore {
+    fn supports_operation_evidence(&self) -> bool {
+        true
+    }
+    async fn put_operation_evidence(
+        &self,
+        intent: &super::CommittedOperationIntent,
+    ) -> RuntimeResult<super::CommittedOperationIntent> {
+        if super::committed_evidence::operation_payload_hash(&intent.payload)
+            .map_err(|error| RuntimeError::session_save(intent.input.session, error.to_string()))?
+            != intent.payload_hash
+        {
+            return Err(RuntimeError::session_save(
+                intent.input.session,
+                "operation evidence integrity mismatch",
+            ));
+        }
+        let mut entries = self.operations.lock().await;
+        if let Some(existing) = entries.iter().find(|entry| {
+            entry.input.session == intent.input.session && entry.operation_id == intent.operation_id
+        }) {
+            if existing.module_id != intent.module_id
+                || existing.payload_hash != intent.payload_hash
+                || existing.payload != intent.payload
+                || existing.input != intent.input
+            {
+                return Err(RuntimeError::session_save(
+                    intent.input.session,
+                    "operation evidence identity conflict",
+                ));
+            }
+            return Ok(existing.clone());
+        }
+        let mut value = intent.clone();
+        value.sequence = self
+            .operation_sequence
+            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |seq| seq.checked_add(1))
+            .map_err(|_| {
+                RuntimeError::session_save(intent.input.session, "operation sequence exhausted")
+            })?
+            + 1;
+        entries.push(value.clone());
+        Ok(value)
+    }
+    async fn operation_evidence(
+        &self,
+        id: &SessionId,
+    ) -> RuntimeResult<Vec<super::CommittedOperationIntent>> {
+        Ok(self
+            .operations
+            .lock()
+            .await
+            .iter()
+            .filter(|entry| entry.input.session == *id)
+            .cloned()
+            .collect())
+    }
     async fn load(&self, id: &SessionId) -> RuntimeResult<Option<Session>> {
         Ok(self.sessions.lock().await.get(id).cloned())
     }
@@ -691,6 +770,10 @@ impl SessionStore for InMemorySessionStore {
     }
 
     async fn delete(&self, id: &SessionId) -> RuntimeResult<bool> {
+        self.operations
+            .lock()
+            .await
+            .retain(|entry| entry.input.session != *id);
         Ok(self.sessions.lock().await.remove(id).is_some())
     }
 }

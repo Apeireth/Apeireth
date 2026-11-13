@@ -31,6 +31,7 @@ pub mod behavior_adapter;
 mod behavior_projection;
 pub mod cache_trace;
 pub mod capability;
+pub mod committed_evidence;
 pub mod context;
 // 内部控制命令: 注册式状态请求面 (描述符与实现分离; 内核不匹配业务工具名)。
 pub mod control;
@@ -102,6 +103,10 @@ pub use approval::{
     FrozenTurnContinuation, PendingApproval, PendingApprovalView,
 };
 pub use capability::{CapabilityProvider, CapabilityRegistry};
+pub use committed_evidence::{
+    CommittedEvidenceAccess, CommittedEvidencePage, CommittedInputOrigin, CommittedOperationIntent,
+    CommittedTurnSnapshot, CommittedUserInput,
+};
 pub use context::{ContextProjectionError, ContextProjector, NoContextProjector};
 pub use control::{ControlCommand, ControlContext};
 pub use domain_plane::{DomainRuntimeContext, DomainRuntimePlane, DomainSessionPlane};

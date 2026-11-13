@@ -119,12 +119,12 @@
 {"id": "ig-v1-119", "query": "H3 的兜底为什么只对窄目录生效？", "expect_ids": ["doc:477595206336"], "expect_fragments": ["窄目录 ≤8 文件"], "tags": ["status", "H3"]}
 {"id": "ig-v1-120", "query": "怎么复核哈希链真在写入路径？", "expect_ids": ["doc:4e824195ae6a"], "expect_fragments": ["put_chained_episode"], "tags": ["status", "D0"]}
 {"id": "ig-v1-121", "query": "D2 在离线环境下的后果是什么？", "expect_ids": ["doc:71d04b109c2d"], "expect_fragments": ["支持本地兼容端点。未配置则走词面回落"], "tags": ["status", "D2"]}
-{"id": "ig-v1-122", "query": "B0-c 台账缺失时复核命令会输出什么？", "expect_ids": ["doc:83d5ca1d6fbb"], "expect_fragments": ["B0-c 未开始"], "tags": ["status", "B0-c"]}
+{"id": "ig-v1-122", "query": "B0-c 当前模块、候选及已测数量应以什么为准？", "expect_ids": ["doc:f25a6d5e6450"], "expect_fragments": ["当前模块、候选、已测及测法无效数量以页首自动事实块和 `scripts/d4-ledger.json` 为准"], "tags": ["status", "B0-c"]}
 {"id": "ig-v1-123", "query": "2026-10-28 两项初测的测法无效时，B0-c 的有效数字起点是多少？", "expect_ids": ["doc:b1ccfabde538"], "expect_fragments": ["当时两项测法均无效，**有效数字 0 行**"], "tags": ["status", "B0-c"]}
 {"id": "ig-v1-124", "query": "变更纪律里为什么要禁止引用对话记忆？", "expect_ids": ["doc:a391ba706796"], "expect_fragments": ["我曾因此误判"], "tags": ["status", "纪律"]}
 {"id": "ig-v1-125", "query": "claims-verify 为什么必须装 Tauri 系统库？", "expect_ids": ["doc:ae00ef7351eb"], "expect_fragments": ["否则 CI 会假红"], "tags": ["status", "CI"]}
 {"id": "ig-v1-126", "query": "dedup 那次的掉分被称为什么？", "expect_ids": ["doc:b1ccfabde538"], "expect_fragments": ["被误用"], "tags": ["status", "B0-c"]}
-{"id": "ig-v1-127", "query": "横向看 B0 这一批的整体状态是什么？", "expect_ids": ["doc:c3e04a7d39d4"], "expect_fragments": ["这不代表 B0 全部完成或自动事实纠错已实现"], "tags": ["status", "B0"]}
+{"id": "ig-v1-127", "query": "横向看 B0 这一批的整体状态是什么？", "expect_ids": ["doc:c3e04a7d39d4"], "expect_fragments": ["一般语义完备性、真实模型答题质量及 B0 整体验收尚未建立"], "tags": ["status", "B0"]}
 {"id": "ig-v1-128", "query": "B0-a 适配器文件叫什么？", "expect_ids": ["doc:d035d02f30db"], "expect_fragments": ["perltqa_adapter.rs"], "tags": ["status", "B0-a"]}
 {"id": "ig-v1-129", "query": "B0-a 现在缺的是什么？", "expect_ids": ["doc:f25a6d5e6450"], "expect_fragments": ["适配器有，数据下不来"], "tags": ["status", "B0-a"]}
 {"id": "ig-v1-130", "query": "文档分类守卫改用哪种粒度锚定判定？", "expect_ids": ["doc:f8f5a90d4092"], "expect_fragments": ["标题级 / 列表表格行级锚定"], "tags": ["audit", "H8"]}
@@ -251,7 +251,7 @@
 {"id": "ig-v1-250", "query": "紅樓夢上送达率对应的漏送比例是多少？", "expect_ids": ["doc:79a03fc44a92"], "expect_fragments": ["69.0%"], "tags": ["evidence", "数字"]}
 {"id": "ig-v1-251", "query": "未标注记录还剩多少条（批次记录用）？", "expect_ids": ["doc:7a5275865617"], "expect_fragments": ["AGENTS.md §5.1"], "tags": ["handover"]}
 {"id": "ig-v1-253", "query": "问责闭环的回填账与自述面用的是同一个什么对象？", "expect_ids": ["doc:8240675cf39b"], "expect_fragments": ["ConsequenceTracker"], "tags": ["fix"]}
-{"id": "ig-v1-254", "query": "未接线模块数为 93 的那条复核命令在哪份脚本？", "expect_ids": ["doc:83d5ca1d6fbb"], "expect_fragments": ["B0-c 未开始"], "tags": ["status"]}
+{"id": "ig-v1-254", "query": "未接线模块数为 93 的那条复核命令在哪份脚本？", "expect_ids": ["doc:b8fe6b2b658c"], "expect_fragments": ["python3 scripts/audit_unwired_modules.py | head -1"], "tags": ["status"]}
 {"id": "ig-v1-255", "query": "CI 门禁本地镜像补齐覆盖了多少场景导出？", "expect_ids": ["doc:84e32b7a1d18"], "expect_fragments": ["2835 场景导出"], "tags": ["ci", "数字"]}
 {"id": "ig-v1-256", "query": "文档事实体系的机器真源目录是哪个？", "expect_ids": ["doc:84eb2dd52aef"], "expect_fragments": ["docs/status"], "tags": ["claims"]}
 {"id": "ig-v1-257", "query": "打包脚本的版本漂移根因是什么？", "expect_ids": ["doc:84f031507c7b"], "expect_fragments": ["编译期 hardcode"], "tags": ["fix"]}

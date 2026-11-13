@@ -245,7 +245,7 @@ pub struct PersonaStatusSection {
 }
 
 /// 一条人格候选陈述 (原文 + 来源情节).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PersonaStatement {
     /// 候选原文 (逐字).
     pub text: String,
@@ -254,7 +254,7 @@ pub struct PersonaStatement {
 }
 
 /// 人格增量 (一次提炼步的产出).
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PersonaExtract {
     /// 信念候选.
     pub core_beliefs: Vec<PersonaStatement>,
@@ -1028,6 +1028,17 @@ pub fn sweep_persona(
 
 /// 人格记忆存储面 (与用户事实层分表).
 pub trait PersonaMemoryStore: Send + Sync {
+    fn consolidate_once(
+        &self,
+        operation_id: &str,
+        extract: &PersonaExtract,
+        at_secs: i64,
+    ) -> MemoryResult<()> {
+        let _ = (operation_id, extract, at_secs);
+        Err(MemoryError::Invalid(
+            "durable persona consolidation is not supported".into(),
+        ))
+    }
     /// 读出人格记忆聚合.
     fn load(&self) -> MemoryResult<PersonaMemory>;
     /// 落盘人格记忆聚合 (状态面: 行集 = 当前聚合).
@@ -1075,6 +1086,44 @@ impl PersonaMemoryStore for InMemoryPersonaMemoryStore {
 }
 
 impl PersonaMemoryStore for SqliteMemoryStore {
+    fn consolidate_once(
+        &self,
+        operation_id: &str,
+        extract: &PersonaExtract,
+        at_secs: i64,
+    ) -> MemoryResult<()> {
+        let hash = crate::writeback_recovery::payload_hash(&(extract, at_secs))?;
+        let mut conn = self.conn()?;
+        let tx = conn.transaction()?;
+        if crate::writeback_recovery::operation_applied(&tx, operation_id, &hash)? {
+            tx.commit()?;
+            return Ok(());
+        }
+        for statement in extract
+            .core_beliefs
+            .iter()
+            .chain(&extract.preferences)
+            .chain(&extract.boundaries)
+            .chain(&extract.narrative_lines)
+        {
+            crate::writeback_recovery::assert_episode_source_allowed(
+                &tx,
+                &statement.source_episode_id,
+            )?;
+        }
+        let mut memory = load_persona_memory(&tx)?;
+        if memory.apply_extract(extract, at_secs).changed {
+            save_persona_memory(&tx, &memory)?;
+        }
+        crate::writeback_recovery::record_operation_applied(
+            &tx,
+            operation_id,
+            &hash,
+            at_secs.saturating_mul(1000),
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
     fn load(&self) -> MemoryResult<PersonaMemory> {
         self.persona_memory_load()
     }
@@ -1092,144 +1141,160 @@ impl SqliteMemoryStore {
     /// 读人格记忆聚合 (`persona_memory_*` 三表).
     pub fn persona_memory_load(&self) -> MemoryResult<PersonaMemory> {
         let conn = self.conn()?;
-        let mut memory = PersonaMemory::default();
-        let mut stmt = conn.prepare(
-            "SELECT id, kind, text, sources_json, polarity, created_at, updated_at, protection \
-             FROM persona_memory_entries ORDER BY created_at ASC, id ASC",
-        )?;
-        let rows = stmt.query_map([], |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, String>(2)?,
-                row.get::<_, String>(3)?,
-                row.get::<_, String>(4)?,
-                row.get::<_, i64>(5)?,
-                row.get::<_, i64>(6)?,
-                row.get::<_, String>(7)?,
-            ))
-        })?;
-        for row in rows {
-            let (id, kind, text, sources_json, polarity, created_at, updated_at, protection) = row?;
-            let kind = PersonaKind::from_str_value(&kind).ok_or_else(|| {
-                MemoryError::Invalid(format!("unknown persona kind in store: {kind}"))
-            })?;
-            let polarity = PersonaPolarity::from_str_value(&polarity).ok_or_else(|| {
-                MemoryError::Invalid(format!("unknown persona polarity in store: {polarity}"))
-            })?;
-            let protection = PersonaProtection::from_str_value(&protection).ok_or_else(|| {
-                MemoryError::Invalid(format!("unknown persona protection in store: {protection}"))
-            })?;
-            let sources: Vec<String> = serde_json::from_str(&sources_json).unwrap_or_default();
-            let entry = PersonaEntry {
-                id,
-                kind,
-                text,
-                sources,
-                polarity,
-                created_at,
-                updated_at,
-                protection,
-            };
-            match kind {
-                PersonaKind::CoreBelief => memory.core_beliefs.push(entry),
-                PersonaKind::Preference => memory.preferences.push(entry),
-                PersonaKind::Boundary => memory.boundaries.push(entry),
-            }
-        }
-        drop(stmt);
-
-        let mut stmt = conn.prepare(
-            "SELECT id, kind, existing_entry_id, existing_text, incoming_text, note, detected_at, resolved \
-             FROM persona_memory_tensions ORDER BY detected_at ASC, id ASC",
-        )?;
-        let rows = stmt.query_map([], |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, String>(2)?,
-                row.get::<_, String>(3)?,
-                row.get::<_, String>(4)?,
-                row.get::<_, String>(5)?,
-                row.get::<_, i64>(6)?,
-                row.get::<_, i64>(7)?,
-            ))
-        })?;
-        for row in rows {
-            let (
-                id,
-                kind,
-                existing_entry_id,
-                existing_text,
-                incoming_text,
-                note,
-                detected_at,
-                resolved,
-            ) = row?;
-            let kind = PersonaKind::from_str_value(&kind).ok_or_else(|| {
-                MemoryError::Invalid(format!("unknown persona tension kind in store: {kind}"))
-            })?;
-            memory.tensions.push(PersonaTension {
-                id,
-                kind,
-                existing_entry_id,
-                existing_text,
-                incoming_text,
-                note,
-                detected_at,
-                resolved: resolved != 0,
-            });
-        }
-        drop(stmt);
-
-        let state = conn
-            .query_row(
-                "SELECT self_narrative, updated_at, last_consolidation_at \
-                 FROM persona_memory_state WHERE singleton = 1",
-                [],
-                |row| {
-                    Ok((
-                        row.get::<_, String>(0)?,
-                        row.get::<_, i64>(1)?,
-                        row.get::<_, Option<i64>>(2)?,
-                    ))
-                },
-            )
-            .optional()?;
-        if let Some((self_narrative, updated_at, last_consolidation_at)) = state {
-            memory.self_narrative = self_narrative;
-            memory.updated_at = updated_at;
-            memory.last_consolidation_at = last_consolidation_at;
-        }
-        Ok(memory)
+        load_persona_memory(&conn)
     }
 
     /// 落盘人格记忆聚合 (状态面持久化: 行集 = 当前聚合, 变更经合并策略).
     pub fn persona_memory_save(&self, memory: &PersonaMemory) -> MemoryResult<()> {
         let mut conn = self.conn()?;
         let tx = conn.transaction()?;
-        tx.execute("DELETE FROM persona_memory_entries", [])?;
-        tx.execute("DELETE FROM persona_memory_tensions", [])?;
-        for entry in memory.all_entries() {
-            let sources_json = serde_json::to_string(&entry.sources)?;
-            tx.execute(
-                "INSERT INTO persona_memory_entries \
+        save_persona_memory(&tx, memory)?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// 自述节 (只计数, 不回内容).
+    pub fn persona_memory_status(&self) -> MemoryResult<PersonaStatusSection> {
+        Ok(self.persona_memory_load()?.status())
+    }
+}
+
+fn load_persona_memory(conn: &rusqlite::Connection) -> MemoryResult<PersonaMemory> {
+    let mut memory = PersonaMemory::default();
+    let mut stmt = conn.prepare(
+        "SELECT id, kind, text, sources_json, polarity, created_at, updated_at, protection \
+             FROM persona_memory_entries ORDER BY created_at ASC, id ASC",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, String>(2)?,
+            row.get::<_, String>(3)?,
+            row.get::<_, String>(4)?,
+            row.get::<_, i64>(5)?,
+            row.get::<_, i64>(6)?,
+            row.get::<_, String>(7)?,
+        ))
+    })?;
+    for row in rows {
+        let (id, kind, text, sources_json, polarity, created_at, updated_at, protection) = row?;
+        let kind = PersonaKind::from_str_value(&kind).ok_or_else(|| {
+            MemoryError::Invalid(format!("unknown persona kind in store: {kind}"))
+        })?;
+        let polarity = PersonaPolarity::from_str_value(&polarity).ok_or_else(|| {
+            MemoryError::Invalid(format!("unknown persona polarity in store: {polarity}"))
+        })?;
+        let protection = PersonaProtection::from_str_value(&protection).ok_or_else(|| {
+            MemoryError::Invalid(format!("unknown persona protection in store: {protection}"))
+        })?;
+        let sources: Vec<String> = serde_json::from_str(&sources_json).unwrap_or_default();
+        let entry = PersonaEntry {
+            id,
+            kind,
+            text,
+            sources,
+            polarity,
+            created_at,
+            updated_at,
+            protection,
+        };
+        match kind {
+            PersonaKind::CoreBelief => memory.core_beliefs.push(entry),
+            PersonaKind::Preference => memory.preferences.push(entry),
+            PersonaKind::Boundary => memory.boundaries.push(entry),
+        }
+    }
+    drop(stmt);
+
+    let mut stmt = conn.prepare(
+            "SELECT id, kind, existing_entry_id, existing_text, incoming_text, note, detected_at, resolved \
+             FROM persona_memory_tensions ORDER BY detected_at ASC, id ASC",
+        )?;
+    let rows = stmt.query_map([], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, String>(2)?,
+            row.get::<_, String>(3)?,
+            row.get::<_, String>(4)?,
+            row.get::<_, String>(5)?,
+            row.get::<_, i64>(6)?,
+            row.get::<_, i64>(7)?,
+        ))
+    })?;
+    for row in rows {
+        let (
+            id,
+            kind,
+            existing_entry_id,
+            existing_text,
+            incoming_text,
+            note,
+            detected_at,
+            resolved,
+        ) = row?;
+        let kind = PersonaKind::from_str_value(&kind).ok_or_else(|| {
+            MemoryError::Invalid(format!("unknown persona tension kind in store: {kind}"))
+        })?;
+        memory.tensions.push(PersonaTension {
+            id,
+            kind,
+            existing_entry_id,
+            existing_text,
+            incoming_text,
+            note,
+            detected_at,
+            resolved: resolved != 0,
+        });
+    }
+    drop(stmt);
+
+    let state = conn
+        .query_row(
+            "SELECT self_narrative, updated_at, last_consolidation_at \
+                 FROM persona_memory_state WHERE singleton = 1",
+            [],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, Option<i64>>(2)?,
+                ))
+            },
+        )
+        .optional()?;
+    if let Some((self_narrative, updated_at, last_consolidation_at)) = state {
+        memory.self_narrative = self_narrative;
+        memory.updated_at = updated_at;
+        memory.last_consolidation_at = last_consolidation_at;
+    }
+    Ok(memory)
+}
+
+fn save_persona_memory(conn: &rusqlite::Connection, memory: &PersonaMemory) -> MemoryResult<()> {
+    conn.execute("DELETE FROM persona_memory_entries", [])?;
+    conn.execute("DELETE FROM persona_memory_tensions", [])?;
+    for entry in memory.all_entries() {
+        let sources_json = serde_json::to_string(&entry.sources)?;
+        conn.execute(
+            "INSERT INTO persona_memory_entries \
                  (id, kind, text, sources_json, polarity, created_at, updated_at, protection) \
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-                rusqlite::params![
-                    entry.id,
-                    entry.kind.as_str(),
-                    entry.text,
-                    sources_json,
-                    entry.polarity.as_str(),
-                    entry.created_at,
-                    entry.updated_at,
-                    entry.protection.as_str(),
-                ],
-            )?;
-        }
-        for tension in &memory.tensions {
-            tx.execute(
+            rusqlite::params![
+                entry.id,
+                entry.kind.as_str(),
+                entry.text,
+                sources_json,
+                entry.polarity.as_str(),
+                entry.created_at,
+                entry.updated_at,
+                entry.protection.as_str(),
+            ],
+        )?;
+    }
+    for tension in &memory.tensions {
+        conn.execute(
                 "INSERT INTO persona_memory_tensions \
                  (id, kind, existing_entry_id, existing_text, incoming_text, note, detected_at, resolved) \
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
@@ -1244,8 +1309,8 @@ impl SqliteMemoryStore {
                     i64::from(tension.resolved),
                 ],
             )?;
-        }
-        tx.execute(
+    }
+    conn.execute(
             "INSERT INTO persona_memory_state (singleton, self_narrative, updated_at, last_consolidation_at) \
              VALUES (1, ?1, ?2, ?3) \
              ON CONFLICT(singleton) DO UPDATE SET \
@@ -1258,14 +1323,7 @@ impl SqliteMemoryStore {
                 memory.last_consolidation_at,
             ],
         )?;
-        tx.commit()?;
-        Ok(())
-    }
-
-    /// 自述节 (只计数, 不回内容).
-    pub fn persona_memory_status(&self) -> MemoryResult<PersonaStatusSection> {
-        Ok(self.persona_memory_load()?.status())
-    }
+    Ok(())
 }
 
 // ============================================

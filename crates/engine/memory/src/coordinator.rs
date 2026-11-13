@@ -20,7 +20,9 @@ use apeireth_plugin::preference::PreferenceStore;
 use crate::access_history::ActivationSource;
 use crate::consolidation::{ConsolidationReport, MemoryConsolidationJob};
 use crate::consolidation_trigger::{ConsolidationOutcome, ConsolidationTrigger};
-use crate::context_compiler::{ClosedWorldContextCompiler, SelectedMemoryAccess};
+use crate::context_compiler::{
+    ClosedWorldContextCompiler, MemoryEvidenceSource, SelectedMemoryAccess,
+};
 use crate::continuity_state::{ContinuityCompressor, ContinuityState};
 use crate::cross_diary_wiring::{self, CrossDiaryLimits};
 use crate::diary::DiaryStore;
@@ -60,6 +62,7 @@ pub struct MemoryCoordinator {
     associations: Option<Arc<dyn AssociationStore>>,
     compressor: ContinuityCompressor,
     compiler: ClosedWorldContextCompiler,
+    evidence_source: Option<Arc<dyn MemoryEvidenceSource>>,
     consolidation: MemoryConsolidationJob,
     /// **可选**的夜间整编驱动（窗口水位 + 只整新料）。
     ///
@@ -174,6 +177,7 @@ impl MemoryCoordinator {
             diary_store: None,
             wiki_root: None,
             audit_events: None,
+            evidence_source: None,
         }
     }
 
@@ -961,14 +965,27 @@ impl MemoryCoordinator {
         // V4-c 检索维度自进化: 排序权重取**生效值** (调权落地 override; 无调权
         // 在场 = 原配置原值, 零改动回落)。
         let pipeline = HybridRetrievalPipeline::new_for_session(&query.session_id, self.ranking);
-        let (primary_candidates, mut status) = pipeline.retrieve_with_status_for_session(
-            &query.session_id,
-            &query.query_text,
-            &query.visible_scopes,
-            &sources,
-            query.limit,
-            query.max_chars,
-        )?;
+        let qualified = self.evidence_source.is_some();
+        let discover = |text: &str| {
+            if qualified {
+                pipeline.bounded_ranked_pool_for_session(
+                    &query.session_id,
+                    text,
+                    &query.visible_scopes,
+                    &sources,
+                )
+            } else {
+                pipeline.retrieve_with_status_for_session(
+                    &query.session_id,
+                    text,
+                    &query.visible_scopes,
+                    &sources,
+                    query.limit,
+                    query.max_chars,
+                )
+            }
+        };
+        let (primary_candidates, mut status) = discover(&query.query_text)?;
 
         // 查询扩展（`query_expand`）：**召回增强**，不是替换查询。
         // # 为什么不是「直接用 rewritten 查询」
@@ -983,21 +1000,22 @@ impl MemoryCoordinator {
         // - 主查询够用 ⇒ 完全走原路径，**零行为变化**；
         // - 主查询稀疏（用户短查询、生僻词）⇒ 扩展补召回，精确匹配那篇的分数
         //   不会被任何东西压低（并集只增不减）。
-        let (ranked_candidates, mut status) = if primary_candidates.len() >= query.limit {
+        let primary_count = if qualified {
+            primary_candidates
+                .iter()
+                .filter(|candidate| candidate.score >= query.min_score)
+                .count()
+        } else {
+            primary_candidates.len()
+        };
+        let (mut ranked_candidates, mut status) = if primary_count >= query.limit {
             (primary_candidates, status)
         } else {
             let expanded = crate::query_expand::expand_query(&query.query_text);
             if expanded.extra_terms.is_empty() {
                 (primary_candidates, status)
             } else {
-                let (extra_candidates, extra_status) = pipeline.retrieve_with_status_for_session(
-                    &query.session_id,
-                    &expanded.rewritten,
-                    &query.visible_scopes,
-                    &sources,
-                    query.limit,
-                    query.max_chars,
-                )?;
+                let (extra_candidates, extra_status) = discover(&expanded.rewritten)?;
                 status.lexical_candidates += extra_status.lexical_candidates;
                 status.vector_candidates += extra_status.vector_candidates;
                 (
@@ -1010,16 +1028,27 @@ impl MemoryCoordinator {
         if self.embedding_provider.is_none() {
             status.used_lexical_fallback = true;
         }
+        if qualified {
+            ranked_candidates.truncate(crate::retrieval_pipeline::RANKED_POOL_CAP);
+            ranked_candidates.retain(|candidate| candidate.score >= query.min_score);
+        }
 
         let mut final_items = Vec::new();
+        let mut seen_content = std::collections::HashSet::new();
         // ⭐ 计费口径与选择侧**同一口径**（2026-11-08）：按交付侧实际裁到的长度计
         let (mut total_chars, span) = (0, self.ranking.candidate_span_chars);
-        for cand in ranked_candidates {
+        for cand in self.source_coverage(ranked_candidates, &pipeline.ranking) {
             if cand.score < query.min_score {
                 continue;
             }
             if final_items.len() >= query.limit {
                 break;
+            }
+            if qualified {
+                let normalized = Self::qualified_content_key(&cand.content);
+                if normalized.is_empty() || !seen_content.insert(normalized) {
+                    continue;
+                }
             }
             let Some(spent) = diversity::fit(total_chars, &cand.content, query.max_chars, span)
             else {
@@ -1127,17 +1156,26 @@ impl MemoryCoordinator {
         scope: &MemoryScope,
         provenance: &MemoryProvenance,
     ) -> Result<(), MemoryError> {
+        self.persist_episode_with_metadata(episode, scope, provenance, serde_json::json!({}))
+    }
+
+    fn persist_episode_with_metadata(
+        &self,
+        episode: &Episode,
+        scope: &MemoryScope,
+        provenance: &MemoryProvenance,
+        extra: serde_json::Value,
+    ) -> Result<(), MemoryError> {
+        let mut metadata = extra
+            .as_object()
+            .cloned()
+            .ok_or_else(|| MemoryError::Invalid("episode metadata must be an object".into()))?;
+        for (key,value) in serde_json::json!({"scope":scope,"provenance":provenance,"layer":"episodic","content_hash":crate::canonical::vector::content_hash(&episode.content)}).as_object().expect("literal object") {
+            metadata.insert(key.clone(),value.clone());
+        }
         let outcome = self
             .backend
-            .put_episode_with_metadata(
-                episode,
-                serde_json::json!({
-                    "scope": scope,
-                    "provenance": provenance,
-                    "layer": "episodic",
-                    "content_hash": crate::canonical::vector::content_hash(&episode.content),
-                }),
-            )
+            .put_episode_with_metadata(episode, serde_json::Value::Object(metadata))
             .map_err(|e| MemoryError::Invalid(e.to_string()))?;
         if outcome == EpisodeWriteOutcome::Existing {
             return Ok(());
@@ -1176,6 +1214,40 @@ impl MemoryCoordinator {
         recalled: &crate::layers::MemoryRecallResult,
         query: &MemoryRecallQuery,
     ) -> Option<SelectedMemoryAccess> {
+        if self.evidence_source.is_some() {
+            let evidence = recalled
+                .items
+                .iter()
+                .map(|item| {
+                    (
+                        item.id.clone(),
+                        self.source_evidence(&item.id, &item.content),
+                    )
+                })
+                .collect();
+            let anchored = crate::anchor_injection::AnchoredInjectionConfig::PRODUCTION;
+            let options = crate::context_compiler::SourceRenderOptions {
+                per_item_chars: if self.injection_format {
+                    if anchored.enabled {
+                        anchored.span_chars
+                    } else {
+                        crate::memory_injection::EVIDENCE_MAX_CHARS
+                    }
+                } else {
+                    self.ranking.candidate_span_chars
+                },
+                numbered: self.injection_format,
+                query: (self.injection_format && anchored.enabled)
+                    .then_some(query.query_text.as_str()),
+            };
+            return self.compiler.compile_with_source_evidence_options(
+                recalled,
+                &query.session_id,
+                query.max_chars,
+                &evidence,
+                options,
+            );
+        }
         if self.injection_format {
             // ⚠️ **D-11（owner 2026-10-28 采纳）**：注入「**主体出现处为中心**」的窗口
             // （单条 = 生产跨度，见 `AnchoredInjectionConfig::PRODUCTION`），而不是「正文开头 120 字」。

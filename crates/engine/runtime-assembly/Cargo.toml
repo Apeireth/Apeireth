@@ -10,6 +10,10 @@ description = "Production assembly for the Apeireth runtime kernel"
 keywords = ["ai", "agent", "runtime", "assembly"]
 categories = ["asynchronous"]
 
+[[example]]
+name = "memory_answer_eval"
+required-features = ["desktop"]
+
 [features]
 default = ["desktop"]
 desktop = ["memory", "profile-store", "dep:apeireth-guard", "dep:apeireth-organ", "dep:apeireth-tools-canonical"]
@@ -39,6 +43,7 @@ chrono = { workspace = true }
 rusqlite = { workspace = true, optional = true }
 
 [dev-dependencies]
+apeireth-provider = { path = "../provider" }
 tempfile = "3"
 reqwest = { workspace = true }
 

@@ -62,6 +62,70 @@ fn controlled_first_attempt_failure() {
 }
 '''
 
+RESOURCE_TESTS = (
+    "zoo_decodes_and_never_panics_when_cut_or_corrupted",
+    "tests::effect_maps_with_nested_rayon_work_do_not_deadlock",
+)
+RESOURCE_PEERS = tuple(f"resource_peer_{index}" for index in range(7))
+RESOURCE_SOURCE = '''use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+
+const HEAVY: &str = "__HEAVY_LEAF__";
+const LABELS: [&str; 8] = [
+    HEAVY, "resource_peer_0", "resource_peer_1", "resource_peer_2",
+    "resource_peer_3", "resource_peer_4", "resource_peer_5", "resource_peer_6",
+];
+
+fn mark(path: &Path) {
+    match std::fs::OpenOptions::new().write(true).create_new(true).open(path) {
+        Ok(_) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+        Err(error) => panic!("resource probe marker: {error}"),
+    }
+}
+
+fn stamp(path: &Path) {
+    let at = SystemTime::now().duration_since(UNIX_EPOCH).expect("clock").as_nanos();
+    std::fs::write(path, at.to_string()).expect("resource probe timestamp");
+}
+
+fn exercise(label: &str) {
+    let workers = std::env::var("APEIRETH_NEXTEST_RESOURCE_WORKERS").expect("probe workers");
+    assert!(workers == "2" || workers == "4");
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("events-{workers}"));
+    assert!(root.is_dir(), "only the prepared fixture directory is used");
+    let active = root.join(format!("{label}.active"));
+    stamp(&root.join(format!("{label}.start")));
+    mark(&active);
+    let started = Instant::now();
+    while started.elapsed() < Duration::from_millis(500) {
+        for other in LABELS {
+            if other == label || !root.join(format!("{other}.active")).is_file() {
+                continue;
+            }
+            let kind = if label == HEAVY || other == HEAVY { "heavy-overlap" } else { "peer-overlap" };
+            mark(&root.join(kind));
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    std::fs::remove_file(active).expect("remove own active marker");
+    stamp(&root.join(format!("{label}.end")));
+}
+
+__HEAVY_DECLARATION__
+
+macro_rules! peer {
+    ($name:ident) => { #[test] fn $name() { exercise(stringify!($name)); } };
+}
+peer!(resource_peer_0);
+peer!(resource_peer_1);
+peer!(resource_peer_2);
+peer!(resource_peer_3);
+peer!(resource_peer_4);
+peer!(resource_peer_5);
+peer!(resource_peer_6);
+'''
+
 
 def child(root: Path, relative: str) -> Path:
     """Resolve and validate every probe path before writing or reading it."""
@@ -202,6 +266,98 @@ def probe(root: Path) -> None:
         cleanup(temporary, parent)
 
 
+def verify_resource_report(
+    report: Path, events: Path, workers: int, qualified_name: str, event_name: str,
+) -> None:
+    """Check actual execution intervals and active markers, not config text."""
+    if not report.is_file():
+        raise ValueError("resource probe did not create a fresh JUnit report")
+    cases = ET.parse(report).findall(".//testcase")
+    names = {qualified_name, *RESOURCE_PEERS}
+    if len(cases) != len(names) or {case.get("name") for case in cases} != names:
+        raise ValueError("resource JUnit did not identify exactly the isolated fixture cases")
+    forbidden = {"failure", "error", "skipped", "flakyFailure", "flakyError", "rerunFailure", "rerunError"}
+    if any(node.tag in forbidden for case in cases for node in case):
+        raise ValueError("resource probe contains a failure, skip or retry instead of a first-pass measurement")
+    intervals = {}
+    # JUnit retains Rust module qualifiers; Windows event filenames use safe leaves.
+    for name in {event_name, *RESOURCE_PEERS}:
+        start = int((events / f"{name}.start").read_text(encoding="utf-8"))
+        end = int((events / f"{name}.end").read_text(encoding="utf-8"))
+        if start >= end or (events / f"{name}.active").exists():
+            raise ValueError("resource probe has an incomplete or invalid execution interval")
+        intervals[name] = (start, end)
+    heavy = intervals[event_name]
+    heavy_overlap = any(max(heavy[0], intervals[name][0]) < min(heavy[1], intervals[name][1]) for name in RESOURCE_PEERS)
+    if heavy_overlap or (events / "heavy-overlap").exists():
+        raise ValueError(f"resource probe {qualified_name} overlapped a peer with {workers} workers")
+    peer_overlap = any(
+        max(intervals[first][0], intervals[second][0]) < min(intervals[first][1], intervals[second][1])
+        for index, first in enumerate(RESOURCE_PEERS) for second in RESOURCE_PEERS[index + 1:]
+    )
+    if not peer_overlap or not (events / "peer-overlap").is_file():
+        raise ValueError(f"resource probe did not demonstrate ordinary peer concurrency with {workers} workers")
+
+
+def resource_probe(root: Path, qualified_name: str) -> None:
+    """Exercise one real heavy-case selector in its own disposable fixture."""
+    if qualified_name not in RESOURCE_TESTS:
+        raise ValueError("resource probe requires a registered heavy-case identity")
+    event_name = qualified_name.rsplit("::", 1)[-1]
+    declaration = f"#[test]\nfn {event_name}() {{ exercise(HEAVY); }}"
+    if "::" in qualified_name:
+        declaration = f"#[cfg(test)]\nmod tests {{\n    use super::*;\n{declaration}\n}}"
+    source = RESOURCE_SOURCE.replace("__HEAVY_LEAF__", event_name).replace("__HEAVY_DECLARATION__", declaration)
+    with (root / "rust-toolchain.toml").open("rb") as handle:
+        channel = tomllib.load(handle)["toolchain"]["channel"]
+    if not isinstance(channel, str) or not re.fullmatch(r"\d+\.\d+\.\d+", channel):
+        raise ValueError("the resource probe requires the repository's exact pinned Rust release")
+    config = (root / ".config" / "nextest.toml").resolve(strict=True)
+    parent = Path(tempfile.gettempdir()).resolve(strict=True)
+    temporary = Path(tempfile.mkdtemp(prefix="apeireth-nextest-resource-", dir=parent)).resolve(strict=True)
+    if temporary.parent != parent or temporary == parent:
+        raise ValueError("resource probe directory must be a fresh direct child of the temporary root")
+    output = ""
+    try:
+        child(temporary, "src").mkdir()
+        child(temporary, "Cargo.toml").write_text(MANIFEST, encoding="utf-8")
+        child(temporary, "Cargo.lock").write_text(LOCKFILE, encoding="utf-8")
+        child(temporary, "src/lib.rs").write_text(source, encoding="utf-8")
+        target = child(temporary, "target")
+        report = child(temporary, "target/nextest/ci/junit.xml")
+        for workers in (2, 4):
+            events = child(temporary, f"events-{workers}")
+            events.mkdir()
+            prepare_workspace_report(temporary)
+            env = {key: value for key, value in os.environ.items() if not key.upper().startswith("NEXTEST_")}
+            env.update({
+                "RUSTC_WRAPPER": "", "RUSTC_WORKSPACE_WRAPPER": "",
+                "RUSTUP_TOOLCHAIN": channel, "CARGO_TARGET_DIR": str(target),
+                "CARGO_BUILD_JOBS": "2", "CARGO_TERM_COLOR": "never",
+                "APEIRETH_NEXTEST_RESOURCE_WORKERS": str(workers),
+            })
+            command = [
+                "cargo", "nextest", "run", "--manifest-path", str(child(temporary, "Cargo.toml")),
+                "--config-file", str(config), "--profile", "ci", "--offline", "--locked",
+                "--test-threads", str(workers),
+            ]
+            result = subprocess.run(
+                command, cwd=temporary, env=env, capture_output=True, text=True,
+                encoding="utf-8", errors="replace", timeout=180, check=False,
+            )
+            output = result.stdout + result.stderr
+            if result.returncode:
+                raise ValueError(f"isolated resource run exited {result.returncode} with {workers} workers")
+            verify_resource_report(report, events, workers, qualified_name, event_name)
+    except (OSError, ValueError, ET.ParseError, subprocess.TimeoutExpired) as error:
+        detail = output[-20_000:]
+        if detail:
+            raise ValueError(f"{error}\nResource probe diagnostics (not workspace results):\n{detail}") from error
+        raise
+    finally:
+        cleanup(temporary, parent)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -217,10 +373,13 @@ def main() -> int:
             print(f"PASS: workspace JUnit path prepared; prior report {state}.")
             return 0
         probe(root)
+        for qualified_name in RESOURCE_TESTS:
+            resource_probe(root, qualified_name)
     except (OSError, ValueError, KeyError, ET.ParseError, subprocess.TimeoutExpired) as error:
         print(f"FAIL: nextest report probe: {error}", file=sys.stderr)
         return 1
     print("PASS: isolated nextest report probe retained retry identity and failed output in JUnit and logs.")
+    print("PASS: isolated nextest resource probes reserved all 2/4-worker slots for both heavy cases while ordinary peers ran concurrently.")
     return 0
 
 

@@ -33,3 +33,16 @@ slow-timeout = { period = "180s", terminate-after = 2 }
 # Apeireth: 直接 nextest run 自带 junit 输出
 [profile.ci.junit]
 path = "junit.xml"
+
+# This complete corruption sweep starts internal parallel decoding workers.
+# Reserve the current worker budget for this case, without changing its
+# samples, assertions, timeout, retry policy, or the other cases' concurrency.
+[[profile.ci.overrides]]
+filter = 'test(=zoo_decodes_and_never_panics_when_cut_or_corrupted)'
+threads-required = "num-test-threads"
+
+# The complete nested-Rayon regression also exercises internal worker pools.
+# Keep its original rounds and watchdog while reserving the CI worker budget.
+[[profile.ci.overrides]]
+filter = 'test(=tests::effect_maps_with_nested_rayon_work_do_not_deadlock)'
+threads-required = "num-test-threads"

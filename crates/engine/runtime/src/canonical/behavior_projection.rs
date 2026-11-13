@@ -58,9 +58,16 @@ pub(super) fn budget_module_context(
                     "invalid behavior context block",
                 ));
             };
-            overlays.push(match block["source"].as_str() {
+            let overlay = match block["source"].as_str() {
                 Some(source) => PromptOverlay::system_cross_source(source, text),
                 None => PromptOverlay::system(text),
+            };
+            // Only metadata from the exact authenticated persisted fact is
+            // consulted. A JSON-shaped claim inside text is ordinary data.
+            overlays.push(if block["atomic"] == true {
+                overlay.with_atomic_context()
+            } else {
+                overlay
             });
         }
         selected.push((index, *fact, start..overlays.len()));
@@ -76,10 +83,17 @@ pub(super) fn budget_module_context(
                 .iter_mut()
                 .zip(&budgeted[range])
             {
-                block["text"] = apeireth_protocol::canonical::ContentPart::join_text(
+                let text = apeireth_protocol::canonical::ContentPart::join_text(
                     &overlay.message().content,
-                )
-                .into();
+                );
+                if overlay.is_atomic_context()
+                    && text.is_empty()
+                    && block["text"].as_str().is_some_and(|text| !text.is_empty())
+                {
+                    block["omitted"] =
+                        serde_json::json!({"reason":"context_budget","whole_block":true});
+                }
+                block["text"] = text.into();
             }
         }
         let derived = ToolEventV1::new(

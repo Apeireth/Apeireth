@@ -859,6 +859,12 @@ def impact_plan(base: str | None) -> dict:
     return {"available": False, "stages": ["fast", "deep"], "level": "?"}
 
 
+def _verify_phase_binding(document: dict[str, Any], expected: dict[str, Any]) -> None:
+    for key in ("commit_sha", "tree_sha", "base_sha"):
+        if not expected.get(key) or document.get(key) != expected[key]:
+            raise ValueError(f"verify phase {key} differs from the frozen source")
+
+
 def cmd_verify(args: argparse.Namespace) -> int:
     """**两阶段验证**：先 `fast`；**fast 有 FAIL 就不跑 deep**。
 
@@ -892,7 +898,23 @@ def cmd_verify(args: argparse.Namespace) -> int:
         print(f"  · {reason}")
     print()
 
-    for stage in stages:
+    context = collect_context(args.base)
+    gates, notes, _ = load_registry()
+    initial_dirty = tree_is_dirty()
+    started_at = now_iso()
+    phase_runs: list[dict[str, Any]] = []
+    records: dict[str, dict[str, Any]] = {}
+    errors: list[str] = []
+    fast_failed = False
+    for stage in (name for name in ("fast", "deep") if name in stages):
+        phase_gates = [g for g in gates if g.get("stage", "fast") == stage]
+        try:
+            _verify_phase_binding(collect_context(args.base), context)
+            if tree_is_dirty() != initial_dirty:
+                raise ValueError("verify working tree dirty state changed between phases")
+        except ValueError as error:
+            errors.append(str(error))
+            break
         ns = _ap.Namespace(
             base=args.base,
             only=None,
@@ -904,50 +926,100 @@ def cmd_verify(args: argparse.Namespace) -> int:
         )
         if stage == "fast":
             print("════ 阶段 1/2：fast（秒级只读）════")
-            code = cmd_check(ns)
-            if code != 0:
-                print()
-                print("⚠️ **fast 阶段有 FAIL ⇒ 不跑 deep**（短反馈回路：先修快的）")
-                # 记录 deep 被跳过（**追加**进结果文件 ⇒ 证据里能看到 deep 未跑）
-                ctx = collect_context(args.base)
-                gates, notes, exemptions = load_registry()
-                tags = ctx["tags"]
-                deep_gates = [g for g in gates if g.get("stage", "fast") == "deep"]
-                if LAST_RUN_PATH.exists():
-                    try:
-                        doc = json.loads(LAST_RUN_PATH.read_text(encoding="utf-8"))
-                    except (OSError, json.JSONDecodeError):
-                        doc = None
-                    if isinstance(doc, dict):
-                        existing = {
-                            g.get("id")
-                            for g in doc.get("gates", [])
-                            if isinstance(g, dict)
-                        }
-                        for gate in deep_gates:
-                            if gate["id"] in existing:
-                                continue
-                            record = gate_record(
-                                gate,
-                                S_SKIPPED,
-                                "fast 阶段失败 ⇒ 不跑 deep（**不是通过**）",
-                            )
-                            record["scope_applies"] = scope_applies(gate, tags)
-                            doc.setdefault("gates", []).append(record)
-                        doc["stage"] = "fast-failed-deep-skipped"
-                        LAST_RUN_PATH.write_text(
-                            json.dumps(doc, ensure_ascii=False, indent=2) + "\n",
-                            encoding="utf-8",
-                        )
-                        print(
-                            f"（deep 的 {len(deep_gates)} 条门禁已记为 SKIPPED 进结果文件）"
-                        )
-                return code
         else:
             print()
             print("════ 阶段 2/2：deep（编译 / 重活）════")
-            code = cmd_check(ns)
-            return code
+        code = cmd_check(ns)
+        document: dict[str, Any] = {}
+        try:
+            document = json.loads(LAST_RUN_PATH.read_text(encoding="utf-8"))
+            if not isinstance(document, dict):
+                raise ValueError("verify phase evidence is not an object")
+            phase_runs.append({"stage": stage, "run": document})
+            if document.get("schema") != RUN_SCHEMA:
+                raise ValueError("verify phase evidence schema differs")
+            _verify_phase_binding(document, context)
+            _verify_phase_binding(collect_context(args.base), context)
+            if (
+                document.get("working_tree_dirty") != initial_dirty
+                or tree_is_dirty() != initial_dirty
+            ):
+                raise ValueError("verify working tree dirty state changed during a phase")
+            rows = document.get("gates")
+            if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
+                raise ValueError("verify phase gate evidence is invalid")
+            ids = [row.get("id") for row in rows]
+            if ids != [gate["id"] for gate in phase_gates]:
+                raise ValueError("verify phase gate set/order differs from the frozen contract")
+            records.update((row["id"], row) for row in rows)
+        except (OSError, ValueError) as error:
+            errors.append(str(error))
+            # Keep the original phase evidence, but never certify records from
+            # a changed source or an incomplete phase under the frozen binding.
+            observed = document.get("gates", []) if isinstance(document, dict) else []
+            observed = observed if isinstance(observed, list) else []
+            by_id = {
+                row["id"]: row for row in observed
+                if isinstance(row, dict) and isinstance(row.get("id"), str)
+            }
+            for gate in phase_gates:
+                row = gate_record(gate, S_UNVERIFIED, str(error))
+                row.update(by_id.get(gate["id"], {}))
+                row["observed_status"] = row.get("status")
+                row["status"] = S_UNVERIFIED
+                row["reason"] = str(error)
+                records[gate["id"]] = row
+            break
+        if code != 0:
+            fast_failed = stage == "fast"
+            if fast_failed:
+                print("⚠️ **fast 阶段有 FAIL/未验 ⇒ 不跑 deep**（短反馈回路）")
+            break
+
+    results = []
+    for gate in gates:
+        row = records.get(gate["id"])
+        if row is None:
+            reason = (
+                errors[-1] if errors else
+                "fast 阶段失败 ⇒ 不跑 deep（**不是通过**）" if fast_failed else
+                "影响分析未选择该阶段（**不是通过**）"
+            )
+            row = gate_record(gate, S_UNVERIFIED if errors else S_SKIPPED, reason)
+            row["scope_applies"] = scope_applies(gate, context["tags"])
+        results.append(row)
+    verdict, reasons = evaluate_verdict(results, global_reasons(context) + errors)
+    run_doc = {
+        "schema": RUN_SCHEMA,
+        "commit_sha": context["commit_sha"],
+        "tree_sha": context["tree_sha"],
+        "base_sha": context["base_sha"],
+        "started_at": started_at,
+        "finished_at": now_iso(),
+        "working_tree_dirty": initial_dirty,
+        "diff_tags": context["tags"],
+        "gates": results,
+        "verdict": verdict,
+        "verdict_reasons": reasons,
+        "changed_files": context["files"],
+        "changed_file_count": len(context["files"]),
+        "diff_source": context["diff_source"],
+        "registry_source": notes,
+        "restricted_to": None,
+        "skipped_by_request": None,
+        "stage": "fast-failed-deep-skipped" if fast_failed else "verify",
+        "phase_runs": phase_runs,
+        "verification_errors": errors,
+    }
+    LAST_RUN_PATH.parent.mkdir(parents=True, exist_ok=True)
+    LAST_RUN_PATH.write_text(json.dumps(run_doc, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print("\n== verify combined evidence ==")
+    render_gate_table(results)
+    print(f"VERDICT: {verdict}")
+    if any(row["status"] == S_FAIL for row in results):
+        return 1
+    if errors or any(row["status"] in (S_UNVERIFIED, S_BLOCKED) for row in results):
+        return 2
     return 0
 
 
@@ -1119,6 +1191,7 @@ def cmd_check(args: argparse.Namespace) -> int:
         "base_sha": ctx["base_sha"],
         "started_at": started_at,
         "finished_at": finished_at,
+        "working_tree_dirty": dirty,
         "diff_tags": tags,
         "gates": results,
         "verdict": verdict,

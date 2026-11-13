@@ -160,6 +160,12 @@ impl SqlitePersonaProfileStore {
 
 #[async_trait::async_trait]
 impl PersonaProfileStore for SqlitePersonaProfileStore {
+    fn supports_recovery_journal(
+        &self,
+        journal: &crate::writeback_recovery::SqliteWritebackJournal,
+    ) -> bool {
+        journal.shares_pool(self.pool())
+    }
     async fn get_profile(
         &self,
         persona_id: &str,
@@ -246,9 +252,63 @@ impl PersonaProfileStore for SqlitePersonaProfileStore {
         delta: PersonaProfileDelta,
         updated_at: Timestamp,
     ) -> Result<PersonaMemoryProfile, String> {
+        self.apply_delta_inner(
+            None,
+            persona_id,
+            subject_id,
+            expected_revision,
+            delta,
+            updated_at,
+        )
+        .await
+    }
+
+    async fn apply_delta_once(
+        &self,
+        operation_id: &str,
+        persona_id: &str,
+        subject_id: &str,
+        expected_revision: u64,
+        delta: PersonaProfileDelta,
+        updated_at: Timestamp,
+    ) -> Result<PersonaMemoryProfile, String> {
+        self.apply_delta_inner(
+            Some(operation_id.to_owned()),
+            persona_id,
+            subject_id,
+            expected_revision,
+            delta,
+            updated_at,
+        )
+        .await
+    }
+}
+
+impl SqlitePersonaProfileStore {
+    async fn apply_delta_inner(
+        &self,
+        operation_id: Option<String>,
+        persona_id: &str,
+        subject_id: &str,
+        expected_revision: u64,
+        delta: PersonaProfileDelta,
+        updated_at: Timestamp,
+    ) -> Result<PersonaMemoryProfile, String> {
         let persona_id = persona_id.to_owned();
         let subject_id = subject_id.to_owned();
         let changed_at_ms = updated_at.epoch_millis();
+        let operation_hash = operation_id
+            .as_ref()
+            .map(|_| {
+                crate::writeback_recovery::payload_hash(&(
+                    &persona_id,
+                    &subject_id,
+                    &delta,
+                    changed_at_ms,
+                ))
+            })
+            .transpose()
+            .map_err(|e| e.to_string())?;
 
         self.pool
             .write(move |conn| {
@@ -264,6 +324,19 @@ impl PersonaProfileStore for SqlitePersonaProfileStore {
                     )
                     .optional()?;
 
+                if let (Some(id), Some(hash)) = (&operation_id, &operation_hash) {
+                    if crate::writeback_recovery::operation_applied(&transaction, id, hash)
+                        .map_err(|e| StorageError::Serialization(e.to_string()))? {
+                        let profile = current.ok_or_else(|| StorageError::Serialization("applied persona operation lost its profile".into()))?;
+                        transaction.commit()?;
+                        return Ok(profile);
+                    }
+                    let forgotten: bool = transaction.query_row(
+                        "SELECT EXISTS(SELECT 1 FROM persona_profile_governance WHERE persona_id=?1 AND subject_id=?2 AND tombstoned_at_ms IS NOT NULL)",
+                        rusqlite::params![persona_id,subject_id], |r| r.get(0),
+                    )?;
+                    if forgotten { return Err(StorageError::Serialization("persona profile is forgotten".into())); }
+                }
                 let has_current = current.is_some();
                 let mut profile = current.unwrap_or_else(|| PersonaMemoryProfile {
                     persona_id: persona_id.clone(),
@@ -368,6 +441,10 @@ impl PersonaProfileStore for SqlitePersonaProfileStore {
                         changed_at_ms,
                     ],
                 )?;
+                if let (Some(id), Some(hash)) = (&operation_id, &operation_hash) {
+                    crate::writeback_recovery::record_operation_applied(&transaction, id, hash, changed_at_ms)
+                        .map_err(|e| StorageError::Serialization(e.to_string()))?;
+                }
                 transaction.commit()?;
                 Ok(profile)
             })

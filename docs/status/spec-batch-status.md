@@ -4,7 +4,7 @@
 Document: docs/status/spec-batch-status.md
 Class: STATUS
 Status: 🟢 活跃
-Last-Modified: 2026-11-12
+Last-Modified: 2026-11-13
 Author: lead
 
 > 依据：`docs/01-architecture/memory-knowledge-depth-system-spec.md`（321 行 / 11 章）
@@ -37,7 +37,7 @@ Author: lead
 | `b3_shadow_run` · B3 影子双跑模块 | **存在** |
 | `b0a_adapter` · B0-a PerLTQA 适配器 | **存在** |
 | `b0a_reproduce` · B0-a `reproduce.sh` | ****无**** |
-| `claims` · 状态声明 | **54 条（延后 0 · 豁免 1）** |
+| `claims` · 状态声明 | **59 条（延后 0 · 豁免 1）** |
 
 <!-- END:auto-facts -->
 
@@ -46,8 +46,21 @@ Author: lead
 > **PRODUCTION WIRED**：D0 哈希链已进入默认写入路径；规则抽取、typed recall、证据注入和偏好学习已有生产装配。
 > D2 默认词面召回，可配置 embedding URL 与模型；本地端点可用，key 按端点要求配置，不能写成必需联网。
 > B2/B3 已接入装配，影子切换默认关闭且缺少治理链时拒绝；完整度见下表，不再称为“生产未接”。
-> 本批补强的持久一致性、中文显式纠错与真实 Provider 证据验收，见
-> [记忆质量与持久一致性](../design/memory-quality-hardening.md)。这不代表 B0 全部完成或自动事实纠错已实现。
+> 持久一致性及本轮受限自然语言纠错、失败恢复的实现与验收边界，见
+> [记忆质量与持久一致性](../design/memory-quality-hardening.md)。受限纠错已接入生产装配；一般语义完备性、真实模型答题质量及 B0 整体验收尚未建立。
+
+### 本轮接线范围与待验边界（2026-11-12 接续）
+
+| 项目 | 当前接线 | 正式验收边界 |
+|---|---|---|
+| Q5 自然语言纠错 | **IMPLEMENTED / 条件性 PRODUCTION WIRED**：官方同库 journal 装配按恢复 → 纠错 → 召回执行；直接用户证据经受限提案及来源、作用域、权限、CAS 校验进入事务；v3 对完整原文内唯一绝对日期允许同日 ISO/中文等价，UTC 仍由原文和 Host 偏移确定 | 相对日期须逐字保持；畸形、多日期、证据外或省略相关显式日期拒绝，模型弃权不覆盖。保守语法不等于一般语义完备。当前 G 源码本地全仓、doc tests 及五项红绿反证通过；LIVE05 固定合成语料36/36，旧四轮失败保留；本行为提交前验收快照；最终提交按[PR #125 的检查](https://github.com/Apeireth/Apeireth/pull/125/checks)及绑定 SHA 的完整门禁证据裁决 |
+| Q6 持久失败恢复 | **IMPLEMENTED / 条件性 PRODUCTION WIRED**：冻结意图、同库待办及操作回执供下一次有权 TurnStart / AfterTurn 有界处理；当前定向测试核对冻结日期/偏移重启后不重新提案，并在真实请求中交付精确历史 ID、正文及时间区间 | 不承诺独立后台 daemon、跨库原子事务或任意第三方 store 的 exactly-once；撤权、修订冲突与遗忘须阻止旧重放。当前 G 源码本地全仓与 doc tests 已过；本行为提交前验收快照；最终提交按[PR #125 的检查](https://github.com/Apeireth/Apeireth/pull/125/checks)及绑定 SHA 的完整门禁证据裁决，测试装配/解析校准不记作产品故障 |
+| Q7 回答评测 | **IMPLEMENTED / OFF**：手动 example 复用真实 Runtime、SQLite、Recall 和 Provider，保存全部主答、提案、失败、来源及预算证据；LIVE05 完整固定合成12类×3次为36/36，独立答题/来源审计及原执行文件只读复算通过 | 旧01–04失败、分型与grade保留。固定语料已用于开发，不是独立留出集，36/36不是通用质量保证；提案v3、评分v2，旧协议非同条件比较，无外部对照。当前 G 本地全仓/doc tests/严格检查已过；本行为提交前验收快照；最终提交按[PR #125 的检查](https://github.com/Apeireth/Apeireth/pull/125/checks)及绑定 SHA 的完整门禁证据裁决，见[质量批进度](../design/memory-quality-hardening.md) |
+
+未提供 journal 的兼容组合不启用新纠错/恢复模块；私有 Profile 还需 Host 映射、可写授权及独立模块执行授权。
+状态变化可产生带有效区间的派生历史证据；纠正误记不把旧误值记为曾经有效的事实。
+原始 D0 保留，遗忘的口径是治理隐藏及禁止重放，不是物理擦除。
+本节不改写前批 Q1–Q4 的历史验收；最终结果与命令证据仍由上述质量批进度统一登记。
 
 ---
 
@@ -55,8 +68,8 @@ Author: lead
 
 | 层 | 契约（承诺什么） | 状态 | 证据 |
 |---|---|---|---|
-| **D0 原始证据** | 原文 + 结构 + 双时间 + 出处 + 关系 + 上下文 + **访问史**（**唯一"绝不"可丢**） | ✅ **最扎实** | `episode`/`append_only`/`provenance`/`access_history` 生产接线；**哈希链进写入路径** `MemoryCoordinator::persist_episode` → `put_episode_with_metadata` → `memory_chain::put_chained_episode_record`；`memory verify` CLI 可定位坏记录；`docs/status/d0-fidelity-audit.md`（11 KB 缺口清单） |
-| **D1 结构化** | 目录树 / 段落切分 / **实体** / 图谱边 | 🟡 **部分已接** | `wiki_corpus`、图谱及 `MemoryMaterializer`/`RuleMemoryExtractor` 已由 `canonical/cognitive.rs` 的 AfterTurn 路径调用；typed 承诺、人格、关系分别受既有 sink 契约约束。自然语言关系识别不等于已获准写入结构化图。 |
+| **D0 原始证据** | 原文 + 结构 + 双时间 + 出处 + 关系 + 上下文 + **访问史**（**唯一"绝不"可丢**） | ✅ **最扎实** | `episode`/`append_only`/`provenance`/`access_history` 生产接线；**哈希链进写入路径** `MemoryCoordinator::persist_episode` → `put_episode_with_metadata` → `memory_chain::put_chained_episode_record`；本轮新增 Runtime 提交来源标记及独立冻结操作意图，旧记录缺失标记不伪造直接用户归属。`memory verify` CLI 可定位坏记录；`docs/status/d0-fidelity-audit.md`（11 KB 缺口清单） |
+| **D1 结构化** | 目录树 / 段落切分 / **实体** / 图谱边 | 🟡 **部分已接** | `wiki_corpus`、图谱及 `MemoryMaterializer`/`RuleMemoryExtractor` 已由 `canonical/cognitive.rs` 的 AfterTurn 路径调用；typed 承诺、人格、关系分别受既有 sink 契约约束。本轮个人记忆投影增加直接用户来源及保守声明语法边界，原始引用仍保留在 D0；该边界不等于通用语义验证。自然语言关系识别不等于已获准写入结构化图。 |
 | **D2 语义索引** | 向量 / 关键词 / 主题；**可重建且可换代** | 🟡 **词面默认，可选嵌入端点** | `hybrid_search`/`retrieval_pipeline`、`persistent_vector`、`vector_rebuild` 已有实现；CLI 配置 URL 与 model 时装配 `OpenAiCompatibleEmbeddingProvider`，key 可选，支持本地兼容端点。未配置则走词面回落；当前仍需补向量增量缓存和模型换代运行验收。 |
 | **D3 提炼** | 摘要 / 里程碑 / 教训 / 原则；每条带 provenance 指回 D0 | 🟡 **一部分** | ✅ `milestone`（3 处）· `lesson`（1 处）· ❌ `daily_summary` / `principles` / `chronicle_crystallizer` **生产 0 调用** |
 | **D4 模式** | **只产标注，不产记忆**；默认关；**不接线也能离线量增量价值** | 🟡 **已有测量记录，尚未全面验收** | ✅ `betti_hole_detector` / `kuramoto_resonance` / `semantic_axis` = **生产已接但 DEFAULT OFF**（`APEIRETH_ENABLE_ABSORPTION_INSIGHT=1` 才开）· ❌ 五维 / 程序性 / 做梦 / 社区分层 / `hallways` / `layered_memo` / `ensemble` 未接 · `d4_eval` 离线评测已有实现；当前已测及测法无效记录以自动事实块和候选台账为准，已有记录不等于本批复跑或可上线收益 |
@@ -181,7 +194,7 @@ Author: lead
 
 ## 3. 下一步（按设计稿顺序，优先级从高到低）
 
-1. 优先完成[当前质量批](../design/memory-quality-hardening.md)的故障恢复、中文治理纠错与重启验收。
+1. 完成[当前质量批](../design/memory-quality-hardening.md)已接入的受限纠错、持久恢复、重启及授权隔离的正式集成验证，再用显式模型配置和预算进行真实答题评测；调用前保持未测。
 2. 沿已存在的融合与影子入口评测候选的增量价值；不得把 oracle 信号或预算变化当作算法收益。
 3. B0 外部卷继续受既有许可边界约束；先做自有中文会话生命周期回归，外部系统比较暂记未测。
 4. B0-b 已达到表内验收数量；继续扩展独立场景、竞争噪声及保留测试，不能重复声称尚待人精标。
@@ -204,8 +217,8 @@ grep -n "OpenAiCompatibleEmbeddingProvider" crates/adapters/cli/src/lib.rs
 # ④ B0-a 适配器在不在
 ls crates/engine/memory/src/perltqa_adapter.rs crates/engine/memory/tests/perltqa_adapter.rs
 
-# ⑤ B0-c 到底有没有数字（当前应为「没有台账文件」）
-ls scripts/d4-ledger.json 2>/dev/null || echo "B0-c 未开始"
+# ⑤ B0-c 当前记录以自动事实块和正式台账校验为准
+python3 scripts/d4_ledger.py --check
 ```
 
 ---

@@ -10,6 +10,95 @@ use apeireth_plugin::memory_backend::CapabilityResult;
 use apeireth_storage::SqliteConnectionPool;
 use std::sync::Arc;
 
+// A Host-supplied external source without an episode remains compatible; an
+// explicit governance withdrawal or journal suppression always takes priority.
+fn source_filter(
+    conn: &rusqlite::Connection,
+    source: &str,
+) -> Result<String, apeireth_storage::StorageError> {
+    let table = |name| {
+        crate::writeback_recovery::has_table(conn, name)
+            .map_err(|e| apeireth_storage::StorageError::Serialization(e.to_string()))
+    };
+    let mut predicates = vec!["1".to_owned()];
+    let governed = table("episode_governance")?;
+    if governed {
+        predicates.push(format!("NOT EXISTS(SELECT 1 FROM episode_governance source_g WHERE source_g.episode_id={source} AND (source_g.status='forgotten' OR source_g.content_override IS NOT NULL))"));
+    }
+    if table("memory_writeback_jobs")? {
+        predicates.push(format!("NOT EXISTS(SELECT 1 FROM memory_writeback_dependencies source_d JOIN memory_writeback_jobs source_j ON source_j.id=source_d.job_id WHERE source_d.episode_id={source} AND source_j.state='suppressed')"));
+        if governed {
+            predicates.push(format!("NOT EXISTS(SELECT 1 FROM memory_writeback_dependencies source_d JOIN memory_writeback_dependencies target_d ON target_d.job_id=source_d.job_id JOIN episode_governance source_g ON source_g.episode_id=target_d.episode_id WHERE source_d.episode_id={source} AND source_g.status='forgotten')"));
+        }
+    }
+    Ok(predicates.join(" AND "))
+}
+
+fn source_visible(
+    conn: &rusqlite::Connection,
+    id: &str,
+) -> Result<bool, apeireth_storage::StorageError> {
+    if crate::writeback_recovery::has_table(conn, "episode_governance")
+        .map_err(|e| apeireth_storage::StorageError::Serialization(e.to_string()))?
+    {
+        let revised:bool=conn.query_row("SELECT EXISTS(SELECT 1 FROM episode_governance WHERE episode_id=?1 AND content_override IS NOT NULL)",[id],|r|r.get(0))?;
+        if revised {
+            return Ok(false);
+        }
+    }
+    match crate::writeback_recovery::assert_episode_source_allowed(conn, id) {
+        Ok(()) => Ok(true),
+        Err(crate::MemoryError::Invalid(_)) => Ok(false),
+        Err(e) => Err(apeireth_storage::StorageError::Serialization(e.to_string())),
+    }
+}
+
+fn governed_association(
+    conn: &rusqlite::Connection,
+    mut edge: AssociationEdge,
+) -> Result<Option<AssociationEdge>, apeireth_storage::StorageError> {
+    let mut statement=conn.prepare("SELECT source_episode_id FROM association_observations WHERE from_entity=?1 AND to_entity=?2")?;
+    let observed = statement
+        .query_map(rusqlite::params![edge.from_entity, edge.to_entity], |r| {
+            r.get::<_, String>(0)
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    if observed.is_empty() {
+        // Legacy aggregates have no per-source ledger. Preserve the recorded
+        // aggregate only while its recorded latest source is still visible;
+        // never manufacture observations for its historical count.
+        return Ok(source_visible(conn, &edge.last_seen_episode_id)?.then_some(edge));
+    }
+    let mut active = Vec::new();
+    for id in observed {
+        if source_visible(conn, &id)? {
+            let at = crate::writeback_recovery::episode_source_timestamp(conn, &id)
+                .map_err(|e| apeireth_storage::StorageError::Serialization(e.to_string()))?;
+            active.push((id, at));
+        }
+    }
+    if active.is_empty() {
+        return Ok(None);
+    }
+    edge.co_occurrence_count = u32::try_from(active.len()).map_err(|_| {
+        apeireth_storage::StorageError::Serialization("association count exceeds u32".into())
+    })?;
+    if !active
+        .iter()
+        .any(|(id, _)| id == &edge.last_seen_episode_id)
+    {
+        // Older external observations carry no timestamp. Once the latest is
+        // withdrawn the public nonoptional time cannot honestly represent them.
+        if active.iter().any(|(_, at)| at.is_none()) {
+            return Ok(None);
+        }
+        active.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+        edge.last_seen_episode_id = active[0].0.clone();
+        edge.last_seen_at = active[0].1.expect("checked timestamp");
+    }
+    Ok(Some(edge))
+}
+
 pub struct SQLiteExperienceStore {
     pool: Arc<SqliteConnectionPool>,
 }
@@ -106,7 +195,10 @@ impl WikiEntryStore for SQLiteExperienceStore {
         let extracted_at = entry.extracted_at;
         self.pool
             .write_sync(move |conn| {
-                conn.execute(
+                let tx=conn.transaction()?;
+                crate::writeback_recovery::assert_episode_source_allowed(&tx,&source_episode_id)
+                    .map_err(|e|apeireth_storage::StorageError::Serialization(e.to_string()))?;
+                tx.execute(
                     "INSERT OR REPLACE INTO wiki_entries \
                      (id, session_id, source_episode_id, topic, summary, body, confidence, tags, extracted_at) \
                      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
@@ -115,6 +207,7 @@ impl WikiEntryStore for SQLiteExperienceStore {
                         confidence, tags_json, extracted_at,
                     ],
                 )?;
+                tx.commit()?;
                 Ok(())
             })
             .map_err(|e| -> Box::<dyn std::error::Error + Send + Sync> { Box::new(e) })
@@ -128,13 +221,15 @@ impl WikiEntryStore for SQLiteExperienceStore {
     ) -> CapabilityResult<Vec<WikiEntry>> {
         self.pool
             .read(|conn| -> Result<Vec<WikiEntry>, apeireth_storage::StorageError> {
+                let visible=source_filter(conn,"wiki_entries.source_episode_id")?;
                 let mut stmt = conn.prepare_cached(
-                    "SELECT id, session_id, source_episode_id, topic, summary, body, confidence, tags, extracted_at \
+                    &format!("SELECT id, session_id, source_episode_id, topic, summary, body, confidence, tags, extracted_at \
                      FROM wiki_entries \
                      WHERE session_id = ?1 \
                        AND (?2 = '' OR topic LIKE '%' || ?2 || '%') \
+                       AND {visible} \
                      ORDER BY extracted_at DESC \
-                     LIMIT ?3",
+                     LIMIT ?3"),
                 )?;
                 let rows = stmt.query_map(
                     rusqlite::params![session_id, topic, i64::from(limit)],
@@ -174,11 +269,12 @@ impl WikiEntryStore for SQLiteExperienceStore {
     fn wiki_for_episode(&self, episode_id: &str) -> CapabilityResult<Vec<WikiEntry>> {
         self.pool
             .read(|conn| -> Result<Vec<WikiEntry>, apeireth_storage::StorageError> {
+                let visible=source_filter(conn,"wiki_entries.source_episode_id")?;
                 let mut stmt = conn.prepare_cached(
-                    "SELECT id, session_id, source_episode_id, topic, summary, body, confidence, tags, extracted_at \
+                    &format!("SELECT id, session_id, source_episode_id, topic, summary, body, confidence, tags, extracted_at \
                      FROM wiki_entries \
-                     WHERE source_episode_id = ?1 \
-                     ORDER BY extracted_at DESC",
+                     WHERE source_episode_id = ?1 AND {visible} \
+                     ORDER BY extracted_at DESC"),
                 )?;
                 let rows = stmt.query_map(rusqlite::params![episode_id], |row| {
                     let id: String = row.get(0)?;
@@ -227,7 +323,10 @@ impl KnowledgeGraphStore for SQLiteExperienceStore {
         let confidence = fact.confidence;
         self.pool
             .write_sync(move |conn| {
-                conn.execute(
+                let tx = conn.transaction()?;
+                crate::writeback_recovery::assert_episode_source_allowed(&tx, &source_episode_id)
+                    .map_err(|e| apeireth_storage::StorageError::Serialization(e.to_string()))?;
+                tx.execute(
                     "INSERT OR REPLACE INTO kg_facts \
                      (id, subject_id, subject_kind, predicate, object_id, object_kind, \
                       valid_from_ms, valid_until_ms, source_episode_id, confidence) \
@@ -245,6 +344,7 @@ impl KnowledgeGraphStore for SQLiteExperienceStore {
                         confidence,
                     ],
                 )?;
+                tx.commit()?;
                 Ok(())
             })
             .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })
@@ -259,12 +359,16 @@ impl KnowledgeGraphStore for SQLiteExperienceStore {
         let created_at = link.created_at;
         self.pool
             .write_sync(move |conn| {
-                conn.execute(
+                let tx = conn.transaction()?;
+                crate::writeback_recovery::assert_episode_source_allowed(&tx, &source_episode_id)
+                    .map_err(|e| apeireth_storage::StorageError::Serialization(e.to_string()))?;
+                tx.execute(
                     "INSERT OR REPLACE INTO kg_links \
                      (from_id, to_id, kind, weight, source_episode_id, created_at) \
                      VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                     rusqlite::params![from_id, to_id, kind, weight, source_episode_id, created_at,],
                 )?;
+                tx.commit()?;
                 Ok(())
             })
             .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })
@@ -287,15 +391,17 @@ impl KnowledgeGraphStore for SQLiteExperienceStore {
         self.pool
             .read(
                 |conn: &rusqlite::Connection| -> Result<Vec<GraphFact>, apeireth_storage::StorageError> {
+                    let visible=source_filter(conn,"kg_facts.source_episode_id")?;
                     let mut stmt = conn.prepare_cached(
-                        "SELECT id, subject_id, subject_kind, predicate, object_id, object_kind, \
+                        &format!("SELECT id, subject_id, subject_kind, predicate, object_id, object_kind, \
                             valid_from_ms, valid_until_ms, source_episode_id, confidence \
                          FROM kg_facts \
                          WHERE subject_id = ?1 \
                            AND valid_from_ms <= ?2 \
                            AND (valid_until_ms IS NULL OR valid_until_ms > ?2) \
+                           AND {visible} \
                          ORDER BY confidence DESC \
-                         LIMIT ?3",
+                         LIMIT ?3"),
                     )?;
                     let rows = stmt.query_map(
                         rusqlite::params![subject_id, as_of_ms, i64::from(limit)],
@@ -328,15 +434,17 @@ impl KnowledgeGraphStore for SQLiteExperienceStore {
         self.pool
             .read(
                 |conn| -> Result<Vec<GraphFact>, apeireth_storage::StorageError> {
-                    let mut stmt = conn.prepare_cached(
+                    let visible = source_filter(conn, "kg_facts.source_episode_id")?;
+                    let mut stmt = conn.prepare_cached(&format!(
                         "SELECT id, subject_id, subject_kind, predicate, object_id, object_kind, \
                             valid_from_ms, valid_until_ms, source_episode_id, confidence \
                      FROM kg_facts \
                      WHERE subject_id = ?1 \
                        AND (valid_until_ms IS NULL OR valid_until_ms > ?2) \
+                       AND {visible} \
                      ORDER BY confidence DESC \
-                     LIMIT ?3",
-                    )?;
+                     LIMIT ?3"
+                    ))?;
                     let now_ms = chrono::Utc::now().timestamp_millis();
                     let rows = stmt.query_map(
                         rusqlite::params![subject_id, now_ms, i64::from(limit)],
@@ -371,14 +479,16 @@ impl KnowledgeGraphStore for SQLiteExperienceStore {
         self.pool
             .read(
                 |conn| -> Result<Vec<GraphFact>, apeireth_storage::StorageError> {
-                    let mut stmt = conn.prepare_cached(
+                    let visible = source_filter(conn, "kg_facts.source_episode_id")?;
+                    let mut stmt = conn.prepare_cached(&format!(
                         "SELECT id, subject_id, subject_kind, predicate, object_id, object_kind, \
                             valid_from_ms, valid_until_ms, source_episode_id, confidence \
                          FROM kg_facts \
                          WHERE (valid_until_ms IS NULL OR valid_until_ms > ?1) \
+                         AND {visible} \
                          ORDER BY valid_from_ms DESC \
-                         LIMIT ?2",
-                    )?;
+                         LIMIT ?2"
+                    ))?;
                     let now_ms = chrono::Utc::now().timestamp_millis();
                     let rows =
                         stmt.query_map(rusqlite::params![now_ms, i64::from(limit)], |row| {
@@ -409,10 +519,11 @@ impl KnowledgeGraphStore for SQLiteExperienceStore {
         self.pool
             .read(
                 |conn| -> Result<Vec<GraphLink>, apeireth_storage::StorageError> {
-                    let mut stmt = conn.prepare_cached(
+                    let visible = source_filter(conn, "kg_links.source_episode_id")?;
+                    let mut stmt = conn.prepare_cached(&format!(
                         "SELECT from_id, to_id, kind, weight, source_episode_id, created_at \
-                     FROM kg_links WHERE from_id = ?1 ORDER BY weight DESC LIMIT ?2",
-                    )?;
+                     FROM kg_links WHERE from_id = ?1 AND {visible} ORDER BY weight DESC LIMIT ?2"
+                    ))?;
                     let rows =
                         stmt.query_map(rusqlite::params![from_id, i64::from(limit)], |row| {
                             Ok(GraphLink {
@@ -460,15 +571,21 @@ impl AssociationStore for SQLiteExperienceStore {
         let episode_id = episode_id.to_string();
         self.pool
             .write_sync(move |conn| {
-                let inserted = conn.execute(
+                let tx = conn.transaction()?;
+                crate::writeback_recovery::assert_episode_source_allowed(&tx,&episode_id)
+                    .map_err(|e|apeireth_storage::StorageError::Serialization(e.to_string()))?;
+                let now=crate::writeback_recovery::episode_source_timestamp(&tx,&episode_id)
+                    .map_err(|e|apeireth_storage::StorageError::Serialization(e.to_string()))?.unwrap_or(now);
+                let inserted = tx.execute(
                     "INSERT OR IGNORE INTO association_observations \
                      (from_entity, to_entity, source_episode_id) VALUES (?1, ?2, ?3)",
                     rusqlite::params![from, to, episode_id],
                 )?;
                 if inserted == 0 {
+                    tx.commit()?;
                     return Ok(());
                 }
-                conn.execute(
+                tx.execute(
                     "INSERT INTO association_edges (from_entity, to_entity, co_occurrence_count, last_seen_episode_id, last_seen_at) \
                      VALUES (?1, ?2, 1, ?3, ?4) \
                      ON CONFLICT (from_entity, to_entity) DO UPDATE SET \
@@ -478,7 +595,7 @@ impl AssociationStore for SQLiteExperienceStore {
                     rusqlite::params![from, to, episode_id, now],
                 )?;
                 for entity in [from, to] {
-                    conn.execute(
+                    tx.execute(
                         "INSERT INTO association_nodes (entity_id, co_occurrence_count, last_seen_at) \
                          VALUES (?1, 1, ?2) \
                          ON CONFLICT (entity_id) DO UPDATE SET \
@@ -487,22 +604,25 @@ impl AssociationStore for SQLiteExperienceStore {
                         rusqlite::params![entity, now],
                     )?;
                 }
+                tx.commit()?;
                 Ok(())
             })
             .map_err(|e| Box::<dyn std::error::Error + Send + Sync>::from(e))
     }
 
     fn top_associations(&self, entity: &str, limit: u32) -> CapabilityResult<Vec<AssociationEdge>> {
+        if limit == 0 {
+            return Ok(Vec::new());
+        }
         self.pool
             .read(|conn: &rusqlite::Connection| -> Result<Vec<AssociationEdge>, apeireth_storage::StorageError> {
                 let mut stmt = conn.prepare_cached(
                     "SELECT from_entity, to_entity, co_occurrence_count, last_seen_episode_id, last_seen_at \
                      FROM association_edges \
                      WHERE from_entity = ?1 OR to_entity = ?1 \
-                     ORDER BY co_occurrence_count DESC \
-                     LIMIT ?2",
+                     ORDER BY co_occurrence_count DESC",
                 )?;
-                let rows = stmt.query_map(rusqlite::params![entity, i64::from(limit)], |row| {
+                let rows = stmt.query_map(rusqlite::params![entity], |row| {
                     Ok(AssociationEdge {
                         from_entity: row.get(0)?,
                         to_entity: row.get(1)?,
@@ -513,8 +633,10 @@ impl AssociationStore for SQLiteExperienceStore {
                 })?;
                 let mut out = Vec::new();
                 for r in rows {
-                    out.push(r?);
+                    if let Some(edge)=governed_association(conn,r?)? {out.push(edge)}
                 }
+                out.sort_by(|a,b|b.co_occurrence_count.cmp(&a.co_occurrence_count).then_with(||a.from_entity.cmp(&b.from_entity)).then_with(||a.to_entity.cmp(&b.to_entity)));
+                out.truncate(limit as usize);
                 Ok(out)
             })
             .map_err(|e| -> Box::<dyn std::error::Error + Send + Sync> { Box::new(e) })

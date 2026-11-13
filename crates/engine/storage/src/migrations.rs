@@ -9,7 +9,7 @@ use rusqlite::Connection;
 use crate::StorageError;
 
 /// The latest schema version this storage foundation knows about.
-pub const LATEST_SCHEMA_VERSION: i64 = 3;
+pub const LATEST_SCHEMA_VERSION: i64 = 4;
 
 /// One schema migration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -81,6 +81,24 @@ CREATE TABLE IF NOT EXISTS memory_vectors (
 );
 CREATE INDEX IF NOT EXISTS idx_memory_vectors_model_dimension
     ON memory_vectors(model_id, dimension);
+"#,
+    },
+    Migration {
+        version: 4,
+        name: "committed_module_operations",
+        sql: r#"
+CREATE TABLE IF NOT EXISTS module_operation_evidence (
+    seq INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    operation_id TEXT NOT NULL,
+    data TEXT NOT NULL,
+    UNIQUE(session_id, operation_id)
+);
+CREATE INDEX IF NOT EXISTS module_operation_evidence_session
+    ON module_operation_evidence(session_id, seq);
+CREATE TRIGGER IF NOT EXISTS module_operation_evidence_no_update
+    BEFORE UPDATE ON module_operation_evidence
+    BEGIN SELECT RAISE(ABORT, 'operation evidence is append-only'); END;
 "#,
     },
 ];

@@ -438,17 +438,44 @@ END;
         .map_err(Into::into)
     }
 
-    pub async fn create(&self, mut commitment: Commitment) -> Result<Commitment, CommitmentError> {
+    pub async fn create(&self, commitment: Commitment) -> Result<Commitment, CommitmentError> {
+        self.create_inner(None, commitment).await
+    }
+
+    pub async fn create_recovery(
+        &self,
+        operation_id: &str,
+        commitment: Commitment,
+    ) -> Result<Commitment, CommitmentError> {
+        self.create_inner(Some(operation_id.to_owned()), commitment)
+            .await
+    }
+
+    async fn create_inner(
+        &self,
+        operation_id: Option<String>,
+        mut commitment: Commitment,
+    ) -> Result<Commitment, CommitmentError> {
         validate_commitment(&commitment)?;
         commitment.status = CommitmentStatus::Active;
         commitment.revision = 0;
         commitment.retracted_at_ms = None;
         commitment.completed_at_ms = None;
         let value = commitment.clone();
+        let hash = crate::writeback_recovery::payload_hash(&value)
+            .map_err(|e| StorageError::Serialization(e.to_string()))?;
 
         self.pool
             .write(move |connection| {
                 let transaction = connection.transaction()?;
+                if let Some(id)=&operation_id {
+                    if crate::writeback_recovery::operation_applied(&transaction,id,&hash).map_err(|e|StorageError::Serialization(e.to_string()))? {
+                        transaction.commit()?;return Ok(())
+                    }
+                }
+                if let Some(source)=&value.source_episode {
+                    crate::writeback_recovery::assert_episode_source_allowed(&transaction,source).map_err(|e|StorageError::Serialization(e.to_string()))?;
+                }
                 transaction.execute(
                     "INSERT INTO commitments (id,subject_id,statement,status,due_at_ms,scope_json,source_episode_id,provenance_json,confidence,revision,supersedes_id,retracted_at_ms,completed_at_ms,created_at_ms,updated_at_ms) VALUES (?1,?2,?3,'open',?4,?5,?6,?7,?8,0,?9,NULL,NULL,?10,?11)",
                     params![
@@ -480,6 +507,7 @@ END;
                         payload.to_string()
                     ],
                 )?;
+                if let Some(id)=&operation_id {crate::writeback_recovery::record_operation_applied(&transaction,id,&hash,value.created_at).map_err(|e|StorageError::Serialization(e.to_string()))?;}
                 transaction.commit()?;
                 Ok(())
             })
@@ -574,7 +602,7 @@ END;
         at: i64,
         reason: Option<&str>,
     ) -> Result<Commitment, CommitmentError> {
-        self.transition_inner(None, id, expected_revision, to, at, reason)
+        self.transition_inner(None, id, expected_revision, to, at, (reason, None))
             .await
     }
 
@@ -590,8 +618,33 @@ END;
         reason: Option<&str>,
     ) -> Result<Commitment, CommitmentError> {
         validate_subject(subject_id)?;
-        self.transition_inner(Some(subject_id), id, expected_revision, to, at, reason)
-            .await
+        self.transition_inner(
+            Some(subject_id),
+            id,
+            expected_revision,
+            to,
+            at,
+            (reason, None),
+        )
+        .await
+    }
+
+    pub async fn transition_recovery(
+        &self,
+        operation_id: &str,
+        current: &Commitment,
+        to: CommitmentStatus,
+        at: i64,
+    ) -> Result<Commitment, CommitmentError> {
+        self.transition_inner(
+            Some(&current.subject_id),
+            &current.id,
+            current.revision,
+            to,
+            at,
+            (Some("typed memory materialization"), Some(operation_id)),
+        )
+        .await
     }
 
     async fn transition_inner(
@@ -601,7 +654,7 @@ END;
         expected_revision: i64,
         to: CommitmentStatus,
         at: i64,
-        reason: Option<&str>,
+        evidence: (Option<&str>, Option<&str>),
     ) -> Result<Commitment, CommitmentError> {
         validate_text(id, "id")?;
         if expected_revision < 0 {
@@ -616,12 +669,28 @@ END;
         }
         let id = id.to_owned();
         let subject_id = subject_id.map(str::to_owned);
-        let reason = reason.map(str::to_owned);
+        let reason = evidence.0.map(str::to_owned);
+        let operation_id = evidence.1.map(str::to_owned);
+        let hash = crate::writeback_recovery::payload_hash(&(
+            &id,
+            &subject_id,
+            expected_revision,
+            to,
+            at,
+            &reason,
+        ))
+        .map_err(|e| StorageError::Serialization(e.to_string()))?;
         let lookup = id.clone();
         let outcome = self
             .pool
             .write(move |connection| {
                 let transaction = connection.transaction()?;
+                if let Some(id)=&operation_id {
+                    if crate::writeback_recovery::operation_applied(&transaction,id,&hash).map_err(|e|StorageError::Serialization(e.to_string()))? {
+                        let current=transaction.query_row(&format!("{SELECT_COMMITMENT} WHERE id=?1"),[&lookup],row_commitment)?;
+                        transaction.commit()?;return Ok(TransitionOutcome::Updated(current))
+                    }
+                }
                 let current: Option<(String, String, i64, Option<String>)> = match subject_id {
                     Some(ref subject_id) => transaction
                         .query_row(
@@ -700,6 +769,7 @@ END;
                     params![&lookup],
                     row_commitment,
                 )?;
+                if let Some(id)=&operation_id {crate::writeback_recovery::record_operation_applied(&transaction,id,&hash,at).map_err(|e|StorageError::Serialization(e.to_string()))?;}
                 transaction.commit()?;
                 Ok(TransitionOutcome::Updated(updated))
             })

@@ -67,6 +67,17 @@ impl GateDecision {
 ///
 /// 实现体: [`SqliteMemoryStore`] (散列账与记忆库同库, 迁移 append-only)。
 pub trait IngestGate: Send + Sync {
+    fn record_recovery(
+        &self,
+        operation_id: &str,
+        source: &str,
+        content: &str,
+        now_ms: i64,
+        skipped: bool,
+    ) -> Result<(), String> {
+        let _ = (operation_id, source, content, now_ms, skipped);
+        Err("durable ingest-gate recovery is not supported".into())
+    }
     /// 查门 (只读判定, 不记账; 无时间语义): 同源同散列已在账上 =
     /// [`GateDecision::SkipDuplicate`]。
     fn check(&self, source: &str, content: &str) -> Result<GateDecision, String>;
@@ -78,6 +89,34 @@ pub trait IngestGate: Send + Sync {
 }
 
 impl IngestGate for SqliteMemoryStore {
+    fn record_recovery(
+        &self,
+        operation_id: &str,
+        source: &str,
+        content: &str,
+        now_ms: i64,
+        skipped: bool,
+    ) -> Result<(), String> {
+        let run = || -> MemoryResult<()> {
+            let hash =
+                crate::writeback_recovery::payload_hash(&(source, content, now_ms, skipped))?;
+            let mut conn = self.conn()?;
+            let tx = conn.transaction()?;
+            if crate::writeback_recovery::operation_applied(&tx, operation_id, &hash)? {
+                tx.commit()?;
+                return Ok(());
+            }
+            if skipped {
+                mark_skipped_conn(&tx, source, content, now_ms)?;
+            } else {
+                mark_ingested_conn(&tx, source, content, now_ms)?;
+            }
+            crate::writeback_recovery::record_operation_applied(&tx, operation_id, &hash, now_ms)?;
+            tx.commit()?;
+            Ok(())
+        };
+        run().map_err(|e| e.to_string())
+    }
     fn check(&self, source: &str, content: &str) -> Result<GateDecision, String> {
         self.ingest_gate_check(source, content)
             .map_err(|error| error.to_string())

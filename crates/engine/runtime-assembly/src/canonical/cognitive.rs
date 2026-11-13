@@ -1518,9 +1518,15 @@ impl BehaviorModule for MemoryRecallModule {
             if let Some(coord) = &self.coordinator {
                 let topic = topic_from_messages(ctx.messages);
                 let limit = morphology_recall_limit(&topic, self.limit, self.morphology_recall);
+                let context_chars = ctx
+                    .invoker()
+                    .context_budget_chars()
+                    .map(apeireth_orchestration::untrusted_envelope::per_source_budget_chars)
+                    .unwrap_or(self.max_context_chars)
+                    .min(self.max_context_chars);
                 let mut query = MemoryRecallQuery::new(session.clone(), topic.clone())
                     .with_limit(limit)
-                    .with_max_chars(self.max_context_chars);
+                    .with_max_chars(context_chars);
                 if let Some(scopes) = &self.authorized_scopes {
                     query.visible_scopes = scopes.clone();
                     query.exact_scope_authorization = true;
@@ -1575,14 +1581,19 @@ impl BehaviorModule for MemoryRecallModule {
                         }
                         let mut overlay = selected.overlay.clone();
                         if let Some(community) = self.community_overlay(&topic) {
-                            overlay.push_str("\n\n");
-                            overlay.push_str(&community);
+                            if overlay.chars().count() + 2 + community.chars().count()
+                                <= context_chars
+                            {
+                                overlay.push_str("\n\n");
+                                overlay.push_str(&community);
+                            }
                         }
                         // Recalled memory content is cross-source input: the
                         // provider-request funnel discloses it through the
                         // untrusted reference envelope.
                         ModuleOutcome::continue_().with_prompt_overlay(
-                            PromptOverlay::system_cross_source("memory_recall", overlay),
+                            PromptOverlay::system_cross_source("memory_recall", overlay)
+                                .with_atomic_context(),
                         )
                     }
                     Ok(None) => {
@@ -1691,6 +1702,9 @@ impl BehaviorModule for MemoryRecallModule {
     }
 }
 
+#[path = "cognitive/writeback_recovery.rs"]
+mod writeback_recovery;
+
 /// Persist the current successful turn after the canonical transcript commit.
 pub struct MemoryWritebackModule {
     manifest: ModuleManifest,
@@ -1703,13 +1717,18 @@ pub struct MemoryWritebackModule {
     materializer: Arc<dyn MemoryMaterializerPort>,
     typed_sink: Option<Arc<dyn MemoryTypedMaterializationSink>>,
     consolidation: bool,
-    /// ⭐ **写侧去重门**（P1 接线 · 2026-11-07）：materializer 产物落库**之前**过门。
+    recovery_journal: Option<Arc<apeireth_memory::writeback_recovery::SqliteWritebackJournal>>,
+    recovery_lock: tokio::sync::Mutex<()>,
+    recovery_error: Mutex<Option<String>>,
+    recovery_source_state: Mutex<std::collections::BTreeMap<String, bool>>,
+    recovery_mappings: Mutex<Option<Arc<crate::profile_memory::ProfileMemoryMappings>>>,
+    /// 无 journal 兼容分支的写侧去重门：materializer 产物落库之前过门。
+    /// journal 分支使用提交后的持久指纹；本字段只服务旧组合。
     ///
     /// * **命名空间 = 归属锚点**（profile 私有分区 / 会话锚点）⇒ ⇒ **不跨来源误杀**；
     /// * **指纹** = `dedup::episode_fingerprint(role, content)`（角色 + 归一化正文）；
     /// * **窗口** = `dedup::DEFAULT_DEDUP_WINDOW_MS`（24h）⇒ ⇒ 窗口内相同内容**只落一次**；
-    /// * ⚠️ **进程内**窗口（LRU）⇒ ⇒ **重启后清空**（持久化门 `accept_persisted` 需要
-    ///   `&SqliteMemoryStore`，而本模块只持 `Arc<dyn MemoryBackend>` ⇒ 拿不到库句柄）。
+    /// * 此兼容字段是进程内窗口（LRU），重启后清空；不是 journal 的持久状态。
     dedup: DedupIndex,
     /// 去重门拦下的条数（**可观测** ⇒ 不许「静默少写」）。
     dedup_skipped: AtomicU64,
@@ -1739,6 +1758,11 @@ impl MemoryWritebackModule {
             materializer: Arc::new(MemoryMaterializer::default()),
             typed_sink: None,
             consolidation: false,
+            recovery_journal: None,
+            recovery_lock: tokio::sync::Mutex::new(()),
+            recovery_error: Mutex::new(None),
+            recovery_source_state: Mutex::new(std::collections::BTreeMap::new()),
+            recovery_mappings: Mutex::new(None),
             dedup: DedupIndex::new(),
             dedup_skipped: AtomicU64::new(0),
             persona: None,
@@ -1922,6 +1946,9 @@ impl MemoryWritebackModule {
 
 #[async_trait::async_trait]
 impl BehaviorModule for MemoryWritebackModule {
+    fn committed_evidence_access(&self) -> super::module::CommittedEvidenceAccess {
+        super::module::CommittedEvidenceAccess::OwnedHistory
+    }
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
     }
@@ -1959,6 +1986,17 @@ impl MemoryWritebackModule {
         execution: Option<&apeireth_plugin::ToolExecutionContext>,
     ) -> Result<ModuleOutcome, ModuleError> {
         let started = Instant::now();
+        if hook == HookPoint::AfterTurn && self.recovery_journal.is_some() {
+            let result = self.drain_recovery(ctx, execution).await;
+            self.metrics.record(
+                MEMORY_WRITEBACK_MODULE_ID,
+                hook,
+                &ModuleDirective::Continue,
+                started,
+                0,
+            );
+            return result;
+        }
         let result = if hook == HookPoint::AfterTurn {
             if let Some(candidate) = ctx.candidate {
                 let session = self
