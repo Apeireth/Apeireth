@@ -1384,7 +1384,7 @@ claims:
     tests:
       - crates/engine/runtime-assembly/examples/memory_longterm_eval/tests.rs
       - crates/engine/provider/tests/canonical_openai_compatible.rs
-    verified_at: 461fb4aec
+    verified_at: 0854e4d1c
     verify_cmd: "cargo test -p apeireth-runtime-assembly --example memory_longterm_eval --locked -j 2"
     owner: runtime-assembly
     next_review: "2026-11-20"

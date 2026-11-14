@@ -63,7 +63,7 @@
 | `mem.writeback_recovery` | PRODUCTION WIRED | - | - | `aca269539` | 2026-11-26 |
 | `mem.source_qualified_context` | PRODUCTION WIRED | - | - | `aca269539` | 2026-11-26 |
 | `mem.answer_eval_contract` | IMPLEMENTED | OFF | - | `aca269539` | 2026-11-26 |
-| `mem.longterm_eval_contract` | IMPLEMENTED | OFF | - | `461fb4aec` | 2026-11-20 |
+| `mem.longterm_eval_contract` | IMPLEMENTED | OFF | - | `0854e4d1c` | 2026-11-20 |
 | `sec.output_injection_guard` | PRODUCTION WIRED | ON | - | `ba5466500aca` | 2026-12-05 |
 
 ## 使用
