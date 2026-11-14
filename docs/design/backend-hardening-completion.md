@@ -105,12 +105,23 @@ Author: lead
   但同段没有四级口径标注」，`check_batch_status.py --check` 报进度页事实块写 59 条声明而代码事实 60 条
   ⇒ 已按各自官方修法修掉（补同段口径标注 + `--gen` 重写事实块并还原 LF 行尾），复跑全绿；
   未放宽任何门槛，也未手改生成物。
+- 本地补跑 CI 专属门禁的等价命令（2026-11-14，Windows 单机）：本机装有 `cargo-nextest 0.9.151` 与
+  `cargo-deny 0.20.2`，按 CI 侧同一条命令本地实跑——`cargo nextest run --workspace --profile ci --locked`：
+  **11069 个用例全部通过**（494 个测试二进制、49 个跳过，耗时 607.2s，退出码 0）；
+  `cargo deny --all-features --offline check`：advisories / bans / licenses / sources 四类全 ok（退出码 0）；
+  `python scripts/test_nextest_reporting.py` 退出码 0（重试证据隔离与 2/4 worker 资源占用探针均 PASS）。
+  两处如实标注：① `cargo-deny` 的 advisories 用的是本机缓存的 advisory-db 快照，**不是当日刷新**——
+  当日刷新被本机全局 git 代理配置（`http.https://github.com/.proxy` 指向当前未运行的本地代理）挡住，
+  本批不擅自改用户全局 git 配置；② 本地 nextest 没有落出 JUnit 文件，CI 侧 JUnit 产物与上传属
+  Actions 上报链，本地未复现该产物（不影响 pass/fail 结论）。
+  这一步只补「本机能自证的等价证据」，**替代不了 Actions**：OS matrix（Linux/macOS）、
+  真实 CI runner 环境与 Actions 产物上报仍只有 CI 能给。
 - 架构棘轮（`scripts/arch_guard.py --strict`）：本批改动让 `coordinator.rs`（2418→2424）与
   `recon_tool.rs`（1664→1667）超了尺寸棘轮 ⇒ **不抬基线盖章**（棘轮只减不增，例外簿额度已满）⇒
   改为把两文件压回基线以内（两条 refactor 提交，行为等价：候选查询构造下沉到 `scope.rs`、
   recon 调用改用本批建好的再导出面），并把 `memory_correction.rs` 的指纹按实测从 1535 缩到 1413
   （逻辑搬进新模块后该文件真实变小）。
-  本批按用户要求**只本地提交**（共 11 条提交），不推送、不开 PR、不合并。
+  本批按用户要求**只本地提交**（共 12 条提交），不推送、不开 PR、不合并。
 
 ### 已确认的待复现或待实施项
 
@@ -127,6 +138,9 @@ Author: lead
   需要回传推理轮的厂商仍须走协议改造；本批实测端点以关闭推理模式的方式接入。
 - 真实模型首跑曾出现一次传输层失败（厂商侧连接中断，非 400 业务拒绝），重跑通过；
   该类瞬时失败没有进入夹具的重试口径。
+- CI 专属门禁本地只跑通了等价命令：nextest（11069 个用例全通过）与 cargo-deny（四类 check 全 ok）
+  不等于 Actions 结果；其中 cargo-deny 的 advisories 用的是本机缓存快照而非当日刷新（当日刷新被本机
+  全局 git 代理配置挡住，本批不改用户全局配置），Linux/macOS 的 OS matrix 只有 CI 能给。
 - 结构化系统观测、通用服务/计划任务和真实设备协议须继续设计及验收；已有正式 Shell、文件及隔离能力应复用。
 - 系统能力规范中的全工作区纯 Safe/零 FFI 口径需依据实际平台边界复核并收窄，尚未修改。
 
