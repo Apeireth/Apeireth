@@ -31,6 +31,11 @@ const LIVE_PLUGIN_ID: &str = "plugin.memory-longterm.live-model";
 ///
 /// ⭐ It is a request *shape* knob, not a credential: it must never carry a
 /// secret, and only the **key names** of this object reach the artifacts.
+///
+/// ⭐ The name lives here, not in the provider crate: this evaluation owns
+/// its own extra-body switch, and the production factory must not inherit it
+/// (the architecture contract budgets one environment name per capability
+/// switch, and a tool-local knob must not spend a production slot).
 const VENDOR_EXTRA_BODY_ENV: &str = "APEIRETH_OPENAI_EXTRA_BODY";
 
 /// The live provider of one run.
@@ -169,33 +174,15 @@ fn vendor_body(config: &Config) -> Result<serde_json::Value> {
 /// ⭐ Split from [`vendor_body`] so the rule can be tested without touching
 /// the process environment (the environment is global state; tests must not
 /// race on it).
+///
+/// ⭐ The mapping itself is **not** implemented here: the provider crate owns
+/// it ([`apeireth_provider::vendor_body`]), so the production factory and this
+/// evaluation cannot drift apart.
 pub(super) fn vendor_body_from(config: &Config, extra: Option<&str>) -> Result<serde_json::Value> {
-    let mut fields = serde_json::Map::new();
-    if let Some(thinking) = config.thinking {
-        let mode = if thinking { "enabled" } else { "disabled" };
-        fields.insert("thinking".to_string(), serde_json::json!({ "type": mode }));
-    }
-    if let Some(effort) = config.reasoning_effort.as_ref() {
-        fields.insert("reasoning_effort".to_string(), serde_json::json!(effort));
-    }
-    if let Some(raw) = extra.map(str::trim).filter(|value| !value.is_empty()) {
-        let parsed: serde_json::Value = serde_json::from_str(raw)
-            .map_err(|error| format!("{VENDOR_EXTRA_BODY_ENV} 不是合法 JSON：{error}"))?;
-        let Some(extra_fields) = parsed.as_object() else {
-            return Err(format!("{VENDOR_EXTRA_BODY_ENV} 必须是 JSON 对象").into());
-        };
-        for (key, value) in extra_fields {
-            fields.insert(key.clone(), value.clone());
-        }
-    }
-    for key in fields.keys() {
-        if apeireth_provider::openai_chat::RESERVED_EXTRA_BODY_KEYS.contains(&key.as_str()) {
-            return Err(format!(
-                "{VENDOR_EXTRA_BODY_ENV} 不得覆盖协议保留键 '{key}'（保留键：{:?}）",
-                apeireth_provider::openai_chat::RESERVED_EXTRA_BODY_KEYS
-            )
-            .into());
-        }
-    }
-    Ok(serde_json::Value::Object(fields))
+    Ok(apeireth_provider::vendor_body::vendor_body_from_parts(
+        config.thinking,
+        config.reasoning_effort.as_deref(),
+        extra,
+    )
+    .map_err(|error| error.to_string())?)
 }

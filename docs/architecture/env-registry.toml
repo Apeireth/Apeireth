@@ -1322,6 +1322,16 @@ status = "current"
 evidence = "direct:crates/engine/organ/src/morphology.rs:174"
 
 [[entries]]
+name = "APEIRETH_OPENAI_EXTRA_BODY"
+default = "n/a"
+layer = "engine"
+owner = "apeireth-provider"
+purpose = "厂商私有请求字段（JSON 对象）：逐键并入 OpenAI 兼容端点的请求体。⭐ 只对支持该厂商私有字段的端点设置；发给不认识该字段的厂商端点会被直接 400 拒单。⭐ 非合法 JSON / 非 JSON 对象 / 覆盖协议保留键 ⇒ 装配期报错。⭐ 归属：长程评测工具的开关（不在生产工厂的口径内 ⇒ 生产请求体不受它影响）。默认不设 ⇒ 不发任何厂商字段，请求体与本项上线前逐字节一致。"
+level = "UNCLASSIFIED"
+status = "current"
+evidence = "direct:crates/engine/runtime-assembly/examples/memory_longterm_eval/live.rs:39"
+
+[[entries]]
 name = "APEIRETH_OPENAI_KEY"
 default = "n/a"
 layer = "adapters"
@@ -1340,6 +1350,26 @@ purpose = "Build the plugin from environment configuration, with a safe vendor d
 level = "UNCLASSIFIED"
 status = "current"
 evidence = "direct:crates/adapters/cli/src/lib.rs:1589;direct:crates/adapters/cli/src/lib.rs:2307;direct:crates/adapters/cli/src/lib.rs:2401"
+
+[[entries]]
+name = "APEIRETH_OPENAI_REASONING_EFFORT"
+default = "n/a"
+layer = "engine"
+owner = "apeireth-provider"
+purpose = "厂商私有字段 reasoning_effort：非空即原样并入 OpenAI 兼容端点的请求体。⭐ 只对支持该厂商私有字段的端点设置；发给不认识该字段的厂商端点会被直接 400 拒单。⭐ 归属：长程评测工具的开关（生产工厂不读它 ⇒ 生产请求体不受它影响）。默认不设 ⇒ 不发。"
+level = "UNCLASSIFIED"
+status = "current"
+evidence = "direct:crates/engine/runtime-assembly/examples/memory_longterm_eval/mod.rs:236"
+
+[[entries]]
+name = "APEIRETH_OPENAI_THINKING"
+default = "n/a"
+layer = "engine"
+owner = "apeireth-provider"
+purpose = "厂商私有字段 thinking（推理模式开关）：enabled/on/true/1 ⇒ {\"thinking\":{\"type\":\"enabled\"}}，disabled/off/false/0 ⇒ disabled。⭐ 只对支持该厂商私有字段的端点设置；发给不认识该字段的厂商端点会被直接 400 拒单。⭐ 取值无法识别 ⇒ 工厂构造期报错（不静默忽略、不当成 disabled）。⭐ 归属：生产 OpenAI 兼容工厂的开关（构造期接线 ⇒ 误配在装配处暴露）。默认不设 ⇒ 不发。"
+level = "UNCLASSIFIED"
+status = "current"
+evidence = "direct:crates/engine/provider/src/vendor_body.rs:43;direct:crates/engine/provider/src/openai_compatible_llm_factory.rs:79"
 
 [[entries]]
 name = "APEIRETH_OPENAI_URL"

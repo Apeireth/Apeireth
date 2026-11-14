@@ -228,6 +228,13 @@ pub fn cost_of(config: &Config, usage: &Usage) -> Cost {
     }
 }
 
+/// The evaluation's own reasoning-effort switch.
+///
+/// ⭐ It belongs to this evaluation, not to the provider crate: the
+/// production factory owns only the reasoning-mode switch, and the
+/// architecture contract budgets one environment name per capability switch.
+const EVAL_REASONING_EFFORT_ENV: &str = "APEIRETH_OPENAI_REASONING_EFFORT";
+
 /// The live configuration, read from the environment.
 ///
 /// ⭐ Only **names** and non-secret values are read here: the endpoint, the
@@ -268,23 +275,19 @@ fn live_config() -> Result<Config> {
     //
     // ⭐ 只有运维方明确要求时才发这个厂商私有字段：端点不认识它时可能直接
     // 拒单 ⇒ 默认不发＝端点保持自己的默认行为。
-    if let Some(value) = std::env::var("APEIRETH_OPENAI_THINKING")
+    //
+    // ⭐ 取值口径在 provider 侧（`apeireth_provider::vendor_body`）：生产工厂
+    // 与本评测共用同一份映射 ⇒ 不维护两份真源。
+    if let Some(value) = std::env::var(apeireth_provider::vendor_body::THINKING_ENV)
         .ok()
         .filter(|value| !value.trim().is_empty())
     {
-        let normalized = value.trim().to_ascii_lowercase();
-        config.thinking = match normalized.as_str() {
-            "enabled" | "on" | "true" | "1" => Some(true),
-            "disabled" | "off" | "false" | "0" => Some(false),
-            other => {
-                return Err(format!(
-                "环境变量 APEIRETH_OPENAI_THINKING 取值无法识别：{other}（可用：enabled/disabled）"
-            )
-                .into())
-            }
-        };
+        config.thinking = Some(
+            apeireth_provider::vendor_body::parse_thinking(&value)
+                .map_err(|error| error.to_string())?,
+        );
     }
-    config.reasoning_effort = std::env::var("APEIRETH_OPENAI_REASONING_EFFORT")
+    config.reasoning_effort = std::env::var(EVAL_REASONING_EFFORT_ENV)
         .ok()
         .filter(|value| !value.trim().is_empty());
     if let Some(price) = std::env::var("APEIRETH_PRICE_INPUT_PER_MILLION")

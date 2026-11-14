@@ -31,3 +31,7 @@ pub mod openai_compatible_llm_factory;
 pub mod provider_model;
 /// Provider-local reasoning field normalization.
 pub mod reasoning_adapter;
+/// Vendor-private request fields: the environment mapping (and its
+/// construction-time validation) shared by the production LLM factory and the
+/// long-range memory evaluation.
+pub mod vendor_body;
