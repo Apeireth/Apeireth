@@ -181,6 +181,32 @@ Author: lead
     需另取一枚本次临时 key 复跑一轮（凭据只经环境变量注入，不进参数/源码/日志/产物）。
   - 本分支提交形态：截至本条共 **18 条提交**（自 `ca2b7b70f` 起），**已推送并开 PR，未合并**
     （合并须由上游维护者在 PR #126 上按仓库流程执行）。
+- 上线前必做 R2/R3 收尾（2026-11-14，用本次临时 key 实测）：
+  - R2 生产工厂 → 真实端点：新增 `crates/engine/provider/tests/openai_compatible_vendor_body_live.rs`
+    （`#[ignore]`，按仓内同族 live 用例的纪律：默认不跑、手动跑、0 commit key、0 print key、CI 无 key 不跑）。
+    手动跑一次（`APEIRETH_OPENAI_THINKING=disabled` + `APEIRETH_OPENAI_URL` + `APEIRETH_OPENAI_MODEL` +
+    `OPENAI_API_KEY`）⇒ `LIVE endpoint = https://api.deepseek.com/v1 model = deepseek-flash
+    vendor_field_keys = ["thinking"]`、`LIVE ok model = deepseek-flash content_len = 2
+    vendor_field_keys = ["thinking"] usage = 18/1 tokens`，`test result: ok. 1 passed; 0 failed`。
+    ⇒ **生产装配路径到厂商 200 的链路打通**（此前只有 401：旧 key 失效）。
+    「没设开关 ⇒ 不发厂商私有字段」由**不联网**的 `vendor_body_factory_wiring.rs` 用 mock 服务器钉住。
+  - 评测 live 路径复跑（同一枚 key）：`seal --live` ⇒ EXIT=0；`run --live` ⇒ EXIT=1（**2 例模型侧质量失败**，
+    不是夹具或门禁失败）：6 例中 4 例通过、36/36 负控全拒、6 条探针全绿、`seal_chain.status = "verified"`
+    且 `seal_body_digest_recomputed == seal_sha256`；`verify --live`（同一份环境）⇒ `verified: true`、
+    `reveal_state: "verified"`、`reveal_verified_from_files: true`、EXIT=0；
+    **同一 custody 复跑被拒**（`one-time use: the shard … was already revealed at 2026-11-14T07:23:25Z`）；
+    配置不一致时 `verify` **fail-closed** 并给出原因（`the freeze does not bind this configuration`）
+    ⇒ 封存链确实绑定了「本次配置 + 本次 EXE + 题集」。
+  - 真实计价：产物里 `cost.status = "wired"`，按本轮配置的单价折算出金额（如首例 0.00033538 USD），
+    `price_source` 写明官方价格页与所用档位（deepseek-flash 高峰档：cache miss 输入 0.3、输出 1.2、
+    cache hit 0.006 USD/1M，`price_date = 2026-11-14`）⇒ 上一轮「真实计价未接线」在本轮**已接线并有真实用量**
+    （四级口径：IMPLEMENTED，计价能力属评测契约 `mem.longterm_eval_contract`，默认 OFF、需显式给单价才折算）。
+  - 密钥零泄漏：产物目录与封存目录共 15 个文件，检索 key 值与 `sk-[A-Za-z0-9]{8,}` ⇒ **0 命中**；
+    凭据只经环境变量注入，未写入任何文件、参数、日志或报告。
+  - R3 暴露面体检开关：**用户已拍板首发保持 default OFF**（2026-11-14）⇒ 部署侧不设
+    `APEIRETH_ENABLE_EXPOSURE_AUDIT`，对外声明与默认行为一致（`sec.exposure_audit` = PRODUCTION WIRED + default OFF）。
+  - 本批新增/变更：1 个 live 用例文件（`tests/openai_compatible_vendor_body_live.rs`，默认不跑）+ 本节与
+    §上线就绪口径的文档更新；**不改**生产代码、不改契约、不改基线、不新增 env 名。
 
 ### 已确认的待复现或待实施项
 
@@ -195,11 +221,11 @@ Author: lead
   独立保管（需另一持有人或另一台机器）与真实计价仍未接线。
 - 【长尾 L5】厂商推理模式下的 `reasoning_content` 回传未在协议层实现：本批只提供厂商私有字段透传这一条显式通道，
   需要回传推理轮的厂商仍须走协议改造；本批实测端点以关闭推理模式的方式接入。
-- 【上线前必须 R2】生产侧推理模式的口径由部署环境变量决定（见 §上线就绪口径）：默认值是**不发**任何厂商私有字段，
+- 【上线前必须 R2 · 真实端点已实测】生产侧推理模式的口径由部署环境变量决定（见 §上线就绪口径）：默认值是**不发**任何厂商私有字段，
   显式设 `APEIRETH_OPENAI_THINKING=disabled` 才关闭该端点的推理模式；取值非法时在工厂构造期报错。
-  未完成的两处：CLI 的两条装配路径会吞掉构造错误（静默回退默认工厂），
-  以及真实端点的 **200 取证**未完成（2026-11-14 探针已通到「请求发出并拿到厂商应答」，
-  但 2026-11-13 那枚临时 key 已失效，厂商回 401 ⇒ 需另取本次临时 key 复跑一轮）。
+  2026-11-14 用本次临时 key 实测：生产工厂 → 真实端点拿到 200 应答；评测 live 路径封存链 verified、真实计价已折算
+  （详见 §进度与验收记录的「上线前必做 R2/R3 收尾」）。**剩余缺口只剩一处**：CLI 的两条装配路径会吞掉构造错误
+  （静默回退默认工厂）⇒ 运维写错开关值时不会报错。
 - 【上线前必须 R2】架构契约的 env 名额已用尽（实测 154 = 预算 154，预算值未改）：下一轮任何新增能力开关名
   必须先删一个或改走配置项，不得再「顺手加」。
 - 真实模型首跑曾出现一次传输层失败（厂商侧连接中断，非 400 业务拒绝），重跑通过；
@@ -224,8 +250,8 @@ Author: lead
 | 编号 | 事项 | 状态 | 验收口径 |
 |---|---|---|---|
 | R1 | 合并裁决交给 GitHub Actions | **已完成**：PR #126 的 43 项检查全绿，`合并裁决（唯一）`（merge-gate）通过；首轮两条红（供应链公告 `RUSTSEC-2026-0538`、macOS 专属用例 runner 偶发）已分别按公告补丁升级与重跑复核处理 | 已推送到 fork 并开 PR（fork → upstream `main`），Actions 对本批提交给出结论；`merge-gate` 是唯一合并裁决，它对含 Rust 变更的 PR 只给 BLOCKED（本地不能认证 cargo 门禁）⇒ 以 Actions 结论为准。**合并动作本身仍待上游维护者执行** |
-| R2 | 生产模型推理模式口径 | 生产 LLM 工厂已在**构造期**接线厂商私有请求字段（四级口径：IMPLEMENTED）；真实端点的 **200 取证**未完成（链路已通到「请求发出并拿到厂商应答」，但 2026-11-13 那枚临时 key 已失效，厂商回 401） | 部署侧显式设 `APEIRETH_OPENAI_THINKING=disabled`，或不设（默认零变化 ⇒ 不发厂商私有字段）；上线前用真实端点复跑一轮并留证（需另取本次临时 key）；需要回传推理轮的厂商走协议改造（长尾 L5）。⚠️ 写错取值时构造期会报错，但 CLI 的两条装配路径会吞掉该错误并静默回退默认工厂（见 §进度与验收记录） |
-| R3 | 暴露面体检开关口径 | `sec.exposure_audit` = PRODUCTION WIRED、default OFF，开关 `APEIRETH_ENABLE_EXPOSURE_AUDIT` | 首发平台是 Windows 桌面：上线前须明确该开关首发是否打开（开＝每次启动跑一次真实 netstat 采集；不开＝声明保持 default OFF），两处口径必须一致 |
+| R2 | 生产模型推理模式口径 | **已实测（2026-11-14，用本次临时 key）**：生产 LlmFactory → 真实端点拿到 200 应答（`vendor_field_keys = ["thinking"]`，content 非空，usage 18/1 tokens）；评测 live 路径复跑 4/6 通过、封存链 verified、真实计价已折算 | 部署侧显式设 `APEIRETH_OPENAI_THINKING=disabled`，或不设（默认零变化 ⇒ 不发厂商私有字段）；需要回传推理轮的厂商走协议改造（长尾 L5）。⚠️ 剩余缺口：CLI 的两条装配路径会吞掉构造错误并静默回退默认工厂（见 §进度与验收记录） |
+| R3 | 暴露面体检开关口径 | **已拍板（2026-11-14）：首发保持 default OFF** ⇒ 部署侧不设 `APEIRETH_ENABLE_EXPOSURE_AUDIT`，声明与默认一致 | 首发平台是 Windows 桌面：上线前须明确该开关首发是否打开（开＝每次启动跑一次真实 netstat 采集；不开＝声明保持 default OFF），两处口径必须一致 |
 
 ### 长尾（以后有空做）
 
