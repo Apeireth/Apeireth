@@ -147,6 +147,40 @@ Author: lead
     fmt-check（35 crate 0 diff）、arch-strict（0 违规）、env registry（168/168 覆盖）。
   - 提交形态：本分支截至本批共 **14 条提交**（自 `ca2b7b70f` 起），仍**只本地提交**，不推送、不开 PR、不合并；
     用户要求「一切以上线为目标」，合并与推送的时机由用户决定。
+- 上线收口裁决（2026-11-14，按 R1「CI 裁决交给 Actions」执行）：
+  - 推送与 PR：分支 `feat/backend-hardening-completion-20261113` 已推到 fork（`Xephylos/Apeireth`），
+    并向上游 `Apeireth/Apeireth` 的 `main` 开 **PR #126**（https://github.com/Apeireth/Apeireth/pull/126 ）。
+    PR 的全部检查 **43 项通过 / 0 失败 / 1 项 skipping**（kani 的非默认 harness 矩阵项），
+    其中 **`合并裁决（唯一）`（merge-gate）通过** ⇒ CI 侧裁决门禁已由 Actions 出结论，
+    不再依赖本地对 cargo 门禁的代跑（本地代跑见上一批记录，只作辅助证据）。
+  - CI 首轮红 ①（供应链公告）：`cargo deny check` 报 `RUSTSEC-2026-0538`
+    （`quinn-udp 0.5.15`，受影响链 `quinn-udp ← quinn ← apeireth-mesh-quic ← apeireth-cli`）。
+    该公告**不是本批引入**（`git diff --stat ca2b7b70f..HEAD -- Cargo.lock` 为空，是新发布公告），
+    修法按公告原文做补丁级升级 `quinn-udp 0.5.15 → 0.5.16`（提交 `34d793ab9`），
+    **未加任何 advisory 豁免**；拒绝的替代方案＝`[advisories] ignore` 豁免（放宽门槛）、
+    跨到 `0.6.3`（牵动 quinn-proto 全链）、全量 `cargo update`（大版本漂移）。
+    复跑后 `cargo deny check`（advisories/bans/licenses/sources 四类）**pass**。
+  - CI 首轮红 ②（macOS 专属用例偶发）：`cargo nextest (macos-latest)` 有一条
+    `macos_tests::timeout_terminates_the_whole_process_group_tree` 以
+    `Io("Operation not permitted (os error 1)")` 失败。**不在本 PR 的改动面内**：
+    失败文件 `crates/capabilities/tools/tests/process_executor.rs` 在本 PR 的 diff 里为空，
+    本 PR 在 `src/process/` 下只改了 `windows.rs` 的一个 `pub(crate)` 可见性；
+    错误源是 `crates/capabilities/tools/src/process/macos.rs` 的 `setpgid(0, 0)`
+    （进程已是组长时返回 EPERM）。**重跑同一 job（attempt 2）即绿**，同一批 43 项复跑后全绿 ⇒
+    记为 macOS runner 相关偶发，未在本 PR 内改动该平台实现（改它会牵动进程树治理，不属本批范围）。
+  - 本地统一验证入口复跑（最终树）：`python scripts/harness.py verify --base ca2b7b70f`
+    ⇒ fast **30 项全 PASS**、deep PASS=7（claims-verify/arch-strict/unwired-groups/guard-wiring/
+    golden-baseline/real-query-baseline/d4-ledger）+ DELEGATED=7（ci-rust/ci-nextest/ci-clippy/ci-fmt/
+    ci-doc-test/ci-cargo-deny/ci-promise-audit）⇒ **VERDICT: PASS**；
+    `python scripts/harness.py attest` 生成绑 `34d793ab9…` 的证据包
+    （`artifacts/harness/` 在 .gitignore 内，不入仓、不脏工作树）。
+  - R2 取证现状（如实）：生产工厂 → 真实端点的链路已通到「请求发出并拿到厂商应答」这一步
+    （探针打印 `extra_body_keys = ["thinking"]`、`extra_body_present = true`，
+    随后的 401 是厂商应答，不是本地拼装失败）；但 2026-11-13 那枚临时 key 已失效
+    （厂商回 `401 … Your api key: ****e5de is invalid`）⇒ **本轮未取到 200 证据**，
+    需另取一枚本次临时 key 复跑一轮（凭据只经环境变量注入，不进参数/源码/日志/产物）。
+  - 本分支提交形态：截至本条共 **18 条提交**（自 `ca2b7b70f` 起），**已推送并开 PR，未合并**
+    （合并须由上游维护者在 PR #126 上按仓库流程执行）。
 
 ### 已确认的待复现或待实施项
 
@@ -163,14 +197,20 @@ Author: lead
   需要回传推理轮的厂商仍须走协议改造；本批实测端点以关闭推理模式的方式接入。
 - 【上线前必须 R2】生产侧推理模式的口径由部署环境变量决定（见 §上线就绪口径）：默认值是**不发**任何厂商私有字段，
   显式设 `APEIRETH_OPENAI_THINKING=disabled` 才关闭该端点的推理模式；取值非法时在工厂构造期报错。
-  未完成的两处：CLI 的两条装配路径会吞掉构造错误（静默回退默认工厂），真实端点复跑一轮尚未做。
+  未完成的两处：CLI 的两条装配路径会吞掉构造错误（静默回退默认工厂），
+  以及真实端点的 **200 取证**未完成（2026-11-14 探针已通到「请求发出并拿到厂商应答」，
+  但 2026-11-13 那枚临时 key 已失效，厂商回 401 ⇒ 需另取本次临时 key 复跑一轮）。
 - 【上线前必须 R2】架构契约的 env 名额已用尽（实测 154 = 预算 154，预算值未改）：下一轮任何新增能力开关名
   必须先删一个或改走配置项，不得再「顺手加」。
 - 真实模型首跑曾出现一次传输层失败（厂商侧连接中断，非 400 业务拒绝），重跑通过；
   该类瞬时失败没有进入夹具的重试口径。
-- 【上线前必须 R1】CI 专属门禁本地只跑通了等价命令：nextest（11069 个用例全通过）与 cargo-deny（四类 check 全 ok）
-  不等于 Actions 结果；其中 cargo-deny 的 advisories 用的是本机缓存快照而非当日刷新（当日刷新被本机
-  全局 git 代理配置挡住，本批不改用户全局配置），Linux/macOS 的 OS matrix 只有 CI 能给。
+- 【上线前必须 R1 · 已完成】CI 专属门禁已由 Actions 出结论：PR #126 的 43 项检查全绿
+  （含 `cargo nextest` 三平台、`cargo deny check`、`clippy 3 档 lint`、`cargo fmt --check`、
+  `cargo test --doc` 三平台、`cargo miri`、`cargo kani`、`cargo tarpaulin`、`cargo audit`、
+  死代码/孤儿 API/记忆可达率棘轮、wiring ledger、docs truth、doc caliber、golden baseline、
+  以及唯一的 **`合并裁决（唯一）` merge-gate**）。本地此前跑的等价命令（nextest 11069 全通过、
+  cargo-deny 四类 ok）**只作辅助证据**，其中 cargo-deny 的 advisories 用的是本机缓存快照而非当日刷新
+  （当日刷新被本机全局 git 代理配置挡住，本批不改用户全局配置）⇒ 供应链与 OS matrix 的最终裁决以 CI 为准。
 - 结构化系统观测、通用服务/计划任务和真实设备协议须继续设计及验收；已有正式 Shell、文件及隔离能力应复用。
 - 系统能力规范中的全工作区纯 Safe/零 FFI 口径需依据实际平台边界复核并收窄，尚未修改。
 
@@ -183,8 +223,8 @@ Author: lead
 
 | 编号 | 事项 | 状态 | 验收口径 |
 |---|---|---|---|
-| R1 | 合并裁决交给 GitHub Actions | 本地等价命令已跑通：nextest 11069 个用例全通过、cargo-deny 四类 check 全 ok；但 7 条 CI 门禁在本地只记 DELEGATED（不是本地通过） | 推送分支到 fork 并开 PR（fork → upstream `main`），等 Actions 对本批提交给出结论；`merge-gate` 是唯一合并裁决，它对含 Rust 变更的 PR 只给 BLOCKED（本地不能认证 cargo 门禁）⇒ 以 Actions 结论为准 |
-| R2 | 生产模型推理模式口径 | 生产 LLM 工厂已在**构造期**接线厂商私有请求字段（四级口径：IMPLEMENTED）；真实端点复跑尚未做（上一轮真实模型实测跑在接线之前） | 部署侧显式设 `APEIRETH_OPENAI_THINKING=disabled`，或不设（默认零变化 ⇒ 不发厂商私有字段）；上线前用真实端点复跑一轮并留证；需要回传推理轮的厂商走协议改造（长尾 L5）。⚠️ 写错取值时构造期会报错，但 CLI 的两条装配路径会吞掉该错误并静默回退默认工厂（见 §进度与验收记录） |
+| R1 | 合并裁决交给 GitHub Actions | **已完成**：PR #126 的 43 项检查全绿，`合并裁决（唯一）`（merge-gate）通过；首轮两条红（供应链公告 `RUSTSEC-2026-0538`、macOS 专属用例 runner 偶发）已分别按公告补丁升级与重跑复核处理 | 已推送到 fork 并开 PR（fork → upstream `main`），Actions 对本批提交给出结论；`merge-gate` 是唯一合并裁决，它对含 Rust 变更的 PR 只给 BLOCKED（本地不能认证 cargo 门禁）⇒ 以 Actions 结论为准。**合并动作本身仍待上游维护者执行** |
+| R2 | 生产模型推理模式口径 | 生产 LLM 工厂已在**构造期**接线厂商私有请求字段（四级口径：IMPLEMENTED）；真实端点的 **200 取证**未完成（链路已通到「请求发出并拿到厂商应答」，但 2026-11-13 那枚临时 key 已失效，厂商回 401） | 部署侧显式设 `APEIRETH_OPENAI_THINKING=disabled`，或不设（默认零变化 ⇒ 不发厂商私有字段）；上线前用真实端点复跑一轮并留证（需另取本次临时 key）；需要回传推理轮的厂商走协议改造（长尾 L5）。⚠️ 写错取值时构造期会报错，但 CLI 的两条装配路径会吞掉该错误并静默回退默认工厂（见 §进度与验收记录） |
 | R3 | 暴露面体检开关口径 | `sec.exposure_audit` = PRODUCTION WIRED、default OFF，开关 `APEIRETH_ENABLE_EXPOSURE_AUDIT` | 首发平台是 Windows 桌面：上线前须明确该开关首发是否打开（开＝每次启动跑一次真实 netstat 采集；不开＝声明保持 default OFF），两处口径必须一致 |
 
 ### 长尾（以后有空做）
