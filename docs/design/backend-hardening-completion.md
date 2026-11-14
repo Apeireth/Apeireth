@@ -121,7 +121,8 @@ Author: lead
   改为把两文件压回基线以内（两条 refactor 提交，行为等价：候选查询构造下沉到 `scope.rs`、
   recon 调用改用本批建好的再导出面），并把 `memory_correction.rs` 的指纹按实测从 1535 缩到 1413
   （逻辑搬进新模块后该文件真实变小）。
-  本批按用户要求**只本地提交**（共 12 条提交），不推送、不开 PR、不合并。
+  本批按用户要求**只本地提交**（共 12 条提交），不推送、不开 PR、不合并（该阶段口径；
+  其后按 2026-11-14「一切以上线为目标」的新指示改为推送并开 PR #126，见文末最终裁决）。
 - 上线收口批次（2026-11-14，按「一切以上线为目标」推进）：
   - 生产工厂接线：新增 `crates/engine/provider/src/vendor_body.rs` 作为厂商私有请求字段的**命名、解析与校验单一真源**；
     生产 `OpenAiCompatibleLlmFactory::from_env_with_resolver` 在**构造期**读取 `APEIRETH_OPENAI_THINKING` 并挂到 capability。
@@ -207,6 +208,21 @@ Author: lead
     `APEIRETH_ENABLE_EXPOSURE_AUDIT`，对外声明与默认行为一致（`sec.exposure_audit` = PRODUCTION WIRED + default OFF）。
   - 本批新增/变更：1 个 live 用例文件（`tests/openai_compatible_vendor_body_live.rs`，默认不跑）+ 本节与
     §上线就绪口径的文档更新；**不改**生产代码、不改契约、不改基线、不新增 env 名。
+- 最终上线裁决（2026-11-14，PR #126 的最终代码提交 `c24bad42e…`）：
+  - Actions 结论：**43 项 success / 0 项 failure / 2 项 skipped**（跳过的两项＝`auto-merge patch/minor
+    dependabot PR`（仅对 dependabot PR 生效）与 `kani · ${{ matrix.harness }}`（该矩阵项本仓不适用））。
+    关键门禁逐项 success：`harness / merge-gate`（唯一合并裁决）、`Cargo deny`（公告已消）、
+    `Golden baseline`（内部卷检索基线）、`arch-guard`、`Unwired API ratchet`、`Dead code ratchet`、
+    `Wiring ledger`、`Memory reachability ratchet`、`Docs truth`、`Doc caliber`、`Doc paths`、
+    `Cargo audit`、`Kani`、`Miri`、`Protocol integration tests`、`rustdoc (nightly)`、
+    `Rust tests (OS matrix + cargo-nextest)` 的 **ubuntu-latest / windows-latest / macos-latest 三个平台**。
+  - 本地统一验证入口在同一提交上复跑：`python scripts/harness.py verify --base ca2b7b70f`
+    ⇒ fast **30 项全 PASS**、deep PASS=7 + DELEGATED=7 ⇒ **VERDICT: PASS**（HARNESS_EXIT=0）；
+    `python scripts/harness.py attest` 生成绑 `c24bad42e…` 的证据包
+    （`artifacts/harness/<commit_sha>/`，在 .gitignore 内，不入仓、不脏工作树）。
+  - 提交形态：截至本条共 **20 条提交**（自 `ca2b7b70f` 起），**已推送到 fork 并开 PR #126，未合并**
+    （合并由上游维护者按仓库流程执行）。
+  - 本条为纯文档记录，不含代码改动；此后的任何提交以 `git log` 为准。
 
 ### 已确认的待复现或待实施项
 
