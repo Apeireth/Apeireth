@@ -223,6 +223,26 @@ Author: lead
   - 提交形态：截至本条共 **20 条提交**（自 `ca2b7b70f` 起），**已推送到 fork 并开 PR #126，未合并**
     （合并由上游维护者按仓库流程执行）。
   - 本条为纯文档记录，不含代码改动；此后的任何提交以 `git log` 为准。
+- 文档收口与最终交付（2026-11-14，提交形态的最终口径）：
+  - 提交数：自 `ca2b7b70f` 起共 **21 条提交**，全部**已推送到 fork**，PR #126 保持打开、**未合并**
+    （合并由上游维护者按仓库流程执行）；分支上 **不含任何前端目录**（`git diff --name-only ca2b7b70f..HEAD`
+    的前端路径计数为 0）⇒ 新前端的在途改动不在本 PR 内，也没有被推送。
+  - CI 结论的最终绑定：Actions 在 `4520069e0…`（最终代码提交 `c24bad42e…` 之上的纯文档提交）上同样是
+    **43 项 success / 0 项 failure / 2 项 skipped**；本地 `python scripts/harness.py verify --base ca2b7b70f`
+    在 `4520069e0…` 上 **VERDICT: PASS**（fast 30 项全 PASS、deep PASS=7 + DELEGATED=7），
+    `python scripts/harness.py attest` 生成**绑 `4520069e0…`** 的证据包
+    （`artifacts/harness/4520069e0bdeff79d3f9836728067be45729039f/`，在 .gitignore 内，不入仓、不脏工作树）。
+  - 文档与真账已全部同步到最终状态（本条只改文档，不改代码、不改契约、不改基线、不新增 env 名）：
+    本设计稿（进度与验收记录、上线就绪口径与长尾归类）、`docs/status/workline-registry.md` 进度页、
+    `docs/status/claims.yaml`（60 条声明的 `verified_at` 已对齐到各条自己的提交）、`docs/status/STATUS.md`、
+    `docs/status/wiring.yaml`、`docs/architecture/env-registry.toml`（168 条登记）、
+    `docs/architecture/contract.toml`（env 名额 154/154 的用途承诺注释，预算值未改）、
+    `scripts/arch-baseline.txt`、`scripts/crate-budget-baseline.json`、`scripts/unwired-baseline.txt`、
+    `CHANGELOG.md` 顶部 `## [Unreleased]` 段、`docs/INDEX.csv`。
+  - 长尾交接口径不变：L1 作用域索引化、L2 英文与跨属性一致性（另含 CLI 两条装配路径吞构造错误）、
+    L3 独立保管与真实计价与真人盲测、L4 Linux/macOS 与 dispatcher 端到端、L5 协议级
+    `reasoning_content` 回传、L6 架构棘轮剩 1 条可缩表项；每项在 §上线就绪口径与长尾归类里写明
+    「为什么归长尾」与「升级条件」。
 
 ### 已确认的待复现或待实施项
 
