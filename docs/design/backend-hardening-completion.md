@@ -3,9 +3,9 @@
 [Document-Meta]
 Document: docs/design/backend-hardening-completion.md
 Class: SPEC
-Version: 0.1
-Last-Modified: 2026-11-13
-Status: 🟡 草稿
+Version: 0.2
+Last-Modified: 2026-11-14
+Status: 🟢 活跃
 Author: lead
 
 ## 目标与范围
@@ -122,27 +122,84 @@ Author: lead
   recon 调用改用本批建好的再导出面），并把 `memory_correction.rs` 的指纹按实测从 1535 缩到 1413
   （逻辑搬进新模块后该文件真实变小）。
   本批按用户要求**只本地提交**（共 12 条提交），不推送、不开 PR、不合并。
+- 上线收口批次（2026-11-14，按「一切以上线为目标」推进）：
+  - 生产工厂接线：新增 `crates/engine/provider/src/vendor_body.rs` 作为厂商私有请求字段的**命名、解析与校验单一真源**；
+    生产 `OpenAiCompatibleLlmFactory::from_env_with_resolver` 在**构造期**读取 `APEIRETH_OPENAI_THINKING` 并挂到 capability。
+    不设 ⇒ 不挂 extra body ⇒ 请求体与接线前**逐字节一致**；取值非法 ⇒ 构造期 `FactoryError::VendorBody` 报错
+    （不等第一次真实请求才发现）；不认得该字段的端点会被厂商直接 400 ⇒ 该字段是**显式可选**的（四级口径：IMPLEMENTED）。
+  - 反向验伪（主代理亲做）：摘掉工厂接线 ⇒ `vendor_body_factory_wiring` 两项红
+    （`the_reasoning_switch_reaches_the_wire` 与 `the_factory_sends_only_the_field_it_owns`，
+    原文 `left: None  right: Some(Object {"thinking": Object {"type": String("disabled")}})`），
+    改回 ⇒ `ok. 5 passed; 0 failed`。
+  - env 名额：架构契约按 src 口径只数能力开关，预算 154。本批最初把三个新名字放进生产 `src/`
+    ⇒ arch-strict 实测 156 ⇒ **超预算** ⇒ 按契约「不许顺手加」把生产只留**一个**（推理模式开关），
+    另外两个（评测侧推理强度、额外体 JSON）退回评测工具侧（`examples/` 不占 src 口径预算）⇒
+    实测 154 = 预算 154，**预算值未改**；契约里补记了本次用掉最后一个名额的逐条核对
+    （已登记 / 默认关且关时零变化 / 为何不能走配置项 / 不许顺手加）。
+  - 评测侧改为复用 provider 的同一份映射（`vendor_body_from_parts` 与 `parse_thinking`）⇒
+    生产与评测不再各维护一份真源；评测自己的两个开关名留在 `examples/` 侧。
+  - 如实标注的缺口：① CLI 有两处装配点用 `if let Ok(factory)` ⇒ **构造错误被吞**
+    （`crates/adapters/cli/src/lib.rs:2492` 的 `build_council_from_env` 与
+    `crates/adapters/cli/src/llm_factory_env.rs:37`），只有同文件 `:2588` 的
+    `build_subagent_orchestrator_from_env` 把错误透出 ⇒ 运维写错开关值时，这两条路径会静默回退默认工厂；
+    ② 真实模型那一轮（4/6）跑在工厂接线**之前** ⇒ 上线前须按 R2 口径复跑一轮真实端点。
+  - 本批门禁：provider 单测、评测 example 单测（14 项）、两 crate clippy（`-D warnings`，0 warning）、
+    fmt-check（35 crate 0 diff）、arch-strict（0 违规）、env registry（168/168 覆盖）。
+  - 提交形态：本分支截至本批共 **14 条提交**（自 `ca2b7b70f` 起），仍**只本地提交**，不推送、不开 PR、不合并；
+    用户要求「一切以上线为目标」，合并与推送的时机由用户决定。
 
 ### 已确认的待复现或待实施项
 
-- 自动纠错的英文文法、跨属性与跨主体一致性核验尚未覆盖；语义层目前是中文闭集文法。
-- 情节候选挤掉长历史关键证据的缺陷已修复（同一预算内两条切片，三处后端共用一份可见性口径）；
+- 【长尾 L2】自动纠错的英文文法、跨属性与跨主体一致性核验尚未覆盖；语义层目前是中文闭集文法。
+- 【长尾 L1】情节候选挤掉长历史关键证据的缺陷已修复（同一预算内两条切片，三处后端共用一份可见性口径）；
   作用域逐行 JSON 解析的成本（1 万条约 18ms）未消除，作用域索引化留待下一轮，须保持
   作用域、治理状态和时间过滤不被放宽。
-- netstat 的统一执行边界与 Recon 的整体期限、取消和异步执行已在 Windows 上实测；
+- 【长尾 L4】netstat 的统一执行边界与 Recon 的整体期限、取消和异步执行已在 Windows 上实测；
   Linux/macOS 分支与 dispatcher 真实链路仍未实测。
-- 长程评测的 CLI、正式装配、封存执行闭环和压力 runner 已实现并实跑（四级口径：IMPLEMENTED）；真实模型路径已实测一轮
+- 【长尾 L3】长程评测的 CLI、正式装配、封存执行闭环和压力 runner 已实现并实跑（四级口径：IMPLEMENTED）；真实模型路径已实测一轮
   （4/6 通过，2 例模型侧质量失败），但题集仍是本仓自编回归集而非独立盲测，单轮结果不构成质量水平结论；
   独立保管（需另一持有人或另一台机器）与真实计价仍未接线。
-- 厂商推理模式下的 `reasoning_content` 回传未在协议层实现：本批只提供厂商私有字段透传这一条显式通道，
+- 【长尾 L5】厂商推理模式下的 `reasoning_content` 回传未在协议层实现：本批只提供厂商私有字段透传这一条显式通道，
   需要回传推理轮的厂商仍须走协议改造；本批实测端点以关闭推理模式的方式接入。
+- 【上线前必须 R2】生产侧推理模式的口径由部署环境变量决定（见 §上线就绪口径）：默认值是**不发**任何厂商私有字段，
+  显式设 `APEIRETH_OPENAI_THINKING=disabled` 才关闭该端点的推理模式；取值非法时在工厂构造期报错。
+  未完成的两处：CLI 的两条装配路径会吞掉构造错误（静默回退默认工厂），真实端点复跑一轮尚未做。
+- 【上线前必须 R2】架构契约的 env 名额已用尽（实测 154 = 预算 154，预算值未改）：下一轮任何新增能力开关名
+  必须先删一个或改走配置项，不得再「顺手加」。
 - 真实模型首跑曾出现一次传输层失败（厂商侧连接中断，非 400 业务拒绝），重跑通过；
   该类瞬时失败没有进入夹具的重试口径。
-- CI 专属门禁本地只跑通了等价命令：nextest（11069 个用例全通过）与 cargo-deny（四类 check 全 ok）
+- 【上线前必须 R1】CI 专属门禁本地只跑通了等价命令：nextest（11069 个用例全通过）与 cargo-deny（四类 check 全 ok）
   不等于 Actions 结果；其中 cargo-deny 的 advisories 用的是本机缓存快照而非当日刷新（当日刷新被本机
   全局 git 代理配置挡住，本批不改用户全局配置），Linux/macOS 的 OS matrix 只有 CI 能给。
 - 结构化系统观测、通用服务/计划任务和真实设备协议须继续设计及验收；已有正式 Shell、文件及隔离能力应复用。
 - 系统能力规范中的全工作区纯 Safe/零 FFI 口径需依据实际平台边界复核并收窄，尚未修改。
+
+## 上线就绪口径与长尾归类
+
+本节是本批的上线口径与后续排期。判定规则：**会破坏用户数据、让对外声明超出事实、或让整条产品路径不可用**
+⇒ 上线前必须做完；只影响性能、评测严谨度或额外语言覆盖 ⇒ 归入长尾，**降口径也算闭环**（不得写成已覆盖）。
+
+### 上线前必须（3 项）
+
+| 编号 | 事项 | 状态 | 验收口径 |
+|---|---|---|---|
+| R1 | 合并裁决交给 GitHub Actions | 本地等价命令已跑通：nextest 11069 个用例全通过、cargo-deny 四类 check 全 ok；但 7 条 CI 门禁在本地只记 DELEGATED（不是本地通过） | 推送分支到 fork 并开 PR（fork → upstream `main`），等 Actions 对本批提交给出结论；`merge-gate` 是唯一合并裁决，它对含 Rust 变更的 PR 只给 BLOCKED（本地不能认证 cargo 门禁）⇒ 以 Actions 结论为准 |
+| R2 | 生产模型推理模式口径 | 生产 LLM 工厂已在**构造期**接线厂商私有请求字段（四级口径：IMPLEMENTED）；真实端点复跑尚未做（上一轮真实模型实测跑在接线之前） | 部署侧显式设 `APEIRETH_OPENAI_THINKING=disabled`，或不设（默认零变化 ⇒ 不发厂商私有字段）；上线前用真实端点复跑一轮并留证；需要回传推理轮的厂商走协议改造（长尾 L5）。⚠️ 写错取值时构造期会报错，但 CLI 的两条装配路径会吞掉该错误并静默回退默认工厂（见 §进度与验收记录） |
+| R3 | 暴露面体检开关口径 | `sec.exposure_audit` = PRODUCTION WIRED、default OFF，开关 `APEIRETH_ENABLE_EXPOSURE_AUDIT` | 首发平台是 Windows 桌面：上线前须明确该开关首发是否打开（开＝每次启动跑一次真实 netstat 采集；不开＝声明保持 default OFF），两处口径必须一致 |
+
+### 长尾（以后有空做）
+
+| 编号 | 缺口 | 为什么归长尾 | 升级为「上线前必须」的触发条件 |
+|---|---|---|---|
+| L1 | 记忆候选阶段的作用域逐行 JSON 解析成本（1 万条约 18ms） | 只影响性能；B3 实测规模下召回 p50 56.8ms / p95 60.8ms 可接受 | 召回延迟进入首发体验指标时 |
+| L2 | 英文文法、跨属性与跨主体一致性 | `mem.automatic_correction` 的 notes 写明「不声明一般自然语言语义完备」；对外材料不得写成通用自然语言语义 | 对外宣称支持英文或一般自然语言时 |
+| L3 | 评测的独立保管、真实计价、真人盲测 | `mem.longterm_eval_contract` = IMPLEMENTED 且 default OFF；真实模型单轮 4/6 是模型侧质量失败，不是产品缺陷 | 把该评测当作上线质量裁决依据时 |
+| L4 | Linux/macOS 产品行为实测、dispatcher 端到端 | 首发平台是 Windows 桌面，unix 分支 fail-closed | 首发支持 Linux/macOS，或 dispatcher 进入首发链路时 |
+| L5 | 协议级 `reasoning_content` 回传 | 本批给了显式可选的厂商私有字段透传通道，可关闭推理模式规避 | 目标厂商强制要求回传推理内容时 |
+| L6 | 架构棘轮剩 1 条可缩表项（`size crates/engine/memory/src/coordinator.rs 2418`） | 差额来自注释搬家而非能力收缩，且该文件他线在改 | 下一次架构波收口评审 |
+
+未列入上两表的开放项（结构化系统观测、通用服务与计划任务、真实设备协议、系统能力规范的全工作区
+纯 Safe/零 FFI 口径）沿用既有设计稿路线，不因本批上线而改变范围。
 
 ## 验收入口
 
