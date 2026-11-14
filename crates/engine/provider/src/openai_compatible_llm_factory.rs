@@ -27,6 +27,7 @@ use crate::canonical_openai_compatible::{
     OpenAiCompatibleProviderCapability, OpenAiCompatibleProviderPlugin,
 };
 use crate::llm_factory_adapters;
+use crate::vendor_body::{self, VendorBodyError};
 
 /// 工厂名字 (用于监控 / 日志; per llm_factory.rs:162 "factory 名字")。
 pub const FACTORY_NAME: &str = "openai-compatible";
@@ -58,10 +59,27 @@ impl OpenAiCompatibleLlmFactory {
     }
 
     /// 显式注入 resolver（Env / Keyring / StaticCredentials 任意实现）。
+    ///
+    /// ⭐ **厂商私有请求字段在这里接线**（推理模式开关 `APEIRETH_OPENAI_THINKING`，
+    /// 见 [`crate::vendor_body`]）：
+    ///
+    /// * 没设 ⇒ **不设** extra body ⇒ 请求体与接线前逐字节一致；
+    /// * 设了 ⇒ 逐键并入请求体，**只对支持该厂商私有字段的端点**才有意义
+    ///   （发给不认识它的端点会被直接 400 拒单）；
+    /// * 取值非法 ⇒ **构造期** `Err`（fail fast），不等第一次真实请求才发现。
+    ///
+    /// ⭐ 本工厂**只拥有这一个**厂商开关：架构契约按「每个能力开关一个 env 名」
+    /// 预算，工具侧的额外开关不得占用生产名额。
     pub fn from_env_with_resolver(
         resolver: Arc<dyn CredentialResolver>,
     ) -> Result<Self, FactoryError> {
         let plugin = OpenAiCompatibleProviderPlugin::from_env().map_err(FactoryError::Plugin)?;
+        // ⭐ 只在运维方显式设置时才发厂商私有字段；非法取值在这里就报错。
+        if let Some(extra) =
+            vendor_body::vendor_body_from_env().map_err(FactoryError::VendorBody)?
+        {
+            plugin.set_extra_body(extra);
+        }
         plugin.attach_resolver_for_test(resolver);
         Ok(Self::new(plugin.provider_for_test()))
     }
@@ -86,6 +104,10 @@ impl OpenAiCompatibleLlmFactory {
 pub enum FactoryError {
     /// plugin 构造错 (reqwest build 失败 / invalid base url / empty models)。
     Plugin(apeireth_plugin::PluginError),
+    /// 厂商私有请求字段构造错 (取值非法 / 额外体非 JSON 对象 / 覆盖协议保留键)。
+    ///
+    /// ⭐ 这是**构造期**错误: 误配的开关在装配时就暴露, 不等第一次真实请求。
+    VendorBody(VendorBodyError),
 }
 
 impl std::fmt::Display for FactoryError {
@@ -95,6 +117,10 @@ impl std::fmt::Display for FactoryError {
                 f,
                 "openai-compatible LlmFactory 构造失败: plugin error: {e}"
             ),
+            Self::VendorBody(e) => write!(
+                f,
+                "openai-compatible LlmFactory 构造失败: vendor body error: {e}"
+            ),
         }
     }
 }
@@ -103,6 +129,7 @@ impl std::error::Error for FactoryError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::Plugin(e) => Some(e),
+            Self::VendorBody(e) => Some(e),
         }
     }
 }

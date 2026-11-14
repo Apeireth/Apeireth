@@ -293,6 +293,21 @@ target = "R2（ADR-0008 Accepted）: 公共面 2026-10-20 收敛；plugin 内部
 # 逐条登记字段迁移见 R3。
 policy = "所有 APEIRETH_* 开关必须登记; 新增必须默认关 + 关时零变化测试"
 max_distinct_names = 154            # 棘轮: 只减不增（按 src 口径 · **只数能力开关**）
+# ⚠️ **2026-11-14 消耗最后一个名额（后端补强批次 · 厂商推理模式开关）**：
+#   新增 **1** 个能力开关名 `APEIRETH_OPENAI_THINKING`（生产 OpenAI 兼容工厂的
+#   厂商私有推理模式开关，构造期接线）。按本段条件逐条核对：
+#   ① 已登记 `docs/architecture/env-registry.toml`（owner=apeireth-provider / level / evidence 齐全）；
+#   ② **默认关 + 关时零变化**：不设 ⇒ 工厂不挂 extra body ⇒ 请求体与接线前逐字节一致
+#      （provider tests/vendor_body_factory_wiring.rs 的
+#      `without_any_switch_the_factory_sets_no_extra_body` 钉住）；
+#   ③ **为什么不能走配置项**：provider 的装配根是**代码构造**的
+#      （`OpenAiCompatibleProviderPlugin::from_env()` 读环境变量），provider crate 没有
+#      配置面可挂 ⇒ 只能走 env；且该开关是**部署级**（按端点取值），不是用户级文档配置；
+#   ④ **不许顺手加**：本轮原本同时想加「额外体 JSON 逃生口」与「reasoning_effort」两个名字，
+#      但它们不是上线必需 ⇒ **不放进生产**（生产工厂只拥有推理模式这一个开关）；
+#      两者保留在长程评测工具侧（examples/ 目录 ⇒ 不占本预算口径的能力开关名）。
+#   ⇒ ⇒ 实测能力开关 154（= 预算 154，**预算值未改**，本条只把最后一个名额用掉）
+#      ⇒ ⇒ ⇒ **154/154 用尽：下一轮任何新增 env 名必须先删一个**（或改配置项）。
 # ⚠️ **2026-11-11 合并后树重测（PR #117 并入 main 后按合并后树重测）**：
 #   能力开关实测 **152**（原始 findall **164**；登记面 164 条**全部已登记** ⇒ 登记面零缺口）
 #   ⇒ ⇒ 预算 **154 保持不变**（**未放宽**，余 2 个名额；棘轮只减不增）

@@ -22,7 +22,7 @@
     },
     "crates/capabilities/tools": {
       "files": 131,
-      "loc": 88351
+      "loc": 88861
     },
     "crates/engine/guard": {
       "files": 28,
@@ -73,8 +73,8 @@
       "loc": 4159
     },
     "crates/engine/memory": {
-      "files": 193,
-      "loc": 90378
+      "files": 194,
+      "loc": 91322
     },
     "crates/engine/mesh": {
       "files": 27,
@@ -89,16 +89,16 @@
       "loc": 27834
     },
     "crates/engine/provider": {
-      "files": 14,
-      "loc": 6290
+      "files": 15,
+      "loc": 6715
     },
     "crates/engine/runtime": {
       "files": 55,
       "loc": 27089
     },
     "crates/engine/runtime-assembly": {
-      "files": 91,
-      "loc": 50550
+      "files": 92,
+      "loc": 50993
     },
     "crates/engine/storage": {
       "files": 27,

@@ -80,13 +80,12 @@ orphan with_quorum_gate_probe  # G3  生物族默认关 ⇒ 零引用是设计�
 orphan with_system_markers  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线 ⇒ 触发: 提示词装配族进生产时
 orphan with_task_type  # G3  认知编排面默认关 ⇒ 零引用是设计如此 ⇒ 触发: 认知编排族进生产时
 
-# --- G4（22 条）：**注入点 / 探测口**（`with_*`）。生产装配走 `install_*`。
+# --- G4（21 条）：**注入点 / 探测口**（`with_*`）。生产装配走 `install_*`。
 
 orphan with_age  # G4  ⇒ 触发: 研究族进生产时
 orphan with_backend  # G4  ⇒ 触发: 语音感知族进生产装配时
 orphan with_bio_self_status_from_env  # G4  ⇒ 触发: 生物自述进生产时
 orphan with_busy_timeout  # G4  ⇒ 触发: 部署需要非默认 busy_timeout（慢盘/网络 FS）时
-orphan with_clear_env  # G4  ⇒ 触发: 进程工具需最小环境隔离（安全加固）时
 orphan with_data  # G4  ⇒ 触发: 宿主侧 JSON-RPC 扩展字段需求出现时
 orphan with_date  # G4  日记族（`DailyNote`）**未接生产**（生产侧引用 0）⇒ ⇒ 零引用是族级结果 ⇒ ⇒ 见 `dailynote-mcp-tool-spec-2026-11-04.md`（暴露面待产品决策） ⇒ 触发: 4 个日记 MCP 工具注册进工具面时
 orphan with_deep_risk_floor  # G4  ⇒ 触发: 体检需要分级告警阈值时

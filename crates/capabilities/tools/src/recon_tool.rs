@@ -14,7 +14,7 @@ use async_trait::async_trait;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
-use crate::recon::{analyze_pack, Evidence, EvidenceItem, PackOptions};
+use crate::recon::{analyze_pack, scan_controlled, Evidence, EvidenceItem, PackOptions};
 
 /// 单文件分析上限（64 MiB）。
 const MAX_INPUT_BYTES: u64 = 64 * 1024 * 1024;
@@ -546,7 +546,7 @@ impl ToolCapability for ReconNetTool {
             max_ports: 1024,
             banner_probe: true,
         };
-        let report = match crate::recon::scan_ports(target, &requested, &self.scope, &options) {
+        let report = match scan_controlled(target, &requested, &self.scope, &options).await {
             Ok(report) => report,
             Err(error) => {
                 return ToolResult::permanent_error(&call.id, format!("scan refused: {error}"))

@@ -3,13 +3,15 @@
 //! These types are deliberately independent of Runtime, providers, and
 //! credentials. Assembly owns concrete adapters; Memory owns the semantics.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::fmt;
 use std::sync::Mutex;
 
 use apeireth_core::kernel::Timestamp;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+
+use crate::layers::MemoryRecallQuery;
 
 /// Visibility boundary for a memory record.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -36,6 +38,117 @@ pub struct MemoryCandidateQuery {
     pub visible_scopes: Vec<MemoryScope>,
     pub limit: usize,
     pub as_of_ms: Option<i64>,
+    /// **相关词**（可选）：候选发现的「相关度切片」用。
+    ///
+    /// # 为什么需要它（长历史关键事实）
+    ///
+    /// 候选阶段若只按**最新时间**截断 ⇒ ⇒ 早期确立的关键事实（姓名 / 住址 /
+    /// 长期约定）在进入正式排序与评分**之前**就被近期记录挤掉
+    /// ⇒ ⇒ 后面的检索层再强也救不回来（它根本不在候选池里）。
+    /// ⇒ ⇒ 调用方把问句的**相关词**带下来 ⇒ ⇒ 存储层可以在**同一个预算**内
+    /// 额外给「按词命中的老记录」留一条切片。
+    ///
+    /// # 口径
+    ///
+    /// * **空 = 只要新鲜度切片** ⇒ ⇒ 未接相关度切片的后端**行为不变**；
+    /// * 词条由 [`relevance_terms`] 产出（用检索层同一个分词器 ⇒ ⇒ 词是正文
+    ///   里真实出现的子串 ⇒ ⇒ 子串命中才有意义）；
+    /// * 这条切片只是**候选前置筛**，不是最终排序口径 ⇒ ⇒ 最终排序仍由检索层
+    ///   自己的覆盖度与权重决定；
+    /// * 切片条数由 [`MemoryCandidateQuery::relevance_slice_limit`] 决定
+    ///   （**绝对上限**，不是无界放大）。
+    pub query_terms: Vec<String>,
+}
+
+/// **相关度切片**的条数上限（行）。
+///
+/// # 为什么是绝对上限
+///
+/// 候选池的总量仍由 [`MemoryCandidateQuery::limit`] 兜住 ⇒ ⇒ 相关度切片
+/// 只是**占用**预算里的位置，而不是**追加**预算 ⇒ ⇒ 读取量与时延有界。
+pub const CANDIDATE_RELEVANCE_SLICE_MAX: usize = 16;
+
+/// **相关词**的条数上限（词）。
+///
+/// # 为什么有上限
+///
+/// 相关词会进存储层的排序表达式 ⇒ ⇒ 条数越多，单行打分层越贵
+/// ⇒ ⇒ 固定上限 ⇒ ⇒ 成本可预期。
+pub const CANDIDATE_RELEVANCE_MAX_TERMS: usize = 16;
+
+/// 从问句里抽**相关词**（候选发现的相关度切片用）。
+///
+/// # 口径（用检索层同一个分词器 ⇒ ⇒ 词是正文里真实出现的子串）
+///
+/// * **≥2 字符**的词才留（单字噪声太大）；
+/// * 中文按**二字组**（避免单字命中一大片），ASCII 词整体保留（已小写）；
+/// * 去重且保持问句顺序；
+/// * 超过 [`CANDIDATE_RELEVANCE_MAX_TERMS`] ⇒ ⇒ **等距抽样**（覆盖整句，
+///   不是只留开头那截 —— 只留开头会让长问句后半段的关键事实捞不回来）。
+#[must_use]
+pub fn relevance_terms(query: &str) -> Vec<String> {
+    let mut terms: Vec<String> = Vec::new();
+    let mut seen: HashSet<String> = HashSet::new();
+    for token in crate::hybrid_search::tokenize(query) {
+        let token = token.trim();
+        if token.chars().count() < 2 {
+            continue;
+        }
+        if !seen.insert(token.to_string()) {
+            continue;
+        }
+        terms.push(token.to_string());
+    }
+    if terms.len() <= CANDIDATE_RELEVANCE_MAX_TERMS {
+        return terms;
+    }
+    let total = terms.len();
+    let cap = CANDIDATE_RELEVANCE_MAX_TERMS;
+    (0..cap)
+        .map(|slot| terms[slot * total / cap].clone())
+        .collect()
+}
+
+/// 候选发现查询的派生口径。
+impl MemoryCandidateQuery {
+    /// 由**召回查询**构造候选查询（候选预算与相关词口径的唯一真源）。
+    ///
+    /// # 为什么放在这里
+    ///
+    /// 候选预算与相关词口径是**存储层候选发现**的契约 ⇒ ⇒ 与
+    /// [`MemoryCandidateQuery`] 住在同一个模块 ⇒ ⇒ 调用方不再各写一遍
+    /// （三处后端共用这一份口径）。
+    ///
+    /// # 口径
+    ///
+    /// * **候选预算** = `limit × 8`（下限 64）⇒ ⇒ 存储层在**同一个预算**内给
+    ///   「新鲜度切片」与「相关度切片」分位置 ⇒ ⇒ 候选池总量不放大；
+    /// * **相关词** = 问句经 [`relevance_terms`] 抽出的词 ⇒ ⇒ 空 ⇒ ⇒ 只有
+    ///   新鲜度切片（未接相关度切片的后端行为不变）。
+    #[must_use]
+    pub fn for_recall(query: &MemoryRecallQuery) -> Self {
+        Self {
+            source_session: Some(query.session_id.clone()),
+            visible_scopes: query.visible_scopes.clone(),
+            limit: (query.limit * 8).max(64),
+            as_of_ms: query.as_of_ms,
+            query_terms: relevance_terms(&query.query_text),
+        }
+    }
+
+    /// **相关度切片**能占用的条数（没有相关词 ⇒ 0 ⇒ 只有新鲜度切片）。
+    ///
+    /// # 上界从哪来
+    ///
+    /// `min(绝对上限, 本次候选预算)` ⇒ ⇒ 候选池**总量**仍由 `limit` 兜住
+    /// ⇒ ⇒ 成本与时延不会因为这条切片而放大。
+    #[must_use]
+    pub fn relevance_slice_limit(&self) -> usize {
+        if self.query_terms.is_empty() {
+            return 0;
+        }
+        CANDIDATE_RELEVANCE_SLICE_MAX.min(self.limit)
+    }
 }
 
 /// A storage backend capable of evaluating candidate visibility across scopes.
