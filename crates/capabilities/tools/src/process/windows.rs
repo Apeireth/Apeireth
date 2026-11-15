@@ -553,7 +553,7 @@ fn explicit_env_path(request: &ProcessRequest) -> Option<std::path::PathBuf> {
     }
 }
 
-fn system_directory() -> Option<std::path::PathBuf> {
+pub(crate) fn system_directory() -> Option<std::path::PathBuf> {
     unsafe {
         use windows_sys::Win32::System::SystemInformation::GetSystemDirectoryW;
         let mut buffer = vec![0u16; 512];

@@ -117,7 +117,7 @@ impl ToolCapability for ExposureAuditTool {
             config.bundle = Some(PathBuf::from(bundle));
         }
         // 体检跑在阻塞池上: 遍历大目录卡住时执行链的到期计时器仍能触发。
-        match tokio::task::spawn_blocking(move || run_exposure_audit(&config)).await {
+        match crate::process::run_native(move || run_exposure_audit(&config)).await {
             Ok(report) => ToolResult::ok(&call.id, report.to_json_value()),
             Err(error) => ToolResult::permanent_error(
                 &call.id,

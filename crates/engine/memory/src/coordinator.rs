@@ -482,12 +482,7 @@ impl MemoryCoordinator {
         // Layer 2: Episodic Memory (Governed SQLite / Scoped Storage)
         if query.layers.contains(&MemoryLayerKind::Episodic) {
             if let Some(scoped) = &self.scoped_backend {
-                let candidate_query = MemoryCandidateQuery {
-                    source_session: Some(query.session_id.clone()),
-                    visible_scopes: query.visible_scopes.clone(),
-                    limit: (query.limit * 8).max(64),
-                    as_of_ms: query.as_of_ms,
-                };
+                let candidate_query = MemoryCandidateQuery::for_recall(&query);
                 if let Ok(scoped_episodes) = scoped.query_candidates(&candidate_query) {
                     for ep in scoped_episodes {
                         // 治理判定（**fail-closed**：查不出来 = 不可判定 = 过滤掉）。

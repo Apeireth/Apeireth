@@ -3,8 +3,8 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: 3756e391e7f659ad8c5789c579d142b0a1910dd729e5b73d53ef8955350b8af4
-claims_total: 59
+claims_sha256: 4ce550d40bdb8c5b374b38e0ecda501d378c99616e189a8bf8bc2a7428943f8c
+claims_total: 60
 items:
   - id: "rt.provider_router"
     capability: "跨 provider fallback + 健康态（运行时路由）"
@@ -957,6 +957,8 @@ items:
         - "crates/engine/runtime-assembly/src/canonical/tool_modules.rs"
         - "crates/capabilities/tools/src/shell/execution.rs"
         - "crates/capabilities/tools/src/process/mod.rs"
+        - "crates/capabilities/tools/src/process/appcontainer.rs"
+        - "crates/capabilities/tools/src/process/windows.rs"
         - "crates/capabilities/tools/src/exec_pipeline/mod.rs"
         - "crates/engine/runtime/src/canonical/behavior_adapter.rs"
         - "crates/engine/runtime/src/canonical/behavior_projection.rs"
@@ -966,7 +968,9 @@ items:
     wired:
       production_refs:
         - "crates/capabilities/tools/src/exec_pipeline/mod.rs"
+        - "crates/capabilities/tools/src/process/appcontainer.rs"
         - "crates/capabilities/tools/src/process/mod.rs"
+        - "crates/capabilities/tools/src/process/windows.rs"
         - "crates/capabilities/tools/src/shell/execution.rs"
         - "crates/engine/runtime-assembly/src/canonical/cognitive_registry.rs"
         - "crates/engine/runtime-assembly/src/canonical/production.rs"
@@ -1611,6 +1615,53 @@ items:
       claims_id: "mem.answer_eval_contract"
     gaps:
       - "未达 PRODUCTION WIRED：2026-11-12 IMPLEMENTED，仅显式手动 example，不是默认产品请求入口。复用真实 Runtime/SQLite/Recall/ModuleInvoker，服务端完整协议标识区分主答、纠错提案与未知请求，所有已尝试调用共享不可退还预算；输入与 oracle 分离，失败、缺失与保…"
+  - id: "mem.longterm_eval_contract"
+    capability: "长历史多会话回答质量评测与规模压力契约（本仓回归集；真实模型一轮 4/6 通过）"
+    implemented:
+      sources:
+        - "crates/engine/runtime-assembly/examples/memory_longterm_eval.rs"
+        - "crates/engine/runtime-assembly/examples/memory_longterm_eval/schema.rs"
+        - "crates/engine/runtime-assembly/examples/memory_longterm_eval/config.rs"
+        - "crates/engine/runtime-assembly/examples/memory_longterm_eval/corpus.rs"
+        - "crates/engine/runtime-assembly/examples/memory_longterm_eval/evidence.rs"
+        - "crates/engine/runtime-assembly/examples/memory_longterm_eval/grading.rs"
+        - "crates/engine/runtime-assembly/examples/memory_longterm_eval/harness.rs"
+        - "crates/engine/runtime-assembly/examples/memory_longterm_eval/reader.rs"
+        - "crates/engine/runtime-assembly/examples/memory_longterm_eval/live.rs"
+        - "crates/engine/runtime-assembly/examples/memory_longterm_eval/seal.rs"
+        - "crates/engine/runtime-assembly/examples/memory_longterm_eval/pressure.rs"
+        - "crates/engine/runtime-assembly/examples/memory_longterm_eval/artifacts.rs"
+        - "crates/engine/runtime-assembly/examples/memory_longterm_eval/mod.rs"
+        - "crates/engine/runtime-assembly/examples/memory_longterm_eval/tests.rs"
+        - "crates/engine/runtime-assembly/Cargo.toml"
+        - "crates/engine/provider/src/canonical_openai_compatible.rs"
+        - "crates/engine/provider/src/openai_chat.rs"
+    wired:
+      production_refs:
+        - "crates/engine/provider/src/canonical_openai_compatible.rs"
+        - "crates/engine/provider/src/openai_chat.rs"
+        - "crates/engine/runtime-assembly/examples/memory_longterm_eval.rs"
+        - "crates/engine/runtime-assembly/examples/memory_longterm_eval/artifacts.rs"
+        - "crates/engine/runtime-assembly/examples/memory_longterm_eval/config.rs"
+        - "crates/engine/runtime-assembly/examples/memory_longterm_eval/corpus.rs"
+        - "crates/engine/runtime-assembly/examples/memory_longterm_eval/evidence.rs"
+        - "crates/engine/runtime-assembly/examples/memory_longterm_eval/grading.rs"
+        - "crates/engine/runtime-assembly/examples/memory_longterm_eval/harness.rs"
+        - "crates/engine/runtime-assembly/examples/memory_longterm_eval/live.rs"
+        - "crates/engine/runtime-assembly/examples/memory_longterm_eval/mod.rs"
+        - "crates/engine/runtime-assembly/examples/memory_longterm_eval/pressure.rs"
+        - "crates/engine/runtime-assembly/examples/memory_longterm_eval/reader.rs"
+        - "crates/engine/runtime-assembly/examples/memory_longterm_eval/schema.rs"
+        - "crates/engine/runtime-assembly/examples/memory_longterm_eval/seal.rs"
+        - "crates/engine/runtime-assembly/examples/memory_longterm_eval/tests.rs"
+    default_enabled: false
+    validated:
+      tests:
+        - "crates/engine/runtime-assembly/examples/memory_longterm_eval/tests.rs"
+        - "crates/engine/provider/tests/canonical_openai_compatible.rs"
+      claims_id: "mem.longterm_eval_contract"
+    gaps:
+      - "未达 PRODUCTION WIRED：2026-11-13 IMPLEMENTED，仅显式手动 example，不是默认产品请求入口。本条覆盖长历史多会话回答质量评测与规模压力契约：四类前提（直接用户证据、Host 授权、当前作用域、修订 CAS）逐例留痕并各配一条差分探针；引用必须可追溯到证据条目（证据 id、episode、修订、正…"
   - id: "sec.output_injection_guard"
     capability: "回合层消费工具**输出侧**的提示注入标记 ⇒ 可见告警（固定措辞，恒不阻断）"
     implemented:

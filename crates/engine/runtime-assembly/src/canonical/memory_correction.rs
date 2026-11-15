@@ -27,6 +27,9 @@ use async_trait::async_trait;
 use chrono::{DateTime, Duration, FixedOffset, NaiveDate, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 
+#[path = "memory_correction/semantics.rs"]
+mod semantics;
+
 pub const MEMORY_CORRECTION_MODULE_ID: &str = "cognitive.memory_correction";
 pub const CORRECTION_PROPOSAL_PROTOCOL: &str = "apeireth.memory-correction.v3";
 pub const CORRECTION_RECEIPT_PROTOCOL: &str = "apeireth.memory-correction-result.v1";
@@ -611,6 +614,9 @@ fn may_change_memory(text: &str) -> bool {
     .iter()
     .any(|cue| lower.contains(cue))
         || (!text.contains(['?', '？']) && ["现在", "已经"].iter().any(|cue| text.contains(cue)))
+        // A dated start modifier states the current fact of this user even
+        // without an explicit correction word.
+        || semantics::has_absolute_date_modifier(text)
 }
 
 fn direct_self(text: &str) -> bool {
@@ -628,6 +634,7 @@ fn direct_self(text: &str) -> bool {
         .is_some_and(first_person_predicate);
     let first = self_attribute(text).is_some()
         || pronoun_predicate
+        || semantics::parses_as_self(text)
         || lower.starts_with("i ")
         || lower.starts_with("i'm ");
     let self_speech = ["我说错", "我之前说错", "我刚才说错", "我会说", "我能说"];
@@ -679,21 +686,9 @@ fn is_correction_marker(text: &str) -> bool {
     ["更正：", "纠正：", "更正:", "纠正:"].contains(&text.trim())
 }
 
-fn self_predicate(mut rest: &str) -> &str {
+fn self_predicate(rest: &str) -> &str {
     // Adverbs do not themselves establish a subject: 我之前的朋友 is third-party.
-    for _ in 0..16 {
-        let adverb = [
-            "其实", "已经", "刚刚", "刚才", "现在", "目前", "之前", "此前", "原来", "本来", "曾经",
-            "实际", "今天", "昨天", "前天", "常年", "一直", "确实", "已", "刚",
-        ]
-        .into_iter()
-        .find(|prefix| rest.starts_with(prefix));
-        match adverb {
-            Some(prefix) => rest = rest[prefix.len()..].trim_start(),
-            None => break,
-        }
-    }
-    rest
+    semantics::strip_adverbs(rest).0
 }
 
 fn first_person_predicate(rest: &str) -> bool {
@@ -706,33 +701,16 @@ fn first_person_predicate(rest: &str) -> bool {
     }
     [
         "住", "居住", "常住", "现居", "搬", "迁", "移", "姓", "叫", "名叫", "名字", "姓名", "用",
-        "使用", "是", "在", "有", "工作", "就读", "上班", "上学", "读", "学", "任职", "改", "更正",
-        "纠正", "修正", "不", "没", "从", "换", "变", "调整", "把", "记错", "说错", "确认", "确定",
-        "喜欢", "偏好", "习惯", "需要", "想",
+        "使用", "是", "在", "有", "工作", "就职", "就读", "上班", "上学", "读", "学", "任职", "改",
+        "更正", "纠正", "修正", "不", "没", "从", "自", "换", "变", "调整", "把", "记错", "说错",
+        "确认", "确定", "喜欢", "偏好", "习惯", "需要", "想",
     ]
     .into_iter()
     .any(|predicate| rest.starts_with(predicate))
 }
 
 fn assertion_property(text: &str) -> Option<&'static str> {
-    let text = assertion_body(text);
-    if let Some(property) = self_attribute(text) {
-        return Some(normalized_property(property));
-    }
-    let mut rest = self_predicate(
-        text.strip_prefix('我')
-            .or_else(|| text.strip_prefix("本人"))?,
-    );
-    if let Some(dated) = rest.strip_prefix('于') {
-        rest = absolute_date_prefix(dated)?.1.trim_start();
-    }
-    if ["名叫", "叫"]
-        .iter()
-        .any(|predicate| rest.starts_with(predicate))
-    {
-        return Some("name");
-    }
-    residence_property(rest)
+    semantics::property_of(text)
 }
 
 fn residence_property(rest: &str) -> Option<&'static str> {
@@ -978,8 +956,10 @@ fn expression_is_temporal(evidence: &str, expression: &str) -> bool {
                 .strip_prefix('我')
                 .or_else(|| clause[..range.start].strip_prefix("本人"))?;
             let prefix = self_predicate(prefix).trim();
+            let after = clause[range.end..].trim_start();
             Some(if absolute_date(expression).is_some() {
-                prefix == "于"
+                // 于 marks the moment of the fact; 从 or 自 marks its start.
+                prefix == "于" || semantics::is_start_modifier(prefix, after)
             } else {
                 prefix.is_empty()
             })
@@ -1050,64 +1030,15 @@ fn absolute_date_prefix(text: &str) -> Option<(NaiveDate, &str)> {
 /// Possessive syntax is accepted only for an explicit property of this user.
 /// A related person or a mailbox administrator is not the user as subject.
 fn self_attribute(text: &str) -> Option<&'static str> {
-    let rest = text
-        .trim()
-        .strip_prefix("我的")
-        .or_else(|| text.trim().strip_prefix("本人的"))?;
-    attribute_property(rest)
-}
-
-fn attribute_property(rest: &str) -> Option<&'static str> {
-    attribute_tail(rest).map(|(property, _)| property)
+    semantics::self_attribute(text)
 }
 
 fn normalized_property(property: &'static str) -> &'static str {
-    if ["address", "residence_city"].contains(&property) {
-        "residence"
-    } else {
-        property
-    }
+    semantics::normalized_property(property)
 }
 
 fn attribute_tail(rest: &str) -> Option<(&'static str, &str)> {
-    let attributes = [
-        ("居住城市", "residence_city"),
-        ("常住城市", "residence_city"),
-        ("城市", "residence_city"),
-        ("工作地点", "work_location"),
-        ("工作单位", "employer"),
-        ("电子邮箱", "email"),
-        ("邮件地址", "email"),
-        ("电话号码", "phone"),
-        ("手机号码", "phone"),
-        ("手机号", "phone"),
-        ("联系方式", "contact"),
-        ("语言偏好", "language_preference"),
-        ("常住地", "address"),
-        ("居住地", "address"),
-        ("现居地", "address"),
-        ("地址", "address"),
-        ("住址", "address"),
-        ("名字", "name"),
-        ("姓名", "name"),
-        ("昵称", "name"),
-        ("邮箱", "email"),
-        ("时区", "timezone"),
-        ("职业", "occupation"),
-        ("学校", "school"),
-        ("专业", "major"),
-        ("生日", "birthday"),
-        ("偏好", "preference"),
-    ];
-    attributes.into_iter().find_map(|(label, key)| {
-        let after = rest.strip_prefix(label)?.trim_start();
-        (after.is_empty()
-            || after.starts_with([
-                '是', '为', '在', '改', '更', '换', '变', '调', '需', '已', '现', '目', '之', '原',
-                '从', '不', '其', '有', '记', '写', '：', ':',
-            ]))
-        .then_some((key, after))
-    })
+    semantics::attribute_tail(rest)
 }
 
 fn has_direct_self_clause(text: &str) -> bool {
@@ -1151,21 +1082,9 @@ fn unquoted_assertion_at(
     {
         return None;
     }
-    // A naked comma after reported speech is not a new first-person assertion.
-    if prefix.contains('说')
-        && !["我说错", "我之前说错", "我刚才说错", "我记错"]
-            .iter()
-            .any(|cue| prefix.contains(cue))
-    {
-        return None;
-    }
-    if [
-        "表示", "声称", "提到", "写道", "转述", "引用", "假设", "假如", "如果", "比如", "例如",
-        "设想",
-    ]
-    .iter()
-    .any(|cue| prefix.contains(cue))
-    {
+    // Reported speech and frame markers decide whether the text before this
+    // clause may carry this user's mutation authority.
+    if !semantics::scope_prefix_allows(text, range.start) {
         return None;
     }
     Some(range)
@@ -1207,8 +1126,8 @@ fn value_has_self_property(source: &str, span: &str, value: &str, property: &str
                 return false;
             }
             if direct_clause_range(source, clause).is_some()
-                && assertion_property(clause) == Some(property)
                 && direct_statement_value(clause, property) == Some(value)
+                && semantics::is_positive_assertion(clause)
             {
                 return true;
             }
@@ -1253,61 +1172,9 @@ fn attribute_value<'a>(text: &'a str, property: &str) -> Option<&'a str> {
     .filter(|value| !value.is_empty())
 }
 
+/// Whole literal values for the already recognized finite property grammar.
 fn direct_statement_value<'a>(text: &'a str, property: &str) -> Option<&'a str> {
-    let text = assertion_body(text);
-    if let Some(rest) = text
-        .strip_prefix("我的")
-        .or_else(|| text.strip_prefix("本人的"))
-    {
-        return attribute_value(rest, property);
-    }
-    let mut rest = self_predicate(
-        text.strip_prefix('我')
-            .or_else(|| text.strip_prefix("本人"))?,
-    );
-    if let Some(dated) = rest.strip_prefix('于') {
-        rest = absolute_date_prefix(dated)?.1.trim_start();
-    }
-    let (value, moved) = match property {
-        "name" => (
-            ["名叫", "叫"]
-                .into_iter()
-                .find_map(|verb| rest.strip_prefix(verb))?,
-            false,
-        ),
-        "residence" => {
-            let stationary = ["居住在", "常住在", "住在", "现居于", "居住", "常住", "现居"]
-                .into_iter()
-                .find_map(|verb| rest.strip_prefix(verb));
-            if let Some(value) = stationary {
-                (value, false)
-            } else {
-                (
-                    [
-                        "搬到了",
-                        "搬到",
-                        "搬去了",
-                        "搬去",
-                        "迁居到",
-                        "迁居",
-                        "移居到",
-                        "移居",
-                    ]
-                    .into_iter()
-                    .find_map(|verb| rest.strip_prefix(verb))?,
-                    true,
-                )
-            }
-        }
-        _ => return None,
-    };
-    let value = value.trim();
-    let value = if moved {
-        value.strip_suffix('了').unwrap_or(value).trim_end()
-    } else {
-        value
-    };
-    (!value.is_empty()).then_some(value)
+    semantics::value_of(text, property)
 }
 
 fn self_correction_bridge(part: &str) -> bool {
@@ -1501,6 +1368,17 @@ fn validate_proposal<'a>(
     // literal-value grammar. Neither fragment may clip a different person's or
     // property's value, or manufacture a new value from parts of two cities.
     let property = assertion_property(anchor).ok_or(CorrectionRejection::InvalidEvidenceSpan)?;
+    // The whole source must agree with the proposal: a transition must start
+    // from the replaced value, and two current statements of one property may
+    // not contradict each other.
+    if !semantics::source_is_consistent(
+        source,
+        property,
+        new,
+        p.old_fragment.as_deref().unwrap_or_default(),
+    ) {
+        return Err(CorrectionRejection::InvalidEvidenceSpan);
+    }
     if !value_has_self_property(source, evidence, new, property)
         || !value_has_self_property(
             &candidate.content,

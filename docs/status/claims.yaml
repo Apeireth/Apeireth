@@ -164,7 +164,7 @@ claims:
       - crates/engine/runtime-assembly/src/canonical/self_status_source.rs
     tests:
       - crates/capabilities/tools/src/exposure_audit/mod.rs
-    verified_at: 5c74f955e62cebcb1979fb3606e804d9fb10d73c
+    verified_at: 7c2e0d699
     verify_cmd: "cargo test -p apeireth-tools-canonical --lib exposure_audit"
     owner: capabilities
     next_review: "2026-12-01"
@@ -276,7 +276,7 @@ claims:
     verify_cmd: "cargo test -p apeireth-tools-canonical --test process_executor"
     owner: tools
     next_review: "2026-11-20"
-    notes: "进程组 + setrlimit(AS/CPU/FSIZE/NPROC) + PR_SET_PDEATHSIG + PR_SET_NO_NEW_PRIVS；不承诺 cgroup/seccomp/namespace/网络隔离；memory/process-count 为 partial。；2026-10-28 Phase 3 复核：原进程组/rlimit/降权语义保留，增加期限/取消与退出后清理后代；实进程 PID 回归通过。不保证回收主动脱离进程组的后代，维持 PARTIAL，不升级为强隔离或硬件验证。 ⭐ **2026-11-07 主指挥核验后升 PRODUCTION WIRED**：① 真跑 `cargo nextest run -p apeireth-tools-canonical --test process_executor --offline` ⇒ ⇒ **21 passed / 0 failed**（实测，2026-11-07）；② 生产调用点确凿：`crates/capabilities/tools/src/process/mod.rs:748` `linux::spawn_and_supervise(...)`、`:776` `linux::capabilities()`、`:688` `ProcessExecutor` ⇒ ⇒ ⇒ **真在生产链路上**；⇒ ⇒ ⇒ ⚠️ **能力本身仍是 partial**（memory/process-count 有限 · 不保证回收主动脱离进程组的后代）⇒ ⇒ ⇒ ⇒ **PRODUCTION WIRED ≠ 完整 ≠ HARDWARE VALIDATED** ⇒ ⇒ ⇒ ⇒ ⇒ **partial 标注原样保留**；⇒ ⇒ ⇒ ⇒ ⇒ 声明标题里的「(partial，如实)」**不改** ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ **不许**借升级把 partial 抹掉。"
+    notes: "进程组 + setrlimit(AS/CPU/FSIZE/NPROC) + PR_SET_PDEATHSIG + PR_SET_NO_NEW_PRIVS；不承诺 cgroup/seccomp/namespace/网络隔离；memory/process-count 为 partial。；2026-10-28 Phase 3 复核：原进程组/rlimit/降权语义保留，增加期限/取消与退出后清理后代；实进程 PID 回归通过。不保证回收主动脱离进程组的后代，维持 PARTIAL，不升级为强隔离或硬件验证。 ⭐ **2026-11-07 主指挥核验后升 PRODUCTION WIRED**：① 真跑 `cargo nextest run -p apeireth-tools-canonical --test process_executor --offline` ⇒ ⇒ **21 passed / 0 failed**（实测，2026-11-07）；② 生产调用点确凿：`crates/capabilities/tools/src/process/mod.rs:748` `linux::spawn_and_supervise(...)`、`:776` `linux::capabilities()`、`:688` `ProcessExecutor` ⇒ ⇒ ⇒ **真在生产链路上**；⇒ ⇒ ⇒ ⚠️ **能力本身仍是 partial**（memory/process-count 有限 · 不保证回收主动脱离进程组的后代）⇒ ⇒ ⇒ ⇒ **PRODUCTION WIRED ≠ 完整 ≠ HARDWARE VALIDATED** ⇒ ⇒ ⇒ ⇒ ⇒ **partial 标注原样保留**；⇒ ⇒ ⇒ ⇒ ⇒ 声明标题里的「(partial，如实)」**不改** ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ ⇒ **不许**借升级把 partial 抹掉。；2026-11-13 复核：同目录下的 process/appcontainer.rs 属 Windows 实现，不在本条 Linux 声明的覆盖范围内，suspected_missing 提示来自同目录启发式，已复核后不硬塞；本条 sources 与等级不变。"
 
   - id: sec.gateway_tls
     title: "Gateway TLS 真接线（PEM 真加载 fail-closed + TLS listener + 三态状态面）"
@@ -490,7 +490,7 @@ claims:
       - crates/foundation/credentials/src/hot_store.rs
     tests:
       - crates/engine/provider/tests/endpoint_binding.rs
-    verified_at: a9d689ed8f095975e9210ad54b7b67dfcf44f3fa
+    verified_at: 1180c3462
     verify_cmd: "cargo test -p apeireth-provider --test endpoint_binding --locked"
     owner: provider
     next_review: "2026-12-01"
@@ -865,6 +865,8 @@ claims:
       - crates/engine/runtime-assembly/src/canonical/tool_modules.rs
       - crates/capabilities/tools/src/shell/execution.rs
       - crates/capabilities/tools/src/process/mod.rs
+      - crates/capabilities/tools/src/process/appcontainer.rs
+      - crates/capabilities/tools/src/process/windows.rs
       - crates/capabilities/tools/src/exec_pipeline/mod.rs
       - crates/engine/runtime/src/canonical/behavior_adapter.rs
       - crates/engine/runtime/src/canonical/behavior_projection.rs
@@ -882,11 +884,11 @@ claims:
       - crates/adapters/cli/tests/gateway_panels.rs
       - crates/engine/runtime-assembly/tests/production_cognitive_v1.rs
       - crates/engine/runtime-assembly/tests/profile_memory_authorization.rs
-    verified_at: ba5466500aca57c6c1c5fe53a5d082ca85bca5cf
+    verified_at: 7c2e0d699
     verify_cmd: "cargo test -p apeireth-runtime --test registry_runtime_v1 --locked && cargo test -p apeireth-runtime-assembly --test capability_modules_v1 --locked"
     owner: runtime
     next_review: "2026-11-28"
-    notes: "Kernel 不自动安装业务工具；Desktop 将原配置选择的工具注册为普通 ToolModule，注册后沿用 V1 协议。default ON 只表示该生产装配机制，未新开 Shell/网络/文件写权限，原业务开关不变。复用唯一 PluginManager 与 CapabilityRegistry；自动 Hook 输出仍经同一治理/冻结审批入口与 ToolEventV1 成对投影。新增执行上下文、局部并发、原生取消/排水；旧参数/日志兼容及 AfterToolCall 串行屏障保留。真实 Runtime 模拟模型回合覆盖四协议 Adapter。动态 MCP 完整 owner 生命周期、Memory 自动 overlay、专有设备原生清理、共享 Arc 热插拔与完整多实例仍未完成；无云 API/设备实测。Phase 2 历史 default OFF 不追改；Phase 3 接线证据见 docs/04-internal/capability-modules-phase3-2026-10-28.md。；本批复核：动态 MCP owner、独立 Agent Scope/Principal、Memory 固定 Hook 已在真实 Runtime 测试；Managed Runtime 无模块也使用 V1。Desktop 默认旧 Memory/Persona/Organ Overlay 和旧 SubLoop 尚未退出，不声称完整 Convergence。；2026-10-28 生产收敛：桌面认知回调经 RegisteredBehavior 私有工具与固定 Hook 注入 V1；空观察审计消费、模型猜名拒绝、旧投影不被重新学习有真实生产回归。with_module / SubLoop 仍为明确残留，不能视为全部 Legacy 后端退出。；2026-10-29 S1：SubLoop 已委托同一 AgentInstance/execute_outcome，独立 provider/round 循环已删除；注册 owner 世代、共享预算、隔离审批与原生排水经真实 Runtime 验证。with_module/Overlay 和两种 ModuleInvoker 后端仍留后续，见 kernel-convergence-s1-2026-10-29.md。；2026-10-29 S2：两种 ModuleInvoker 均委托既有 AgentInstance 单次私有任务，直接 Router 后端已删除；无工具声明/派发、无递归 Hook、完整响应与 served_by 保真、child/真实模块 owner 用量和父来源经真实 Runtime 验证。with_module/Overlay、Profile 映射与桌面 managed 默认仍留后续，整体 Convergence 为 Partial，见 kernel-convergence-s2-2026-10-29.md。；2026-10-29 S3：with_module / with_behavior 与 with_registered_behavior 共用 RegisteredBehavior、固定 Hook、原治理/Dispatcher 与 V1；execute 直接 callback fallback 和动态 system Overlay 插槽已删除。动态数据只成对投影一次，空观察仅审计，预算/spill/溢出收缩重组认证工具载荷；静态 Host policy、审批/指令时序及旧 reader 保留。Host grant、模型假 receipt/同名工具拒绝、开放批闭合、stop/unload 无回退及 principal 跳过旧全局引擎有真实 Runtime/旧 DB 回归。整体 Convergence 仍 Partial，S4 映射/S5 桌面主入口未实施，见 kernel-convergence-s3-2026-10-29.md。；2026-10-29 S4：兼容 callback receipt 与 Dispatcher 上下文绑定完整 principal/epoch，未映射私有引擎继续默认拒绝；Host 显式选择的映射属于 IMPLEMENTED，映射未默认启用，原注册/治理/V1 机制等级与默认不变。指定窄门禁与真实 Runtime 对抗场景通过；整体 Convergence 仍 Partial，S5 桌面受管主入口未实施，见 kernel-convergence-s4-2026-10-29.md。；2026-10-29 S5：生产认知 load/stop/permission/guessed receipt/module-only 原用例切入 managed desktop；兼容 builder 另保留原装配并扩展 managed/private principal 回归。主实例与模块 child 使用同一实例服务及短锁执行视图；注册仍不授权，整体 Convergence 保持 Partial。 证据见 kernel-convergence-s5-2026-10-29.md。；2026-10-29 S6：兼容子执行经既有实例、Kernel 与 Dispatcher，未新增 Provider 后端或重复计量；真实 Runtime 验证多 child/round 复用 wire id 的独立事实、前端隔离、取消保账、native drain 后的持久 AgentTaskInterrupted 与重复 stop 幂等。新 reader 保留旧日志，新增变体不承诺旧二进制降级读取；pending 只表示最后 checkpoint 未闭合，不证明副作用回滚。原五段 gate_full 清理磁盘后重试通过；宽泛等级与默认不变，平台/性能及最终结论见 kernel-convergence-s6-2026-10-29.md。；2026-10-29 D3：只移除已无调用的内部旧 invoker getter；注册/生命周期生产边界不变，新增保留 Host adapter 的 schema、session scope 与 shutdown 拒绝契约通过。；2026-10-29 P1：显式 Host 选择的 ModuleToolContract 与任务句柄/状态查询经真实 Runtime 回归；既有目录/生命周期/默认权限不变，完整五段门禁通过。监督门禁仍待 P2，无新默认启用或硬件声明。；2026-10-30 P2：新增可选 Host 监督服务与执行回执；原能力默认、Provider 路由与确定性权限机制保持，定向及原 MainOnly 测试/clippy/fmt 回归通过。未将兼容入口声明为已受 System One 保护，无 live model/硬件声明。；2026-10-30 P3：可选 owner-bound 消息复用 Registry/Dispatcher，委托交集与独立后台授权分离；真实 Runtime 定向及原 MainOnly test/clippy/fmt 回归通过。默认与既有等级保持，本地幂等非持久 exactly-once，新消息变体需新 reader；无 live model/硬件声明。；2026-11-10 PR31 rebase 到 #94 之后复核：注册式模块 v1 两处回归通过（cargo test -p apeireth-runtime --test registry_runtime_v1 --locked && cargo test -p apeireth-runtime-assembly --test capability_modules_v1 --locked）；本批把 PR31 的工具准入并入上游 dispatch_admission 模块（模块注册与工具目录合并路径未改），模块契约语义与默认开未变；两条 source（capabilities/tools/src/process/{appcontainer,windows}.rs）在本仓不存在，属上游既有缺口，main 基线同报 suspected_missing，非本批引入；2026-11-11 PR #117 收口范围复核：当前来源树 b5cea2bf673e。Runtime 改动限模型目录、远端会话 scope 与 control 保留名，不改变本条既有所有权、生命周期或接线等级；工具路由定向 16 项、provider 路由 16 项、父子 scope 回归及 Mesh 可见性回归通过。治理链步骤仍在 nextest 前，原样命令本机 4 项通过。完整工作区与各条 verify_cmd 的最终结论由本 PR 当前 head 的 CI 门禁验证，不把本段范围审查冒充全量实跑。；2026-11-11 预算收口范围复核 11feb868ced8：会话目录合并为同一scope过滤，保留control与legacy owner兼容；生命周期路径逐字未改，builder仅等价Result表达式；父子scope fixture保持原unit模块身份移入tests/support，断言未删。本条等级与默认值不变，最终verify_cmd由当前head的CI验证。；2026-11-12 记忆自动化批源码范围复核：来源固定到 ba5466500aca。新增按模块声明授权的已提交证据/冻结操作端口，实际 SubLoopSpawner 转发沿用同一 Runtime；工厂仅在 journal 组合接入记忆恢复/纠错，注册本身不授予额外业务权限。本段只记录源码范围复核，不替代本条 verify_cmd；同提交完整工作区、严格检查及适用 CI 仍待最终验证，原等级、默认值与历史证据保留。；2026-11-12 Beta 来源范围补记：Runtime 新增通用 context_budget_chars 读口与认证模块外层 atomic 投影，SubLoopSpawner 转发实际配置；不在 Kernel 加入记忆业务规则。相关本地定向及红绿证据见 docs/design/memory-quality-hardening.md，完整工作区、真实 Beta 复验及同提交 CI 仍待最终验证。"
+    notes: "Kernel 不自动安装业务工具；Desktop 将原配置选择的工具注册为普通 ToolModule，注册后沿用 V1 协议。default ON 只表示该生产装配机制，未新开 Shell/网络/文件写权限，原业务开关不变。复用唯一 PluginManager 与 CapabilityRegistry；自动 Hook 输出仍经同一治理/冻结审批入口与 ToolEventV1 成对投影。新增执行上下文、局部并发、原生取消/排水；旧参数/日志兼容及 AfterToolCall 串行屏障保留。真实 Runtime 模拟模型回合覆盖四协议 Adapter。动态 MCP 完整 owner 生命周期、Memory 自动 overlay、专有设备原生清理、共享 Arc 热插拔与完整多实例仍未完成；无云 API/设备实测。Phase 2 历史 default OFF 不追改；Phase 3 接线证据见 docs/04-internal/capability-modules-phase3-2026-10-28.md。；本批复核：动态 MCP owner、独立 Agent Scope/Principal、Memory 固定 Hook 已在真实 Runtime 测试；Managed Runtime 无模块也使用 V1。Desktop 默认旧 Memory/Persona/Organ Overlay 和旧 SubLoop 尚未退出，不声称完整 Convergence。；2026-10-28 生产收敛：桌面认知回调经 RegisteredBehavior 私有工具与固定 Hook 注入 V1；空观察审计消费、模型猜名拒绝、旧投影不被重新学习有真实生产回归。with_module / SubLoop 仍为明确残留，不能视为全部 Legacy 后端退出。；2026-10-29 S1：SubLoop 已委托同一 AgentInstance/execute_outcome，独立 provider/round 循环已删除；注册 owner 世代、共享预算、隔离审批与原生排水经真实 Runtime 验证。with_module/Overlay 和两种 ModuleInvoker 后端仍留后续，见 kernel-convergence-s1-2026-10-29.md。；2026-10-29 S2：两种 ModuleInvoker 均委托既有 AgentInstance 单次私有任务，直接 Router 后端已删除；无工具声明/派发、无递归 Hook、完整响应与 served_by 保真、child/真实模块 owner 用量和父来源经真实 Runtime 验证。with_module/Overlay、Profile 映射与桌面 managed 默认仍留后续，整体 Convergence 为 Partial，见 kernel-convergence-s2-2026-10-29.md。；2026-10-29 S3：with_module / with_behavior 与 with_registered_behavior 共用 RegisteredBehavior、固定 Hook、原治理/Dispatcher 与 V1；execute 直接 callback fallback 和动态 system Overlay 插槽已删除。动态数据只成对投影一次，空观察仅审计，预算/spill/溢出收缩重组认证工具载荷；静态 Host policy、审批/指令时序及旧 reader 保留。Host grant、模型假 receipt/同名工具拒绝、开放批闭合、stop/unload 无回退及 principal 跳过旧全局引擎有真实 Runtime/旧 DB 回归。整体 Convergence 仍 Partial，S4 映射/S5 桌面主入口未实施，见 kernel-convergence-s3-2026-10-29.md。；2026-10-29 S4：兼容 callback receipt 与 Dispatcher 上下文绑定完整 principal/epoch，未映射私有引擎继续默认拒绝；Host 显式选择的映射属于 IMPLEMENTED，映射未默认启用，原注册/治理/V1 机制等级与默认不变。指定窄门禁与真实 Runtime 对抗场景通过；整体 Convergence 仍 Partial，S5 桌面受管主入口未实施，见 kernel-convergence-s4-2026-10-29.md。；2026-10-29 S5：生产认知 load/stop/permission/guessed receipt/module-only 原用例切入 managed desktop；兼容 builder 另保留原装配并扩展 managed/private principal 回归。主实例与模块 child 使用同一实例服务及短锁执行视图；注册仍不授权，整体 Convergence 保持 Partial。 证据见 kernel-convergence-s5-2026-10-29.md。；2026-10-29 S6：兼容子执行经既有实例、Kernel 与 Dispatcher，未新增 Provider 后端或重复计量；真实 Runtime 验证多 child/round 复用 wire id 的独立事实、前端隔离、取消保账、native drain 后的持久 AgentTaskInterrupted 与重复 stop 幂等。新 reader 保留旧日志，新增变体不承诺旧二进制降级读取；pending 只表示最后 checkpoint 未闭合，不证明副作用回滚。原五段 gate_full 清理磁盘后重试通过；宽泛等级与默认不变，平台/性能及最终结论见 kernel-convergence-s6-2026-10-29.md。；2026-10-29 D3：只移除已无调用的内部旧 invoker getter；注册/生命周期生产边界不变，新增保留 Host adapter 的 schema、session scope 与 shutdown 拒绝契约通过。；2026-10-29 P1：显式 Host 选择的 ModuleToolContract 与任务句柄/状态查询经真实 Runtime 回归；既有目录/生命周期/默认权限不变，完整五段门禁通过。监督门禁仍待 P2，无新默认启用或硬件声明。；2026-10-30 P2：新增可选 Host 监督服务与执行回执；原能力默认、Provider 路由与确定性权限机制保持，定向及原 MainOnly 测试/clippy/fmt 回归通过。未将兼容入口声明为已受 System One 保护，无 live model/硬件声明。；2026-10-30 P3：可选 owner-bound 消息复用 Registry/Dispatcher，委托交集与独立后台授权分离；真实 Runtime 定向及原 MainOnly test/clippy/fmt 回归通过。默认与既有等级保持，本地幂等非持久 exactly-once，新消息变体需新 reader；无 live model/硬件声明。；2026-11-10 PR31 rebase 到 #94 之后复核：注册式模块 v1 两处回归通过（cargo test -p apeireth-runtime --test registry_runtime_v1 --locked && cargo test -p apeireth-runtime-assembly --test capability_modules_v1 --locked）；本批把 PR31 的工具准入并入上游 dispatch_admission 模块（模块注册与工具目录合并路径未改），模块契约语义与默认开未变；两条 source（capabilities/tools/src/process/{appcontainer,windows}.rs）在本仓不存在，属上游既有缺口，main 基线同报 suspected_missing，非本批引入；2026-11-11 PR #117 收口范围复核：当前来源树 b5cea2bf673e。Runtime 改动限模型目录、远端会话 scope 与 control 保留名，不改变本条既有所有权、生命周期或接线等级；工具路由定向 16 项、provider 路由 16 项、父子 scope 回归及 Mesh 可见性回归通过。治理链步骤仍在 nextest 前，原样命令本机 4 项通过。完整工作区与各条 verify_cmd 的最终结论由本 PR 当前 head 的 CI 门禁验证，不把本段范围审查冒充全量实跑。；2026-11-11 预算收口范围复核 11feb868ced8：会话目录合并为同一scope过滤，保留control与legacy owner兼容；生命周期路径逐字未改，builder仅等价Result表达式；父子scope fixture保持原unit模块身份移入tests/support，断言未删。本条等级与默认值不变，最终verify_cmd由当前head的CI验证。；2026-11-12 记忆自动化批源码范围复核：来源固定到 ba5466500aca。新增按模块声明授权的已提交证据/冻结操作端口，实际 SubLoopSpawner 转发沿用同一 Runtime；工厂仅在 journal 组合接入记忆恢复/纠错，注册本身不授予额外业务权限。本段只记录源码范围复核，不替代本条 verify_cmd；同提交完整工作区、严格检查及适用 CI 仍待最终验证，原等级、默认值与历史证据保留。；2026-11-12 Beta 来源范围补记：Runtime 新增通用 context_budget_chars 读口与认证模块外层 atomic 投影，SubLoopSpawner 转发实际配置；不在 Kernel 加入记忆业务规则。相关本地定向及红绿证据见 docs/design/memory-quality-hardening.md，完整工作区、真实 Beta 复验及同提交 CI 仍待最终验证。；2026-11-13 补记：上游缺口已消失——crates/capabilities/tools/src/process/{appcontainer,windows}.rs 现已存在于本仓，本条 sources 按原意补入这两个文件（Windows 侧进程执行实现），verified_at 抬到本批提交；Linux 侧遏制边界仍由 sec.linux_containment 单独声明，两条声明的等级与默认值不变。"
 
   - id: rt.owned_agents
     title: "同一 Runtime 的模块拥有独立 Agent 与分层核算"
@@ -956,7 +958,7 @@ claims:
       - crates/engine/runtime-assembly/tests/convergence_memory.rs
       - crates/engine/runtime-assembly/tests/profile_memory_authorization.rs
       - crates/engine/runtime-assembly/tests/memory_namespace_production.rs
-    verified_at: 76ce2d4dcd17f580071f6f5b57ac19b358df6778
+    verified_at: aca269539
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test profile_memory_authorization --locked -j 2 && cargo test -p apeireth-runtime-assembly --test convergence_memory --locked -j 2 && cargo test -p apeireth-runtime-assembly --test memory_namespace_production --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
@@ -1114,7 +1116,7 @@ claims:
       - crates/engine/memory/src/coordinator.rs
       - crates/engine/memory/tests/memory_source_evidence.rs
       - crates/engine/runtime-assembly/tests/memory_autonomy_production.rs
-    verified_at: 76ce2d4dcd17f580071f6f5b57ac19b358df6778
+    verified_at: aca269539
     # ⚠️ **2026-11-07 收窄**（声明核验批，与兄弟声明同形）：原命令跑的是
     # **apeireth-memory 整个 lib 单测**（944 条 + 1 ignored）⇒ ⇒ 而本条真正相关的
     # 只有 `retrieval_pipeline.rs` 的 33 条 + `coordinator.rs` 的 17 条
@@ -1157,7 +1159,7 @@ claims:
     tests:
       - crates/engine/memory/tests/golden_injection2.rs
       - crates/engine/memory/src/context_compiler.rs
-    verified_at: 76ce2d4dcd17f580071f6f5b57ac19b358df6778
+    verified_at: aca269539
     verify_cmd: "cargo test -p apeireth-memory --test golden_injection2"
     owner: memory
     next_review: "2026-12-04"
@@ -1236,7 +1238,7 @@ claims:
       - crates/engine/memory/tests/memory_automatic_correction.rs
       - crates/engine/runtime-assembly/tests/memory_automatic_correction.rs
       - crates/engine/runtime-assembly/tests/memory_autonomy_production.rs
-    verified_at: 05548244bf3b2f0ce627cb8476a2fa40a254f342
+    verified_at: 2acf8f44d
     verify_cmd: "cargo test -p apeireth-memory --test memory_automatic_correction --locked -j 2 && cargo test -p apeireth-runtime-assembly --test memory_automatic_correction --test memory_autonomy_production --locked -j 2"
     owner: memory
     next_review: "2026-11-26"
@@ -1274,7 +1276,7 @@ claims:
       - crates/engine/memory/tests/memory_automatic_correction.rs
       - crates/engine/runtime-assembly/tests/memory_writeback_recovery.rs
       - crates/engine/runtime-assembly/tests/memory_autonomy_production.rs
-    verified_at: 76ce2d4dcd17f580071f6f5b57ac19b358df6778
+    verified_at: aca269539
     verify_cmd: "cargo test -p apeireth-memory --test writeback_recovery --test memory_automatic_correction --locked -j 2 && cargo test -p apeireth-runtime-assembly --test memory_writeback_recovery --test memory_autonomy_production --locked -j 2"
     owner: memory
     next_review: "2026-11-26"
@@ -1311,7 +1313,7 @@ claims:
       - crates/engine/runtime-assembly/tests/memory_autonomy_production.rs
       - crates/engine/memory/src/context_compiler.rs
       - crates/engine/runtime/tests/context_budget.rs
-    verified_at: 76ce2d4dcd17f580071f6f5b57ac19b358df6778
+    verified_at: aca269539
     verify_cmd: "cargo test -p apeireth-memory --lib context_compiler --locked -j 2 && cargo test -p apeireth-memory --test memory_source_evidence --locked -j 2 && cargo test -p apeireth-runtime-assembly --test memory_autonomy_production --locked -j 2 && cargo test -p apeireth-runtime --test context_budget --locked -j 2 && cargo test -p apeireth-memory --lib coordinator --locked -j 2 && cargo test -p apeireth-memory --lib retrieval --locked -j 2"
     owner: memory
     next_review: "2026-11-26"
@@ -1350,11 +1352,43 @@ claims:
       - crates/engine/runtime-assembly/examples/memory_answer_eval/wire.rs
       - crates/engine/runtime-assembly/examples/memory_answer_eval/runner.rs
       - crates/engine/runtime-assembly/examples/memory_answer_eval/protocol.rs
-    verified_at: 05548244bf3b2f0ce627cb8476a2fa40a254f342
+    verified_at: aca269539
     verify_cmd: "cargo test -p apeireth-runtime-assembly --example memory_answer_eval --locked -j 2"
     owner: memory
     next_review: "2026-11-26"
     notes: "2026-11-12 IMPLEMENTED，仅显式手动 example，不是默认产品请求入口。复用真实 Runtime/SQLite/Recall/ModuleInvoker，服务端完整协议标识区分主答、纠错提案与未知请求，所有已尝试调用共享不可退还预算；输入与 oracle 分离，失败、缺失与保留场景不从分母移除。离线确定性 Provider、故障反证及回环 HTTP 验证评测链路，不能作为模型答题分数。live 必须显式选择端点、模型、参数、调用/输出预算与临时凭据；凭据仅经受绑定的 Authorization 头发送，报告脱敏。保留实际规范化请求、wire body/响应、来源、用量、时延及散列；评测 body 的额外 thinking 控制不冒充生产 Provider 已支持该参数，也不修改原消息。四轮真实评测 live01/live02/live03/live04 均已执行且未通过，原始报告及失败保留；E2/F 历史全仓已通过，Epsilon 日期协议 v3 已完成定向软件验收，最终全仓/LIVE05/当前CI待验；不再称模型尚未调用，也不声明质量通过或跨系统领先。Beta 明确裸来源 ID、属性名和 RFC3339 UTC 字符串合同，按生产脱敏/裁剪后的确切可见正文及独立持久来源资格审计；评分仍须精确事实元组、完整支持正文哈希、实际可见且可引用来源同时成立，仅同值子串不能证明引用正确，诊断不转写为通过。合同、来源呈现及产品修复同时变动，不能将前后差异单独归因于记忆算法。失败分型与复验边界见 docs/design/memory-quality-hardening.md；外部同条件比较、同提交全仓、严格检查及适用 CI 仍待最终验证。；2026-11-12 beta-assembly-eval-v4.log 的回答评测 example 软件测试通过，覆盖实际 Runtime 投递、独立持久来源与可见正文支持；该历史软件结果不把 live01/live02 失败改判为通过；当前 Delta 已完成定向软件验收，全仓/LIVE04/最终CI待验。完整工作区及同提交 CI 未完成。；2026-11-12 Gamma 源码范围复核（3cb47ef9e9f1）：live02 已完整运行而未通过：30/36 passed、6 hard_failure，114 次实际 HTTP 200、79376 tokens；live01/live02 原始 grade 均保留。评分协议显式升级为 apeireth.memory-answer-scoring.v2，每事实仍须实际引用原支持哈希内直接 gold 锚；额外引用只在独立 SQL 单跳关系之外，再验证唯一完整身份、姓名不变、唯一完整居住值实际变化的本人居住城市，未知自述保守拒绝。同情节另一属性同值、传递关系或仅额外引用不能通过。固定12题×3、Oracle、日期及原支持哈希集合不变；协议确有变化，不将前后差异单独归为记忆算法。gamma-final-eval-v2.log 的42项软件测试和当前 fact-binding 红绿反证通过，旧协议运行须保留原执行文件，不静默重判。本段是本条源码范围复核，不替代全部 verify_cmd；Gamma 完整工作区及同提交 CI 仍待验；第三轮真实评测已失败，Delta 已完成定向软件验收，全仓/LIVE04/最终CI待验，证据见 docs/design/memory-quality-hardening.md。；2026-11-12 live03 实况：完整36槽为35 passed/1 hard_failure，114次HTTP200、81125 tokens，complete=true且live_quality_passed=false。唯一e07 repetition 2主答call100缺少此前歧义修改语句，返回unknown而原Oracle要求ambiguous，wrong_answer_status硬失败保留。Gamma源码pin仍为3cb47ef9e9f1；Delta对话交付与标题计数已落盘并通过定向软件验收，全仓、全量固定重复LIVE04与最终同提交CI仍待验证，不改旧grade、Oracle或分母。；2026-11-12 当前边界：Gamma来源C/执行D全仓已退出0；Delta来源706cabcfe174的对话交付与实际标题计数定向软件验收、两项红绿反证、严格Clippy/fmt及指定特性编译通过。评分器和固定真实12×3未改，live03的35/36及全部旧grade保留；Delta全仓、LIVE04及最终同提交CI仍待验。该E检查点当时仅跟踪example源码，未刷新pin；本次已按实际失败补足直接Memory依赖。；2026-11-12 E2复验：初版delta-eval-tests.log实际41/42，弱同文副本吞掉正式更正原证，失败日志保留；E2只修复生产同文证据选择，原capture、fixture、Oracle、提示词与协议未改，delta2-production-eval.log生产7项及example42项软件回归通过。初版E软件检查按其快照保留，不将42项软件通过写为LIVE04已运行或质量已过；Delta最终全仓、LIVE04与当前CI仍待验。example源码保持不变；本次将已证明影响证据交付/核验的直接Memory依赖纳入sources，pin更新到E2。；2026-11-12 直接依赖跟踪修补：E只改Memory分层就使本条原verify_cmd实际41/42失败，但原15个example sources未变而未触发STALE。现仅追加coordinator.rs、coordinator/owned.rs、context_compiler.rs和context_compiler/evidence.rs四个已证明直接影响答题证据交付/核验的本仓文件，不展开全部传递依赖。E2原生产7项及example42项软件测试通过，故pin到76ce2d4dcd17；verify_cmd、等级与默认值不变，真实LIVE04、最终全仓和当前CI仍待验，旧失败报告保留。；2026-11-12 Epsilon 源码范围复核（05548244bf3b）：live04完整36槽为35 passed/1 hard_failure，114次HTTP调用、81864 tokens，complete=true且live_quality_passed=false；e03 repetition2将原文中文日期规范成同日ISO后被旧精确片段合同拒绝，未提交更正及历史，口头确认不等于写入，原失败保留。提案合同/system改为v3；评分v2、固定fixture、主答SYSTEM、Oracle、12×3分母及原支持哈希保持，旧manifest含空/缺失协议必须使用原执行文件，拒绝静默重判。example46项软件测试与classifier/旧协议拒判真实红绿反证通过；tests补列实际protocol测试文件，sources补列直接决定提案/校验的canonical/memory_correction.rs，使已识别直接依赖变化触发STALE，等级/默认/verify_cmd不变。E2/F历史全仓通过不代替新源码最终全仓、完整LIVE05或最终同提交CI，后三项仍待验；四轮原报告与grade保留，不发布跨系统领先结论，证据见docs/design/memory-quality-hardening.md。；2026-11-13 当前源码G验收：固定合成12类×3次的live05完整36/36通过，实际114次HTTP、82750tokens；独立来源审计及root复算无错误，旧01–04失败和grade保留。当前源码本地全仓572组/11064通过/0失败/49既有忽略，doc tests完成且0失败，严格Clippy/fmt及指定特性检查已过；本段为提交前验收快照；最终提交适用CI与真实完整harness/attest/merge-decision按[PR #125 的检查](https://github.com/Apeireth/Apeireth/pull/125/checks)和绑定SHA的证据裁决，本文不预报其结果或合并状态。source pin仍G05548244bf3b，levels/defaults/verify_cmd保持。此36/36限已用于开发的自有固定合成语料，不是独立留出或一般质量保证；提案协议v3、评分v2，旧协议非同条件比较，不发布外部领先结论。Q7仍手动IMPLEMENTED/OFF，恢复授权/事务/有界生命周期边界不扩展。证据见docs/design/memory-quality-hardening.md及audit-live-05-root-confirmed.json。"
+
+  - id: mem.longterm_eval_contract
+    title: "长历史多会话回答质量评测与规模压力契约（本仓回归集；真实模型一轮 4/6 通过）"
+    level: IMPLEMENTED
+    default: "OFF"
+    switch_env: null
+    sources:
+      - crates/engine/runtime-assembly/examples/memory_longterm_eval.rs
+      - crates/engine/runtime-assembly/examples/memory_longterm_eval/schema.rs
+      - crates/engine/runtime-assembly/examples/memory_longterm_eval/config.rs
+      - crates/engine/runtime-assembly/examples/memory_longterm_eval/corpus.rs
+      - crates/engine/runtime-assembly/examples/memory_longterm_eval/evidence.rs
+      - crates/engine/runtime-assembly/examples/memory_longterm_eval/grading.rs
+      - crates/engine/runtime-assembly/examples/memory_longterm_eval/harness.rs
+      - crates/engine/runtime-assembly/examples/memory_longterm_eval/reader.rs
+      - crates/engine/runtime-assembly/examples/memory_longterm_eval/live.rs
+      - crates/engine/runtime-assembly/examples/memory_longterm_eval/seal.rs
+      - crates/engine/runtime-assembly/examples/memory_longterm_eval/pressure.rs
+      - crates/engine/runtime-assembly/examples/memory_longterm_eval/artifacts.rs
+      - crates/engine/runtime-assembly/examples/memory_longterm_eval/mod.rs
+      - crates/engine/runtime-assembly/examples/memory_longterm_eval/tests.rs
+      - crates/engine/runtime-assembly/Cargo.toml
+      - crates/engine/provider/src/canonical_openai_compatible.rs
+      - crates/engine/provider/src/openai_chat.rs
+    tests:
+      - crates/engine/runtime-assembly/examples/memory_longterm_eval/tests.rs
+      - crates/engine/provider/tests/canonical_openai_compatible.rs
+    verified_at: 0854e4d1c
+    verify_cmd: "cargo test -p apeireth-runtime-assembly --example memory_longterm_eval --locked -j 2"
+    owner: runtime-assembly
+    next_review: "2026-11-20"
+    notes: "2026-11-13 IMPLEMENTED，仅显式手动 example，不是默认产品请求入口。本条覆盖长历史多会话回答质量评测与规模压力契约：四类前提（直接用户证据、Host 授权、当前作用域、修订 CAS）逐例留痕并各配一条差分探针；引用必须可追溯到证据条目（证据 id、episode、修订、正文散列、可引用资格、锚点命中与缺失）；负控覆盖伪造引用 id、错值、错主体、少引用、状态不符、重复事实与环状步骤。规模与持续运行分别报告：存储规模与并发、全链路并发、规模下召回延迟、故障注入与恢复、真实墙钟持续与虚拟时域各占一项；虚拟时域写明只拨了时钟、不是持续运行。封存（seal）闭环按 append-only 台账实现：首次揭封成功、二次运行被拒退出码 1、仅凭 custody 文件可独立复核。独立保管（需另一持有人或另一台机器）与真实计价（价格表接线）本轮未接线，产物如实标注未实现，费用不是 0 元。题集是本仓自编回归集，不是独立盲测，产物显式标注；确定性生成器与种子一并写出。真实模型路径已接线并实测一轮（deepseek-flash，厂商 OpenAI 兼容端点）：6 例 4 通过 2 失败、36 次负控全被拒、4 类前提成立、6 条探针全绿、8 次提供方调用、提问阶段 p50 1.17 秒 p95 1.57 秒；两例失败是模型侧质量失败（歧义主体答成已知、跨作用域答成已知），不是夹具或门禁失败；单轮结果不构成质量水平结论。该端点默认开启推理模式，历史里带工具调用的助手轮缺推理内容会被厂商拒绝（400）；本仓规范化协议没有该字段，因此只提供显式可选且默认不变的厂商私有请求字段透传（厂商字段与协议保留键的守护在 provider 侧），协议级回传未实现。凭据只经环境变量按轮解析，不进参数、仓库、产物或报告；产物中密钥形态串一律脱敏，并有测试断言产物不含密钥形态串与环境变量值。"
 
   - id: sec.output_injection_guard
     title: "回合层消费工具**输出侧**的提示注入标记 ⇒ 可见告警（固定措辞，恒不阻断）"

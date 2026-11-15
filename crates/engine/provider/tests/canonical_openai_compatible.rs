@@ -463,3 +463,95 @@ fn canonical_openai_compatible_type_is_not_a_legacy_bridge() {
         apeireth_provider::canonical_openai_compatible::OpenAiCompatibleProviderCapability,
     >();
 }
+
+// ── vendor-private request fields (the opt-in extra-body passthrough) ──
+//
+// ⭐ Why this exists: some endpoints in this protocol family add request
+// fields the canonical protocol does not model. DeepSeek's OpenAI-compatible
+// endpoint is one of them — its reasoning mode requires the caller to replay
+// `reasoning_content` for every assistant turn that carried tool calls, and
+// the only other door is a vendor-private switch (`{"thinking": {...}}`).
+// Without a passthrough the only way in is to re-implement the wire format
+// outside the provider, which is the duplication this crate exists to avoid.
+
+#[tokio::test]
+async fn vendor_extra_body_reaches_the_wire_and_leaves_protocol_fields_alone() {
+    let server = MockServer::start(CannedResponse {
+        status: 200,
+        headers: vec![],
+        body: openai_success_body(),
+    })
+    .await;
+    let plugin = plugin_at(server.base_url());
+    plugin.set_extra_body(serde_json::json!({"thinking": {"type": "disabled"}}));
+    let cap = plugin.provider_for_test();
+
+    cap.complete(&request()).await.expect("completes");
+    let recorded = server.received();
+    assert_eq!(
+        recorded.body["thinking"]["type"], "disabled",
+        "vendor field must reach the wire: {}",
+        recorded.body
+    );
+    // The protocol fields the canonical layer produced are untouched.
+    assert_eq!(recorded.body["model"], MODEL);
+    assert_eq!(recorded.body["stream"], false);
+    let messages = recorded.body["messages"].as_array().expect("array");
+    assert_eq!(messages.len(), 1);
+    assert_eq!(messages[0]["role"], "user");
+    assert_eq!(messages[0]["content"], "say hello");
+}
+
+#[tokio::test]
+async fn vendor_extra_body_refuses_reserved_protocol_keys_before_any_request() {
+    let server = MockServer::start(CannedResponse {
+        status: 200,
+        headers: vec![],
+        body: openai_success_body(),
+    })
+    .await;
+    let plugin = plugin_at(server.base_url());
+    plugin.set_extra_body(serde_json::json!({"messages": []}));
+    let cap = plugin.provider_for_test();
+
+    let err = cap.complete(&request()).await.unwrap_err();
+    assert!(
+        matches!(err, ProviderError::Refused { .. }),
+        "a reserved key must be refused, not overwritten: {err}"
+    );
+    assert!(
+        err.to_string().contains("messages"),
+        "the error must name the offending key: {err}"
+    );
+    assert!(
+        server.received.lock().unwrap().is_none(),
+        "no HTTP for a refused extra body"
+    );
+}
+
+#[tokio::test]
+async fn without_an_extra_body_the_request_carries_no_vendor_fields() {
+    let server = MockServer::start(CannedResponse {
+        status: 200,
+        headers: vec![],
+        body: openai_success_body(),
+    })
+    .await;
+    let cap = plugin_at(server.base_url()).provider_for_test();
+
+    cap.complete(&request()).await.expect("completes");
+    let recorded = server.received();
+    let mut keys = recorded
+        .body
+        .as_object()
+        .expect("object body")
+        .keys()
+        .map(String::as_str)
+        .collect::<Vec<_>>();
+    keys.sort_unstable();
+    assert_eq!(
+        keys,
+        vec!["max_tokens", "messages", "model", "stream"],
+        "the default request body must stay byte-identical to the one before the passthrough"
+    );
+}

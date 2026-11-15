@@ -11,6 +11,7 @@ use apeireth_storage::SqliteConnectionPool;
 use crate::append_only::HistoryEntry;
 use crate::MemoryResult;
 
+use super::candidate;
 use super::{BackendKind, MemoryBackend};
 
 /// Shared-pool SQLite backend; independent of the legacy Mutex-based store.
@@ -31,6 +32,32 @@ impl SqliteBackend {
 
     pub fn pool(&self) -> &SqliteConnectionPool {
         &self.pool
+    }
+
+    /// 读候选行（预编译 + 绑定参数）。
+    ///
+    /// # 为什么单独抽一个
+    ///
+    /// 候选发现有**两条**切片（新鲜度 / 相关度）⇒ ⇒ 两条语句的行结构完全一样
+    /// ⇒ ⇒ 解码口径只留一份（字段顺序 / 类型不对齐只可能错一处）。
+    fn fetch_candidate_rows(
+        &self,
+        sql: String,
+        params: Vec<Box<dyn rusqlite::ToSql>>,
+    ) -> Result<Vec<Episode>, Box<dyn std::error::Error + Send + Sync>> {
+        self.pool
+            .read(move |conn| {
+                let mut stmt = conn.prepare(&sql)?;
+                let param_refs: Vec<&dyn rusqlite::ToSql> =
+                    params.iter().map(|p| p.as_ref()).collect();
+                let rows = stmt.query_map(param_refs.as_slice(), candidate::map_episode)?;
+                let mut out = Vec::new();
+                for r in rows {
+                    out.push(r?);
+                }
+                Ok(out)
+            })
+            .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })
     }
 }
 
@@ -326,6 +353,30 @@ impl MemoryBackend for SqliteBackend {
 }
 
 impl crate::scope::ScopedMemoryBackend for SqliteBackend {
+    /// 候选发现：**两条切片，共用同一份可见性口径**。
+    ///
+    /// # 切片形状（长历史关键事实）
+    ///
+    /// 1. **新鲜度切片**：最新优先（既有行为，逐条不变）；
+    /// 2. **相关度切片**：按问句相关词的命中条数排序（**同一份 `WHERE`**）。
+    ///
+    /// # 为什么要有第 2 条切片
+    ///
+    /// 候选阶段若只按最新时间截断 ⇒ ⇒ 早期确立的关键事实（姓名 / 住址 / 长期
+    /// 约定）在进入正式排序与评分**之前**就被近期记录挤掉 ⇒ ⇒ 后面的检索层
+    /// 再强也救不回来（它根本不在候选池里）⇒ ⇒ 这不是排序权重问题，是**候选池
+    /// 可达性**问题 ⇒ ⇒ 只调权重调不出来。
+    ///
+    /// # 三条不变量怎么保住
+    ///
+    /// * **作用域 / 治理状态 / 时间过滤**：两条切片的 `WHERE` 由
+    ///   [`candidate`] 里**同一份**模板与作用域翻译产出 ⇒ ⇒ 逐条一致
+    ///   ⇒ ⇒ 相关度切片**不是**绕过可见性的旁路；
+    /// * **预算**：合并后**总量仍 ≤ `query.limit`** ⇒ ⇒ 候选池不比修法前大
+    ///   ⇒ ⇒ 相关度切片**占用**预算里的位置，不是追加预算（成本与时延有界）；
+    /// * **原始来源**：候选只搬运 `Episode`（id / 时间 / 内容 / 会话），作用域与
+    ///   来源元数据仍由 `coordinator` 从 episode metadata 取 ⇒ ⇒ 切片既不新增
+    ///   也不改写来源字段。
     fn query_candidates(
         &self,
         query: &crate::scope::MemoryCandidateQuery,
@@ -333,87 +384,49 @@ impl crate::scope::ScopedMemoryBackend for SqliteBackend {
         if query.visible_scopes.is_empty() || query.limit == 0 {
             return Ok(Vec::new());
         }
+        let Some(scope) = candidate::scope_filter(&query.visible_scopes) else {
+            return Ok(Vec::new());
+        };
 
-        let mut scope_clauses = Vec::new();
-        let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+        // ── 切片 1：新鲜度（既有行为，逐条不变）─────────────────────────────
+        let fresh = candidate::freshness_query(&scope, query.as_of_ms, query.limit);
+        let fresh_rows = self.fetch_candidate_rows(fresh.sql, fresh.params)?;
 
-        for scope in &query.visible_scopes {
-            match scope {
-                crate::scope::MemoryScope::Global => {
-                    scope_clauses.push(
-                        "json_extract(m.metadata_json, '$.scope.scope') = 'global'".to_string(),
-                    );
-                }
-                crate::scope::MemoryScope::Project { project_id } => {
-                    scope_clauses.push("(json_extract(m.metadata_json, '$.scope.scope') = 'project' AND json_extract(m.metadata_json, '$.scope.project_id') = ?)".to_string());
-                    params.push(Box::new(project_id.clone()));
-                }
-                crate::scope::MemoryScope::User { user_id } => {
-                    scope_clauses.push("(json_extract(m.metadata_json, '$.scope.scope') = 'user' AND json_extract(m.metadata_json, '$.scope.user_id') = ?)".to_string());
-                    params.push(Box::new(user_id.clone()));
-                }
-                crate::scope::MemoryScope::Persona {
-                    persona_id,
-                    user_id,
-                } => {
-                    scope_clauses.push("(json_extract(m.metadata_json, '$.scope.scope') = 'persona' AND json_extract(m.metadata_json, '$.scope.persona_id') = ? AND json_extract(m.metadata_json, '$.scope.user_id') = ?)".to_string());
-                    params.push(Box::new(persona_id.clone()));
-                    params.push(Box::new(user_id.clone()));
-                }
-                crate::scope::MemoryScope::Session { session_id } => {
-                    scope_clauses.push("((json_extract(m.metadata_json, '$.scope.scope') = 'session' AND json_extract(m.metadata_json, '$.scope.session_id') = ?) OR (m.metadata_json IS NULL AND e.session_id = ?))".to_string());
-                    params.push(Box::new(session_id.clone()));
-                    params.push(Box::new(session_id.clone()));
-                }
+        // ⚠️ 便宜先判（省一次全表扫描）：若新鲜度切片**没取满**预算 ⇒ ⇒ 可见历史
+        // 全部落在这条切片里 ⇒ ⇒ 相关度切片只可能返回**已经在池子里**的行
+        // ⇒ ⇒ 合并结果逐条相同 ⇒ ⇒ 直接跳过相关度切片。
+        // ⇒ 预算中性（不多取、不多花）、不改动任何不变量（作用域 / 治理 / 时间 / 来源）。
+        if fresh_rows.len() < query.limit {
+            return Ok(candidate::merge_candidates(
+                Vec::new(),
+                fresh_rows,
+                query.limit,
+            ));
+        }
+
+        // ── 切片 2：相关度（同一份 WHERE ⇒ 可见性口径逐条一致）──────────────
+        let relevance_limit = query.relevance_slice_limit();
+        let mut relevance_rows: Vec<Episode> = Vec::new();
+        if relevance_limit > 0 {
+            let terms: Vec<String> = query
+                .query_terms
+                .iter()
+                .take(crate::scope::CANDIDATE_RELEVANCE_MAX_TERMS)
+                .cloned()
+                .collect();
+            if !terms.is_empty() {
+                let relevance =
+                    candidate::relevance_query(&scope, query.as_of_ms, &terms, relevance_limit);
+                relevance_rows = self.fetch_candidate_rows(relevance.sql, relevance.params)?;
             }
         }
 
-        if scope_clauses.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        let scope_sql = scope_clauses.join(" OR ");
-        let mut sql = format!(
-            "SELECT e.id, e.timestamp, e.role,
-                    COALESCE(g.content_override, e.content), e.session_id
-               FROM episodes e
-               LEFT JOIN episode_memory_metadata m ON m.episode_id = e.id
-               LEFT JOIN episode_governance g ON g.episode_id = e.id
-              WHERE (g.status IS NULL OR g.status <> 'forgotten')
-                AND ({scope_sql})"
-        );
-
-        if let Some(as_of_ms) = query.as_of_ms {
-            let as_of_sec = as_of_ms / 1000;
-            sql.push_str(" AND e.timestamp <= ?");
-            params.push(Box::new(as_of_sec));
-        }
-
-        sql.push_str(" ORDER BY e.timestamp DESC, e.id DESC LIMIT ?");
-        params.push(Box::new(query.limit as i64));
-
-        self.pool
-            .read(move |conn| {
-                let mut stmt = conn.prepare(&sql)?;
-                let param_refs: Vec<&dyn rusqlite::ToSql> =
-                    params.iter().map(|p| p.as_ref()).collect();
-                let rows = stmt.query_map(param_refs.as_slice(), |row| {
-                    Ok(Episode {
-                        id: row.get(0)?,
-                        timestamp: row.get(1)?,
-                        role: row.get(2)?,
-                        content: row.get(3)?,
-                        session_id: row.get(4)?,
-                    })
-                })?;
-                let mut out = Vec::new();
-                for r in rows {
-                    out.push(r?);
-                }
-                out.reverse();
-                Ok(out)
-            })
-            .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })
+        // ── 合并：相关度切片优先 → 新鲜度切片补位 → 去重 → 总量 ≤ limit ──
+        Ok(candidate::merge_candidates(
+            relevance_rows,
+            fresh_rows,
+            query.limit,
+        ))
     }
 }
 

@@ -146,6 +146,58 @@ pub fn build_request_body(
     Ok(body)
 }
 
+/// Request-body keys a caller may **not** override through the vendor
+/// extra-body passthrough.
+///
+/// These carry the protocol's own meaning (which model, which conversation,
+/// whether the body is a stream, what tools exist and which one is chosen) ⇒
+/// a caller-supplied value for them would silently rewrite the request the
+/// canonical layer produced.
+pub const RESERVED_EXTRA_BODY_KEYS: &[&str] =
+    &["model", "messages", "stream", "tools", "tool_choice"];
+
+/// Merge caller-supplied **vendor-private** fields into an OpenAI-compatible
+/// request body.
+///
+/// Some vendors in this protocol family add fields the canonical protocol does
+/// not model. DeepSeek's OpenAI-compatible endpoint is one of them: its
+/// `{"thinking": {"type": "enabled" | "disabled"}}` switch decides whether the
+/// vendor runs its reasoning mode, and `reasoning_effort` selects the effort
+/// level. Without a passthrough the only way to reach those fields is to
+/// re-implement the wire format outside the provider — which is exactly the
+/// duplication this module exists to prevent.
+///
+/// The merge is deliberately narrow:
+/// * the extra body must be a JSON **object** (a scalar or array is refused);
+/// * a reserved key ([`RESERVED_EXTRA_BODY_KEYS`]) is refused, not overwritten;
+/// * every other key is written verbatim, so the caller can add fields this
+///   protocol version does not know about.
+///
+/// ⭐ The passthrough is **opt-in**: with no extra body the request body is
+/// byte-identical to what it was before this function existed.
+pub fn merge_extra_body(
+    body: &mut serde_json::Value,
+    extra: &serde_json::Value,
+    provider: &str,
+) -> Result<(), ProviderError> {
+    let Some(fields) = extra.as_object() else {
+        return Err(ProviderError::Refused {
+            provider: provider.to_string(),
+            detail: "vendor extra body must be a JSON object".into(),
+        });
+    };
+    for (key, value) in fields {
+        if RESERVED_EXTRA_BODY_KEYS.contains(&key.as_str()) {
+            return Err(ProviderError::Refused {
+                provider: provider.to_string(),
+                detail: format!("vendor extra body may not override '{key}'"),
+            });
+        }
+        body[key] = value.clone();
+    }
+    Ok(())
+}
+
 /// Parse an OpenAI Chat Completions response into a canonical response.
 ///
 /// Reads `choices[0].message.content`, `finish_reason` (via

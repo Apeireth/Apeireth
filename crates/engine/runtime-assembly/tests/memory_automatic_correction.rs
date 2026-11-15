@@ -2416,3 +2416,410 @@ async fn normalized_absolute_date_is_frozen_before_failed_registration_and_recov
     );
     assert!(text.ends_with(old));
 }
+
+#[tokio::test]
+async fn parsed_self_assertions_cover_explicit_properties_transitions_and_independent_speech() {
+    for (old, input, evidence, anchor, before, after) in [
+        (
+            "我的工作单位是青松公司。",
+            "更正：我现在就职于白桦公司。",
+            "更正：我现在就职于白桦公司。",
+            "我的工作单位是青松公司",
+            "青松公司",
+            "白桦公司",
+        ),
+        (
+            "我的邮箱是old@example.test。",
+            "更正：我现在的邮箱是new@example.test。",
+            "更正：我现在的邮箱是new@example.test。",
+            "我的邮箱是old@example.test",
+            "old@example.test",
+            "new@example.test",
+        ),
+        (
+            "我的手机号是13800000001。",
+            "更正：我现在的手机号码是13900000002。",
+            "更正：我现在的手机号码是13900000002。",
+            "我的手机号是13800000001",
+            "13800000001",
+            "13900000002",
+        ),
+        (
+            "我的地址是北岚市。",
+            "我的地址从北岚市改为南汀市。",
+            "我的地址从北岚市改为南汀市。",
+            "我的地址是北岚市",
+            "北岚市",
+            "南汀市",
+        ),
+        (
+            "我住在北岚市。",
+            "我不再住在北岚市，我现在住在南汀市。",
+            "我不再住在北岚市，我现在住在南汀市。",
+            "我住在北岚市",
+            "北岚市",
+            "南汀市",
+        ),
+        (
+            "我住在北岚市。",
+            "同事说他住在别处。更正：我住在南汀市。",
+            "更正：我住在南汀市。",
+            "我住在北岚市",
+            "北岚市",
+            "南汀市",
+        ),
+        (
+            "我的昵称是小禾。",
+            "更正：我的昵称是青檐。",
+            "更正：我的昵称是青檐。",
+            "我的昵称是小禾",
+            "小禾",
+            "青檐",
+        ),
+        (
+            "我的学校是北岚大学。",
+            "更正：我现在就读于青松大学。",
+            "更正：我现在就读于青松大学。",
+            "我的学校是北岚大学",
+            "北岚大学",
+            "青松大学",
+        ),
+        (
+            "我的邮箱是old@example.test。",
+            "更正：我现在使用的电子邮箱是new@example.test。",
+            "更正：我现在使用的电子邮箱是new@example.test。",
+            "我的邮箱是old@example.test",
+            "old@example.test",
+            "new@example.test",
+        ),
+    ] {
+        let dir = tempdir().unwrap();
+        let session = SessionId::new();
+        let provider = SemanticProvider::new(proposal(anchor, evidence, before, after));
+        let (runtime, store, module) = runtime(dir.path(), provider.clone(), clock()).await;
+        runtime
+            .execute(TurnRequest::new(session, old))
+            .await
+            .unwrap();
+        let original = EpisodeStore::recent_episodes(store.as_ref(), &session.to_string(), 20)
+            .unwrap()
+            .into_iter()
+            .find(|episode| episode.role == "user" && episode.content == old)
+            .unwrap();
+        runtime
+            .execute(TurnRequest::new(session, input))
+            .await
+            .unwrap();
+        assert_eq!(module.metrics().proposals, 1, "{input}");
+        assert_eq!(
+            module.metrics().applied,
+            1,
+            "{input}: {:?}",
+            module.rejection_counts()
+        );
+        let current = store.get_governed(&original.id).unwrap().unwrap();
+        assert_eq!(current.revision, 1, "{input}");
+        assert_eq!(
+            current.episode.content,
+            old.replace(before, after),
+            "{input}"
+        );
+        assert_eq!(
+            EpisodeStore::get_episode(store.as_ref(), &original.id)
+                .unwrap()
+                .unwrap()
+                .content,
+            old
+        );
+        let calls = provider.calls();
+        assert_eq!(calls.len(), 3, "exactly one proposal: {input}");
+        assert!(
+            memory_text(&calls.last().unwrap().1).contains(&current.episode.content),
+            "{input}"
+        );
+        assert_eq!(
+            correction_receipt(&calls.last().unwrap().1).unwrap()["outcome"],
+            "applied"
+        );
+    }
+}
+
+#[tokio::test]
+async fn parsed_semantic_conflicts_roles_negation_and_speech_scopes_are_not_mutation_authority() {
+    for (old, input, evidence, anchor, before, after) in [
+        (
+            "我住在北岚市。",
+            "更正：我住在南汀市。我住在银桥市。",
+            "我住在南汀市。",
+            "我住在北岚市",
+            "北岚市",
+            "南汀市",
+        ),
+        (
+            "我的姓名是余禾。",
+            "更正：我的昵称是青檐。",
+            "更正：我的昵称是青檐。",
+            "我的姓名是余禾",
+            "余禾",
+            "青檐",
+        ),
+        (
+            "我的工作单位是青松公司。",
+            "更正：我的工作地点是南汀市。",
+            "更正：我的工作地点是南汀市。",
+            "我的工作单位是青松公司",
+            "青松公司",
+            "南汀市",
+        ),
+        (
+            "我的地址是北岚市。",
+            "我的地址从银桥市改为南汀市。",
+            "我的地址从银桥市改为南汀市。",
+            "我的地址是北岚市",
+            "北岚市",
+            "南汀市",
+        ),
+        (
+            "我住在北岚市。",
+            "更正：我不住在南汀市。",
+            "更正：我不住在南汀市。",
+            "我住在北岚市",
+            "北岚市",
+            "南汀市",
+        ),
+        (
+            "我住在北岚市。",
+            "同事说：“住处有误。更正：我住在南汀市。”",
+            "更正：我住在南汀市。",
+            "我住在北岚市",
+            "北岚市",
+            "南汀市",
+        ),
+        (
+            "我住在北岚市。",
+            "同事说，更正：我住在南汀市。",
+            "更正：我住在南汀市。",
+            "我住在北岚市",
+            "北岚市",
+            "南汀市",
+        ),
+        (
+            "我住在北岚市。",
+            "假设条件成立。更正：我住在南汀市。",
+            "更正：我住在南汀市。",
+            "我住在北岚市",
+            "北岚市",
+            "南汀市",
+        ),
+        (
+            "我住在北岚市。",
+            "I moved to Southport on November 10, 2026.",
+            "I moved to Southport on November 10, 2026.",
+            "我住在北岚市",
+            "北岚市",
+            "Southport",
+        ),
+    ] {
+        let dir = tempdir().unwrap();
+        let session = SessionId::new();
+        let provider = SemanticProvider::new(proposal(anchor, evidence, before, after));
+        let (runtime, store, module) = runtime(dir.path(), provider.clone(), clock()).await;
+        runtime
+            .execute(TurnRequest::new(session, old))
+            .await
+            .unwrap();
+        let original = EpisodeStore::recent_episodes(store.as_ref(), &session.to_string(), 20)
+            .unwrap()
+            .into_iter()
+            .find(|episode| episode.role == "user" && episode.content == old)
+            .unwrap();
+        runtime
+            .execute(TurnRequest::new(session, input))
+            .await
+            .unwrap();
+        assert_eq!(module.metrics().applied, 0, "{input}");
+        assert_no_correction_effects(dir.path(), session, store.as_ref(), &original.id, old).await;
+        assert!(provider.calls().iter().filter(|(side, _)| *side).count() <= 1);
+    }
+}
+
+#[tokio::test]
+async fn parsed_absolute_time_modifiers_preserve_original_spans_and_host_time() {
+    for evidence in [
+        "我从2026年11月10日起住在南汀市。",
+        "我自2026-11-10起常住南汀市。",
+    ] {
+        let dir = tempdir().unwrap();
+        let session = SessionId::new();
+        let clock = Arc::new(VirtualClock::new(
+            Utc.with_ymd_and_hms(2026, 11, 1, 12, 0, 0)
+                .single()
+                .unwrap(),
+        ));
+        let mut response = proposal("我住在北岚市", evidence, "北岚市", "南汀市");
+        response["decision"] = json!("state_change");
+        response["effective_time"] = json!("2026-11-10");
+        let provider = SemanticProvider::new(response);
+        let (runtime, store, module) = runtime(dir.path(), provider.clone(), clock.clone()).await;
+        runtime
+            .execute(TurnRequest::new(session, "我住在北岚市。"))
+            .await
+            .unwrap();
+        clock.set(
+            Utc.with_ymd_and_hms(2026, 11, 12, 12, 0, 0)
+                .single()
+                .unwrap(),
+        );
+        runtime
+            .execute(TurnRequest::new(session, evidence))
+            .await
+            .unwrap();
+        assert_eq!(
+            module.metrics().applied,
+            1,
+            "{evidence}: {:?}",
+            module.rejection_counts()
+        );
+        let sessions = SqliteSessionStore::open(dir.path().join("sessions.sqlite3"))
+            .await
+            .unwrap();
+        let intents = apeireth_runtime::SessionStore::operation_evidence(&sessions, &session)
+            .await
+            .unwrap();
+        assert_eq!(intents.len(), 1);
+        let plan: apeireth_memory::automatic_correction::AutomaticCorrectionPlan =
+            serde_json::from_value(intents[0].payload.clone()).unwrap();
+        assert_eq!(plan.evidence.content, evidence);
+        assert_eq!(
+            plan.valid_from_ms,
+            Utc.with_ymd_and_hms(2026, 11, 10, 0, 0, 0)
+                .single()
+                .unwrap()
+                .timestamp_millis()
+        );
+        let history = EpisodeStore::recent_episodes(store.as_ref(), &session.to_string(), 40)
+            .unwrap()
+            .into_iter()
+            .find(|episode| episode.role == "fact_history")
+            .unwrap();
+        assert!(history.content.contains("2026-11-10T00:00:00.000Z"));
+        assert!(memory_text(&provider.calls().last().unwrap().1).contains(&history.content));
+    }
+}
+
+/// An absolute-date modifier only carries a correction when the date itself is
+/// well formed and belongs to the evidence fragment. A malformed date, a
+/// missing date, a date outside the fragment, and a dated change without an
+/// explicit effective time must all be refused instead of writing a value.
+#[tokio::test]
+async fn parsed_absolute_date_modifiers_reject_malformed_missing_and_outside_fragment_dates() {
+    for (input, evidence, time, expected) in [
+        (
+            "更正：我从2026年13月10日起住在南汀市。",
+            "更正：我从2026年13月10日起住在南汀市。",
+            json!("2026-11-10"),
+            CorrectionRejection::InvalidEffectiveDate,
+        ),
+        (
+            "更正：我从起住在南汀市。",
+            "更正：我从起住在南汀市。",
+            json!("2026-11-10"),
+            CorrectionRejection::InvalidEffectiveDate,
+        ),
+        (
+            "我从2026年11月10日起住在银桥市。我住在南汀市。",
+            "我住在南汀市。",
+            json!("2026-11-10"),
+            CorrectionRejection::InvalidEffectiveDate,
+        ),
+        (
+            "更正：我从2026年11月10日起住在南汀市。",
+            "更正：我从2026年11月10日起住在南汀市。",
+            json!(null),
+            CorrectionRejection::MissingEffectiveDate,
+        ),
+        (
+            "我从2026年11月10日起住在南汀市。",
+            "我从2026年11月10日起住在南汀市。",
+            json!(null),
+            CorrectionRejection::MissingEffectiveDate,
+        ),
+    ] {
+        let dir = tempdir().unwrap();
+        let session = SessionId::new();
+        let old = "我住在北岚市。";
+        let mut response = proposal("我住在北岚市", evidence, "北岚市", "南汀市");
+        response["decision"] = json!("state_change");
+        response["effective_time"] = time;
+        let provider = SemanticProvider::new(response);
+        let (runtime, store, module) = runtime(dir.path(), provider.clone(), clock()).await;
+        runtime
+            .execute(TurnRequest::new(session, old))
+            .await
+            .unwrap();
+        let original = EpisodeStore::recent_episodes(store.as_ref(), &session.to_string(), 20)
+            .unwrap()
+            .into_iter()
+            .find(|episode| episode.role == "user" && episode.content == old)
+            .unwrap();
+        runtime
+            .execute(TurnRequest::new(session, input))
+            .await
+            .unwrap();
+        assert_eq!(module.metrics().applied, 0, "{input}");
+        assert_eq!(
+            module.rejection_counts().get(&expected),
+            Some(&1),
+            "{input}: {:?}",
+            module.rejection_counts()
+        );
+        assert_no_correction_effects(dir.path(), session, store.as_ref(), &original.id, old).await;
+    }
+}
+
+/// A statement of the prior fact that stands before the correction in the same
+/// message states the value that the correction replaces. It must not be read
+/// as a second current value that contradicts the correction.
+#[tokio::test]
+async fn parsed_prior_statement_before_the_correction_is_not_a_conflict() {
+    for (old, input, evidence, anchor, before, after) in [(
+        "我住在北岚市。",
+        "我住在北岚市。更正：我住在南汀市。",
+        "更正：我住在南汀市。",
+        "我住在北岚市",
+        "北岚市",
+        "南汀市",
+    )] {
+        let dir = tempdir().unwrap();
+        let session = SessionId::new();
+        let provider = SemanticProvider::new(proposal(anchor, evidence, before, after));
+        let (runtime, store, module) = runtime(dir.path(), provider.clone(), clock()).await;
+        runtime
+            .execute(TurnRequest::new(session, old))
+            .await
+            .unwrap();
+        let original = EpisodeStore::recent_episodes(store.as_ref(), &session.to_string(), 20)
+            .unwrap()
+            .into_iter()
+            .find(|episode| episode.role == "user" && episode.content == old)
+            .unwrap();
+        runtime
+            .execute(TurnRequest::new(session, input))
+            .await
+            .unwrap();
+        assert_eq!(module.metrics().proposals, 1, "{input}");
+        assert_eq!(
+            module.metrics().applied,
+            1,
+            "{input}: {:?}",
+            module.rejection_counts()
+        );
+        let current = store.get_governed(&original.id).unwrap().unwrap();
+        assert_eq!(current.revision, 1, "{input}");
+        assert_eq!(
+            current.episode.content,
+            old.replace(before, after),
+            "{input}"
+        );
+    }
+}

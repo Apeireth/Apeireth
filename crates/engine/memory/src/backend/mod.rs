@@ -30,6 +30,10 @@ pub mod file_encrypted;
 pub mod in_memory;
 pub mod sqlite;
 
+// 候选发现的共享口径（可见性 / 两条切片 / 合并）—— 三处 `query_candidates` 实现共用
+// (crate 内可见 ⇒ 不扩 public API 面).
+pub(crate) mod candidate;
+
 use apeireth_core::kernel::memory::Episode;
 
 use crate::append_only::HistoryEntry;
