@@ -63,7 +63,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: dtolnay/rust-toolchain@1.97.1
+      - uses: dtolnay/rust-toolchain@1.120.0
         with:
           components: clippy
 
