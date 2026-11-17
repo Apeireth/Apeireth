@@ -23,9 +23,7 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock};
 
-use apeireth_protocol::canonical_stream::{
-    C1DeltaFrame, C1FinalFrame, C1Frame, C1StreamState, C1_FINAL_EVENT,
-};
+use apeireth_protocol::canonical_stream::{C1DeltaFrame, C1FinalFrame, C1Frame, C1_FINAL_EVENT};
 use parking_lot::Mutex;
 use tokio::sync::mpsc;
 
@@ -457,22 +455,4 @@ static GLOBAL_REGISTRY: OnceLock<StreamRegistry> = OnceLock::new();
 #[must_use]
 pub fn global_registry() -> &'static StreamRegistry {
     GLOBAL_REGISTRY.get_or_init(StreamRegistry::new)
-}
-
-/// 帧的终态判定 (终帧 ⇒ 流结束)。
-#[must_use]
-pub fn frame_is_terminal(frame: &C1Frame) -> bool {
-    match frame {
-        C1Frame::Delta(delta) => delta.state.is_terminal(),
-        C1Frame::Final(_) => true,
-    }
-}
-
-/// 帧状态 (增量帧 ⇒ `running`; 终帧 ⇒ 其终态)。
-#[must_use]
-pub fn frame_state(frame: &C1Frame) -> C1StreamState {
-    match frame {
-        C1Frame::Delta(delta) => delta.state,
-        C1Frame::Final(final_frame) => final_frame.state,
-    }
 }

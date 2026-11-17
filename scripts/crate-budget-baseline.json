@@ -5,8 +5,8 @@
       "loc": 18891
     },
     "crates/adapters/gateway": {
-      "files": 36,
-      "loc": 19459
+      "files": 37,
+      "loc": 19677
     },
     "crates/adapters/sdk": {
       "files": 22,
@@ -93,8 +93,8 @@
       "loc": 6715
     },
     "crates/engine/runtime": {
-      "files": 55,
-      "loc": 27089
+      "files": 56,
+      "loc": 27550
     },
     "crates/engine/runtime-assembly": {
       "files": 92,
@@ -129,8 +129,8 @@
       "loc": 15504
     },
     "crates/foundation/protocol": {
-      "files": 24,
-      "loc": 8841
+      "files": 25,
+      "loc": 9121
     },
     "crates/services/mesh-rendezvous": {
       "files": 2,
