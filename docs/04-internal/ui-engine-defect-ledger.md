@@ -446,6 +446,90 @@
 > 而四类使用侧反模式（E-196）**全部**是「调用方没读手册/手册落后于引擎」或「调用方自建了一套」的产物
 > ⇒ ⇒ **手册与引擎同批更新，是引擎交付的一部分，不是文档债**。
 
+## 3.8 ⭐ 2026-11-17 · 强制快反馈门禁（fast gate）在「碰契约/配置 toml」的批次上必假红
+
+> 背景：本条**不是引擎缺陷**，是**工具缺陷**；按 **E-118a / E-121** 的先例登记在本台账（那两条记的也是
+> `scripts/verify_changed.py` 这条门禁）。本轮由后端「构建产物槽位纪律」批次触发：批次要改
+> `docs/architecture/contract.toml` ⇒ ⇒ 门禁假红 ⇒ ⇒ **纪律链在真正需要它的地方断掉**。
+
+| # | 缺陷 | 证据 | 状态 |
+|---|---|---|---|
+| **E-197** | ⚠️⭐⭐⭐⭐ **fast gate 把「任何 `.toml`」当成 Rust 变更，并把 cargo metadata 的三方依赖名全塞进 `cargo -p`** ⇒ ⇒ 撞上多版本依赖即报歧义 ⇒ ⇒ **任何碰契约/配置 toml 的批次都跑不过 AGENTS.md §5.1 强制的门禁** ⇒ ⇒ 门禁红得与被测改动无关（假红），且**红在纪律链最需要它的地方** ⇒ ⇒ 「谁都不信 fast gate」比「fast gate 一直红」更坏 | **实测**：改 `docs/architecture/contract.toml` 后 `python scripts/verify_changed.py` ⇒ `FAST GATE FAILED: check (exit=101)`；`logs/verify-changed.log` 原文 `error: specification 'bit-set' is ambiguous` + `bit-set@0.5.3 / bit-set@0.8.0 / bit-set@0.11.1` ⇒ ⇒ **根因**（读 `scripts/verify_changed.py` 全文定位）：`:159` `rust_files = [f for f in files if f.endswith((".rs", ".toml"))]` 把契约 toml 当代码 ⇒ `:172 crate_for_path` 找不到归属包 ⇒ `seed_ids` 为空 ⇒ `:106-107 affected_packages` 走 `if all_workspace or not seed_ids:` ⇒ 返回 **metadata 里的 481 个包名（三方依赖）** ⇒ ⇒ `cargo -p <三方依赖>` 歧义 ⇒ ⇒ **修法**：`classify_files()` 区分「代码文件 / 清单文件 / 非 Rust 变更」；`affected_packages` 限制在 `meta["workspace_members"]`（35 个成员）；非本仓 workspace 的 `.rs` 进 `foreign_files` 并**明说「本仓 Rust 阶段不覆盖，请另跑对应 workspace 的门禁」**（不静默跳过）⇒ ⇒ **反向验伪**：修前红（上面原文）⇒ 修后 `no Rust/manifest changes (24 files changed) — docs-only` ⇒ EXIT 0；闭包自证 `--files crates/foundation/core/src/kernel/ids.rs --dry-run` ⇒ `affected crates: 23`（全是 workspace 成员）⇒ ⇒ **回归守卫**：新增 `scripts/check_fast_gate_classifier.py`（11 条断言，纯只读不编译）⇒ 全 ok EXIT 0 | `scripts/verify_changed.py`（:159/:172/:106-107 段已改）＋`scripts/check_fast_gate_classifier.py`（新）⇒ ⇒ **已修**（并已加回归守卫）；⚠️ **更正 E-121**：E-121 把同一个现象「更正」为「瞬时依赖解析抖动 ⇒ 非工具缺陷 ⇒ 工具可用（复跑 EXIT 0）」⇒ ⇒ **那次 EXIT 0 成立的原因是该分支只动 crates-ui 与 docs（无 `.toml`）⇒ 走 docs-only 路径** ⇒ ⇒ **E-121 的更正只在 docs-only 批次成立** ⇒ ⇒ 一旦批次碰契约/配置 toml 就必假红 ⇒ ⇒ **E-121 的归因不成立（原文保留不删，在此更正）** |
+## 3.9 ⭐ 2026-11-17 · harness 合并裁决链「阶段选择 vs 门禁适用性」两套口径 ⇒ 纯文档 PR 假红 BLOCKED（E-198）
+
+> 背景：提交 `a8b7e971a`（「fix(harness): retain evidence from both verification phases」，2026-11-12，
+> 经 PR #126 进 `upstream/main`）让 `cmd_verify` 跑完 fast 之后**继续跑 deep**、并把两阶段证据都写进
+> `scripts/harness-last-run.json` ⇒ ⇒ 好处是 deep 门禁不再「查不到证据」；
+> 坏处是它把**「该跑哪个阶段」与「哪条门禁适用」两套口径**同时暴露在同一条裁决链上
+> ⇒ ⇒ 两套口径在**纯文档 / 纯契约 / 纯 CI 改动**上**不一致** ⇒ ⇒ 假红 BLOCKED。
+> （本条是**工具链**缺陷，登记在本台账：全仓只有这一个缺陷台账。）
+
+| # | 缺陷 | 证据 | 状态 |
+|---|---|---|---|
+| **E-198** | ⭐⭐⭐⭐ **阶段选择（只看 Rust 改动）vs 门禁适用性（看 diff 标签）两套口径不一致** ⇒ ⇒ 纯文档 / 纯契约 / 纯 CI 的 PR（影响级别 L0 ⇒ 只跑 fast）把 `claims-verify` 等 **required deep 门禁**记成「适用却没跑」⇒ ⇒ 裁决 **BLOCKED**（假红） | 逐条证据见下方 ①～⑨；修法 = `cmd_verify` 把「required ∧ scope 命中本次 diff」的门禁**所在阶段并入**阶段集合（`scripts/harness.py:862-930` 新增 `order_stages` / `required_scope_stages` / `stage_completion_notes`；`scripts/harness.py:968-988` 合并阶段集合）；**`evaluate_verdict` / `req_bad` / `scope_applies` 一行未改**（不放松裁决，只把该跑的阶段真跑起来）；回归测试 `scripts/test_harness_gate_status.py::StageCompletionTests`（5 例） | **已修**（2026-11-17） |
+
+**① 阶段选择只看「有没有 Rust 改动」**：基线 `5c373955c` 的 `scripts/harness.py:891-892`
+`plan = impact_plan(args.base)`；`stages = plan["stages"]` ⇒ 阶段集合**只**由影响级别 L0..L4 决定
+（L0/L1 ⇒ `["fast"]`；L2+ ⇒ 含 deep）。
+
+**② 裁决口径看的是「本次 diff 命中了哪些 scope 标签」**：基线 `scripts/harness.py:901-902`
+`context = collect_context(args.base)`、`gates, notes, _ = load_registry()`；
+`context["tags"]` = diff 的**文件类型标签**（docs / claims / ci / contract / rust / lock / frontend）。
+
+**③ 「适用」的判定**：基线 `scripts/harness.py:466-481` `scope_applies(gate, tags)` ——
+scope 含 `"*"` ⇒ True；否则 `set(scope) & set(tags)` 非空 ⇒ True。
+
+**④ 没跑到的门禁被合成 SKIPPED**：基线 `scripts/harness.py:980-990` ——
+登记表里每条没跑到的门禁 reason = 「影响分析未选择该阶段（**不是通过**）」，
+并写 `row["scope_applies"] = scope_applies(gate, context["tags"])`。
+
+**⑤ 「适用却没跑」⇒ 阻断**：基线 `scripts/harness.py:689-699` `evaluate_verdict` 的 `req_bad`
+（required ∧ status ∉ {PASS,WAIVED,FAIL,UNVERIFIED,BLOCKED,DELEGATED} ∧ scope_applies ∧ skip_kind ≠ `"env"`）
+⇒ 理由「required gate applicable but skipped without justification: `<id>`」（`:709-712`）
+⇒ `:723-728` 裁决 **BLOCKED**。
+
+**⑥ ⇒ 两套口径不一致**：只改 docs / contract / ci 的 PR（L0 ⇒ 只跑 fast）会把 scope 含
+docs / claims / contract 的 **required deep 门禁**记成 SKIPPED 且「适用」⇒ BLOCKED。
+
+**⑦ 被这条口径误伤的 required 门禁**（`docs/architecture/contract.toml`，均 `required = true`）：
+`claims-verify`（scope docs/claims/rust，deep）、`golden-baseline`（rust/docs，deep）、
+`real-query-baseline`（rust/docs，deep）、`d4-ledger`（rust/docs，deep）、
+`ci-doc-test`（rust/docs，deep，env=cargo）⇒ docs-only diff（tags = `["docs"]`）实测命中这 **5** 条
+（`scripts/harness-last-run.json` 的 `verdict_reasons` 逐条列名）；
+`arch-strict`（scope rust/contract，deep）**只在** diff 命中 **contract** 标签时
+（如改 `docs/architecture/contract.toml`）才命中；
+而 `ci-rust` / `ci-nextest` / `ci-clippy` / `ci-fmt` / `ci-cargo-deny` / `ci-promise-audit`
+的 scope 只含 rust / lock ⇒ docs-only diff **不适用** ⇒ 不阻断。
+
+**⑧ 引入提交**：`a8b7e971a`「fix(harness): retain evidence from both verification phases」
+（2026-11-12，经 PR #126 进 `upstream/main`）—— 在那之前 `cmd_verify` 跑完 fast 就 return，
+deep 门禁**根本不在裁决文档里** ⇒ 不阻断 ⇒ ⇒ 所以这是**回归**，不是历史遗留。
+
+**⑨ 实测对照**：
+PR #120（纯文档 7 文件，含 `docs/status/claims.yaml`，2026-11-11 合并，**早于** `a8b7e971a`）
+merge-gate 日志原文「影响级别 **L0** ⇒ 该跑阶段：fast」→「════ 阶段 1/2：fast（秒级只读）════」
+→「VERDICT: PASS」；
+PR #131（只改 docs / scripts / contract，**无 Rust 改动**，2026-11-13 之后合并）实测
+`VERDICT: BLOCKED`，理由正是 ⑦ 的那几条 ⇒ ⇒ **同一类改动在引入提交前后裁决相反**。
+
+**修法（E-198）**：`scripts/harness.py:862-930` 新增 `STAGE_ORDER`（阶段顺序恒为 fast 在前、deep 在后）、
+`order_stages`（显式排序，不靠集合偶然顺序）、`required_scope_stages`（**只认 required**；
+命中判定**复用** `scope_applies` ⇒ 裁决口径与阶段口径**同一套**）、`stage_completion_notes`（只为
+**真正新增**的阶段打印一行「阶段补齐：`<id>`(scope 命中 …) 位于 `<stage>` ⇒ 该阶段必须跑…」）；
+`cmd_verify`（`scripts/harness.py:968-988`）在拿到 `context["tags"]` 与 `gates` 之后合并阶段集合：
+`stages = order_stages(set(impact_stages) | set(required_stages))`。
+⚠️ **没有放松裁决**：`evaluate_verdict` / `req_bad` / `scope_applies` **一行未改**
+⇒ 阶段补齐只是把**该跑的阶段真跑起来**，而不是把「适用却没跑」降级成「跳过」。
+
+**⚠️ 诚实边界（这次修法没有解决什么）**：
+① **影响级别仍只由 Rust 改动驱动** ⇒ 纯文档 PR 依旧显示 L0，只是**额外**要跑「适用门禁所在阶段」；
+② `ci-doc-test` 等 `env=cargo` 门禁本机仍 **DELEGATED**（由 CI job 负责）⇒ 阶段补齐**不会**让 cargo 门禁在本机真跑；
+③ 本机跑 deep 会多花时间（GREEN 实测：`claims-verify` 0.08 s、`golden-baseline` ≈ 126 s、
+`real-query-baseline` ≈ 428 s、`d4-ledger` ≈ 103 s；fast 阶段的 `fusion-channels` 另有 ≈ 225 s）
+⇒ ⇒ 纯文档 PR 的门禁时长会**明显变长**（这是**真实成本**，不是 bug）；
+④ 「fast 有 FAIL ⇒ 不跑 deep」保持不变 —— 此时 deep 门禁 SKIPPED + 适用 ⇒ BLOCKED 是**故意**的；
+⑤ 非 required 门禁**不得**把阶段拉进来（否则每批改动都无谓跑重阶段）。
+
 ## 3.10 ⭐ 2026-11-17 · 测试隔离：临时库路径按进程号 ⇒ Windows 回收进程号 ⇒ 上一轮残留被当成本轮事实（假红）
 
 | 编号 | 缺陷 | 证据 | 状态 |

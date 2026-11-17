@@ -33,6 +33,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_LOG = ROOT / "logs" / "verify-changed.log"
 
+# Windows 控制台默认 GBK ⇒ 破折号/箭头类字符会抛 UnicodeEncodeError ⇒ 强制 UTF-8
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:  # noqa: BLE001 —— 老解释器没有 reconfigure 时不阻断
+        pass
+
 
 def _run(cmd: list[str], log_path: Path, append: bool = True) -> int:
     mode = "a" if append else "w"
@@ -81,13 +88,14 @@ def load_metadata() -> dict:
 
 def build_index(meta: dict):
     by_manifest: dict[str, dict] = {}
-    roots: list[str] = []
     for pkg in meta["packages"]:
         manifest = Path(pkg["manifest_path"]).resolve()
         by_manifest[str(manifest).lower()] = pkg
-        if manifest.parent == ROOT:
-            roots.append(pkg["id"])
-    return by_manifest, roots
+    # 只认「根 workspace 的成员」：cargo metadata 会把三方依赖也放进 packages，
+    # 把它们当 crate 传给 `cargo -p` 会在多版本依赖名上直接报
+    # `specification 'xxx' is ambiguous` ⇒ 门禁假红（见缺陷账本 E-122）。
+    workspace_members = set(meta.get("workspace_members", []))
+    return by_manifest, workspace_members
 
 
 def crate_for_path(path: str, by_manifest: dict[str, dict]) -> dict | None:
@@ -103,11 +111,14 @@ def crate_for_path(path: str, by_manifest: dict[str, dict]) -> dict | None:
 def affected_packages(seed_ids: list[str], meta: dict, all_workspace: bool) -> list[str]:
     packages = meta["packages"]
     nodes = meta.get("resolve", {}).get("nodes", [])
+    # 只取根 workspace 的成员（cargo metadata 会把三方依赖也放进 packages）。
+    members = set(meta.get("workspace_members", []))
     if all_workspace or not seed_ids:
-        return sorted({p["name"] for p in packages})
-    reverse: dict[str, set[str]] = {p["id"]: set() for p in packages}
+        return sorted({p["name"] for p in packages if p["id"] in members})
+    reverse: dict[str, set[str]] = {}
     for node in nodes:
         for dep in node.get("dependencies", []):
+            # cargo metadata 的 resolve.nodes[].dependencies 是**包 id 字符串**。
             reverse.setdefault(dep, set()).add(node["id"])
     id_to_name = {p["id"]: p["name"] for p in packages}
     seen: set[str] = set()
@@ -118,7 +129,54 @@ def affected_packages(seed_ids: list[str], meta: dict, all_workspace: bool) -> l
             continue
         seen.add(current)
         stack.extend(reverse.get(current, set()))
-    return sorted(id_to_name[i] for i in seen if i in id_to_name)
+    return sorted(id_to_name[i] for i in seen if i in id_to_name and i in members)
+
+
+def classify_files(files: list[str], by_manifest: dict[str, dict]) -> dict:
+    """把改动文件分成三类（口径守卫见 scripts/check_fast_gate_classifier.py）。
+
+    - 代码文件（`.rs`）⇒ 按最近的祖先 crate manifest 归属；
+    - 清单文件（`Cargo.toml` / `Cargo.lock` / `rust-toolchain.toml` / `.cargo/config.toml`）
+      ⇒ 根 manifest 与构建级输入按**全 workspace** 计；
+    - 其余（`.md` / `.py` / `.ps1` / **非清单** `.toml` 等）⇒ **不是 Rust 变更**。
+
+    ⚠️ 旧口径把所有 `.toml`（含 `docs/architecture/contract.toml`）当代码文件
+    ⇒ 映射到根 manifest ⇒ 影响面按全 workspace 计 ⇒ 把**三方依赖名**一起塞进
+    `cargo -p` ⇒ 撞上多版本依赖即报 `specification 'bit-set' is ambiguous` ⇒ 门禁假红
+    （缺陷账本 docs/04-internal/ui-engine-defect-ledger.md E-122）。
+    """
+    code_files: list[str] = []
+    manifest_files: list[str] = []
+    foreign_files: list[str] = []  # 不属于根 workspace 的 .rs（独立 cargo workspace）
+    seed_ids: list[str] = []
+    all_workspace = False
+    for path in files:
+        name = path.rsplit("/", 1)[-1]
+        if name == "Cargo.lock" or name == "rust-toolchain.toml" or path.endswith(".cargo/config.toml"):
+            all_workspace = True
+            manifest_files.append(path)
+        elif name == "Cargo.toml":
+            manifest_files.append(path)
+            if "/" not in path:  # 根 manifest
+                all_workspace = True
+            else:
+                pkg = crate_for_path(path, by_manifest)
+                if pkg:
+                    seed_ids.append(pkg["id"])
+        elif path.endswith(".rs"):
+            code_files.append(path)
+            pkg = crate_for_path(path, by_manifest)
+            if pkg:
+                seed_ids.append(pkg["id"])
+            else:
+                foreign_files.append(path)
+    return {
+        "code_files": code_files,
+        "manifest_files": manifest_files,
+        "foreign_files": foreign_files,
+        "seed_ids": seed_ids,
+        "all_workspace": all_workspace,
+    }
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -156,27 +214,29 @@ def main(argv: list[str] | None = None) -> int:
                 print("FAST GATE FAILED: arch_guard（详见日志）")
                 return 1
 
-    rust_files = [f for f in files if f.endswith((".rs", ".toml"))]
-    if not rust_files:
-        print(f"no Rust/Toml changes ({len(files)} files changed) — docs-only; run doc gates instead.")
+    meta = load_metadata()
+    by_manifest, _members = build_index(meta)
+    classified = classify_files(files, by_manifest)
+    seed_ids = classified["seed_ids"]
+    all_workspace = classified["all_workspace"]
+    code_files = classified["code_files"]
+    manifest_files = classified["manifest_files"]
+    foreign_files = classified["foreign_files"]
+
+    if not code_files and not manifest_files:
+        print(f"no Rust/manifest changes ({len(files)} files changed) — docs-only; run doc gates instead.")
         return 0
 
-    meta = load_metadata()
-    by_manifest, _roots = build_index(meta)
-    seed_ids: list[str] = []
-    all_workspace = False
-    for path in rust_files:
-        if path in ("Cargo.toml", "Cargo.lock"):
-            all_workspace = True
-            continue
-        pkg = crate_for_path(path, by_manifest)
-        if pkg:
-            seed_ids.append(pkg["id"])
-
     pkgs = affected_packages(sorted(set(seed_ids)), meta, all_workspace)
-    print(f"changed rust files: {len(rust_files)}; affected crates: {len(pkgs)}")
+    print(f"changed rust files: {len(code_files)}; manifest files: {len(manifest_files)}; affected crates: {len(pkgs)}")
     for pkg in pkgs:
         print(f"  - {pkg}")
+    if foreign_files:
+        # ⚠️ 独立 cargo workspace 的改动不在根 workspace 的影响面里 ⇒ 本仓 Rust 阶段不覆盖。
+        # 「宁可明确说没验」⇒ 明写出来，不静默跳过。
+        print("  ! 不属于根 workspace 的改动（独立 cargo workspace，本仓 Rust 阶段不覆盖，请另跑对应 workspace 的门禁）:")
+        for path in foreign_files:
+            print(f"    - {path}")
     if args.dry_run:
         print("dry-run: no command executed.")
         return 0

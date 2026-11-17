@@ -50,12 +50,15 @@
 ## 3. 口径纪律
 
 - **测试数字**：单一真源 [docs/03-reference/test-baseline.md](docs/03-reference/test-baseline.md)——其余文档只引用不抄写。
-- **crate 口径**：`workspace = 31 members（30 crates + bench harness）`（2026-10-31 ADR-0019 新增
-  门面 crate `apeireth` 后由 30→31；2026-10-20 R4b 归档 `apeireth-perception` 与 SDK 四孤岛后
-  由 31→30；2026-10-18 许可搬运线第一批 +11：图像核心 vendored 家族 10 crate + 接口层 1 crate，
-  见 docs/04-internal/license-port/；历史口径：30 members（29 crates + bench harness，
-  2026-10-20 至 2026-10-31）/ 31 members（30 crates + bench harness，2026-10-18 至 2026-10-20）/
-  20 members（19 crates + bench harness，2026-10-18 前））。
+- **crate 口径**：`workspace = 35 members（34 crates + bench harness）`（**现行值 2026-11-17 实测**：
+  `cargo metadata --no-deps` 报 35 个 `workspace_members`；根 `Cargo.toml` 的 `members` 也是 35 条路径
+  （含门面 crate `crates/apeireth` 与 `benches` 这个 bench-only 成员）；`scripts/check_crate_budget.py`
+  同口径报 34 个产品 crate。⚠️ 本节按「历史不追溯改写」只**加**现行值，不改旧行；
+  历史口径：31 members（30 crates + bench harness，2026-10-31 ADR-0019 新增门面 crate `apeireth`
+  后由 30→31；2026-10-20 R4b 归档 `apeireth-perception` 与 SDK 四孤岛后由 31→30；2026-10-18 许可搬运线
+  第一批 +11：图像核心 vendored 家族 10 crate + 接口层 1 crate，见 docs/04-internal/license-port/）/
+  30 members（29 crates + bench harness，2026-10-20 至 2026-10-31）/ 31 members（30 crates + bench
+  harness，2026-10-18 至 2026-10-20）/ 20 members（19 crates + bench harness，2026-10-18 前））。
 - **版本**：以根 `Cargo.toml` `[workspace.package] version` 为准（现 `2.0.0-rc.5`）；发版前按
   [docs/04-internal/release-checklist.md](docs/04-internal/release-checklist.md) 清版本残留。
 - **历史不追溯改写**：带日期的历史记录保留原值，需要时加「历史口径（日期）」标注。
@@ -90,6 +93,10 @@ cargo clippy --workspace --all-targets --locked -- -D warnings      # 期望 0 �
 cargo fmt --check                                                    # 期望 0 diff
 ```
 
+- ⚠️ **上面三条是「收口 wave」的口径**（合并前 / 发版前 / 大批次收尾）⇒ ⇒ **不是日常默认**；
+  日常默认 = §5.1 快反馈（改动 crate + 反向依赖）⇒ ⇒ 理由见 §5.2 ②（一次全量 nextest
+  = 1129 个测试可执行文件 = **256.3 G** ⇒ ⇒ 在 924 GB 的盘上先把盘撑爆 ⇒ ⇒ 再写文件静默截断）。
+  ⇒ ⇒ **不许**因为「§5 写着必跑」就在每批都跑 `--workspace` ⇒ ⇒ 那是收口 wave 的事。
 - **Windows 侧 fmt 口径**：`cargo fmt --all -- --check` 在 Windows 上**不可用**（cargo-fmt 把每个目标文件当 argv 传给 rustfmt ⇒ 超 Windows 命令行长度上限 ⇒ 报 `文件名或扩展名太长。 (os error 206)` 并打印 rustfmt usage ⇒ 是**调用方式坏了**，不是格式坏了）⇒ Windows 改用 `pwsh -NoProfile -File scripts/fmt-check.ps1`（逐 crate `cargo fmt -p <crate> --check`，覆盖同一批文件）；CI（Linux）仍以 `cargo fmt --all -- --check` 为准。
 - 数字对外引用时对照 test-baseline.md 现行口径；不一致如实报「本批实测值 + 日期」，不代改真源。
 - 纯文档批同样跑校验；扫描类收尾（旧版本号 / 旧口径词）要求现值文档零命中、历史卷宗如实登记。
@@ -118,6 +125,17 @@ runuser -u bai -- env HOME=/home/bai LC_ALL=C.UTF-8 CARGO_INCREMENTAL=0 RUSTC_WR
 ```bash
 find <target>/debug/deps -maxdepth 1 -type f -executable ! -name '*.so' -delete
 ```
+
+* ⚠️ **上面那条 `find` 是 Linux 口径** ⇒ ⇒ **Windows 等价用仓内工具**（同样保留 `*.so` 与 incremental）：
+
+```powershell
+python scripts/clean_test_binaries.py --target <产物目录>
+```
+
+* ⭐ **产物目录不许写死** `<repo>\target` ⇒ ⇒ 真实目录用 `python scripts/target_dir.py` 解析
+  （① `$env:CARGO_TARGET_DIR` → ② `cargo metadata` → ③ 回退 `<repo>\target` 且**显式提示**）
+  ⇒ ⇒ 否则产物目录一改 ⇒ ⇒ 这些脚本**静默失效**（找不到文件却不报错 ⇒ ⇒ 门禁自称绿
+  ⇒ ⇒ 属「守卫失效」⇒ ⇒ **比红更坏**）。
 
 * 磁盘守卫已入库：`python3 scripts/disk_guard.py`（磁盘 + 内存）
   ⇒ ⇒ `harness.py` 的**每条门禁之前**都会看 ⇒ ⇒ 空间不足 ⇒ ⇒ 门禁记 UNVERIFIED
@@ -176,3 +194,31 @@ pwsh scripts/commit.ps1 -MessageFile <msg.txt>   # 显式 author + staged secret
   源码动过而 `verified_at` 未更新，交付 commit 前须复核并 bump。
 - 提交走 `commit.ps1`（不全局设 `core.hooksPath`，避免拦住同工作树并行线）；详细口径见
   [docs/02-guides/fast-feedback-gate.md](docs/02-guides/fast-feedback-gate.md)。
+
+### 5.4 ⭐ **构建产物槽位纪律**（2026-11-17 补 · 磁盘漂移根治）
+
+* ⭐ **判定式（不许）**：Rust 构建产物**只允许**落在**登记过**的槽位里
+  ⇒ ⇒ 槽位表 = `docs/architecture/target-slots.json`（base / ui / tool）
+  ⇒ ⇒ **新建目录前先登记**（路径 + owner + 用途）⇒ ⇒ 没登记的目录叫「游离」⇒ ⇒ 守卫判红。
+* **本机默认（L1 工具链默认值）**：`~/.cargo/config.toml` 的 `[build] target-dir`
+  ⇒ ⇒ 机器上任何 cargo 调用默认落在 base 槽位 ⇒ ⇒ **不需要人记得** ⇒ ⇒ 就不会漂移
+  ⇒ ⇒ CI（Linux 容器）不读该文件 ⇒ ⇒ **CI 行为不变**
+  ⇒ ⇒ 覆盖优先级：`CARGO_TARGET_DIR`（env）> 该文件 > workspace manifest。
+* **隔离并行线（L2 单入口）**：`pwsh scripts/cargo.ps1 -Slot <base|ui|tool> [-Line <slug>] <cargo 参数…>`
+  ⇒ ⇒ 做三件事：磁盘预检（**fail-closed** ⇒ 空间不足就不跑）· 槽位解析（`-Line` ⇒ 槽位下分子目录，
+  避开共享构建目录的文件锁争用）· 环境卫生（`RUSTC_WRAPPER=` 置空 + `CARGO_BUILD_JOBS=2`
+  + `CARGO_INCREMENTAL=0` + `CARGO_PROFILE_TEST_DEBUG=0` + `PYTHONUTF8=1` + `PYTHONIOENCODING=utf-8`）
+  ⇒ ⇒ 退出码透传。
+* **守卫（L3）**：`python scripts/target_slot.py --audit` ⇒ 游离目录 ⇒ ⇒ **非 0 退出**
+  ⇒ ⇒ 每日哨兵：`pwsh scripts/disk-watch.ps1`（磁盘/内存 + 槽位体积 + 游离清单；
+  `-RegisterTask` 注册每日计划任务）。
+* **磁盘底线**：`python scripts/disk_guard.py --ensure <MB>` ⇒ 可用量低于**绝对硬线**
+  （默认 10 GB，可用 `APEIRETH_DISK_HARD_FREE_MB` 调；设 `0` ⇒ 关闭）⇒ ⇒ 回收后仍不足
+  ⇒ ⇒ **中止**（**不许**在空间不足时干活：空间不足 ⇒ ⇒ 写文件静默截断 ⇒ ⇒ 产物损坏）
+  ⇒ ⇒ `harness.py` 的每条门禁前都跑它 ⇒ ⇒ 空间不足 ⇒ ⇒ 该门禁记 UNVERIFIED。
+* **回收**：`python scripts/clean_test_binaries.py --target <产物目录>`
+  （只删可再生的测试二进制 ⇒ ⇒ 保留 `*.so`（proc-macro）与 incremental）。
+* ⚠️ **他仓产物只报告不判红**（如私有桌面前端仓自己的 `target/`）⇒ ⇒ **不替别人的线做决定**；
+  他线**在途**（仍在写）的新目录 ⇒ ⇒ 登记成 `active` 条目 ⇒ ⇒ **只报告不判红**（他线迁入登记槽位后再移除）
+  ⇒ ⇒ **已停用**的历史遗留 ⇒ ⇒ 登记成「历史遗留 + 体量上限」⇒ ⇒ **只许缩不许涨**（棘轮）
+  ⇒ ⇒ ⚠️ **在途目录按上限判红 ⇒ ⇒ 守卫长期红 ⇒ ⇒ 长期红的守卫等于没有守卫** ⇒ ⇒ 两者必须分开记。

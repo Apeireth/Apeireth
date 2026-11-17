@@ -59,8 +59,21 @@ from utf8_stdout import force_utf8_stdout  # noqa: E402
 
 force_utf8_stdout()
 
+# ⭐ **不许硬编码 `<repo>/target`**（2026-11-17 批）：cargo 的实际产物目录可以
+#   被 `CARGO_TARGET_DIR` / cargo 配置改道 ⇒ ⇒ 硬编码会让本守卫**静默失效**
+#   （扫不到东西却不报错 ⇒ 自称绿）⇒ ⇒ 改成**解析真实生效的目录**
+#   （真实逻辑只在 `scripts/target_dir.py` 这一个共享文件里）。
+from target_dir import SOURCE_FALLBACK, resolve_target_dir_with_source  # noqa: E402
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
-TARGET_DIRS = [REPO_ROOT / "target" / "debug" / "deps", REPO_ROOT / "target" / "release" / "deps"]
+TARGET_DIR, TARGET_SOURCE = resolve_target_dir_with_source(REPO_ROOT)
+if TARGET_SOURCE == SOURCE_FALLBACK:
+    # 回退必须**明确提示**（不许静默 ⇒ 否则又是一个「假装绿」的守卫）
+    print(
+        f"[check-stale] ⚠️ 解析不到真实产物目录 ⇒ 回退到 {TARGET_DIR}（<repo>/target）",
+        file=sys.stderr,
+    )
+TARGET_DIRS = [TARGET_DIR / "debug" / "deps", TARGET_DIR / "release" / "deps"]
 
 # 只关心「**像工作树路径**」的绝对路径前缀（避免把系统路径当陈旧产物）。
 PATH_PREFIX_HINTS = (b"/tmp/apeireth", b"/home/bai/wt-apeireth", b"/home/bai/Projects/Apeireth")
@@ -145,6 +158,19 @@ def scan() -> list[tuple[Path, str]]:
     return stale
 
 
+def display_path(path: Path) -> str:
+    """产物路径的显示形式：**相对 repo 根**；不在 repo 内 ⇒ 给绝对路径。
+
+    ⚠️ 为什么需要它（2026-11-17 批）：产物目录可能**不在 repo 内**
+    （`CARGO_TARGET_DIR` ⇒ 例如 `C:\\Apeireth\\cargo-target`）
+    ⇒ ⇒ `Path.relative_to` 会抛 `ValueError` ⇒ ⇒ 守卫**崩掉**（而不是报陈旧）。
+    """
+    try:
+        return str(path.relative_to(REPO_ROOT))
+    except ValueError:
+        return str(path)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--clean", action="store_true", help="删掉陈旧二进制（让 cargo 重编）")
@@ -158,7 +184,7 @@ def main() -> int:
 
     print(f"发现 **{len(stale)}** 个陈旧二进制（编译于已不存在的路径 ⇒ 运行时会读到 NotFound）：")
     for binary, path in stale:
-        print(f"  · {binary.relative_to(REPO_ROOT)}")
+        print(f"  · {display_path(binary)}")
         print(f"      嵌的路径已不存在：{path}")
 
     if args.clean:

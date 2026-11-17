@@ -60,7 +60,16 @@ $gateBearer = if ($env:APEIRETH_GATEWAY_TOKEN -and $env:APEIRETH_GATEWAY_TOKEN.T
 } else {
   "Bearer $realKey"
 }
-$exe = Join-Path (Split-Path $PSScriptRoot -Parent) 'target\x86_64-pc-windows-msvc\release\apeireth.exe'
+# Resolve the REAL cargo target dir (no hardcoded <repo>\target).
+# Single source of truth: scripts/target_dir.py (stdout is exactly one path line).
+$targetRoot = $null
+try {
+  $targetRoot = (& python (Join-Path $PSScriptRoot 'target_dir.py') 2>$null | Select-Object -Last 1)
+} catch {
+  $targetRoot = $null
+}
+if (-not $targetRoot) { $targetRoot = Join-Path (Split-Path $PSScriptRoot -Parent) 'target' }
+$exe = Join-Path $targetRoot 'x86_64-pc-windows-msvc\release\apeireth.exe'
 if (-not (Test-Path $exe)) { $exe = 'C:\Program Files\Apeireth Companion\apeireth.exe' }
 $gw = Start-Process -FilePath $exe -ArgumentList 'gateway','serve','--port',"$Port" -PassThru -WindowStyle Hidden
 Start-Sleep 5
