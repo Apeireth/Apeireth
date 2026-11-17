@@ -28,8 +28,7 @@ use apeireth_gateway::{
     SkillRefusalDto, SkillShelfQuery, SkillShelfScanDto, SkillSourceDto, TaskBoardPanel,
     TaskBoardSnapshotDto, TaskCountsDto, TaskPanelDto, TaskPanelError, TaskTimelineDto,
     ToolCatalogQuery, ToolDto, TraceCommand, TraceDetailDto, TraceQuery, TraceSpanDto,
-    TraceSummaryDto, TraitLocksDto, TraitMoveDto, TraitPanelDto, TraitPanelQuery, TraitValuesDto,
-    TuningRecordDto, WorkbenchMemoryProvenanceDto, WorkbenchQuery, WorkbenchToolExecutionDto,
+    TraceSummaryDto, WorkbenchMemoryProvenanceDto, WorkbenchQuery, WorkbenchToolExecutionDto,
     WorkbenchTurnDto,
 };
 use apeireth_governance::{Permission, PermissionPolicy};
@@ -38,20 +37,23 @@ use apeireth_orchestration::task_queue::{
     TaskCaller, TaskEvent, TaskQueue, TaskQueueConfig, TaskQueueError, TaskRecord, TaskState,
     TaskStore,
 };
-use apeireth_orchestration::trait_report::{recent_moves, TRAIT_RECENT_MOVES};
 use apeireth_plugin::memory_backend::MemoryBackend;
 use apeireth_protocol::canonical::{ContentPart, MessageRole};
 use apeireth_runtime::canonical::{Runtime, Session, SessionStore};
-use apeireth_runtime_assembly::{CareHeartbeatStatus, TraitGrowthFacts, TraitGrowthPaths};
+use apeireth_runtime_assembly::CareHeartbeatStatus;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+
+// 面板合同面适配自本模块拆出 (架构尺寸棘轮压回): 公开路径经再导出保持不变。
+pub use crate::contract_panels::{bind_managed_workspace, CliWorkspacePanel, HOST_SCOPE_CEILING};
+pub use crate::trait_panel::CliTraitPanel;
 
 const MAX_TRACES: usize = 500;
 const MAX_AUDIT: usize = 1_000;
 const TITLE_CHARS: usize = 40;
 const GRAPH_EPISODES_PER_SESSION: usize = 200;
 
-fn errstr<E: std::fmt::Display>(e: E) -> String {
+pub(crate) fn errstr<E: std::fmt::Display>(e: E) -> String {
     e.to_string()
 }
 
@@ -461,7 +463,7 @@ fn append_jsonl<T: serde::Serialize>(path: &PathBuf, value: &T) {
     }
 }
 
-fn now_millis() -> i64 {
+pub(crate) fn now_millis() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis() as i64)
@@ -1123,6 +1125,12 @@ pub fn gateway_services(panel: Arc<CliPanelData>) -> GatewayServices {
         // `services.care` / `services.traits`), 与工具面同表同账。
         care: None,
         traits: None,
+        // 工作区合同面同口径: 适配器由组合根在装配点注入 (见 cli::lib 的
+        // `services.workspaces`), 真实持有受管根与工作区注册表。
+        workspaces: None,
+        // 联系人合同面同口径: 适配器由组合根在装配点注入 (见 cli::lib 的
+        // `services.contacts`), 真实持有联系人注册表与绑定档。
+        contacts: None,
     }
 }
 
@@ -1451,76 +1459,6 @@ impl CarePanelQuery for CliCarePanel {
             rules,
             discipline: care_discipline_dto(&body.discipline),
             last_care: status.last_care.as_ref().map(care_record_dto),
-        })
-    }
-}
-
-/// 性格面板面适配 (组合根): 成长计既有账 + 锁定档 → 四滑杆现值 / 锁定态 /
-/// 最近移动。
-///
-/// 与 `tool.trait_report` / 自述调参节**同账同源**: 同一本成长计账
-/// (`tuning-log.jsonl`) + 同一份锁定档 (`trait-locks.json`), 同一套判据
-/// (`trait_report::recent_moves`); 锁定档坏档 = 失败帧即报真因 (绝不读成
-/// 全解锁)。一次快照读: 账面一次扫描, 各节同出一刻。
-///
-/// **零写面**: 锁定/解锁走 CLI 显式动作 (`apeireth trait lock|unlock`),
-/// 调参走工具面/自动调参, 本适配只读。
-pub struct CliTraitPanel {
-    paths: TraitGrowthPaths,
-}
-
-impl CliTraitPanel {
-    /// 以成长计既有账路径为锚 (锁定档 = 同目录 `trait-locks.json`, 与
-    /// `tool.trait_report` 同一落位)。
-    pub fn new(paths: TraitGrowthPaths) -> Self {
-        Self { paths }
-    }
-}
-
-#[async_trait]
-impl TraitPanelQuery for CliTraitPanel {
-    async fn trait_frame(&self) -> Result<TraitPanelDto, String> {
-        // 一次快照读: 账面一次扫描 (成长计既有账 + 锁定档), 各节同出一刻。
-        let facts = TraitGrowthFacts::read(&self.paths)?;
-        let now_ms = apeireth_runtime_assembly::now_epoch_ms();
-        let moves = recent_moves(&facts.records, now_ms, TRAIT_RECENT_MOVES)
-            .into_iter()
-            .map(|movement| TraitMoveDto {
-                param: movement.param.id().to_string(),
-                label: movement.label,
-                at_epoch_ms: movement.at_epoch_ms,
-                delta: movement.delta,
-                reason: movement.reason,
-            })
-            .collect();
-        let records = facts
-            .records
-            .iter()
-            .map(|record| TuningRecordDto {
-                seq: record.seq,
-                param: record.param.id().to_string(),
-                previous: record.previous,
-                next: record.next,
-                reason: record.reason.clone(),
-                at_epoch_ms: record.at_epoch_ms,
-            })
-            .collect();
-        Ok(TraitPanelDto {
-            values: TraitValuesDto {
-                memory_fade: facts.values.memory_fade,
-                curiosity_strength: facts.values.curiosity_strength,
-                tone_saturation: facts.values.tone_saturation,
-                consolidation_cadence: facts.values.consolidation_cadence,
-            },
-            locked: TraitLocksDto {
-                memory_fade: facts.locks.memory_fade,
-                curiosity_strength: facts.locks.curiosity_strength,
-                tone_saturation: facts.locks.tone_saturation,
-                consolidation_cadence: facts.locks.consolidation_cadence,
-            },
-            recent_moves: moves,
-            records,
-            skipped_records: facts.skipped,
         })
     }
 }

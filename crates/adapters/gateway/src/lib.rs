@@ -22,6 +22,8 @@ pub mod device_decision;
 /// **主体 → 会话**归属登记（审计 P1 收口；episode 维度的被遗忘权前提）。
 pub mod principal_attribution;
 
+/// 能力清单面 (`GET /v1/apeireth/capabilities`): 网关/面板面能力 manifest。
+pub(crate) mod capabilities;
 pub(crate) mod panel_errors;
 /// Panel introspection surface (`/v1/panel/*`, tools, capabilities, audit, traces).
 pub mod panel_memory_update;
@@ -114,6 +116,18 @@ pub mod care_panel;
 /// 现值/锁定态/最近移动投影端口 (与 `tool.trait_report` 同账同源; 零写面)。
 pub mod trait_panel;
 
+/// 工作区合同面 (A2 批): `GET /v1/panel/workspaces` 面板读面 +
+/// `GET /v1/workspaces/:id` / `POST /v1/workspaces` / `POST /v1/workspaces/:id/select|close`
+/// 写面 (带 `expected_revision` 乐观并发)。端口只说身份 + 安全展示名:
+/// 读面**不含**绝对根路径。
+pub mod workspace_panel;
+
+/// 联系人合同面 (B3a 批): `GET /v1/agents/contacts` 资源读面 +
+/// `GET|PATCH /v1/agents/contacts/:id` / `POST /v1/agents/contacts/:id/archive`
+/// 写面 (带 `expected_revision` 乐观并发, 归档是终态不可复活)。身份由**后端
+/// 铸造**; 读面**不含**任何存储位置。
+pub mod contact_panel;
+
 /// W2-② remote access face: listen knob, non-loopback fail-closed bind gate,
 /// and the wired TLS surface (material loading fail-closed, real TLS listener).
 pub mod remote_access;
@@ -154,6 +168,15 @@ pub use client_tokens::{
 pub use care_panel::{
     CareDisciplineDto, CarePanelDto, CarePanelQuery, CarePanelStatusDto, CareRecordDto, CareRuleDto,
 };
+pub use contact_panel::{
+    ContactArchiveCommand, ContactBindingChange, ContactBindingCommand, ContactCapabilitiesCommand,
+    ContactCapabilitiesDto, ContactCapabilitiesRequest, ContactCreateCommand, ContactCreateRequest,
+    ContactDto, ContactEnvelope, ContactListDto, ContactListQuery, ContactMemoryScopeDto,
+    ContactPanel, ContactPanelError, ContactRevisionRequest, ContactStatusDto,
+    ContactUpdateCommand, ContactUpdateRequest, ContactWorkspaceBindingDto,
+    ContactWorkspaceBindingRequest, CONTACT_ACTION_ARCHIVE, CONTACT_ACTION_CREATE,
+    CONTACT_ACTION_DENY, CONTACT_ACTION_UPDATE, CONTACT_AUDIT_EVENT,
+};
 pub use domain_admin::{DomainAdminDto, DomainAdminService, DomainCreateBody};
 pub use skill_shelf::{
     SkillMetaDto, SkillRefusalDto, SkillShelfQuery, SkillShelfScanDto, SkillSourceDto,
@@ -167,6 +190,12 @@ pub use trait_panel::{
 };
 pub use user_admin::{
     UserAdminDto, UserAdminError, UserAdminService, UserCreateBody, UserRolePatchBody,
+};
+pub use workspace_panel::{
+    WorkspaceCreateCommand, WorkspaceCreateRequest, WorkspaceDto, WorkspaceEnvelope,
+    WorkspaceListDto, WorkspacePanel, WorkspacePanelError, WorkspaceRevisionRequest,
+    WORKSPACE_ACTION_CLOSE, WORKSPACE_ACTION_CREATE, WORKSPACE_ACTION_DENY,
+    WORKSPACE_ACTION_SELECT, WORKSPACE_AUDIT_EVENT,
 };
 
 pub use remote_access::{

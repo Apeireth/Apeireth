@@ -67,6 +67,9 @@ pub mod stored_doc;
 /// 用户域模型 (`UserDomain`/`DomainUserId`/`DomainRole`) + 域注册表 + 首次启动
 /// 「默认域原位采用」(零迁移) + 域级授权拒绝即帧 (404/403 语义钉死)。
 pub mod user_domain;
+// 联系人 / Agent 身份 (后端合同 B1 批): 身份铸造 + 人设校验 + 归档墓碑 + 落盘注册表。
+/// 联系人领域 (`Contact`/`ContactId`/`ContactAgentId`/`PersonaText`): 身份后端铸造、人设构造即校验 (字节上限 + 控制字符)、revision 乐观并发、归档墓碑不可复活。
+pub mod agent_contact;
 // 模型画像表 (H-P1 模型面轴): 模型能力事实 + 单价的依据数据面 (路由/成本分级)。
 /// 模型画像表 (`ModelProfile`/`ModelProfileTable`): 三层配置 (内置基线 /
 /// 数据目录拒开档 / env 覆盖) + 显式 unknown, 单价缺省 None 绝不编价。
@@ -100,34 +103,29 @@ use std::collections::HashMap;
 // 公开签名 0 破坏 — `pub use memory::*` 在文件顶部, 旧 `apeireth_core::Episode` 等仍可用.
 
 // ============================================
-// ============================================
 // 2. 双洋葱统一体 (PrincipleOnion + PermissionOnion + HumanAuthority)
 // ============================================
 // R131 拆 lib.rs: 类型定义已移到 `src/onion.rs`.
 // 公开签名 0 破坏 — `pub use onion::*` 在文件顶部, 旧 `apeireth_core::Onion` 仍可用.
 
-pub use onion::*;
 // ============================================
 // 3. 12 键 verdict (编译时 hardcode trait)
 // ============================================
 // R131 拆 lib.rs: 类型定义已移到 `src/philosophy.rs`.
 // 公开签名 0 破坏 — `pub use philosophy::*` 在文件顶部, 旧 `apeireth_core::Philosophy` 仍可用.
 
-pub use philosophy::*;
 // ============================================
 // 4. 5 重守门 (编译时 hardcode 是骨架, 运行时拦截是肉)
 // ============================================
 // R131 拆 lib.rs: 类型定义已移到 `src/gate.rs`.
 // 公开签名 0 破坏 — `pub use gate::*` 在文件顶部, 旧 `apeireth_core::Gate` 仍可用.
 
-pub use gate::*;
 // ============================================
 // 5. 9 阶段生命周期 + Cognitive-Dream 6 状态机
 // ============================================
 // R131 拆 lib.rs: 类型定义已移到 `src/lifecycle.rs`.
 // 公开签名 0 破坏 — `pub use lifecycle::*` 在文件顶部, 旧 `apeireth_core::Lifecycle` 仍可用.
 
-pub use lifecycle::*;
 // 6. Self-Disable 防护（百年章节 — 5 大机制编译时 hardcode）
 // ============================================
 //

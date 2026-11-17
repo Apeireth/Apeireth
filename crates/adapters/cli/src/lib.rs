@@ -9,6 +9,8 @@ pub mod backup;
 pub mod env_switches;
 // 审批面分派 (W3.7 拆分: 装配根文件尺寸棘轮已到顶; 公开路径经下方 re-export 不变).
 pub mod canonical_approval;
+pub mod contact_panel;
+pub(crate) mod contract_panels;
 /// **主体 → 会话**归属写面实现（持有记忆库；审计 P1 收口）。
 pub mod principal_recorder;
 // 心跳关怀常驻宿主接线面: FnInitiativeGate 注入 CareEngine + dispatch 接 Runtime::execute + 自述心跳两列.
@@ -50,6 +52,7 @@ pub mod panel_governance_port;
 pub mod portable_bundle;
 // 裁定 ④⑤ 性格锁定 + 性格周报 (成长计既有账只读周报 + 四杆锁定/解锁显式动作面)。
 pub mod trait_command;
+pub(crate) mod trait_panel;
 // W3-② 用户身份与角色: `apeireth user add|list|role|remove` 管理面 (owner 角色门)。
 pub mod user_admin;
 
@@ -3241,14 +3244,7 @@ pub async fn dispatch_gateway_serve_with(
         default_panel_data_dir(),
         care_heartbeat.status_probe(),
     )));
-    // 性格面板只读面 (GET /v1/panel/traits): 四滑杆现值/锁定态/最近移动 ——
-    // 与 `tool.trait_report` **同账同源** (同一成长计既有账 tuning-log.jsonl +
-    // 同一锁定档 trait-locks.json)。只读零写面 (锁定/解锁走 CLI 显式动作)。
-    services.traits = Some(Arc::new(crate::gateway_panels::CliTraitPanel::new(
-        apeireth_runtime_assembly::TraitGrowthPaths::new(
-            apeireth_runtime_assembly::tuning_log_path(),
-        ),
-    )));
+    crate::trait_panel::wire_trait_panel(&mut services);
     // 任务面板面 (`GET /v1/panel/tasks` 只读 + `POST .../human-judge-retry` 人判
     // 重试): 与 `tool.task_board` 工具面**同队同账** (同一 `sessions.sqlite3`
     // 任务表), 附从句柄不重复崩溃恢复 (恢复点只归工具面主句柄的 `open`)。
@@ -3261,6 +3257,8 @@ pub async fn dispatch_gateway_serve_with(
     } else {
         None
     };
+    crate::contract_panels::wire_workspace_panel(&mut services)?;
+    crate::contact_panel::wire_contacts(&mut services, default_panel_data_dir())?;
     // W2-②: 客户端令牌表 (令牌族第二面) 显式注入; 远程绑定闸与 TLS 接口桩的
     // 清场事实随装配进审计面 (逃生阀可裸奔, 但必须留痕)。
     let mut state =
