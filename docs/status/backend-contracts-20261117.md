@@ -99,12 +99,13 @@ cargo test -p apeireth-runtime --test contact_persona_authority --locked -j 2 # 
 
 ## 六、本轮（三条工作线）过程中被门禁抓到的真实缺陷（不是演练）
 
-三条都登记在 `docs/04-internal/ui-engine-defect-ledger.md`（台账编号只增不改）；**只有 E-199 落在本分支**，另两条分别落在磁盘纪律线（PR #131）与 harness 裁决线（PR #133）：
+三条都登记在 `docs/04-internal/ui-engine-defect-ledger.md`（台账编号只增不改）；**E-199 与 E-200 落在本分支**，另两条分别落在磁盘纪律线（PR #131）与 harness 裁决线（PR #133）：
 
 | 编号 | 现象 | 根因 | 修在哪 |
 |---|---|---|---|
 | E-197 | fast gate 把契约类 `.toml` 当 Rust 改动，并把三方依赖名塞进 `cargo -p` ⇒ 撞多版本依赖报 `error: specification 'bit-set' is ambiguous` | `scripts/verify_changed.py` 的文件分类只按后缀，不按「是不是清单」 | 磁盘纪律线 PR #131（提交 `6aaff28ec`：`classify_files()` 分类 + 影响面限制在 35 个 workspace 成员内）＋新增回归守卫 `scripts/check_fast_gate_classifier.py`（11 条断言） |
 | E-198 | 合并裁决把「适用却没跑」判成 BLOCKED，但**阶段选择只看有没有 Rust 改动** ⇒ docs/contract/ci-only PR 必假红 | `scripts/harness.py` 的阶段集合只由影响级别决定，与门禁 scope 适用性是两套口径 | harness 裁决线 PR #133（提交 `9e438190f`：阶段集合＝影响级别阶段 ∪ 适用且 required 的门禁所在阶段）＋回归测试 `scripts/test_harness_gate_status.py` 新增 5 例 |
 | E-199 | fast gate 的 `self_status_e2e` 偶发假红（`protect: Conflict { id: "e1", expected: 0, actual: 1 }`） | 测试临时路径用 `std::process::id()` 拼名 ⇒ Windows 回收进程号 ⇒ 上一轮残留被当成本轮事实 | **本分支**（提交 `2dd369247`：本进程首次用到该路径时清一次残留；**不放宽断言**）。⚠️ 同类写法全仓 236 处，属长尾 |
+| E-200 | CI 判 `docs/status/wiring.yaml drift` ⇒ 门禁假红（本机 `--verify` 却绿） | `docs_truth.py` 的**两条解析路径**（有/无 PyYAML）给出不同值：最小解析器把引号标量内部的 ` #`（正文里的 `PR #125` 链接）当注释截断 ⇒ 本机生成的字节 ≠ CI 生成的字节 ⇒ 60 条声明里 53 条标量值两边不同 | **本分支**：`docs_truth.py` 注释剥离改引号感知（`_strip_comment`）＋ `wiring_report.py` 的 `--gen`/`--verify` 前置 `claims_parse_agreement()`（有 PyYAML ⇒ 逐字段对账；无 ⇒ 对账「引号内原文」）⇒ 「两条路径不一致」成为门禁可判定的事实 |
 
-**教训**：三条都不是「演练出来的红」，是本批真的撞上的门禁红；修法一律落在**机制**（分类口径 / 阶段口径 / 隔离口径），不是落在「把断言放宽」。
+**教训**：四条都不是「演练出来的红」，是本批真的撞上的门禁红；修法一律落在**机制**（分类口径 / 阶段口径 / 隔离口径 / 解析口径），不是落在「把断言放宽」。**共同形态**：**「同一份真源 + 同一段代码」不等于「同一份事实」** —— 判定口径只要有两条路径，就必须让它们逐字段对账。

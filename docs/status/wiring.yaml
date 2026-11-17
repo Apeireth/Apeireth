@@ -1614,7 +1614,7 @@ items:
         - "crates/engine/runtime-assembly/examples/memory_answer_eval/protocol.rs"
       claims_id: "mem.answer_eval_contract"
     gaps:
-      - "未达 PRODUCTION WIRED：\"2026-11-12 IMPLEMENTED，仅显式手动 example，不是默认产品请求入口。复用真实 Runtime/SQLite/Recall/ModuleInvoker，服务端完整协议标识区分主答、纠错提案与未知请求，所有已尝试调用共享不可退还预算；输入与 oracle 分离，失败、缺失与…"
+      - "未达 PRODUCTION WIRED：2026-11-12 IMPLEMENTED，仅显式手动 example，不是默认产品请求入口。复用真实 Runtime/SQLite/Recall/ModuleInvoker，服务端完整协议标识区分主答、纠错提案与未知请求，所有已尝试调用共享不可退还预算；输入与 oracle 分离，失败、缺失与保…"
   - id: "mem.longterm_eval_contract"
     capability: "长历史多会话回答质量评测与规模压力契约（本仓回归集；真实模型一轮 4/6 通过）"
     implemented:

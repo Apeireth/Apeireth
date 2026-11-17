@@ -74,11 +74,48 @@ def _scalar(text: str):
     return text
 
 
+def _strip_comment(raw: str) -> str:
+    """剥掉行尾注释。
+
+    ⚠️ 注释起点只在**引号字符串之外**才算（YAML 语义）：
+    双引号标量内部的 ` #`（例如正文里的 `PR #125` 链接）是内容的一部分。
+    早期实现用 `raw.split(" #", 1)[0]` 无条件截断 ⇒ 把引号内的 ` #` 当注释
+    ⇒ 最小解析器（有 PyYAML 时不走）与真 YAML（PyYAML）解析结果不一致
+    ⇒ 生成物（docs/status/wiring.yaml）在「本机无 PyYAML」与「CI 有 PyYAML」
+    两边生成出**不同字节** ⇒ CI 判 drift ⇒ 门禁假红（2026-11-17 E-200）。
+    """
+    if raw.lstrip().startswith("#"):
+        return ""
+    quote = ""
+    i = 0
+    n = len(raw)
+    while i < n:
+        ch = raw[i]
+        if quote:
+            if quote == '"' and ch == "\\":
+                i += 2
+                continue
+            if quote == "'" and ch == "'":
+                # YAML 单引号内以两个单引号表示一个单引号
+                if i + 1 < n and raw[i + 1] == "'":
+                    i += 2
+                    continue
+                quote = ""
+            elif ch == quote:
+                quote = ""
+        elif ch in ("'", '"'):
+            quote = ch
+        elif ch == "#" and i > 0 and raw[i - 1] in (" ", "\t"):
+            return raw[:i].rstrip()
+        i += 1
+    return raw.rstrip()
+
+
 def _load_minimal_yaml(text: str) -> dict:
     """解析本仓库 claims.yaml 用到的 YAML 子集（顶层标量 + claims 列表）。"""
     lines = []
     for raw in text.splitlines():
-        stripped = raw.split(" #", 1)[0].rstrip() if not raw.lstrip().startswith("#") else ""
+        stripped = _strip_comment(raw)
         if stripped.strip():
             lines.append(stripped)
 

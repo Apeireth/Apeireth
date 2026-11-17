@@ -533,7 +533,95 @@ def _render_items(out: list[str], items: list[str], indent: str) -> None:
         out.append(f"{indent}- {yaml_str(item)}")
 
 
+def _raw_claim_scalars(text: str) -> dict[str, dict[str, str]]:
+    """取每条 claim 的原始行值（未经解析），用于「引号标量内容」自检。"""
+    out: dict[str, dict[str, str]] = {}
+    current: str | None = None
+    for raw in text.splitlines():
+        stripped = raw.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if stripped.startswith("- id:"):
+            current = stripped.split(":", 1)[1].strip().strip('"').strip("'")
+            out.setdefault(current, {})
+            continue
+        if current is None or ":" not in stripped:
+            continue
+        key, _, value = stripped.partition(":")
+        key = key.strip()
+        if key in ("id", "sources", "tests"):
+            continue
+        out[current].setdefault(key, value.strip())
+    return out
+
+
+def claims_parse_agreement() -> list[str]:
+    """claims.yaml 的两条解析路径必须给出同一份事实（缺陷 E-200，2026-11-17）。
+
+    `scripts/docs_truth.py::load_claims` 在**有 PyYAML** 时走 `yaml.safe_load`，
+    在**没有 PyYAML** 时走自带�� `_load_minimal_yaml`。两条路径给出不同值时
+    ⇒ 生成物 `docs/status/wiring.yaml` 在「本机」与「CI」生成出**不同字节**
+    ⇒ CI 判 drift ⇒ 门禁假红，而本机 `--verify` 却是绿的（本地绿 ≠ CI 绿）。
+
+    ⇒ 本函数把「两条路径一致」变成门禁可判定的事实：
+    * 有 PyYAML ⇒ 逐条逐字段对账（最小解析 vs 真 YAML）；
+    * 无 PyYAML ⇒ 退化为「引号标量的值 == 原始行首尾引号之间的内容」（YAML 规范期望）。
+    """
+    import docs_truth  # noqa: PLC0415 - 复用同一份解析入口（single parse 口径）
+
+    text = CLAIMS.read_bytes().replace(b"\r\n", b"\n").decode("utf-8")
+    minimal = docs_truth._load_minimal_yaml(text)
+    min_claims = list(minimal.get("claims") or [])
+    problems: list[str] = []
+
+    try:
+        import yaml  # type: ignore
+    except ImportError:
+        yaml = None
+
+    if yaml is None:
+        raw_values = _raw_claim_scalars(text)
+        for claim in min_claims:
+            cid = str(claim.get("id", ""))
+            for field, raw_value in raw_values.get(cid, {}).items():
+                if len(raw_value) >= 2 and raw_value[0] == '"' and raw_value[-1] == '"':
+                    expected = raw_value[1:-1]
+                    actual = str(claim.get(field, ""))
+                    if actual != expected:
+                        problems.append(
+                            f"{cid}.{field}: 最小解析器结果与引号内原文不一致"
+                            f"（期望 {expected[:60]!r}，实际 {actual[:60]!r}）"
+                        )
+        return problems
+
+    try:
+        full = yaml.safe_load(text) or {}
+    except Exception as err:  # noqa: BLE001 - 真 YAML 解析失败本身就是问题
+        return [f"claims.yaml 真 YAML（PyYAML）解析失败：{err}"]
+    full_claims = list(full.get("claims") or [])
+    if len(min_claims) != len(full_claims):
+        return [f"claims 数量不一致：最小解析 {len(min_claims)} vs 真 YAML {len(full_claims)}"]
+    fields = ("title", "level", "default", "switch_env", "notes", "verify_cmd", "sources", "tests")
+    for min_claim, full_claim in zip(min_claims, full_claims):
+        cid = str(min_claim.get("id", ""))
+        for field in fields:
+            mv = min_claim.get(field)
+            fv = full_claim.get(field)
+            if isinstance(mv, list) or isinstance(fv, list):
+                if [str(x) for x in (mv or [])] != [str(x) for x in (fv or [])]:
+                    problems.append(f"{cid}.{field}: 列表值不一致（{mv!r} vs {fv!r}）")
+            elif str("" if mv is None else mv) != str("" if fv is None else fv):
+                problems.append(f"{cid}.{field}: 标量值不一致（{mv!r} vs {fv!r}）")
+    return problems
+
+
 def cmd_gen() -> int:
+    problems = claims_parse_agreement()
+    if problems:
+        print("FAIL: claims.yaml 两条解析路径不一致（E-200）⇒ 拒绝生成会漂移的产物", file=sys.stderr)
+        for item in problems[:40]:
+            print(f"  - {item}", file=sys.stderr)
+        return 1
     text = render_wiring()
     WIRING.parent.mkdir(parents=True, exist_ok=True)
     # 生成物固定 LF：Windows 本地默认 CRLF、Linux CI 默认 LF 会让同一内容
@@ -545,6 +633,12 @@ def cmd_gen() -> int:
 
 
 def cmd_verify() -> int:
+    problems = claims_parse_agreement()
+    if problems:
+        print("FAIL: claims.yaml 两条解析路径不一致（E-200）⇒ 本机与 CI 的生成物会不同", file=sys.stderr)
+        for item in problems[:40]:
+            print(f"  - {item}", file=sys.stderr)
+        return 1
     if not WIRING.exists():
         print(f"FAIL: {WIRING.relative_to(ROOT)} missing; run --gen", file=sys.stderr)
         return 1
