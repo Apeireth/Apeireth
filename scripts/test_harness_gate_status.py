@@ -19,7 +19,12 @@
 4. **环境跳过**（`skip_kind = "env"`）**不阻断**裁决（环境本来就没有那些前置条件）
    ⇒ ⇒ 但**必须出现在理由里**（否则「没跑」在报告里就消失了 ⇒ 又变成「只看 ✅」）；
 5. **真·scope 跳过**（本次 diff 不触发该门禁）⇒ ⇒ 不阻断；
-6. **适用却没跑**的 required 门禁（既不是 env 跳过、也没有 scope 不相交）⇒ ⇒ **必须 BLOCKED**。
+6. **适用却没跑**的 required 门禁（既不是 env 跳过、也没有 scope 不相交）⇒ ⇒ **必须 BLOCKED**；
+7. **阶段选择与门禁适用性必须同一套口径**（2026-11-17 · E-198）：`impact_plan`
+   只按「有没有 Rust 改动」选阶段（纯文档 diff ⇒ L0 ⇒ 只跑 fast），而裁决口径按
+   「diff 命中了哪些 scope 标签」⇒ `claims-verify` 这类 **required deep** 门禁
+   「适用却没跑」⇒ **假红 BLOCKED**（PR #131 实测）
+   ⇒ ⇒ 阶段集合必须 ∪ {required ∧ scope 命中的门禁所在阶段}。
 
 # 用法
 
@@ -421,6 +426,165 @@ class VerifyAggregationTests(unittest.TestCase):
         self.assertTrue(delegated)
         self.assertTrue(all(rows[g["id"]]["status"] == HARNESS.S_DELEGATED for g in delegated))
         self.assertEqual(HARNESS.VERDICT_PASS, document["verdict"])
+
+
+class StageCompletionTests(unittest.TestCase):
+    """E-198：**阶段选择**与**门禁适用性**必须同一套口径。
+
+    缺陷（2026-11-17）：`impact_plan` 只按「有没有 Rust 改动」选阶段
+    ⇒ 纯文档 diff（L0）**只跑 fast**；而裁决口径 `evaluate_verdict` 按
+    「diff 命中了哪些 scope 标签」⇒ `claims-verify` 这类 **required deep**
+    门禁「**适用却没跑**」⇒ 假红 BLOCKED（PR #131 实测）。
+
+    ⇒ 修法：阶段集合 ∪ {required ∧ scope 命中的门禁**所在阶段**}
+    ⇒ ⇒ **不是**放松裁决，而是把**该跑的阶段真跑起来**。
+
+    本组测试只替换「门禁程序」（假门禁）与 git 上下文，其余走真实
+    `cmd_verify` / `cmd_check` / `run_gate` / `evaluate_verdict`。
+    """
+
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.dir = Path(temporary.name)
+        self.fake_gate = self.dir / "fake_gate.py"
+        self.fake_gate.write_text(
+            "import sys\n"
+            "gate = sys.argv[1]\n"
+            "if gate.startswith('fail'):\n"
+            "    sys.exit(3)\n"
+            "print('evidence:' + gate)\n",
+            encoding="utf-8",
+        )
+        self.context = {
+            "commit_sha": "a" * 40, "tree_sha": "b" * 40, "base_sha": "c" * 40,
+            "git_ok": True, "files": ["docs/fake.md"], "diff_source": "test fixture",
+            "tags": ["docs"],
+        }
+        self.plan = {"available": True, "stages": ["fast"], "level": "L0"}
+        self.gates: list[dict] = []
+        self.stages: list[str] = []
+        real_check = HARNESS.cmd_check
+
+        def check(args):
+            self.stages.append(args.stage)
+            return real_check(args)
+
+        for name, value in {
+            "LAST_RUN_PATH": self.dir / "last-run.json",
+            "ARTIFACT_ROOT": self.dir / "artifacts",
+        }.items():
+            patcher = mock.patch.object(HARNESS, name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        for name, callback in {
+            "collect_context": lambda _: copy.deepcopy(self.context),
+            "tree_is_dirty": lambda: False,
+            "impact_plan": lambda _: copy.deepcopy(self.plan),
+            "load_registry": lambda: (copy.deepcopy(self.gates), ["isolated contract commands"], []),
+            "cmd_check": check,
+        }.items():
+            patcher = mock.patch.object(HARNESS, name, side_effect=callback)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        patcher = mock.patch.object(HARNESS.subprocess, "run", side_effect=_python_only_runner(self.dir))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def _gate(self, gate_id: str, stage: str, scope: list[str], required: bool = True) -> dict:
+        gate = HARNESS.normalize_gate({
+            "id": gate_id,
+            "cmd": [sys.executable, str(self.fake_gate), gate_id],
+            "stage": stage,
+            "scope": scope,
+            "required": required,
+        })
+        self.assertIsNotNone(gate, "门禁必须能归一化")
+        return gate
+
+    def _run(self):
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer), contextlib.redirect_stderr(io.StringIO()):
+            code = HARNESS.cmd_verify(argparse.Namespace(base="frozen-base"))
+        return code, buffer.getvalue(), json.loads(HARNESS.LAST_RUN_PATH.read_text("utf-8"))
+
+    def test_docs_only_diff_runs_the_stage_of_every_applicable_required_gate(self):
+        """① docs-only diff ⇒ `claims-verify`（required ∧ deep）适用 ⇒ **deep 必须跑**。"""
+        self.gates = [
+            self._gate("doc-fast", "fast", ["docs"]),
+            self._gate("claims-verify", "deep", ["docs", "claims"]),
+        ]
+        self.context["tags"] = ["docs"]
+        self.plan = {"available": True, "stages": ["fast"], "level": "L0"}
+        code, output, document = self._run()
+        self.assertEqual(["fast", "deep"], self.stages, "适用却没跑 ⇒ 阶段必须补齐")
+        self.assertIn("该跑阶段：fast, deep", output)
+        self.assertIn("阶段补齐：claims-verify(scope 命中 docs) 位于 deep", output)
+        rows = {row["id"]: row for row in document["gates"]}
+        self.assertEqual(HARNESS.S_PASS, rows["claims-verify"]["status"], "补齐后该门禁必须真跑")
+        self.assertEqual(HARNESS.VERDICT_PASS, document["verdict"])
+        self.assertEqual(0, code)
+
+    def test_a_diff_that_hits_no_required_gate_scope_keeps_the_planned_stages(self):
+        """② 纯脚本 diff（不命中任何 required 门禁的 scope）⇒ **不得**无条件跑 deep。"""
+        self.gates = [
+            self._gate("doc-fast", "fast", ["docs"]),
+            self._gate("rust-deep", "deep", ["rust"]),
+        ]
+        self.context["tags"] = ["ci"]
+        self.plan = {"available": True, "stages": ["fast"], "level": "L0"}
+        code, output, document = self._run()
+        self.assertEqual(["fast"], self.stages, "不命中任何 required 门禁 ⇒ 不该补 deep")
+        self.assertNotIn("阶段补齐", output)
+        rows = {row["id"]: row for row in document["gates"]}
+        self.assertEqual(HARNESS.S_SKIPPED, rows["rust-deep"]["status"])
+        self.assertFalse(rows["rust-deep"]["scope_applies"])
+        self.assertEqual(HARNESS.VERDICT_PASS, document["verdict"])
+
+    def test_optional_gates_never_pull_a_stage_in(self):
+        """③ `required=false` 的门禁**不得**把阶段拉进来。"""
+        self.gates = [
+            self._gate("doc-fast", "fast", ["docs"]),
+            self._gate("optional-deep", "deep", ["docs"], required=False),
+        ]
+        self.context["tags"] = ["docs"]
+        self.plan = {"available": True, "stages": ["fast"], "level": "L0"}
+        code, output, document = self._run()
+        self.assertEqual(["fast"], self.stages, "非 required 门禁不得把 deep 拉进来")
+        self.assertNotIn("阶段补齐", output)
+        rows = {row["id"]: row for row in document["gates"]}
+        self.assertEqual(HARNESS.S_SKIPPED, rows["optional-deep"]["status"])
+        self.assertTrue(rows["optional-deep"]["scope_applies"])
+        self.assertEqual(
+            HARNESS.VERDICT_PASS, document["verdict"],
+            "适用却没跑但**非 required** ⇒ 不阻断（既有语义不变）",
+        )
+
+    def test_an_unavailable_impact_plan_still_runs_both_stages(self):
+        """④ 影响分析不可用 ⇒ 保守：两个阶段都跑（补齐逻辑不得把范围**变窄**）。"""
+        self.gates = [self._gate("doc-fast", "fast", ["docs"])]
+        self.context["tags"] = ["docs"]
+        self.plan = {"available": False, "stages": ["fast", "deep"], "level": "?"}
+        code, output, document = self._run()
+        self.assertEqual(["fast", "deep"], self.stages)
+        self.assertIn("影响分析不可用", output)
+
+    def test_a_fast_failure_still_stops_before_the_deep_stage(self):
+        """⑤ fast 有 FAIL ⇒ 不跑 deep（补齐逻辑**不得**改这条既有语义）。"""
+        self.gates = [
+            self._gate("fail-fast", "fast", ["docs"]),
+            self._gate("claims-verify", "deep", ["docs", "claims"]),
+        ]
+        self.context["tags"] = ["docs"]
+        self.plan = {"available": True, "stages": ["fast"], "level": "L0"}
+        code, output, document = self._run()
+        self.assertEqual(["fast"], self.stages, "fast 失败 ⇒ 不跑 deep")
+        self.assertIn("不跑 deep", output)
+        rows = {row["id"]: row for row in document["gates"]}
+        self.assertEqual(HARNESS.S_FAIL, rows["fail-fast"]["status"])
+        self.assertEqual(HARNESS.S_SKIPPED, rows["claims-verify"]["status"])
+        self.assertEqual(HARNESS.VERDICT_FAIL, document["verdict"])
+        self.assertEqual(1, code)
 
 
 if __name__ == "__main__":
