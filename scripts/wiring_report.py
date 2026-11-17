@@ -555,6 +555,29 @@ def _raw_claim_scalars(text: str) -> dict[str, dict[str, str]]:
     return out
 
 
+def _render_without_pyyaml() -> bytes | None:
+    """在「机器上没有 PyYAML」的环境里重算一遍生成物，返回其字节。
+
+    `sys.modules['yaml'] = None` 让 `import yaml` 抛 ImportError ⇒ 走最小解析器。
+    放在子进程里做，是因为模块一旦在本进程导入过就撤不回来。
+    """
+    code = (
+        "import sys\n"
+        "sys.modules['yaml'] = None\n"
+        "sys.path.insert(0, 'scripts')\n"
+        "import wiring_report\n"
+        "sys.stdout.buffer.write(wiring_report.render_wiring().encode('utf-8'))\n"
+    )
+    proc = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=str(ROOT),
+        capture_output=True,
+    )
+    if proc.returncode != 0:
+        return None
+    return proc.stdout
+
+
 def claims_parse_agreement() -> list[str]:
     """claims.yaml 的两条解析路径必须给出同一份事实（缺陷 E-200，2026-11-17）。
 
@@ -585,7 +608,9 @@ def claims_parse_agreement() -> list[str]:
             cid = str(claim.get("id", ""))
             for field, raw_value in raw_values.get(cid, {}).items():
                 if len(raw_value) >= 2 and raw_value[0] == '"' and raw_value[-1] == '"':
-                    expected = raw_value[1:-1]
+                    # 原文里带的是 YAML 转义形态（\"1\"）⇒ 期望值要先按 YAML 规则还原，
+                    # 否则这条自检会把「解析器已正确还原转义」误判成不一致（假红）。
+                    expected = docs_truth._unescape_yaml_double(raw_value[1:-1])
                     actual = str(claim.get(field, ""))
                     if actual != expected:
                         problems.append(
@@ -612,6 +637,20 @@ def claims_parse_agreement() -> list[str]:
                     problems.append(f"{cid}.{field}: 列表值不一致（{mv!r} vs {fv!r}）")
             elif str("" if mv is None else mv) != str("" if fv is None else fv):
                 problems.append(f"{cid}.{field}: 标量值不一致（{mv!r} vs {fv!r}）")
+
+    # 字节级跨环境对账：同一份 claims.yaml，在「有 PyYAML」与「没有 PyYAML」
+    # 两台机器上必须生成出**同样的字节**。CI 永远有 PyYAML ⇒ 只有这条检查
+    # 才能保证「本机（可能没有 PyYAML）生成的产物」与「CI 生成的产物」一致。
+    without_pyyaml = _render_without_pyyaml()
+    if without_pyyaml is None:
+        problems.append("无法在「无 PyYAML」子进程中重算生成物 ⇒ 跨环境一致性未被证明")
+    else:
+        here = render_wiring().encode("utf-8")
+        if here != without_pyyaml:
+            problems.append(
+                "生成物在「有 PyYAML」与「无 PyYAML」两环境下字节不同"
+                f"（本机 {len(here)} bytes vs 无 PyYAML {len(without_pyyaml)} bytes）"
+            )
     return problems
 
 

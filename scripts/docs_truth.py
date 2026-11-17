@@ -56,12 +56,77 @@ LIST_KEYS = ("sources", "tests")
 
 # ---------------------------------------------------------------- loading
 
+# YAML 双引号标量的转义表（YAML 1.2 §5.8 双引号风格）。
+# ⚠️ 缺这张表 ⇒ 最小解析器会把 `\"1\"` 原样留下，而 PyYAML 解析成 `"1"`
+# ⇒ 两条解析路径给出不同值 ⇒ 生成物在「无 PyYAML 的机器」与「有 PyYAML 的 CI」
+#   两边字节不同 ⇒ CI 判 drift（2026-11-17 E-200 的第二个根因）。
+_YAML_DOUBLE_ESCAPES = {
+    "0": "\0",
+    "a": "\a",
+    "b": "\b",
+    "t": "\t",
+    "\t": "\t",
+    "n": "\n",
+    "v": "\v",
+    "f": "\f",
+    "r": "\r",
+    "e": "\x1b",
+    " ": " ",
+    '"': '"',
+    "/": "/",
+    "\\": "\\",
+    "N": "\u0085",
+    "_": "\u00a0",
+    "L": "\u2028",
+    "P": "\u2029",
+}
+
+
+def _unescape_yaml_double(body: str) -> str:
+    """把 YAML 双引号标量体内的转义序列还原（`\\"` → `"`、`\\\\` → `\\`、\\uXXXX 等）。"""
+    out: list[str] = []
+    i = 0
+    n = len(body)
+    while i < n:
+        ch = body[i]
+        if ch != "\\" or i + 1 >= n:
+            out.append(ch)
+            i += 1
+            continue
+        esc = body[i + 1]
+        if esc in ("x", "u", "U"):
+            width = {"x": 2, "u": 4, "U": 8}[esc]
+            digits = body[i + 2 : i + 2 + width]
+            if len(digits) == width:
+                try:
+                    out.append(chr(int(digits, 16)))
+                    i += 2 + width
+                    continue
+                except ValueError:
+                    pass
+            out.append(ch)
+            i += 1
+            continue
+        if esc in _YAML_DOUBLE_ESCAPES:
+            out.append(_YAML_DOUBLE_ESCAPES[esc])
+            i += 2
+            continue
+        # 未知转义：按 YAML 规范是错误；这里保留原字符，交由对账门禁报出来。
+        out.append(ch)
+        i += 1
+    return "".join(out)
+
+
 def _scalar(text: str):
     text = text.strip()
     if not text:
         return None
     if len(text) >= 2 and text[0] == text[-1] and text[0] in ("'", '"'):
-        return text[1:-1]
+        body = text[1:-1]
+        if text[0] == '"':
+            return _unescape_yaml_double(body)
+        # YAML 单引号风格：两个单引号表示一个单引号
+        return body.replace("''", "'")
     low = text.lower()
     if low in ("null", "~"):
         return None
