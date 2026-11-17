@@ -828,7 +828,8 @@ impl Runtime {
         let clock = self.clock.as_ref();
         let mut session = self.sessions.load_or_create(request.session).await?;
         self.dispatcher.bind_session_principal(&mut session)?;
-        self.expire_active_approval_if_needed(&mut session).await?;
+        // 先闸后写: 绑定不再成立 ⇒ 直接 Err ⇒ 本回合零写入 (消息未追加、revision 未推进)。
+        super::turn_admission::admit_turn(self, &mut session).await?;
         if session
             .events
             .iter()
@@ -2725,7 +2726,7 @@ impl Runtime {
     /// every call in the assistant message before that transcript can be sent
     /// to another provider. The module's retry feedback remains a separate
     /// transient user scaffold; it is never encoded as a tool result.
-    fn append_skipped_tool_results(
+    pub(super) fn append_skipped_tool_results(
         session: &mut Session,
         tool_calls: &[ToolCall],
         first_skipped: usize,
@@ -2958,57 +2959,6 @@ impl Runtime {
         );
         self.sessions.save(session).await?;
         Err(error)
-    }
-
-    /// Expire a pending approval that has outlived its TTL so a later turn can start.
-    ///
-    /// Claimed approvals are not expired here: their effect may already have
-    /// started, and automatic retry is unsafe.
-    async fn expire_active_approval_if_needed(&self, session: &mut Session) -> RuntimeResult<()> {
-        let Some(approval_id) = session.active_approval_id else {
-            return Ok(());
-        };
-        let Some(approval) = session.approvals.get(&approval_id).cloned() else {
-            session.active_approval_id = None;
-            self.sessions.save(session).await?;
-            return Ok(());
-        };
-        if approval.status != ApprovalStatus::Pending {
-            return Ok(());
-        }
-        let now = Timestamp::from_clock(self.clock.as_ref());
-        if !approval.is_expired(now) {
-            return Ok(());
-        }
-
-        let expired = {
-            let mut expired = approval.clone();
-            expired.status = ApprovalStatus::Expired;
-            expired.human_reason = None;
-            expired
-        };
-        session.approvals.insert(approval_id, expired);
-        session.active_approval_id = None;
-        session.record(
-            approval.request_id,
-            approval.trace_id,
-            SessionEventKind::ApprovalResolved {
-                approval_id,
-                decision: "expired".into(),
-                round: approval.round,
-                human_reason: None,
-            },
-            self.clock.as_ref(),
-        );
-        Self::append_skipped_tool_results(
-            session,
-            &approval.continuation.tool_calls,
-            approval.continuation.next_tool_index,
-            "operation expired before tool dispatch",
-            self.clock.as_ref(),
-        );
-        self.sessions.save(session).await?;
-        Ok(())
     }
 
     /// Route one provider round to its execution route.

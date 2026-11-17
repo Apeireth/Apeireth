@@ -221,6 +221,20 @@ impl Session {
         self.touch(clock);
     }
 
+    /// Unbinds this session from its agent.
+    ///
+    /// The counterpart of [`Self::set_agent_binding`]: it drops the binding and
+    /// advances the session revision like every other write, so an unbind rides
+    /// the same optimistic-concurrency record a bind does. A session that was
+    /// never bound is left untouched (no revision move for a no-op).
+    pub fn clear_agent_binding(&mut self, clock: &dyn Clock) {
+        if self.agent_binding.is_none() {
+            return;
+        }
+        self.agent_binding = None;
+        self.touch(clock);
+    }
+
     /// Append a message and update the modification time.
     ///
     /// The transcript and the event log advance together: the log gains the

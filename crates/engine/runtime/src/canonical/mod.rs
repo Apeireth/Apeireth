@@ -89,12 +89,14 @@ mod execution_view;
 pub mod provider;
 pub mod quota;
 pub mod runtime;
+pub mod runtime_builder;
 pub mod session;
 mod session_events;
 pub mod session_locks;
 pub mod subloop;
 pub mod tool_route;
 pub mod trace;
+mod turn_admission;
 pub mod workspace;
 // L0-L5 自升级 cycle driver (Stage 5 完整化, per R11 §7 + v2-architecture-reflection.md §6).
 // **0 装诚实**: L0/L2/L3/L4 真接 governance + Orchestrator; L5 建议模式不自动跑 git tag;
@@ -158,11 +160,12 @@ pub use quota::{
     SessionQuotaLimits, MAX_QUOTA_COST_MICROS, MAX_QUOTA_TOKENS, MAX_QUOTA_TOOL_STEPS,
 };
 pub use runtime::{
-    parse_tool_call_limit, parse_turn_round_limit, plugin_ids, Runtime, RuntimeBuilder,
-    RuntimeCapabilitySnapshot, RuntimeConfig, RuntimeHealthSnapshot, RuntimeModelSnapshot,
-    RuntimeModuleSnapshot, RuntimeProviderSnapshot, RuntimeSnapshot, DEFAULT_CONTEXT_BUDGET_CHARS,
-    DEFAULT_MAX_ROUNDS, MAX_TOOL_CALL_LIMIT, MAX_TURN_ROUNDS, MIN_TOOL_CALL_LIMIT, MIN_TURN_ROUNDS,
+    parse_tool_call_limit, parse_turn_round_limit, plugin_ids, Runtime, RuntimeCapabilitySnapshot,
+    RuntimeConfig, RuntimeHealthSnapshot, RuntimeModelSnapshot, RuntimeModuleSnapshot,
+    RuntimeProviderSnapshot, RuntimeSnapshot, DEFAULT_CONTEXT_BUDGET_CHARS, DEFAULT_MAX_ROUNDS,
+    MAX_TOOL_CALL_LIMIT, MAX_TURN_ROUNDS, MIN_TOOL_CALL_LIMIT, MIN_TURN_ROUNDS,
 };
+pub use runtime_builder::RuntimeBuilder;
 pub use session::{
     InMemorySessionStore, PermissionPreset, Session, SessionEvent, SessionEventKind,
     SessionManager, SessionSettings, SessionStore, SessionWriteAdmission, SessionWriteGate,
