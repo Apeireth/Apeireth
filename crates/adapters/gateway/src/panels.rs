@@ -578,6 +578,8 @@ pub struct GatewayServices {
     /// (读面**不含**绝对根路径; 写面带 `expected_revision` 乐观并发)。
     /// 适配实现在组合根; 未注入 = `501`。
     pub workspaces: Option<Arc<dyn crate::workspace_panel::WorkspacePanel>>,
+    /// 联系人合同面 (B3a 批, 契约见 [`crate::contact_panel`]): 身份 + 人设投影。
+    pub contacts: Option<Arc<dyn crate::contact_panel::ContactPanel>>,
 }
 
 impl GatewayServices {
@@ -619,6 +621,8 @@ impl GatewayServices {
             traits: None,
             // 工作区面由组合根注入真实注册表 (A2 合同面), 不走旧 PanelData 适配。
             workspaces: None,
+            // 联系人面由组合根注入真实注册表 (B3a 合同面), 不走旧 PanelData 适配。
+            contacts: None,
         }
     }
 }
@@ -785,6 +789,10 @@ pub fn panel_routes() -> Router<GatewayState> {
             "/v1/workspaces/:workspace_id/close",
             axum::routing::post(crate::workspace_panel::close_workspace),
         )
+        // 联系人合同面 (B3a 批), 路由表跟合同面住在一起 ([`crate::contact_panel`]):
+        // 一张读面 (`GET /v1/agents/contacts`), 写面三条 (建/改/归档)。**不另开**
+        // `/v1/panel/contacts` 别名 —— 一张读面, 不两套。
+        .merge(crate::contact_panel::contact_routes())
         // V2-b 用户/域管理面 (owner 档, 见 [`panel_admin_face`]): 列表两口在面板族,
         // 增删改口在 canonical_entry 的 admin 族 (同一 UserTable 服务, 双入口同源)。
         .route("/v1/panel/users", get(crate::user_admin::list_users))
@@ -1481,7 +1489,7 @@ async fn list_modules(State(state): State<GatewayState>) -> Response {
 // Capability manifest（口径：只描述**网关/面板面**；`not_assembled` = 该 HTTP 面未装配，不等于能力不存在——`subagents.orchestration` 网关无端点但 CLI `apeireth subagent` 可用）
 // ---------------------------------------------------------------------------
 
-fn cap(
+pub(crate) fn cap(
     id: &str,
     read: bool,
     write: bool,
@@ -1555,6 +1563,7 @@ async fn capabilities(State(state): State<GatewayState>) -> Response {
     let care_supported = services.care.is_some();
     let traits_supported = services.traits.is_some();
     let workspaces_supported = services.workspaces.is_some();
+    let contacts_supported = services.contacts.is_some();
 
     let memory_ids = [
         ("memory.read", true, false, &["list", "read"] as &[&str]),
@@ -1612,6 +1621,7 @@ async fn capabilities(State(state): State<GatewayState>) -> Response {
                 cap("workspaces.read", true, false, &["list", "get"], workspaces_supported, workspaces_supported),
                 cap("workspaces.write", false, true, &["create", "select", "close"], workspaces_supported, workspaces_supported),
             ] },
+            crate::contact_panel::contacts_capability_group(contacts_supported),
             { "name": "permissions", "capabilities": [
                 cap("permissions.approval.read", true, false, &["list"], true, true),
                 cap("permissions.approval.resolve", false, true, &["resolve"], true, true),

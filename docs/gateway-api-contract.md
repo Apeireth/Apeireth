@@ -22,6 +22,8 @@
   503 `unavailable` / 202 审批挂起
   工作区面(A2 批, 见 §7g)的专用码:404 `workspace_not_found` / 409 `workspace_conflict` /
   403 `workspace_revoked` —— **新增码 = 合同变更**, 前端需同步;其余面的既有码语义不变。
+  联系人面(B3a 批, 见 §7h)的专用码:404 `contact_not_found` / 409 `contact_conflict` /
+  403 `contact_archived` / 409 `contact_binding_conflict` —— 同为**新增码 = 合同变更**。
 - 分页:列表端点统一 `limit`(默认 50,最大 500)+ 按时间倒序;需要更多分页时再引入 cursor
 
 ## §2 已实现端点〔四级口径：PRODUCTION WIRED〕
@@ -49,6 +51,11 @@
 | `/v1/workspaces` | POST | 建工作区(见 §7g;受管根由宿主决定, 请求体不含根路径) |
 | `/v1/workspaces/{workspace_id}/select` | POST | 选择工作区(见 §7g;必须带 `expected_revision`) |
 | `/v1/workspaces/{workspace_id}/close` | POST | 关闭工作区 = 吊销(见 §7g;必须带 `expected_revision`) |
+| `/v1/agents/contacts` | GET | 联系人列表(见 §7h;默认不含已归档, `?include_archived=true` 才含) |
+| `/v1/agents/contacts` | POST | 建联系人(见 §7h;身份由后端铸造, 请求体不得带 `contact_id`/`agent_id`) |
+| `/v1/agents/contacts/{contact_id}` | GET | 单个联系人(见 §7h;不存在/不可见 = 404 `contact_not_found`) |
+| `/v1/agents/contacts/{contact_id}` | PATCH | 改联系人(见 §7h;必须带 `expected_revision`) |
+| `/v1/agents/contacts/{contact_id}/archive` | POST | 归档联系人 = 软删除墓碑(见 §7h;终态不可复活) |
 | `/v1/panel/users` | GET | 用户管理列表(见 §7c;owner 专属) |
 | `/v1/admin/users` | POST | 建户(见 §7c;owner 专属) |
 | `/v1/admin/users/{user_id}` | PATCH / DELETE | 改角色 / 删户(见 §7c;owner 专属) |
@@ -482,6 +489,79 @@ bounded-context 端口 + 乐观并发比对 + 审计)、领域层
 `crates/adapters/cli/src/lib.rs`(网关装配点注入 `services.workspaces`)。
 A2 批**不承诺持久化**(注册表为进程内实现, 持久化属 A3 批)。
 
+### §7h 联系人面 ✅(2026-11-17, 后端接线合同 B3a 批)
+
+`GET /v1/agents/contacts` —— 联系人列表(默认**不含**已归档);`POST /v1/agents/contacts` —— 建;
+`GET /v1/agents/contacts/{contact_id}` —— 单个;`PATCH /v1/agents/contacts/{contact_id}` —— 改;
+`POST /v1/agents/contacts/{contact_id}/archive` —— 归档(软删除墓碑, 终态)。
+
+- **一张读面**: 只 `/v1/agents/contacts` 一族, **不另开** `/v1/panel/contacts` 别名。
+- **身份由后端铸造**: 请求体带 `contact_id`/`agent_id`/`persona_revision`/`revision`
+  ⇒ **400**(请求体 `deny_unknown_fields`)。
+- **乐观并发**: 写面必须带 `expected_revision`;缺 ⇒ **400** 且**不调端口**;不符 ⇒
+  **409 `contact_conflict`**(详情带 `expected_revision` / `actual_revision`)且
+  **联系人逐字段不变**。
+- **归档是终态, 不是冲突**: 已归档再写 ⇒ **403 `contact_archived`**;默认列表不含已归档
+  (需 `?include_archived=true`);归档不可复活。
+- **工作区绑定**: 写面可带 `workspace_id` + `revision`, 服务端校验工作区**存在/未吊销/
+  修订号精确匹配**;不符 ⇒ **409 `contact_binding_conflict`** + `details.reason`
+  (`workspace_not_found` / `workspace_revoked` / `workspace_revision_mismatch`),
+  且**零字段变化**。绑定**只存 id + revision, 不存快照**。
+- **存在性不泄露**: 不存在 / 不可见 = 同帧 404 `contact_not_found`(消息恒定
+  「联系人不存在或不可见」)。
+- **可检索审计**: 建/改/归档/被拒都落审计行 `gateway.contact_action`
+  (`contact.create|contact.update|contact.archive|contact.deny`), allow/deny 都留痕,
+  明细**不含路径与人设正文**。
+- **能力清单**: `contacts.read`(list/get)与 `contacts.write`(create/update/archive)
+  **分开登记**。
+
+列表读面(200):
+```json
+{
+  "contacts": [
+    { "contact_id": "3b7a1f92-0c44-4a55-9f2e-8d1c6b0a5e31",
+      "agent_id": "9f3d2c18-4a6b-4e77-8c21-5d0e7a9b2c48",
+      "display_name": "校对发布清单", "subtitle": "发布线值班",
+      "avatar_ref": null, "status": "ready", "persona_revision": 2,
+      "memory_scope": "contact",
+      "workspace_binding": { "workspace_id": "6f1b0f6c-4f0a-4f6f-9a3a-1b2c3d4e5f60",
+                             "revision": 7 },
+      "capabilities": { "read": true, "write": true, "approval_required": false },
+      "persona": "发布线值班代理", "revision": 3, "updated_at_ms": 1728000000000 }
+  ],
+  "count": 1
+}
+```
+
+- **ContactDto**:`contact_id` / `agent_id` / `display_name` / `subtitle` / `avatar_ref`
+  (可空)/ `status`(`ready|draft|archived|unavailable`)/ `persona_revision` /
+  `memory_scope`(`subject|contact|session|none`)/ `workspace_binding`
+  (`{workspace_id,revision}` 或 null)/ `capabilities`
+  (`{read,write,approval_required}`)/ `persona` / `revision` / `updated_at_ms`
+  (**epoch 毫秒**)。
+- 列表 = `{"contacts":[…],"count":N}`;单体 = `{"contact":{…}}`。
+- 建(POST, 请求体
+  `{ "display_name": "校对发布清单", "subtitle": "发布线值班", "persona": "…",
+     "memory_scope": "contact", "workspace_binding": { "workspace_id": "…", "revision": 7 } }`,
+  可省字段同上)→ **201** `{"contact":{…}}`。
+- 改(PATCH, 请求体必须带 `expected_revision`)→ **200** `{"contact":{…}}`。
+- 归档(POST)→ **200** `{"contact":{…}}`;之后 `status` = `archived`。
+
+- 错误模型(与 §1 同一帧形):400 `invalid_request`(缺 `expected_revision` /
+  未知字段 / 自带身份)/ 401(令牌门)/ 403 `permission_denied`(角色门)/
+  403 `contact_archived` / 403 `domain_forbidden`(非默认域)/ 404 `contact_not_found`/
+  409 `contact_conflict` / 409 `contact_binding_conflict` / 500 `internal_error`/
+  501 `unsupported`(服务未接线)。
+
+实现:`crates/adapters/gateway/src/contact_panel.rs`(DTO + `ContactPanel`
+bounded-context 端口 + 乐观并发比对 + 审计 + 能力入册)、领域层
+`crates/foundation/core/src/agent_contact.rs`(B1 批: `Contact` /
+`ContactRegistry` / `FileContactRegistry`)、组合根适配
+`crates/adapters/cli/src/contact_panel.rs`(`CliContactPanel` 持真落盘注册表 +
+宿主绑定档)与 `crates/adapters/cli/src/lib.rs`(网关装配点注入 `services.contacts`)。
+**未接**: 回合入口(B3b)未接线 ⇒ 新建联系人当前**不影响真实回合**;`memory_scope` 只到
+DTO 层, 未翻译成运行时记忆作用域;会话绑定面 `POST/GET /v1/sessions/{id}/agent-binding` 未做。
+
 ## §8 Trace / Audit / 事件总线
 
 - `GET /v1/panel/traces?limit=20` `[P0]` → `{ "traces": [ { "trace_id": "…", "span_count": 3, "root_span": { … }, "started_at": 123 } ] }`
@@ -603,6 +683,8 @@ initiative(他从 `dreaming_consolidation` 苏醒主动开口)是独立事件类
 `care.read`（关怀规则只读面，§7f）、`traits.read`（性格成长账只读面，§7f）、
 `workspaces.read` / `workspaces.write`（工作区面：列表/单读 + 建/选/关，§7g；
 `supported=available` 取值随工作区服务接线状态，见 §7g）、
+`contacts.read` / `contacts.write`（联系人面：list/get + create/update/archive，§7h；
+`supported=available` 取值随联系人服务接线状态，见 §7h）、
 `permissions.approval.read`、`permissions.approval.resolve`、
 `approvals.read` / `approvals.resolve`（compatibility aliases）、`permissions.grants.read`、
 `permissions.revoke`、`organs.list`、`modules.list`、`trace.read`、`audit.read`、`activity.sse`、
@@ -618,6 +700,8 @@ initiative(他从 `dreaming_consolidation` 苏醒主动开口)是独立事件类
 | P2 | Live Behavior/Capability/Provider/Model projection 与 approvals/grants | ✅ 已完成(2026-09-04) |
 | P3 | Runtime Event Spine → trace/audit/SSE，CLI direct turn 可观测 | ✅ 已完成(2026-09-04) |
 | A2 | 工作区 HTTP 契约面：列表/单读/建/选/关 + 乐观并发(`expected_revision`)+ 审计(`gateway.workspace_action`)+ 能力入册 + 错误码 `workspace_not_found`/`workspace_conflict`/`workspace_revoked`(见 §7g) | ✅ 已完成(2026-11-17, 后端接线合同 A2 批)；**不承诺持久化**(注册表进程内, 持久化属 A3 批) |
+| A3 | 工作区持久化：落盘注册表 + 跨重启恢复 + 坏记录 fail-closed + 已吊销不可复活 | ✅ 已完成(2026-11-17, 后端接线合同 A3 批)；本地文件系统介质, 非 DB/WAL |
+| B3a | 联系人 HTTP 契约面：list/create/get/update/archive + 乐观并发(`expected_revision`)+ 归档终态(403 `contact_archived`)+ 工作区绑定校验(409 `contact_binding_conflict`)+ 审计(`gateway.contact_action`)+ 能力入册 + 4 个新错误码(见 §7h) | ✅ 已完成(2026-11-17, 后端接线合同 B3a 批)；**回合入口未接线**(B3b), 新建联系人当前不影响真实回合 |
 
 实现位置:`crates/adapters/gateway/src/`(canonical_entry.rs + panels.rs + events.rs)，
 数据源为 Runtime/Assembly 注入的 bounded-context ports；CLI 组合根位于

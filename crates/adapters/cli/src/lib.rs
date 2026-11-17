@@ -9,6 +9,7 @@ pub mod backup;
 pub mod env_switches;
 // 审批面分派 (W3.7 拆分: 装配根文件尺寸棘轮已到顶; 公开路径经下方 re-export 不变).
 pub mod canonical_approval;
+pub mod contact_panel;
 /// **主体 → 会话**归属写面实现（持有记忆库；审计 P1 收口）。
 pub mod principal_recorder;
 // 心跳关怀常驻宿主接线面: FnInitiativeGate 注入 CareEngine + dispatch 接 Runtime::execute + 自述心跳两列.
@@ -3276,6 +3277,11 @@ pub async fn dispatch_gateway_serve_with(
     // 幂等: 受管根已登记过就复用那一个身份, 不新铸。
     crate::gateway_panels::bind_managed_workspace(&workspace_panel, "默认工作区")?;
     services.workspaces = Some(workspace_panel as Arc<dyn apeireth_gateway::WorkspacePanel>);
+    // 联系人合同面 (B3a 批: `GET/POST /v1/agents/contacts` + 单体读写 + 归档写面):
+    // 真实持有 B1 的联系人注册表, **落盘**在数据根下 ⇒ 重启后仍是同一批联系人;
+    // 工作区绑定存**宿主侧绑定档** (只存 id + 修订号, 不存工作区快照)。
+    // 开不出来 ⇒ **fail-closed** (启动失败), 不降级成进程内注册表假装成功。
+    crate::contact_panel::wire_contacts(&mut services, default_panel_data_dir())?;
     // W2-②: 客户端令牌表 (令牌族第二面) 显式注入; 远程绑定闸与 TLS 接口桩的
     // 清场事实随装配进审计面 (逃生阀可裸奔, 但必须留痕)。
     let mut state =

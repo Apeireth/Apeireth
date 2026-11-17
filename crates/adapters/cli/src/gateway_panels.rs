@@ -467,7 +467,7 @@ fn append_jsonl<T: serde::Serialize>(path: &PathBuf, value: &T) {
     }
 }
 
-fn now_millis() -> i64 {
+pub(crate) fn now_millis() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis() as i64)
@@ -1132,6 +1132,9 @@ pub fn gateway_services(panel: Arc<CliPanelData>) -> GatewayServices {
         // 工作区合同面同口径: 适配器由组合根在装配点注入 (见 cli::lib 的
         // `services.workspaces`), 真实持有受管根与工作区注册表。
         workspaces: None,
+        // 联系人合同面同口径: 适配器由组合根在装配点注入 (见 cli::lib 的
+        // `services.contacts`), 真实持有联系人注册表与绑定档。
+        contacts: None,
     }
 }
 

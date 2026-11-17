@@ -120,6 +120,12 @@ pub mod trait_panel;
 /// 读面**不含**绝对根路径。
 pub mod workspace_panel;
 
+/// 联系人合同面 (B3a 批): `GET /v1/agents/contacts` 资源读面 +
+/// `GET|PATCH /v1/agents/contacts/:id` / `POST /v1/agents/contacts/:id/archive`
+/// 写面 (带 `expected_revision` 乐观并发, 归档是终态不可复活)。身份由**后端
+/// 铸造**; 读面**不含**任何存储位置。
+pub mod contact_panel;
+
 /// W2-② remote access face: listen knob, non-loopback fail-closed bind gate,
 /// and the wired TLS surface (material loading fail-closed, real TLS listener).
 pub mod remote_access;
@@ -159,6 +165,15 @@ pub use client_tokens::{
 
 pub use care_panel::{
     CareDisciplineDto, CarePanelDto, CarePanelQuery, CarePanelStatusDto, CareRecordDto, CareRuleDto,
+};
+pub use contact_panel::{
+    ContactArchiveCommand, ContactBindingChange, ContactBindingCommand, ContactCapabilitiesCommand,
+    ContactCapabilitiesDto, ContactCapabilitiesRequest, ContactCreateCommand, ContactCreateRequest,
+    ContactDto, ContactEnvelope, ContactListDto, ContactListQuery, ContactMemoryScopeDto,
+    ContactPanel, ContactPanelError, ContactRevisionRequest, ContactStatusDto,
+    ContactUpdateCommand, ContactUpdateRequest, ContactWorkspaceBindingDto,
+    ContactWorkspaceBindingRequest, CONTACT_ACTION_ARCHIVE, CONTACT_ACTION_CREATE,
+    CONTACT_ACTION_DENY, CONTACT_ACTION_UPDATE, CONTACT_AUDIT_EVENT,
 };
 pub use domain_admin::{DomainAdminDto, DomainAdminService, DomainCreateBody};
 pub use skill_shelf::{
