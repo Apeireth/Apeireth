@@ -67,6 +67,10 @@ pub mod stored_doc;
 /// 用户域模型 (`UserDomain`/`DomainUserId`/`DomainRole`) + 域注册表 + 首次启动
 /// 「默认域原位采用」(零迁移) + 域级授权拒绝即帧 (404/403 语义钉死)。
 pub mod user_domain;
+// 联系人 / Agent 身份 (后端合同 B1 批): 身份铸造 + 人设校验 + 归档墓碑 + 落盘注册表。
+/// 联系人领域 (`Contact`/`ContactId`/`ContactAgentId`/`PersonaText`): 身份后端铸造、
+/// 人设构造即校验 (字节上限 + 控制字符)、revision 乐观并发、归档墓碑不可复活。
+pub mod agent_contact;
 // 模型画像表 (H-P1 模型面轴): 模型能力事实 + 单价的依据数据面 (路由/成本分级)。
 /// 模型画像表 (`ModelProfile`/`ModelProfileTable`): 三层配置 (内置基线 /
 /// 数据目录拒开档 / env 覆盖) + 显式 unknown, 单价缺省 None 绝不编价。

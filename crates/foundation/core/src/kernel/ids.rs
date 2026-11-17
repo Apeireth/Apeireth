@@ -141,6 +141,35 @@ generated_id! {
     WorkspaceId
 }
 
+generated_id! {
+    /// Identifies one contact.
+    ///
+    /// A contact is the person-facing identity in the backend contract: a
+    /// backend-minted UUID, a display name that is a *label* and deliberately
+    /// not unique (two contacts may share one name and stay distinct), and a
+    /// persona version. The identity is the join key for anything bound to the
+    /// contact — a display name never substitutes for it.
+    ///
+    /// This is a separate identity family from [`AgentId`]: an `AgentId` names
+    /// a runtime sub-agent handle, a `ContactId` names a contact record. The
+    /// two are deliberately not merged.
+    ContactId
+}
+
+generated_id! {
+    /// Identifies the agent identity bound to one contact.
+    ///
+    /// A contact owns exactly one bindable agent identity. This is the
+    /// `agent_id` of the backend contract — the identity a session binding
+    /// refers to — and it is minted by the backend, never chosen by a client.
+    ///
+    /// It is deliberately **not** [`AgentId`]: the runtime `AgentId` is a
+    /// sub-agent handle minted inside a live session, while this is the stable
+    /// agent identity of a contact that outlives any session. Merging the two
+    /// would make "archived contact" ambiguous with "stopped sub-agent".
+    ContactAgentId
+}
+
 /// Longest permitted stable identifier.
 ///
 /// Generous enough for `provider.some-vendor.some-long-model-name`, short enough
