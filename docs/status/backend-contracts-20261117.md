@@ -15,14 +15,18 @@ Author: lead
 | 批次 | 目标 | 四级口径 | 状态 | 证据 |
 |---|---|---|---|---|
 | A1 | 工作区领域类型 + 受管根 + revision CAS | **IMPLEMENTED**（仅领域层） | ✅ 已完成（提交 `91888e27c`） | `cargo test -p apeireth-runtime --test workspace_contract --locked -j 2` ⇒ 11 passed / 0 failed（2026-11-17）；clippy 0 警告；fmt 0 diff；反向验伪两组（摘 revision 递增 / 摘安全展示名）均 RED→GREEN |
-| A2 | 工作区 HTTP 面 + 审计 + 会话/项目/审批绑定 | — | 🔶 实施中（2026-11-17 派实施代理） | 代理交付后由 Lead 亲验补入 |
-| B1 | 联系人 / Agent identity + 人设（字节上限 / 控制字符 / 版本号） | — | ❌ 未开始 | 无 |
+| A2 | 工作区 HTTP 面 + 审计 + 会话/项目/审批绑定 | **IMPLEMENTED**（HTTP 面已接线；⚠️ 未持久化） | ✅ 已完成（提交 `3854c01a8`） | `cargo test -p apeireth-gateway --test panel_workspaces_face --locked -j 2` ⇒ 13 passed / 0 failed；`cargo test -p apeireth-cli --test workspace_real_chain --locked -j 2` ⇒ 5 passed / 0 failed（均 2026-11-17）；clippy 0 警告；fmt 0 diff；fast gate FAST GATE PASSED；反向验伪三组（摘修订号比对 / 摘展示名安全闸 / 409→400）均 RED→GREEN |
+| B1 | 联系人 / Agent identity + 人设（字节上限 / 控制字符 / 版本号） | **IMPLEMENTED**（仅领域层） | ✅ 已完成（提交 `5bfb959d7`） | `cargo test -p apeireth-core --test agent_contact --locked -j 2` ⇒ 16 passed / 0 failed；`cargo test -p apeireth-runtime --test contact_persona_authority --locked -j 2` ⇒ 6 passed / 0 failed（均 2026-11-17）；clippy 0 警告；fmt 0 diff；反向验伪五组（persona_revision 不递增 / 归档可复活 / 上限被绕过 / 入面采信客户端 capabilities / 人设被当授权依据）均 RED→GREEN |
 | B2 | 记忆作用域映射 + 会话 agent 绑定 + 归档语义 | — | ❌ 未开始 | 无 |
+| B3 | 联系人 HTTP 面 + `workspace_binding` + 会话绑定面 | — | ❌ 未开始 | 无 |
 | C1 | 规范流帧 + 后端流面（身份 / sequence / 重放 / resync） | — | ❌ 未开始 | 无 |
 | C2 | 单次 canonical dispatch + stop 幂等 + 审批终帧 | — | ❌ 未开始 | 无 |
 
 **四级口径说明**：A1 达 **IMPLEMENTED**（**仅领域层**：未持久化、无 HTTP 面、未接生产路径 ⇒ **不是** PRODUCTION WIRED）；
-其余五批**尚无任何一项**达到 IMPLEMENTED；批次完成前不得在文档或回复里写「已实现 / 已接线」。
+A2 达 **IMPLEMENTED**（HTTP 面 + 端口 + 乐观并发 + 审计 + 能力入册 + 错误码 + **生产组合根真实注入**
+⇒ `apeireth gateway serve` 可用；但**未持久化**（A3）、失效联动未做 ⇒ 仍**不是** PRODUCTION WIRED）；
+B1 达 **IMPLEMENTED**（**仅领域层**：无 HTTP 面、无绑定、无审计 ⇒ **不是** PRODUCTION WIRED）；
+B2 / B3 / C1 / C2 **尚无任何一项**达到 IMPLEMENTED；批次完成前不得在文档或回复里写「已实现 / 已接线」。
 `DEFAULT ENABLED` 是横切属性，不随阶梯走。
 
 ## 二、2026-11-17 开工前现状核查（只读调研，非交付）
@@ -43,18 +47,23 @@ Author: lead
 
 ## 三、还差什么（逐条可判定）
 
-1. **A1 已完成，但只到领域层**：持久化在 A3；HTTP 面在 A2；工作区与 session/task/审批的**绑定**尚未开工；
+1. **A1 已完成，但只到领域层**：持久化在 A3；工作区与 session/task/审批的**绑定**尚未开工；
    多根解析（运行时仍是进程单根）与自动过期回收也未做。
-2. **A2 在实施中**：`/v1/panel/workspaces` 读面、`/v1/workspaces*` 写面、409 冲突码、工作区审计事件、
-   能力清单登记 —— 待 Lead 验收后补证据。
-3. **B1 未开工**：无 contact 实体、无 agent registry、无 `/v1/agents/contacts*`、无人设字节上限与控制字符校验、无客户端可读的 `persona_revision`。
+2. **A2 已完成，但未持久化**：HTTP 面、409/403 分类码、审计事件、能力入册、组合根真实注入均已落地；
+   **仍缺**：跨重启恢复（A3）、多根/临时根/预设根的受管根装配、自动过期回收、
+   **workspace→session/task/审批/流的失效联动**、多用户归属建模。
+3. **B1 已完成，但只到领域层**：缺 `/v1/agents/contacts*` HTTP 面（B3）、`workspace_binding`（B3）、
+   记忆作用域映射与会话绑定（B2）、归档审计事件（B3）。
 4. **B2 未开工**：无合同版 `memory_scope` 映射、无会话 agent 绑定面、无「绑定不匹配即拒绝且不重放」载体、无 HTTP 级归档语义。
-5. **C1 未开工**：无 `apeireth.c1.delta.v1` / `apeireth.c1.final.v1` 帧 schema、无后端规范流面、无 sequence / 重放 / `resync_required`。
-6. **C2 未开工**：无 operation 级单次 dispatch 去重、无 stop/cancel 幂等端点、无审批终帧载体。
-7. **能力清单未登记**（A2 范围内）：新增端点须登记进 `crates/adapters/gateway/src/panels.rs` 的能力清单（现 `:1528-1594`）。
-8. **错误码未登记**（A2 范围内）：`crates/adapters/gateway/src/error_frame.rs:27-55` 现 12 码，工作区/联系人专属码属**合同变更**，须显式新增并登记。
-9. **未决 5 条**（设计稿 §未决）：`expected_context_key` 定义域、`incarnation` 生命周期、成果版本对象、`workspace_binding` 语义、联系人 `capabilities` 到 `Permission` 的映射粒度。
-10. **跨线协调未完成**：前端草案的 `root_kind` 与 `crates-ui/.../governance_tab.rs:867` 的轨迹 span kind 同名不同义，须与前端线对齐命名。
+5. **B3 未开工**：无联系人 HTTP 面、无 `workspace_binding` 承载、无会话绑定面。
+6. **C1 未开工**：无 `apeireth.c1.delta.v1` / `apeireth.c1.final.v1` 帧 schema、无后端规范流面、无 sequence / 重放 / `resync_required`。
+7. **C2 未开工**：无 operation 级单次 dispatch 去重、无 stop/cancel 幂等端点、无审批终帧载体。
+8. ~~能力清单未登记~~ ⇒ **已做**（A2：`workspaces.read|workspaces.write` 登记进 `crates/adapters/gateway/src/panels.rs`）；
+   联系人能力清单待 B3。
+9. ~~错误码未登记~~ ⇒ **已做**（A2：`workspace_not_found` / `workspace_conflict` / `workspace_revoked`
+   已进 `crates/adapters/gateway/src/error_frame.rs` 并各带 solution）；联系人专属码待 B3。
+10. **未决 5 条**（设计稿 §未决）：`expected_context_key` 定义域、`incarnation` 生命周期、成果版本对象、`workspace_binding` 语义、联系人 `capabilities` 到 `Permission` 的映射粒度。
+11. **跨线协调未完成**：前端草案的 `root_kind` 与 `crates-ui/.../governance_tab.rs:867` 的轨迹 span kind 同名不同义，须与前端线对齐命名。
 
 ## 四、守卫（机器判对错）
 

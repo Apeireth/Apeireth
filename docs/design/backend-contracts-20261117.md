@@ -28,10 +28,11 @@ Author: lead
 | 批次 | 交付目标 | 验收要求 | 当前进度 |
 |---|---|---|---|
 | A1 | 工作区领域类型 + 受管根 + revision CAS | 工作区有 UUID 身份；根目录、权限作用域、撤销状态任一变化都递增 revision；同名工作区仍按 UUID 区分；GET 读面不暴露完整根路径与凭据；旧客户端缺 workspace 字段**不默认提升为 write** | ✅ 已完成（提交 `91888e27c`，四级口径 **IMPLEMENTED（领域层）**；未持久化、无 HTTP 面、未接生产路径） |
-| A2 | 工作区 HTTP 面 + 审计 + 与会话/项目/审批的绑定 | `GET /v1/panel/workspaces` 返回有界列表并区分「空 / 未装配 / 不可用」；创建/选择/关闭都落审计；`expected_revision` 冲突返回可分类 409；撤销或 revision 变化后旧写意图、审批、stream 不再生效 | 🔶 实施中（2026-11-17 派实施代理，Lead 待验收） |
+| A2 | 工作区 HTTP 面 + 审计 + 与会话/项目/审批的绑定 | `GET /v1/panel/workspaces` 返回有界列表并区分「空 / 未装配 / 不可用」；创建/选择/关闭都落审计；`expected_revision` 冲突返回可分类 409；撤销或 revision 变化后旧写意图、审批、stream 不再生效 | ✅ 已完成（提交 `3854c01a8`，四级口径 **IMPLEMENTED（HTTP 面 + 端口 + 审计 + 能力入册 + 错误码 + 生产组合根接线）**；⚠️ **未持久化**（A3）、未接多根/临时根/预设根、未做自动过期回收、**workspace→session/task/审批/流的失效联动未做**、多用户归属未建模） |
 | A3 | 工作区持久化（跨重启恢复） | 工作区身份、revision、状态与受管根的登记事实落库；重启后 `GET /v1/panel/workspaces` 仍能列出且 revision 单调；恢复时按 `workspace_id + revision` 精确匹配，revision 落后者被拒 | ❌ 未开始 |
-| B1 | 联系人 / Agent identity + 人设（字节上限 + 控制字符 + 版本号） | `contact_id`/`agent_id`/`persona_revision` 由后端生成；人设有字节上限与控制字符校验；persona 只影响允许的注入槽，**不得**改变工具权限、审批决定、workspace scope 或系统策略；同名不同 ID 不碰撞 | ❌ 未开始 |
+| B1 | 联系人 / Agent identity + 人设（字节上限 + 控制字符 + 版本号） | `contact_id`/`agent_id`/`persona_revision` 由后端生成；人设有字节上限与控制字符校验；persona 只影响允许的注入槽，**不得**改变工具权限、审批决定、workspace scope 或系统策略；同名不同 ID 不碰撞 | ✅ 已完成（提交 `5bfb959d7`，四级口径 **IMPLEMENTED（领域层：ContactId/ContactAgentId/PersonaText/Contact + InMemory/FileContactRegistry）**；⚠️ 无 HTTP 面、无 `workspace_binding`、无记忆作用域映射、无会话绑定、无审计、未接生产路径） |
 | B2 | 记忆作用域映射 + 会话 agent 绑定 + 归档语义 | `memory_scope` 受管枚举并与主体/联系人/工作区隔离（联系人 A 读不到 B 的记忆）；绑定请求携带 contact_id+agent_id+persona_revision+workspace_id+workspace_revision+expected_context_key+incarnation，任一不匹配即拒绝**且不重放消息**；归档为软删除，旧会话不静默转移到默认 Agent；全部动作有可检索审计身份 | ❌ 未开始 |
+| B3 | 联系人 HTTP 面 + `workspace_binding` + 会话绑定面 | `GET/POST /v1/agents/contacts`、`GET/PATCH /v1/agents/contacts/{id}`、`POST /v1/agents/contacts/{id}/archive`、`GET/POST /v1/sessions/{id}/agent-binding`；`workspace_binding{workspace_id,revision}` 随联系人与会话绑定携带（B1 领域层已就位、绑定字段留到本批）；绑定任一字段不匹配即拒绝**且不重放消息**；归档为软删除、不可复活 | ❌ 未开始（B1 已完成，见批次表） |
 | C1 | 规范流帧 + 后端流面（身份、sequence、重放、resync） | 帧 schema 固定（`apeireth.c1.delta.v1` / `apeireth.c1.final.v1`）；每帧带 operation/session/incarnation/context_key/sequence；sequence 单调有界；`Last-Event-ID`/`after_sequence` 有限重放，超窗返回 `resync_required`；`[DONE]` **只表示通道关闭**；断线后 GET 回执能恢复真实状态且不重发模型 | ❌ 未开始 |
 | C2 | 单次 canonical dispatch + stop 幂等 + 审批终帧 | 一个 operation 只产生一次 canonical dispatch（重连/刷新/abort 不重复调模型）；stop 单独、幂等、可审计且不撤销已发生的外部副作用；approval 终帧只带**已确认**的 approval_id/action_binding_digest/expires_at；provider 非流式回退、上游错误、超时、取消、慢客户端、大正文都有有界错误契约 | ❌ 未开始 |
 
@@ -111,6 +112,14 @@ DTO 字段按前端草案（`contact_id`/`agent_id`/`display_name`/`subtitle`/`a
     `display_name` / `root_kind` / `permission_scope` / `expires_at`；**受管根由宿主决定**。
     理由：A1 的立论是「绝对根是宿主实现细节，公开面只暴露身份 + 安全展示名」；若客户端能传路径，
     该不变量当场破（且「GET 读面不暴露完整根路径」这条合同验收项将形同虚设）。
+12. **吊销 ⇒ 403 `workspace_revoked`，不是 409 冲突**（A2 批实施时追加的裁决）：吊销是「状态不可用」，
+    不是并发冲突；客户端据码自愈的方式不同（409 ⇒ 重读修订号重试；403 ⇒ 停止使用该工作区）。
+    同理「不存在」⇒ 404 且**消息恒定**「工作区不存在或不可见」（不区分「不存在」与「存在但不属于你」）。
+13. **`workspace_binding` 与联系人 HTTP 面归 B3**（A2/B1 交付时追加的裁决）：B1 只做联系人**领域层**
+    （身份 + 人设 + 墓碑归档 + 文件持久化），`workspace_binding{workspace_id,revision}` 是**跨资源绑定**，
+    与会话绑定面一起做才不会造出「只有一半的绑定」；B2 做记忆作用域映射与会话 agent 绑定，B3 做 HTTP 面与绑定。
+14. **`ContactOut` 在合同字段之上增补**（B1 交付时追加的裁决）：`persona` 正文 / `revision` / `updated_at_ms`
+    是后端生成的事实（客户端不可写），对外暴露只读不构成越权 ⇒ 保留并写进契约文档。
 
 ## 未决（需要前端/宿主侧确认，后端按最保守口径实现）
 
@@ -191,6 +200,41 @@ DTO 字段按前端草案（`contact_id`/`agent_id`/`display_name`/`subtitle`/`a
   **无 HTTP 面**（A2 批）；**未接任何生产路径**（不在任何现有组装根里接线）；运行时仍是**进程单根**
   （未做多根解析）；`expires_at` 只透传、**无自动过期回收**；`WorkspaceId` 尚未进 kernel 再导出名单
   （当前用全路径 `apeireth_core::kernel::ids::WorkspaceId`）。
+
+### 2026-11-17 A2 批次交付（提交 `3854c01a8`）
+
+- 落点：新增 `crates/adapters/gateway/src/workspace_panel.rs`（718 行）与
+  `crates/adapters/gateway/tests/panel_workspaces_face.rs`（13 测试）、
+  `crates/adapters/cli/tests/workspace_real_chain.rs`（5 测试）；改
+  `crates/adapters/gateway/src/panels.rs`（`GatewayServices.workspaces` 端口 + 5 条路由 + 能力清单
+  `workspaces.read|workspaces.write`）、`crates/adapters/gateway/src/error_frame.rs`（3 个新码 + solution）、
+  `crates/adapters/gateway/src/lib.rs`、`crates/adapters/cli/src/gateway_panels.rs`（`CliWorkspacePanel` +
+  `bind_managed_workspace`）、`crates/adapters/cli/src/lib.rs:3264-3274`（组合根**真实注入**）、
+  `docs/gateway-api-contract.md`（+84 行：§1 错误码 / §2 端点表 / 新增 §7g 工作区面 / §9 能力清单 / §10 状态表）。
+- 端点面：`GET /v1/panel/workspaces`（包裹 `{"workspaces":[…],"count":n}`，有界）、`GET /v1/workspaces/{id}`、
+  `POST /v1/workspaces`（201）、`POST /v1/workspaces/{id}/select`、`POST /v1/workspaces/{id}/close`。
+- 关键不变量（已由测试钉死）：**端口只说 DTO** ⇒ 网关层**没有任何可承载绝对根路径的字段**；
+  读面再叠一道展示名安全闸（叶子名、≤64 字节、无 `/ \ :` 与控制字符），不合格 ⇒ 500 且**不回显该值**；
+  缺 `expected_revision` ⇒ 400 且**不调端口**；revision 不符 ⇒ 409 且**不调端口** ⇒ 工作区逐字段不变；
+  吊销 ⇒ 403 `workspace_revoked`（裁决 12）；不存在 ⇒ 404 且消息恒定「工作区不存在或不可见」；
+  创建请求体 `deny_unknown_fields` ⇒ 客户端塞 `root` 恒 400（受管根由宿主决定，裁决 11）；
+  审计动作词 `workspace.create|select|close|deny`、事件 `gateway.workspace_action`，**审计详情无绝对路径**。
+- 实测（2026-11-17，本机 Windows，`CARGO_TARGET_DIR=C:\Apeireth\cargo-target\backend-contracts`，`-j 2`）：
+  `cargo test -p apeireth-gateway --test panel_workspaces_face --locked -j 2` ⇒ **13 passed; 0 failed**（EXIT 0）；
+  `cargo test -p apeireth-cli --test workspace_real_chain --locked -j 2` ⇒ **5 passed; 0 failed**（EXIT 0）；
+  `cargo clippy -p apeireth-gateway -p apeireth-cli --all-targets --locked -j 2 -- -D warnings` ⇒ EXIT 0；
+  `cargo fmt -p apeireth-gateway -p apeireth-cli --check` ⇒ 0 diff（EXIT 0）；
+  fast gate `python scripts/verify_changed.py` ⇒ `changed rust files: 8; affected crates: 3` +
+  `check OK 57.8s` + `clippy OK 2.2s` + `test(nextest) OK 263.6s` ⇒ **FAST GATE PASSED**。
+- 反向验伪三组（红/绿各一条已贴进提交正文）：① 摘掉写面修订号比对 ⇒ RED
+  「stale_expected_revision_is_a_409_conflict_that_changes_nothing … left: 200 right: 409 / 11 passed; 2 failed」
+  ⇒ 装回 GREEN 13 passed；② 摘掉展示名安全闸 ⇒ RED「body 里出现 `C:\\Users\\someone\\secret` … left: 200 right: 500 /
+  12 passed; 1 failed」⇒ 装回 GREEN 13 passed；③ 把冲突帧从 409 降成 400 ⇒ RED「left: 400 right: 409 / 11 passed; 2 failed」
+  ⇒ 装回 GREEN 13 passed。
+- ⚠️ **诚实边界（四级口径：IMPLEMENTED，HTTP 面已接线）**：**未持久化**（A3 批）；**未接多根/临时根/预设根**
+  （非受管根 ⇒ 400）；**未做自动过期回收**（`expires_at` 只透传）；**workspace→session/task/审批/流的失效联动未做**；
+  多用户归属未建模（404 恒定消息是为归属建模预留的合同位）；作用域「宿主确认」当前＝**上限截断到 Write**；
+  审计端口缺席时回落 `observations.buffer_audit`；`domain_context.rs` 未改（域门对未登记路径 fail-closed 403）。
 
 ### 还差什么
 
