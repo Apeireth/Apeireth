@@ -80,6 +80,30 @@ DTO 字段按前端草案（`contact_id`/`agent_id`/`display_name`/`subtitle`/`a
 事件名 `apeireth.c1.delta.v1` / `apeireth.c1.final.v1`。字段按前端草案；
 `incarnation` 允许 `uuid-or-bounded-label`，`context_key` 为 hex64。
 
+**后端原生流面**（裁决 1 / 2 的直接落点）：
+
+```text
+GET  /v1/sessions/{session_id}/requests/{request_id}/stream   # ?after_sequence=N 或 Last-Event-ID 头
+```
+
+- 身份键＝`session_id + request_id`（+ `trace_id`）；宿主的 `operation` 只作**不透明有界标签**回显。
+- 帧：
+  - `apeireth.c1.delta.v1`＝`{session, request, trace, operation?, sequence, delta, state:"running"}`；
+    `delta` 只是 **provisional** 展示，**不是**完成事实。
+  - `apeireth.c1.final.v1`＝`{session, request, trace, operation?, state:"completed"|"approval"|"failed"|"unknown",
+    text?, usage?, approvals?, error?}`；approval 终帧只带**已确认**的
+    `approval_id` / `action_binding_digest` / `expires_at`。
+  - 帧里的 `incarnation` / `context_key` 是**回显位**：调用方给了才带，后端**不生成**（裁决 8）。
+  - `[DONE]` 只表示**通道关闭**；与既有 OpenAI 兼容 SSE 的 `[DONE]` 语义**并存不混**（那是别人的合同，不改）。
+- 运行时落点：**规范流注册表**（`crates/engine/runtime/src/canonical/canonical_stream.rs`）按
+  `(session_id, request_id)` 持有 **sequence 计数 + 有界环形缓冲（delta 帧）+ 终帧 + 订阅广播**；
+  `/v1/chat` 的流式处理器把 delta **发布进注册表**，规范流端点从注册表**订阅 / 重放**
+  ⇒ 同一回合可被**多个订阅者**观察，晚连者能按 `after_sequence` 补齐窗口内增量。
+- 重放与超窗：`after_sequence` / `Last-Event-ID` ⇒ 从该序号之后**有限重放**；
+  序号早于窗口 ⇒ 先发一帧 `resync_required`（带 `resync_from_sequence`），再从窗口最早可用序号续发
+  ⇒ 客户端据此**重新取回执**，而不是假装连续。
+- 断线回退：断线后 GET 回执（既有权威面）能恢复真实状态，且**不重发模型**（去重见 C2）。
+
 ## 裁决（本批已定，避免实现期反复）
 
 1. **`/bridge/*` 是私有前端仓宿主自己的本地 HTTP 面，不是后端路由。**
@@ -120,6 +144,20 @@ DTO 字段按前端草案（`contact_id`/`agent_id`/`display_name`/`subtitle`/`a
     与会话绑定面一起做才不会造出「只有一半的绑定」；B2 做记忆作用域映射与会话 agent 绑定，B3 做 HTTP 面与绑定。
 14. **`ContactOut` 在合同字段之上增补**（B1 交付时追加的裁决）：`persona` 正文 / `revision` / `updated_at_ms`
     是后端生成的事实（客户端不可写），对外暴露只读不构成越权 ⇒ 保留并写进契约文档。
+15. **规范流的后端原生路径定为 `GET /v1/sessions/{session_id}/requests/{request_id}/stream`**（C 批实施时追加的裁决）：
+    不实现 `/bridge/*`（裁决 1），宿主把 `/bridge/conversation/operations/{op}/stream` 映射过来。
+    理由：身份键已经是 session + request（裁决 2），路径沿用既有 `/v1/sessions/...` 族
+    （`crates/adapters/gateway/src/session_settings.rs:229-257`）⇒ 前端只需记两个 id，
+    不必在后端造一个无法校验的 operation 身份。
+16. **规范流的权威缓冲落在运行时注册表，不落在网关**（C 批实施时追加的裁决）：
+    网关 SSE 处理器只做**投影**（把既有 OpenAI 兼容 chunk 转成规范帧），权威增量留在运行时的
+    有界环形缓冲里 ⇒ 晚连 / 重连的订阅者能拿到**同一回合**的增量；
+    否则「重放」退化成事后文本镜像（`turn_delta` 的老问题，`canonical_entry.rs:1798-1805`）。
+17. **`resync_required` 是显式事实帧，不是错误**（C 批实施时追加的裁决）：
+    窗口外重放 ⇒ 发 `resync_required`（带 `resync_from_sequence`）后从窗口最早序号续发，
+    客户端应改取回执。理由：沿用仓内「显式省略事实」范式
+    （`crates/adapters/gateway/tests/events.rs:226-266` 的 `frames_omitted`）
+    ⇒ 把「省略」写成事实，客户端才知道该回退；把省略伪装成连续＝假连续，最坏。
 
 ## 未决（需要前端/宿主侧确认，后端按最保守口径实现）
 
@@ -235,6 +273,41 @@ DTO 字段按前端草案（`contact_id`/`agent_id`/`display_name`/`subtitle`/`a
   （非受管根 ⇒ 400）；**未做自动过期回收**（`expires_at` 只透传）；**workspace→session/task/审批/流的失效联动未做**；
   多用户归属未建模（404 恒定消息是为归属建模预留的合同位）；作用域「宿主确认」当前＝**上限截断到 Write**；
   审计端口缺席时回落 `observations.buffer_audit`；`domain_context.rs` 未改（域门对未登记路径 fail-closed 403）。
+
+### 2026-11-17 A3 批次交付（提交 `e5cb9bfb6`）
+
+- 落点：`crates/engine/runtime/src/canonical/workspace.rs`（819 → 1446 行）、新增
+  `crates/engine/runtime/tests/workspace_persistence.rs`（11 测试）与
+  `crates/adapters/cli/tests/workspace_persistence_chain.rs`（3 测试）；改
+  `crates/adapters/cli/src/gateway_panels.rs`（注册表改 `Arc<dyn WorkspaceRegistry>`、新增
+  `new_persistent(managed_root, data_dir)`、`WorkspaceError::Storage` ⇒ 恒定文案「工作区存储故障」）与
+  `crates/adapters/cli/src/lib.rs:3268-3277`（组合根改 `new_persistent(current_dir(), default_panel_data_dir())?`
+  ⇒ **开不出注册表就启动失败**（fail-closed），不降级成进程内注册表假装成功）。
+- 持久化介质：**本地文件系统 + 既有 `StoredDoc` 信封**（`name="workspace"`、`version=1`），落
+  `<data_dir>/workspaces/<workspace_id>/workspace.json` + `selection.json` + 各自 `.lock`；
+  **0 新增外部依赖**，与 B1 的 `FileContactRegistry` 同范式（物理隔离、零债）。
+- 关键不变量（已由测试钉死）：**绝对根只落盘不外泄**（`root_display` 与能力字段是**派生**值，恢复时重算，
+  读面仍只出叶子名）；**revision 随记录落盘**（重启不重置，跨工作区不可比）；**恢复按 `workspace_id + revision`
+  精确匹配**，陈旧 revision ⇒ `RevisionConflict` 且状态零变化（顺序固定 NotFound → RevisionConflict → Revoked）；
+  **已吊销的工作区不可复活**（`restore_exact` 与 `find_by_root` 都不返回它）；**坏记录 ⇒ fail-closed 拒开**
+  （开不出注册表 ⇒ 组合根启动失败）；**落盘失败 ⇒ 内存零变化**（读盘上权威记录 → 校验 → 改副本 → 写盘 → 提交内存）；
+  宿主身份按**受管根绝对路径**匹配 ⇒ `bind_managed_workspace` 幂等（同一根复用同一身份）。
+- 反向验伪三组（红/绿各一条已贴进提交正文）：① 摘 revision 比对 ⇒ RED「陈旧 revision 必须被拒 …
+  Workspace { workspace_id: WorkspaceId(3868fe54-…), revision: 1, status: Ready, … }」+
+  「陈旧 revision 必须是 RevisionConflict, 实际是 Revoked」⇒ `9 passed; 2 failed` ⇒ 装回 GREEN 11 passed；
+  ② 摘落盘里的受管根 ⇒ RED「落盘文件必须带着受管根 —— 否则重启后无从解析工作目录」+
+  「重启后逐字段一致 … left: root_display: "workspace-root" right: ".tmp95NWgp"」⇒ `6 passed; 5 failed`
+  ⇒ 装回 GREEN 11 passed；③ 摘恢复时的状态回填 ⇒ RED「left: Ready right: Revoked」+
+  「已吊销的工作区不得被交回宿主去复用」⇒ `9 passed; 2 failed` ⇒ 装回 GREEN 11 passed。
+- ⚠️ **诚实边界（四级口径：IMPLEMENTED，持久化层已就位；HTTP 面仍是 A2 的形态）**：落盘介质是**本地文件系统**
+  （无 DB / 无 WAL）；原子性只到**单文件替换级**（Windows 上不做父目录 fsync）；锁粒度是**单工作区文件锁**
+  + selection 独立锁（**跨工作区无全局序**）；revision 是**每工作区自己的**计数器（跨工作区不可比）；
+  `restore_exact` **尚无 HTTP 端点、无生产调用点**；多根 / 临时根 / 预设根装配未做；自动过期回收未做；
+  **workspace→session/task/审批/流的失效联动未做**；多用户归属未建模；落盘文件含绝对根 ⇒
+  **数据根目录的读权限＝绝对根的读权限**（未做 0600 级收紧）；宿主身份按受管根绝对路径匹配 ⇒
+  **换 CWD 重启会新铸身份**（跨路径稳定性未裁决）；`WorkspaceError` 新增公开变体 `Storage`
+  （仓外穷举匹配算 minor 破坏，仓内唯一匹配点已同步）；A2 合同面文件 `crates/adapters/gateway/src/workspace_panel.rs`
+  **0 改动**（持久化不污染合同语义）。
 
 ### 还差什么
 

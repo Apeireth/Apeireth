@@ -16,6 +16,7 @@ Author: lead
 |---|---|---|---|---|
 | A1 | 工作区领域类型 + 受管根 + revision CAS | **IMPLEMENTED**（仅领域层） | ✅ 已完成（提交 `91888e27c`） | `cargo test -p apeireth-runtime --test workspace_contract --locked -j 2` ⇒ 11 passed / 0 failed（2026-11-17）；clippy 0 警告；fmt 0 diff；反向验伪两组（摘 revision 递增 / 摘安全展示名）均 RED→GREEN |
 | A2 | 工作区 HTTP 面 + 审计 + 会话/项目/审批绑定 | **IMPLEMENTED**（HTTP 面已接线；⚠️ 未持久化） | ✅ 已完成（提交 `3854c01a8`） | `cargo test -p apeireth-gateway --test panel_workspaces_face --locked -j 2` ⇒ 13 passed / 0 failed；`cargo test -p apeireth-cli --test workspace_real_chain --locked -j 2` ⇒ 5 passed / 0 failed（均 2026-11-17）；clippy 0 警告；fmt 0 diff；fast gate FAST GATE PASSED；反向验伪三组（摘修订号比对 / 摘展示名安全闸 / 409→400）均 RED→GREEN |
+| A3 | 工作区持久化（跨重启恢复） | **IMPLEMENTED**（持久化层已就位；HTTP 面仍 A2 形态） | ✅ 已完成（提交 `e5cb9bfb6`） | `cargo test -p apeireth-runtime --locked -j 2` ⇒ 全绿（含 `workspace_contract` 11 passed + `workspace_persistence` 11 passed）；`cargo test -p apeireth-cli --locked -j 2` ⇒ 全绿（含 `workspace_real_chain` 5 passed + `workspace_persistence_chain` 3 passed）；clippy 0 警告；fmt 0 diff；孤儿 API 棘轮 0 新增；反向验伪三组（摘 revision 比对 / 摘落盘受管根 / 摘恢复状态回填）均 RED→GREEN |
 | B1 | 联系人 / Agent identity + 人设（字节上限 / 控制字符 / 版本号） | **IMPLEMENTED**（仅领域层） | ✅ 已完成（提交 `5bfb959d7`） | `cargo test -p apeireth-core --test agent_contact --locked -j 2` ⇒ 16 passed / 0 failed；`cargo test -p apeireth-runtime --test contact_persona_authority --locked -j 2` ⇒ 6 passed / 0 failed（均 2026-11-17）；clippy 0 警告；fmt 0 diff；反向验伪五组（persona_revision 不递增 / 归档可复活 / 上限被绕过 / 入面采信客户端 capabilities / 人设被当授权依据）均 RED→GREEN |
 | B2 | 记忆作用域映射 + 会话 agent 绑定 + 归档语义 | — | ❌ 未开始 | 无 |
 | B3 | 联系人 HTTP 面 + `workspace_binding` + 会话绑定面 | — | ❌ 未开始 | 无 |
@@ -47,11 +48,13 @@ B2 / B3 / C1 / C2 **尚无任何一项**达到 IMPLEMENTED；批次完成前不�
 
 ## 三、还差什么（逐条可判定）
 
-1. **A1 已完成，但只到领域层**：持久化在 A3；工作区与 session/task/审批的**绑定**尚未开工；
-   多根解析（运行时仍是进程单根）与自动过期回收也未做。
-2. **A2 已完成，但未持久化**：HTTP 面、409/403 分类码、审计事件、能力入册、组合根真实注入均已落地；
-   **仍缺**：跨重启恢复（A3）、多根/临时根/预设根的受管根装配、自动过期回收、
-   **workspace→session/task/审批/流的失效联动**、多用户归属建模。
+1. **A1 已完成，但只到领域层**：工作区与 session/task/审批的**绑定**尚未开工；
+   多根解析（运行时仍是进程单根）与自动过期回收也未做。持久化已在 A3 落地。
+2. **A2 已完成，持久化已在 A3 落地**：HTTP 面、409/403 分类码、审计事件、能力入册、组合根真实注入均已落地；
+   A3 又把登记事实落到本地文件系统（跨重启可恢复）。
+   **仍缺**：多根/临时根/预设根的受管根装配、自动过期回收、
+   **workspace→session/task/审批/流的失效联动**、多用户归属建模、
+   `restore_exact` 的 HTTP 端点与生产调用点。
 3. **B1 已完成，但只到领域层**：缺 `/v1/agents/contacts*` HTTP 面（B3）、`workspace_binding`（B3）、
    记忆作用域映射与会话绑定（B2）、归档审计事件（B3）。
 4. **B2 未开工**：无合同版 `memory_scope` 映射、无会话 agent 绑定面、无「绑定不匹配即拒绝且不重放」载体、无 HTTP 级归档语义。
@@ -71,14 +74,37 @@ B2 / B3 / C1 / C2 **尚无任何一项**达到 IMPLEMENTED；批次完成前不�
 cargo test -p apeireth-runtime --locked -j 2
 cargo test -p apeireth-gateway --locked -j 2
 cargo test -p apeireth-protocol --locked -j 2
-cargo clippy -p apeireth-gateway -p apeireth-runtime -p apeireth-protocol --all-targets --locked -j 2 -- -D warnings
+cargo test -p apeireth-cli --locked -j 2
+cargo clippy -p apeireth-gateway -p apeireth-runtime -p apeireth-protocol -p apeireth-cli --all-targets --locked -j 2 -- -D warnings
 python3 scripts/docs_truth.py --verify --check
 ```
 
 各批次落地后，**每个批次必须补一条专属守卫**（该批的集成测试名），并在本页 §一 的「证据」列写明命令与实测输出。
+本批已落的专属守卫：
+
+```text
+cargo test -p apeireth-runtime --test workspace_contract --locked -j 2       # A1
+cargo test -p apeireth-gateway --test panel_workspaces_face --locked -j 2    # A2
+cargo test -p apeireth-runtime --test workspace_persistence --locked -j 2   # A3
+cargo test -p apeireth-cli --test workspace_persistence_chain --locked -j 2  # A3（真实落盘 + 真路由）
+cargo test -p apeireth-core --test agent_contact --locked -j 2              # B1
+cargo test -p apeireth-runtime --test contact_persona_authority --locked -j 2 # B1
+```
 
 ## 五、口径纪律
 
 - 本页写「已实现 / 已接线」必须同时给出**四级口径**与**实测命令 + 输出**；没有输出就写「未实测」。
 - 批次未完成时进度页写「❌ 未开始 / 未实测」是**守卫友好**的形态（可判定），不要写成散文。
 - 引用现状只引文件（本页 / 设计稿 / 源码 file:line / 门禁输出），**不引对话摘要**。
+
+## 六、本轮（三条工作线）过程中被门禁抓到的真实缺陷（不是演练）
+
+三条都登记在 `docs/04-internal/ui-engine-defect-ledger.md`（台账编号只增不改）；**只有 E-199 落在本分支**，另两条分别落在磁盘纪律线（PR #131）与 harness 裁决线（PR #133）：
+
+| 编号 | 现象 | 根因 | 修在哪 |
+|---|---|---|---|
+| E-197 | fast gate 把契约类 `.toml` 当 Rust 改动，并把三方依赖名塞进 `cargo -p` ⇒ 撞多版本依赖报 `error: specification 'bit-set' is ambiguous` | `scripts/verify_changed.py` 的文件分类只按后缀，不按「是不是清单」 | 磁盘纪律线 PR #131（提交 `6aaff28ec`：`classify_files()` 分类 + 影响面限制在 35 个 workspace 成员内）＋新增回归守卫 `scripts/check_fast_gate_classifier.py`（11 条断言） |
+| E-198 | 合并裁决把「适用却没跑」判成 BLOCKED，但**阶段选择只看有没有 Rust 改动** ⇒ docs/contract/ci-only PR 必假红 | `scripts/harness.py` 的阶段集合只由影响级别决定，与门禁 scope 适用性是两套口径 | harness 裁决线 PR #133（提交 `9e438190f`：阶段集合＝影响级别阶段 ∪ 适用且 required 的门禁所在阶段）＋回归测试 `scripts/test_harness_gate_status.py` 新增 5 例 |
+| E-199 | fast gate 的 `self_status_e2e` 偶发假红（`protect: Conflict { id: "e1", expected: 0, actual: 1 }`） | 测试临时路径用 `std::process::id()` 拼名 ⇒ Windows 回收进程号 ⇒ 上一轮残留被当成本轮事实 | **本分支**（提交 `2dd369247`：本进程首次用到该路径时清一次残留；**不放宽断言**）。⚠️ 同类写法全仓 236 处，属长尾 |
+
+**教训**：三条都不是「演练出来的红」，是本批真的撞上的门禁红；修法一律落在**机制**（分类口径 / 阶段口径 / 隔离口径），不是落在「把断言放宽」。
