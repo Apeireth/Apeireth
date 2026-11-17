@@ -446,7 +446,7 @@ jobs:
           workspaces: 'crates-ui -> target'
 
       - name: Setup Node + pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           version: 12
 
@@ -558,7 +558,7 @@ jobs:
           workspaces: 'crates-ui -> target'
 
       - name: Setup Node + pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           version: 12
 
