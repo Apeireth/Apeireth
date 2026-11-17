@@ -1,6 +1,7 @@
 //! Registry lifecycle facade and dispatcher catalog views. No second registry.
 use super::error::{RuntimeError, RuntimeResult};
-use super::runtime::{Runtime, RuntimeBuilder};
+use super::runtime::Runtime;
+use super::runtime_builder::RuntimeBuilder;
 use apeireth_core::kernel::{CapabilityId, PluginId, SessionId};
 use apeireth_plugin::{Plugin, PluginContext, ToolCapability};
 use std::sync::Arc;

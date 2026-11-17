@@ -147,6 +147,10 @@ pub(crate) async fn capabilities(State(state): State<GatewayState>) -> Response 
                 cap("workspaces.write", false, true, &["create", "select", "close"], workspaces_supported, workspaces_supported),
             ] },
             crate::contact_panel::contacts_capability_group(contacts_supported),
+            crate::session_binding::session_binding_capability_group(
+                state.runtime.contact_registry().is_some()
+                    && state.runtime.workspace_registry().is_some(),
+            ),
             { "name": "permissions", "capabilities": [
                 cap("permissions.approval.read", true, false, &["list"], true, true),
                 cap("permissions.approval.resolve", false, true, &["resolve"], true, true),

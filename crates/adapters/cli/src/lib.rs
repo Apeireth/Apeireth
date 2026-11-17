@@ -8,6 +8,7 @@
 pub mod backup;
 pub mod env_switches;
 // 审批面分派 (W3.7 拆分: 装配根文件尺寸棘轮已到顶; 公开路径经下方 re-export 不变).
+pub(crate) mod binding_registries;
 pub mod canonical_approval;
 pub mod contact_panel;
 pub(crate) mod contract_panels;
@@ -1610,6 +1611,7 @@ async fn build_canonical_runtime_with_parts(
     use apeireth_provider::canonical_openai_compatible::OpenAiCompatibleProviderPlugin;
 
     let mut builder = Runtime::builder().with_clock(Arc::clone(&clock));
+    builder = crate::binding_registries::inject(builder);
     // P-arch (2026-08-27) + v2.0.0-rc.1 RC-9: KeyringSelector 真接 OS keyring
     // 优先用 keyring (设 APEIRETH_KEYRING_BACKEND env), fallback 到 EnvCredentialResolver
     // (alpha 0 装路径, 0 行为变化). 详见 `keyring_bootstrap` 模块.

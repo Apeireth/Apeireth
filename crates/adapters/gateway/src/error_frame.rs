@@ -64,6 +64,11 @@ pub enum ErrorCode {
     ContactArchived,
     /// 工作区绑定冲突 (B3a 合同面): 绑定的工作区不存在、已吊销或修订号不匹配。
     ContactBindingConflict,
+    /// 会话绑定被拒 (B3b 合同面 / 回合闸): 会话的 agent 绑定已不再成立 ——
+    /// 联系人缺失/已归档、工作区缺失/已吊销或修订号已变 —— 故不复用 conflict 码。
+    AgentBindingRejected,
+    /// 会话版本冲突 (B3b 合同面): 客户端带来的 `expected_revision` 与会话当前修订号不符。
+    SessionBindingConflict,
     /// An unexpected internal error.
     Internal,
 }
@@ -91,6 +96,8 @@ impl ErrorCode {
             Self::ContactConflict => "contact_conflict",
             Self::ContactArchived => "contact_archived",
             Self::ContactBindingConflict => "contact_binding_conflict",
+            Self::AgentBindingRejected => "agent_binding_rejected",
+            Self::SessionBindingConflict => "session_binding_conflict",
             Self::Internal => "internal",
         }
     }
@@ -134,6 +141,11 @@ impl ErrorCode {
             Self::ContactConflict => "联系人已被改动——重新读取该联系人拿到最新修订号, 再带着新的 expected_revision 提交",
             Self::ContactArchived => "联系人已归档 (软删除), 不可修改也不可复活; 请新建一个联系人",
             Self::ContactBindingConflict => "绑定的工作区不存在、已吊销或修订号已变——重读工作区列表拿到最新修订号后再声明绑定",
+            // 会话绑定面 (B3b 合同面 / 回合闸): 两个码各说一条可执行动作。
+            Self::AgentBindingRejected => {
+                "会话绑定的联系人/工作区已不可用——重新读取会话绑定, 换一位可用联系人或一个未吊销的工作区后再发起回合"
+            }
+            Self::SessionBindingConflict => "会话已被改动——重新读取会话拿到最新修订号, 再带着新的 expected_revision 提交",
             Self::Internal => "重启 Companion 后重试, 若复现请提交日志",
         }
     }
@@ -233,6 +245,8 @@ mod tests {
             ErrorCode::ContactConflict,
             ErrorCode::ContactArchived,
             ErrorCode::ContactBindingConflict,
+            ErrorCode::AgentBindingRejected,
+            ErrorCode::SessionBindingConflict,
             ErrorCode::Internal,
         ];
         for code in codes {

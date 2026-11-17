@@ -110,6 +110,19 @@ pub enum RuntimeError {
         approval: ApprovalId,
     },
 
+    /// The session's agent binding no longer holds, so the turn was refused.
+    ///
+    /// The turn-admission gate refuses **before** anything is written: no
+    /// message is appended and the session revision does not move. A refused
+    /// turn is therefore never replayed against a changed binding.
+    #[error("session {session} agent binding rejected: {reason}")]
+    AgentBindingRejected {
+        /// The session whose binding was refused.
+        session: SessionId,
+        /// Why the binding no longer holds.
+        reason: String,
+    },
+
     /// The session store could not serve or persist a session.
     #[error("session {session} could not be {operation}: {reason}")]
     Session {

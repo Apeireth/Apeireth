@@ -796,6 +796,10 @@ pub fn panel_routes() -> Router<GatewayState> {
         // 一张读面 (`GET /v1/agents/contacts`), 写面三条 (建/改/归档)。**不另开**
         // `/v1/panel/contacts` 别名 —— 一张读面, 不两套。
         .merge(crate::contact_panel::contact_routes())
+        // 会话 agent 绑定合同面 (B3b-1 批), 路由表跟合同面住在一起
+        // ([`crate::session_binding`]): 一读 (GET) 一写 (POST), 写面带
+        // `expected_revision`, 显式 `contact_id: null` ⇒ 解绑。
+        .merge(crate::session_binding::session_binding_routes())
         // V2-b 用户/域管理面 (owner 档, 见 [`panel_admin_face`]): 列表两口在面板族,
         // 增删改口在 canonical_entry 的 admin 族 (同一 UserTable 服务, 双入口同源)。
         .route("/v1/panel/users", get(crate::user_admin::list_users))
