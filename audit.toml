@@ -18,6 +18,13 @@ ignore = [
     #   zbus_names/zvariant/zvariant_derive 5.x ← zbus ← xcap ← apeireth-perception
     # 均无安全升级路径（paste 已归档；zbus 6 迁移需等 xcap 升），只能上游解决。
     "RUSTSEC-2024-0436",
+    # 2026-11-17 供应链公告批：RUSTSEC-2026-0543（chrono 0.4.45 · unmaintained）。
+    # 类型＝unmaintained（非漏洞：无 exploit / 无 unsafe 缺陷 / 无数据泄漏面）；
+    # 所有版本都受影响 ⇒ 公告自带「无安全升级路径」⇒ 升级解不掉；
+    # chrono 是在役直接依赖（6 个在役 crate 引用）⇒ 迁移属独立工作线。
+    # 复审条件：迁移完成后即删；上游恢复维护 ⇒ 变 advisory-not-detected ⇒ 即删。
+    # 理由全文与同步面见 deny.toml [advisories].ignore 同名条目。
+    "RUSTSEC-2026-0543",
     "RUSTSEC-2026-0370",
     "RUSTSEC-2026-0371",
     "RUSTSEC-2026-0372",
