@@ -859,6 +859,77 @@ def impact_plan(base: str | None) -> dict:
     return {"available": False, "stages": ["fast", "deep"], "level": "?"}
 
 
+# 阶段顺序恒定：**fast 在前、deep 在后**（其余阶段附在后，按字典序）。
+STAGE_ORDER: tuple[str, ...] = ("fast", "deep")
+
+
+def order_stages(stages: set[str]) -> list[str]:
+    """把阶段集合排成**恒定顺序**（fast → deep → 其余字典序）。
+
+    为什么：阶段的先后**有语义**（fast 失败 ⇒ 不跑 deep）⇒ 顺序不能由
+    集合/字典的偶然顺序决定 ⇒ 必须显式排序。
+    """
+    known = [name for name in STAGE_ORDER if name in stages]
+    extra = sorted(name for name in stages if name not in STAGE_ORDER)
+    return known + extra
+
+
+def required_scope_stages(
+    gates: list[dict[str, Any]], tags: list[str]
+) -> dict[str, list[tuple[str, list[str]]]]:
+    """**required 且 scope 命中本次 diff** 的门禁 ⇒ 它所在的阶段**必须跑**。
+
+    # 为什么（2026-11-17 · E-198）
+
+    本仓有**两套**「该跑什么」的口径：
+
+    1. **阶段选择**（`impact_plan`）只看「有没有 Rust 改动」
+       ⇒ 影响级别 L0/L1（纯文档）⇒ **只跑 fast**；
+    2. **裁决口径**（`evaluate_verdict` 的 `req_bad`）看「diff 命中了哪些 scope 标签」
+       ⇒ 适用却没跑的 **required** 门禁 ⇒ **BLOCKED**。
+
+    ⇒ ⇒ 两套口径**不一致** ⇒ 只改 docs/contract/ci 的 PR（只跑 fast）
+    ⇒ ⇒ `claims-verify` / `golden-baseline` 这类 **required deep 门禁**被记成
+    「适用却没跑」⇒ 裁决 BLOCKED（PR #131 实测）。
+
+    ⇒ ⇒ 本函数把「required ∧ scope 适用」的门禁**所在阶段**并入阶段集合
+    ⇒ ⇒ 两套口径**一致**（**不是**放松裁决，而是把该跑的阶段真跑起来）。
+
+    ⚠️ **只认 required**：非 required 门禁**不得**把阶段拉进来
+    （那会让每批改动都无谓地跑重阶段）。
+
+    返回 {阶段: [(门禁 id, 命中的 scope 标签), ...]}（命中判定**复用**
+    `scope_applies` ⇒ 裁决口径与阶段口径**同一套**）。
+    """
+    out: dict[str, list[tuple[str, list[str]]]] = {}
+    for gate in gates:
+        if not gate.get("required", True):
+            continue
+        if not scope_applies(gate, tags):
+            continue
+        scope = gate.get("scope") or ["*"]
+        hits = ["*"] if "*" in scope else sorted(set(scope) & set(tags))
+        stage = str(gate.get("stage") or "fast")
+        out.setdefault(stage, []).append((str(gate.get("id")), hits))
+    return out
+
+
+def stage_completion_notes(
+    required: dict[str, list[tuple[str, list[str]]]], added: set[str]
+) -> list[str]:
+    """「阶段补齐」说明行（**只**为**真正新增**的阶段打印）。"""
+    notes: list[str] = []
+    for stage in sorted(required):
+        if stage not in added:
+            continue
+        for gate_id, hits in required[stage]:
+            notes.append(
+                f"阶段补齐：{gate_id}(scope 命中 {'/'.join(hits)}) 位于 {stage}"
+                " ⇒ 该阶段必须跑，否则「适用却没跑 ⇒ 阻断」"
+            )
+    return notes
+
+
 def _verify_phase_binding(document: dict[str, Any], expected: dict[str, Any]) -> None:
     for key in ("commit_sha", "tree_sha", "base_sha"):
         if not expected.get(key) or document.get(key) != expected[key]:
@@ -885,21 +956,37 @@ def cmd_verify(args: argparse.Namespace) -> int:
     * **deep 被跳过**（因 fast 失败）时，deep 的门禁记 `SKIPPED` + 原因
       「**fast 阶段失败 ⇒ 不跑 deep**」（**不是通过**）；
     * 阶段本身**不改变**门禁的 required 语义 ⇒ 裁决仍按「适用却没跑 ⇒ 阻断」处理。
+    * ⭐ **阶段补齐**（2026-11-17 · E-198）：影响分析只看「有没有 Rust 改动」，
+      而裁决口径看「diff 命中了哪些 scope」⇒ 两套口径不一致 ⇒ 纯文档 PR
+      （L0 ⇒ 只跑 fast）会把 `claims-verify` 这类 **required deep 门禁**
+      记成「适用却没跑」⇒ **假红 BLOCKED**
+      ⇒ ⇒ 这里把「required ∧ scope 命中本次 diff」的门禁**所在阶段并入**
+      阶段集合 ⇒ 两套口径一致（**不放松裁决**，只是把该跑的阶段真跑起来）。
     """
     import argparse as _ap
 
     plan = impact_plan(args.base)
-    stages = plan["stages"]
+    impact_stages = plan["stages"]
+    context = collect_context(args.base)
+    gates, notes, _ = load_registry()
+    # ⭐ **阶段补齐**（E-198）：让「阶段选择」与「门禁适用性」**两套口径一致**
+    #    —— 「required ∧ scope 命中本次 diff」的门禁**所在阶段必须跑**，
+    #    否则它就是「适用却没跑」⇒ 裁决 BLOCKED（假红）。
+    required_stages = required_scope_stages(gates, context["tags"])
+    added_stages = {
+        stage for stage in required_stages if stage not in set(impact_stages)
+    }
+    stages = order_stages(set(impact_stages) | set(required_stages))
     print(
         f"影响级别 **{plan['level']}** ⇒ 该跑阶段：{', '.join(stages)}"
         + ("" if plan["available"] else "（影响分析不可用 ⇒ 保守：两个阶段都跑）")
     )
     for reason in (plan.get("reasons") or [])[:3]:
         print(f"  · {reason}")
+    for note in stage_completion_notes(required_stages, added_stages):
+        print(note)
     print()
 
-    context = collect_context(args.base)
-    gates, notes, _ = load_registry()
     initial_dirty = tree_is_dirty()
     started_at = now_iso()
     phase_runs: list[dict[str, Any]] = []
