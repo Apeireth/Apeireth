@@ -446,6 +446,16 @@
 > 而四类使用侧反模式（E-196）**全部**是「调用方没读手册/手册落后于引擎」或「调用方自建了一套」的产物
 > ⇒ ⇒ **手册与引擎同批更新，是引擎交付的一部分，不是文档债**。
 
+## 3.8 ⭐ 2026-11-17 · 强制快反馈门禁（fast gate）在「碰契约/配置 toml」的批次上必假红
+
+> 背景：本条**不是引擎缺陷**，是**工具缺陷**；按 **E-118a / E-121** 的先例登记在本台账（那两条记的也是
+> `scripts/verify_changed.py` 这条门禁）。本轮由后端「构建产物槽位纪律」批次触发：批次要改
+> `docs/architecture/contract.toml` ⇒ ⇒ 门禁假红 ⇒ ⇒ **纪律链在真正需要它的地方断掉**。
+
+| # | 缺陷 | 证据 | 状态 |
+|---|---|---|---|
+| **E-197** | ⚠️⭐⭐⭐⭐ **fast gate 把「任何 `.toml`」当成 Rust 变更，并把 cargo metadata 的三方依赖名全塞进 `cargo -p`** ⇒ ⇒ 撞上多版本依赖即报歧义 ⇒ ⇒ **任何碰契约/配置 toml 的批次都跑不过 AGENTS.md §5.1 强制的门禁** ⇒ ⇒ 门禁红得与被测改动无关（假红），且**红在纪律链最需要它的地方** ⇒ ⇒ 「谁都不信 fast gate」比「fast gate 一直红」更坏 | **实测**：改 `docs/architecture/contract.toml` 后 `python scripts/verify_changed.py` ⇒ `FAST GATE FAILED: check (exit=101)`；`logs/verify-changed.log` 原文 `error: specification 'bit-set' is ambiguous` + `bit-set@0.5.3 / bit-set@0.8.0 / bit-set@0.11.1` ⇒ ⇒ **根因**（读 `scripts/verify_changed.py` 全文定位）：`:159` `rust_files = [f for f in files if f.endswith((".rs", ".toml"))]` 把契约 toml 当代码 ⇒ `:172 crate_for_path` 找不到归属包 ⇒ `seed_ids` 为空 ⇒ `:106-107 affected_packages` 走 `if all_workspace or not seed_ids:` ⇒ 返回 **metadata 里的 481 个包名（三方依赖）** ⇒ ⇒ `cargo -p <三方依赖>` 歧义 ⇒ ⇒ **修法**：`classify_files()` 区分「代码文件 / 清单文件 / 非 Rust 变更」；`affected_packages` 限制在 `meta["workspace_members"]`（35 个成员）；非本仓 workspace 的 `.rs` 进 `foreign_files` 并**明说「本仓 Rust 阶段不覆盖，请另跑对应 workspace 的门禁」**（不静默跳过）⇒ ⇒ **反向验伪**：修前红（上面原文）⇒ 修后 `no Rust/manifest changes (24 files changed) — docs-only` ⇒ EXIT 0；闭包自证 `--files crates/foundation/core/src/kernel/ids.rs --dry-run` ⇒ `affected crates: 23`（全是 workspace 成员）⇒ ⇒ **回归守卫**：新增 `scripts/check_fast_gate_classifier.py`（11 条断言，纯只读不编译）⇒ 全 ok EXIT 0 | `scripts/verify_changed.py`（:159/:172/:106-107 段已改）＋`scripts/check_fast_gate_classifier.py`（新）⇒ ⇒ **已修**（并已加回归守卫）；⚠️ **更正 E-121**：E-121 把同一个现象「更正」为「瞬时依赖解析抖动 ⇒ 非工具缺陷 ⇒ 工具可用（复跑 EXIT 0）」⇒ ⇒ **那次 EXIT 0 成立的原因是该分支只动 crates-ui 与 docs（无 `.toml`）⇒ 走 docs-only 路径** ⇒ ⇒ **E-121 的更正只在 docs-only 批次成立** ⇒ ⇒ 一旦批次碰契约/配置 toml 就必假红 ⇒ ⇒ **E-121 的归因不成立（原文保留不删，在此更正）** |
+
 ## 4. 已否 / 已排除（留档，免得重走）
 
 | 假设 | 实测结果 | 结论 |
