@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "updated_at": "2026-11-17",
+  "purpose": "构建产物槽位登记表 —— 唯一真源。谁在哪个目录里长构建产物，先登记再长；没登记的目录叫「游离」，审计脚本按体积判红。",
+  "policy": [
+    "只有本表登记的目录才允许承载 Rust 构建产物；新建目录前先登记 owner 与用途。",
+    "槽位是「路径 + 归属」，不是「每个工作线一个」——同一工作线的多个工作树共用同一槽位，否则 N 条线 × N 倍产物。",
+    "个人/临时目录用 CARGO_TARGET_DIR 覆盖，不得新增长期目录名（如 cargo-target-<某批次>）。",
+    "审计口径：`python scripts/target_slot.py --audit`；游离目录总量超阈值 ⇒ 非 0 退出（守卫）。",
+    "回收口径：`python scripts/clean_test_binaries.py --target <目录>`（只删可再生测试二进制，保留 *.so 与 incremental）。"
+  ],
+  "default_slot": "base",
+  "scan_roots": [
+    "C:\\Apeireth"
+  ],
+  "thresholds": {
+    "max_stray_total_gb": 20,
+    "max_single_stray_gb": 5
+  },
+  "slots": {
+    "base": {
+      "path": "C:\\Apeireth\\cargo-target",
+      "owner": "apeireth-backend-rust",
+      "purpose": "Apeireth 后端 Rust 工作线共用槽位（所有工作树 + 私有桌面前端仓以外的本仓 Rust 任务）",
+      "keep": "deps/build/.fingerprint 与 *.so 保留；测试二进制与 incremental 可再生，按需回收"
+    },
+    "ui": {
+      "path": "C:\\Apeireth\\cargo-target-ui-desk",
+      "owner": "apeireth-desktop-ui",
+      "purpose": "桌面前端 / Tauri WASM 构建槽位（私有 ui-desktop 仓的 shell/build-windows.ps1 显式指定该槽位）",
+      "keep": "同上"
+    },
+    "tool": {
+      "path": "C:\\Apeireth\\cargo-target-tools",
+      "owner": "apeireth-tooling",
+      "purpose": "独立工具链槽位（fuzz / 一次性工具构建 / 供应链检查），与业务构建隔离，避免互相踩",
+      "keep": "同上"
+    }
+  },
+  "reserved_evidence_paths": [
+    {
+      "path": "C:\\Apeireth\\cargo-target-ui-desk2",
+      "reason": "docs/intake 的 c10-companion 证据直接引用其 exe 路径 ⇒ 暂不删除；腾空间时先改证据引用"
+    }
+  ],
+  "legacy_strays": [
+    {
+      "path": "C:\\Apeireth\\cargo-target-c4-ui",
+      "max_gb": 2,
+      "reason": "历史遗留（2026-11-15 前某条 UI 线自建）⇒ 登记为棘轮项：只许缩不许涨；迁进登记槽位后从本表移除"
+    },
+    {
+      "path": "C:\\Apeireth\\cargo-target-c23",
+      "max_gb": 8,
+      "active": true,
+      "reason": "他线在途产物（2026-11-17 创建，仍在写入）⇒ 不替别人的线做决定 ⇒ 只报告不判红；该线迁入登记槽位后从本表移除（上限仅作膨胀提示，不作判红依据）"
+    },
+    {
+      "path": "C:\\Apeireth\\cargo-target-c13-model",
+      "max_gb": 1,
+      "reason": "历史遗留（模型线自建）⇒ 棘轮项：只许缩不许涨"
+    },
+    {
+      "path": "C:\\Apeireth\\cargo-target-check",
+      "max_gb": 1,
+      "reason": "历史遗留（一次性检查任务自建）⇒ 棘轮项：只许缩不许涨"
+    }
+  ]
+}
