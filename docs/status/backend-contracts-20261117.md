@@ -18,8 +18,8 @@ Author: lead
 | A2 | 工作区 HTTP 面 + 审计 + 会话/项目/审批绑定 | **IMPLEMENTED**（HTTP 面已接线；⚠️ 未持久化） | ✅ 已完成（提交 `3854c01a8`） | `cargo test -p apeireth-gateway --test panel_workspaces_face --locked -j 2` ⇒ 13 passed / 0 failed；`cargo test -p apeireth-cli --test workspace_real_chain --locked -j 2` ⇒ 5 passed / 0 failed（均 2026-11-17）；clippy 0 警告；fmt 0 diff；fast gate FAST GATE PASSED；反向验伪三组（摘修订号比对 / 摘展示名安全闸 / 409→400）均 RED→GREEN |
 | A3 | 工作区持久化（跨重启恢复） | **IMPLEMENTED**（持久化层已就位；HTTP 面仍 A2 形态） | ✅ 已完成（提交 `e5cb9bfb6`） | `cargo test -p apeireth-runtime --locked -j 2` ⇒ 全绿（含 `workspace_contract` 11 passed + `workspace_persistence` 11 passed）；`cargo test -p apeireth-cli --locked -j 2` ⇒ 全绿（含 `workspace_real_chain` 5 passed + `workspace_persistence_chain` 3 passed）；clippy 0 警告；fmt 0 diff；孤儿 API 棘轮 0 新增；反向验伪三组（摘 revision 比对 / 摘落盘受管根 / 摘恢复状态回填）均 RED→GREEN |
 | B1 | 联系人 / Agent identity + 人设（字节上限 / 控制字符 / 版本号） | **IMPLEMENTED**（仅领域层） | ✅ 已完成（提交 `5bfb959d7`） | `cargo test -p apeireth-core --test agent_contact --locked -j 2` ⇒ 16 passed / 0 failed；`cargo test -p apeireth-runtime --test contact_persona_authority --locked -j 2` ⇒ 6 passed / 0 failed（均 2026-11-17）；clippy 0 警告；fmt 0 diff；反向验伪五组（persona_revision 不递增 / 归档可复活 / 上限被绕过 / 入面采信客户端 capabilities / 人设被当授权依据）均 RED→GREEN |
-| B2 | 记忆作用域映射 + 会话 agent 绑定 + 归档语义 | — | ❌ 未开始 | 无 |
-| B3 | 联系人 HTTP 面 + `workspace_binding` + 会话绑定面 | — | ❌ 未开始 | 无 |
+| B2 | 记忆作用域映射 + 会话 agent 绑定 + 归档语义 | **IMPLEMENTED**（仅领域层） | ✅ 已完成（提交 `49213dc78`） | `cargo test -p apeireth-runtime --test agent_binding_contract --locked -j 2` ⇒ 21 passed / 0 failed；`cargo test -p apeireth-runtime --all-targets --locked -j 2` ⇒ 全绿（均 2026-11-17）；clippy 0 警告；fmt 0 diff；反向验伪五组（fail-closed 归档闸 / 不重放 / none≠Global / contact 间隔离 / fork 继承）均 RED→GREEN |
+| B3 | 联系人 HTTP 面 + `workspace_binding` + 会话绑定面 | — | 🔶 实施中（B3a＝联系人 HTTP 面，子代理在跑；B3b＝回合入口接线 + 装配层翻译，未开工） | 无 |
 | C1 | 规范流帧 + 后端流面（身份 / sequence / 重放 / resync） | — | ❌ 未开始 | 无 |
 | C2 | 单次 canonical dispatch + stop 幂等 + 审批终帧 | — | ❌ 未开始 | 无 |
 
@@ -27,7 +27,9 @@ Author: lead
 A2 达 **IMPLEMENTED**（HTTP 面 + 端口 + 乐观并发 + 审计 + 能力入册 + 错误码 + **生产组合根真实注入**
 ⇒ `apeireth gateway serve` 可用；但**未持久化**（A3）、失效联动未做 ⇒ 仍**不是** PRODUCTION WIRED）；
 B1 达 **IMPLEMENTED**（**仅领域层**：无 HTTP 面、无绑定、无审计 ⇒ **不是** PRODUCTION WIRED）；
-B2 / B3 / C1 / C2 **尚无任何一项**达到 IMPLEMENTED；批次完成前不得在文档或回复里写「已实现 / 已接线」。
+B2 达 **IMPLEMENTED**（**仅领域层**：`canonical::agent_binding` + `Session.agent_binding`；
+但 **`admit_turn` 无调用方** ⇒ `domain_plane` 默认域回落仍是未绑定会话的现役路径 ⇒ **不是** PRODUCTION WIRED）；
+B3 / C1 / C2 **尚无任何一项**达到 IMPLEMENTED；批次完成前不得在文档或回复里写「已实现 / 已接线」。
 `DEFAULT ENABLED` 是横切属性，不随阶梯走。
 
 ## 二、2026-11-17 开工前现状核查（只读调研，非交付）
@@ -55,10 +57,15 @@ B2 / B3 / C1 / C2 **尚无任何一项**达到 IMPLEMENTED；批次完成前不�
    **仍缺**：多根/临时根/预设根的受管根装配、自动过期回收、
    **workspace→session/task/审批/流的失效联动**、多用户归属建模、
    `restore_exact` 的 HTTP 端点与生产调用点。
-3. **B1 已完成，但只到领域层**：缺 `/v1/agents/contacts*` HTTP 面（B3）、`workspace_binding`（B3）、
-   记忆作用域映射与会话绑定（B2）、归档审计事件（B3）。
-4. **B2 未开工**：无合同版 `memory_scope` 映射、无会话 agent 绑定面、无「绑定不匹配即拒绝且不重放」载体、无 HTTP 级归档语义。
-5. **B3 未开工**：无联系人 HTTP 面、无 `workspace_binding` 承载、无会话绑定面。
+3. **B1 已完成，但只到领域层**：缺 `/v1/agents/contacts*` HTTP 面（B3a）、`workspace_binding`（B3a）、
+   归档审计事件（B3a）。记忆作用域映射与会话绑定已在 B2 落地（领域层）。
+4. **B2 已完成，但只到领域层**：合同版 `memory_scope` 映射、会话 agent 绑定、「绑定不匹配即拒绝且不重放」的载体
+   都已落地（`canonical::agent_binding` + `Session.agent_binding`，21 条契约测试 + 5 组反向验伪）。
+   **仍缺**：回合入口接线（`admit_turn` 无调用方 ⇒ 仍**不是** PRODUCTION WIRED；B3b）、
+   canonical `MemoryScope` 的装配层翻译（B3）、HTTP 级归档语义与审计（B3a）。
+5. **B3a 实施中**（子代理在跑）：联系人 HTTP 面 + `workspace_binding` + 错误码 + 能力入册 + CLI 真构造。
+   **B3b 未开工**：回合入口接线（先 admit 后 append）、装配层作用域翻译、**会话绑定面**
+   （`GET/POST /v1/sessions/{id}/agent-binding`）。
 6. **C1 未开工**：无 `apeireth.c1.delta.v1` / `apeireth.c1.final.v1` 帧 schema、无后端规范流面、无 sequence / 重放 / `resync_required`。
 7. **C2 未开工**：无 operation 级单次 dispatch 去重、无 stop/cancel 幂等端点、无审批终帧载体。
 8. ~~能力清单未登记~~ ⇒ **已做**（A2：`workspaces.read|workspaces.write` 登记进 `crates/adapters/gateway/src/panels.rs`）；
@@ -106,6 +113,6 @@ cargo test -p apeireth-runtime --test contact_persona_authority --locked -j 2 # 
 | E-197 | fast gate 把契约类 `.toml` 当 Rust 改动，并把三方依赖名塞进 `cargo -p` ⇒ 撞多版本依赖报 `error: specification 'bit-set' is ambiguous` | `scripts/verify_changed.py` 的文件分类只按后缀，不按「是不是清单」 | 磁盘纪律线 PR #131（提交 `6aaff28ec`：`classify_files()` 分类 + 影响面限制在 35 个 workspace 成员内）＋新增回归守卫 `scripts/check_fast_gate_classifier.py`（11 条断言） |
 | E-198 | 合并裁决把「适用却没跑」判成 BLOCKED，但**阶段选择只看有没有 Rust 改动** ⇒ docs/contract/ci-only PR 必假红 | `scripts/harness.py` 的阶段集合只由影响级别决定，与门禁 scope 适用性是两套口径 | harness 裁决线 PR #133（提交 `9e438190f`：阶段集合＝影响级别阶段 ∪ 适用且 required 的门禁所在阶段）＋回归测试 `scripts/test_harness_gate_status.py` 新增 5 例 |
 | E-199 | fast gate 的 `self_status_e2e` 偶发假红（`protect: Conflict { id: "e1", expected: 0, actual: 1 }`） | 测试临时路径用 `std::process::id()` 拼名 ⇒ Windows 回收进程号 ⇒ 上一轮残留被当成本轮事实 | **本分支**（提交 `2dd369247`：本进程首次用到该路径时清一次残留；**不放宽断言**）。⚠️ 同类写法全仓 236 处，属长尾 |
-| E-200 | CI 判 `docs/status/wiring.yaml drift` ⇒ 门禁假红（本机 `--verify` 却绿） | `docs_truth.py` 的**两条解析路径**（有/无 PyYAML）给出不同值：最小解析器把引号标量内部的 ` #`（正文里的 `PR #125` 链接）当注释截断 ⇒ 本机生成的字节 ≠ CI 生成的字节 ⇒ 60 条声明里 53 条标量值两边不同 | **本分支**：`docs_truth.py` 注释剥离改引号感知（`_strip_comment`）＋ `wiring_report.py` 的 `--gen`/`--verify` 前置 `claims_parse_agreement()`（有 PyYAML ⇒ 逐字段对账；无 ⇒ 对账「引号内原文」）⇒ 「两条路径不一致」成为门禁可判定的事实 |
+| E-200 | CI 判 `docs/status/wiring.yaml drift` ⇒ 门禁假红（本机 `--verify` 却绿） | `docs_truth.py` 的**两条解析路径**（有/无 PyYAML）给出不同值：最小解析器把引号标量内部的 ` #`（正文里的 `PR #125` 链接）当注释截断 ⇒ 本机生成的字节 ≠ CI 生成的字节 ⇒ 60 条声明里 53 条标量值两边不同 | **本分支**：`docs_truth.py` 注释剥离改引号感知（`_strip_comment`）＋ `wiring_report.py` 的 `--gen`/`--verify` 前置 `claims_parse_agreement()`（有 PyYAML ⇒ 逐字段对账；无 ⇒ 对账「引号内原文」）⇒ 「两条路径不一致」成为门禁可判定的事实。**首修不完整 ⇒ CI 抓到第二根因**（最小解析器没还原 YAML 双引号转义 `\"`）⇒ 补 `_unescape_yaml_double` ＋ **字节级跨环境对账**（子进程屏蔽 yaml 后重算并比字节）＋ 本机装 PyYAML ⇒ RED 可在本地复现 |
 
 **教训**：四条都不是「演练出来的红」，是本批真的撞上的门禁红；修法一律落在**机制**（分类口径 / 阶段口径 / 隔离口径 / 解析口径），不是落在「把断言放宽」。**共同形态**：**「同一份真源 + 同一段代码」不等于「同一份事实」** —— 判定口径只要有两条路径，就必须让它们逐字段对账。

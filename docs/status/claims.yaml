@@ -884,7 +884,7 @@ claims:
       - crates/adapters/cli/tests/gateway_panels.rs
       - crates/engine/runtime-assembly/tests/production_cognitive_v1.rs
       - crates/engine/runtime-assembly/tests/profile_memory_authorization.rs
-    verified_at: 7c2e0d699
+    verified_at: 49213dc78
     verify_cmd: "cargo test -p apeireth-runtime --test registry_runtime_v1 --locked && cargo test -p apeireth-runtime-assembly --test capability_modules_v1 --locked"
     owner: runtime
     next_review: "2026-11-28"
@@ -928,7 +928,7 @@ claims:
       - crates/engine/runtime-assembly/tests/managed_main.rs
       - crates/adapters/cli/tests/canonical_cli_bootstrap.rs
       - crates/adapters/cli/tests/care_heartbeat_host.rs
-    verified_at: e5cb9bfb6
+    verified_at: 49213dc78
     verify_cmd: "cargo test -p apeireth-runtime --test cognitive_module_abi --locked -j 2 && cargo test -p apeireth-runtime --test canonical_subloop --locked -j 2 && cargo test -p apeireth-runtime-assembly --test convergence_agents --locked -j 2 && cargo test -p apeireth-runtime-assembly --test memory_namespace_production --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
@@ -958,7 +958,7 @@ claims:
       - crates/engine/runtime-assembly/tests/convergence_memory.rs
       - crates/engine/runtime-assembly/tests/profile_memory_authorization.rs
       - crates/engine/runtime-assembly/tests/memory_namespace_production.rs
-    verified_at: aca269539
+    verified_at: 49213dc78
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test profile_memory_authorization --locked -j 2 && cargo test -p apeireth-runtime-assembly --test convergence_memory --locked -j 2 && cargo test -p apeireth-runtime-assembly --test memory_namespace_production --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
@@ -1213,7 +1213,7 @@ claims:
     tests:
       - crates/engine/runtime/tests/committed_evidence.rs
       - crates/engine/runtime-assembly/tests/memory_autonomy_production.rs
-    verified_at: ba5466500aca57c6c1c5fe53a5d082ca85bca5cf
+    verified_at: 49213dc78
     verify_cmd: "cargo test -p apeireth-runtime --test committed_evidence --locked -j 2 && cargo test -p apeireth-runtime-assembly --test memory_autonomy_production --locked -j 2"
     owner: runtime
     next_review: "2026-11-26"

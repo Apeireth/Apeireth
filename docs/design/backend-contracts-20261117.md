@@ -31,7 +31,7 @@ Author: lead
 | A2 | 工作区 HTTP 面 + 审计 + 与会话/项目/审批的绑定 | `GET /v1/panel/workspaces` 返回有界列表并区分「空 / 未装配 / 不可用」；创建/选择/关闭都落审计；`expected_revision` 冲突返回可分类 409；撤销或 revision 变化后旧写意图、审批、stream 不再生效 | ✅ 已完成（提交 `3854c01a8`，四级口径 **IMPLEMENTED（HTTP 面 + 端口 + 审计 + 能力入册 + 错误码 + 生产组合根接线）**；⚠️ **未持久化**（A3）、未接多根/临时根/预设根、未做自动过期回收、**workspace→session/task/审批/流的失效联动未做**、多用户归属未建模） |
 | A3 | 工作区持久化（跨重启恢复） | 工作区身份、revision、状态与受管根的登记事实落库；重启后 `GET /v1/panel/workspaces` 仍能列出且 revision 单调；恢复时按 `workspace_id + revision` 精确匹配，revision 落后者被拒 | ❌ 未开始 |
 | B1 | 联系人 / Agent identity + 人设（字节上限 + 控制字符 + 版本号） | `contact_id`/`agent_id`/`persona_revision` 由后端生成；人设有字节上限与控制字符校验；persona 只影响允许的注入槽，**不得**改变工具权限、审批决定、workspace scope 或系统策略；同名不同 ID 不碰撞 | ✅ 已完成（提交 `5bfb959d7`，四级口径 **IMPLEMENTED（领域层：ContactId/ContactAgentId/PersonaText/Contact + InMemory/FileContactRegistry）**；⚠️ 无 HTTP 面、无 `workspace_binding`、无记忆作用域映射、无会话绑定、无审计、未接生产路径） |
-| B2 | 记忆作用域映射 + 会话 agent 绑定 + 归档语义 | `memory_scope` 受管枚举并与主体/联系人/工作区隔离（联系人 A 读不到 B 的记忆）；绑定请求携带 contact_id+agent_id+persona_revision+workspace_id+workspace_revision+expected_context_key+incarnation，任一不匹配即拒绝**且不重放消息**；归档为软删除，旧会话不静默转移到默认 Agent；全部动作有可检索审计身份 | ❌ 未开始 |
+| B2 | 记忆作用域映射 + 会话 agent 绑定 + 归档语义 | `memory_scope` 受管枚举并与主体/联系人/工作区隔离（联系人 A 读不到 B 的记忆）；绑定请求携带 contact_id+agent_id+persona_revision+workspace_id+workspace_revision+expected_context_key+incarnation，任一不匹配即拒绝**且不重放消息**；归档为软删除，旧会话不静默转移到默认 Agent；全部动作有可检索审计身份 | ✅ 已完成（提交 `49213dc78`，四级口径 **IMPLEMENTED（领域层：`canonical::agent_binding` + `Session.agent_binding`；21 条契约测试 + 5 组反向验伪）**；⚠️ **未 PRODUCTION WIRED**（`admit_turn` 无调用方，`domain_plane` 默认域回落仍是未绑定会话的现役路径）、HTTP 面归 B3、canonical `MemoryScope` 翻译归 B3、审计未做） |
 | B3 | 联系人 HTTP 面 + `workspace_binding` + 会话绑定面 | `GET/POST /v1/agents/contacts`、`GET/PATCH /v1/agents/contacts/{id}`、`POST /v1/agents/contacts/{id}/archive`、`GET/POST /v1/sessions/{id}/agent-binding`；`workspace_binding{workspace_id,revision}` 随联系人与会话绑定携带（B1 领域层已就位、绑定字段留到本批）；绑定任一字段不匹配即拒绝**且不重放消息**；归档为软删除、不可复活 | ❌ 未开始（B1 已完成，见批次表） |
 | C1 | 规范流帧 + 后端流面（身份、sequence、重放、resync） | 帧 schema 固定（`apeireth.c1.delta.v1` / `apeireth.c1.final.v1`）；每帧带 operation/session/incarnation/context_key/sequence；sequence 单调有界；`Last-Event-ID`/`after_sequence` 有限重放，超窗返回 `resync_required`；`[DONE]` **只表示通道关闭**；断线后 GET 回执能恢复真实状态且不重发模型 | ❌ 未开始 |
 | C2 | 单次 canonical dispatch + stop 幂等 + 审批终帧 | 一个 operation 只产生一次 canonical dispatch（重连/刷新/abort 不重复调模型）；stop 单独、幂等、可审计且不撤销已发生的外部副作用；approval 终帧只带**已确认**的 approval_id/action_binding_digest/expires_at；provider 非流式回退、上游错误、超时、取消、慢客户端、大正文都有有界错误契约 | ❌ 未开始 |
@@ -158,6 +158,22 @@ GET  /v1/sessions/{session_id}/requests/{request_id}/stream   # ?after_sequence=
     客户端应改取回执。理由：沿用仓内「显式省略事实」范式
     （`crates/adapters/gateway/tests/events.rs:226-266` 的 `frames_omitted`）
     ⇒ 把「省略」写成事实，客户端才知道该回退；把省略伪装成连续＝假连续，最坏。
+18. **B2 补记 · 绑定的拒绝次序＝「存在 → 终态（archived / revoked）→ 版本精确匹配」**（B2 交付时追加）：
+    与 B1 的 `checked_contact`（NotFound→Archived→RevisionConflict）、A3 的 `check_mutable`
+    （NotFound→Revoked→RevisionConflict）同族；**故意不同于** A3 的 `restore_exact`
+    （NotFound→RevisionConflict→Revoked）——后者是「按精确版本取回」的查询语义。
+    理由：已归档 / 已吊销是**终态**，不得报成「版本过期，刷新后重试」（那种话术会引出永远不可能成功的重试）。
+19. **B2 补记 · 作用域映射产物是 runtime 自有的镜像类型**（B2 交付时追加）：
+    `MemoryScopeTarget` 只含 `user` / `persona` / `session` 三个变体，serde 形状与 canonical `MemoryScope` 一致；
+    canonical `MemoryScope` 的翻译在 B3 装配层完成。
+    本批 **0 触碰 `MemoryScope` 本体**，`apeireth-runtime` **0 依赖 `apeireth-memory`**（`Cargo.lock` 0 行 diff）。
+    镜像类型**故意没有 `Global` 变体** ⇒ 「`none` ⇒ `Global`」在类型层不可表达（裁决 5 的结构保险）。
+20. **B2 补记 · 归档 fail-closed 的落点是回合入口闸，不是 HTTP 状态码**（B2 交付时追加）：
+    「拒绝且不重放」是回合语义（消息不追加、revision 不推进、不回落默认 Agent / 默认域），HTTP 状态码表达不了；
+    故校验放在领域层（`admit_bound_turn` / `admit_turn`），B3 的网关只做状态码映射。
+    绑定**只存 id + revision、不存 contact/workspace 快照**，每回合现查现校验 ⇒ 快照不会陈旧到放行失效绑定。
+    附带边界：`Session.agent_binding` 沿用 `Session` 既有风格是 pub 字段 ⇒ 调用方理论上可写入未经校验的绑定，
+    但回合闸会现查现校验 ⇒ 非法绑定必然被拒 ⇒ **保证落在闸上，不落在字段可见性上**。
 
 ## 未决（需要前端/宿主侧确认，后端按最保守口径实现）
 
@@ -308,6 +324,36 @@ GET  /v1/sessions/{session_id}/requests/{request_id}/stream   # ?after_sequence=
   **换 CWD 重启会新铸身份**（跨路径稳定性未裁决）；`WorkspaceError` 新增公开变体 `Storage`
   （仓外穷举匹配算 minor 破坏，仓内唯一匹配点已同步）；A2 合同面文件 `crates/adapters/gateway/src/workspace_panel.rs`
   **0 改动**（持久化不污染合同语义）。
+
+### 2026-11-17 B2 批次交付（提交 `49213dc78`）
+
+- 落点：新建 `crates/engine/runtime/src/canonical/agent_binding.rs`（761 行）与
+  `crates/engine/runtime/tests/agent_binding_contract.rs`（21 测试）；改
+  `crates/engine/runtime/src/canonical/session.rs`（`Session.agent_binding` 字段＋`agent_binding()` /
+  `set_agent_binding()`＋fork 继承＋`SessionRepr` 迁移字段）与 `canonical/mod.rs`（`pub mod agent_binding`）。
+- 三个职责：① 记忆作用域映射（合同的受管枚举 → 写入落点，`none` ⇒ **不写**）；
+  ② 绑定模型（contact + workspace 的一次精确配对，外加宿主自有的 `context_key` / `incarnation` 两个回显字段）；
+  ③ **fail-closed 闸**（`admit_bound_turn` / `admit_turn`）。
+- 关键不变量（已由测试钉死）：**`none` 在类型层不可表达为 `Global`**（镜像类型没有 `Global` 变体）；
+  **同主体的不同联系人落在不同人设作用域**（`persona_id` 与 `user_id` 同时匹配才算可见）；
+  **归档/吊销立即生效**（只存 id + revision，每回合现查现校验 ⇒ 快照不会陈旧到放行失效绑定）；
+  **拒绝时不追加消息、不推进 revision**（`admit_turn` 在校验成功后才 `append`）；
+  **绑定随 fork 继承**（不得静默掉回未绑定 / 默认域路径）；**绑定 revision 是 CAS**；
+  **后端不生成 `context_key` / `incarnation`**（只透传并 exact-match）。
+- 反向验伪五组（红/绿各一条已贴进提交正文）：① 摘 fail-closed 归档闸 ⇒ `18 passed; 3 failed` ⇒ GREEN 21 passed；
+  ② 把 `append` 挪到 admit 之前 ⇒ RED「被拒的回合不得追加消息（不得重放）/ left: 1 / right: 0」⇒ `20 passed; 1 failed`
+  ⇒ GREEN 21 passed；③ `none` 分支改产出 `User` 作用域 ⇒ RED「left: Some(User { user_id: "subject-1" }) / right: None」
+  ⇒ `19 passed; 2 failed` ⇒ GREEN 21 passed；④ `persona_id` 改成 `subject_id` ⇒ RED「left: Persona { persona_id: "subject-1" … }」
+  ⇒ `19 passed; 2 failed` ⇒ GREEN 21 passed；⑤ 摘 fork 继承 ⇒ RED「left: None / right: Some(ContactId(…))」
+  ⇒ `20 passed; 1 failed` ⇒ GREEN 21 passed。
+  ⚠️ 自检陷阱：还原文件若保留旧 mtime ⇒ cargo 判定源码未变 ⇒ 不重编 ⇒ 跑出的仍是上一次的红（必须刷新 mtime）。
+- ⚠️ **诚实边界（四级口径：IMPLEMENTED 领域层，未 PRODUCTION WIRED）**：
+  **无任何调用方调用 `admit_turn`** ⇒ `canonical::domain_plane` 的默认域回落仍是**未绑定会话**的现役路径；
+  已绑定会话在生产回合里尚不会走 fail-closed 闸 ⇒ **回合入口接线属 B3b**；
+  **HTTP 面未做**（归 B3a）；**canonical `MemoryScope` 的翻译未做**（归 B3 装配层）；
+  **审计未做**（动作身份待 B3a 的 HTTP 面）；`MemoryScopeTarget` 是 runtime 自有镜像类型（serde 形状与 canonical 一致）；
+  `apeireth-runtime` **0 依赖** `apeireth-memory`（`Cargo.lock` 0 行 diff）；
+  `Session.agent_binding` 是 pub 字段（沿用 `Session` 既有风格）⇒ 保证来自回合闸的现查现校验，不来自字段可见性。
 
 ### 还差什么
 

@@ -45,9 +45,9 @@
 | `bio.ritual` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_CARE_CANDIDATES` | `52009d5f` | 2026-11-20 |
 | `bio.ecosystem_health` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_SELF_STATUS` | `52009d5f` | 2026-11-20 |
 | `bio.capacity` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_SELF_STATUS` | `52009d5f` | 2026-11-20 |
-| `rt.registered_module_v1` | PRODUCTION WIRED | ON | - | `7c2e0d699` | 2026-11-28 |
-| `rt.owned_agents` | PRODUCTION WIRED | - | - | `e5cb9bfb6` | 2026-11-20 |
-| `mem.registered_namespace` | PRODUCTION WIRED | - | - | `aca269539` | 2026-11-20 |
+| `rt.registered_module_v1` | PRODUCTION WIRED | ON | - | `49213dc78` | 2026-11-28 |
+| `rt.owned_agents` | PRODUCTION WIRED | - | - | `49213dc78` | 2026-11-20 |
+| `mem.registered_namespace` | PRODUCTION WIRED | - | - | `49213dc78` | 2026-11-20 |
 | `rt.desktop_managed_main` | PRODUCTION WIRED | ON | - | `e5cb9bfb6` | 2026-11-20 |
 | `rt.module_execution_contract` | PRODUCTION WIRED | OFF | - | `11feb868ced8` | 2026-11-20 |
 | `rt.system_one_internal` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_SYSTEM_ONE` | `e5cb9bfb6` | 2026-11-20 |
@@ -58,7 +58,7 @@
 | `mem.injection_contract` | PRODUCTION WIRED | ON | - | `aca269539` | 2026-12-04 |
 | `mem.contract_view` | PRODUCTION WIRED | ON | - | `706cabcfe174` | 2026-12-05 |
 | `mem.shadow_swap` | PRODUCTION WIRED | OFF | - | `05759be1` | 2026-12-05 |
-| `rt.committed_evidence` | PRODUCTION WIRED | - | - | `ba5466500aca` | 2026-11-26 |
+| `rt.committed_evidence` | PRODUCTION WIRED | - | - | `49213dc78` | 2026-11-26 |
 | `mem.automatic_correction` | PRODUCTION WIRED | - | - | `e5cb9bfb6` | 2026-11-26 |
 | `mem.writeback_recovery` | PRODUCTION WIRED | - | - | `e5cb9bfb6` | 2026-11-26 |
 | `mem.source_qualified_context` | PRODUCTION WIRED | - | - | `e5cb9bfb6` | 2026-11-26 |
