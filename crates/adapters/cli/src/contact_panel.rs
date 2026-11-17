@@ -180,6 +180,11 @@ impl CliContactPanel {
 /// 把联系人面装进服务图 (组合根用)。
 ///
 /// 落盘注册表 + 绑定档都开不出 ⇒ `Err` (fail-closed): 调用方让启动失败, 不降级。
+///
+/// 联系人合同面 (B3a 批: `GET/POST /v1/agents/contacts` + 单体读写 + 归档写面):
+/// 真实持有 B1 的联系人注册表, **落盘**在数据根下 ⇒ 重启后仍是同一批联系人;
+/// 工作区绑定存**宿主侧绑定档** (只存 id + 修订号, 不存工作区快照)。
+/// 开不出来 ⇒ **fail-closed** (启动失败), 不降级成进程内注册表假装成功。
 pub fn wire_contacts(
     services: &mut GatewayServices,
     data_dir: impl Into<PathBuf>,

@@ -1212,7 +1212,7 @@ pub fn contacts_capability_group(supported: bool) -> serde_json::Value {
     serde_json::json!({
         "name": "contacts",
         "capabilities": [
-            crate::panels::cap(
+            crate::capabilities::cap(
                 "contacts.read",
                 true,
                 false,
@@ -1220,7 +1220,7 @@ pub fn contacts_capability_group(supported: bool) -> serde_json::Value {
                 supported,
                 supported,
             ),
-            crate::panels::cap(
+            crate::capabilities::cap(
                 "contacts.write",
                 false,
                 true,

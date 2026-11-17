@@ -22,6 +22,8 @@ pub mod device_decision;
 /// **主体 → 会话**归属登记（审计 P1 收口；episode 维度的被遗忘权前提）。
 pub mod principal_attribution;
 
+/// 能力清单面 (`GET /v1/apeireth/capabilities`): 网关/面板面能力 manifest。
+pub(crate) mod capabilities;
 pub(crate) mod panel_errors;
 /// Panel introspection surface (`/v1/panel/*`, tools, capabilities, audit, traces).
 pub mod panel_memory_update;

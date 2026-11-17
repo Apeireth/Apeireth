@@ -1,12 +1,12 @@
 {
   "crates": {
     "crates/adapters/cli": {
-      "files": 41,
-      "loc": 19646
+      "files": 43,
+      "loc": 19696
     },
     "crates/adapters/gateway": {
-      "files": 38,
-      "loc": 21519
+      "files": 39,
+      "loc": 21535
     },
     "crates/adapters/sdk": {
       "files": 22,
@@ -106,7 +106,7 @@
     },
     "crates/foundation/core": {
       "files": 29,
-      "loc": 15820
+      "loc": 15814
     },
     "crates/foundation/credentials": {
       "files": 10,

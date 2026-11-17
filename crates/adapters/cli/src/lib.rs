@@ -10,6 +10,7 @@ pub mod env_switches;
 // 审批面分派 (W3.7 拆分: 装配根文件尺寸棘轮已到顶; 公开路径经下方 re-export 不变).
 pub mod canonical_approval;
 pub mod contact_panel;
+pub(crate) mod contract_panels;
 /// **主体 → 会话**归属写面实现（持有记忆库；审计 P1 收口）。
 pub mod principal_recorder;
 // 心跳关怀常驻宿主接线面: FnInitiativeGate 注入 CareEngine + dispatch 接 Runtime::execute + 自述心跳两列.
@@ -51,6 +52,7 @@ pub mod panel_governance_port;
 pub mod portable_bundle;
 // 裁定 ④⑤ 性格锁定 + 性格周报 (成长计既有账只读周报 + 四杆锁定/解锁显式动作面)。
 pub mod trait_command;
+pub(crate) mod trait_panel;
 // W3-② 用户身份与角色: `apeireth user add|list|role|remove` 管理面 (owner 角色门)。
 pub mod user_admin;
 
@@ -3242,14 +3244,7 @@ pub async fn dispatch_gateway_serve_with(
         default_panel_data_dir(),
         care_heartbeat.status_probe(),
     )));
-    // 性格面板只读面 (GET /v1/panel/traits): 四滑杆现值/锁定态/最近移动 ——
-    // 与 `tool.trait_report` **同账同源** (同一成长计既有账 tuning-log.jsonl +
-    // 同一锁定档 trait-locks.json)。只读零写面 (锁定/解锁走 CLI 显式动作)。
-    services.traits = Some(Arc::new(crate::gateway_panels::CliTraitPanel::new(
-        apeireth_runtime_assembly::TraitGrowthPaths::new(
-            apeireth_runtime_assembly::tuning_log_path(),
-        ),
-    )));
+    crate::trait_panel::wire_trait_panel(&mut services);
     // 任务面板面 (`GET /v1/panel/tasks` 只读 + `POST .../human-judge-retry` 人判
     // 重试): 与 `tool.task_board` 工具面**同队同账** (同一 `sessions.sqlite3`
     // 任务表), 附从句柄不重复崩溃恢复 (恢复点只归工具面主句柄的 `open`)。
@@ -3262,25 +3257,7 @@ pub async fn dispatch_gateway_serve_with(
     } else {
         None
     };
-    // 工作区合同面 (A2 批: `GET /v1/panel/workspaces` + `/v1/workspaces*` 写面):
-    // 真实持有工作区注册表 + **宿主受管根** (进程唯一根 = 当前工作目录, 与
-    // 组合根既有的唯一根口径同源)。受管根由宿主决定: 客户端只提交身份字段,
-    // 提交根路径一律 400。作用域宿主确认 (上限 Write, 请求值被截断)。
-    // A3 批: 注册表**落盘**在数据根 (`APEIRETH_DATA_DIR` / `~/.apeireth`) 下 ⇒
-    // 重启后 `GET /v1/panel/workspaces` 仍列出同一批工作区, revision 单调。
-    // 落盘开不出来 ⇒ **fail-closed** (启动失败), 不降级成进程内注册表假装成功。
-    let workspace_panel = Arc::new(crate::gateway_panels::CliWorkspacePanel::new_persistent(
-        std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")),
-        default_panel_data_dir(),
-    )?);
-    // 宿主把受管根绑成一个工作区 (身份 + 叶子名展示; 路径不出宿主)。
-    // 幂等: 受管根已登记过就复用那一个身份, 不新铸。
-    crate::gateway_panels::bind_managed_workspace(&workspace_panel, "默认工作区")?;
-    services.workspaces = Some(workspace_panel as Arc<dyn apeireth_gateway::WorkspacePanel>);
-    // 联系人合同面 (B3a 批: `GET/POST /v1/agents/contacts` + 单体读写 + 归档写面):
-    // 真实持有 B1 的联系人注册表, **落盘**在数据根下 ⇒ 重启后仍是同一批联系人;
-    // 工作区绑定存**宿主侧绑定档** (只存 id + 修订号, 不存工作区快照)。
-    // 开不出来 ⇒ **fail-closed** (启动失败), 不降级成进程内注册表假装成功。
+    crate::contract_panels::wire_workspace_panel(&mut services)?;
     crate::contact_panel::wire_contacts(&mut services, default_panel_data_dir())?;
     // W2-②: 客户端令牌表 (令牌族第二面) 显式注入; 远程绑定闸与 TLS 接口桩的
     // 清场事实随装配进审计面 (逃生阀可裸奔, 但必须留痕)。
