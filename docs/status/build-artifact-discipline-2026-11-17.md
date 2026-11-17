@@ -28,12 +28,18 @@ Author: lead
 
 ## 交付形态（2026-11-17）
 
-- 分支 `chore/build-artifact-discipline-20261117`（基线 `upstream/main = 5c373955c`），共 **4 条 commit**：
+- 分支 `chore/build-artifact-discipline-20261117`（基线 `upstream/main = 5c373955c`），共 **6 条 commit**：
   `325a8339b`（门禁清单生成器 CRLF）· `5fce46c5b`（构建产物槽位纪律的机械层）·
-  `6aaff28ec`（fast gate 把契约类 toml 当 Rust 改动的假红修复）· `efcfe9636`（宪章条款与仓库口径校正）。
-- 已推 fork（`https://github.com/Xephylos/Apeireth`）并开 **PR #131**（base `Apeireth/Apeireth:main`）⇒ **未合并**。
+  `6aaff28ec`（fast gate 把契约类 toml 当 Rust 改动的假红修复）· `efcfe9636`（宪章条款与仓库口径校正）·
+  `f13349d7b`（进度页补记交付形态）· `2a3ef44d5`（合入 upstream/main，带上 E-198 修复）。
+- 已推 fork（`https://github.com/Xephylos/Apeireth`）并开 **PR #131**（base `Apeireth/Apeireth:main`）⇒ **已合并**（合并提交 `e177bda67`，见下）。
 - 门禁口径：**本机** doc/脚本门禁全绿（见本页各行证据）；**Rust 侧本批 0 行源码改动** ⇒ 本机未重跑
   `cargo test --workspace`（按 `AGENTS.md` §5.2「`--workspace` 只在收口 wave 跑」），由 CI 矩阵全量跑。
+- **合并前 CI（head=`2a3ef44d5`）**：**24 pass / 0 fail / 2 skipping**（skipping＝dependabot 自动合并项 ＋ kani 不适用矩阵项）；
+  三平台 nextest 全绿（ubuntu 21m14s / windows 21m58s / macos 32m32s）、合并裁决 pass（2m39s）、arch-guard pass、docs truth / wiring ledger / doc caliber / doc source path 全 pass。
+- **合并依赖**：本 PR 的合并裁决曾因既有缺陷 **E-198** 假红（阶段选择只看「有没有 Rust 改动」，而门禁适用性看「diff 命中的文件类型标签」
+  ⇒ docs/contract/ci-only PR 把 required 的 deep 门禁记成「适用却没跑」）⇒ 先合并修复 PR #133（`9e438190f`）
+  ⇒ 本分支合入上游并重跑 ⇒ **转绿**（缺陷登记见 `docs/04-internal/ui-engine-defect-ledger.md` §3.9 / E-198）。
 
 ## 现场事实（2026-11-17 实测）
 
@@ -57,18 +63,30 @@ Author: lead
    `C:\Apeireth\wt\build-artifact-discipline-20261117\scripts\disk-watch.ps1`
    ⇒ ⇒ 本批合并进上游后**必须改指主仓路径**（`schtasks /delete` + 重新 `-RegisterTask`），否则工作树一旦删除
    任务即失效 ⇒ ⇒ 哨兵静默失联（**这正是本批要根治的那类「静默失效」**）。
-2. **未做跨机器验证**：本批只在 Windows 本机实测；Linux/macOS 上 `target_dir.py` 的 `cargo metadata` 路径
+2. **⚠️ 计划任务注册本身不持久（本轮实测）**：本批早期 `-RegisterTask` 曾返回
+   `SUCCESS: The scheduled task "Apeireth-DiskWatch" has successfully been created.` 且复核到
+   `Next Run Time 2026/11/18 3:00:00` / `Status Ready`；**但 2026-11-17 17:4x 复核时该任务已不存在**
+   （`schtasks /query /tn Apeireth-DiskWatch` ⇒ `ERROR: The system cannot find the file specified.`；
+   全部 376 条任务里无匹配项；`Schedule` 服务在运行）⇒ 已重新注册并复核通过（`Next Run Time 2026/11/18 3:00:00`）。
+   ⇒ ⇒ **结论：每日哨兵只能算 best-effort，不许当作守门依据**；真正的守门是**已接进门禁链**的
+   `python scripts/target_slot.py --audit`（版本受控、每次 PR 必跑、退出码可判定）⇒⇒
+   **这也是本批最该记住的一条：规则/守卫的存活率 ∝ 它离执行点的距离**（`AGENTS.md` §5.4 的四层正是为此）。
+3. **未做跨机器验证**：本批只在 Windows 本机实测；Linux/macOS 上 `target_dir.py` 的 `cargo metadata` 路径
    未实跑（CI 不读用户级配置 ⇒ CI 行为不变已论证，但未实测）。审计在「本机无任何登记槽位根」时
    **跳过并退出 0** 已用「登记表指向不存在根」的实测证过（Linux CI 路径）。
-3. **未做多 workspace 共享 target-dir 的实测**：5+ 个独立 workspace 共用一个全局 `target-dir` 时的
-   文件锁争用只做了设计防护（`-Line`），未实测争用强度。
-4. **未清理既有历史遗留目录**：cargo-target-c23 / c4-ui / c13-model / check 仍占约 7 G，只登记成棘轮或在途项；
+4. **未做多 workspace 共享 target-dir 的实测**：5+ 个独立 workspace 共用一个全局 `target-dir` 时的
+   文件锁争用只做了设计防护（-Line），未实测争用强度。
+5. **未清理既有历史遗留目录**：cargo-target-c23 / c4-ui / c13-model / check 仍占约 7 G，只登记成棘轮或在途项；
    何时回收取决于他线是否还在用（`c23` 在 2026-11-17 仍在写入）⇒ **不替别人的线做决定**。
-5. **c23 迁移债未清**：`C:\Apeireth\cargo-target-c23`（他线在途，5.03 G）待该线迁入登记槽位
+6. **c23 迁移债未清**：`C:\Apeireth\cargo-target-c23`（他线在途，6.06 G）待该线迁入登记槽位
    ⇒ 届时从 `docs/architecture/target-slots.json` 移除该条（审计会从「🔵 在途他线产物」变为不再出现）。
-6. **本批顺手修掉的既有缺陷**：`scripts/gen_gate_manifest.py` 在 Windows 上用 `Path.write_text` 回写
+7. **本批顺手修掉的既有缺陷**：`scripts/gen_gate_manifest.py` 在 Windows 上用 `Path.write_text` 回写
    ⇒ 把 LF 翻成 CRLF ⇒ 整个 PR 模板与门禁清单被「全文件重写」（172 行 / 751 行空白噪声 diff）
    ⇒ 现已改为 `open(..., newline="\n")` 强制 LF ⇒ 重生成后 diff 收敛为 4 行 + 16 行。
+8. **本批自己的产物已按纪律回收**：2026-11-17 17:4x 用仓内工具
+   `python scripts/clean_test_binaries.py --target …` 清掉本线各批次（`backend-contracts` / `-a3` / `-b1` / `-b2` / `-b3a`）
+   共 **753 个测试二进制（15.4 G）**（保留 `*.so`），base 槽位由 **61.3 G** 回落到 **45.9 G**
+   ⇒ ⇒ 即「cargo 的磁盘 90% 来自测试二进制」这条既有实测口径的第一次**真实回收**（此前 Windows 上从未真回收过）。
 
 ## 本批过程中被守卫抓到的真实缺陷（不是演练）
 
