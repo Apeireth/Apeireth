@@ -29,11 +29,12 @@ Author: lead
 |---|---|---|---|
 | A1 | 工作区领域类型 + 受管根 + revision CAS | 工作区有 UUID 身份；根目录、权限作用域、撤销状态任一变化都递增 revision；同名工作区仍按 UUID 区分；GET 读面不暴露完整根路径与凭据；旧客户端缺 workspace 字段**不默认提升为 write** | ✅ 已完成（提交 `91888e27c`，四级口径 **IMPLEMENTED（领域层）**；未持久化、无 HTTP 面、未接生产路径） |
 | A2 | 工作区 HTTP 面 + 审计 + 与会话/项目/审批的绑定 | `GET /v1/panel/workspaces` 返回有界列表并区分「空 / 未装配 / 不可用」；创建/选择/关闭都落审计；`expected_revision` 冲突返回可分类 409；撤销或 revision 变化后旧写意图、审批、stream 不再生效 | ✅ 已完成（提交 `3854c01a8`，四级口径 **IMPLEMENTED（HTTP 面 + 端口 + 审计 + 能力入册 + 错误码 + 生产组合根接线）**；⚠️ **未持久化**（A3）、未接多根/临时根/预设根、未做自动过期回收、**workspace→session/task/审批/流的失效联动未做**、多用户归属未建模） |
-| A3 | 工作区持久化（跨重启恢复） | 工作区身份、revision、状态与受管根的登记事实落库；重启后 `GET /v1/panel/workspaces` 仍能列出且 revision 单调；恢复时按 `workspace_id + revision` 精确匹配，revision 落后者被拒 | ❌ 未开始 |
+| A3 | 工作区持久化（跨重启恢复） | 工作区身份、revision、状态与受管根的登记事实落库；重启后 `GET /v1/panel/workspaces` 仍能列出且 revision 单调；恢复时按 `workspace_id + revision` 精确匹配，revision 落后者被拒 | ✅ 已完成（提交 `e5cb9bfb6`，四级口径 **IMPLEMENTED（持久化层：本地文件系统 + `StoredDoc` 信封；跨重启可恢复；坏记录 fail-closed；已吊销不可复活；落盘失败内存零变化）**；⚠️ 介质＝本地文件系统（非 DB/WAL，原子性只到单文件替换级）、`restore_exact` 尚无 HTTP 端点、多根/临时根/预设根装配未做、自动过期回收未做、workspace→session/task/审批/流的失效联动未做、多用户归属未建模、**绝对根落盘但绝不外泄**） |
 | B1 | 联系人 / Agent identity + 人设（字节上限 + 控制字符 + 版本号） | `contact_id`/`agent_id`/`persona_revision` 由后端生成；人设有字节上限与控制字符校验；persona 只影响允许的注入槽，**不得**改变工具权限、审批决定、workspace scope 或系统策略；同名不同 ID 不碰撞 | ✅ 已完成（提交 `5bfb959d7`，四级口径 **IMPLEMENTED（领域层：ContactId/ContactAgentId/PersonaText/Contact + InMemory/FileContactRegistry）**；⚠️ 无 HTTP 面、无 `workspace_binding`、无记忆作用域映射、无会话绑定、无审计、未接生产路径） |
 | B2 | 记忆作用域映射 + 会话 agent 绑定 + 归档语义 | `memory_scope` 受管枚举并与主体/联系人/工作区隔离（联系人 A 读不到 B 的记忆）；绑定请求携带 contact_id+agent_id+persona_revision+workspace_id+workspace_revision+expected_context_key+incarnation，任一不匹配即拒绝**且不重放消息**；归档为软删除，旧会话不静默转移到默认 Agent；全部动作有可检索审计身份 | ✅ 已完成（提交 `49213dc78`，四级口径 **IMPLEMENTED（领域层：`canonical::agent_binding` + `Session.agent_binding`；21 条契约测试 + 5 组反向验伪）**；⚠️ **未 PRODUCTION WIRED**（`admit_turn` 无调用方，`domain_plane` 默认域回落仍是未绑定会话的现役路径）、HTTP 面归 B3、canonical `MemoryScope` 翻译归 B3、审计未做） |
-| B3 | 联系人 HTTP 面 + `workspace_binding` + 会话绑定面 | `GET/POST /v1/agents/contacts`、`GET/PATCH /v1/agents/contacts/{id}`、`POST /v1/agents/contacts/{id}/archive`、`GET/POST /v1/sessions/{id}/agent-binding`；`workspace_binding{workspace_id,revision}` 随联系人与会话绑定携带（B1 领域层已就位、绑定字段留到本批）；绑定任一字段不匹配即拒绝**且不重放消息**；归档为软删除、不可复活 | ❌ 未开始（B1 已完成，见批次表） |
-| C1 | 规范流帧 + 后端流面（身份、sequence、重放、resync） | 帧 schema 固定（`apeireth.c1.delta.v1` / `apeireth.c1.final.v1`）；每帧带 operation/session/incarnation/context_key/sequence；sequence 单调有界；`Last-Event-ID`/`after_sequence` 有限重放，超窗返回 `resync_required`；`[DONE]` **只表示通道关闭**；断线后 GET 回执能恢复真实状态且不重发模型 | ❌ 未开始 |
+| B3a | 联系人 HTTP 面（+ `workspace_binding` 校验） | `GET/POST /v1/agents/contacts`、`GET/PATCH /v1/agents/contacts/{id}`、`POST /v1/agents/contacts/{id}/archive`；身份由后端铸造；写面必须带 `expected_revision`（缺⇒400、不符⇒409 且状态逐字段不变）；归档为软删除、不可复活（**已归档是终态 ⇒ 403 `contact_archived`，不是 409 版本过期**）；`workspace_binding{workspace_id,revision}` 由服务端校验（不存在/已吊销/修订号不符 ⇒ 409 `contact_binding_conflict`）；同名不同 ID 不碰撞；审计事件与能力清单入册 | ✅ 已完成（提交 `43291e4ea`，四级口径 **IMPLEMENTED（HTTP 面 + 端口 + 审计 + 能力入册 + 4 个新错误码 + CLI 组合根接线）**；15 条网关测试 + 5 条 CLI 链路测试 + 4 组反向验伪；⚠️ **回合入口未接线 ⇒ 新建联系人当前不影响真实回合**、会话绑定面未做、`memory_scope` 只到 DTO 层未翻译、`capabilities` 只是展示投影非授权依据、绑定只存 id+revision 不存快照） |
+| B3b | 会话绑定面 + 回合入口接线（`admit_turn` 上线 + 装配层作用域翻译） | `GET/POST /v1/sessions/{id}/agent-binding`；回合入口先 `admit` 后 `append`（拒绝即不重放）；装配层把 `MemoryScopeTarget` 翻译成 canonical `MemoryScope`（`none` ⇒ 不写记忆，**禁拿 `Global` 代替**）；绑定不合法 ⇒ 回合拒绝；已归档联系人 ⇒ fail-closed，不回落默认 Agent/默认域；旧会话不静默转移到默认 Agent | ❌ 未开始（B2 领域层已就位；`admit_turn` 现无调用方） |
+| C1 | 规范流帧 + 后端流面（身份、sequence、重放、resync） | 帧 schema 固定（`apeireth.c1.delta.v1` / `apeireth.c1.final.v1`）；每帧带 session_id/request_id/trace_id/sequence（**不带** operation/incarnation/context_key —— 裁决 2/8：宿主 operation 是不透明标签、后端不解释，后端不生成 incarnation/context_key）；sequence 单调有界；`Last-Event-ID`/`after_sequence` 有限重放，超窗发 `resync_required` 事实帧后关闭通道；`[DONE]` **只表示通道关闭**；断线后 GET 回执能恢复真实状态且不重发模型 | ✅ 已交付（提交 `e397cc687`，PR #135；四级口径 **IMPLEMENTED（领域层）** —— **未接生产装配**：全仓无生产路径调 register/publish_delta/publish_final ⇒ 端点当前不产生真实流数据 ⇒ 未登记进 `docs/gateway-api-contract.md` §2（该节标题即〔PRODUCTION WIRED〕）；**不实现 `/bridge/*`**（裁决 15）） |
 | C2 | 单次 canonical dispatch + stop 幂等 + 审批终帧 | 一个 operation 只产生一次 canonical dispatch（重连/刷新/abort 不重复调模型）；stop 单独、幂等、可审计且不撤销已发生的外部副作用；approval 终帧只带**已确认**的 approval_id/action_binding_digest/expires_at；provider 非流式回退、上游错误、超时、取消、慢客户端、大正文都有有界错误契约 | ❌ 未开始 |
 
 ## 目标形态
@@ -100,8 +101,8 @@ GET  /v1/sessions/{session_id}/requests/{request_id}/stream   # ?after_sequence=
   `/v1/chat` 的流式处理器把 delta **发布进注册表**，规范流端点从注册表**订阅 / 重放**
   ⇒ 同一回合可被**多个订阅者**观察，晚连者能按 `after_sequence` 补齐窗口内增量。
 - 重放与超窗：`after_sequence` / `Last-Event-ID` ⇒ 从该序号之后**有限重放**；
-  序号早于窗口 ⇒ 先发一帧 `resync_required`（带 `resync_from_sequence`），再从窗口最早可用序号续发
-  ⇒ 客户端据此**重新取回执**，而不是假装连续。
+  序号早于窗口 ⇒ 先发一帧 `resync_required` 事实帧（带 `resync_from_sequence`），
+  **随后关闭该通道**（本通道不自动续发）⇒ 客户端据此**重新取回执**，而不是假装连续。
 - 断线回退：断线后 GET 回执（既有权威面）能恢复真实状态，且**不重发模型**（去重见 C2）。
 
 ## 裁决（本批已定，避免实现期反复）
@@ -154,10 +155,13 @@ GET  /v1/sessions/{session_id}/requests/{request_id}/stream   # ?after_sequence=
     有界环形缓冲里 ⇒ 晚连 / 重连的订阅者能拿到**同一回合**的增量；
     否则「重放」退化成事后文本镜像（`turn_delta` 的老问题，`canonical_entry.rs:1798-1805`）。
 17. **`resync_required` 是显式事实帧，不是错误**（C 批实施时追加的裁决）：
-    窗口外重放 ⇒ 发 `resync_required`（带 `resync_from_sequence`）后从窗口最早序号续发，
+    窗口外重放 ⇒ 发 `resync_required` 事实帧（带 `resync_from_sequence`）**后关闭该通道**，
     客户端应改取回执。理由：沿用仓内「显式省略事实」范式
     （`crates/adapters/gateway/tests/events.rs:226-266` 的 `frames_omitted`）
     ⇒ 把「省略」写成事实，客户端才知道该回退；把省略伪装成连续＝假连续，最坏。
+    **措辞裁定（2026-11-17，C1 实施时补记）**：**不在同一条通道内自动续发**。
+    理由：同通道自动续发会把一次断线放大成无限循环，且把「客户端该回退到回执面」的判断
+    藏进服务端；C1 实现按「先发事实帧 → 再关通道」落地（见下节 C1 交付）。
 18. **B2 补记 · 绑定的拒绝次序＝「存在 → 终态（archived / revoked）→ 版本精确匹配」**（B2 交付时追加）：
     与 B1 的 `checked_contact`（NotFound→Archived→RevisionConflict）、A3 的 `check_mutable`
     （NotFound→Revoked→RevisionConflict）同族；**故意不同于** A3 的 `restore_exact`
@@ -354,6 +358,63 @@ GET  /v1/sessions/{session_id}/requests/{request_id}/stream   # ?after_sequence=
   **审计未做**（动作身份待 B3a 的 HTTP 面）；`MemoryScopeTarget` 是 runtime 自有镜像类型（serde 形状与 canonical 一致）；
   `apeireth-runtime` **0 依赖** `apeireth-memory`（`Cargo.lock` 0 行 diff）；
   `Session.agent_binding` 是 pub 字段（沿用 `Session` 既有风格）⇒ 保证来自回合闸的现查现校验，不来自字段可见性。
+
+### 2026-11-17 B3a 批次交付（提交 `43291e4ea`）
+
+- 落点：新建 `crates/adapters/gateway/src/contact_panel.rs`（1233 行）、`crates/adapters/cli/src/contact_panel.rs`（455 行）、
+  `crates/adapters/gateway/tests/panel_contacts_face.rs`（15 测试）、`crates/adapters/cli/tests/contact_real_chain.rs`（5 测试）；
+  改 `crates/adapters/gateway/src/{error_frame.rs,lib.rs,panels.rs}` 与 `crates/adapters/cli/src/{gateway_panels.rs,lib.rs}`；
+  文档同步 `docs/gateway-api-contract.md`（§1 错误码 ＋ §2 端点表 ＋ 新增 §7h 联系人面 ＋ §9 能力清单 ＋ §10 状态表）。
+- HTTP 面：`GET/POST /v1/agents/contacts`、`GET/PATCH /v1/agents/contacts/{id}`、`POST /v1/agents/contacts/{id}/archive`
+  （**不另开** `/v1/panel/contacts` 别名）；`ContactDto` 13 键（合同字段 ＋ B1 增补 persona/revision/updated_at_ms
+  ＋ `workspace_binding{workspace_id,revision}` ＋ `capabilities{read,write,approval_required}`）⇒ **不含绝对路径**。
+- 关键不变量（已由测试钉死）：身份后端铸造（客户端自带 ⇒ 400）；写面必须带 `expected_revision`
+  （缺 ⇒ 400 且**不调端口**；不符 ⇒ 409 `contact_conflict` ＋ `details{expected_revision,actual_revision}`，状态逐字段不变）；
+  **归档是终态 ⇒ 403 `contact_archived`**（不是 409「版本过期，刷新后重试」——与 B2/A3 的拒绝次序同族，见裁决 12/18）；
+  404 消息恒定「联系人不存在或不可见」；`deny_unknown_fields`（自带 `contact_id` ⇒ 400）；
+  绑定只存 id+revision 不存快照（不符 ⇒ 409 `contact_binding_conflict` ＋ `details.reason`）；
+  审计事件 `gateway.contact_action`，动作词 `contact.create|update|archive|deny`；
+  能力清单 `contacts.read` / `contacts.write` 分开登记；CLI 组合根注入真落盘 `FileContactRegistry`
+  ＋ 宿主绑定档 `<data_dir>/agents/contact-bindings.json`，开不出 ⇒ **fail-closed**。
+- 反向验伪四组（红/绿各一条已贴进提交正文）：① 摘 revision 比对 ⇒ RED（left: 200 / right: 409）⇒ GREEN；
+  ② 摘归档过滤 ⇒ RED（left: 1 / right: 0）⇒ GREEN；③ 摘 `deny_unknown_fields` ⇒ RED（自带 contact_id ⇒ left: 201 / right: 400）⇒ GREEN；
+  ④ 摘工作区绑定修订号校验 ⇒ RED（left: 200 / right: 409）⇒ GREEN（还原后 SHA256 同哈希）。
+- ⚠️ **诚实边界（四级口径：IMPLEMENTED，未 PRODUCTION WIRED）**：**回合入口未接线** ⇒ 新建联系人当前**不影响真实回合**
+  （绑定闸 `admit_turn` 仍无调用方，归 B3b）；**会话绑定面未做**（`/v1/sessions/{id}/agent-binding` 归 B3b）；
+  **`memory_scope` 只到 DTO 层未翻译**（装配层翻译归 B3b）；**`capabilities` 只是展示投影，非授权依据**
+  （授权仍由 `Permission`/审批链决定）；绑定只存 id+revision ⇒ 改名/改人设不会让旧绑定失效（靠每回合现查现校验）；
+  `ContactOut` 在合同字段之上增补 persona/revision/updated_at_ms（裁决 14）。
+- **尺寸棘轮联动（本批的真实代价）**：B3a 使 4 个既有文件越过架构尺寸棘轮 ⇒ `arch-strict` 判红 ⇒ 合并裁决 BLOCKED
+  ⇒ 按 PR #126 的既有口径（不抬基线、不登记例外）改为**行为等价搬迁**，把 4 个文件压回基线以内（见进度页）。
+
+### 2026-11-17 C1 批次交付（提交 `e397cc687`，PR #135）
+
+- 落点（独立工作树 `C:\Apeireth\wt\backend-contracts-c1-20261117`，分支 `feat/backend-contracts-c1-20261117`）：
+  新建 `crates/foundation/protocol/src/canonical_stream.rs`（帧族 wire 类型）、
+  `crates/engine/runtime/src/canonical/canonical_stream.rs`（运行时权威缓冲注册表）、
+  `crates/adapters/gateway/src/canonical_stream.rs`（后端原生 SSE 面）；
+  测试 3 个文件（protocol 9 / runtime 11 / gateway 7）；改 4 个既有文件（3 个 `pub mod` ＋ 路由注册一行 merge）。
+- 帧族：`apeireth.c1.delta.v1` / `apeireth.c1.final.v1`；delta 帧带 `session_id/request_id/trace_id/sequence/delta/state`，
+  final 帧带 `state`（`completed|approval|failed|unknown`）＋ `text/usage/approvals/error/resync_required`；
+  **帧内无 `[DONE]`**（`[DONE]` 只表示通道关闭），**无 operation/incarnation/context_key**（裁决 2/8）。
+- 权威缓冲（运行时注册表）：按 `(session_id, request_id)` 索引；sequence 从 1 单调；环形缓冲 256 帧；
+  每订阅者队列 64 ＋ `try_send`（**发布方永不阻塞**，满了丢最旧并计数）；终帧只发一次（重复发布 ⇒ `FinalAlreadyPublished`）；
+  终态后拒绝增量（`StreamFinalized`）；`replay(after_sequence)` 超窗返回**显式事实** `ResyncRequired{oldest_available_sequence}`。
+- 后端原生面：`GET /v1/sessions/{session_id}/requests/{request_id}/stream`（text/event-stream）；
+  续发锚点＝`Last-Event-ID` 头**优先** → `?after_sequence=` 次之 → 缺省 0；
+  **先订阅后重放**（不漏帧）＋ 交界按序号去重；超窗 ⇒ 发一条 `resync_required` 事实帧（`state:"unknown"`）
+  **再关闭通道**（裁决 17 措辞裁定，见上）。
+- 反向验伪四组（红/绿各一条已贴进 PR 正文与提交正文）：① 摘终帧唯一性闸 ⇒ RED（10 passed / 1 failed）⇒ GREEN（11 passed）；
+  ② 摘环形有界 ⇒ RED（left: 266 / right: 256）⇒ GREEN；③ 把超窗改成错误 ⇒ runtime RED（replay 不得失败）
+  ＋ gateway RED（left: 500 / right: 200）⇒ GREEN；④ 摘 `.id(sequence)` ⇒ RED（left: None / right: Some("11")）⇒ GREEN。
+- ⚠️ **诚实边界（四级口径：IMPLEMENTED，未 PRODUCTION WIRED）**：**未接生产装配** ⇒ 端点当前**不产生真实流数据**
+  ⇒ 因此**未登记**进 `docs/gateway-api-contract.md` 的「已实现端点〔PRODUCTION WIRED〕」一节（登记即抬高口径）；
+  帧只两级；**不做** operation 级去重与 stop/cancel（归 C2）；权威缓冲是**进程内内存** ⇒ 进程重启即失
+  （客户端须改取回执）；全局单例注册表 ⇒ 多实例部署下重连到另一实例得 404 而不是 `resync_required`；
+  慢订阅者丢帧是静默的（未补 `frames_omitted` 类事实帧）。
+- **尺寸棘轮联动**：C1 需在 `canonical_entry.rs` 注册一条路由，而该文件基线 2291 行 ⇒ 按既有口径
+  （不抬基线、不登记例外）把路由定义搬进 `canonical_stream::routes()`、主路由表只加一行 `merge`
+  （并把该函数的两行文档注释并成一行）⇒ 该文件**净增 0 行**，`arch_guard --strict` ⇒ VIOLATIONS 0。
 
 ### 还差什么
 
