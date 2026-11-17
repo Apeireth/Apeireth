@@ -5,7 +5,8 @@
 //! (绝不回显凭据本体)、既有内置只读工具零回归。`std::env` 是进程全局,
 //! 全部用例串在一把锁后。
 
-use std::sync::Mutex;
+use std::collections::HashSet;
+use std::sync::{Mutex, OnceLock};
 
 use apeireth_cli::build_canonical_runtime_from_env;
 use apeireth_core::kernel::{CapabilityId, SessionId, TraceId};
@@ -19,6 +20,9 @@ use apeireth_runtime::canonical::Runtime;
 use serde_json::Value;
 
 static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+/// 本进程内已经清过一次的临时库路径 (只清一次, 免得把本用例刚写的数据删掉)。
+static CLEANED_PATHS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
 
 const GUARDED_KEYS: &[&str] = &[
     "APEIRETH_SESSION_DB",
@@ -96,13 +100,26 @@ impl Drop for EnvGuard {
 }
 
 fn temp_path(label: &str, name: &str) -> String {
-    std::env::temp_dir()
-        .join(format!(
-            "apeireth-self-status-e2e-{label}-{}-{name}",
-            std::process::id()
-        ))
-        .to_string_lossy()
-        .into_owned()
+    let path = std::env::temp_dir().join(format!(
+        "apeireth-self-status-e2e-{label}-{}-{name}",
+        std::process::id()
+    ));
+    // Windows 会回收进程号 ⇒ 同一 pid 的**上一轮**运行留下的库会被这一轮当成
+    // "已存在的事实" (实测: 残留的 episode e1 已在 revision 1 ⇒ protect(e1, 0)
+    // 撞 CAS ⇒ `Conflict { expected: 0, actual: 1 }` 假红)。
+    // ⇒ 本进程第一次用到某个路径时, 把上一轮残留 (含 sqlite 的 -wal/-shm) 清掉;
+    //    只清一次 ⇒ 本用例自己写进去的数据不会被自己删掉。
+    let key = path.to_string_lossy().into_owned();
+    let mut cleaned = CLEANED_PATHS
+        .get_or_init(|| Mutex::new(HashSet::new()))
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if cleaned.insert(key.clone()) {
+        for suffix in ["", "-wal", "-shm"] {
+            let _ = std::fs::remove_file(format!("{key}{suffix}"));
+        }
+    }
+    path.to_string_lossy().into_owned()
 }
 
 fn lock_env() -> std::sync::MutexGuard<'static, ()> {

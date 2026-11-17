@@ -446,6 +446,12 @@
 > 而四类使用侧反模式（E-196）**全部**是「调用方没读手册/手册落后于引擎」或「调用方自建了一套」的产物
 > ⇒ ⇒ **手册与引擎同批更新，是引擎交付的一部分，不是文档债**。
 
+## 3.10 ⭐ 2026-11-17 · 测试隔离：临时库路径按进程号 ⇒ Windows 回收进程号 ⇒ 上一轮残留被当成本轮事实（假红）
+
+| 编号 | 缺陷 | 证据 | 状态 |
+|---|---|---|---|
+| **E-199** | ⚠️⭐⭐⭐⭐ **测试的临时库路径只用「进程号」做唯一键 ⇒ Windows 会回收进程号 ⇒ 上一轮运行留下的库会被这一轮当成「已存在的事实」⇒ 断言撞 CAS 而假红**。**① 现象（实测原文）**：本批 fast gate 的 test 阶段红在 `apeireth-cli::self_status_e2e memory_ledger_counts_track_the_cognitive_store` ⇒ `panicked at crates/adapters/cli/tests/self_status_e2e.rs:257:40: protect: Conflict { id: "e1", expected: 0, actual: 1 }` ⇒ 用例自己写的三条 episode 还没写完，`protect(e1, 0)` 就撞上了 CAS（**actual=1 说明库里已经有一条 revision=1 的 e1** ⇒ 那不是本轮写的）。**② 根因（读源码定位）**：`crates/adapters/cli/tests/self_status_e2e.rs:98-106` 的 `temp_path(label, name)` 用 `std::process::id()` 拼路径 ⇒ 同名标签 + 同号进程 ⇒ 同一路径；而 Windows 的进程号**会被回收**（实测：%TEMP% 里 `apeireth-self-status-e2e-ledger-<pid>-*` 堆了两周、共几十个 pid 的残留，最新的两轮相距 8 分钟就撞了同一个号）⇒ ⇒ 撞上残留库 ⇒ 断言读到上一轮的事实。**③ 为什么以前没炸**：CI 是**一次性 runner** ⇒ %TEMP% 干净 ⇒ 永远撞不上 ⇒ 只有本机连续跑多轮才暴露（⇒ **CI 绿 ≠ 本机绿**）。**④ 修法（只改隔离，不改断言强度）**：`temp_path` 在**本进程第一次**用到某个路径时，先删掉该路径与它的 `-wal`/`-shm` 残留（用进程内 `OnceLock<Mutex<HashSet<String>>>` 保证**只清一次** ⇒ 本用例自己写进去的数据不会被自己删掉）。**⑤ 同类面（已登记，未在本批全改）**：`crates/**` 里用 `std::process::id()` 拼临时路径的地方共 **236 处**（grep 全仓）⇒ 同一类脆弱性普遍存在；本批**只修挡住强制门禁的那一处**，其余进长尾（改法同上：首次使用时清残留）。**⑥ 教训**：**「进程号」不是唯一键** ⇒ 需要「本轮唯一」时必须带**轮次维度**（时间戳 / 单调计数 / 随机后缀），否则跨轮次会串状态 | 反向验伪：修前 fast gate 的 test 阶段红在上述用例（原文见 ①）⇒ 修后同一条 fast gate 在同样条件下（2362 个用例、nextest 每用例一进程、进程号高周转）转绿；定向复跑 `cargo nextest run -p apeireth-cli --test self_status_e2e` ⇒ `7 tests run: 7 passed`（清残留后连跑两轮均绿） | **已修（阻塞门禁的那一处）**；同类 236 处**已登记为长尾** |
+
 ## 4. 已否 / 已排除（留档，免得重走）
 
 | 假设 | 实测结果 | 结论 |
