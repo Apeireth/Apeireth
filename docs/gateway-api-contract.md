@@ -24,6 +24,14 @@
   403 `workspace_revoked` —— **新增码 = 合同变更**, 前端需同步;其余面的既有码语义不变。
   联系人面(B3a 批, 见 §7h)的专用码:404 `contact_not_found` / 409 `contact_conflict` /
   403 `contact_archived` / 409 `contact_binding_conflict` —— 同为**新增码 = 合同变更**。
+  会话绑定面(B3b 批)的专用码:409 `agent_binding_rejected`(回合闸拒绝: 会话绑定的联系人/工作区
+  已不可用)/ 409 `session_binding_conflict`(会话修订号冲突, 详情带 `expected_revision`/
+  `actual_revision`) —— 同为**新增码 = 合同变更**。
+  操作幂等面(C2-0 批)登记的专用码:409 `operation_conflict`(同一操作键 + 不同载荷)/
+  409 `operation_in_progress`(同一操作键在飞) —— ⚠️ **目录与中文文案已登记, 尚无端点产生这两个码**;
+  产生它们的端点归 C2-1(幂等接线), 交付前**不得**按已实现端点/已生产码计。
+  同为**新增码 = 合同变更**, 前端需同步(封闭集共 24 个码, 顺序见
+  `crates/adapters/gateway/src/error_frame.rs` 的 `ErrorCode` 枚举)。
 - 分页:列表端点统一 `limit`(默认 50,最大 500)+ 按时间倒序;需要更多分页时再引入 cursor
 
 ## §2 已实现端点〔四级口径：PRODUCTION WIRED〕

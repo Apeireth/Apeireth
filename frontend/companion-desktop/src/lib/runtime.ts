@@ -457,11 +457,20 @@ const GENERIC_ERROR_SOLUTION = {
 
 /** 错误码 → 中文解决方案目录 (P0-5 / P1-3 前端). */
 export const ERROR_SOLUTIONS: Record<ErrorCode, {title: string; solution: string}> = {
-  auth_missing_key: {title: '缺少 API 密钥', solution: '在「设置 → 模型」中保存密钥后重试'},
-  auth_invalid_key: {title: 'API 密钥无效', solution: '检查是否过期或被撤销, 在设置中重新保存'},
+  auth_missing_key: {title: '缺少凭据', solution: '网关访问令牌由部署者配置；模型密钥在「设置 → 模型」中保存'},
+  auth_invalid_key: {title: '凭据无效', solution: '检查是否过期或被撤销, 在设置中重新保存'},
   provider_unreachable: {title: '模型服务不可达', solution: '检查 base_url 与网络后重试'},
   provider_error: {title: '模型服务返回错误', solution: '查看错误详情中的上游信息'},
   invalid_request: {title: '请求参数错误', solution: '检查输入后重试'},
+  permission_denied: {
+    title: '权限不足',
+    solution: '若提示「未绑定用户」: 用 apeireth user add 把令牌绑定到用户; 若提示角色不足: 需 owner 调整用户表',
+  },
+  domain_forbidden: {title: '跨域访问被拒', solution: '该操作不在本用户域的开放面内——域面按用户域隔离, 越域访问一律拒绝'},
+  domain_refused: {
+    title: '用户域未开放',
+    solution: '本用户域的数据面未打开（域配置可能损坏）——请联系 owner 检查 users/<id>/domain.json',
+  },
   session_not_found: {title: '会话不存在', solution: '回到会话列表重新选择'},
   rate_limited: {title: '请求被限流', solution: '稍后重试或降低频率'},
   review_rejected: {
@@ -472,6 +481,35 @@ export const ERROR_SOLUTIONS: Record<ErrorCode, {title: string; solution: string
     title: '本轮未收敛',
     solution: '本轮工具链过长——把问题拆小一点再问，或点「重新生成」',
   },
+  workspace_not_found: {title: '工作区不存在', solution: '回到工作区列表重新读取; 已关闭或不属于你的工作区不会再出现'},
+  workspace_conflict: {
+    title: '工作区已被改动',
+    solution: '重新读取工作区列表拿到最新修订号, 再带新的 expected_revision 提交',
+  },
+  workspace_revoked: {title: '工作区已关闭', solution: '工作区已吊销, 不能再选择或关闭——请换一个可用工作区'},
+  contact_not_found: {title: '联系人不存在', solution: '回到联系人列表重新读取; 已归档或不属于你的联系人不会再出现'},
+  contact_conflict: {
+    title: '联系人已被改动',
+    solution: '重新读取该联系人拿到最新修订号, 再带新的 expected_revision 提交',
+  },
+  contact_archived: {title: '联系人已归档', solution: '归档是终态（软删除）, 不可修改也不可复活——请新建一个联系人'},
+  contact_binding_conflict: {
+    title: '工作区绑定冲突',
+    solution: '绑定的工作区不存在、已吊销或修订号已变——重读工作区列表后再声明绑定',
+  },
+  agent_binding_rejected: {
+    title: '会话绑定已失效',
+    solution: '会话绑定的联系人/工作区已不可用——重新读取会话绑定, 换可用联系人或未吊销工作区后再发起回合',
+  },
+  session_binding_conflict: {
+    title: '会话已被改动',
+    solution: '重新读取会话拿到最新修订号, 再带新的 expected_revision 提交',
+  },
+  operation_conflict: {
+    title: '操作键载荷冲突',
+    solution: '同一操作键已用另一份载荷提交过——按原载荷重试, 或换一个操作键',
+  },
+  operation_in_progress: {title: '操作处理中', solution: '同一操作键的请求还在处理中——等它结束后再重试, 不要重复提交'},
   internal: {title: '内部错误', solution: '重启 Companion 后重试, 复现请提交日志'},
 };
 
