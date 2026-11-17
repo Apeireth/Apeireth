@@ -1289,8 +1289,7 @@ async fn approval_session_refusal(
     ))
 }
 
-/// Build the production router over an explicit [`GatewayState`] (lets tests
-/// keep a handle on the event bus).
+/// Build the production router over an explicit [`GatewayState`] (tests keep a handle on the event bus).
 pub fn canonical_router_with_state(state: GatewayState) -> Router {
     // W2-② 认证面全网关化: 令牌门是**整面**中间件 (chat / 事件流 / 面板 / 会话 /
     // 审批 / admin 族全过门), 不再逐端点挂 route_layer —— 新路由默认在门内,
@@ -1316,6 +1315,7 @@ pub fn canonical_router_with_state(state: GatewayState) -> Router {
             "/v1/sessions/:session_id",
             axum::routing::delete(crate::session_settings::delete_session),
         )
+        .merge(crate::canonical_stream::routes())
         .route("/v1/apeireth/events", get(events_handler))
         .route(
             "/v1/apeireth/presence",

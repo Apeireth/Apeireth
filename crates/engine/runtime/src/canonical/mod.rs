@@ -30,6 +30,9 @@ pub mod approval;
 pub mod behavior_adapter;
 mod behavior_projection;
 pub mod cache_trace;
+// C1 规范流的权威缓冲 (后端合同 C 批 · C1 段 · 裁决 16): 注册表 + 有界环形窗口
+// + 终帧只发一次 + 重放落后显式事实 (裁决 17)。
+pub mod canonical_stream;
 pub mod capability;
 pub mod committed_evidence;
 pub mod context;

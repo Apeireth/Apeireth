@@ -64,6 +64,8 @@ pub mod adapters;
 // were missing (ToolResult / StreamEvent / ModelDescriptor). See `canonical`'s
 // module docs for what this crate must never own.
 pub mod canonical;
+// C1 规范流帧 schema (后端合同 C 批 · C1 段): 两族帧 (delta / final) + 终态事实位。
+pub mod canonical_stream;
 // R37-1: 砍 ProtocolRouter 中间层, 加 ProtocolBridge trait + 4 Bridge struct
 pub mod bridge;
 pub mod bridge_ext;
