@@ -237,14 +237,17 @@ def cmd_gen(contract: dict) -> int:
     text = PR_TEMPLATE.read_text(encoding="utf-8")
     updated = write_block(text, block)
     if updated != text:
-        PR_TEMPLATE.write_text(updated, encoding="utf-8")
+        # ⚠️ 2026-11-17：`Path.write_text` 在 Windows 上把 '\n' 翻成 CRLF
+        # ⇒ ⇒ 整个文件被重写 ⇒ git diff 变成「172 行全改」的空白噪声
+        # ⇒ ⇒ 仓里存的是 LF ⇒ ⇒ 写回时强制 newline="\n"（Linux 行为一致）。
+        with PR_TEMPLATE.open("w", encoding="utf-8", newline="\n") as handle:
+            handle.write(updated)
         print(f"✓ 已更新 {PR_TEMPLATE.relative_to(ROOT)} 的自动事实块")
     else:
         print(f"✓ {PR_TEMPLATE.relative_to(ROOT)} 自动事实块已是最新")
 
-    MANIFEST.write_text(
-        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-    )
+    with MANIFEST.open("w", encoding="utf-8", newline="\n") as handle:
+        handle.write(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
     print(
         f"✓ 已写 {MANIFEST.relative_to(ROOT)}："
         f"{len(manifest['gates'])} 条门禁 · "

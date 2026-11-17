@@ -895,6 +895,22 @@ required = true
 timeout = 600
 note = "融合通道 delta 不许为负（不许不涨的尺子）；⚠️ delta 是下界（内部卷偏词面）⇒ 修 harness + 加公平考卷 = 让尺子变准的前提"
 
+# 构建产物槽位纪律（2026-11-17 · 磁盘漂移根治）
+# ⇒ ⇒ 「产物只落在登记槽位」从「靠人记得」变成「机器判红」
+# ⇒ ⇒ 登记表 = docs/architecture/target-slots.json（路径 + owner + 用途 ⇒ 先登记再长）
+# ⇒ ⇒ ⚠️ 该登记表是**本机布局** ⇒ CI（Linux 容器）上没有槽位根 ⇒ 审计**跳过并退出 0**
+# ⇒ ⇒ ⇒ CI 行为不变；本机（Windows 开发机）上未登记的游离产物目录 ⇒ ⇒ 判红
+# ⇒ ⇒ 他仓产物（例如私有桌面前端仓自己的 target/）⇒ ⇒ **只报告不判红**（不替别人的线做决定）
+[[ci_gates.gate]]
+id = "target-slots"
+cmd = ["python3", "scripts/target_slot.py", "--audit"]
+stage = "fast"
+scope = ["*"]
+blocking = true
+required = true
+timeout = 120
+note = "构建产物槽位审计：未登记的游离产物目录 ⇒ 判红（他仓产物只报告不判红；在途他线目录只报告不判红）"
+
 [[concepts]]
 name = "PrincipalAuthorizations"
 canonical = "crates/engine/runtime/src/canonical/principal_authority.rs"

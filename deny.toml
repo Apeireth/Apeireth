@@ -152,6 +152,25 @@ ignore = [
     #   EXR 属核面保留能力; 若将来放弃 EXR 承诺, 去掉 exr 依赖即消。
     "RUSTSEC-2024-0436",
     #
+    # 2026-11-17 供应链公告批：RUSTSEC-2026-0543（chrono 0.4.45 · unmaintained）。
+    #   **公告类型＝unmaintained，不是漏洞**：没有 exploit、没有 unsafe 缺陷、
+    #   没有数据泄漏面 ⇒ 运行时行为与被接管风险不变。
+    #   公告日 2026-11-17（reported 2026-09-14），**所有版本都受影响** ⇒
+    #   公告自带「无安全升级路径」（Solution: No safe upgrade is available!）
+    #   ⇒ 升级版本解不掉 ⇒ 只剩「迁移到公告建议的替代实现」或「显式豁免」两条路。
+    #   依赖面：chrono 是**在役直接依赖**（根 Cargo.toml 的 workspace 依赖表），
+    #   在役 6 个 crate 引用（cli / core / runtime / runtime-assembly / guard / memory）。
+    #   **为什么本批选豁免而不是当场迁移**：
+    #     ① 公告类型是「不再维护」⇒ 没有可修的缺陷，修不了的东西写进代码也修不掉；
+    #     ② 迁移跨 6 个在役 crate ＋ 时间/时区/格式化面 ⇒ 属独立工作线，
+    #        塞进本次解阻塞批会把一个 CI 红变成一个跨线大改，风险更高；
+    #     ③ 豁免本身带复审条件，不是永久静默。
+    #   **复审条件**：完成向公告建议的替代实现的迁移后本条即删；
+    #     若上游恢复维护 ⇒ 本条变 advisory-not-detected ⇒ 按本文件既有规则即删。
+    #   同步面：audit.toml [advisories].ignore 与 .github/workflows/cargo-audit.yml
+    #     的 --ignore 同批同加（三处口径一致，理由同本段）。
+    "RUSTSEC-2026-0543",
+    #
     # 2026-11-10 依赖升级批（rusqlite 0.32 → 0.41）复审：删掉 8 条已失效 ignore。
     #   ① zbus 5.x 家族（RUSTSEC-2026-0370/0371/0372）: **Cargo.lock 里已无 zbus**
     #      （xcap 那条链不在当前依赖树）⇒ `cargo deny check advisories` 报

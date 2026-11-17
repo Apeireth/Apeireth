@@ -12,7 +12,71 @@
 param([switch]$Apply)
 
 $ErrorActionPreference = 'Stop'
-$target = Join-Path $PSScriptRoot '..\target' | Resolve-Path
+$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+
+# --- Resolve the REAL cargo target dir (no hardcoded <repo>\target) -------------
+# NOTE (2026-11-17): this block is intentionally ASCII-only.
+#   These .ps1 files are UTF-8 WITHOUT BOM. Windows PowerShell 5.1 decodes them
+#   with the ANSI code page (cp936) => the mojibake can swallow the next ASCII
+#   char (e.g. `{` right after a full-width colon) and even merge lines
+#   => parse errors. The real logic lives in scripts/target_dir.py (Python,
+#   always UTF-8); this block is only a thin PowerShell adapter:
+#     1) $env:CARGO_TARGET_DIR  (a relative value is anchored at RepoRoot)
+#     2) python scripts/target_dir.py  (it runs cargo metadata internally)
+#     3) fallback <RepoRoot>\target, WITH an explicit notice (never silent).
+#   A missing or broken Python must NOT crash the script => degrade to fallback.
+function Resolve-CargoTargetDir {
+    param(
+        [Parameter(Mandatory = $true)][string]$RepoRoot,
+        [Parameter(Mandatory = $true)][string]$HelperPath
+    )
+    # 1) env var first (cargo itself looks at it first too)
+    if ($env:CARGO_TARGET_DIR) {
+        $raw = $env:CARGO_TARGET_DIR
+        if (-not [System.IO.Path]::IsPathRooted($raw)) { $raw = Join-Path $RepoRoot $raw }
+        return [System.IO.Path]::GetFullPath($raw)
+    }
+    # 2) shared helper (inside: env => cargo metadata => fallback)
+    if (Test-Path $HelperPath) {
+        $python = if ($env:PYTHON) { $env:PYTHON } else { 'python' }
+        $prevEap = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'   # native stderr throws under PS 5.1 with EAP=Stop
+        $merged = @()
+        $code = -1
+        $failure = ''
+        try {
+            $merged = & $python $HelperPath --repo-root $RepoRoot 2>&1
+            $code = $LASTEXITCODE
+        }
+        catch {
+            $failure = $_.Exception.Message
+        }
+        finally {
+            $ErrorActionPreference = $prevEap
+        }
+        # stdout entries are String (the path); stderr entries are ErrorRecord (notices)
+        $outLines = @($merged | Where-Object { $_ -is [string] } | ForEach-Object { "$_".Trim() } | Where-Object { $_ -ne '' })
+        $errLines = @($merged | Where-Object { $_ -is [System.Management.Automation.ErrorRecord] } | ForEach-Object { "$_".TrimEnd() } | Where-Object { $_ -ne '' })
+        foreach ($errLine in $errLines) { Write-Host $errLine }   # helper notices => never silent
+        if ($code -eq 0 -and $outLines.Count -ge 1) {
+            $resolved = $outLines[0]
+            try { $resolved = [System.IO.Path]::GetFullPath($resolved) } catch { }
+            return $resolved
+        }
+        if ($failure -ne '') {
+            Write-Host ("[target-dir] WARN: cannot run python scripts/target_dir.py : {0}" -f $failure)
+        }
+        else {
+            Write-Host ("[target-dir] WARN: python scripts/target_dir.py exit code {0} => using fallback" -f $code)
+        }
+    }
+    # 3) fallback (with an explicit notice => never silent)
+    $fallback = Join-Path $RepoRoot 'target'
+    Write-Host ("[target-dir] WARN: cannot resolve the real cargo target dir => fallback to {0} (<RepoRoot>\target)" -f $fallback)
+    return [System.IO.Path]::GetFullPath($fallback)
+}
+
+$target = Resolve-CargoTargetDir -RepoRoot $RepoRoot -HelperPath (Join-Path $PSScriptRoot 'target_dir.py') | Resolve-Path
 if (-not (Test-Path $target)) { Write-Host "target not found: $target"; exit 0 }
 
 function Measure-Dir($dir) {

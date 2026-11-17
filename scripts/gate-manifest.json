@@ -738,6 +738,22 @@
       "env": "python",
       "timeout": 600,
       "note": "融合通道 delta 不许为负（不许不涨的尺子）；⚠️ delta 是下界（内部卷偏词面）⇒ 修 harness + 加公平考卷 = 让尺子变准的前提"
+    },
+    {
+      "id": "target-slots",
+      "cmd": [
+        "python3",
+        "scripts/target_slot.py",
+        "--audit"
+      ],
+      "scope": [
+        "*"
+      ],
+      "blocking": true,
+      "required": true,
+      "env": "python",
+      "timeout": 120,
+      "note": "构建产物槽位审计：未登记的游离产物目录 ⇒ 判红（他仓产物只报告不判红；在途他线目录只报告不判红）"
     }
   ]
 }
