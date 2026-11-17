@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use apeireth_core::kernel::ids::WorkspaceId;
 use apeireth_core::Episode;
 use apeireth_gateway::{
     AuditCommand, AuditDto, AuditQuery, CareDisciplineDto, CarePanelDto, CarePanelQuery,
@@ -30,7 +31,7 @@ use apeireth_gateway::{
     ToolCatalogQuery, ToolDto, TraceCommand, TraceDetailDto, TraceQuery, TraceSpanDto,
     TraceSummaryDto, TraitLocksDto, TraitMoveDto, TraitPanelDto, TraitPanelQuery, TraitValuesDto,
     TuningRecordDto, WorkbenchMemoryProvenanceDto, WorkbenchQuery, WorkbenchToolExecutionDto,
-    WorkbenchTurnDto,
+    WorkbenchTurnDto, WorkspaceCreateCommand, WorkspaceDto, WorkspacePanel, WorkspacePanelError,
 };
 use apeireth_governance::{Permission, PermissionPolicy};
 use apeireth_memory::{GovernedEpisode, MemoryGovernanceStore};
@@ -41,6 +42,10 @@ use apeireth_orchestration::task_queue::{
 use apeireth_orchestration::trait_report::{recent_moves, TRAIT_RECENT_MOVES};
 use apeireth_plugin::memory_backend::MemoryBackend;
 use apeireth_protocol::canonical::{ContentPart, MessageRole};
+use apeireth_runtime::canonical::workspace::{
+    InMemoryWorkspaceRegistry, Workspace, WorkspaceCreateRequest as DomainWorkspaceCreateRequest,
+    WorkspaceError, WorkspacePermissionScope, WorkspaceRegistry, WorkspaceRootKind,
+};
 use apeireth_runtime::canonical::{Runtime, Session, SessionStore};
 use apeireth_runtime_assembly::{CareHeartbeatStatus, TraitGrowthFacts, TraitGrowthPaths};
 use async_trait::async_trait;
@@ -1123,6 +1128,9 @@ pub fn gateway_services(panel: Arc<CliPanelData>) -> GatewayServices {
         // `services.care` / `services.traits`), 与工具面同表同账。
         care: None,
         traits: None,
+        // 工作区合同面同口径: 适配器由组合根在装配点注入 (见 cli::lib 的
+        // `services.workspaces`), 真实持有受管根与工作区注册表。
+        workspaces: None,
     }
 }
 
@@ -1522,5 +1530,222 @@ impl TraitPanelQuery for CliTraitPanel {
             records,
             skipped_records: facts.skipped,
         })
+    }
+}
+
+/// 工作区合同面适配 (组合根, A2 批): 真实持有 `InMemoryWorkspaceRegistry` +
+/// 宿主受管根。
+///
+/// 宿主口径 (A2 合同面):
+/// - **受管根由宿主决定** —— 客户端只提交身份字段, 根路径永远来自本适配器;
+/// - **作用域宿主确认** —— 客户端提交的是 requested scope, 生效的是宿主确认值
+///   (被 [`CliWorkspacePanel::with_scope_ceiling`] 的上限截断);
+/// - **读面不含绝对根路径** —— 出口只给 `root_display` (叶子名), 根路径不出适配器;
+/// - **只装配受管根** —— temporary / preset 的根装配属后续批, 本适配如实拒开。
+pub struct CliWorkspacePanel {
+    registry: Arc<InMemoryWorkspaceRegistry>,
+    managed_root: PathBuf,
+    scope_ceiling: WorkspacePermissionScope,
+    source: String,
+}
+
+impl CliWorkspacePanel {
+    /// 以宿主受管根装配一个工作区面 (并绑定一个受管工作区)。
+    ///
+    /// 绑定的那个工作区就是宿主此刻的受管根 —— 读面看到的是身份 + 叶子名,
+    /// 不是路径。
+    pub fn new(managed_root: impl Into<PathBuf>) -> Self {
+        Self {
+            registry: Arc::new(InMemoryWorkspaceRegistry::new()),
+            managed_root: managed_root.into(),
+            scope_ceiling: WorkspacePermissionScope::Write,
+            source: "cli".to_string(),
+        }
+    }
+
+    /// 收紧宿主可授予的作用域上限 (请求值高于上限时被截断到上限)。
+    pub fn with_scope_ceiling(mut self, ceiling: WorkspacePermissionScope) -> Self {
+        self.scope_ceiling = ceiling;
+        self
+    }
+
+    /// 换掉工作区来源标签 (写进 `source` 字段)。
+    pub fn with_source(mut self, source: impl Into<String>) -> Self {
+        self.source = source.into();
+        self
+    }
+
+    /// 宿主当前生效的受管根 (仅供组合根/测试核对, 不进任何响应体)。
+    pub fn managed_root(&self) -> &std::path::Path {
+        &self.managed_root
+    }
+
+    /// 宿主确认作用域: 请求值被上限截断。
+    fn confirm_scope(&self, requested: WorkspacePermissionScope) -> WorkspacePermissionScope {
+        if scope_rank(requested) <= scope_rank(self.scope_ceiling) {
+            requested
+        } else {
+            self.scope_ceiling
+        }
+    }
+}
+
+/// 作用域的强弱次序 (read < write < approval_write), 用来截断请求值。
+fn scope_rank(scope: WorkspacePermissionScope) -> u8 {
+    match scope {
+        WorkspacePermissionScope::Read => 0,
+        WorkspacePermissionScope::Write => 1,
+        WorkspacePermissionScope::ApprovalWrite => 2,
+    }
+}
+
+/// 领域错误 → 合同面错误的归因 (不泄露根路径, 不改写语义)。
+fn map_workspace_error(error: WorkspaceError) -> WorkspacePanelError {
+    match error {
+        WorkspaceError::NotFound(id) => WorkspacePanelError::NotFound {
+            workspace_id: id.to_string(),
+        },
+        WorkspaceError::RevisionConflict { expected, actual } => WorkspacePanelError::Conflict {
+            workspace_id: String::new(),
+            expected_revision: expected,
+            actual_revision: actual,
+        },
+        WorkspaceError::Revoked => WorkspacePanelError::Revoked {
+            workspace_id: String::new(),
+        },
+        WorkspaceError::InvalidDisplayName { reason } => {
+            WorkspacePanelError::InvalidRequest { reason }
+        }
+        WorkspaceError::InvalidRequest { reason } => WorkspacePanelError::InvalidRequest { reason },
+    }
+}
+
+/// 领域工作区 → 合同 DTO 的投影 (只给身份 + 安全展示名)。
+fn project_workspace(workspace: &Workspace) -> WorkspaceDto {
+    WorkspaceDto {
+        workspace_id: workspace.workspace_id.to_string(),
+        display_name: workspace.display_name.clone(),
+        root_kind: workspace.root_kind,
+        root_display: workspace.root_display.clone(),
+        permission_scope: workspace.permission_scope,
+        revision: workspace.revision,
+        status: workspace.status,
+        can_select: workspace.can_select,
+        can_create_temporary: workspace.can_create_temporary,
+        can_write: workspace.can_write,
+        expires_at: workspace.expires_at.map(|value| value as i64),
+        source: workspace.source.clone(),
+        updated_at_ms: workspace.updated_at_ms as i64,
+    }
+}
+
+#[async_trait]
+impl WorkspacePanel for CliWorkspacePanel {
+    async fn list_workspaces(&self) -> Result<Vec<WorkspaceDto>, String> {
+        Ok(self.registry.list().iter().map(project_workspace).collect())
+    }
+
+    async fn get_workspace(&self, workspace_id: &str) -> Result<WorkspaceDto, WorkspacePanelError> {
+        let id = workspace_id.parse::<WorkspaceId>().map_err(|_| {
+            WorkspacePanelError::InvalidRequest {
+                reason: "workspace_id 格式非法".to_string(),
+            }
+        })?;
+        let workspace = self
+            .registry
+            .get(&id)
+            .ok_or_else(|| WorkspacePanelError::NotFound {
+                workspace_id: workspace_id.to_string(),
+            })?;
+        Ok(project_workspace(&workspace))
+    }
+
+    async fn create_workspace(
+        &self,
+        command: WorkspaceCreateCommand,
+    ) -> Result<WorkspaceDto, WorkspacePanelError> {
+        // 宿主只装配受管根: 其它根类型如实拒开, 不假装支持。
+        if command.root_kind != WorkspaceRootKind::Managed {
+            return Err(WorkspacePanelError::InvalidRequest {
+                reason: format!(
+                    "宿主只装配受管根, 暂不支持 {} 根",
+                    command.root_kind.source_label()
+                ),
+            });
+        }
+        if command.expires_at.is_some() {
+            return Err(WorkspacePanelError::InvalidRequest {
+                reason: "受管工作区不接受 expires_at (过期时间只属于临时工作区)".to_string(),
+            });
+        }
+        let request = DomainWorkspaceCreateRequest {
+            root_kind: WorkspaceRootKind::Managed,
+            root: self.managed_root.clone(),
+            display_name: command.display_name,
+            permission_scope: self.confirm_scope(command.permission_scope),
+            expires_at: None,
+            source: Some(self.source.clone()),
+            now_ms: now_millis().max(0) as u64,
+        };
+        match self.registry.create(request) {
+            Ok(workspace) => Ok(project_workspace(&workspace)),
+            Err(error) => Err(map_workspace_error(error)),
+        }
+    }
+
+    async fn select_workspace(
+        &self,
+        workspace_id: &str,
+        expected_revision: u64,
+    ) -> Result<WorkspaceDto, WorkspacePanelError> {
+        let id = workspace_id.parse::<WorkspaceId>().map_err(|_| {
+            WorkspacePanelError::InvalidRequest {
+                reason: "workspace_id 格式非法".to_string(),
+            }
+        })?;
+        match self.registry.select(&id, expected_revision) {
+            Ok(workspace) => Ok(project_workspace(&workspace)),
+            Err(error) => Err(map_workspace_error(error)),
+        }
+    }
+
+    async fn close_workspace(
+        &self,
+        workspace_id: &str,
+        expected_revision: u64,
+    ) -> Result<WorkspaceDto, WorkspacePanelError> {
+        let id = workspace_id.parse::<WorkspaceId>().map_err(|_| {
+            WorkspacePanelError::InvalidRequest {
+                reason: "workspace_id 格式非法".to_string(),
+            }
+        })?;
+        let now_ms = now_millis().max(0) as u64;
+        match self.registry.close(&id, expected_revision, now_ms) {
+            Ok(workspace) => Ok(project_workspace(&workspace)),
+            Err(error) => Err(map_workspace_error(error)),
+        }
+    }
+}
+
+/// 绑定宿主受管根的受管工作区 (组合根装配时调用)。
+///
+/// 受管根是宿主事实: 这里给它一个身份 + 叶子名展示, 路径不出宿主。
+pub fn bind_managed_workspace(
+    panel: &CliWorkspacePanel,
+    display_name: &str,
+) -> Result<WorkspaceDto, String> {
+    let scope = panel.scope_ceiling;
+    let request = DomainWorkspaceCreateRequest {
+        root_kind: WorkspaceRootKind::Managed,
+        root: panel.managed_root.clone(),
+        display_name: display_name.to_string(),
+        permission_scope: scope,
+        expires_at: None,
+        source: Some(panel.source.clone()),
+        now_ms: now_millis().max(0) as u64,
+    };
+    match panel.registry.create(request) {
+        Ok(workspace) => Ok(project_workspace(&workspace)),
+        Err(error) => Err(errstr(error)),
     }
 }

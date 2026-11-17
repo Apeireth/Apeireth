@@ -50,6 +50,12 @@ pub enum ErrorCode {
     ReviewRejected,
     /// The turn hit the structural round limit without reaching an answer.
     TurnNotConverged,
+    /// 工作区不存在或对调用方不可见 (A2 合同面): 帧恒定, 不泄露他域/他人存在性。
+    WorkspaceNotFound,
+    /// 工作区修订号冲突 (A2 合同面): 客户端带来的 `expected_revision` 与当前修订号不符。
+    WorkspaceConflict,
+    /// 工作区已吊销 (A2 合同面): 状态不可用, 不是并发冲突 —— 故不复用 conflict 码。
+    WorkspaceRevoked,
     /// An unexpected internal error.
     Internal,
 }
@@ -70,6 +76,9 @@ impl ErrorCode {
             Self::RateLimited => "rate_limited",
             Self::ReviewRejected => "review_rejected",
             Self::TurnNotConverged => "turn_not_converged",
+            Self::WorkspaceNotFound => "workspace_not_found",
+            Self::WorkspaceConflict => "workspace_conflict",
+            Self::WorkspaceRevoked => "workspace_revoked",
             Self::Internal => "internal",
         }
     }
@@ -104,6 +113,10 @@ impl ErrorCode {
             Self::RateLimited => "稍后重试或降低请求频率",
             Self::ReviewRejected => "回复被认知评审驳回——点「重新生成」再试; 若频繁出现, 在设置 → 高级能力中把认知深度调低",
             Self::TurnNotConverged => "本轮工具链过长未收敛——把问题拆小一点再问, 或点「重新生成」",
+            // 工作区面（A2 合同面）：三个码各说一条可执行动作。
+            Self::WorkspaceNotFound => "回到工作区列表重新读取; 若该工作区已被关闭或不属于你, 列表里不会再出现",
+            Self::WorkspaceConflict => "工作区已被改动——重新读取列表拿到最新修订号, 再带着新的 expected_revision 提交",
+            Self::WorkspaceRevoked => "工作区已关闭, 不能再选择或关闭; 请换一个可用工作区",
             Self::Internal => "重启 Companion 后重试, 若复现请提交日志",
         }
     }
@@ -196,6 +209,9 @@ mod tests {
             ErrorCode::InvalidRequest,
             ErrorCode::SessionNotFound,
             ErrorCode::RateLimited,
+            ErrorCode::WorkspaceNotFound,
+            ErrorCode::WorkspaceConflict,
+            ErrorCode::WorkspaceRevoked,
             ErrorCode::Internal,
         ];
         for code in codes {

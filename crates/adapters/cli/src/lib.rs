@@ -3261,6 +3261,17 @@ pub async fn dispatch_gateway_serve_with(
     } else {
         None
     };
+    // 工作区合同面 (A2 批: `GET /v1/panel/workspaces` + `/v1/workspaces*` 写面):
+    // 真实持有工作区注册表 + **宿主受管根** (进程唯一根 = 当前工作目录, 与
+    // 组合根既有的唯一根口径同源)。受管根由宿主决定: 客户端只提交身份字段,
+    // 提交根路径一律 400。作用域宿主确认 (上限 Write, 请求值被截断)。
+    // A2 批不承诺持久化 (A3 批做) —— 本批是可跑的真实链路, 注册表是进程内的。
+    let workspace_panel = Arc::new(crate::gateway_panels::CliWorkspacePanel::new(
+        std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")),
+    ));
+    // 宿主把受管根绑成一个工作区 (身份 + 叶子名展示; 路径不出宿主)。
+    crate::gateway_panels::bind_managed_workspace(&workspace_panel, "默认工作区")?;
+    services.workspaces = Some(workspace_panel as Arc<dyn apeireth_gateway::WorkspacePanel>);
     // W2-②: 客户端令牌表 (令牌族第二面) 显式注入; 远程绑定闸与 TLS 接口桩的
     // 清场事实随装配进审计面 (逃生阀可裸奔, 但必须留痕)。
     let mut state =

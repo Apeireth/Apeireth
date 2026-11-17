@@ -114,6 +114,12 @@ pub mod care_panel;
 /// 现值/锁定态/最近移动投影端口 (与 `tool.trait_report` 同账同源; 零写面)。
 pub mod trait_panel;
 
+/// 工作区合同面 (A2 批): `GET /v1/panel/workspaces` 面板读面 +
+/// `GET /v1/workspaces/:id` / `POST /v1/workspaces` / `POST /v1/workspaces/:id/select|close`
+/// 写面 (带 `expected_revision` 乐观并发)。端口只说身份 + 安全展示名:
+/// 读面**不含**绝对根路径。
+pub mod workspace_panel;
+
 /// W2-② remote access face: listen knob, non-loopback fail-closed bind gate,
 /// and the wired TLS surface (material loading fail-closed, real TLS listener).
 pub mod remote_access;
@@ -167,6 +173,12 @@ pub use trait_panel::{
 };
 pub use user_admin::{
     UserAdminDto, UserAdminError, UserAdminService, UserCreateBody, UserRolePatchBody,
+};
+pub use workspace_panel::{
+    WorkspaceCreateCommand, WorkspaceCreateRequest, WorkspaceDto, WorkspaceEnvelope,
+    WorkspaceListDto, WorkspacePanel, WorkspacePanelError, WorkspaceRevisionRequest,
+    WORKSPACE_ACTION_CLOSE, WORKSPACE_ACTION_CREATE, WORKSPACE_ACTION_DENY,
+    WORKSPACE_ACTION_SELECT, WORKSPACE_AUDIT_EVENT,
 };
 
 pub use remote_access::{

@@ -572,6 +572,12 @@ pub struct GatewayServices {
     /// 的四滑杆现值/锁定态/最近移动投影 (与 `tool.trait_report` 同账同源)。
     /// 适配实现在组合根; 未注入 = `501`。
     pub traits: Option<Arc<dyn crate::trait_panel::TraitPanelQuery>>,
+    /// 工作区合同面 (`GET /v1/panel/workspaces` + `GET /v1/workspaces/:id` +
+    /// `POST /v1/workspaces` + `POST /v1/workspaces/:id/select|close`):
+    /// [`crate::workspace_panel::WorkspacePanel`] 的身份 + 安全展示名投影
+    /// (读面**不含**绝对根路径; 写面带 `expected_revision` 乐观并发)。
+    /// 适配实现在组合根; 未注入 = `501`。
+    pub workspaces: Option<Arc<dyn crate::workspace_panel::WorkspacePanel>>,
 }
 
 impl GatewayServices {
@@ -611,6 +617,8 @@ impl GatewayServices {
             tasks: None,
             care: None,
             traits: None,
+            // 工作区面由组合根注入真实注册表 (A2 合同面), 不走旧 PanelData 适配。
+            workspaces: None,
         }
     }
 }
@@ -755,6 +763,28 @@ pub fn panel_routes() -> Router<GatewayState> {
             axum::routing::post(crate::task_panel::human_judge_retry),
         )
         .route("/v1/apeireth/capabilities", get(capabilities))
+        // 工作区合同面 (A2 批), 见 [`crate::workspace_panel`]: 面板读面一张,
+        // 写面三条 (建/选/关)。读面**不含**绝对根路径 (只有安全展示名)。
+        .route(
+            "/v1/panel/workspaces",
+            get(crate::workspace_panel::list_workspaces),
+        )
+        .route(
+            "/v1/workspaces/:workspace_id",
+            get(crate::workspace_panel::get_workspace),
+        )
+        .route(
+            "/v1/workspaces",
+            axum::routing::post(crate::workspace_panel::create_workspace),
+        )
+        .route(
+            "/v1/workspaces/:workspace_id/select",
+            axum::routing::post(crate::workspace_panel::select_workspace),
+        )
+        .route(
+            "/v1/workspaces/:workspace_id/close",
+            axum::routing::post(crate::workspace_panel::close_workspace),
+        )
         // V2-b 用户/域管理面 (owner 档, 见 [`panel_admin_face`]): 列表两口在面板族,
         // 增删改口在 canonical_entry 的 admin 族 (同一 UserTable 服务, 双入口同源)。
         .route("/v1/panel/users", get(crate::user_admin::list_users))
@@ -1524,6 +1554,7 @@ async fn capabilities(State(state): State<GatewayState>) -> Response {
     let tasks_supported = services.tasks.is_some();
     let care_supported = services.care.is_some();
     let traits_supported = services.traits.is_some();
+    let workspaces_supported = services.workspaces.is_some();
 
     let memory_ids = [
         ("memory.read", true, false, &["list", "read"] as &[&str]),
@@ -1576,6 +1607,10 @@ async fn capabilities(State(state): State<GatewayState>) -> Response {
             { "name": "tasks", "capabilities": [
                 cap("tasks.read", true, false, &["list"], tasks_supported, tasks_supported),
                 cap("tasks.human_judge_retry", false, true, &["retry"], tasks_supported, tasks_supported),
+            ] },
+            { "name": "workspaces", "capabilities": [
+                cap("workspaces.read", true, false, &["list", "get"], workspaces_supported, workspaces_supported),
+                cap("workspaces.write", false, true, &["create", "select", "close"], workspaces_supported, workspaces_supported),
             ] },
             { "name": "permissions", "capabilities": [
                 cap("permissions.approval.read", true, false, &["list"], true, true),
