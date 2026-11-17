@@ -1295,7 +1295,7 @@ docs/development/legacy-port-backlog.md,L3,3,Legacy Port Backlog,,现行,1,保�
 docs/development/repository-layout.md,L3,4,Repository Layout,2026-10-18,现行,7,保留,
 docs/development/rfc-process.md,L3,4,RFC 流程 (Request for Comments),,现行,7,保留,
 docs/development/rfc/README.md,L3,5,RFC 索引,,现行,0,索引,
-docs/gateway-api-contract.md,L3,4,Apeireth Canonical Gateway — HTTP API 契约 v1,2026-09-04,现行,28,保留,
+docs/gateway-api-contract.md,L3,4,Apeireth Canonical Gateway — HTTP API 契约 v1,2026-09-04,现行,29,保留,
 docs/integration/README.md,L3,5,Integration records,,现行,1,索引,
 docs/integration/architecture.md,L3,4,集成架构（2026-08-19）,2026-08-19,现行,2,保留,
 docs/integration/legacy-audit.md,L3,7,Phase 3 — Legacy Audit（2026-08-19）,2026-08-19,现行,2,保留,
