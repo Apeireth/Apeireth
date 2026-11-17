@@ -91,6 +91,7 @@ pub mod session_locks;
 pub mod subloop;
 pub mod tool_route;
 pub mod trace;
+pub mod workspace;
 // L0-L5 自升级 cycle driver (Stage 5 完整化, per R11 §7 + v2-architecture-reflection.md §6).
 // **0 装诚实**: L0/L2/L3/L4 真接 governance + Orchestrator; L5 建议模式不自动跑 git tag;
 // L1 接 SelfAssessmentStore. 主人 Veto dashboard 留 v2.0.0 release 接入.

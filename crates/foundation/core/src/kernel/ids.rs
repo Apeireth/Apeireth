@@ -131,6 +131,16 @@ generated_id! {
     ApprovalId
 }
 
+generated_id! {
+    /// Identifies one managed workspace.
+    ///
+    /// A workspace is a first-class managed identity: a UUID, a managed root,
+    /// a confirmed permission scope, and a revision. The identity is the join
+    /// key for anything bound to the workspace — a display name is a label and
+    /// is deliberately *not* unique, so two workspaces may share one.
+    WorkspaceId
+}
+
 /// Longest permitted stable identifier.
 ///
 /// Generous enough for `provider.some-vendor.some-long-model-name`, short enough
