@@ -43,15 +43,35 @@
 //! # Honest scope
 //!
 //! This module is the domain layer: the types, the validation, the optimistic
-//! concurrency rules. The registry implementation shipped here is in-process
-//! and **not persisted**; there is no HTTP surface, no audit trail, and no
-//! multi-root resolution yet — those belong to later batches.
+//! concurrency rules. Two registry implementations ship here:
+//! [`InMemoryWorkspaceRegistry`] — in-process and **not persisted** — and
+//! [`FileWorkspaceRegistry`], which keeps the registration facts under a data
+//! root, so a restart still lists the same workspaces with the same revisions.
+//! There is no HTTP surface and no audit trail here (those live in the gateway
+//! adapter), and no multi-root resolution yet.
+//!
+//! # What is persisted, and what is not
+//!
+//! The persisted record carries the **registration facts**: identity, display
+//! name, root kind, the managed root, the confirmed scope, the revision, the
+//! status, the expiry, the source, and the last write time. The managed root
+//! is a host fact: it is written to disk and never leaves the host — no read
+//! surface can reach it, because there is no accessor and the wire form does
+//! not carry it (see [`safe_root_display`]).
+//!
+//! The capabilities are **derived** on restore, never read back from the file,
+//! so a hand-edited record cannot widen them. The safe display name is
+//! likewise re-derived from the stored root, so the file never becomes a
+//! second place a path could leak from.
 
 use std::collections::BTreeMap;
 use std::fmt;
+use std::fs;
 use std::path::{Path, PathBuf};
 
 use apeireth_core::kernel::ids::WorkspaceId;
+use apeireth_core::storage_atomic;
+use apeireth_core::stored_doc;
 use parking_lot::Mutex;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
@@ -500,6 +520,17 @@ pub enum WorkspaceError {
         /// Why the request was rejected.
         reason: String,
     },
+    /// The workspace store could not be read or written.
+    ///
+    /// A storage failure is **not** a client error: the request was fine, the
+    /// host could not carry it out. It gets its own variant so a read surface
+    /// can answer "internal error" instead of "bad request" — and so a failed
+    /// write is never mistaken for a refused one.
+    #[error("workspace storage failure: {reason}")]
+    Storage {
+        /// What went wrong in the store.
+        reason: String,
+    },
 }
 
 /// A request to create a workspace.
@@ -608,6 +639,41 @@ pub trait WorkspaceRegistry: Send + Sync {
         expected_revision: u64,
         now_ms: u64,
     ) -> Result<Workspace, WorkspaceError>;
+
+    /// Restores a workspace by **exact** identity + revision match.
+    ///
+    /// This is the read side of the binding contract: a session, a task, or an
+    /// approval names `workspace_id` + `revision`, and the host answers with
+    /// the workspace only when *both* still match. A mismatch is refused,
+    /// never repaired: the workspace is not upgraded to the caller's
+    /// revision, the call is not replayed, and nothing is written.
+    ///
+    /// The check order is fixed: **not found → revision conflict → revoked**.
+    /// The revision is checked before the status because it is the primary key
+    /// component of this exact-match contract, so a stale binding is reported
+    /// as the conflict it is; a workspace revoked *at exactly* the expected
+    /// revision is reported as revoked and is never resurrected.
+    fn restore_exact(
+        &self,
+        workspace_id: &WorkspaceId,
+        expected_revision: u64,
+    ) -> Result<Workspace, WorkspaceError>;
+
+    /// Finds the workspace already bound to `root`.
+    ///
+    /// The managed root is a host fact, so the **host** — never the client —
+    /// needs to ask "is this root already registered?" before it mints an
+    /// identity. Without this, a host that binds its root on every start
+    /// would mint a fresh identity per start and the registry would grow
+    /// without bound.
+    ///
+    /// A **revoked** workspace is never returned: revocation is terminal, so
+    /// a tombstone must not be handed back as "the workspace for this root".
+    /// When several workspaces share a root, the one this returns is the
+    /// first in registry iteration order, which is fixed by the workspace
+    /// identity — so the same set always yields the same answer, before and
+    /// after a restart.
+    fn find_by_root(&self, root: &Path) -> Option<Workspace>;
 }
 
 /// An in-process workspace registry.
@@ -640,6 +706,45 @@ impl Default for InMemoryWorkspaceRegistry {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// Builds a workspace from a create request, without touching any registry.
+///
+/// Shared by both registry implementations so that the *domain* rules (kind,
+/// expiry, display name, derived capabilities) live in exactly one place.
+fn build_workspace(request: WorkspaceCreateRequest) -> Result<Workspace, WorkspaceError> {
+    let mut workspace = match request.root_kind {
+        WorkspaceRootKind::Managed => Workspace::new_managed(
+            &request.root,
+            &request.display_name,
+            request.permission_scope,
+            request.now_ms,
+        )?,
+        WorkspaceRootKind::Temporary => {
+            let expires_at = request
+                .expires_at
+                .ok_or_else(|| WorkspaceError::InvalidRequest {
+                    reason: "a temporary workspace requires an expiry".to_string(),
+                })?;
+            Workspace::new_temporary(
+                &request.root,
+                &request.display_name,
+                request.permission_scope,
+                request.now_ms,
+                expires_at,
+            )?
+        }
+        WorkspaceRootKind::Preset => Workspace::new_preset(
+            &request.root,
+            &request.display_name,
+            request.permission_scope,
+            request.now_ms,
+        )?,
+    };
+    if let Some(source) = request.source {
+        workspace.source = source;
+    }
+    Ok(workspace)
 }
 
 /// The guard every mutation runs before it touches a workspace.
@@ -682,38 +787,7 @@ impl WorkspaceRegistry for InMemoryWorkspaceRegistry {
     }
 
     fn create(&self, request: WorkspaceCreateRequest) -> Result<Workspace, WorkspaceError> {
-        let mut workspace = match request.root_kind {
-            WorkspaceRootKind::Managed => Workspace::new_managed(
-                &request.root,
-                &request.display_name,
-                request.permission_scope,
-                request.now_ms,
-            )?,
-            WorkspaceRootKind::Temporary => {
-                let expires_at =
-                    request
-                        .expires_at
-                        .ok_or_else(|| WorkspaceError::InvalidRequest {
-                            reason: "a temporary workspace requires an expiry".to_string(),
-                        })?;
-                Workspace::new_temporary(
-                    &request.root,
-                    &request.display_name,
-                    request.permission_scope,
-                    request.now_ms,
-                    expires_at,
-                )?
-            }
-            WorkspaceRootKind::Preset => Workspace::new_preset(
-                &request.root,
-                &request.display_name,
-                request.permission_scope,
-                request.now_ms,
-            )?,
-        };
-        if let Some(source) = request.source {
-            workspace.source = source;
-        }
+        let workspace = build_workspace(request)?;
         let mut inner = self.inner.lock();
         inner
             .workspaces
@@ -815,5 +889,558 @@ impl WorkspaceRegistry for InMemoryWorkspaceRegistry {
             inner.selected = None;
         }
         Ok(snapshot)
+    }
+
+    fn restore_exact(
+        &self,
+        workspace_id: &WorkspaceId,
+        expected_revision: u64,
+    ) -> Result<Workspace, WorkspaceError> {
+        let inner = self.inner.lock();
+        let workspace = inner
+            .workspaces
+            .get(workspace_id)
+            .ok_or(WorkspaceError::NotFound(*workspace_id))?;
+        if workspace.revision != expected_revision {
+            return Err(WorkspaceError::RevisionConflict {
+                expected: expected_revision,
+                actual: workspace.revision,
+            });
+        }
+        if workspace.is_revoked() {
+            return Err(WorkspaceError::Revoked);
+        }
+        Ok(workspace.clone())
+    }
+
+    fn find_by_root(&self, root: &Path) -> Option<Workspace> {
+        self.inner
+            .lock()
+            .workspaces
+            .values()
+            .find(|workspace| workspace.root == root && !workspace.is_revoked())
+            .cloned()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Persistent registry
+// ---------------------------------------------------------------------------
+
+/// The document identity of a persisted workspace record.
+const WORKSPACE_DOC_NAME: &str = "workspace";
+
+/// The document version of a persisted workspace record.
+const WORKSPACE_DOC_VERSION: u32 = 1;
+
+/// The file name of a persisted workspace record.
+const WORKSPACE_FILE_NAME: &str = "workspace.json";
+
+/// The directory (under the registry root) that holds the workspace records.
+const WORKSPACES_DIR_NAME: &str = "workspaces";
+
+/// The document identity of the persisted registry selection.
+const SELECTION_DOC_NAME: &str = "workspace-selection";
+
+/// The document version of the persisted registry selection.
+const SELECTION_DOC_VERSION: u32 = 1;
+
+/// The file name of the persisted registry selection.
+const SELECTION_FILE_NAME: &str = "selection.json";
+
+/// The persisted form of one workspace.
+///
+/// `managed_root` is the only field that carries a path, and it is a **host
+/// fact**: it is written down so the runtime can resolve a working directory
+/// again after a restart, and it is never projected to a read surface.
+///
+/// The capability declarations are deliberately absent: they are derived, so
+/// reading them back from a file would let a hand-edited record widen them.
+/// The safe display name is absent for the same reason — it is re-derived from
+/// the stored root on restore.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WorkspaceRecord {
+    workspace_id: WorkspaceId,
+    display_name: String,
+    root_kind: WorkspaceRootKind,
+    managed_root: String,
+    permission_scope: WorkspacePermissionScope,
+    revision: u64,
+    status: WorkspaceStatus,
+    expires_at: Option<u64>,
+    source: String,
+    updated_at_ms: u64,
+}
+
+/// The persisted form of the registry-level selection.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SelectionRecord {
+    workspace_id: WorkspaceId,
+}
+
+impl Workspace {
+    /// The persisted form of this workspace.
+    ///
+    /// A managed root that is not valid UTF-8 is **refused**: writing it with a
+    /// replacement character would store a root that is not the root.
+    fn to_record(&self) -> Result<WorkspaceRecord, WorkspaceError> {
+        let managed_root = self.root.to_str().ok_or_else(|| WorkspaceError::Storage {
+            reason: "受管根不是合法 UTF-8, 拒绝落盘 (不写一个会被改写的根)".to_string(),
+        })?;
+        Ok(WorkspaceRecord {
+            workspace_id: self.workspace_id,
+            display_name: self.display_name.clone(),
+            root_kind: self.root_kind,
+            managed_root: managed_root.to_string(),
+            permission_scope: self.permission_scope,
+            revision: self.revision,
+            status: self.status,
+            expires_at: self.expires_at,
+            source: self.source.clone(),
+            updated_at_ms: self.updated_at_ms,
+        })
+    }
+
+    /// Rebuilds a workspace from its persisted form.
+    ///
+    /// The derived fields are re-derived, never read back: the capabilities
+    /// follow the status and the scope, and the safe display name follows the
+    /// stored root.
+    fn from_record(record: WorkspaceRecord) -> Result<Self, WorkspaceError> {
+        let display_name = validate_display_name(&record.display_name)?;
+        let root = PathBuf::from(&record.managed_root);
+        let ready = record.status == WorkspaceStatus::Ready;
+        Ok(Self {
+            workspace_id: record.workspace_id,
+            display_name,
+            root_kind: record.root_kind,
+            root_display: safe_root_display(&root),
+            root,
+            permission_scope: record.permission_scope,
+            revision: record.revision,
+            status: record.status,
+            can_select: ready,
+            can_create_temporary: ready,
+            can_write: record.permission_scope.allows_write(),
+            expires_at: record.expires_at,
+            source: record.source,
+            updated_at_ms: record.updated_at_ms,
+        })
+    }
+}
+
+/// The version contract of a workspace record.
+fn workspace_doc_compat() -> stored_doc::DocCompat {
+    stored_doc::DocCompat::exact(WORKSPACE_DOC_NAME, WORKSPACE_DOC_VERSION)
+}
+
+/// The version contract of the selection record.
+fn selection_doc_compat() -> stored_doc::DocCompat {
+    stored_doc::DocCompat::exact(SELECTION_DOC_NAME, SELECTION_DOC_VERSION)
+}
+
+/// Reads one workspace record, refusing to open anything that does not match.
+fn read_workspace_record(file: &Path) -> Result<WorkspaceRecord, WorkspaceError> {
+    let doc = stored_doc::open_single::<WorkspaceRecord>(file, &workspace_doc_compat()).map_err(
+        |error| WorkspaceError::Storage {
+            reason: format!("工作区记录拒开 ({}): {error}", file.display()),
+        },
+    )?;
+    Ok(doc.body)
+}
+
+/// Wraps an IO failure into a storage error.
+fn storage_error(action: &str, path: &Path, error: &std::io::Error) -> WorkspaceError {
+    WorkspaceError::Storage {
+        reason: format!("{action} ({}): {error}", path.display()),
+    }
+}
+
+/// The mutation guard, applied to one workspace.
+///
+/// The order is fixed: a revoked workspace, then the revision check — the same
+/// order [`check_mutable`] uses, so a revoked workspace always reports
+/// `Revoked` instead of a revision conflict.
+fn check_mutable_workspace(
+    workspace: &Workspace,
+    expected_revision: u64,
+) -> Result<(), WorkspaceError> {
+    if workspace.is_revoked() {
+        return Err(WorkspaceError::Revoked);
+    }
+    if workspace.revision != expected_revision {
+        return Err(WorkspaceError::RevisionConflict {
+            expected: expected_revision,
+            actual: workspace.revision,
+        });
+    }
+    Ok(())
+}
+
+/// A workspace registry that keeps its facts on disk.
+///
+/// The layout under the registry root is:
+///
+/// ```text
+/// <root>/workspaces/<workspace_id>/workspace.json   # one record per workspace
+/// <root>/workspaces/selection.json                   # the registry-level selection
+/// ```
+///
+/// Every file is a [`stored_doc::StoredDoc`] envelope, so a record that is
+/// malformed, of the wrong identity, or of an unknown version **refuses to
+/// open**: the registry reports a storage error instead of silently dropping a
+/// workspace or falling back to an empty registry.
+///
+/// **Write, then commit.** A mutation is written to disk first and only then
+/// committed to the in-memory map, so a failed write leaves the in-memory
+/// state exactly as it was. The revision check is made against the record
+/// **on disk**, under that workspace's own file lock, so two processes that
+/// share a data root cannot both apply a stale expectation to the same
+/// workspace.
+pub struct FileWorkspaceRegistry {
+    root: PathBuf,
+    workspaces_dir: PathBuf,
+    inner: Mutex<RegistryInner>,
+}
+
+impl FileWorkspaceRegistry {
+    /// Opens (or creates) a persistent registry rooted at `root`.
+    ///
+    /// The root is the **data root**, not a workspace root: the workspaces this
+    /// registry holds keep their own roots, and those never appear in the
+    /// paths this function touches.
+    pub fn open(root: impl Into<PathBuf>) -> Result<Self, WorkspaceError> {
+        let root = root.into();
+        let workspaces_dir = root.join(WORKSPACES_DIR_NAME);
+        fs::create_dir_all(&workspaces_dir)
+            .map_err(|error| storage_error("创建工作区目录失败", &workspaces_dir, &error))?;
+
+        let mut inner = RegistryInner::default();
+        let entries = fs::read_dir(&workspaces_dir)
+            .map_err(|error| storage_error("读取工作区目录失败", &workspaces_dir, &error))?;
+        for entry in entries {
+            let entry = entry
+                .map_err(|error| storage_error("读取工作区目录项失败", &workspaces_dir, &error))?;
+            let path = entry.path();
+            if !path.is_dir() {
+                continue;
+            }
+            let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+                continue;
+            };
+            let Ok(workspace_id) = name.parse::<WorkspaceId>() else {
+                // A directory that is not named after a workspace identity is
+                // not a workspace record; it carries no fact to lose.
+                continue;
+            };
+            let file = path.join(WORKSPACE_FILE_NAME);
+            if !file.is_file() {
+                // An interrupted write leaves the directory behind without a
+                // record. Nothing was committed to memory in that case (the
+                // record is written first), so there is no fact to lose.
+                continue;
+            }
+            let record = read_workspace_record(&file)?;
+            let workspace = Workspace::from_record(record)?;
+            inner.workspaces.insert(workspace_id, workspace);
+        }
+
+        // The selection is a registry-level fact: keeping it means a restart
+        // does not silently drop the current selection.
+        let selection_file = workspaces_dir.join(SELECTION_FILE_NAME);
+        if selection_file.is_file() {
+            let doc = stored_doc::open_single::<SelectionRecord>(
+                &selection_file,
+                &selection_doc_compat(),
+            )
+            .map_err(|error| WorkspaceError::Storage {
+                reason: format!("选中态记录拒开 ({}): {error}", selection_file.display()),
+            })?;
+            if inner.workspaces.contains_key(&doc.body.workspace_id) {
+                inner.selected = Some(doc.body.workspace_id);
+            }
+        }
+
+        Ok(Self {
+            root,
+            workspaces_dir,
+            inner: Mutex::new(inner),
+        })
+    }
+
+    /// The data root this registry was opened at.
+    pub fn root(&self) -> &Path {
+        &self.root
+    }
+
+    /// The directory that holds the workspace records.
+    pub fn workspaces_dir(&self) -> &Path {
+        &self.workspaces_dir
+    }
+
+    /// The record file of one workspace.
+    fn workspace_file(&self, workspace_id: &WorkspaceId) -> PathBuf {
+        self.workspaces_dir
+            .join(workspace_id.to_string())
+            .join(WORKSPACE_FILE_NAME)
+    }
+
+    /// Reads the authoritative record of one workspace from disk.
+    fn read_workspace_from_disk(
+        &self,
+        workspace_id: &WorkspaceId,
+    ) -> Result<Workspace, WorkspaceError> {
+        let file = self.workspace_file(workspace_id);
+        if !file.is_file() {
+            return Err(WorkspaceError::NotFound(*workspace_id));
+        }
+        let record = read_workspace_record(&file)?;
+        Workspace::from_record(record)
+    }
+
+    /// Writes one workspace record. The caller holds that workspace's lock.
+    fn write_workspace_record(&self, workspace: &Workspace) -> Result<(), WorkspaceError> {
+        let record = workspace.to_record()?;
+        let file = self.workspace_file(&workspace.workspace_id);
+        stored_doc::save_single(
+            &file,
+            &workspace_doc_compat(),
+            record,
+            stored_doc::DEFAULT_DOC_MODE,
+        )
+        .map_err(|error| WorkspaceError::Storage {
+            reason: format!("工作区落盘失败 ({}): {error}", file.display()),
+        })?;
+        Ok(())
+    }
+
+    /// Writes (or clears) the registry-level selection.
+    fn write_selection(&self, selected: Option<WorkspaceId>) -> Result<(), WorkspaceError> {
+        let file = self.workspaces_dir.join(SELECTION_FILE_NAME);
+        let lock = storage_atomic::lock_path_for(&file);
+        let outcome = storage_atomic::with_file_lock(&lock, || -> Result<(), String> {
+            match selected {
+                Some(workspace_id) => stored_doc::save_single(
+                    &file,
+                    &selection_doc_compat(),
+                    SelectionRecord { workspace_id },
+                    stored_doc::DEFAULT_DOC_MODE,
+                )
+                .map(|_| ())
+                .map_err(|error| error.to_string()),
+                None => match fs::remove_file(&file) {
+                    Ok(()) => Ok(()),
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+                    Err(error) => Err(error.to_string()),
+                },
+            }
+        });
+        match outcome {
+            Ok(inner) => inner.map_err(|reason| WorkspaceError::Storage {
+                reason: format!("选中态落盘失败 ({}): {reason}", file.display()),
+            }),
+            Err(error) => Err(WorkspaceError::Storage {
+                reason: format!("选中态文件锁失败 ({}): {error}", lock.display()),
+            }),
+        }
+    }
+
+    /// Reads, mutates and writes one workspace record under its own file lock.
+    ///
+    /// The revision check is made against the record **on disk**, so another
+    /// process that already advanced the revision makes this one fail with a
+    /// conflict instead of overwriting the newer fact.
+    fn mutate_workspace(
+        &self,
+        workspace_id: &WorkspaceId,
+        expected_revision: u64,
+        apply: impl FnOnce(&mut Workspace) -> Result<(), WorkspaceError>,
+    ) -> Result<Workspace, WorkspaceError> {
+        let file = self.workspace_file(workspace_id);
+        let lock = storage_atomic::lock_path_for(&file);
+        let outcome =
+            storage_atomic::with_file_lock(&lock, || -> Result<Workspace, WorkspaceError> {
+                let current = self.read_workspace_from_disk(workspace_id)?;
+                check_mutable_workspace(&current, expected_revision)?;
+                let mut next = current;
+                apply(&mut next)?;
+                self.write_workspace_record(&next)?;
+                Ok(next)
+            });
+        match outcome {
+            Ok(inner) => inner,
+            Err(error) => Err(WorkspaceError::Storage {
+                reason: format!("工作区文件锁失败 ({}): {error}", lock.display()),
+            }),
+        }
+    }
+
+    /// Commits a workspace to the in-memory map; the durable write already happened.
+    fn commit(&self, workspace: Workspace) {
+        let mut inner = self.inner.lock();
+        inner.workspaces.insert(workspace.workspace_id, workspace);
+    }
+}
+
+impl WorkspaceRegistry for FileWorkspaceRegistry {
+    fn list(&self) -> Vec<Workspace> {
+        self.inner.lock().workspaces.values().cloned().collect()
+    }
+
+    fn get(&self, workspace_id: &WorkspaceId) -> Option<Workspace> {
+        self.inner.lock().workspaces.get(workspace_id).cloned()
+    }
+
+    fn current_selection(&self) -> Option<WorkspaceId> {
+        self.inner.lock().selected
+    }
+
+    fn create(&self, request: WorkspaceCreateRequest) -> Result<Workspace, WorkspaceError> {
+        let workspace = build_workspace(request)?;
+        let file = self.workspace_file(&workspace.workspace_id);
+        let lock = storage_atomic::lock_path_for(&file);
+        let outcome = storage_atomic::with_file_lock(&lock, || -> Result<(), WorkspaceError> {
+            if file.is_file() {
+                return Err(WorkspaceError::Storage {
+                    reason: format!("工作区记录已存在 ({})", file.display()),
+                });
+            }
+            self.write_workspace_record(&workspace)
+        });
+        let written = match outcome {
+            Ok(inner) => inner,
+            Err(error) => {
+                return Err(WorkspaceError::Storage {
+                    reason: format!("工作区文件锁失败 ({}): {error}", lock.display()),
+                })
+            }
+        };
+        written?;
+        let mut inner = self.inner.lock();
+        inner
+            .workspaces
+            .insert(workspace.workspace_id, workspace.clone());
+        Ok(workspace)
+    }
+
+    fn create_temporary(
+        &self,
+        root: &Path,
+        display_name: &str,
+        permission_scope: WorkspacePermissionScope,
+        now_ms: u64,
+        expires_at: u64,
+    ) -> Result<Workspace, WorkspaceError> {
+        self.create(WorkspaceCreateRequest {
+            root_kind: WorkspaceRootKind::Temporary,
+            root: root.to_path_buf(),
+            display_name: display_name.to_string(),
+            permission_scope,
+            expires_at: Some(expires_at),
+            source: None,
+            now_ms,
+        })
+    }
+
+    fn select(
+        &self,
+        workspace_id: &WorkspaceId,
+        expected_revision: u64,
+    ) -> Result<Workspace, WorkspaceError> {
+        let mut inner = self.inner.lock();
+        check_mutable(&inner, workspace_id, expected_revision)?;
+        let workspace = inner
+            .workspaces
+            .get(workspace_id)
+            .expect("checked above")
+            .clone();
+        // The selection is a registry-level fact: it is written down before the
+        // in-memory state moves, so a failed write leaves it as it was.
+        self.write_selection(Some(*workspace_id))?;
+        inner.selected = Some(*workspace_id);
+        Ok(workspace)
+    }
+
+    fn change_permission_scope(
+        &self,
+        workspace_id: &WorkspaceId,
+        expected_revision: u64,
+        permission_scope: WorkspacePermissionScope,
+        now_ms: u64,
+    ) -> Result<Workspace, WorkspaceError> {
+        let next = self.mutate_workspace(workspace_id, expected_revision, |workspace| {
+            workspace.apply_permission_scope(permission_scope, now_ms);
+            Ok(())
+        })?;
+        self.commit(next.clone());
+        Ok(next)
+    }
+
+    fn rebind_root(
+        &self,
+        workspace_id: &WorkspaceId,
+        expected_revision: u64,
+        root: &Path,
+        now_ms: u64,
+    ) -> Result<Workspace, WorkspaceError> {
+        let next = self.mutate_workspace(workspace_id, expected_revision, |workspace| {
+            workspace.rebind_root(root, now_ms);
+            Ok(())
+        })?;
+        self.commit(next.clone());
+        Ok(next)
+    }
+
+    fn close(
+        &self,
+        workspace_id: &WorkspaceId,
+        expected_revision: u64,
+        now_ms: u64,
+    ) -> Result<Workspace, WorkspaceError> {
+        let next = self.mutate_workspace(workspace_id, expected_revision, |workspace| {
+            workspace.revoke(now_ms);
+            Ok(())
+        })?;
+        self.commit(next.clone());
+        // A revoked workspace must not stay the current selection. The
+        // revocation itself is already durable at this point, so a failure to
+        // clear the selection is reported as a storage error *after* the fact —
+        // it is never rolled back.
+        let mut inner = self.inner.lock();
+        if inner.selected == Some(*workspace_id) {
+            self.write_selection(None)?;
+            inner.selected = None;
+        }
+        Ok(next)
+    }
+
+    fn restore_exact(
+        &self,
+        workspace_id: &WorkspaceId,
+        expected_revision: u64,
+    ) -> Result<Workspace, WorkspaceError> {
+        // The durable record is the authority here: this is the recovery path.
+        let current = self.read_workspace_from_disk(workspace_id)?;
+        if current.revision != expected_revision {
+            return Err(WorkspaceError::RevisionConflict {
+                expected: expected_revision,
+                actual: current.revision,
+            });
+        }
+        if current.is_revoked() {
+            return Err(WorkspaceError::Revoked);
+        }
+        Ok(current)
+    }
+
+    fn find_by_root(&self, root: &Path) -> Option<Workspace> {
+        self.inner
+            .lock()
+            .workspaces
+            .values()
+            .find(|workspace| workspace.root == root && !workspace.is_revoked())
+            .cloned()
     }
 }

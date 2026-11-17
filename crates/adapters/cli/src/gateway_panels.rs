@@ -43,8 +43,9 @@ use apeireth_orchestration::trait_report::{recent_moves, TRAIT_RECENT_MOVES};
 use apeireth_plugin::memory_backend::MemoryBackend;
 use apeireth_protocol::canonical::{ContentPart, MessageRole};
 use apeireth_runtime::canonical::workspace::{
-    InMemoryWorkspaceRegistry, Workspace, WorkspaceCreateRequest as DomainWorkspaceCreateRequest,
-    WorkspaceError, WorkspacePermissionScope, WorkspaceRegistry, WorkspaceRootKind,
+    FileWorkspaceRegistry, InMemoryWorkspaceRegistry, Workspace,
+    WorkspaceCreateRequest as DomainWorkspaceCreateRequest, WorkspaceError,
+    WorkspacePermissionScope, WorkspaceRegistry, WorkspaceRootKind,
 };
 use apeireth_runtime::canonical::{Runtime, Session, SessionStore};
 use apeireth_runtime_assembly::{CareHeartbeatStatus, TraitGrowthFacts, TraitGrowthPaths};
@@ -1533,17 +1534,30 @@ impl TraitPanelQuery for CliTraitPanel {
     }
 }
 
+/// 宿主策略: 本宿主可授予的作用域上限 (请求值高于上限时被截断到上限)。
+///
+/// 这是**宿主策略常量**, 不是可插拔的构建器: 上限由宿主定, 客户端提交的
+/// requested scope 永远只是请求, 生效值 = min(requested, HOST_SCOPE_CEILING)。
+/// 写成常量而不是留一个没人调的 builder: 留 builder 等于把「谁定上限」这件事
+/// 悬空 (孤儿 API 棘轮会如实报出来), 而上限本就是宿主的一条策略。
+pub const HOST_SCOPE_CEILING: WorkspacePermissionScope = WorkspacePermissionScope::Write;
+
 /// 工作区合同面适配 (组合根, A2 批): 真实持有 `InMemoryWorkspaceRegistry` +
 /// 宿主受管根。
 ///
 /// 宿主口径 (A2 合同面):
 /// - **受管根由宿主决定** —— 客户端只提交身份字段, 根路径永远来自本适配器;
 /// - **作用域宿主确认** —— 客户端提交的是 requested scope, 生效的是宿主确认值
-///   (被 [`CliWorkspacePanel::with_scope_ceiling`] 的上限截断);
+///   (被宿主策略上限 [`HOST_SCOPE_CEILING`] 截断);
 /// - **读面不含绝对根路径** —— 出口只给 `root_display` (叶子名), 根路径不出适配器;
 /// - **只装配受管根** —— temporary / preset 的根装配属后续批, 本适配如实拒开。
+///
+/// 存储口径 (A3 批): 注册表可以是**进程内**的 ([`CliWorkspacePanel::new`],
+/// 供测试与一次性进程使用), 也可以是**落盘**的
+/// ([`CliWorkspacePanel::new_persistent`], 生产组合根用) —— 后者让工作区的
+/// 登记事实跨重启存活。
 pub struct CliWorkspacePanel {
-    registry: Arc<InMemoryWorkspaceRegistry>,
+    registry: Arc<dyn WorkspaceRegistry>,
     managed_root: PathBuf,
     scope_ceiling: WorkspacePermissionScope,
     source: String,
@@ -1554,19 +1568,38 @@ impl CliWorkspacePanel {
     ///
     /// 绑定的那个工作区就是宿主此刻的受管根 —— 读面看到的是身份 + 叶子名,
     /// 不是路径。
+    ///
+    /// 本构造用**进程内**注册表: 事实只活到进程结束。生产组合根用
+    /// [`CliWorkspacePanel::new_persistent`]。
     pub fn new(managed_root: impl Into<PathBuf>) -> Self {
         Self {
             registry: Arc::new(InMemoryWorkspaceRegistry::new()),
             managed_root: managed_root.into(),
-            scope_ceiling: WorkspacePermissionScope::Write,
+            scope_ceiling: HOST_SCOPE_CEILING,
             source: "cli".to_string(),
         }
     }
 
-    /// 收紧宿主可授予的作用域上限 (请求值高于上限时被截断到上限)。
-    pub fn with_scope_ceiling(mut self, ceiling: WorkspacePermissionScope) -> Self {
-        self.scope_ceiling = ceiling;
-        self
+    /// 以宿主受管根 + **数据根**装配一个落盘的工作区面。
+    ///
+    /// 数据根下写出 `<data_dir>/workspaces/<workspace_id>/workspace.json`:
+    /// 工作区的登记事实 (身份 / 展示名 / 根类型 / 受管根 / 作用域 / revision /
+    /// 状态 / 过期时间 / 来源 / 更新时间) 落盘; 受管根**只落盘不外泄**。
+    ///
+    /// 开不出注册表就是**开不出来**: 本构造返回 `Err`, 调用方必须 fail-closed,
+    /// 不许降级成进程内注册表假装成功。
+    pub fn new_persistent(
+        managed_root: impl Into<PathBuf>,
+        data_dir: impl Into<PathBuf>,
+    ) -> Result<Self, String> {
+        let registry = FileWorkspaceRegistry::open(data_dir)
+            .map_err(|error| format!("打开工作区注册表失败: {error}"))?;
+        Ok(Self {
+            registry: Arc::new(registry),
+            managed_root: managed_root.into(),
+            scope_ceiling: HOST_SCOPE_CEILING,
+            source: "cli".to_string(),
+        })
     }
 
     /// 换掉工作区来源标签 (写进 `source` 字段)。
@@ -1617,6 +1650,12 @@ fn map_workspace_error(error: WorkspaceError) -> WorkspacePanelError {
             WorkspacePanelError::InvalidRequest { reason }
         }
         WorkspaceError::InvalidRequest { reason } => WorkspacePanelError::InvalidRequest { reason },
+        // 存储故障是**服务端**故障, 不是客户端请求的问题 ⇒ 500 而不是 400。
+        // 读面只给恒定文案: 领域层的 reason 里带绝对路径, 那是本机诊断用的,
+        // 不进任何响应体。
+        WorkspaceError::Storage { .. } => WorkspacePanelError::Internal {
+            reason: "工作区存储故障".to_string(),
+        },
     }
 }
 
@@ -1730,10 +1769,22 @@ impl WorkspacePanel for CliWorkspacePanel {
 /// 绑定宿主受管根的受管工作区 (组合根装配时调用)。
 ///
 /// 受管根是宿主事实: 这里给它一个身份 + 叶子名展示, 路径不出宿主。
+///
+/// **幂等 (A3)**: 受管根已经登记过 ⇒ 复用那一个身份。否则每次重启都会新铸一个
+/// 身份, 列表越滚越长, 「重启后列表逐字段一致」也就无从谈起。
+/// 命中一个**已吊销**的受管根时不复活它: 吊销是终态, 墓碑留着, 另立新身份
+/// ([`WorkspaceRegistry::find_by_root`] 不返回已吊销的工作区)。
+///
+/// 匹配按**受管根** (宿主事实) 走, 不按展示名走: 展示名不是身份 (同名工作区
+/// 仍按 UUID 区分)。命中若有多个, 取注册表迭代序的第一个 —— 迭代序由
+/// `WorkspaceId` 决定, 因此重启前后同一个集合必然选中同一个。
 pub fn bind_managed_workspace(
     panel: &CliWorkspacePanel,
     display_name: &str,
 ) -> Result<WorkspaceDto, String> {
+    if let Some(existing) = panel.registry.find_by_root(panel.managed_root()) {
+        return Ok(project_workspace(&existing));
+    }
     let scope = panel.scope_ceiling;
     let request = DomainWorkspaceCreateRequest {
         root_kind: WorkspaceRootKind::Managed,

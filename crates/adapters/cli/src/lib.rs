@@ -3265,11 +3265,15 @@ pub async fn dispatch_gateway_serve_with(
     // 真实持有工作区注册表 + **宿主受管根** (进程唯一根 = 当前工作目录, 与
     // 组合根既有的唯一根口径同源)。受管根由宿主决定: 客户端只提交身份字段,
     // 提交根路径一律 400。作用域宿主确认 (上限 Write, 请求值被截断)。
-    // A2 批不承诺持久化 (A3 批做) —— 本批是可跑的真实链路, 注册表是进程内的。
-    let workspace_panel = Arc::new(crate::gateway_panels::CliWorkspacePanel::new(
+    // A3 批: 注册表**落盘**在数据根 (`APEIRETH_DATA_DIR` / `~/.apeireth`) 下 ⇒
+    // 重启后 `GET /v1/panel/workspaces` 仍列出同一批工作区, revision 单调。
+    // 落盘开不出来 ⇒ **fail-closed** (启动失败), 不降级成进程内注册表假装成功。
+    let workspace_panel = Arc::new(crate::gateway_panels::CliWorkspacePanel::new_persistent(
         std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")),
-    ));
+        default_panel_data_dir(),
+    )?);
     // 宿主把受管根绑成一个工作区 (身份 + 叶子名展示; 路径不出宿主)。
+    // 幂等: 受管根已登记过就复用那一个身份, 不新铸。
     crate::gateway_panels::bind_managed_workspace(&workspace_panel, "默认工作区")?;
     services.workspaces = Some(workspace_panel as Arc<dyn apeireth_gateway::WorkspacePanel>);
     // W2-②: 客户端令牌表 (令牌族第二面) 显式注入; 远程绑定闸与 TLS 接口桩的
