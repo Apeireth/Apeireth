@@ -28,6 +28,7 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{Mutex, OwnedMutexGuard};
 
+use super::agent_binding::AgentBinding;
 use super::approval::PendingApproval;
 use super::error::{RuntimeError, RuntimeResult};
 use super::event_log::{
@@ -105,6 +106,20 @@ pub struct Session {
     /// Revocable Host authorization epoch; copied on fork and checked on reload.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub authorization_epoch: Option<String>,
+    /// The agent binding this session runs under (B2): the exact contact +
+    /// workspace pairing, when the host bound one.
+    ///
+    /// `None` means "not bound": the session keeps the pre-existing
+    /// default-domain path. `Some(..)` means the session **is** bound, and a
+    /// binding that is no longer valid (archived contact, revoked workspace,
+    /// moved persona) must **refuse the turn** rather than fall back to a
+    /// default agent — see
+    /// [`crate::canonical::agent_binding::admit_bound_turn`].
+    ///
+    /// `#[serde(default)]` is the on-disk migration path: sessions persisted
+    /// before this field existed load as unbound and lose nothing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_binding: Option<AgentBinding>,
     /// Durable session-scoped settings (model override + permission preset).
     ///
     /// `#[serde(default)]` is the on-disk migration path: sessions persisted
@@ -171,6 +186,7 @@ impl Session {
             principal: None,
             tool_scope: None,
             authorization_epoch: None,
+            agent_binding: None,
             messages: Vec::new(),
             events: Vec::new(),
             log: Vec::new(),
@@ -183,6 +199,26 @@ impl Session {
             created_at: now,
             updated_at: now,
         }
+    }
+
+    /// The agent binding this session carries, if any.
+    ///
+    /// `None` means the session is not bound: it keeps the pre-existing
+    /// default-domain path.
+    pub fn agent_binding(&self) -> Option<&AgentBinding> {
+        self.agent_binding.as_ref()
+    }
+
+    /// Binds this session to an agent (one contact, one workspace).
+    ///
+    /// The binding must have been validated already (see
+    /// [`crate::canonical::agent_binding::resolve_agent_binding`]); this
+    /// method only stores it. It advances the session revision like every
+    /// other write, so the binding rides the session's existing
+    /// optimistic-concurrency record.
+    pub fn set_agent_binding(&mut self, binding: AgentBinding, clock: &dyn Clock) {
+        self.agent_binding = Some(binding);
+        self.touch(clock);
     }
 
     /// Append a message and update the modification time.
@@ -409,6 +445,11 @@ impl Session {
         child.principal = self.principal.clone();
         child.tool_scope = self.tool_scope.clone();
         child.authorization_epoch = self.authorization_epoch.clone();
+        // The fork inherits the binding: a child must not silently fall back
+        // to the unbound/default-domain path just because it is a new
+        // session. The inherited binding still has to pass the fail-closed
+        // gate on its own turn (archived contact ⇒ refuse).
+        child.agent_binding = self.agent_binding.clone();
         child.inherited_event_count = Some(prefix_end_seq);
         child.log = self.log[..prefix_end_seq].to_vec();
         // The facts of the inherited prefix: the records that carry execution
@@ -529,6 +570,8 @@ struct SessionRepr {
     #[serde(default)]
     authorization_epoch: Option<String>,
     #[serde(default)]
+    agent_binding: Option<AgentBinding>,
+    #[serde(default)]
     settings: SessionSettings,
     #[serde(default)]
     quota: CognitiveQuota,
@@ -552,6 +595,7 @@ impl From<SessionRepr> for Session {
             principal: repr.principal,
             tool_scope: repr.tool_scope,
             authorization_epoch: repr.authorization_epoch,
+            agent_binding: repr.agent_binding,
             settings: repr.settings,
             quota: repr.quota,
             messages: repr.messages,

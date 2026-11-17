@@ -26,6 +26,7 @@
 //! there is no second orchestration driver or legacy runtime dependency.
 
 pub mod accounting;
+pub mod agent_binding;
 pub mod approval;
 pub mod behavior_adapter;
 mod behavior_projection;
