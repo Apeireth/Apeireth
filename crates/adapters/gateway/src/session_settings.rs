@@ -145,7 +145,7 @@ fn domain_refused(error: &UserDomainError) -> SettingsError {
 ///   承诺不拆);
 /// - 资源级跨域不需要专门拒帧: 本域写闸查不到他域会话, 一律走
 ///   [`session_not_found`] —— 与真不存在**同帧** (存在性不泄露)。
-fn session_manager<'s>(
+pub(crate) fn session_manager<'s>(
     state: &'s GatewayState,
     domain: Option<&Extension<DomainContext>>,
 ) -> Result<&'s SessionManager, SettingsError> {

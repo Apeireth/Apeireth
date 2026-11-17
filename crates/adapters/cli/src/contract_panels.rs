@@ -15,9 +15,8 @@ use apeireth_gateway::{
     GatewayServices, WorkspaceCreateCommand, WorkspaceDto, WorkspacePanel, WorkspacePanelError,
 };
 use apeireth_runtime::canonical::workspace::{
-    FileWorkspaceRegistry, InMemoryWorkspaceRegistry, Workspace,
-    WorkspaceCreateRequest as DomainWorkspaceCreateRequest, WorkspaceError,
-    WorkspacePermissionScope, WorkspaceRegistry, WorkspaceRootKind,
+    InMemoryWorkspaceRegistry, Workspace, WorkspaceCreateRequest as DomainWorkspaceCreateRequest,
+    WorkspaceError, WorkspacePermissionScope, WorkspaceRegistry, WorkspaceRootKind,
 };
 use async_trait::async_trait;
 
@@ -80,10 +79,11 @@ impl CliWorkspacePanel {
         managed_root: impl Into<PathBuf>,
         data_dir: impl Into<PathBuf>,
     ) -> Result<Self, String> {
-        let registry = FileWorkspaceRegistry::open(data_dir)
-            .map_err(|error| format!("打开工作区注册表失败: {error}"))?;
+        // B3b-1: 注册表按根目录取**进程内单例** —— 回合闸与合同面要读同一份事实 (R8)。
+        let data_dir = data_dir.into();
+        let registry = crate::binding_registries::workspaces(&data_dir)?;
         Ok(Self {
-            registry: Arc::new(registry),
+            registry,
             managed_root: managed_root.into(),
             scope_ceiling: HOST_SCOPE_CEILING,
             source: "cli".to_string(),

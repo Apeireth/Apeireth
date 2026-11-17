@@ -128,6 +128,15 @@ pub mod workspace_panel;
 /// 铸造**; 读面**不含**任何存储位置。
 pub mod contact_panel;
 
+/// 会话 agent 绑定合同面 (B3b-1 批): `GET /v1/sessions/:session_id/agent-binding`
+/// 读面 + `POST /v1/sessions/:session_id/agent-binding` 写面 (带
+/// `expected_revision` 乐观并发; 显式 `contact_id: null` ⇒ 解绑)。面与回合闸
+/// 共用**同一个**注册表实例 ⇒ 闸读到的就是这张面刚写下的事实。
+pub mod session_binding;
+
+/// 运行时错误 ⇒ HTTP 状态 + 稳定错误码的映射表 (与入口面分开住)。
+mod runtime_error_map;
+
 /// W2-② remote access face: listen knob, non-loopback fail-closed bind gate,
 /// and the wired TLS surface (material loading fail-closed, real TLS listener).
 pub mod remote_access;

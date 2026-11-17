@@ -33,7 +33,9 @@ Author: lead
 | B1 | 联系人 / Agent identity + 人设（字节上限 + 控制字符 + 版本号） | `contact_id`/`agent_id`/`persona_revision` 由后端生成；人设有字节上限与控制字符校验；persona 只影响允许的注入槽，**不得**改变工具权限、审批决定、workspace scope 或系统策略；同名不同 ID 不碰撞 | ✅ 已完成（提交 `5bfb959d7`，四级口径 **IMPLEMENTED（领域层：ContactId/ContactAgentId/PersonaText/Contact + InMemory/FileContactRegistry）**；⚠️ 无 HTTP 面、无 `workspace_binding`、无记忆作用域映射、无会话绑定、无审计、未接生产路径） |
 | B2 | 记忆作用域映射 + 会话 agent 绑定 + 归档语义 | `memory_scope` 受管枚举并与主体/联系人/工作区隔离（联系人 A 读不到 B 的记忆）；绑定请求携带 contact_id+agent_id+persona_revision+workspace_id+workspace_revision+expected_context_key+incarnation，任一不匹配即拒绝**且不重放消息**；归档为软删除，旧会话不静默转移到默认 Agent；全部动作有可检索审计身份 | ✅ 已完成（提交 `49213dc78`，四级口径 **IMPLEMENTED（领域层：`canonical::agent_binding` + `Session.agent_binding`；21 条契约测试 + 5 组反向验伪）**；⚠️ **未 PRODUCTION WIRED**（`admit_turn` 无调用方，`domain_plane` 默认域回落仍是未绑定会话的现役路径）、HTTP 面归 B3、canonical `MemoryScope` 翻译归 B3、审计未做） |
 | B3a | 联系人 HTTP 面（+ `workspace_binding` 校验） | `GET/POST /v1/agents/contacts`、`GET/PATCH /v1/agents/contacts/{id}`、`POST /v1/agents/contacts/{id}/archive`；身份由后端铸造；写面必须带 `expected_revision`（缺⇒400、不符⇒409 且状态逐字段不变）；归档为软删除、不可复活（**已归档是终态 ⇒ 403 `contact_archived`，不是 409 版本过期**）；`workspace_binding{workspace_id,revision}` 由服务端校验（不存在/已吊销/修订号不符 ⇒ 409 `contact_binding_conflict`）；同名不同 ID 不碰撞；审计事件与能力清单入册 | ✅ 已完成（提交 `43291e4ea`，四级口径 **IMPLEMENTED（HTTP 面 + 端口 + 审计 + 能力入册 + 4 个新错误码 + CLI 组合根接线）**；15 条网关测试 + 5 条 CLI 链路测试 + 4 组反向验伪；⚠️ **回合入口未接线 ⇒ 新建联系人当前不影响真实回合**、会话绑定面未做、`memory_scope` 只到 DTO 层未翻译、`capabilities` 只是展示投影非授权依据、绑定只存 id+revision 不存快照） |
-| B3b | 会话绑定面 + 回合入口接线（`admit_turn` 上线 + 装配层作用域翻译） | `GET/POST /v1/sessions/{id}/agent-binding`；回合入口先 `admit` 后 `append`（拒绝即不重放）；装配层把 `MemoryScopeTarget` 翻译成 canonical `MemoryScope`（`none` ⇒ 不写记忆，**禁拿 `Global` 代替**）；绑定不合法 ⇒ 回合拒绝；已归档联系人 ⇒ fail-closed，不回落默认 Agent/默认域；旧会话不静默转移到默认 Agent | ❌ 未开始（B2 领域层已就位；`admit_turn` 现无调用方） |
+| B3b-1 | 会话绑定面 + 回合入口闸（`admit_turn` 上线） | `GET/POST /v1/sessions/{id}/agent-binding`；回合入口先 `admit` 后 `append`（拒绝即不重放）；绑定不合法 ⇒ 回合拒绝；已归档联系人 ⇒ fail-closed，不回落默认 Agent/默认域；旧会话不静默转移到默认 Agent | ✅ 已完成（提交 `b7bcbacc0`，四级口径 **PRODUCTION WIRED**（绑定面路由已 merge ＋ 组合根装配 registry ＋ 回合入口闸接线）；⚠️ **未做 live E2E** ⇒ 不到 HARDWARE VALIDATED；作用域翻译未做（归 B3b-2）、persona 注入未做（归 B3b-3）） |
+| B3b-2 | 装配层作用域翻译（`MemoryScopeTarget` → canonical `MemoryScope`） | 装配层把 `MemoryScopeTarget` 翻译成 canonical `MemoryScope`（`none` ⇒ **不产生 scope**，不写记忆，**禁拿 `Global` 代替**）；写回链路按翻译结果落 scope，`writes=false` ⇒ 整段跳过 materializer | ❌ 未开始（B2 领域层 `map_memory_scope` 已就位；落点必须是 `apeireth-runtime-assembly`（runtime 禁依赖 memory，生产边 132/132 顶格）） |
+| B3b-3 | persona 注入 | 绑定命中的 persona 文本注入回合（只改 system 文本，**不得**改权限/能力/工具面） | ❌ 未开始（B2 领域层 `resolve_bound_persona` 已产出，未被消费） |
 | C1 | 规范流帧 + 后端流面（身份、sequence、重放、resync） | 帧 schema 固定（`apeireth.c1.delta.v1` / `apeireth.c1.final.v1`）；每帧带 session_id/request_id/trace_id/sequence（**不带** operation/incarnation/context_key —— 裁决 2/8：宿主 operation 是不透明标签、后端不解释，后端不生成 incarnation/context_key）；sequence 单调有界；`Last-Event-ID`/`after_sequence` 有限重放，超窗发 `resync_required` 事实帧后关闭通道；`[DONE]` **只表示通道关闭**；断线后 GET 回执能恢复真实状态且不重发模型 | ✅ 已交付（提交 `e397cc687`，PR #135；四级口径 **IMPLEMENTED（领域层）** —— **未接生产装配**：全仓无生产路径调 register/publish_delta/publish_final ⇒ 端点当前不产生真实流数据 ⇒ 未登记进 `docs/gateway-api-contract.md` §2（该节标题即〔PRODUCTION WIRED〕）；**不实现 `/bridge/*`**（裁决 15）） |
 | C2 | 单次 canonical dispatch + stop 幂等 + 审批终帧 | 一个 operation 只产生一次 canonical dispatch（重连/刷新/abort 不重复调模型）；stop 单独、幂等、可审计且不撤销已发生的外部副作用；approval 终帧只带**已确认**的 approval_id/action_binding_digest/expires_at；provider 非流式回退、上游错误、超时、取消、慢客户端、大正文都有有界错误契约 | ❌ 未开始 |
 
@@ -415,6 +417,45 @@ GET  /v1/sessions/{session_id}/requests/{request_id}/stream   # ?after_sequence=
 - **尺寸棘轮联动**：C1 需在 `canonical_entry.rs` 注册一条路由，而该文件基线 2291 行 ⇒ 按既有口径
   （不抬基线、不登记例外）把路由定义搬进 `canonical_stream::routes()`、主路由表只加一行 `merge`
   （并把该函数的两行文档注释并成一行）⇒ 该文件**净增 0 行**，`arch_guard --strict` ⇒ VIOLATIONS 0。
+
+### 2026-11-17 B3b-1 批次交付（提交 `b7bcbacc0`）
+
+- 落点（独立工作树 `C:\Apeireth\wt\backend-contracts-b3b-20261117`，分支 `feat/backend-contracts-b3b-20261117`）：
+  新建 `crates/engine/runtime/src/canonical/turn_admission.rs`（回合入口只读闸）、
+  `crates/engine/runtime/src/canonical/runtime_builder.rs`（**行为等价搬迁**：`RuntimeBuilder` 整块搬来并加两个 registry 字段）、
+  `crates/adapters/gateway/src/session_binding.rs`（绑定 HTTP 面）、
+  `crates/adapters/gateway/src/runtime_error_map.rs`（**行为等价搬迁**：`classify_runtime_error`/`provider_code`）、
+  `crates/adapters/cli/src/binding_registries.rs`（registry 进程级单例）；
+  测试 2 个文件（runtime 9 用例 / gateway 9 用例）；改 16 个既有文件。
+- 端点：`GET/POST /v1/sessions/{session_id}/agent-binding`（路由由 `panel_routes()` 一行 merge 装配）。
+  GET ⇒ `{session_id, bound, binding, session_revision}`；POST 必带 `expected_revision`（缺 ⇒ 400 且不碰会话）、
+  `contact_id` 字段**必带**（**显式 null ＝ 解绑**；字段缺失 ⇒ 400），绑定时 `agent_id/persona_revision/workspace_id/workspace_revision` 必填；
+  `context_key`/`incarnation` 只透传不生成（省略即沿用已存值）。
+- 回合入口闸（`execute.rs` 生产回合入口，先闸后写）：判定顺序＝
+  ① 未绑定 ⇒ **放行**（零回归）② 已绑定但 registry 未装配 ⇒ **fail-closed 拒绝**（409 `agent_binding_rejected`）
+  ③ 交领域层 `admit_bound_turn` 逐项校验（联系人不存在/已归档 ⇒ 拒且**不回落默认 Agent**；`agent_id`/`persona_revision`/
+  `workspace_id`/`workspace_revision` 任一不符 ⇒ 拒）。
+  拒绝 ⇒ 直接 `Err` ⇒ **零写入**（消息未追加、`revision` 未推进、`sessions.save` 未执行 ⇒ 不落盘）。
+- 错误码目录（封闭集）新增 2 个：`agent_binding_rejected`（409，回合闸拒绝）、`session_binding_conflict`（409，会话 CAS 不符，带 `details{expected_revision, actual_revision}`）；
+  复用既有码：`invalid_request`/`session_not_found`/`contact_not_found`/`contact_archived`(403)/`contact_conflict`/`workspace_not_found`/`workspace_revoked`/`workspace_conflict`/`unsupported`(501)。
+- 审计：事件 `gateway.session_binding_action`，动作词 `session_binding.create|update|unbind|deny`；**allow 与 deny 都留痕**。
+- registry 单例：`FileContactRegistry`/`FileWorkspaceRegistry` 是「开档即全读进内存 + 之后只改内存」⇒ 两个实例互不可见
+  ⇒ 闸与 HTTP 面**必须共用同一实例**（`binding_registries.rs` 按根目录缓存）⇒ 否则会出现「HTTP 刚写的绑定，闸读不到」。
+- 反向验伪七组（红/绿两条已贴进提交正文与仓外日志 `b3b1_falsify.log`）：摘路由接线 ⇒ gateway 9 条全红；
+  摘闸接线 ⇒ runtime 7 条红＋gateway 1 条红；闸恒拒 ⇒ 放行类 2 条红；
+  四个语义变异（CAS 由 `!=` 弱化成 `>`、归档码 403→404、显式 null 不当解绑、deny 不写审计）⇒ 各钉一条用例红；回退后 ⇒ 9＋9 全绿。
+- 搬迁等价机器证明（去注释/去空行后代码行多重集比对）：`RuntimeBuilder` 缺失 **0** 行；
+  `expire_active_approval_if_needed` 缺失 **1** 行＝签名行（可见性放宽）；`classify_runtime_error` 缺失 **1** 行＝签名行
+  ⇒ 函数体逐字保留，行为改动 0。
+- **尺寸棘轮联动**：`execute.rs` 5010→4960、`runtime.rs` 1331→**774**（已 <1200 脱离棘轮）、`canonical_entry.rs` 2291→2240；
+  `cli/src/lib.rs` 3786→3788（**正好等于基线，0 余量**）；新增 5 个 src 文件 667/115/938/68/94 行 ⇒ 全部 <1200 不进棘轮。
+  `arch_guard --strict` ⇒ VIOLATIONS 0。
+- ⚠️ **诚实边界**：四级口径 **PRODUCTION WIRED**（绑定面路由已 merge、组合根已装配 registry、回合入口闸已接线），
+  **未做 live E2E**（没起真实网关打真流量）⇒ **不到 HARDWARE VALIDATED**；
+  **作用域翻译（B3b-2）与 persona 注入（B3b-3）未接线**（领域层已产出，本批刻意不消费）；
+  `agent_id` 不符分支**结构不可达**（`contact_id`/`agent_id` 由后端铸造且不可变）⇒ 端到端只覆盖可达的 `persona_revision` 不符；
+  CAS 骑在 `session.revision` 上（该值也会被普通 append 推进）⇒ 客户端写前必须重读；
+  **绑定变更不写 SessionEvent**（只写审计）；多进程部署下 registry 仍会分叉（本批只保证单进程内一致）。
 
 ### 还差什么
 

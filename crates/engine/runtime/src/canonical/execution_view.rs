@@ -39,6 +39,11 @@ impl Runtime {
                     .unwrap_or_else(|poisoned| poisoned.into_inner())
                     .clone(),
             ),
+            // The registries are shared services like the others: the view keeps
+            // the same Arc, so a turn admitted by the view validates against the
+            // same facts the container validates against.
+            contact_registry: self.contact_registry.clone(),
+            workspace_registry: self.workspace_registry.clone(),
         }
     }
 }

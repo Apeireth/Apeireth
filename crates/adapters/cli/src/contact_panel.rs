@@ -16,7 +16,7 @@ use std::sync::{Arc, Mutex};
 
 use apeireth_core::agent_contact::{
     Contact, ContactCapabilities, ContactError, ContactIn, ContactRegistry, ContactStatus,
-    ContractMemoryScope, FileContactRegistry, InMemoryContactRegistry,
+    ContractMemoryScope, InMemoryContactRegistry,
 };
 use apeireth_core::kernel::ids::ContactId;
 use apeireth_core::storage_atomic;
@@ -89,12 +89,12 @@ impl CliContactPanel {
     /// 开不出 ⇒ `Err` (fail-closed): 调用方必须让启动失败, 不许静默降级。
     pub fn new_persistent(data_dir: impl Into<PathBuf>) -> Result<Self, String> {
         let data_dir = data_dir.into();
-        let registry = FileContactRegistry::open(&data_dir)
-            .map_err(|error| format!("打开联系人注册表失败: {error}"))?;
+        // B3b-1: 注册表按根目录取**进程内单例** —— 回合闸与合同面要读同一份事实 (R8)。
+        let registry = crate::binding_registries::contacts(&data_dir)?;
         let binding_path = data_dir.join("agents").join("contact-bindings.json");
         let bindings = load_contact_bindings(&binding_path)?;
         Ok(Self {
-            registry: Arc::new(registry),
+            registry,
             bindings: Mutex::new(bindings),
             binding_path,
         })

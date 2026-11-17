@@ -36,6 +36,7 @@ use crate::client_tokens::{
 use crate::error_frame::{ErrorCode, ErrorFrame};
 use crate::events::{events_handler, EventBus, GatewayEvent, RuntimeObservationSink};
 use crate::panels::{panel_routes, GatewayServices, GatewayState, PanelData};
+use crate::runtime_error_map::classify_runtime_error;
 
 /// Native gateway request. HTTP and CLI transports can both construct it.
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -2235,57 +2236,5 @@ fn classify_entry_error(error: &CanonicalEntryError) -> (StatusCode, ErrorCode) 
             (StatusCode::BAD_REQUEST, ErrorCode::InvalidRequest)
         }
         CanonicalEntryError::Runtime(runtime) => classify_runtime_error(runtime),
-    }
-}
-
-fn classify_runtime_error(error: &RuntimeError) -> (StatusCode, ErrorCode) {
-    match error {
-        RuntimeError::Provider(provider) => (
-            StatusCode::BAD_GATEWAY,
-            provider_code(&provider.to_string()),
-        ),
-        RuntimeError::ProvidersExhausted { source, .. } => {
-            (StatusCode::BAD_GATEWAY, provider_code(&source.to_string()))
-        }
-        RuntimeError::NoProvider { .. } | RuntimeError::NoHealthyProvider { .. } => (
-            StatusCode::SERVICE_UNAVAILABLE,
-            ErrorCode::ProviderUnreachable,
-        ),
-        RuntimeError::Misconfigured(_) => (StatusCode::SERVICE_UNAVAILABLE, ErrorCode::Internal),
-        RuntimeError::Denied { .. } => (StatusCode::FORBIDDEN, ErrorCode::InvalidRequest),
-        RuntimeError::ModuleStopped { .. } => {
-            (StatusCode::UNPROCESSABLE_ENTITY, ErrorCode::ReviewRejected)
-        }
-        RuntimeError::RoundLimitExceeded { .. } => (
-            StatusCode::UNPROCESSABLE_ENTITY,
-            ErrorCode::TurnNotConverged,
-        ),
-        RuntimeError::ApprovalRequired { .. } | RuntimeError::SessionApprovalPending { .. } => {
-            (StatusCode::CONFLICT, ErrorCode::InvalidRequest)
-        }
-        _ => (StatusCode::INTERNAL_SERVER_ERROR, ErrorCode::Internal),
-    }
-}
-
-/// Classify a provider failure from its human-readable rendering.
-///
-/// The gateway crate has no regular dependency on `apeireth_plugin` (where
-/// `ProviderError` is declared), so it cannot destructure the error type. It
-/// reads the stable `Display` wording instead and preserves the full text in
-/// the frame `message`.
-fn provider_code(text: &str) -> ErrorCode {
-    let lower = text.to_ascii_lowercase();
-    if lower.contains("rate limited") {
-        ErrorCode::RateLimited
-    } else if lower.contains("timed out") || lower.contains("network error") {
-        ErrorCode::ProviderUnreachable
-    } else if lower.contains("authentication failed") {
-        if lower.contains("missing") {
-            ErrorCode::AuthMissingKey
-        } else {
-            ErrorCode::AuthInvalidKey
-        }
-    } else {
-        ErrorCode::ProviderError
     }
 }
