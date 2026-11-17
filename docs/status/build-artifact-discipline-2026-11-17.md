@@ -26,6 +26,15 @@ Author: lead
 | L4 工作线登记 | ✅ 已落地 | `docs/status/workline-registry.md` 已加本行（设计稿 / 本进度页 / 守卫命令） |
 | 硬编码产物目录清零 | ✅ 已落地 | 修完 `check_stale_binaries.py` · `measure-session-startup.ps1` · `target-hygiene.ps1` · `target-sweep.ps1` · `test-installed-e2e.ps1` · `verify-provider-path.ps1` · `windows-live-check.ps1`；全部改为「先解析生效目录再拼接」，回退时显式提示 |
 
+## 交付形态（2026-11-17）
+
+- 分支 `chore/build-artifact-discipline-20261117`（基线 `upstream/main = 5c373955c`），共 **4 条 commit**：
+  `325a8339b`（门禁清单生成器 CRLF）· `5fce46c5b`（构建产物槽位纪律的机械层）·
+  `6aaff28ec`（fast gate 把契约类 toml 当 Rust 改动的假红修复）· `efcfe9636`（宪章条款与仓库口径校正）。
+- 已推 fork（`https://github.com/Xephylos/Apeireth`）并开 **PR #131**（base `Apeireth/Apeireth:main`）⇒ **未合并**。
+- 门禁口径：**本机** doc/脚本门禁全绿（见本页各行证据）；**Rust 侧本批 0 行源码改动** ⇒ 本机未重跑
+  `cargo test --workspace`（按 `AGENTS.md` §5.2「`--workspace` 只在收口 wave 跑」），由 CI 矩阵全量跑。
+
 ## 现场事实（2026-11-17 实测）
 
 - C 盘：total 924.6 G / used 555.5 G / free 369.2 G。
