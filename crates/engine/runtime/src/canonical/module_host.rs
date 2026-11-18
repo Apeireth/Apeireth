@@ -151,13 +151,14 @@ impl Runtime {
                     .cloned()
                     .map(|security| Arc::new(security) as Arc<dyn std::any::Any + Send + Sync>),
             },
-            cancellation: self
-                .message_invocation
-                .as_ref()
-                .map(|invocation| {
-                    apeireth_plugin::ToolCancellation::joined(vec![invocation.cancellation.clone()])
-                })
-                .unwrap_or_default(),
+            cancellation: {
+                let parents = self
+                    .message_invocation
+                    .as_ref()
+                    .map(|invocation| vec![invocation.cancellation.clone()])
+                    .unwrap_or_default();
+                super::turn_cancellation::cancellation_for(session, request, parents)
+            },
             deadline: std::time::Instant::now()
                 .checked_add(timeout)
                 .unwrap_or_else(std::time::Instant::now)

@@ -136,6 +136,11 @@ pub struct TurnRequest {
     pub system: Option<String>,
     /// Immutable intent/authorization context created before provider use.
     pub security_context: Option<TurnSecurityContext>,
+    /// Caller-minted turn identity; the runtime mints one when absent.
+    ///
+    /// Supplying it up front lets a streaming caller address the turn (stop)
+    /// from the first frame onward.
+    pub request: Option<RequestId>,
 }
 
 impl TurnRequest {
@@ -147,6 +152,7 @@ impl TurnRequest {
             model: None,
             system: None,
             security_context: None,
+            request: None,
         }
     }
 
@@ -167,6 +173,13 @@ impl TurnRequest {
     #[must_use]
     pub fn with_security_context(mut self, context: TurnSecurityContext) -> Self {
         self.security_context = Some(context);
+        self
+    }
+
+    /// Run the turn under a caller-minted request id.
+    #[must_use]
+    pub fn with_request(mut self, request: RequestId) -> Self {
+        self.request = Some(request);
         self
     }
 }
@@ -758,7 +771,10 @@ impl Runtime {
         let metrics_started = std::time::Instant::now();
 
         let state = Arc::new(ModuleTurnState::new(self.config.max_module_invocations));
-        let request_id = RequestId::new();
+        let request_id = request.request.unwrap_or_else(RequestId::new);
+        // C2: the turn-level cancellation token lives for the whole turn; a
+        // stop cancels it and every tool context joins it as a parent.
+        let _turn_registration = super::turn_cancellation::register(request.session, request_id);
         let trace_id = TraceId::new();
         let mut request = request;
         let session_text = request.session.to_string();

@@ -2076,10 +2076,8 @@ async fn openai_chat(
 }
 
 /// Run the canonical turn with incremental delta forwarding and write an
-/// OpenAI-spec SSE response: role chunk → one chunk per content delta →
-/// final chunk (finish_reason + apeireth metadata + usage) → `[DONE]`.
-/// A pending approval or a runtime error also terminates the stream with an
-/// explicit final frame, so the client never hangs.
+/// OpenAI-spec SSE response: role chunk → content deltas → final chunk → `[DONE]`.
+/// Pending approval / runtime error also terminate the stream explicitly.
 async fn openai_chat_streaming(
     state: &GatewayState,
     runtime: Arc<Runtime>,
@@ -2090,7 +2088,8 @@ async fn openai_chat_streaming(
     let session = native
         .session
         .expect("canonical chat request always carries a session");
-    let stream_id = RequestId::new().to_string();
+    let request_id = RequestId::new();
+    let stream_id = request_id.to_string();
     let created = Timestamp::from_clock(state.runtime.clock().as_ref()).epoch_millis() / 1_000;
 
     let (tx, rx) = tokio::sync::mpsc::channel::<String>(64);
@@ -2131,6 +2130,7 @@ async fn openai_chat_streaming(
     if let Some(system) = native.system {
         turn = turn.with_system(system);
     }
+    turn = turn.with_request(request_id);
     tokio::spawn(async move {
         let role_chunk = OpenAiStreamChunk {
             id: stream_id.clone(),

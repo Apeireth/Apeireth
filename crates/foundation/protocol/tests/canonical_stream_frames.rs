@@ -111,6 +111,7 @@ fn the_state_vocabulary_is_the_contract_vocabulary() {
         (C1StreamState::Completed, "completed"),
         (C1StreamState::Approval, "approval"),
         (C1StreamState::Failed, "failed"),
+        (C1StreamState::Stopped, "stopped"),
         (C1StreamState::Unknown, "unknown"),
     ] {
         assert_eq!(
@@ -128,6 +129,7 @@ fn only_the_running_state_is_a_non_terminal_state() {
         C1StreamState::Completed,
         C1StreamState::Approval,
         C1StreamState::Failed,
+        C1StreamState::Stopped,
         C1StreamState::Unknown,
     ] {
         assert!(terminal.is_terminal(), "{terminal:?} 必须是终态");

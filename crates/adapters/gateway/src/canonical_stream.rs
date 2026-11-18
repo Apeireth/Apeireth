@@ -16,11 +16,14 @@
 //! `event: <帧族>` / `data: <帧 JSON>` / `id: <sequence>` —— `id` 就是帧序号,
 //! 客户端可直接把它作为下一次重连的 `Last-Event-ID`。
 //!
+//! 停止 (C2-2): `POST /v1/sessions/{session_id}/requests/{request_id}/stop`
+//! 取消运行时该回合的取消令牌 ⇒ 只阻断**后续工具派发与提示工具**, 已发生的
+//! 副作用不撤销。
+//!
 //! 不做什么 (诚实边界):
 //! - 不实现 `/bridge/*` 宿主映射 (由前端负责);
-//! - 不做 stop/cancel 端点与幂等 (C2 批);
-//! - 不做「一个 operation 只调一次模型」去重 (C2 批);
-//! - 缓冲是进程内内存 ⇒ 进程重启后本流不再可续 (客户端须改取回执)。
+//! - 停止端点不发布 `stopped` 终帧 (C1 帧族接线归 C2-3);
+//! - 缓冲与停止摘要都是进程内内存 ⇒ 进程重启后本流不再可续 (客户端须改取回执)。
 
 use std::convert::Infallible;
 use std::pin::Pin;
@@ -28,14 +31,17 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
+use apeireth_core::kernel::{RequestId, SessionId};
 use apeireth_protocol::canonical_stream::{C1FinalFrame, C1Frame, C1StreamState};
 use apeireth_runtime::canonical::canonical_stream::{global_registry, ReplayOutcome};
+use apeireth_runtime::canonical::turn_cancellation::{self, StopOutcome};
+use apeireth_runtime::canonical::PendingApprovalView;
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::sse::{Event as SseEvent, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
-use axum::routing::get;
-use axum::Router;
+use axum::routing::{get, post};
+use axum::{Json, Router};
 use serde::Deserialize;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::{Stream, StreamExt};
@@ -56,10 +62,15 @@ pub struct CanonicalStreamQuery {
 /// 路由定义放在本模块 ⇒ 主路由表只需一行 `merge` ⇒ 既有路由表文件净增 0 行
 /// (尺寸棘轮 `size crates/adapters/gateway/src/canonical_entry.rs 2291` 不变)。
 pub fn routes() -> Router<GatewayState> {
-    Router::<GatewayState>::new().route(
-        "/v1/sessions/:session_id/requests/:request_id/stream",
-        get(canonical_stream_handler),
-    )
+    Router::<GatewayState>::new()
+        .route(
+            "/v1/sessions/:session_id/requests/:request_id/stream",
+            get(canonical_stream_handler),
+        )
+        .route(
+            "/v1/sessions/:session_id/requests/:request_id/stop",
+            post(stop_turn_handler),
+        )
 }
 
 /// C1 规范流 SSE 面。
@@ -211,5 +222,113 @@ fn frame_to_event(frame: &C1Frame) -> SseEvent {
             .event(final_frame.event.as_str())
             .data(payload)
             .id(final_frame.sequence.to_string()),
+    }
+}
+
+/// 停止一个在飞回合 (C2-2)。
+///
+/// 路由: `POST /v1/sessions/{session_id}/requests/{request_id}/stop`。只取消
+/// 运行时回合级取消令牌: **不取会话写闸**, 不执行回合, 不撤销已发生的副作用;
+/// 第一次 stop 的摘要留在进程内有界队列里, 重复调用回放同一份摘要 (幂等)。
+pub async fn stop_turn_handler(
+    State(state): State<GatewayState>,
+    Path((session_id, request_id)): Path<(String, String)>,
+) -> Response {
+    let Ok(session) = session_id.parse::<SessionId>() else {
+        return ErrorFrame::response(
+            StatusCode::BAD_REQUEST,
+            ErrorCode::InvalidRequest,
+            format!("invalid session_id: {session_id}"),
+        );
+    };
+    let Ok(request) = request_id.parse::<RequestId>() else {
+        return ErrorFrame::response(
+            StatusCode::BAD_REQUEST,
+            ErrorCode::InvalidRequest,
+            format!("invalid request_id: {request_id}"),
+        );
+    };
+
+    // 待批回合: stop 不越过审批裁决, 先让调用方批准/拒绝或等它过期。
+    match state.runtime.pending_approvals(session).await {
+        Ok(pending) if approval_blocks_stop(&pending, request) => {
+            return ErrorFrame::response(
+                StatusCode::CONFLICT,
+                ErrorCode::InvalidRequest,
+                format!(
+                    "request {request} is awaiting approval; decide it or let it expire before stopping"
+                ),
+            )
+        }
+        Ok(_) => {}
+        Err(error) => {
+            return ErrorFrame::response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                ErrorCode::Internal,
+                error.to_string(),
+            )
+        }
+    }
+
+    match turn_cancellation::stop(session, request) {
+        StopOutcome::Stopped(summary) | StopOutcome::AlreadyStopped(summary) => {
+            Json(summary).into_response()
+        }
+        StopOutcome::NotFound => ErrorFrame::response(
+            StatusCode::NOT_FOUND,
+            ErrorCode::SessionNotFound,
+            format!("no running turn for session {session} request {request}"),
+        ),
+    }
+}
+
+/// 只对**同一 request** 的待批命中返回 true (别的 request 待批不阻塞本回合)。
+fn approval_blocks_stop(pending: &[PendingApprovalView], request: RequestId) -> bool {
+    pending.iter().any(|view| view.request_id == request)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use apeireth_core::kernel::{ApprovalId, CapabilityId, Timestamp, TraceId};
+    use apeireth_protocol::canonical::ToolCall;
+
+    fn pending_view(request: RequestId) -> PendingApprovalView {
+        PendingApprovalView {
+            approval_id: ApprovalId::new(),
+            session_id: SessionId::new(),
+            request_id: request,
+            trace_id: TraceId::new(),
+            round: 1,
+            capability_id: CapabilityId::new("test.capability").expect("static capability id"),
+            tool_name: "test.tool".to_string(),
+            tool_call: ToolCall {
+                id: "call-1".to_string(),
+                name: "test.tool".to_string(),
+                arguments: serde_json::json!({}),
+            },
+            effective_invocation: None,
+            governance_hook: String::new(),
+            governance_reason: String::new(),
+            command_text: String::new(),
+            arguments_summary: String::new(),
+            authorization_families: Vec::new(),
+            action_binding_digest: String::new(),
+            created_at: Timestamp::now(),
+            expires_at: Timestamp::now(),
+            operation_fingerprint: String::new(),
+            generated_text: String::new(),
+            rounds_used: 0,
+        }
+    }
+
+    #[test]
+    fn approval_blocks_stop_matches_only_the_same_request() {
+        let request = RequestId::new();
+        let other = RequestId::new();
+        let pending = vec![pending_view(request)];
+        assert!(approval_blocks_stop(&pending, request));
+        assert!(!approval_blocks_stop(&pending, other));
+        assert!(!approval_blocks_stop(&[], request));
     }
 }
