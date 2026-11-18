@@ -595,7 +595,8 @@ bounded-context 端口 + 乐观并发比对 + 审计 + 能力入册)、领域层
 `ContactRegistry` / `FileContactRegistry`)、组合根适配
 `crates/adapters/cli/src/contact_panel.rs`(`CliContactPanel` 持真落盘注册表 +
 宿主绑定档)与 `crates/adapters/cli/src/lib.rs`(网关装配点注入 `services.contacts`)。
-**已接线（B3b-1/B3b-2/B3b-3）**: 会话绑定面见 §7i；已绑定会话的回合入口先过闸（未绑定放行，
+
+**已接线（B3b-1/B3b-2/B3b-3，PRODUCTION WIRED）**: 会话绑定面见 §7i；已绑定会话的回合入口先过闸（未绑定放行，
 绑定失效/注册表缺位 fail-closed 409 `agent_binding_rejected`，零写入），`memory_scope` 已按绑定
 翻译成运行时作用域（persona/contact/session；缺装配面或失效 ⇒ 已绑定会话显式零写入，不回退
 Session），命中 persona 在**空会话**的 system 种子槽注入（只改 system 文本，不碰权限/工具面/
