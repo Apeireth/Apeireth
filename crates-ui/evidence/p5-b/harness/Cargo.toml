@@ -40,6 +40,8 @@ web-sys = { version = "=0.3.106", features = [
   #   （含 `shiftKey` / `isComposing` ⇒ ⇒ 验「Enter 与 Shift+Enter 可区分」）。
   "KeyboardEvent",
   "KeyboardEventInit",
+  "InputEvent",
+  "InputEventInit",
   "EventTarget",
   "Element",
   "HtmlElement",

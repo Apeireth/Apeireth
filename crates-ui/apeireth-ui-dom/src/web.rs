@@ -29,7 +29,7 @@ use js_sys::{Object, Reflect, WeakMap, WeakSet};
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::JsValue;
-use web_sys::{Document, Element, Event, KeyboardEvent, MouseEvent, Node, Text};
+use web_sys::{Document, Element, Event, InputEvent, KeyboardEvent, MouseEvent, Node, Text};
 
 use crate::dom::{Dom, DomError, ElementBox, EventKind, ScrollMetrics};
 use crate::events::{DomEvent, ElementHandler};
@@ -640,6 +640,9 @@ impl Dom for WebDom {
             // ⇒ ⇒ 正是我们要的「历史事实」⇒ ⇒ 与 `Dom::is_composing()`（当前状态）互补。
             if let Some(keyboard) = event.dyn_ref::<KeyboardEvent>() {
                 dom_event = dom_event.with_is_composing(keyboard.is_composing());
+            } else if let Some(input) = event.dyn_ref::<InputEvent>() {
+                // InputEvent carries the event-time composition flag too.
+                dom_event = dom_event.with_is_composing(input.is_composing());
             }
             // ⭐ **复选框/单选的 `checked`**（G2）：`change` 事件里 `checked` 是布尔 property
             // ⇒ ⇒ 填进载荷，处理器不必回读 DOM（与 `target_value` 同一理由）。
