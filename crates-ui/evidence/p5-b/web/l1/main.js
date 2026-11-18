@@ -211,6 +211,11 @@ try {
   results.keyboardSemantics = { ok: false, failures: [`键盘语义探针抛错：${String(error)}`] };
 }
 try {
+  results.inputComposition = p5b.input_composition_probe();
+} catch (error) {
+  results.inputComposition = false;
+}
+try {
   // ⭐⭐⭐ 焦点与模态探针：Tab 真走引擎？焦点陷阱在真实浏览器里成立？（E-174）
   results.focusModal = p5b.l1_focus_modal_probe();
 } catch (error) {

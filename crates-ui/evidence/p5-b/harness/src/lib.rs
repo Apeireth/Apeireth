@@ -2673,6 +2673,89 @@ pub fn l1_keyboard_semantics_probe() -> Result<JsValue, JsValue> {
     Ok(result.into())
 }
 
+/// Browser-dispatched synthetic input events, not an actual platform IME test.
+#[wasm_bindgen]
+pub fn input_composition_probe() -> Result<JsValue, JsValue> {
+    use apeireth_ui_dom::dom::{Dom, EventKind};
+    use apeireth_ui_dom::events::ElementHandler;
+    use apeireth_ui_dom::vnode::VNode;
+    use apeireth_ui_dom::web::WebDom;
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    let document = web_sys::window()
+        .and_then(|w| w.document())
+        .ok_or_else(|| JsValue::from_str("missing document"))?;
+    let dom = WebDom::new().map_err(|e| JsValue::from_str(&format!("WebDom: {e}")))?;
+    let root = dom
+        .create_element("div")
+        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+    dom.set_attribute(&root, "id", "input-composition-probe-root")
+        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+    document
+        .body()
+        .ok_or_else(|| JsValue::from_str("missing body"))?
+        .append_child(&root)?;
+    let seen = Rc::new(RefCell::new(Vec::<(String, bool)>::new()));
+    let input_seen = seen.clone();
+    let keyboard_seen = seen.clone();
+    let mut renderer = apeireth_ui_dom::Renderer::new(dom, root.clone());
+    renderer
+        .render_guarded(
+            VNode::element("textarea")
+                .attr("id", "input-composition-probe")
+                .handler(
+                    EventKind::Input,
+                    ElementHandler::new(move |event| {
+                        input_seen.borrow_mut().push((
+                            event.target_value().unwrap_or_default().into(),
+                            event.is_composing(),
+                        ));
+                    }),
+                )
+                .handler(
+                    EventKind::KeyDown,
+                    ElementHandler::new(move |event| {
+                        keyboard_seen
+                            .borrow_mut()
+                            .push((event.key().unwrap_or_default().into(), event.is_composing()));
+                    }),
+                )
+                .build(),
+        )
+        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let input = document
+        .query_selector("#input-composition-probe")?
+        .ok_or_else(|| JsValue::from_str("missing input"))?;
+    js_sys::Reflect::set(input.as_ref(), &"value".into(), &"合成输入".into())?;
+    for composing in [true, false] {
+        let init = web_sys::InputEventInit::new();
+        init.set_bubbles(true);
+        init.set_is_composing(composing);
+        let event = web_sys::InputEvent::new_with_event_init_dict("input", &init)?;
+        input.dispatch_event(&event)?;
+    }
+    for composing in [true, false] {
+        let init = web_sys::KeyboardEventInit::new();
+        init.set_key("Enter");
+        init.set_bubbles(true);
+        init.set_is_composing(composing);
+        let event = web_sys::KeyboardEvent::new_with_keyboard_event_init_dict("keydown", &init)?;
+        input.dispatch_event(&event)?;
+    }
+    let expected = vec![
+        ("合成输入".into(), true),
+        ("合成输入".into(), false),
+        ("Enter".into(), true),
+        ("Enter".into(), false),
+    ];
+    let ok = *seen.borrow() == expected;
+    root.parent_node()
+        .ok_or_else(|| JsValue::from_str("missing parent"))?
+        .remove_child(&root)?;
+    Ok(JsValue::from_bool(ok))
+}
+
 /// ⭐⭐⭐⭐ **对照：挂载与窗口化在**同一个 wasm 调用**里**（E-162 的关键证据）。
 ///
 /// ## 它回答什么

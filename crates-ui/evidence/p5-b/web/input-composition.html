@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Input event probe</title></head>
+<body><output id="result">RUNNING</output>
+<script type="module">
+import init, {input_composition_probe} from './engine/pkg/p5b_harness.js';
+const result = document.getElementById('result');
+try {
+  await init();
+  result.textContent = input_composition_probe() ? 'PASS' : 'FAIL';
+} catch (error) {
+  result.textContent = `ERROR: ${String(error)}`;
+}
+</script></body></html>

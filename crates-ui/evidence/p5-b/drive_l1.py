@@ -197,6 +197,7 @@ def main() -> int:
     binding_ok = bool(binding.get("ok"))
     integration_ok = bool(integration.get("ok"))
     keyboard_ok = bool(keyboard.get("ok"))
+    input_composition_ok = report.get("inputComposition") is True
     focus_modal_ok = bool(focus_modal.get("ok"))
     async_line_ok = bool(async_line.get("ok"))
     layout_shift_ok = bool(layout_shift.get("ok"))
@@ -225,6 +226,8 @@ def main() -> int:
             f"composing_flag={keyboard.get('composing_flag')}）",
             file=sys.stderr,
         )
+    if not input_composition_ok:
+        print("❌ 合成输入事件组合态探针失败或缺失", file=sys.stderr)
     if not focus_modal_ok:
         print(
             f"❌ 焦点与模态探针失败项：{focus_modal.get('failures')} "
@@ -265,6 +268,7 @@ def main() -> int:
         and binding_ok
         and integration_ok
         and keyboard_ok
+        and input_composition_ok
         and focus_modal_ok
         and async_line_ok
         and layout_shift_ok
