@@ -80,7 +80,7 @@ orphan with_quorum_gate_probe  # G3  生物族默认关 ⇒ 零引用是设计�
 orphan with_system_markers  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线 ⇒ 触发: 提示词装配族进生产时
 orphan with_task_type  # G3  认知编排面默认关 ⇒ 零引用是设计如此 ⇒ 触发: 认知编排族进生产时
 
-# --- G4（21 条）：**注入点 / 探测口**（`with_*`）。生产装配走 `install_*`。
+# --- G4（20 条）：**注入点 / 探测口**（`with_*`）。生产装配走 `install_*`。
 
 orphan with_age  # G4  ⇒ 触发: 研究族进生产时
 orphan with_backend  # G4  ⇒ 触发: 语音感知族进生产装配时
