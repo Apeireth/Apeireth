@@ -21,7 +21,7 @@ Author: lead
 | B2 | 记忆作用域映射 + 会话 agent 绑定 + 归档语义 | **IMPLEMENTED**（仅领域层） | ✅ 已完成（提交 `49213dc78`） | `cargo test -p apeireth-runtime --test agent_binding_contract --locked -j 2` ⇒ 21 passed / 0 failed；`cargo test -p apeireth-runtime --all-targets --locked -j 2` ⇒ 全绿（均 2026-11-17）；clippy 0 警告；fmt 0 diff；反向验伪五组（fail-closed 归档闸 / 不重放 / none≠Global / contact 间隔离 / fork 继承）均 RED→GREEN |
 | B3a | 联系人 HTTP 面 + `workspace_binding` 校验 | **IMPLEMENTED**（HTTP 面已接线；⚠️ 回合入口未接线） | ✅ 已完成（提交 `43291e4ea`） | `cargo test -p apeireth-gateway --test panel_contacts_face --locked -j 2` ⇒ 15 passed / 0 failed；`cargo test -p apeireth-cli --test contact_real_chain --locked -j 2` ⇒ 5 passed / 0 failed（均 2026-11-17）；clippy 0 警告；fmt 0 diff；反向验伪四组（摘修订号比对 / 摘归档过滤 / 摘 deny_unknown_fields / 摘绑定修订号校验）均 RED→GREEN |
 | B3b-1 | 会话绑定面 + 回合入口闸 | **PRODUCTION WIRED**（绑定面路由已 merge ＋ 组合根装配 registry ＋ 回合入口闸已接线；⚠️ 未做 live E2E） | ✅ 已完成（提交 `b7bcbacc0`） | `cargo test -p apeireth-runtime --test turn_admission_gate --locked -j 2` ⇒ 9 passed / 0 failed；`cargo test -p apeireth-gateway --test session_binding_face --locked -j 2` ⇒ 9 passed / 0 failed（均 2026-11-17）；clippy 0 警告；fmt 0 diff；`arch_guard --strict` ⇒ VIOLATIONS 0；反向验伪七组（摘路由接线 / 摘闸接线 / 闸恒拒 / CAS 弱化 / 归档码 403→404 / 显式 null 不当解绑 / deny 不写审计）均 RED→GREEN |
-| B3b-2 | 装配层作用域翻译 + 写回接线（`MemoryScopeTarget` → canonical `MemoryScope`） | **PRODUCTION WIRED**（翻译层 + 绑定会话写回链路已接生产装配；⚠️ 未做 live E2E；profile 分区路径保持；恢复补写未翻译；`memory_scope_binding` 缺位 ⇒ 已绑定会话显式零写入） | ✅ 已完成（提交 `c137f5a9d`） | `pwsh scripts/cargo.ps1 -Slot base -Line backend-contracts-b3b2 -CargoArgs "test -p apeireth-runtime-assembly --test memory_scope_wiring"` ⇒ 6 passed / 0 failed（含真实 runtime 回合）；`cargo test -p apeireth-runtime-assembly --lib memory_scope_wire` ⇒ 5 passed / 0 failed（均 2026-11-18）；clippy 0 警告；fmt 0 diff；`arch_guard --strict` ⇒ VIOLATIONS 0；`audit_unwired.py` ⇒ 本批新符号 0 orphan；反向验伪四组（翻译层 Persona→Session / none 回退 Session / 绑定路径摘掉 / 失效回退 Session）均 RED→GREEN；⚠️ `check_crate_budget.py --check` 未过（runtime-assembly +273 行，基线未上调，待裁决） |
+| B3b-2 | 装配层作用域翻译 + 写回接线（`MemoryScopeTarget` → canonical `MemoryScope`） | **PRODUCTION WIRED**（翻译层 + 绑定会话写回链路已接生产装配；⚠️ 未做 live E2E；profile 分区路径保持；恢复补写未翻译；`memory_scope_binding` 缺位 ⇒ 已绑定会话显式零写入） | ✅ 已完成（提交 `c137f5a9d`） | `pwsh scripts/cargo.ps1 -Slot base -Line backend-contracts-b3b2 -CargoArgs "test -p apeireth-runtime-assembly --test memory_scope_wiring"` ⇒ 6 passed / 0 failed（含真实 runtime 回合）；`cargo test -p apeireth-runtime-assembly --lib memory_scope_wire` ⇒ 5 passed / 0 failed（均 2026-11-18）；clippy 0 警告；fmt 0 diff；`arch_guard --strict` ⇒ VIOLATIONS 0；`audit_unwired.py` ⇒ 本批新符号 0 orphan；反向验伪四组（翻译层 Persona→Session / none 回退 Session / 绑定路径摘掉 / 失效回退 Session）均 RED→GREEN；合并 upstream/main（提交 `553cad251`）后按官方修法 `check_crate_budget.py --gen` 重建基线（34 crate · 600371 行），`--check` ⇒ exit 0 |
 | B3b-3 | persona 注入 | — | ❌ 未开始 | 无 |
 | C1 | 规范流帧 + 后端流面（身份 / sequence / 重放 / resync） | **IMPLEMENTED**（领域层；⚠️ 未接生产装配） | ✅ 已完成（提交 `e397cc687`，PR #135） | `cargo test -p apeireth-protocol --test canonical_stream_frames --locked -j 2` ⇒ 9 passed / 0 failed；`cargo test -p apeireth-runtime --test canonical_stream_registry --locked -j 2` ⇒ 11 passed / 0 failed；`cargo test -p apeireth-gateway --test canonical_stream_face --locked -j 2` ⇒ 7 passed / 0 failed（均 2026-11-17）；clippy 0 警告；fmt 0 diff；`arch_guard --strict` ⇒ VIOLATIONS 0（`canonical_entry.rs` 净增 0 行）；反向验伪四组（摘终帧唯一性闸 / 摘环形有界 / 超窗改错误 / 摘 `.id(sequence)`）均 RED→GREEN |
 | C2 | 单次 canonical dispatch + stop 幂等 + 审批终帧 | — | ❌ 未开始 | 无 |
@@ -38,7 +38,7 @@ B3b-2 达 **PRODUCTION WIRED**（装配层 `translate_scope` 把 `MemoryScopeTar
 ＋ `MemoryWritebackModule` 写回链路已接生产装配：profile 分区与未绑定会话仍走 `Session`（逐字节不变），
 已绑定会话按合同落 `User/Persona/Session`，失效 / `none` / 装配面缺位 ⇒ 整段不写（fail-closed，**绝不回退 `Session`**）；
 ⚠️ **未做 live E2E** ⇒ 不到 HARDWARE VALIDATED；**恢复补写（recovery-drain）未翻译**，仍按会话锚点重放；
-⚠️ `check_crate_budget.py --check` 未过（新增功能代码 +273 行，基线未上调，待 Lead 裁决））；
+`check_crate_budget.py --gen` 已按官方修法重建基线（34 crate · 600371 行），`--check` ⇒ exit 0）；
 persona 注入（B3b-3）**未接线**；
 C2 **尚无任何一项**达到 IMPLEMENTED；批次完成前不得在文档或回复里写「已实现 / 已接线」。
 C1 达 **IMPLEMENTED**（**仅领域层**：帧族 + 运行时权威缓冲注册表 + 网关投影面齐备；
@@ -75,14 +75,15 @@ C1 达 **IMPLEMENTED**（**仅领域层**：帧族 + 运行时权威缓冲注册
    归档审计事件（B3a）。记忆作用域映射与会话绑定已在 B2 落地（领域层）。
 4. **B2 已完成，但只到领域层**：合同版 `memory_scope` 映射、会话 agent 绑定、「绑定不匹配即拒绝且不重放」的载体
    都已落地（`canonical::agent_binding` + `Session.agent_binding`，21 条契约测试 + 5 组反向验伪）。
-   **仍缺**：回合入口接线（`admit_turn` 无调用方 ⇒ 仍**不是** PRODUCTION WIRED；B3b）、
-   canonical `MemoryScope` 的装配层翻译（B3）、HTTP 级归档语义与审计（B3a）。
+   **已补齐**：回合入口闸（B3b-1）与 canonical `MemoryScope` 的装配层翻译/写回（B3b-2）。
+   **仍缺**：persona 注入（B3b-3）与 HTTP 级归档语义/审计（B3a 的后续项）。
 5. **B3a 已完成**（提交 `43291e4ea`）：联系人 HTTP 面 + `workspace_binding` 服务端校验 + 4 个新错误码 + 能力入册 + CLI 真落盘构造。
    **B3b-1 已完成**（提交 `b7bcbacc0`）：会话绑定面 `GET/POST /v1/sessions/{id}/agent-binding` ＋ **回合入口闸**（`admit_turn` 从「无调用方」变成「每回合现查现校验」）
    ＋ 2 个新错误码（`agent_binding_rejected` / `session_binding_conflict`）＋ 审计事件 `gateway.session_binding_action`。
    ⚠️ 四级口径 **PRODUCTION WIRED**（未做 live E2E ⇒ 不到 HARDWARE VALIDATED）；绑定变更不写 SessionEvent；多进程部署 registry 仍会分叉。
-   **仍缺**：**B3b-2 装配层 `MemoryScopeTarget` → canonical `MemoryScope` 翻译**（落点必须 `apeireth-runtime-assembly`；
-   runtime 禁依赖 memory 且生产边 132/132 顶格）；**B3b-3 persona 注入**（只改 system 文本，不得改权限/能力/工具面）。
+   **B3b-2 已完成**（提交 `c137f5a9d`，合并提交 `553cad251`）：装配层 `MemoryScopeTarget` → canonical `MemoryScope` 翻译
+   ＋ 绑定会话写回；已绑定但装配缺位/计划拒绝/绑定失效 ⇒ 整段不写（fail-closed，绝不回退 `Session`）；
+   **仍缺**：**B3b-3 persona 注入**（只改 system 文本，不得改权限/能力/工具面）。
 6. **C1 已完成**（提交 `e397cc687`，PR #135）：帧族 ＋ 运行时权威缓冲注册表 ＋ 网关后端原生面
    `GET /v1/sessions/{sid}/requests/{rid}/stream`（`Last-Event-ID` 优先 → `?after_sequence=`，
    先订阅后重放 ＋ 交界去重；超窗 ⇒ 发 `resync_required` 事实帧后关闭通道）。

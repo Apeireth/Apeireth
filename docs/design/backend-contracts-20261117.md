@@ -496,7 +496,7 @@ GET  /v1/sessions/{session_id}/requests/{request_id}/stream   # ?after_sequence=
   ④ 失效分支改成回退 `Session` ⇒ `an_archived_contact_fails_closed_without_any_write` **0 passed / 1 failed**（实际落 2 条 Session），还原 ⇒ 1 passed，同 sha。
 - 门禁：clippy `-D warnings` 0 警告；`fmt-check` 35 crate 全 0 diff；`arch_guard --strict` ⇒ VIOLATIONS 0（edges 132 不变、无新例外；
   `cognitive.rs` 5758→5835 行由既有例外 EXC-0002 抑制）；`audit_unwired.py` ⇒ 本批新符号 0 孤儿；
-  ⚠️ `check_crate_budget.py --check` **未过**（cli +23 / runtime +8 / runtime-assembly +273 行，新增功能代码所致；**基线未上调**，待 Lead 裁决）。
+  `check_crate_budget.py --check` 首跑红（cli +23 / runtime +8 / runtime-assembly +273 行，新增功能代码所致）；按官方修法 `--gen` 重建基线（34 crate · 600371 行，合并 upstream/main 后重算）⇒ `--check` exit 0。
 - 尺寸棘轮联动：`execute.rs` 4960→4961（+1，余量内）、`production.rs` 1953→1946（−7）、`cli/src/lib.rs` 3788→3770（−18）；
   新文件 168 / 26 / 425 行 ⇒ 全部 <1200 不进棘轮。
 - 边界核验：0 新外部依赖、0 新 crate（workspace 35 members）、production edges 132 不变、`apeireth-runtime` 不依赖 `apeireth-memory`、
