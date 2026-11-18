@@ -2,11 +2,11 @@
   "crates": {
     "crates/adapters/cli": {
       "files": 44,
-      "loc": 19792
+      "loc": 19815
     },
     "crates/adapters/gateway": {
-      "files": 41,
-      "loc": 22521
+      "files": 42,
+      "loc": 22739
     },
     "crates/adapters/sdk": {
       "files": 22,
@@ -93,12 +93,12 @@
       "loc": 6715
     },
     "crates/engine/runtime": {
-      "files": 59,
-      "loc": 29553
+      "files": 60,
+      "loc": 30022
     },
     "crates/engine/runtime-assembly": {
-      "files": 92,
-      "loc": 50993
+      "files": 94,
+      "loc": 51266
     },
     "crates/engine/storage": {
       "files": 27,
@@ -129,8 +129,8 @@
       "loc": 15504
     },
     "crates/foundation/protocol": {
-      "files": 24,
-      "loc": 8841
+      "files": 25,
+      "loc": 9121
     },
     "crates/services/mesh-rendezvous": {
       "files": 2,

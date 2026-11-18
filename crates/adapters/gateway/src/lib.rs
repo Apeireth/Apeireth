@@ -35,6 +35,9 @@ pub mod panel_metrics;
 /// Gateway-level SSE event bus (`/v1/apeireth/events`).
 pub mod events;
 
+/// C1 规范流的后端原生流面 (`/v1/sessions/{session_id}/requests/{request_id}/stream`).
+pub mod canonical_stream;
+
 /// Full-duplex real-time voice barge-in and client interrupt controller.
 pub mod barge_in;
 

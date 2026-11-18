@@ -24,4 +24,3 @@ docs/01-architecture/v2-line-by-line-verification-and-upgrade-blueprint.md  # �
 docs/04-internal/05-plans/stored-doc-consumer-migration.md  # 迁移**计划**里写的「未来落点」（sandbox/quota.rs + lark/auth.rs）⇒ 计划文档描述的是**将要**写的文件，不是现状断言
 docs/design/mesh-phase-0.md  # Phase 0 设计稿记录的是**当批次的文件布局**：`crates/foundation/plugin/src/module.rs` 只存在于已废弃的 `feature/module-plugin-unification` 分支，上游把 Module 命名收敛到 Plugin 后该文件已删除（现址 `crates/foundation/plugin/src/module_contract.rs`）⇒ 历史批次设计稿不改写历史
 docs/04-internal/backend-enhancement/00-backlog.md  # 历史台账条目 D29 记录「claims.yaml 曾指向**已归档**文件」⇒ 引用的是**过去的事实**（原文件已移到 `legacy/archived/prompt-stabilizer/`）
-docs/design/backend-contracts-20261117.md  # C1 批的**规划落点**（`crates/foundation/protocol/src/canonical_stream.rs`＝C1 帧 schema 的目标文件）⇒ 设计稿记录的是**将要**写的文件，不是现状断言；C1 落地后应改为现址，届时本行可删
