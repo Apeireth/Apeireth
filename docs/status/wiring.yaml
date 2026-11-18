@@ -3,8 +3,8 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: 7823513eaac11bde1b0853da62295b65d9babd6b4c2c12aa8cf4256fbb3a5fb2
-claims_total: 60
+claims_sha256: 711c12f758066f3f3d23258d51aef426d8284327923267052070a61027dae752
+claims_total: 61
 items:
   - id: "rt.provider_router"
     capability: "跨 provider fallback + 健康态（运行时路由）"
@@ -1679,5 +1679,43 @@ items:
       tests:
         - "crates/engine/runtime-assembly/tests/prompt_injection_turn_warning.rs"
       claims_id: "sec.output_injection_guard"
+    gaps:
+      []
+  - id: "work.artifact_versions"
+    capability: "受管文本成果与不可变版本（本机single_operator共同内核）"
+    implemented:
+      sources:
+        - "crates/foundation/protocol/src/artifacts.rs"
+        - "crates/engine/runtime-assembly/src/sqlite_artifacts.rs"
+        - "crates/engine/runtime-assembly/src/sqlite_artifacts/mutations.rs"
+        - "crates/engine/runtime-assembly/src/artifact_tools.rs"
+        - "crates/engine/runtime-assembly/src/canonical/permission_preset.rs"
+        - "crates/adapters/cli/src/lib.rs"
+        - "crates/adapters/cli/src/runtime_entry.rs"
+        - "crates/adapters/cli/src/managed_artifacts.rs"
+        - "crates/adapters/gateway/src/artifacts.rs"
+        - "crates/adapters/gateway/src/panels.rs"
+        - "crates/adapters/gateway/src/canonical_entry.rs"
+    wired:
+      production_refs:
+        - "crates/adapters/cli/src/lib.rs"
+        - "crates/adapters/cli/src/managed_artifacts.rs"
+        - "crates/adapters/cli/src/runtime_entry.rs"
+        - "crates/adapters/gateway/src/artifacts.rs"
+        - "crates/adapters/gateway/src/canonical_entry.rs"
+        - "crates/adapters/gateway/src/panels.rs"
+        - "crates/engine/runtime-assembly/src/artifact_tools.rs"
+        - "crates/engine/runtime-assembly/src/canonical/permission_preset.rs"
+        - "crates/engine/runtime-assembly/src/sqlite_artifacts.rs"
+        - "crates/engine/runtime-assembly/src/sqlite_artifacts/mutations.rs"
+        - "crates/foundation/protocol/src/artifacts.rs"
+    default_enabled: true
+    validated:
+      tests:
+        - "crates/foundation/protocol/src/artifacts.rs"
+        - "crates/engine/runtime-assembly/src/sqlite_artifacts_tests.rs"
+        - "crates/engine/runtime-assembly/src/artifact_tools_tests.rs"
+        - "crates/adapters/gateway/src/artifacts/tests.rs"
+      claims_id: "work.artifact_versions"
     gaps:
       []
