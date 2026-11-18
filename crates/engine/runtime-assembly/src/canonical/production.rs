@@ -38,8 +38,8 @@ use super::care_heartbeat::bio_lifecycle::BioLifecycleState;
 use super::care_heartbeat::bio_tone::ToneState;
 use super::cognitive::{
     CognitiveTelemetry, CouncilModule, JudgeConfig, JudgeModule, JudgeObservations,
-    MemoryRecallAccessStore, MemoryRecallModule, MemoryWritebackModule, PreferenceRecallModule,
-    SelfAssessmentModule,
+    MemoryRecallAccessStore, MemoryRecallModule, MemoryScopeWiring, MemoryWritebackModule,
+    PreferenceRecallModule, SelfAssessmentModule,
 };
 use super::error::{RuntimeError, RuntimeResult};
 use super::memory_assembly;
@@ -50,6 +50,7 @@ use super::nervous_bus::NervousBus;
 use super::nervous_switchboard::{BioSwitch, NervousSwitchboard};
 use super::organ_module::OrganModule;
 use super::preference_learning::PreferenceLearningModule;
+use super::production_helpers::collect_tool_module;
 use super::prompt_injection_guard::{self, PromptInjectionReport};
 use super::self_status_source::{
     doc_ops_status_probe, image_ops_status_probe, proposal_status_probe, roster_from_config,
@@ -576,6 +577,10 @@ pub struct ProductionBackends {
     pub memory_materializer: Option<Arc<dyn MemoryMaterializerPort>>,
     /// Optional unified extractor used to build a default materializer.
     pub memory_extractor: Option<Arc<dyn MemoryExtractor>>,
+    /// 已绑定会话的记忆作用域装配面（B3b-2）。
+    ///
+    /// 缺位 = 已绑定会话的写回显式跳过（fail-closed），不是回退 Session。
+    pub memory_scope_binding: Option<MemoryScopeWiring>,
     /// Optional typed durable candidate source for unified recall.
     pub typed_recall: Option<Arc<dyn TypedMemoryRecallSource>>,
     /// Explicit identity paired with the typed recall source.
@@ -641,21 +646,6 @@ pub struct ProductionBackends {
 }
 /// Compatibility alias for [`ProductionBackends`].
 pub type CognitiveBackends = ProductionBackends;
-
-fn collect_tool_module(
-    tool_modules: &mut Vec<Arc<dyn Plugin>>,
-    capabilities: &mut Vec<Arc<dyn ToolCapability>>,
-    provider: &dyn CapabilityProvider,
-) -> RuntimeResult<()> {
-    let module = provider
-        .tool_module()
-        .map_err(RuntimeError::misconfigured)?;
-    capabilities.extend(module.tools());
-    if !module.tools().is_empty() {
-        tool_modules.push(Arc::new(module));
-    }
-    Ok(())
-}
 
 /// The validated, ordered module set to pass to [`RuntimeBuilder::with_module`].
 pub struct ProductionModules {
@@ -1549,6 +1539,9 @@ impl ProductionModules {
             }
             if let Some(journal) = &backends.memory_recovery {
                 module = module.with_recovery_journal(journal.clone());
+            }
+            if let Some(scope) = &backends.memory_scope_binding {
+                module = module.with_memory_scope(scope.clone());
             }
             Some(Arc::new(module.with_telemetry(Arc::clone(&telemetry))))
         } else {

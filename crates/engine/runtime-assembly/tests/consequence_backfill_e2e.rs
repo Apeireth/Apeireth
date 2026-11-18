@@ -267,6 +267,7 @@ async fn after_tool_result_hook_backfills_the_failure() {
         invoker: &*invoker,
         invoker_handle: Arc::clone(&invoker),
         subloop: &NO_SUB_LOOP,
+        agent_binding: None,
     };
     let outcome = module
         .on_hook(HookPoint::AfterToolResult, &ctx)
@@ -309,6 +310,7 @@ async fn other_hooks_never_backfill() {
         invoker: &*invoker,
         invoker_handle: Arc::clone(&invoker),
         subloop: &NO_SUB_LOOP,
+        agent_binding: None,
     };
     module
         .on_hook(HookPoint::BeforeToolCall, &ctx)

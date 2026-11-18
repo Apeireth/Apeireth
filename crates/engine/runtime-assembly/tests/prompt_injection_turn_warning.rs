@@ -165,6 +165,7 @@ async fn run_after_tool_hook(module: &dyn BehaviorModule, result: &ToolResult) -
         invoker: &*invoker,
         invoker_handle: Arc::clone(&invoker),
         subloop: &NO_SUB_LOOP,
+        agent_binding: None,
     };
     module
         .on_hook(HookPoint::AfterToolResult, &ctx)
@@ -243,6 +244,7 @@ async fn the_guard_only_answers_the_after_tool_result_hook() {
         invoker: &*invoker,
         invoker_handle: Arc::clone(&invoker),
         subloop: &NO_SUB_LOOP,
+        agent_binding: None,
     };
 
     let outcome = module

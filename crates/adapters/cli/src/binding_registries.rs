@@ -20,6 +20,14 @@ use std::sync::{Arc, Mutex, OnceLock};
 use apeireth_core::agent_contact::{ContactRegistry, FileContactRegistry};
 use apeireth_runtime::canonical::workspace::{FileWorkspaceRegistry, WorkspaceRegistry};
 use apeireth_runtime::canonical::RuntimeBuilder;
+use apeireth_runtime_assembly::canonical::cognitive::MemoryScopeWiring;
+
+// Typed memory 身份解析的 env 名与默认值 (B3b-2 从 lib.rs 迁入; 名字与
+// 默认值逐字节不变)。
+const PERSONA_ID_ENV: &str = "APEIRETH_PERSONA_ID";
+const SUBJECT_ID_ENV: &str = "APEIRETH_SUBJECT_ID";
+const DEFAULT_PERSONA_ID: &str = "apeireth";
+const DEFAULT_SUBJECT_ID: &str = "local-user";
 
 /// 一个根目录上的注册表槽位: 开着了 (拿到实例) 或开不出 (记下原因)。
 enum Slot<T: ?Sized> {
@@ -91,4 +99,37 @@ pub(crate) fn inject(builder: RuntimeBuilder) -> RuntimeBuilder {
     builder
         .with_contact_registry(contacts(&root).ok())
         .with_workspace_registry(workspaces(&root).ok())
+}
+
+/// Typed memory 的显式主体身份 (写侧 persona delta 与读侧 typed 召回共用)。
+///
+/// 本地产品单主体: 默认 `apeireth` / `local-user`, 多主体部署用
+/// `APEIRETH_PERSONA_ID` / `APEIRETH_SUBJECT_ID` 覆写 (空白值视为未设)。
+///
+/// B3b-2: 从 `lib.rs` 迁入 (函数体与环境变量名逐字节不变), 由 `lib.rs`
+/// 的 `pub use` 保持 `crate::typed_recall_identity_from_env` 公开路径。
+pub fn typed_recall_identity_from_env() -> apeireth_memory::TypedRecallIdentity {
+    fn value(key: &str, default: &str) -> String {
+        std::env::var(key)
+            .ok()
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty())
+            .unwrap_or_else(|| default.to_string())
+    }
+    apeireth_memory::TypedRecallIdentity {
+        persona_id: value(PERSONA_ID_ENV, DEFAULT_PERSONA_ID),
+        subject_id: value(SUBJECT_ID_ENV, DEFAULT_SUBJECT_ID),
+    }
+}
+
+/// 已绑定会话的记忆作用域装配面 (B3b-2): 与回合闸、合同面共用同一份注册表实例。
+///
+/// 任一份注册表开不出 ⇒ `None`: 已绑定会话的写回**显式跳过** (fail-closed),
+/// 不回退 `Session`, 不 panic。主体 id 复用 typed 身份解析 (默认 `local-user`)。
+pub(crate) fn memory_scope_wiring(root: &Path) -> Option<MemoryScopeWiring> {
+    Some(MemoryScopeWiring {
+        contacts: contacts(root).ok()?,
+        workspaces: workspaces(root).ok()?,
+        subject_id: typed_recall_identity_from_env().subject_id,
+    })
 }

@@ -1,4 +1,5 @@
 //! Compatibility ABI over the ordinary Plugin tool path; never a second evaluator.
+use super::agent_binding::AgentBinding;
 use super::module::*;
 use apeireth_core::kernel::{CapabilityId, PluginId, RequestId, SessionId, TaskId, TraceId};
 use apeireth_plugin::hooks::{HookContextV1, HookToolRequest};
@@ -44,6 +45,8 @@ pub(crate) struct BehaviorInput {
     pub invocation: InvocationContext,
     pub error: Option<String>,
     pub spawner: Arc<super::subloop::RuntimeSubLoopSpawner>,
+    /// 已绑定会话的 host 事实（只读）。
+    pub agent_binding: Option<AgentBinding>,
 }
 struct Shared {
     module: Arc<dyn BehaviorModule>,
@@ -284,6 +287,7 @@ impl ToolCapability for BehaviorTool {
             invoker: &*input.spawner,
             invoker_handle,
             subloop: &*input.spawner,
+            agent_binding: input.agent_binding.as_ref(),
         };
         let outcome = self
             .0
