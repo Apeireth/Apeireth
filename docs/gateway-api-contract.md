@@ -47,7 +47,8 @@
 | `/v1/apeireth/capabilities` | GET | 来自 GatewayServices、Runtime Registry 与 Provider Router 的动态能力清单 |
 | `/v1/modules` | GET | 来自 BehaviorRegistry 的行为模块清单；`/v1/organs` 为兼容别名 |
 | `/v1/chat` | POST | 原生对话(见 §3;C2-1 起支持 `x-apeireth-operation` 幂等键) |
-| `/v1/chat/completions` | POST | OpenAI 兼容对话(支持 `stream:true` SSE;C2-2 起 chunk `id` = 运行时 request_id) |
+| `/v1/chat/completions` | POST | OpenAI 兼容对话(支持 `stream:true` SSE;C2-2 起 chunk `id` = 运行时 request_id;C2-3 起流式回合在生产路径写入 C1 权威流) |
+| `/v1/sessions/{session_id}/requests/{request_id}/stream` | GET | C1 规范流 SSE(见 §11;C2-3 起真实流式回合产生流数据;`Last-Event-ID`/`after_sequence` 续发, 超窗发 `resync_required` 后关闭) |
 | `/v1/sessions/{session_id}/requests/{request_id}/stop` | POST | 停止在飞回合(见 §11;C2-2 起;幂等回放摘要, 不撤销已发生副作用) |
 | `/v1/approvals?session={id}` | GET | 该会话的待批审批(见 §6) |
 | `/v1/approvals/resolve` | POST | 批准/拒绝审批(见 §6) |
@@ -96,6 +97,9 @@
 - 挂起审批以 `finish_reason:"approval_required"` 显式终帧终止流;provider 错误经统一错误帧契约上浮
   (`{"error":{"message","code","solution"}}`,见 ledger #16)。
 - 增量链路:provider SSE → runtime sink(`execute_outcome_streaming`)→ gateway 逐 chunk 直通,非整段后分帧。
+- C1 权威流(C2-3):调用方显式给 request id 的流式回合,同一份 delta 同时写入运行时 C1 注册表
+  (实时增量 + 结束时唯一终帧),可由 `GET /v1/sessions/{sid}/requests/{rid}/stream` 独立订阅/续发;
+  终帧状态映射与边界见 §11。非流式回合或未显式给 request id 的回合不注册 C1 流(GET 仍 404)。
 
 **幂等(C2-1)**:`/v1/chat` 接受请求头 `x-apeireth-operation`(单值, 头名大小写不敏感,
 值去首尾空白后按 `validate_stable_id` 同规则校验:非空、≤128 字节、首字符为 ASCII 小写字母、
@@ -734,6 +738,7 @@ initiative(他从 `dreaming_consolidation` 苏醒主动开口)是独立事件类
 | B3a | 联系人 HTTP 契约面：list/create/get/update/archive + 乐观并发(`expected_revision`)+ 归档终态(403 `contact_archived`)+ 工作区绑定校验(409 `contact_binding_conflict`)+ 审计(`gateway.contact_action`)+ 能力入册 + 4 个新错误码(见 §7h) | ✅ 已完成(2026-11-17, 后端接线合同 B3a 批)；**回合入口未接线**(B3b), 新建联系人当前不影响真实回合 |
 | C2-1 | 对话操作幂等去重:`/v1/chat` 头 `x-apeireth-operation` + SHA-256 三段载荷摘要 + 进程内 1024 条表 + 两错误码 409 `operation_conflict`/`operation_in_progress`(见 §3 幂等小节) | ✅ 已完成(2026-11-18, 后端接线合同 C2-1 批);HTTP 面 PRODUCTION WIRED;**幂等表进程内, 重启即失, 多进程不共享**;`/v1/chat/completions` 未接线, 回放不重放流式 delta |
 | C2-2 | 回合级停止:`POST /v1/sessions/{sid}/requests/{rid}/stop` + 运行时回合级取消注册表 + module_host 取消令牌注入 + 流式 SSE chunk id 与运行时 request_id 对齐(见 §11) | ✅ 已完成(2026-11-18, 后端接线合同 C2-2 批);HTTP 面 + 回合级注入 PRODUCTION WIRED;⚠️ 未做真实回合 E2E;**注册表进程内, 重启即失**;`stopped` 终帧发布归 C2-3 |
+| C2-3 | 审批终帧 + C1 生产装配:流式回合(显式 request id)实时写 C1 权威流, 结束时恰发一帧终帧(completed/approval/failed/stopped), 映射见 §11 | ✅ 已完成(2026-11-18, 后端接线合同 C2-3 批);流式回合生产路径 PRODUCTION WIRED(5 条 E2E 钉住四类终帧 + 非流式不注册);**C1 缓冲仍进程内, 重启即失**;审批恢复不续流(见 §11) |
 
 实现位置:`crates/adapters/gateway/src/`(canonical_entry.rs + panels.rs + events.rs)，
 数据源为 Runtime/Assembly 注入的 bounded-context ports；CLI 组合根位于
@@ -747,8 +752,13 @@ initiative(他从 `dreaming_consolidation` 苏醒主动开口)是独立事件类
 工具取消注入在 `module_host.rs`,端点与路由在
 `crates/adapters/gateway/src/canonical_stream.rs`,流式 id 对齐在
 `canonical_entry.rs` 的 `openai_chat_streaming`。
+C1 生产装配(C2-3)的实现位置:纯终帧映射在
+`crates/engine/runtime/src/canonical/stream_wiring.rs`,回合注册/delta 转发/终帧发布在
+`crates/engine/runtime/src/canonical/execute.rs` 的 `execute_outcome_with_sink`,
+停止摘要查询在 `turn_cancellation.rs`;端到端证据在
+`crates/engine/runtime/tests/c1_stream_wiring.rs`。
 
-## §11 C2 停止语义(C2-2 批)
+## §11 C2 停止语义与终帧(C2-2/C2-3 批)
 
 `POST /v1/sessions/{session_id}/requests/{request_id}/stop` 停止一个在飞回合。
 
@@ -765,5 +775,29 @@ initiative(他从 `dreaming_consolidation` 苏醒主动开口)是独立事件类
 - **400 `invalid_request`**:`session_id` / `request_id` 不是合法 UUID(文案含原值)。
 - **409 `invalid_request`**:该 request 正处待批;先批准/拒绝或等过期,stop 不越过审批裁决。
 - **边界**:stop 不取会话写闸、不执行回合、不撤销已发生的副作用;只取消回合级取消令牌 ⇒
-  阻断后续工具派发与提示工具。`stopped` 终帧的发布归 C2-3;注册表是进程内内存,
-  进程重启即失,多进程不共享。
+  阻断后续工具派发与提示工具。C2-3 起由运行时发布 `stopped` 终帧(停止事实优先于回合
+  最终返回值);停止摘要与 C1 缓冲都是进程内内存,进程重启即失,多进程不共享。
+
+### C1 终帧映射(C2-3)
+
+流式回合(调用方显式给 request id)在 provider 调用前注册一条 C1 流:provider delta
+经 runtime sink 实时 `publish_delta`,回合结束时发布**恰好一帧**终帧。网关
+`GET /v1/sessions/{sid}/requests/{rid}/stream` 只投影运行时缓冲,不持有第二份。
+
+| 回合事实 | 终帧 `state` | 终帧字段 |
+|---|---|---|
+| 存在该回合的停止摘要 | `stopped` | `text`/`usage`/`error` 皆 `null`(只表达停止事实) |
+| `Ok(TurnOutcome::Completed(response))` | `completed` | `text` = 最终助手文本;`usage` = `NormalizedUsage` 的 prompt/completion 如实映射, total 由两者相加;`error` 为 `null` |
+| `Ok(TurnOutcome::PendingApproval(view))` | `approval` | `approvals` 恰一条:`approval_id` = `view.approval_id`,`action_binding_digest` 空串 ⇒ `null`,`expires_at_ms` = `view.expires_at.epoch_millis()`;`text` = `view.generated_text`(非空才给, 否则 `null`);`usage` 为 `null` |
+| `Err(RuntimeError)` | `failed` | `error` = `RuntimeError::to_string()`;`text`/`usage` 为 `null` |
+
+优先级:停止摘要存在时先判停止,即使回合随后正常完成、停在审批或失败,终帧仍为
+`stopped`。终帧由注册表回填 `event`/`session_id`/`request_id`/`sequence`;终帧序号严格
+大于此前所有 delta,发布后流进入终态(重复发布被拒)。
+
+- **恰好一次**:每个已注册流只发一帧终帧;终帧发布失败被忽略,不改变回合结果、不 panic。
+- **注册前置**:同一 `(session_id, request_id)` 已有流时,注册失败 ⇒ 回合不执行(fail-closed)。
+- **不注册**:非流式回合,或流式但未显式给 request id ⇒ 不注册 C1 流,GET 仍 404
+  `session_not_found`(异步生成的新 id 不补注册)。
+- **边界**:C1 缓冲是进程内环形窗口(256 帧),重启即失、多进程不共享;审批恢复后不续流,
+  客户端须重新发起回合;终帧只是控制面事实,不重放历史 delta。

@@ -100,6 +100,8 @@ pub mod trace;
 mod turn_admission;
 // C2 停止语义: 回合级取消注册表 + 幂等 stop 摘要 (进程内, 重启即失)。
 pub mod turn_cancellation;
+// C2-3: 运行时结果 ⇒ C1 终帧的纯映射 (停止 / 完成 / 待批 / 失败)。
+mod stream_wiring;
 pub mod workspace;
 // L0-L5 自升级 cycle driver (Stage 5 完整化, per R11 §7 + v2-architecture-reflection.md §6).
 // **0 装诚实**: L0/L2/L3/L4 真接 governance + Orchestrator; L5 建议模式不自动跑 git tag;

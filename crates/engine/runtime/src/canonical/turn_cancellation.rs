@@ -161,6 +161,21 @@ pub fn stop(session: SessionId, request: RequestId) -> StopOutcome {
     StopOutcome::Stopped(summary)
 }
 
+/// 查一次已冻结的停止摘要 (C2-3 终帧映射用)。
+///
+/// 只读停止队列: 不碰运行中条目, 不注册/取消, 也不淘汰历史摘要。未停止过
+/// (或摘要已被有界队列淘汰) ⇒ `None`。
+#[must_use]
+pub fn stop_summary(session: SessionId, request: RequestId) -> Option<StopSummary> {
+    let registry = lock_registry();
+    let key = (session, request);
+    registry
+        .stopped
+        .iter()
+        .find(|(existing, _)| existing == &key)
+        .map(|(_, summary)| summary.clone())
+}
+
 /// 回合作用域守卫: 回合结束时注销运行中条目 (停止摘要保留, 供幂等回放)。
 #[derive(Debug)]
 pub struct TurnGuard {
@@ -180,5 +195,36 @@ impl Drop for TurnGuard {
         {
             registry.running.remove(&key);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stop_summary_is_available_after_stop() {
+        let session = SessionId::new();
+        let request = RequestId::new();
+        let _guard = register(session, request);
+        assert!(matches!(stop(session, request), StopOutcome::Stopped(_)));
+        let summary = stop_summary(session, request).expect("stopped turn has a summary");
+        assert_eq!(summary.state, StopState::Stopped);
+        assert!(summary.effects_may_be_incomplete);
+    }
+
+    #[test]
+    fn stop_summary_survives_turn_guard_drop() {
+        let session = SessionId::new();
+        let request = RequestId::new();
+        let guard = register(session, request);
+        assert!(matches!(stop(session, request), StopOutcome::Stopped(_)));
+        drop(guard);
+        assert!(stop_summary(session, request).is_some());
+    }
+
+    #[test]
+    fn unknown_key_has_no_stop_summary() {
+        assert!(stop_summary(SessionId::new(), RequestId::new()).is_none());
     }
 }
