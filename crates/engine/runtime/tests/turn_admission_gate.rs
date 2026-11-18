@@ -287,8 +287,8 @@ async fn a_valid_binding_lets_the_turn_through_and_appends_the_user_message() {
     let after = snapshot(&runtime, &session_id).await;
     assert_eq!(
         after.messages,
-        before.messages + 2,
-        "合法绑定 ⇒ 用户输入 + 助手回复都落盘"
+        before.messages + 3,
+        "合法绑定 ⇒ 空会话先种一条 persona system，再落用户输入与助手回复"
     );
     assert!(
         after.revision > before.revision,

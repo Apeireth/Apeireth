@@ -106,6 +106,7 @@ use super::tool_route::{
     resolve_model_route, ModelRouteResolution, ToolExecutionTarget, ToolRouteError,
 };
 use super::trace::{ExecutionTrace, TraceEvent};
+use super::turn_admission::seeded_system;
 
 #[path = "dispatch_admission.rs"]
 mod dispatch_admission;
@@ -875,7 +876,7 @@ impl Runtime {
         let mut session = self.sessions.load_or_create(request.session).await?;
         self.dispatcher.bind_session_principal(&mut session)?;
         // 先闸后写: 绑定不再成立 ⇒ 直接 Err ⇒ 本回合零写入 (消息未追加、revision 未推进)。
-        super::turn_admission::admit_turn(self, &mut session).await?;
+        let admission = super::turn_admission::admit_turn(self, &mut session).await?;
         if session
             .events
             .iter()
@@ -897,8 +898,8 @@ impl Runtime {
         self.land_plan_mode_switch(&mut session, request_id, trace_id)?;
 
         if session.is_empty() {
-            if let Some(system) = &request.system {
-                session.append(NormalizedMessage::system(system.clone()), clock);
+            if let Some(system) = seeded_system(&admission, request.system.as_deref()) {
+                session.append(NormalizedMessage::system(system), clock);
             }
         }
         let committed_input_start = session.messages.len();
