@@ -35,7 +35,7 @@ Author: lead
 | B3a | 联系人 HTTP 面（+ `workspace_binding` 校验） | `GET/POST /v1/agents/contacts`、`GET/PATCH /v1/agents/contacts/{id}`、`POST /v1/agents/contacts/{id}/archive`；身份由后端铸造；写面必须带 `expected_revision`（缺⇒400、不符⇒409 且状态逐字段不变）；归档为软删除、不可复活（**已归档是终态 ⇒ 403 `contact_archived`，不是 409 版本过期**）；`workspace_binding{workspace_id,revision}` 由服务端校验（不存在/已吊销/修订号不符 ⇒ 409 `contact_binding_conflict`）；同名不同 ID 不碰撞；审计事件与能力清单入册 | ✅ 已完成（提交 `43291e4ea`，四级口径 **IMPLEMENTED（HTTP 面 + 端口 + 审计 + 能力入册 + 4 个新错误码 + CLI 组合根接线）**；15 条网关测试 + 5 条 CLI 链路测试 + 4 组反向验伪；⚠️ **回合入口未接线 ⇒ 新建联系人当前不影响真实回合**、会话绑定面未做、`memory_scope` 只到 DTO 层未翻译、`capabilities` 只是展示投影非授权依据、绑定只存 id+revision 不存快照） |
 | B3b-1 | 会话绑定面 + 回合入口闸（`admit_turn` 上线） | `GET/POST /v1/sessions/{id}/agent-binding`；回合入口先 `admit` 后 `append`（拒绝即不重放）；绑定不合法 ⇒ 回合拒绝；已归档联系人 ⇒ fail-closed，不回落默认 Agent/默认域；旧会话不静默转移到默认 Agent | ✅ 已完成（提交 `b7bcbacc0`，四级口径 **PRODUCTION WIRED**（绑定面路由已 merge ＋ 组合根装配 registry ＋ 回合入口闸接线）；⚠️ **未做 live E2E** ⇒ 不到 HARDWARE VALIDATED；作用域翻译未做（归 B3b-2）、persona 注入未做（归 B3b-3）） |
 | B3b-2 | 装配层作用域翻译 + 写回接线（`MemoryScopeTarget` → canonical `MemoryScope`） | 装配层把 `MemoryScopeTarget` 翻译成 canonical `MemoryScope`（`none` ⇒ **不产生 scope**，不写记忆，**禁拿 `Global` 代替**）；写回链路按翻译结果落 scope，`writes=false` ⇒ 整段跳过 materializer | ✅ 已完成（提交 `c137f5a9d`，四级口径 **PRODUCTION WIRED**：翻译层单测 + 绑定会话写回链路已接生产装配；未绑定 / profile 路径逐字节不变；失效 fail-closed 整段不写）；⚠️ **未做 live E2E**；恢复补写未翻译；`memory_scope_binding` 缺位 ⇒ 已绑定会话显式零写入 |
-| B3b-3 | persona 注入 | 绑定命中的 persona 文本注入回合（只改 system 文本，**不得**改权限/能力/工具面） | ❌ 未开始（B2 领域层 `resolve_bound_persona` 已产出，未被消费） |
+| B3b-3 | persona 注入 | 绑定命中的 persona 文本注入回合（只改 system 文本，**不得**改权限/能力/工具面） | ✅ 已完成（本批单提交，四级口径 **PRODUCTION WIRED**：`BoundTurnAdmission` 携带绑定 persona，`turn_admission::seeded_system` 复用 `DomainRuntimeContext::seeded_system` 语义，`execute.rs` 空会话 system 槽消费；7 条真实 runtime 回合测试 + 3 组反向验伪；⚠️ **仅空会话种子槽生效**（非空会话不追溯）；**未做 live E2E** ⇒ 不到 HARDWARE VALIDATED） |
 | C1 | 规范流帧 + 后端流面（身份、sequence、重放、resync） | 帧 schema 固定（`apeireth.c1.delta.v1` / `apeireth.c1.final.v1`）；每帧带 session_id/request_id/trace_id/sequence（**不带** operation/incarnation/context_key —— 裁决 2/8：宿主 operation 是不透明标签、后端不解释，后端不生成 incarnation/context_key）；sequence 单调有界；`Last-Event-ID`/`after_sequence` 有限重放，超窗发 `resync_required` 事实帧后关闭通道；`[DONE]` **只表示通道关闭**；断线后 GET 回执能恢复真实状态且不重发模型 | ✅ 已交付（提交 `e397cc687`，PR #135；四级口径 **IMPLEMENTED（领域层）** —— **未接生产装配**：全仓无生产路径调 register/publish_delta/publish_final ⇒ 端点当前不产生真实流数据 ⇒ 未登记进 `docs/gateway-api-contract.md` §2（该节标题即〔PRODUCTION WIRED〕）；**不实现 `/bridge/*`**（裁决 15）） |
 | C2 | 单次 canonical dispatch + stop 幂等 + 审批终帧 | 一个 operation 只产生一次 canonical dispatch（重连/刷新/abort 不重复调模型）；stop 单独、幂等、可审计且不撤销已发生的外部副作用；approval 终帧只带**已确认**的 approval_id/action_binding_digest/expires_at；provider 非流式回退、上游错误、超时、取消、慢客户端、大正文都有有界错误契约 | ❌ 未开始 |
 
@@ -507,6 +507,42 @@ GET  /v1/sessions/{session_id}/requests/{request_id}/stream   # ?after_sequence=
   `profile_partition` 路径逐字节保持（绑定不改变私有分区行为）；
   测试用 `InMemoryContactRegistry` / `InMemoryWorkspaceRegistry`，未覆盖真实文件注册表跨进程场景；
   `memory_scope_binding` 缺位时已绑定会话**显式零写入**（CLI 组合根开不出注册表即此形态）。
+
+### 2026-11-18 B3b-3 批次交付（本批单提交；分支 `feat/backend-contracts-b3b3-20261117`，起点 `a1300b7bd`）
+
+> 任务：把合同绑定命中的 persona 注入真实回合的 system 槽；只改 system 文本，不得改变权限/能力/工具面。
+
+- 落点（独立工作树 `C:\Apeireth\wt\backend-contracts-b3b3-20261117`）：
+  改 `crates/engine/runtime/src/canonical/turn_admission.rs`（115→141 行：`admit_bound_binding`/`admit_turn` 返回 `BoundTurnAdmission`；
+  新增 `pub(super) fn seeded_system(admission, request_system)`，逐字复用 `DomainRuntimeContext::seeded_system` 的 persona/request 顺序）、
+  `crates/engine/runtime/src/canonical/execute.rs`（5007→5008 行，**净增 +1**：`:878` 接住 admission，空会话 system 槽改为
+  `seeded_system(&admission, request.system.as_deref())`）、`crates/engine/runtime/tests/turn_admission_gate.rs`
+  （既有断言「空会话回合 +2 条消息」改 +3）；新建 `crates/engine/runtime/tests/turn_persona_injection.rs`（657 行 / 7 用例，
+  真实 `Runtime::execute` + 捕获 provider）。
+- 注入语义：`Unbound` ⇒ 不产 system（零回归）；`Admitted{persona: None}` ⇒ 与未绑定逐字相同；
+  `Admitted{persona: Some(p)}` 且空会话 ⇒ 无 request.system 时 system 恰为 `p`，有则 `p + "\n\n" + request.system`（persona 在前）；
+  非空会话 ⇒ 不追加第二条 system（绑定只在空会话种子槽生效）。
+- 权限隔离：persona 只写入 system 消息，**不改变** `session.tool_scope`、Permission、审批决定、workspace scope 或系统策略；
+  归档 / 校验不符仍由 `admit_bound_binding` 返回 `AgentBindingRejected` ⇒ `Runtime::execute` 在 `session.append`/revision/sessions.save 之前 Err
+  ⇒ provider 0 调用、消息数与 revision 逐字段不变。
+- 测试（2026-11-18 实跑）：`turn_persona_injection` **7 passed / 0 failed**（已绑定 + persona + request.system 拼接顺序 /
+  已绑定无 persona 与未绑定逐字相同 / 未绑定零回归 / 仅 persona / 归档拒绝零调用 / persona 诱导越权前后 `tool_scope` 逐字段不变 /
+  非空会话不追加第二条 system）；`--lib` 195 passed；`turn_admission_gate` 9 passed；`contact_persona_authority` 6 passed。
+- 反向验伪三组（红/绿两条实跑，日志 `C:\Apeireth\tmp-build-discipline\logs\b3b3-f{1,2,3}-{red,green}.log`）：
+  ① `seeded_system` 的 Admitted persona 分支临时改 None ⇒ **4 passed / 3 failed**（用例 1/4/6 红），还原 ⇒ 7 passed，SHA256 同哈希 `7B0169A5…C19C`；
+  ② 领域层 match 改为丢弃 persona（`Ok(_) => Unbound`）⇒ **4 passed / 3 failed**（同 1/4/6 红），还原 ⇒ 7 passed，同 sha；
+  ③ persona 与 request.system 顺序对调（persona 后置）⇒ **6 passed / 1 failed**（仅用例 1 红），还原 ⇒ 7 passed，同 sha。
+- 尺寸/门禁：`execute.rs` 5007→5008（+1，arch baseline 5010 内）；`canonical_entry.rs` 2291 未动；
+  `arch_guard --strict` ⇒ VIOLATIONS 0（edges 132 不变、无新例外）；`audit_unwired.py --check` ⇒ 0 新增孤儿；
+  `clippy -D warnings` 0 警告；`fmt-check` 35 crate 0 diff；`check_crate_budget.py --check` 首跑红（runtime +27 行）
+  ⇒ 按官方修法 `--gen` 重建基线（runtime 31154→31181，34 crate · 602012 行）⇒ `--check` exit 0。
+- 边界核验：0 新外部依赖、0 新 crate（workspace 35 members）、未改 `MemoryScope` / Gateway HTTP 面 / C1 `canonical_stream` /
+  C2 错误码与幂等面；LOCKED 5 项 0 触碰。
+- ⚠️ **诚实边界**：四级口径 **PRODUCTION WIRED**（真实 `Runtime::execute` 回合消费绑定 persona），**未做 live E2E**
+  （没起真实网关 / 模型供应商）⇒ **不到 HARDWARE VALIDATED**；**仅空会话种子槽生效**，非空会话不追溯
+  （绑定变更不会改写既有对话的 system）；persona 文本校验仍只在 B1 入册时做（本批不重复校验）；
+  测试用 `InMemoryContactRegistry` / `InMemoryWorkspaceRegistry`。
+
 ### 还差什么
 
 见[进度页](../status/backend-contracts-20261117.md)。

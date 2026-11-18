@@ -94,7 +94,7 @@
     },
     "crates/engine/runtime": {
       "files": 63,
-      "loc": 31154
+      "loc": 31181
     },
     "crates/engine/runtime-assembly": {
       "files": 94,

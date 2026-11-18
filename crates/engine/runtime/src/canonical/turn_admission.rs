@@ -13,6 +13,7 @@ use apeireth_core::kernel::Timestamp;
 
 use super::agent_binding::{admit_bound_turn, BoundTurnAdmission};
 use super::approval::ApprovalStatus;
+use super::domain_plane::DomainRuntimeContext;
 use super::error::{RuntimeError, RuntimeResult};
 use super::runtime::Runtime;
 use super::session::{Session, SessionEventKind};
@@ -23,9 +24,13 @@ use super::workspace::WorkspaceRegistry;
 /// The order is the contract: **admit first, write later**. A refusal returns
 /// before anything is written, so a refused turn leaves the transcript and the
 /// session revision exactly as they were.
-pub(super) async fn admit_turn(runtime: &Runtime, session: &mut Session) -> RuntimeResult<()> {
-    admit_bound_binding(runtime, session)?;
-    runtime.expire_active_approval_if_needed(session).await
+pub(super) async fn admit_turn(
+    runtime: &Runtime,
+    session: &mut Session,
+) -> RuntimeResult<BoundTurnAdmission> {
+    let admission = admit_bound_binding(runtime, session)?;
+    runtime.expire_active_approval_if_needed(session).await?;
+    Ok(admission)
 }
 
 /// Revalidates the session's agent binding, read-only.
@@ -35,9 +40,9 @@ pub(super) async fn admit_turn(runtime: &Runtime, session: &mut Session) -> Runt
 /// * A session with a binding but no installed registry is refused
 ///   (fail closed): the gate cannot prove the binding still holds, so it does
 ///   not let the turn through.
-fn admit_bound_binding(runtime: &Runtime, session: &Session) -> RuntimeResult<()> {
+fn admit_bound_binding(runtime: &Runtime, session: &Session) -> RuntimeResult<BoundTurnAdmission> {
     if session.agent_binding().is_none() {
-        return Ok(());
+        return Ok(BoundTurnAdmission::Unbound);
     }
     let (Some(contacts), Some(workspaces)) =
         (runtime.contact_registry(), runtime.workspace_registry())
@@ -50,12 +55,33 @@ fn admit_bound_binding(runtime: &Runtime, session: &Session) -> RuntimeResult<()
     let contacts: &dyn ContactRegistry = contacts.as_ref();
     let workspaces: &dyn WorkspaceRegistry = workspaces.as_ref();
     match admit_bound_turn(session, contacts, workspaces) {
-        Ok(BoundTurnAdmission::Unbound) | Ok(BoundTurnAdmission::Admitted { .. }) => Ok(()),
+        Ok(admission) => Ok(admission),
         Err(error) => Err(RuntimeError::AgentBindingRejected {
             session: session.id,
             reason: error.to_string(),
         }),
     }
+}
+
+/// The system text a turn starts from, once the binding is admitted.
+///
+/// Reuses [`DomainRuntimeContext::seeded_system`] so the binding cannot invent a
+/// second system-text semantics: persona first, the caller's system after it.
+/// An unbound session carries no persona and therefore keeps the caller's
+/// system text exactly as before.
+pub(super) fn seeded_system(
+    admission: &BoundTurnAdmission,
+    request_system: Option<&str>,
+) -> Option<String> {
+    let persona = match admission {
+        BoundTurnAdmission::Unbound => None,
+        BoundTurnAdmission::Admitted { persona, .. } => persona.clone(),
+    };
+    DomainRuntimeContext {
+        model: None,
+        persona_text: persona,
+    }
+    .seeded_system(request_system)
 }
 
 impl Runtime {

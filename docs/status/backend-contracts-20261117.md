@@ -22,7 +22,7 @@ Author: lead
 | B3a | 联系人 HTTP 面 + `workspace_binding` 校验 | **IMPLEMENTED**（HTTP 面已接线；⚠️ 回合入口未接线） | ✅ 已完成（提交 `43291e4ea`） | `cargo test -p apeireth-gateway --test panel_contacts_face --locked -j 2` ⇒ 15 passed / 0 failed；`cargo test -p apeireth-cli --test contact_real_chain --locked -j 2` ⇒ 5 passed / 0 failed（均 2026-11-17）；clippy 0 警告；fmt 0 diff；反向验伪四组（摘修订号比对 / 摘归档过滤 / 摘 deny_unknown_fields / 摘绑定修订号校验）均 RED→GREEN |
 | B3b-1 | 会话绑定面 + 回合入口闸 | **PRODUCTION WIRED**（绑定面路由已 merge ＋ 组合根装配 registry ＋ 回合入口闸已接线；⚠️ 未做 live E2E） | ✅ 已完成（提交 `b7bcbacc0`） | `cargo test -p apeireth-runtime --test turn_admission_gate --locked -j 2` ⇒ 9 passed / 0 failed；`cargo test -p apeireth-gateway --test session_binding_face --locked -j 2` ⇒ 9 passed / 0 failed（均 2026-11-17）；clippy 0 警告；fmt 0 diff；`arch_guard --strict` ⇒ VIOLATIONS 0；反向验伪七组（摘路由接线 / 摘闸接线 / 闸恒拒 / CAS 弱化 / 归档码 403→404 / 显式 null 不当解绑 / deny 不写审计）均 RED→GREEN |
 | B3b-2 | 装配层作用域翻译 + 写回接线（`MemoryScopeTarget` → canonical `MemoryScope`） | **PRODUCTION WIRED**（翻译层 + 绑定会话写回链路已接生产装配；⚠️ 未做 live E2E；profile 分区路径保持；恢复补写未翻译；`memory_scope_binding` 缺位 ⇒ 已绑定会话显式零写入） | ✅ 已完成（提交 `c137f5a9d`） | `pwsh scripts/cargo.ps1 -Slot base -Line backend-contracts-b3b2 -CargoArgs "test -p apeireth-runtime-assembly --test memory_scope_wiring"` ⇒ 6 passed / 0 failed（含真实 runtime 回合）；`cargo test -p apeireth-runtime-assembly --lib memory_scope_wire` ⇒ 5 passed / 0 failed（均 2026-11-18）；clippy 0 警告；fmt 0 diff；`arch_guard --strict` ⇒ VIOLATIONS 0；`audit_unwired.py` ⇒ 本批新符号 0 orphan；反向验伪四组（翻译层 Persona→Session / none 回退 Session / 绑定路径摘掉 / 失效回退 Session）均 RED→GREEN；合并 upstream/main（提交 `553cad251`）后按官方修法 `check_crate_budget.py --gen` 重建基线（34 crate · 600371 行），`--check` ⇒ exit 0 |
-| B3b-3 | persona 注入 | — | ❌ 未开始 | 无 |
+| B3b-3 | persona 注入（绑定命中 persona 进 system 种子槽） | **PRODUCTION WIRED**（真实 runtime 回合的空会话 system 槽消费绑定 persona；⚠️ 未做 live E2E；仅空会话种子槽，非空会话不追溯；persona 只进 system 文本，不碰权限/工具面） | ✅ 已完成（本批单提交） | `cargo test -p apeireth-runtime --test turn_persona_injection --locked -j 2` ⇒ 7 passed / 0 failed（真实 `Runtime::execute` + 捕获 provider）；`cargo test -p apeireth-runtime --lib --locked -j 2` ⇒ 195 passed / 0 failed；`--test turn_admission_gate` ⇒ 9 passed / 0 failed；`--test contact_persona_authority` ⇒ 6 passed / 0 failed（均 2026-11-18）；clippy 0 警告；fmt 0 diff；`arch_guard --strict` ⇒ VIOLATIONS 0；`audit_unwired.py --check` ⇒ 0 新增孤儿；反向验伪三组（seeded_system 分支改 None / admission persona 丢弃 / persona 改后置）均 RED→GREEN |
 | C1 | 规范流帧 + 后端流面 + 生产装配（身份 / sequence / 重放 / resync） | **PRODUCTION WIRED**（流式回合生产路径；⚠️ 缓冲进程内，重启即失） | ✅ 已完成（领域层提交 `e397cc687`，PR #135；生产装配 C2-3 批） | `cargo test -p apeireth-protocol --test canonical_stream_frames --locked -j 2` ⇒ 9 passed / 0 failed；`cargo test -p apeireth-runtime --test canonical_stream_registry --locked -j 2` ⇒ 11 passed / 0 failed；`cargo test -p apeireth-gateway --test canonical_stream_face --locked -j 2` ⇒ 7 passed / 0 failed（均 2026-11-17）；C2-3 起 `cargo test -p apeireth-runtime --test c1_stream_wiring --locked -j 2` ⇒ 5 passed / 0 failed（真运行时回合四类终帧 + 非流式不注册）；clippy 0 警告；fmt 0 diff；`arch_guard --strict` ⇒ VIOLATIONS 0；反向验伪 C2-3 组（摘实时 delta / 审批映射 / 停止优先）均 RED→GREEN |
 | C2-0 | 错误码目录对齐（24 码封闭集） | — | ✅ 已完成（提交 `80edf9832`） | 错误帧目录随 C2-1 批次复核（24 码不变）；无独立新端点 |
 | C2-1 | operation 幂等去重（`x-apeireth-operation` + SHA-256 载荷摘要 + 进程内 1024 条表） | **PRODUCTION WIRED**（HTTP 面；⚠️ 幂等表进程内，重启即失） | ✅ 已完成（提交 `da81ac1be`） | `cargo test -p apeireth-runtime -p apeireth-gateway --locked` ⇒ 72 suites / 739 passed / 0 failed（runtime lib 188、gateway 幂等 HTTP 4）；clippy 0 警告；fmt 0 diff；`arch_guard --strict` ⇒ VIOLATIONS 0；反向验伪 2 组（Replay 改重执行 / 摘摘要比对）均 RED→GREEN |
@@ -42,7 +42,10 @@ B3b-2 达 **PRODUCTION WIRED**（装配层 `translate_scope` 把 `MemoryScopeTar
 已绑定会话按合同落 `User/Persona/Session`，失效 / `none` / 装配面缺位 ⇒ 整段不写（fail-closed，**绝不回退 `Session`**）；
 ⚠️ **未做 live E2E** ⇒ 不到 HARDWARE VALIDATED；**恢复补写（recovery-drain）未翻译**，仍按会话锚点重放；
 `check_crate_budget.py --gen` 已按官方修法重建基线（34 crate · 600371 行），`--check` ⇒ exit 0）；
-persona 注入（B3b-3）**未接线**；
+B3b-3 达 **PRODUCTION WIRED**（`admit_bound_binding`/`admit_turn` 返回 `BoundTurnAdmission` 携带绑定 persona，
+`turn_admission::seeded_system` 复用 `DomainRuntimeContext::seeded_system` 语义，`execute.rs` 空会话 system 槽优先种 persona；
+persona 只进 system 文本，**不碰** Permission/tool_scope/审批/workspace scope；⚠️ **仅在空会话种子槽生效**（非空会话不追溯），
+未做 live E2E ⇒ 不到 HARDWARE VALIDATED）；
 C2-1 达 **PRODUCTION WIRED**（HTTP 面：`/v1/chat` 幂等键 + 摘要 + 进程内 1024 条表；⚠️ 表**进程内、重启即失、多进程不共享**，
 无头不幂等、无显式 session 不去重，回放不重放流式 delta ⇒ 不是 HARDWARE VALIDATED）。
 C2-2 达 **PRODUCTION WIRED**（stop 端点 + 回合级取消注入 + 流式 chunk id 对齐；⚠️ 未做真实模型回合 E2E，
@@ -85,15 +88,18 @@ C1 达 **PRODUCTION WIRED**（C2-3 起生产流式回合产生真实 C1 流；�
    归档审计事件（B3a）。记忆作用域映射与会话绑定已在 B2 落地（领域层）。
 4. **B2 已完成，但只到领域层**：合同版 `memory_scope` 映射、会话 agent 绑定、「绑定不匹配即拒绝且不重放」的载体
    都已落地（`canonical::agent_binding` + `Session.agent_binding`，21 条契约测试 + 5 组反向验伪）。
-   **已补齐**：回合入口闸（B3b-1）与 canonical `MemoryScope` 的装配层翻译/写回（B3b-2）。
-   **仍缺**：persona 注入（B3b-3）与 HTTP 级归档语义/审计（B3a 的后续项）。
+   **已补齐**：回合入口闸（B3b-1）、canonical `MemoryScope` 的装配层翻译/写回（B3b-2）与 persona 注入（B3b-3，仅空会话种子槽）。
+   **仍缺**：HTTP 级归档语义/审计（B3a 的后续项）。
 5. **B3a 已完成**（提交 `43291e4ea`）：联系人 HTTP 面 + `workspace_binding` 服务端校验 + 4 个新错误码 + 能力入册 + CLI 真落盘构造。
    **B3b-1 已完成**（提交 `b7bcbacc0`）：会话绑定面 `GET/POST /v1/sessions/{id}/agent-binding` ＋ **回合入口闸**（`admit_turn` 从「无调用方」变成「每回合现查现校验」）
    ＋ 2 个新错误码（`agent_binding_rejected` / `session_binding_conflict`）＋ 审计事件 `gateway.session_binding_action`。
    ⚠️ 四级口径 **PRODUCTION WIRED**（未做 live E2E ⇒ 不到 HARDWARE VALIDATED）；绑定变更不写 SessionEvent；多进程部署 registry 仍会分叉。
    **B3b-2 已完成**（提交 `c137f5a9d`，合并提交 `553cad251`）：装配层 `MemoryScopeTarget` → canonical `MemoryScope` 翻译
-   ＋ 绑定会话写回；已绑定但装配缺位/计划拒绝/绑定失效 ⇒ 整段不写（fail-closed，绝不回退 `Session`）；
-   **仍缺**：**B3b-3 persona 注入**（只改 system 文本，不得改权限/能力/工具面）。
+   ＋ 绑定会话写回；已绑定但装配缺位/计划拒绝/绑定失效 ⇒ 整段不写（fail-closed，绝不回退 `Session`）。
+   **B3b-3 已完成**（本批单提交）：绑定命中 persona 经 `BoundTurnAdmission` 进入回合，`turn_admission::seeded_system` 复用
+   `DomainRuntimeContext::seeded_system` 语义，`execute.rs` 空会话 system 槽优先注入 persona（persona + 两换行 + request.system）；
+   **只改 system 文本，不碰权限/能力/工具面**；7 条真实 runtime 回合测试 + 3 组反向验伪；⚠️ **仅空会话种子槽**（非空会话不追溯），
+   未做 live E2E ⇒ 不到 HARDWARE VALIDATED。
 6. **C1 已完成**（提交 `e397cc687`，PR #135）：帧族 ＋ 运行时权威缓冲注册表 ＋ 网关后端原生面
    `GET /v1/sessions/{sid}/requests/{rid}/stream`（`Last-Event-ID` 优先 → `?after_sequence=`，
    先订阅后重放 ＋ 交界去重；超窗 ⇒ 发 `resync_required` 事实帧后关闭通道）。
