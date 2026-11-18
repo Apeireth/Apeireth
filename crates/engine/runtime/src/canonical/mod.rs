@@ -98,6 +98,7 @@ pub mod subloop;
 pub mod tool_route;
 pub mod trace;
 mod turn_admission;
+pub mod turn_request;
 // C2 停止语义: 回合级取消注册表 + 幂等 stop 摘要 (进程内, 重启即失)。
 pub mod turn_cancellation;
 // C2-3: 运行时结果 ⇒ C1 终帧的纯映射 (停止 / 完成 / 待批 / 失败)。
@@ -134,7 +135,7 @@ pub use events::{
 };
 pub use execute::{
     budget_context_blocks, budget_context_blocks_with_spill, plan_mode_exit_declaration,
-    ApprovalResolution, TurnOutcome, TurnRequest, TurnResponse, PLAN_MODE_EXIT_TOOL_NAME,
+    ApprovalResolution, TurnOutcome, TurnResponse, PLAN_MODE_EXIT_TOOL_NAME,
 };
 pub use heartbeat::{
     FlowLock, HeartbeatDispatch, HeartbeatPoll, HeartbeatPollOutcome, HeartbeatProducer,
@@ -184,6 +185,7 @@ pub use session_locks::SessionLocks;
 pub use subloop::{
     RuntimeSubLoopSpawner, SubLoopError, SubLoopResult, SubLoopSpawner, SubLoopSpec,
 };
+pub use turn_request::{TurnRequest, TurnToolPolicy};
 
 pub use tool_route::{
     resolve_model_route, LocalToolView, ModelRouteResolution, ToolExecutionTarget, ToolRouteEntry,

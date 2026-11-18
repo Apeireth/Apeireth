@@ -121,70 +121,9 @@ pub const MAX_TOOL_CALLS_PER_ROUND: usize = 16;
 // mechanism (`plan_mode_control`); re-exported here for the stable public path.
 pub use super::plan_mode_control::{plan_mode_exit_declaration, PLAN_MODE_EXIT_TOOL_NAME};
 
-/// One turn's input.
-#[derive(Debug, Clone)]
-pub struct TurnRequest {
-    /// The conversation to continue. A session that does not exist is created.
-    pub session: SessionId,
-    /// What the user said.
-    pub input: String,
-    /// Model to use, or the runtime's default when absent.
-    pub model: Option<String>,
-    /// System instruction, applied only when the transcript is empty.
-    ///
-    /// Applied once rather than per turn so that a resumed session does not
-    /// accumulate duplicate system messages, which quietly change behaviour and
-    /// cost tokens on every subsequent request.
-    pub system: Option<String>,
-    /// Immutable intent/authorization context created before provider use.
-    pub security_context: Option<TurnSecurityContext>,
-    /// Caller-minted turn identity; the runtime mints one when absent.
-    ///
-    /// Supplying it up front lets a streaming caller address the turn (stop)
-    /// from the first frame onward.
-    pub request: Option<RequestId>,
-}
-
-impl TurnRequest {
-    /// A turn against `session` saying `input`.
-    pub fn new(session: SessionId, input: impl Into<String>) -> Self {
-        Self {
-            session,
-            input: input.into(),
-            model: None,
-            system: None,
-            security_context: None,
-            request: None,
-        }
-    }
-
-    /// Use a specific model for this turn.
-    #[must_use]
-    pub fn with_model(mut self, model: impl Into<String>) -> Self {
-        self.model = Some(model.into());
-        self
-    }
-
-    /// Seed a new session with a system instruction.
-    #[must_use]
-    pub fn with_system(mut self, system: impl Into<String>) -> Self {
-        self.system = Some(system.into());
-        self
-    }
-
-    #[must_use]
-    pub fn with_security_context(mut self, context: TurnSecurityContext) -> Self {
-        self.security_context = Some(context);
-        self
-    }
-
-    /// Run the turn under a caller-minted request id.
-    #[must_use]
-    pub fn with_request(mut self, request: RequestId) -> Self {
-        self.request = Some(request);
-        self
-    }
-}
+// One turn's request and caller-scoped tool policy live in their own
+// module; re-exported here for the stable `canonical::execute` path.
+pub use super::turn_request::{TurnRequest, TurnToolPolicy};
 
 /// One turn's outcome.
 ///
@@ -772,7 +711,12 @@ impl Runtime {
         // G-P1 指标埋点: 收束段计时起点 (不含会话排队)。
         let metrics_started = std::time::Instant::now();
 
-        let state = Arc::new(ModuleTurnState::new(self.config.max_module_invocations));
+        let max_modules = self.config.max_module_invocations;
+        let state = Arc::new(if request.tools_disabled() {
+            ModuleTurnState::read_only(max_modules)
+        } else {
+            ModuleTurnState::new(max_modules)
+        });
         let request_id = request.request.unwrap_or_else(RequestId::new);
         let trace_id = TraceId::new();
         // C2-3: explicit streaming ids own one C1 stream; duplicates are refused.
@@ -1019,7 +963,7 @@ impl Runtime {
             }
         };
 
-        let tools = if self.single_shot_task() {
+        let tools = if self.single_shot_task() || request.tools_disabled() {
             Vec::new()
         } else {
             self.tool_declarations_for_session(request.session)
@@ -1846,6 +1790,12 @@ impl Runtime {
                     },
                 );
 
+                if module_state.is_read_only() && !response.tool_calls.is_empty() {
+                    return Err(RuntimeError::ToolUseForbidden {
+                        count: response.tool_calls.len(),
+                    });
+                }
+
                 let after_model_messages = session.messages.clone();
                 let after_model = self
                     .run_hook_checked(
@@ -2455,7 +2405,7 @@ impl Runtime {
         module_state: &Arc<ModuleTurnState>,
         security_context: Option<&TurnSecurityContext>,
     ) -> RuntimeResult<HookEffects> {
-        if self.isolated_task() {
+        if self.isolated_task() || module_state.is_read_only() {
             return Ok(HookEffects::default());
         }
         match self

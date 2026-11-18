@@ -29,9 +29,9 @@ pub use canonical::{
     RuntimeSubLoopSpawner, Session, SessionEvent, SessionEventKind, SessionManager,
     SessionQuotaLimits, SessionStore, SubLoopError, SubLoopResult, SubLoopSpawner, SubLoopSpec,
     SurfaceOp, SurfaceSegment, SurfaceSource, SurfaceView, TraceEntry, TraceEvent, TurnOutcome,
-    TurnRequest, TurnResponse, DEFAULT_CONTEXT_BUDGET_CHARS, DEFAULT_MAX_INVOCATION_DEPTH,
-    DEFAULT_MAX_MODULE_INVOCATIONS, DEFAULT_MAX_ROUNDS, MAX_QUOTA_COST_MICROS, MAX_QUOTA_TOKENS,
-    MAX_QUOTA_TOOL_STEPS, PLAN_MODE_EXIT_TOOL_NAME,
+    TurnRequest, TurnResponse, TurnToolPolicy, DEFAULT_CONTEXT_BUDGET_CHARS,
+    DEFAULT_MAX_INVOCATION_DEPTH, DEFAULT_MAX_MODULE_INVOCATIONS, DEFAULT_MAX_ROUNDS,
+    MAX_QUOTA_COST_MICROS, MAX_QUOTA_TOKENS, MAX_QUOTA_TOOL_STEPS, PLAN_MODE_EXIT_TOOL_NAME,
 };
 
 pub use canonical::instances::{AgentHostPolicy, AgentRuntime, ModuleAgentGrant};

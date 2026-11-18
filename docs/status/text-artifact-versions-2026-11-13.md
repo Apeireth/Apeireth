@@ -32,6 +32,18 @@ Author: desktop-collaboration-line
 
 本批复核门禁：四包`cargo check --all-targets`退出0；四包`--lib`回归通过（gateway首轮两例`cache-control`断言失败，根因是保护层放在认证层内侧，移到最外层后通过）；Windows逐crate格式检查35个crate零diff；四包clippy`-D warnings`零警告；strict架构守卫零违规；未接线审计退出0；crate预算按ADR0025重建为34个crate·605507行；claims真源、生成STATUS/wiring、文档索引与strict接线交叉检查在文档提交中另行复核。全量workspace、live E2E与外部模型质量仍未在本批重跑或声明。合并评审与发布状态以主干记录为准；私有前端不在本仓推送范围。
 
+## 2026-11-18 只读候选回合
+
+本批在成果线之上新增「按此版续做」的后端只读候选入口`POST /v1/artifacts/:artifact_id/candidates`：服务端先按`store_id/base_revision/base_sha256`核对明确已保存的基准版本，不符时在调用provider前拒绝；候选回合不声明工具，模型若仍返回tool calls在派发/审批/transcript写前拒绝；behavior module/hook不执行，因此无记忆写回等hook副作用；候选不落库、不自动提交，生成期间head变化只回`base_is_current:false`。
+
+四级口径：后端路由与运行时拒绝为PRODUCTION WIRED，实现见`crates/adapters/gateway/src/artifacts.rs`、`crates/engine/runtime/src/canonical/turn_request.rs`、`crates/engine/runtime/src/canonical/execute.rs`与`crates/engine/runtime/src/canonical/module.rs`。真实gateway路由集成测试9条通过（`crates/adapters/gateway/tests/artifact_candidates_http.rs`），覆盖基准过期/摘要不符、provider工具尝试被拒、生成中head变化、空输出、超限、缺少服务与hook跳过。反向验伪4组：去掉`without_tools`、反转基准比较、去掉hook跳过、去掉运行时tool-call拒绝，均先红后绿。私有前端尚未接线；未跑live E2E与外部模型质量，不声明HARDWARE VALIDATED。候选回合仍写内部分Session/消息/事件用于审计，不承诺零会话写，也不等于成果写。
+
+定向测试命令：
+
+```powershell
+pwsh scripts/cargo.ps1 -Slot base -Line artifact-candidates test --package apeireth-gateway --test artifact_candidates_http --locked
+```
+
 ## 守卫命令
 
 四包成果线定向回归（本批未重跑全量 workspace）：

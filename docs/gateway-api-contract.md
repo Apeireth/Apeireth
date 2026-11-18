@@ -12,6 +12,10 @@
 
 该族分页为每页1～32、正文最大256KiB，与下文旧面板的分页默认值分开。首批不接受任意文件路径，不编辑原导入Document，不把work_id当成服务端项目授权。agent的artifact_read/artifact_write与HTTP使用同一服务；agent写经原canonical治理与人工审批，人工保存不伪造工具审批。
 
+2026-11-18 增补只读候选回合：`POST /v1/artifacts/:artifact_id/candidates` 只服务「按此版续做」的候选生成。请求为 strict JSON `{store_id,base_revision,base_sha256,instruction}`；服务端先只读加载明确已保存 revision，要求基准等于当前 head 且 SHA-256 相符，否则在调用 provider 前分别回 409 `stale_base_revision` 或 409 `base_digest_mismatch`。instruction 上限 64KiB，正文+指令+8KiB 封装开销上限 512KiB，超出回 413 `candidate_envelope_too_large`。
+
+候选回合使用独立内部分会话与显式 request id；provider 不声明工具，模型若仍返回 tool calls 在派发/审批/transcript 写前回 422 `candidate_tool_call_rejected`，且不执行 behavior module/hook。成功 200 回执给出基准与生成后 head、`base_is_current`、`request_id`/`trace_id`、候选正文与 SHA、`tool_calls:0`、`artifact_writes:0`；候选不落库、不自动提交，head 在生成期间变化时只回 `base_is_current:false`。四级口径：后端路由与运行时拒绝为 PRODUCTION WIRED，实现:`crates/adapters/gateway/src/artifacts.rs`、`crates/engine/runtime/src/canonical/execute.rs`；私有前端尚未接线，未做 live E2E，不声明 HARDWARE VALIDATED。候选回合仍写内部分 Session/消息/事件用于审计，不承诺零会话写。
+
 ## §1 通用约定
 
 - Base URL:`http://127.0.0.1:{port}`(port 由桌面壳为 sidecar 动态分配;手动运行时默认 8080)

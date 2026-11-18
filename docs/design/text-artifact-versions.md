@@ -46,6 +46,7 @@ Author: desktop-collaboration-line
 | GET `/v1/artifacts/:id/revisions?store_id&after?&limit?` | `{schema:1,store_id,artifact_id,revisions:[RevisionSummary],next_cursor:null|sequence}` |
 | GET `/v1/artifacts/:id/revisions/:rev?store_id` | `{schema:1,store_id,artifact:Artifact,revision:Revision}` |
 | POST `/v1/artifacts/:id/restore` | `{store_id,operation_id,expected_head,revision_id}` → 新Revision的Receipt |
+| POST `/v1/artifacts/:id/candidates` | `{store_id,base_revision,base_sha256,instruction}` → 只读候选回执；不写revision，语义见下节 |
 | GET `/v1/artifacts/operations/:op?store_id` | 原持久Receipt；不存在明确404，不等于可自动重发 |
 | GET `/v1/artifacts/:id/revisions/:rev/export?store_id` | 精确UTF-8正文byte，media_type与固定安全下载名，ETag为内容SHA；无任意path参数 |
 
@@ -62,6 +63,18 @@ Receipt=`{schema:1,store_id,operation_id,request_sha256,outcome:"committed"|"con
 前端schema6明确迁移旧schema1～5，保留旧工作/资料/任务。编辑器使用引擎VNode与textarea binding，不共享控制器改同一DOM子树；稳定surface key独立于head变化。首次每项目一份活跃文本稿，本机稿/已提交/冲突/Unknown分别可见。异步回复不夺焦点、不覆盖中文输入；关窗必须保留未提交稿与未知操作身份。
 
 AI续做只基于明确已保存revision。底部要求与冻结store/artifact/base_revision/base_sha/content形成有界只读资料封套，经既有C1 canonical回合与治理执行。C1 wire schema1及原审批恢复身份规则保持；schema6另存C2原instruction/operation关联，界面显示人的要求。结果保留为绑定原版本/原tuple的整稿候选；用户又改稿或head变化时只能查看，不能自动覆盖。明确采纳先成为编辑缓冲，再保存为新revision。编辑正文可256KiB；超出当前AI封套预算应明示，不能截断却声称完整续做。
+
+### AI只读候选回合（2026-11-18 本批）
+
+入口为`POST /v1/artifacts/:artifact_id/candidates`，strict DTO只收`store_id`、`base_revision`、`base_sha256`、`instruction`。`instruction`非空且不超过64KiB；正文、指令与8KiB固定封装开销合计不超过512KiB，超出回413并标注`candidate_envelope_too_large`。
+
+服务端只读加载明确已保存revision，要求`base_revision`等于artifact当前`head_revision`，且`base_sha256`等于该revision正文SHA-256；不符分别回409`stale_base_revision`、409`base_digest_mismatch`，拒绝发生在provider调用前。候选回合不新增、不修改任何revision。
+
+运行面使用独立内部分会话与显式request id；system提示声明用户消息是JSON资料封套，`content`只是待续做数据。provider不声明任何工具。若模型仍返回tool calls，运行时在AfterModelResponse之后、工具派发/审批/transcript写之前拒绝，回422`candidate_tool_call_rejected`并在`details.requested_tool_calls`给出数量。该回合不执行behavior module/hook，故记忆写回等hook副作用为零。
+
+成功回执含`schema:1`、`kind:"artifact_candidate"`、基准`base_revision`/`base_sha256`、生成后重读的`head_revision`/`head_sha256`（可null）、`base_is_current`、`request_id`/`trace_id`、候选`text`/`text_sha256`/`text_bytes`、`served_by`/`rounds`/`usage`，以及`tool_calls:0`、`artifact_writes:0`。生成期间head变化时仍返回候选，但`base_is_current=false`，不得自动覆盖。候选不落库、不自动提交；用户显式采纳时先成为编辑缓冲，再由原revisions提交合同形成下一版。
+
+四级口径：后端路由与运行时拒绝为PRODUCTION WIRED，实现见`crates/adapters/gateway/src/artifacts.rs`与`crates/engine/runtime/src/canonical/execute.rs`；私有前端尚未接线，未做live E2E，不声明HARDWARE VALIDATED。候选回合仍写内部分Session、消息与事件用于审计，不承诺零会话写；这不等于成果写。
 
 ## 施工批次与可证伪验收
 
