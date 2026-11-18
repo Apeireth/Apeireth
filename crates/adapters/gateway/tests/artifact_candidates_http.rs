@@ -5,7 +5,6 @@
 //! tests exercise the real gateway router, the real runtime and a scripted
 //! provider; the artifact port is a bounded in-memory fake.
 
-#![allow(dead_code)]
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -91,7 +90,6 @@ struct FakeStore {
 
 struct FakeService {
     store: Mutex<FakeStore>,
-    reads: AtomicUsize,
     creates: AtomicUsize,
     commits: AtomicUsize,
 }
@@ -107,7 +105,6 @@ impl FakeService {
                 head_revision: HEAD_REVISION.into(),
                 revisions,
             }),
-            reads: AtomicUsize::new(0),
             creates: AtomicUsize::new(0),
             commits: AtomicUsize::new(0),
         })
@@ -119,10 +116,6 @@ impl FakeService {
 
     fn head(&self) -> String {
         self.store.lock().unwrap().head_revision.clone()
-    }
-
-    fn reads(&self) -> usize {
-        self.reads.load(Ordering::SeqCst)
     }
 
     fn writes(&self) -> usize {
@@ -172,7 +165,6 @@ impl ArtifactService for FakeService {
         artifact_id: String,
         revision_id: Option<String>,
     ) -> Result<ArtifactDocument, ArtifactError> {
-        self.reads.fetch_add(1, Ordering::SeqCst);
         if store_id != STORE || artifact_id != ARTIFACT {
             return Err(ArtifactError::StoreMismatch);
         }
