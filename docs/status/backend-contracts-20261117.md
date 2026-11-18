@@ -4,7 +4,7 @@
 Document: docs/status/backend-contracts-20261117.md
 Class: STATUS
 Status: 🟢 活跃
-Last-Modified: 2026-11-17
+Last-Modified: 2026-11-18
 Author: lead
 
 > **用途**：本工作线「做到哪了」的**唯一权威**（`AGENTS.md` §0.2：引用状态只引文件）。
@@ -21,7 +21,7 @@ Author: lead
 | B2 | 记忆作用域映射 + 会话 agent 绑定 + 归档语义 | **IMPLEMENTED**（仅领域层） | ✅ 已完成（提交 `49213dc78`） | `cargo test -p apeireth-runtime --test agent_binding_contract --locked -j 2` ⇒ 21 passed / 0 failed；`cargo test -p apeireth-runtime --all-targets --locked -j 2` ⇒ 全绿（均 2026-11-17）；clippy 0 警告；fmt 0 diff；反向验伪五组（fail-closed 归档闸 / 不重放 / none≠Global / contact 间隔离 / fork 继承）均 RED→GREEN |
 | B3a | 联系人 HTTP 面 + `workspace_binding` 校验 | **IMPLEMENTED**（HTTP 面已接线；⚠️ 回合入口未接线） | ✅ 已完成（提交 `43291e4ea`） | `cargo test -p apeireth-gateway --test panel_contacts_face --locked -j 2` ⇒ 15 passed / 0 failed；`cargo test -p apeireth-cli --test contact_real_chain --locked -j 2` ⇒ 5 passed / 0 failed（均 2026-11-17）；clippy 0 警告；fmt 0 diff；反向验伪四组（摘修订号比对 / 摘归档过滤 / 摘 deny_unknown_fields / 摘绑定修订号校验）均 RED→GREEN |
 | B3b-1 | 会话绑定面 + 回合入口闸 | **PRODUCTION WIRED**（绑定面路由已 merge ＋ 组合根装配 registry ＋ 回合入口闸已接线；⚠️ 未做 live E2E） | ✅ 已完成（提交 `b7bcbacc0`） | `cargo test -p apeireth-runtime --test turn_admission_gate --locked -j 2` ⇒ 9 passed / 0 failed；`cargo test -p apeireth-gateway --test session_binding_face --locked -j 2` ⇒ 9 passed / 0 failed（均 2026-11-17）；clippy 0 警告；fmt 0 diff；`arch_guard --strict` ⇒ VIOLATIONS 0；反向验伪七组（摘路由接线 / 摘闸接线 / 闸恒拒 / CAS 弱化 / 归档码 403→404 / 显式 null 不当解绑 / deny 不写审计）均 RED→GREEN |
-| B3b-2 | 装配层作用域翻译（`MemoryScopeTarget` → canonical `MemoryScope`） | — | ❌ 未开始 | 无 |
+| B3b-2 | 装配层作用域翻译 + 写回接线（`MemoryScopeTarget` → canonical `MemoryScope`） | **PRODUCTION WIRED**（翻译层 + 绑定会话写回链路已接生产装配；⚠️ 未做 live E2E；profile 分区路径保持；恢复补写未翻译；`memory_scope_binding` 缺位 ⇒ 已绑定会话显式零写入） | ✅ 已完成（提交 `c137f5a9d`） | `pwsh scripts/cargo.ps1 -Slot base -Line backend-contracts-b3b2 -CargoArgs "test -p apeireth-runtime-assembly --test memory_scope_wiring"` ⇒ 6 passed / 0 failed（含真实 runtime 回合）；`cargo test -p apeireth-runtime-assembly --lib memory_scope_wire` ⇒ 5 passed / 0 failed（均 2026-11-18）；clippy 0 警告；fmt 0 diff；`arch_guard --strict` ⇒ VIOLATIONS 0；`audit_unwired.py` ⇒ 本批新符号 0 orphan；反向验伪四组（翻译层 Persona→Session / none 回退 Session / 绑定路径摘掉 / 失效回退 Session）均 RED→GREEN；⚠️ `check_crate_budget.py --check` 未过（runtime-assembly +273 行，基线未上调，待裁决） |
 | B3b-3 | persona 注入 | — | ❌ 未开始 | 无 |
 | C1 | 规范流帧 + 后端流面（身份 / sequence / 重放 / resync） | **IMPLEMENTED**（领域层；⚠️ 未接生产装配） | ✅ 已完成（提交 `e397cc687`，PR #135） | `cargo test -p apeireth-protocol --test canonical_stream_frames --locked -j 2` ⇒ 9 passed / 0 failed；`cargo test -p apeireth-runtime --test canonical_stream_registry --locked -j 2` ⇒ 11 passed / 0 failed；`cargo test -p apeireth-gateway --test canonical_stream_face --locked -j 2` ⇒ 7 passed / 0 failed（均 2026-11-17）；clippy 0 警告；fmt 0 diff；`arch_guard --strict` ⇒ VIOLATIONS 0（`canonical_entry.rs` 净增 0 行）；反向验伪四组（摘终帧唯一性闸 / 摘环形有界 / 超窗改错误 / 摘 `.id(sequence)`）均 RED→GREEN |
 | C2 | 单次 canonical dispatch + stop 幂等 + 审批终帧 | — | ❌ 未开始 | 无 |
@@ -33,8 +33,13 @@ B1 达 **IMPLEMENTED**（**仅领域层**：无 HTTP 面、无绑定、无审计
 B2 达 **IMPLEMENTED**（**仅领域层**：`canonical::agent_binding` + `Session.agent_binding`；
 但 **`admit_turn` 无调用方** ⇒ `domain_plane` 默认域回落仍是未绑定会话的现役路径 ⇒ **不是** PRODUCTION WIRED）；
 B3b-1 达 **PRODUCTION WIRED**（会话绑定面路由已 merge ＋ 组合根装配 registry ＋ **回合入口闸已接线** ⇒
-`admit_turn` 从「无调用方」变成「每回合现查现校验」；⚠️ **未做 live E2E** ⇒ 不到 HARDWARE VALIDATED；
-作用域翻译（B3b-2）与 persona 注入（B3b-3）**未接线**，领域层已产出但本批刻意不消费）；
+`admit_turn` 从「无调用方」变成「每回合现查现校验」；⚠️ **未做 live E2E** ⇒ 不到 HARDWARE VALIDATED）；
+B3b-2 达 **PRODUCTION WIRED**（装配层 `translate_scope` 把 `MemoryScopeTarget` 逐字段翻译成 canonical `MemoryScope`
+＋ `MemoryWritebackModule` 写回链路已接生产装配：profile 分区与未绑定会话仍走 `Session`（逐字节不变），
+已绑定会话按合同落 `User/Persona/Session`，失效 / `none` / 装配面缺位 ⇒ 整段不写（fail-closed，**绝不回退 `Session`**）；
+⚠️ **未做 live E2E** ⇒ 不到 HARDWARE VALIDATED；**恢复补写（recovery-drain）未翻译**，仍按会话锚点重放；
+⚠️ `check_crate_budget.py --check` 未过（新增功能代码 +273 行，基线未上调，待 Lead 裁决））；
+persona 注入（B3b-3）**未接线**；
 C2 **尚无任何一项**达到 IMPLEMENTED；批次完成前不得在文档或回复里写「已实现 / 已接线」。
 C1 达 **IMPLEMENTED**（**仅领域层**：帧族 + 运行时权威缓冲注册表 + 网关投影面齐备；
 但**未接生产装配** ⇒ 端点当前**不产生真实流数据** ⇒ **不是** PRODUCTION WIRED；
