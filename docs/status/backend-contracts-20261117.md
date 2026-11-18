@@ -108,10 +108,10 @@ C1 达 **PRODUCTION WIRED**（C2-3 起生产流式回合产生真实 C1 流；�
    结束时发布唯一终帧（completed/approval/failed/stopped），`c1_stream_wiring` 5 条真运行时 E2E 钉住。
    **仍缺**：权威缓冲持久化与跨进程共享（重启即失）、审批恢复后继续同一条流（客户端须重发回合）；
    ~~operation 级去重（C2-1 已完成）~~、~~stop/cancel（C2-2 已完成）~~。
-7. **C2 进行中**：C2-1 operation 幂等去重已验收（提交 `da81ac1be`，HTTP 面 PRODUCTION WIRED，幂等表进程内）；
-   C2-2 stop 端点与回合级取消注入已落地（HTTP 面＋回合注入 PRODUCTION WIRED，注册表进程内）；
-   **C2-3 本批完成**：审批终帧与 C1 生产装配已接生产流式路径（见 §一证据），
-   审批恢复续流与缓冲持久化仍未做。（裁决与批次拆分见 `brief_c2.txt`。）
+7. **C2 已完成**（C2-0 `80edf9832` / C2-1 `da81ac1be` / C2-2 `3bb73032f` / C2-3 `ccb62e678`，PR #139 已合主干 `27e3872f0`）：
+   operation 幂等去重、stop 幂等端点与回合级取消注入、审批终帧与 C1 生产装配均已落地；
+   ⚠️ 幂等表 / C1 缓冲 / 停止摘要均进程内（重启即失、多进程不共享）；stop 不中断模型生成、不撤销已发生副作用；
+   审批恢复续流与缓冲持久化仍未做；未做 live E2E ⇒ 不是 HARDWARE VALIDATED。（裁决与批次拆分见 `brief_c2.txt`。）
 8. ~~能力清单未登记~~ ⇒ **已做**（A2：`workspaces.read|workspaces.write`；B3a：`contacts.read|contacts.write`，
    均登记进 `crates/adapters/gateway/src/panels.rs`）。
 9. ~~错误码未登记~~ ⇒ **已做**（A2：`workspace_not_found` / `workspace_conflict` / `workspace_revoked`；

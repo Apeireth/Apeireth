@@ -37,7 +37,7 @@ Author: lead
 | B3b-2 | 装配层作用域翻译 + 写回接线（`MemoryScopeTarget` → canonical `MemoryScope`） | 装配层把 `MemoryScopeTarget` 翻译成 canonical `MemoryScope`（`none` ⇒ **不产生 scope**，不写记忆，**禁拿 `Global` 代替**）；写回链路按翻译结果落 scope，`writes=false` ⇒ 整段跳过 materializer | ✅ 已完成（提交 `c137f5a9d`，四级口径 **PRODUCTION WIRED**：翻译层单测 + 绑定会话写回链路已接生产装配；未绑定 / profile 路径逐字节不变；失效 fail-closed 整段不写）；⚠️ **未做 live E2E**；恢复补写未翻译；`memory_scope_binding` 缺位 ⇒ 已绑定会话显式零写入 |
 | B3b-3 | persona 注入 | 绑定命中的 persona 文本注入回合（只改 system 文本，**不得**改权限/能力/工具面） | ✅ 已完成（本批两个提交：feat `7d18e4c32` + docs/claims `f60642cf7`；四级口径 **PRODUCTION WIRED**：`BoundTurnAdmission` 携带绑定 persona，`turn_admission::seeded_system` 复用 `DomainRuntimeContext::seeded_system` 语义，`execute.rs` 空会话 system 槽消费；7 条真实 runtime 回合测试 + 3 组反向验伪；⚠️ **仅空会话种子槽生效**（非空会话不追溯）；**未做 live E2E** ⇒ 不到 HARDWARE VALIDATED） |
 | C1 | 规范流帧 + 后端流面（身份、sequence、重放、resync） | 帧 schema 固定（`apeireth.c1.delta.v1` / `apeireth.c1.final.v1`）；每帧带 session_id/request_id/trace_id/sequence（**不带** operation/incarnation/context_key —— 裁决 2/8：宿主 operation 是不透明标签、后端不解释，后端不生成 incarnation/context_key）；sequence 单调有界；`Last-Event-ID`/`after_sequence` 有限重放，超窗发 `resync_required` 事实帧后关闭通道；`[DONE]` **只表示通道关闭**；断线后 GET 回执能恢复真实状态且不重发模型 | ✅ 已交付（领域层 `e397cc687` + 生产装配 C2-3 `ccb62e678`，PR #135/#139；四级口径 **PRODUCTION WIRED**：流式回合注册 C1 流、实时转发 delta、结束时恰发一帧 completed/approval/failed/stopped 终帧，已登记进 `docs/gateway-api-contract.md` §2〔PRODUCTION WIRED〕；⚠️ 权威缓冲与停止摘要均为进程内，重启即失、多进程不共享；只注册显式 request id 的流式回合；未做 live E2E ⇒ 不到 HARDWARE VALIDATED；**不实现 `/bridge/*`**（裁决 15）） |
-| C2 | 单次 canonical dispatch + stop 幂等 + 审批终帧 | 一个 operation 只产生一次 canonical dispatch（重连/刷新/abort 不重复调模型）；stop 单独、幂等、可审计且不撤销已发生的外部副作用；approval 终帧只带**已确认**的 approval_id/action_binding_digest/expires_at；provider 非流式回退、上游错误、超时、取消、慢客户端、大正文都有有界错误契约 | ✅ 已完成（C2-0 `80edf9832` / C2-1 `da81ac1be` / C2-2 `3bb73032f` / C2-3 `ccb62e678`；随 PR #139 待合并；四级口径 **PRODUCTION WIRED**：24 码封闭集、operation 幂等去重、stop 幂等端点、审批/停止终帧与 C1 生产装配；⚠️ 幂等表 / C1 缓冲 / 停止摘要均进程内，重启即失、多进程不共享；stop 不中断模型生成、不撤销已发生副作用；未做 live E2E ⇒ 不到 HARDWARE VALIDATED） |
+| C2 | 单次 canonical dispatch + stop 幂等 + 审批终帧 | 一个 operation 只产生一次 canonical dispatch（重连/刷新/abort 不重复调模型）；stop 单独、幂等、可审计且不撤销已发生的外部副作用；approval 终帧只带**已确认**的 approval_id/action_binding_digest/expires_at；provider 非流式回退、上游错误、超时、取消、慢客户端、大正文都有有界错误契约 | ✅ 已完成（C2-0 `80edf9832` / C2-1 `da81ac1be` / C2-2 `3bb73032f` / C2-3 `ccb62e678`；PR #139 已合主干 `27e3872f0`；四级口径 **PRODUCTION WIRED**：24 码封闭集、operation 幂等去重、stop 幂等端点、审批/停止终帧与 C1 生产装配；⚠️ 幂等表 / C1 缓冲 / 停止摘要均进程内，重启即失、多进程不共享；stop 不中断模型生成、不撤销已发生副作用；未做 live E2E ⇒ 不到 HARDWARE VALIDATED） |
 
 ## 目标形态
 
@@ -409,8 +409,10 @@ GET  /v1/sessions/{session_id}/requests/{request_id}/stream   # ?after_sequence=
 - 反向验伪四组（红/绿各一条已贴进 PR 正文与提交正文）：① 摘终帧唯一性闸 ⇒ RED（10 passed / 1 failed）⇒ GREEN（11 passed）；
   ② 摘环形有界 ⇒ RED（left: 266 / right: 256）⇒ GREEN；③ 把超窗改成错误 ⇒ runtime RED（replay 不得失败）
   ＋ gateway RED（left: 500 / right: 200）⇒ GREEN；④ 摘 `.id(sequence)` ⇒ RED（left: None / right: Some("11")）⇒ GREEN。
-- ⚠️ **诚实边界（四级口径：IMPLEMENTED，未 PRODUCTION WIRED）**：**未接生产装配** ⇒ 端点当前**不产生真实流数据**
-  ⇒ 因此**未登记**进 `docs/gateway-api-contract.md` 的「已实现端点〔PRODUCTION WIRED〕」一节（登记即抬高口径）；
+- ⚠️ **诚实边界（本批交付时四级口径：IMPLEMENTED，未 PRODUCTION WIRED）**：**本批未接生产装配** ⇒ 当时端点**不产生真实流数据**
+  ⇒ 当时**未登记**进 `docs/gateway-api-contract.md` 的「已实现端点〔PRODUCTION WIRED〕」一节（登记即抬高口径）。
+  **后续已补齐**：2026-11-18 C2-3 `ccb62e678` 把流式回合接入注册/实时 delta/唯一终帧，并登记进该节
+  ⇒ 当前四级口径为 **PRODUCTION WIRED**（见上表 C1 行；缓冲仍为进程内）；
   帧只两级；**不做** operation 级去重与 stop/cancel（归 C2）；权威缓冲是**进程内内存** ⇒ 进程重启即失
   （客户端须改取回执）；全局单例注册表 ⇒ 多实例部署下重连到另一实例得 404 而不是 `resync_required`；
   慢订阅者丢帧是静默的（未补 `frames_omitted` 类事实帧）。
