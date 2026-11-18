@@ -9,6 +9,7 @@ pub mod backup;
 pub mod env_switches;
 // 审批面分派 (W3.7 拆分: 装配根文件尺寸棘轮已到顶; 公开路径经下方 re-export 不变).
 pub(crate) mod binding_registries;
+pub use binding_registries::typed_recall_identity_from_env;
 pub mod canonical_approval;
 pub mod contact_panel;
 pub(crate) mod contract_panels;
@@ -234,10 +235,6 @@ const TYPED_RECALL_DISABLE_ENV: &str = "APEIRETH_DISABLE_TYPED_RECALL";
 const DISABLE_PROACTIVE_RECALL_ENV: &str = "APEIRETH_DISABLE_PROACTIVE_RECALL";
 const DISABLE_PREFERENCE_LEARNING_ENV: &str = "APEIRETH_DISABLE_PREFERENCE_LEARNING";
 const DISABLE_MEMORY_INJECTION_ENV: &str = "APEIRETH_DISABLE_MEMORY_INJECTION";
-const PERSONA_ID_ENV: &str = "APEIRETH_PERSONA_ID";
-const SUBJECT_ID_ENV: &str = "APEIRETH_SUBJECT_ID";
-const DEFAULT_PERSONA_ID: &str = "apeireth";
-const DEFAULT_SUBJECT_ID: &str = "local-user";
 // 2026-10-06 W2 记忆闭环批: 反幻觉注入格式 / 每轮记忆整理 / 失败闭环。
 const ENABLE_MEMORY_INJECTION_ENV: &str = "APEIRETH_ENABLE_MEMORY_INJECTION";
 const ENABLE_CONSOLIDATION_ENV: &str = "APEIRETH_ENABLE_CONSOLIDATION";
@@ -315,24 +312,6 @@ pub fn typed_recall_enabled_from_env() -> bool {
     !std::env::var(TYPED_RECALL_DISABLE_ENV)
         .ok()
         .is_some_and(|value| value.trim() == "1")
-}
-
-/// Typed memory 的显式主体身份 (写侧 persona delta 与读侧 typed 召回共用)。
-///
-/// 本地产品单主体: 默认 `apeireth` / `local-user`, 多主体部署用
-/// `APEIRETH_PERSONA_ID` / `APEIRETH_SUBJECT_ID` 覆写 (空白值视为未设)。
-pub fn typed_recall_identity_from_env() -> apeireth_memory::TypedRecallIdentity {
-    fn value(key: &str, default: &str) -> String {
-        std::env::var(key)
-            .ok()
-            .map(|value| value.trim().to_string())
-            .filter(|value| !value.is_empty())
-            .unwrap_or_else(|| default.to_string())
-    }
-    apeireth_memory::TypedRecallIdentity {
-        persona_id: value(PERSONA_ID_ENV, DEFAULT_PERSONA_ID),
-        subject_id: value(SUBJECT_ID_ENV, DEFAULT_SUBJECT_ID),
-    }
 }
 
 /// 语义向量阶段 (2026-10-06 W2): 召回的 embedding 候选打分接线。
@@ -2327,6 +2306,9 @@ async fn build_cognitive_modules_at(
         diary: diary_store::diary_store_for_data_dir(&default_panel_data_dir()),
         memory_extractor: None,
         memory_materializer: None,
+        // B3b-2: 已绑定会话的记忆作用域装配面 (与回合闸同一份注册表实例);
+        // 开不出注册表 ⇒ 缺位 = 已绑定会话写回显式跳过, 不回退 Session。
+        memory_scope_binding: binding_registries::memory_scope_wiring(&default_panel_data_dir()),
         typed_recall: typed_recall_enabled.then(|| Arc::clone(&typed_source)),
         typed_recall_identity: typed_recall_enabled.then_some(typed_identity),
         typed_sink: Some(typed_sink),

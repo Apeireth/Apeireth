@@ -108,6 +108,10 @@ pub mod memory_contract_wire;
 pub mod memory_correction;
 #[path = "canonical/memory_recovery.rs"]
 pub mod memory_recovery;
+/// B3b-2 · 合同受管作用域（`user`/`persona`/`session`，`none` 不写）⇒ canonical
+/// `MemoryScope` 的**唯一翻译点**；`Global` 在类型层不可达（见文件头）。
+#[path = "canonical/memory_scope_wire.rs"]
+pub mod memory_scope_wire;
 #[path = "canonical/memory_typed_sink.rs"]
 pub mod memory_typed_sink;
 /// `rt.module_execution_contract` 的**生产选举面**: 一张静态装配表 (无新 env
@@ -153,6 +157,9 @@ pub mod play_tools;
 pub mod preference_learning;
 #[path = "canonical/production.rs"]
 pub mod production;
+/// B3b-2 · `production.rs` 的纯装配辅助 (拆出以保持装配根净增为 0)。
+#[path = "canonical/production_helpers.rs"]
+mod production_helpers;
 /// 回合层提示注入告警面 (2026-11-05): 消费 fetch 工具**输出侧**写下的
 /// `prompt_injection` 标记 ⇒ ⇒ 在回合层如实报一条**可见**告警 (固定措辞,
 /// 恒不阻断)。标记的写出面在 `apeireth_tools_canonical::fetch`; 治理面的

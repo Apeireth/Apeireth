@@ -560,6 +560,7 @@ async fn run_turn(module: &Arc<dyn Module>) -> ModuleOutcome {
         invoker: &*invoker,
         invoker_handle: Arc::clone(&invoker),
         subloop: &NO_SUB_LOOP,
+        agent_binding: None,
     };
     module
         .on_hook(HookPoint::TurnStart, &ctx)

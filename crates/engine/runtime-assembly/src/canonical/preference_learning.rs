@@ -686,6 +686,7 @@ mod tests {
             invoker: &*invoker,
             invoker_handle: Arc::clone(&invoker),
             subloop: &NULL_SUBLOOP,
+            agent_binding: None,
         };
 
         for hook in [

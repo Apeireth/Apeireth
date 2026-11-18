@@ -7,6 +7,7 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
+use super::agent_binding::AgentBinding;
 pub use super::committed_evidence::{
     CommittedEvidenceAccess, CommittedEvidencePage, CommittedInputOrigin, CommittedOperationIntent,
     CommittedTurnSnapshot, CommittedUserInput,
@@ -432,6 +433,8 @@ pub struct ModuleContext<'a> {
     pub invoker: &'a dyn ModuleInvoker,
     pub invoker_handle: Arc<dyn ModuleInvoker>,
     pub subloop: &'a dyn super::subloop::SubLoopSpawner,
+    /// 已绑定会话的 host 事实（只读，不参与授权判定）。
+    pub agent_binding: Option<&'a AgentBinding>,
 }
 
 impl<'a> ModuleContext<'a> {
