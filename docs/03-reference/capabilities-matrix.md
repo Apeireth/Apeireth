@@ -28,6 +28,8 @@
 `reason` 来自 `/v1/apeireth/capabilities`；工具来自 `CapabilityRegistry`，
 行为模块来自 `BehaviorRegistry`，Provider/Model 来自 live `ProviderRouter`。
 
+2026-11-13 C2增补：受管文本成果/版本服务通过`/v1/artifacts/capabilities`独立核对store身份和single_operator范围；实际`tool.artifact_read`/`tool.artifact_write`来自同一运行时工具名册，与HTTP显式共享服务。首批默认域本机装配开启，用户表激活或非default域失败关闭；agent写保持原人工审批。完整接线与边界见[共同契约](../design/text-artifact-versions.md)、[进度](../status/text-artifact-versions-2026-11-13.md)及声明`work.artifact_versions`，不把独立成果端点写成旧capabilities列表已新增的标识。
+
 | Capability ID | supported | available | Source / frontend surface |
 |---|---:|---:|---|
 | `health`, `runtime.snapshot.read` | true | true | Gateway + Runtime snapshot / RuntimeModal |

@@ -41,11 +41,13 @@ pub mod guard_decision_wiring;
 pub mod keyring_bootstrap;
 pub mod lessons_command;
 pub mod llm_factory_env;
+mod managed_artifacts;
 pub mod parallel_dispatch_wiring;
 pub mod principal_forget_port;
 pub mod rate_limit_wire;
 pub mod read_only_grants;
 pub mod relationship_stores;
+mod runtime_entry;
 mod self_status_probe;
 
 use self_status_probe::self_status_ledger_probe;
@@ -65,6 +67,14 @@ pub use portable_bundle::{PortableBundleManifest, PortableBundleSynthesizer};
 
 use std::path::PathBuf;
 use std::sync::Arc;
+
+use managed_artifacts::ArtifactHandle;
+pub use runtime_entry::{
+    build_canonical_runtime_from_env,
+    build_canonical_runtime_with_sessions_and_voice_emotion_from_env,
+    build_canonical_runtime_with_sessions_from_env,
+};
+use runtime_entry::{BioHandle, BioParts, NociceptionHandle};
 
 use apeireth_core::kernel::{ApprovalId, CapabilityId, SessionId};
 use apeireth_governance::TurnSecurityContext;
@@ -87,8 +97,7 @@ use apeireth_runtime::canonical::{
     ApprovalDecision, ApprovalResolution, PendingApprovalView, Runtime, SessionStore, TurnOutcome,
     TurnRequest, TurnResponse,
 };
-use apeireth_runtime_assembly::canonical::BioApprovalSocialSource;
-use apeireth_runtime_assembly::{canonical::production::BioProbeSlots, SqliteSessionStore};
+use apeireth_runtime_assembly::SqliteSessionStore;
 use apeireth_tools_canonical::{FetchConfig, TrustedShellConfig, APPLY_PATCH_CAPABILITY_ID};
 pub(crate) use llm_factory_env::{council_config_from_env, llm_factory_from_env};
 // 内部执行强制复核 (System One) 的 env 面 + 生效模型 id 的解析口径 (尺寸棘轮平移; 公开路径不变)。
@@ -1369,71 +1378,9 @@ fn build_production_governance_parts_from_env() -> (
     (pipeline, policy, guard_hook)
 }
 
-/// Build the one canonical runtime used by CLI chat and the HTTP gateway.
-/// Provider plugins carry credentials resolution at execution time (never stored).
-pub async fn build_canonical_runtime_from_env() -> Result<Runtime, String> {
-    let (runtime, _, _, _, _) = build_canonical_runtime_with_sessions_from_env().await?;
-    Ok(runtime)
-}
-
-/// Build the runtime and return the shared session-store / memory-backend /
-/// permission-policy handles alongside it (same stores and live policy that the
-/// gateway introspection surfaces serve). 情绪源绑定位不随本口出口。
-pub async fn build_canonical_runtime_with_sessions_from_env() -> Result<
-    (
-        Runtime,
-        Arc<dyn SessionStore>,
-        Arc<dyn MemoryBackend>,
-        Arc<std::sync::Mutex<PermissionPolicy>>,
-        Arc<BehaviorChainGuardHook>,
-    ),
-    String,
-> {
-    let (
-        runtime,
-        session_store,
-        memory,
-        policy,
-        guard_hook,
-        _voice_emotion,
-        _care_heartbeat,
-        _cost_router,
-    ) = build_canonical_runtime_with_sessions_and_voice_emotion_from_env().await?;
-    Ok((runtime, session_store, memory, policy, guard_hook))
-}
-
-/// 生产网关路径的运行时组装 (R3 接线出口): 同一装配 + 情绪源/心跳源绑定位 +
-/// 成本路由器 (H-P2); 生物 probe 迟绑定槽不随本口出口。
-type CanonicalRuntimeParts = (
-    Runtime,
-    Arc<dyn SessionStore>,
-    Arc<dyn MemoryBackend>,
-    Arc<std::sync::Mutex<PermissionPolicy>>,
-    Arc<BehaviorChainGuardHook>,
-    VoiceEmotionSource,
-    CareHeartbeatSource,
-    Arc<apeireth_core::cost_router::CostRouter>,
-);
-
-type BioHandle = Option<Arc<BioApprovalSocialSource>>;
-/// W3.3 SG-16/17: 痛觉/再生领域观察者句柄（开关关 = None，内核零接线）。
-type NociceptionHandle = Option<Arc<apeireth_organ::nociception::NociceptionObserver>>;
-type BioParts = (
-    CanonicalRuntimeParts,
-    BioProbeSlots,
-    BioHandle,
-    NociceptionHandle,
-);
-
-pub async fn build_canonical_runtime_with_sessions_and_voice_emotion_from_env(
-) -> Result<CanonicalRuntimeParts, String> {
-    let (parts, _slots, _approval, _nociception) =
-        build_canonical_runtime_assembly_from_env().await?;
-    Ok(parts)
-}
-
 /// 装配本体 (回传 W3.6 probe 槽与 R1b-2c 审批社交源句柄, 开关关 = None)。**网关形态的装配根**（`gateway serve` 走这条）; 公开以便测试钉住两条根共用部件。
 pub async fn build_canonical_runtime_assembly_from_env() -> Result<BioParts, String> {
+    let artifacts = managed_artifacts::open(default_panel_data_dir()).await?;
     // B-P1 并行构造独立模块: 会话存储打开与认知侧组装互不依赖 (不同库/不同表),
     // 双任务并行推进 —— 启动到 ready 的等待 ≈ max(两侧) 而非两者之和。
     // 拆任务后各自持票进运行时工作线程; 顺序语义不变 (运行时组装仍等两侧齐备)。
@@ -1475,7 +1422,7 @@ pub async fn build_canonical_runtime_assembly_from_env() -> Result<BioParts, Str
         Arc::clone(&clock),
     ));
     let (runtime, policy, guard_hook, nociception) =
-        build_canonical_runtime_with_parts(sessions, cognitive, clock).await?;
+        build_canonical_runtime_with_parts(sessions, cognitive, clock, artifacts.clone()).await?;
     Ok((
         (
             runtime,
@@ -1490,6 +1437,7 @@ pub async fn build_canonical_runtime_assembly_from_env() -> Result<BioParts, Str
         bio_probe_slots,
         bio_approval,
         nociception,
+        artifacts,
     ))
 }
 
@@ -1517,7 +1465,7 @@ async fn build_domain_partner_runtime(
         .bio_probe_slots()
         .fill_care_status(care_heartbeat.status_probe());
     let (runtime, _policy, _guard_hook, _nociception) =
-        build_canonical_runtime_with_parts(sessions, cognitive, clock).await?;
+        build_canonical_runtime_with_parts(sessions, cognitive, clock, None).await?;
     Ok(runtime)
 }
 
@@ -1576,6 +1524,7 @@ async fn build_canonical_runtime_with_parts(
     sessions: Arc<apeireth_runtime::SessionManager>,
     cognitive: apeireth_runtime_assembly::ProductionCognitiveModules,
     clock: Arc<dyn apeireth_core::kernel::Clock>,
+    artifacts: ArtifactHandle,
 ) -> Result<
     (
         Runtime,
@@ -1677,9 +1626,6 @@ async fn build_canonical_runtime_with_parts(
     // The CLI is the composition root. Gateway reuses this function, while
     // SDK remains an HTTP client and does not host a second Runtime.
     // Builtin tools are owned by ProductionModules, not BuiltinToolsPlugin.
-    // The CLI is the composition root. Gateway reuses this function, while
-    // SDK remains an HTTP client and does not host a second Runtime.
-    // Builtin tools are owned by ProductionModules, not BuiltinToolsPlugin.
     //
     // origin/main 侧：桌面 Host 显式授权 —— 认知模块的行为能力按
     // `ExecuteTool` 授权进生产治理策略，并由 `register_with_policy`
@@ -1690,6 +1636,7 @@ async fn build_canonical_runtime_with_parts(
     let agent_policy = cognitive.desktop_agent_policy()?;
     builder = parallel_dispatch_wiring::attach(builder);
     builder = cognitive.register_with_policy(builder, &policy)?;
+    builder = managed_artifacts::attach(builder, &policy, artifacts);
 
     let mut fallback_order: Vec<CapabilityId> = Vec::new();
 
@@ -1806,6 +1753,7 @@ pub async fn build_canonical_runtime_from_env_with_observability() -> Result<
         bio_probe_slots,
         bio_approval,
         nociception,
+        _artifacts,
     ) = build_canonical_runtime_assembly_from_env().await?;
     let runtime = Arc::new(runtime);
     // W3.6: 痛觉/再生 probe 绑定到装配时装入 runtime 的同一观察者实例。
@@ -3161,6 +3109,7 @@ pub async fn dispatch_gateway_serve_with(
         bio_probe_slots,
         _bio_approval,
         nociception,
+        artifacts,
     ) = build_canonical_runtime_assembly_from_env().await?;
     let runtime = Arc::new(runtime);
     // W3.6: 常驻宿主同样把痛觉/再生 probe 绑定到装配时装入的观察者。
@@ -3202,6 +3151,7 @@ pub async fn dispatch_gateway_serve_with(
         .with_guard(guard_hook),
     );
     let mut services = crate::gateway_panels::gateway_services(panel);
+    services.artifacts = artifacts;
     // Wire the hot-reload api_key writer to the shared runtime credential store
     // the runtime's credential resolver reads per request (真热更: admin 写入后
     // 下一请求即生效); a configured keyring backend additionally persists the

@@ -1,0 +1,782 @@
+{
+  "schema": "apeireth.c2.backend-validation.v1",
+  "date": "2026-11-13",
+  "captured_at_utc": "2026-11-13T04:26:10.484195+00:00",
+  "source": {
+    "checkpoint": "9cc6ab3a9a375b4b0d3f3b7c842a0a621278b81c",
+    "baseline": "b6b98ab07795a1cb72747027418ccc34b4ecfe4a",
+    "branch": "feat/c2-artifact-versions-20261113",
+    "scope": "Public backend C2 managed text artifacts only. Private UI implementation and evidence bundles are out of scope.",
+    "note": "Source hashes below come from the exact 9cc git objects. Original logs and historical restoration hashes retain their original provenance."
+  },
+  "status": "All four local backend software gates and exact-checkpoint critical guard falsification passed; no push, merge, release or user visual signoff.",
+  "toolchain": {
+    "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+    "cargo": "cargo 1.97.1 (c980f4866 2026-06-30)",
+    "version_commands": [
+      [
+        "rustc",
+        "--version"
+      ],
+      [
+        "cargo",
+        "--version"
+      ]
+    ],
+    "platform": "Windows MSVC x86_64",
+    "msvc_setup": "C:/BuildTools/VC/Auxiliary/Build/vcvars64.bat"
+  },
+  "workspace_execution": {
+    "started_at_utc": "2026-11-13T03:50:47.044263+00:00",
+    "target_directory": "C:\\Apeireth\\cargo-target-c2-gates",
+    "profile": {
+      "test_debug": 0,
+      "dev_debug": 0,
+      "incremental": false,
+      "jobs": 2
+    },
+    "environment": {
+      "CARGO_PROFILE_TEST_DEBUG": "0",
+      "CARGO_PROFILE_DEV_DEBUG": "0",
+      "CARGO_INCREMENTAL": "0",
+      "CARGO_TARGET_DIR": "C:\\Apeireth\\cargo-target-c2-gates"
+    },
+    "primary_exit_record": {
+      "origin": "local TEMP retained raw evidence",
+      "file": "apeireth-c2-workspace-gates.json",
+      "bytes": 1804,
+      "sha256": "6f48ce793698d8a049a9a1a5a8d26c6db5eb962e078f4b19d485144aa4758bd6"
+    },
+    "gates": [
+      {
+        "name": "workspace-test",
+        "command": [
+          "cargo",
+          "test",
+          "--workspace",
+          "--all-targets",
+          "--locked",
+          "--offline",
+          "-j",
+          "2"
+        ],
+        "exit_code": 0,
+        "finished_at": "2026-11-13T04:14:55.593896+00:00",
+        "status": "passed",
+        "log": {
+          "origin": "local TEMP retained raw evidence",
+          "file": "apeireth-c2-workspace-test.log",
+          "bytes": 904421,
+          "sha256": "fa7072badba3bede77720c314db33d557adc65c5517b3782704a7ddfb6053ed9"
+        },
+        "counts": {
+          "suites": 560,
+          "passed": 10956,
+          "failed": 0,
+          "ignored": 49,
+          "measured": 0,
+          "filtered_out": 0
+        }
+      },
+      {
+        "name": "workspace-clippy",
+        "command": [
+          "cargo",
+          "clippy",
+          "--workspace",
+          "--all-targets",
+          "--locked",
+          "--offline",
+          "-j",
+          "2",
+          "--",
+          "-D",
+          "warnings"
+        ],
+        "exit_code": 0,
+        "finished_at": "2026-11-13T04:18:54.202669+00:00",
+        "status": "passed",
+        "log": {
+          "origin": "local TEMP retained raw evidence",
+          "file": "apeireth-c2-workspace-clippy.log",
+          "bytes": 13730,
+          "sha256": "62122668f979344f8dd1974216ec17c481a78e0bce2bb71b80713d46cc1ed39c"
+        }
+      },
+      {
+        "name": "fmt",
+        "command": [
+          "pwsh",
+          "-NoProfile",
+          "-File",
+          "scripts/fmt-check.ps1"
+        ],
+        "exit_code": 0,
+        "finished_at": "2026-11-13T04:19:11.309299+00:00",
+        "status": "passed",
+        "log": {
+          "origin": "local TEMP retained raw evidence",
+          "file": "apeireth-c2-fmt.log",
+          "bytes": 1032,
+          "sha256": "1000cc836bf381bef20d4ff3ddc4ae40ab6e3e9776a927af07d869a968eb674d"
+        },
+        "crates_checked": 35
+      },
+      {
+        "name": "workspace-doc-test",
+        "command": [
+          "cargo",
+          "test",
+          "--doc",
+          "--workspace",
+          "--locked",
+          "--offline",
+          "-j",
+          "2"
+        ],
+        "exit_code": 0,
+        "finished_at": "2026-11-13T04:20:26.398766+00:00",
+        "status": "passed",
+        "log": {
+          "origin": "local TEMP retained raw evidence",
+          "file": "apeireth-c2-workspace-doc-test.log",
+          "bytes": 6063,
+          "sha256": "c574172807c22ff70bd0af7175d8957ec1b3168477dc80ee55c7c5032f6b494f"
+        },
+        "counts": {
+          "suites": 34,
+          "passed": 3,
+          "failed": 0,
+          "ignored": 6,
+          "measured": 0,
+          "filtered_out": 0
+        }
+      }
+    ],
+    "count_note": "All-targets and doctests were separate invocations. Ignored cases are not validated. Scoped reruns overlap these counts; no global test-baseline or badge update is implied. Debug information was disabled, incremental compilation off, jobs two, isolated target."
+  },
+  "affected_library_tests": {
+    "exit_code": 0,
+    "exit_evidence": "root observed process success; counts independently parsed from retained log",
+    "counts": {
+      "suites": 4,
+      "passed": 954,
+      "failed": 0,
+      "ignored": 0,
+      "measured": 0,
+      "filtered_out": 0
+    },
+    "by_crate": {
+      "apeireth-cli": 137,
+      "apeireth-gateway": 174,
+      "apeireth-protocol": 200,
+      "apeireth-runtime-assembly": 443
+    },
+    "target_directory": "C:/Apeireth/cargo-target",
+    "profile_as_logged": "test, unoptimized + debuginfo",
+    "reproduction_command": [
+      "cargo",
+      "test",
+      "-p",
+      "apeireth-protocol",
+      "-p",
+      "apeireth-runtime-assembly",
+      "-p",
+      "apeireth-gateway",
+      "-p",
+      "apeireth-cli",
+      "--lib",
+      "--locked",
+      "--offline",
+      "-j",
+      "2"
+    ],
+    "log": {
+      "origin": "local TEMP retained raw evidence",
+      "file": "apeireth-c2-backend-lib.log",
+      "bytes": 89822,
+      "sha256": "9885b39051610f8b5cd3cbe5253cce0f22d72b51eca36ee55c20a00408464ed8"
+    }
+  },
+  "historical_behavioral_falsification": [
+    {
+      "guard": "cas",
+      "test": "independent_connections_cas_once_and_persist_conflict_and_receipt_across_reopen",
+      "red_exit": 101,
+      "green_exit": 0,
+      "source_restored_sha256": "30ee020792ca41f6996ffe7f127f83b9253a34695fb74f15d56912f25799f665",
+      "source_path": "crates/engine/runtime-assembly/src/sqlite_artifacts/mutations.rs",
+      "checkpoint_source_sha256": "30ee020792ca41f6996ffe7f127f83b9253a34695fb74f15d56912f25799f665",
+      "red_log": {
+        "origin": "local TEMP retained raw evidence",
+        "file": "apeireth-c2-reverse-cas-red.log",
+        "bytes": 3655,
+        "sha256": "6924b9db74289e1050d06bb5dd44af0b6cafe0b4e1c850cba61d68842dfe6b5e"
+      },
+      "green_log": {
+        "origin": "local TEMP retained raw evidence",
+        "file": "apeireth-c2-reverse-cas-green.log",
+        "bytes": 553,
+        "sha256": "e846fe10371d24d43cf7cfb047ec4e91692e6e7636fca5c5f1a43e39dcd04007"
+      },
+      "red_counts": {
+        "suites": 1,
+        "passed": 0,
+        "failed": 1,
+        "ignored": 0,
+        "measured": 0,
+        "filtered_out": 442
+      },
+      "green_counts": {
+        "suites": 1,
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered_out": 442
+      },
+      "test_reproduction_command": [
+        "cargo",
+        "test",
+        "-p",
+        "apeireth-runtime-assembly",
+        "--lib",
+        "independent_connections_cas_once_and_persist_conflict_and_receipt_across_reopen",
+        "--locked",
+        "--offline",
+        "-j",
+        "2"
+      ],
+      "restored_source_matches_checkpoint": true
+    },
+    {
+      "guard": "human-floor",
+      "test": "full_or_remembered_preset_never_removes_artifact_human_approval_floor",
+      "red_exit": 101,
+      "green_exit": 0,
+      "source_restored_sha256": "ab075c7dfe1a38ac60490536a388c35b4355a8304caa217e593a0f794e424001",
+      "source_path": "crates/engine/runtime-assembly/src/canonical/permission_preset.rs",
+      "checkpoint_source_sha256": "daaed7bbc25a9e8ef982eb5c2f2a135e2105accd42b0c5b0bcc07e13f955a76d",
+      "red_log": {
+        "origin": "local TEMP retained raw evidence",
+        "file": "apeireth-c2-reverse-human-floor-red.log",
+        "bytes": 1971,
+        "sha256": "1544255fd7ce65047cc66aa9f8896fb7ab3449579ee31aaf5396e0575daa619c"
+      },
+      "green_log": {
+        "origin": "local TEMP retained raw evidence",
+        "file": "apeireth-c2-reverse-human-floor-green.log",
+        "bytes": 541,
+        "sha256": "ad2d797aa8910a2cf2fe261c1dc0f9a697296579405874d87d7f6158aae2b21c"
+      },
+      "red_counts": {
+        "suites": 1,
+        "passed": 0,
+        "failed": 1,
+        "ignored": 0,
+        "measured": 0,
+        "filtered_out": 442
+      },
+      "green_counts": {
+        "suites": 1,
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered_out": 442
+      },
+      "test_reproduction_command": [
+        "cargo",
+        "test",
+        "-p",
+        "apeireth-runtime-assembly",
+        "--lib",
+        "full_or_remembered_preset_never_removes_artifact_human_approval_floor",
+        "--locked",
+        "--offline",
+        "-j",
+        "2"
+      ],
+      "historical_proof_note": "Original red101/green0 and restored SHA retained. That historical SHA differs from 9cc; the difference was not reconstructed or asserted comment-only. See exact_checkpoint_human_floor_falsification for the newly repeated actual red/green on the exact final source and its byte-identical restoration."
+    }
+  ],
+  "export_etag_regression": {
+    "cause": "An actual editable-client export refused content whose required digest ETag was missing.",
+    "test": "artifacts::tests::read_history_export_and_operation_are_exact_version_read_only_calls",
+    "source_path": "crates/adapters/gateway/src/artifacts.rs",
+    "checkpoint_source_sha256": "36cdadd91fdb09b2b7e3c19465211a6b8de48bcb9978fcaf43d1711ae2bb968d",
+    "red_exit_code": 101,
+    "red_reason": "The test executed and failed because header etag was absent.",
+    "red_counts": {
+      "suites": 1,
+      "passed": 0,
+      "failed": 1,
+      "ignored": 0,
+      "measured": 0,
+      "filtered_out": 173
+    },
+    "red_log": {
+      "origin": "local TEMP retained raw evidence",
+      "file": "apeireth-c2-export-etag-red.log",
+      "bytes": 2237,
+      "sha256": "ca29b5e2661927c6cb5ddb30cd1eec14c7d546addf88fe06d2a395e7359bd296"
+    },
+    "green_exit_code": 0,
+    "green_counts": {
+      "suites": 1,
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "measured": 0,
+      "filtered_out": 173
+    },
+    "green_log": {
+      "origin": "local TEMP retained raw evidence",
+      "file": "apeireth-c2-export-etag-green.log",
+      "bytes": 518,
+      "sha256": "c0080428a0f2dc144d4827e648bc60bbed35b9fb96bc469e782a760fd031aace"
+    },
+    "fix": "Return the quoted committed revision content_sha256 ETag with exact UTF8 bytes.",
+    "test_reproduction_command": [
+      "cargo",
+      "test",
+      "-p",
+      "apeireth-gateway",
+      "--lib",
+      "artifacts::tests::read_history_export_and_operation_are_exact_version_read_only_calls",
+      "--locked",
+      "--offline",
+      "-j",
+      "2"
+    ]
+  },
+  "coarse_crate_budget": {
+    "command": [
+      "python",
+      "scripts/check_crate_budget.py",
+      "--check"
+    ],
+    "red_exit_code": 1,
+    "green_exit_code": 0,
+    "red_log": {
+      "origin": "local TEMP retained raw evidence",
+      "file": "apeireth-c2-crate-budget-red.log",
+      "bytes": 691,
+      "sha256": "18ddcd0f18b4ecc0eb72693a32d4472ac879efc58d31d2718189942962ffea0b"
+    },
+    "green_log": {
+      "origin": "local TEMP retained raw evidence",
+      "file": "apeireth-c2-crate-budget-green.log",
+      "bytes": 206,
+      "sha256": "d26b291252c9fe72309df43e14e0c1b65220762c8ed76d93437f52f43b7ac4e0"
+    },
+    "decision": "docs/adr/0025-managed-text-artifact-versions.md",
+    "measurement_method": "current imported check_crate_budget.crate_stats; git ls-tree + cat-file --batch, UTF8 ignore/universal newline file-line equivalent",
+    "baseline_entries": 34,
+    "changed_entries": 4,
+    "unchanged_entries": 30,
+    "version_preserved": "crate-budget/v1",
+    "note_preserved": true,
+    "arch_baseline_unchanged": true,
+    "arch_baseline_sha256": "73575b6e9db8f15a342eda716c46634fe674e353d98691b60b87d87933679d14",
+    "crates": {
+      "crates/adapters/cli": {
+        "baseline": {
+          "files": 40,
+          "loc": 18879
+        },
+        "base_source": {
+          "loc": 18879,
+          "files": 40
+        },
+        "current": {
+          "loc": 18939,
+          "files": 42
+        },
+        "inherited_delta": {
+          "loc": 0,
+          "files": 0
+        },
+        "c2_delta": {
+          "loc": 60,
+          "files": 2
+        }
+      },
+      "crates/adapters/gateway": {
+        "baseline": {
+          "files": 36,
+          "loc": 19459
+        },
+        "base_source": {
+          "loc": 21373,
+          "files": 45
+        },
+        "current": {
+          "loc": 22647,
+          "files": 47
+        },
+        "inherited_delta": {
+          "loc": 1914,
+          "files": 9
+        },
+        "c2_delta": {
+          "loc": 1274,
+          "files": 2
+        }
+      },
+      "crates/engine/runtime-assembly": {
+        "baseline": {
+          "files": 88,
+          "loc": 47508
+        },
+        "base_source": {
+          "loc": 47508,
+          "files": 88
+        },
+        "current": {
+          "loc": 49235,
+          "files": 93
+        },
+        "inherited_delta": {
+          "loc": 0,
+          "files": 0
+        },
+        "c2_delta": {
+          "loc": 1727,
+          "files": 5
+        }
+      },
+      "crates/foundation/protocol": {
+        "baseline": {
+          "files": 24,
+          "loc": 8841
+        },
+        "base_source": {
+          "loc": 8841,
+          "files": 24
+        },
+        "current": {
+          "loc": 9244,
+          "files": 25
+        },
+        "inherited_delta": {
+          "loc": 0,
+          "files": 0
+        },
+        "c2_delta": {
+          "loc": 403,
+          "files": 1
+        }
+      }
+    },
+    "comparison_record": {
+      "origin": "local TEMP retained raw evidence",
+      "file": "apeireth-c2-crate-budget-comparison.json",
+      "bytes": 2036,
+      "sha256": "eb3ce1e243c88b626fe84fd882c72e80df6861866aa56b3287a185201498a8c1"
+    },
+    "update_record": {
+      "origin": "local TEMP retained raw evidence",
+      "file": "apeireth-c2-crate-budget-update-proof.json",
+      "bytes": 360,
+      "sha256": "d053391499b4d20480fe92205f16a54870eabc970fcb615f45df2bf48fd321b2"
+    },
+    "interpretation": "Gateway inherited excess at b6 is 1914 lines and 9 files; C2 net growth is separate. Accept only four measured coarse budgets, with no spare growth or single-file architecture-baseline increase."
+  },
+  "inherited_wiring_registration": {
+    "claim_ids": [
+      "sec.governance_chain_drill",
+      "sec.terminal_permission_surfaces"
+    ],
+    "baseline_source": "b6b98ab07795a1cb72747027418ccc34b4ecfe4a",
+    "current_source": "9cc6ab3a9a375b4b0d3f3b7c842a0a621278b81c",
+    "command": [
+      "python",
+      "scripts/wiring_report.py",
+      "--crosscheck",
+      "--strict"
+    ],
+    "baseline_exit_code": 1,
+    "current_before_registration_exit_code": 1,
+    "current_after_registration_exit_code": 0,
+    "baseline_clean_before_and_after": true,
+    "baseline_log": {
+      "origin": "local TEMP retained raw evidence",
+      "file": "apeireth-c2-b6-wiring-crosscheck-baseline.txt",
+      "bytes": 605,
+      "sha256": "0955f1c2d7b4e90c8290781fc592843f2cafffb92d97106dfcdaf173c65d2348"
+    },
+    "current_red_log": {
+      "origin": "local TEMP retained raw evidence",
+      "file": "apeireth-c2-current-wiring-crosscheck-before-fix.txt",
+      "bytes": 766,
+      "sha256": "22284d03e84a2c80071cd7b0b59f595e20e0efbf0da082d8c2bdddae5cb6e19a"
+    },
+    "current_green_log": {
+      "origin": "local TEMP retained raw evidence",
+      "file": "apeireth-c2-current-wiring-crosscheck-after-fix.txt",
+      "bytes": 320,
+      "sha256": "646ab1f9c3bfeb23fd78284391ed20cfc2bc6a5668c3fc4efe4919d5c3153010"
+    },
+    "change": "Register already present workflow and terminal installation/host sources. Preserve levels/defaults, with no checker relaxation or product change. The source review does not itself claim a new test/build or remote-CI result.",
+    "reviewed_sources": [
+      {
+        "path": "scripts/wiring_report.py",
+        "b6_sha256_lf": "8ecfcdad583fc79dd0d4fa6dfa2f78c870a9e97fd3b1def9f84a39f8a6b69520",
+        "current_sha256_lf": "8ecfcdad583fc79dd0d4fa6dfa2f78c870a9e97fd3b1def9f84a39f8a6b69520",
+        "unchanged": true
+      },
+      {
+        "path": ".github/workflows/rust.yml",
+        "b6_sha256_lf": "d228240a69d9e90a8e8d33b10f98377aa7a57695a2f9b890ebe8a732520ae337",
+        "current_sha256_lf": "d228240a69d9e90a8e8d33b10f98377aa7a57695a2f9b890ebe8a732520ae337",
+        "unchanged": true
+      },
+      {
+        "path": "crates/foundation/governance/tests/governance_chain_drill.rs",
+        "b6_sha256_lf": "5a1d8b9306e1ff424bccc365e3590c574ac0a45083a98bd0f6d8340022735a17",
+        "current_sha256_lf": "5a1d8b9306e1ff424bccc365e3590c574ac0a45083a98bd0f6d8340022735a17",
+        "unchanged": true
+      },
+      {
+        "path": "frontend/companion-desktop/src/lib/starport/apps/terminal-app.ts",
+        "b6_sha256_lf": "30502110471943cd391f896d46462b3bf028830cb2faba0f6cbc97dad0b6cf05",
+        "current_sha256_lf": "30502110471943cd391f896d46462b3bf028830cb2faba0f6cbc97dad0b6cf05",
+        "unchanged": true
+      },
+      {
+        "path": "frontend/companion-desktop/src/lib/starport/faces-install.ts",
+        "b6_sha256_lf": "163de867dadc65f287baff5c966907c0bac440f8e66c51072cc399d6f93652ef",
+        "current_sha256_lf": "163de867dadc65f287baff5c966907c0bac440f8e66c51072cc399d6f93652ef",
+        "unchanged": true
+      },
+      {
+        "path": "frontend/companion-desktop/src/lib/components/StarportPanel.svelte",
+        "b6_sha256_lf": "0e729368ab30288a1e83cc04be6e85e58029ebf07db05b274251c4d21594a89d",
+        "current_sha256_lf": "0e729368ab30288a1e83cc04be6e85e58029ebf07db05b274251c4d21594a89d",
+        "unchanged": true
+      },
+      {
+        "path": "frontend/companion-desktop/src-tauri/src/lib.rs",
+        "b6_sha256_lf": "94d121ffa8e0259f0600370a1cd367ffd1eabb267163a51e043bc8f9bb28dff2",
+        "current_sha256_lf": "94d121ffa8e0259f0600370a1cd367ffd1eabb267163a51e043bc8f9bb28dff2",
+        "unchanged": true
+      },
+      {
+        "path": "frontend/companion-desktop/src-tauri/src/terminal_exec.rs",
+        "b6_sha256_lf": "4da43fedecccc09fcf56e689e4d89e7fb6954f8383fb3f3700379bce92945278",
+        "current_sha256_lf": "4da43fedecccc09fcf56e689e4d89e7fb6954f8383fb3f3700379bce92945278",
+        "unchanged": true
+      }
+    ],
+    "source_review_record": {
+      "origin": "local TEMP retained raw evidence",
+      "file": "apeireth-c2-wiring-source-registration-review.json",
+      "bytes": 6906,
+      "sha256": "f6f78c3846bd27bddca65e95cb769b7d26eebfb5585c5045e5f112c473c7364d"
+    },
+    "new_test_or_remote_ci_result_claimed_by_source_review": false
+  },
+  "shared_kernel_runtime_observation": {
+    "evidence_kind": "root actual bounded observation; no private source, implementation path or evidence bundle copied",
+    "status": "passed",
+    "assertions": 23,
+    "local_controlled_model_calls": 6,
+    "external_model_calls": 0,
+    "behavior": "Canonical artifact_read capabilities; original durable approval then artifact_write create; human HTTP v2 commit; canonical read returned the same human committed text/digest and trusted original session/request/trace provenance.",
+    "scope": "Fresh owned local single_operator fixture. No multiuser, nondefault-domain, external-model quality, hardware or universal editor claim.",
+    "related_in_repository_library_command": [
+      "cargo",
+      "test",
+      "-p",
+      "apeireth-protocol",
+      "-p",
+      "apeireth-runtime-assembly",
+      "-p",
+      "apeireth-gateway",
+      "-p",
+      "apeireth-cli",
+      "--lib",
+      "--locked",
+      "--offline",
+      "-j",
+      "2"
+    ],
+    "command_scope": "The related command runs backend library tests. It does not reproduce the separately root-observed 23-assertion controlled canonical fixture."
+  },
+  "retained_setup_failures": [
+    {
+      "name": "initial workspace invocation without MSVC environment",
+      "exit_code": 101,
+      "reason": "link.exe not found; tests were not run by this invocation",
+      "exit_record": {
+        "origin": "local TEMP retained raw evidence",
+        "file": "apeireth-c2-workspace-gates.json.initial-no-msvc",
+        "bytes": 640,
+        "sha256": "07c202d2af18c59002f11afcf7043c767731a26ea3f2342bb1ae0cd330b6ef40"
+      },
+      "log": {
+        "origin": "local TEMP retained raw evidence",
+        "file": "apeireth-c2-workspace-test.log.initial-no-msvc",
+        "bytes": 608,
+        "sha256": "400d3fd55c151fe78f44bd8ebce0cdadc362fe4ea6ba5099c5f5a868c3af3daa"
+      },
+      "resolution": "Repeat under explicit vcvars64 setup in the same isolated debug0 target; later actual exit0 is separate."
+    }
+  ],
+  "limits": [
+    "Local verification only; no push, merge, publication, remote CI or user visual signoff.",
+    "Scope is single_operator in default domain without active users; active-user and nondefault-domain calls fail closed.",
+    "No DOCX fidelity, arbitrary-format editor, external-model quality or hardware validation.",
+    "No global test-baseline, badges, workspace version or single-file architecture baseline was updated.",
+    "No screenshots, profiles, databases, executables, private source, private internal paths or private evidence bundles are included."
+  ],
+  "exact_checkpoint_human_floor_falsification": {
+    "proof": {
+      "source_checkpoint": "9cc6ab3a9a375b4b0d3f3b7c842a0a621278b81c",
+      "source": "crates\\engine\\runtime-assembly\\src\\canonical\\permission_preset.rs",
+      "source_before_sha256": "daaed7bbc25a9e8ef982eb5c2f2a135e2105accd42b0c5b0bcc07e13f955a76d",
+      "matches_committed_bytes": true,
+      "mutation": "Replace only artifact write capability arm with a distinct nonmatching test marker, preserving git floor",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "apeireth-runtime-assembly",
+        "--lib",
+        "full_or_remembered_preset_never_removes_artifact_human_approval_floor",
+        "--locked",
+        "--offline",
+        "-j",
+        "2"
+      ],
+      "red_exit": 101,
+      "green_exit": 0,
+      "source_restored_sha256": "daaed7bbc25a9e8ef982eb5c2f2a135e2105accd42b0c5b0bcc07e13f955a76d",
+      "source_restored_exactly": true,
+      "at": "2026-11-13T04:27:23.058134+00:00"
+    },
+    "proof_file": {
+      "origin": "local TEMP retained raw evidence",
+      "file": "apeireth-c2-human-floor-final-proof.json",
+      "bytes": 849,
+      "sha256": "3f50ac971cf597bc092afd063f59e90ab69d4c7ec5facae622fad15362e52c08"
+    },
+    "red_log": {
+      "origin": "local TEMP retained raw evidence",
+      "file": "apeireth-c2-human-floor-final-red.log",
+      "bytes": 6791,
+      "sha256": "f4fab4cbd5b0b4005c12809e5f9fbc7e1924786d591c1f7708b4eee554a41ed6"
+    },
+    "green_log": {
+      "origin": "local TEMP retained raw evidence",
+      "file": "apeireth-c2-human-floor-final-green.log",
+      "bytes": 538,
+      "sha256": "f03e415ad5110d7b3807fcb0e3f630e7cabfa0311da2bbb194cc7254a10bf764"
+    },
+    "red_counts": {
+      "passed": 0,
+      "failed": 1
+    },
+    "green_counts": {
+      "passed": 1,
+      "failed": 0
+    },
+    "note": "Fresh actual red/green directly on exact 9cc source bytes. Historical mismatch is retained separately and not used to assert final source identity."
+  },
+  "updated_at_utc": "2026-11-13T04:29:55.483149+00:00",
+  "documentation_gates": {
+    "checks": [
+      {
+        "name": "claims",
+        "command": [
+          "python",
+          "scripts/docs_truth.py",
+          "--verify",
+          "--check",
+          "--block-stale"
+        ],
+        "exit_code": 0,
+        "log": {
+          "file": "apeireth-c2-docs-verify-final.log",
+          "bytes": 5616,
+          "sha256": "9898d726348cff7d9e0f5a4799d024638b003e04594dd275298a10a3b455e180"
+        }
+      },
+      {
+        "name": "wiring",
+        "command": [
+          "python",
+          "scripts/wiring_report.py",
+          "--verify"
+        ],
+        "exit_code": 0,
+        "log": {
+          "file": "apeireth-c2-wiring-verify-final.log",
+          "bytes": 83,
+          "sha256": "c1edba79169270cfe9dff18ce9f53ca48937139305ab6d3298b6397c2790e256"
+        }
+      },
+      {
+        "name": "crosscheck",
+        "command": [
+          "python",
+          "scripts/wiring_report.py",
+          "--crosscheck",
+          "--strict"
+        ],
+        "exit_code": 0,
+        "log": {
+          "file": "apeireth-c2-wiring-crosscheck-final.log",
+          "bytes": 48,
+          "sha256": "e12271770184d8088b2877455eba480e5a76ec317be99928f9de2c76e2b0fed5"
+        }
+      },
+      {
+        "name": "env_registry",
+        "command": [
+          "python",
+          "scripts/wiring_report.py",
+          "--check-env-registry"
+        ],
+        "exit_code": 0,
+        "log": {
+          "file": "apeireth-c2-env-registry.log",
+          "bytes": 171,
+          "sha256": "65222c54b884ca756f12b82987baf00dfbf545b8a979c9ea883ff48f3ae9a99e"
+        }
+      },
+      {
+        "name": "links",
+        "command": [
+          "python",
+          "scripts/docs_links.py",
+          "--check"
+        ],
+        "exit_code": 0,
+        "log": {
+          "file": "apeireth-c2-links-final.log",
+          "bytes": 154,
+          "sha256": "308b4caf0949cd379a22e8f54638c684d675ebe7bac8f991e49da12c50f9b536"
+        }
+      },
+      {
+        "name": "index",
+        "command": [
+          "python",
+          "scripts/docs_index.py",
+          "--check"
+        ],
+        "exit_code": 0,
+        "log": {
+          "file": "apeireth-c2-index-final.log",
+          "bytes": 27,
+          "sha256": "57e5d3904b92747eb9bb1d4845c6e884dd68a62fede4f8c039b6b7dea6c23c0b"
+        }
+      }
+    ],
+    "generated_by": "Original docs_truth.cmd_gen, wiring_report.cmd_gen, docs_index.gen_index functions; no hand-edited generated data",
+    "resource_guard": "Positive own free-space check before generation; did not invoke unrelated 300GB shared-cache cleanup",
+    "retained_nonblocking_historical_hint": "One pre-existing suspected_missing sec.linux_containment source-scope hint was reviewed and not suppressed; no C2 change to those files"
+  }
+}

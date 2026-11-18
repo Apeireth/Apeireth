@@ -56,6 +56,9 @@ pub mod presence;
 /// Session-scoped model + permission settings (`/v1/sessions/{id}/settings`).
 pub mod session_settings;
 
+/// Managed text artifact versions shared with governed tools.
+pub(crate) mod artifacts;
+
 /// Resident-slot (daemon) bookkeeping: PID file claim / release / liveness.
 pub mod resident;
 

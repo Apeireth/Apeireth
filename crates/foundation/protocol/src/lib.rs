@@ -59,6 +59,7 @@ pub mod adapter;
 // addressing + integrity checksum + routing classification (from apeireth-acp).
 pub mod acp;
 pub mod adapters;
+pub mod artifacts;
 // reconstruct_v2 canonical convergence: the canonical interaction contract.
 // Re-exports the normalized types that already existed and adds the three that
 // were missing (ToolResult / StreamEvent / ModelDescriptor). See `canonical`'s

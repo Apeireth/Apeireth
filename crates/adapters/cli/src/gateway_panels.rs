@@ -1108,6 +1108,8 @@ pub fn gateway_services(panel: Arc<CliPanelData>) -> GatewayServices {
         grants: Some(panel.clone() as Arc<dyn GrantQuery>),
         grant_commands: Some(panel.clone() as Arc<dyn GrantCommand>),
         modules: Some(panel.clone() as Arc<dyn ModuleQuery>),
+        // 凭证写面由组合根在网关 serve 装配点注入 (见 cli::lib 的
+        // `services.credentials`), 走 keyring 后端。
         credentials: None,
         safety_guard,
         workbench: Some(panel as Arc<dyn WorkbenchQuery>),
@@ -1131,6 +1133,9 @@ pub fn gateway_services(panel: Arc<CliPanelData>) -> GatewayServices {
         // 联系人合同面同口径: 适配器由组合根在装配点注入 (见 cli::lib 的
         // `services.contacts`), 真实持有联系人注册表与绑定档。
         contacts: None,
+        // 受管文本成果面同口径: 适配器由组合根在装配点注入 (见 cli::lib 的
+        // `services.artifacts`), 真实持有 SQLite 版本库。
+        artifacts: None,
     }
 }
 

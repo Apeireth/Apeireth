@@ -80,7 +80,7 @@ orphan with_quorum_gate_probe  # G3  生物族默认关 ⇒ 零引用是设计�
 orphan with_system_markers  # G3  organ 族未接生产（同上）⇒ 零引用源于族未接线 ⇒ 触发: 提示词装配族进生产时
 orphan with_task_type  # G3  认知编排面默认关 ⇒ 零引用是设计如此 ⇒ 触发: 认知编排族进生产时
 
-# --- G4（21 条）：**注入点 / 探测口**（`with_*`）。生产装配走 `install_*`。
+# --- G4（20 条）：**注入点 / 探测口**（`with_*`）。生产装配走 `install_*`。
 
 orphan with_age  # G4  ⇒ 触发: 研究族进生产时
 orphan with_backend  # G4  ⇒ 触发: 语音感知族进生产装配时
@@ -99,7 +99,6 @@ orphan with_preview_chars  # G4  ⇒ 触发: 告警预览长度出现可读性�
 orphan with_reader  # G4  元思考族（`MetaThinking`）**未接生产**（生产侧引用 0）⇒ ⇒ 零引用是族级结果；读面注入（与 `save_to_cluster` 配对） ⇒ 触发: 元思考族进生产装配时
 orphan with_session_label  # G4  ⇒ 触发: 需要按会话区分内容流时
 orphan with_shell_executable  # G4  ⇒ 触发: 需要非 bash shell（pwsh/fish）的部署时
-orphan with_synchronous  # G4  ⇒ 触发: 需要 FULL（耐久性优先）档时
 orphan with_voices_error  # G4  ⇒ 触发: 写语音后端失败路径测试时
 orphan with_default_deadline  # G4  Mesh 线新增的 builder 注入点（MeshNodeConfig 的默认调用截止时间）；生产装配尚未设置该值 ⇒ 零引用源于「装配未接线」，不是「没实现」 ⇒ 触发: 网格节点需要按部署覆盖默认调用截止时间时（勿另开参数面）
 orphan with_remote_port  # G4  Mesh 线新增的注入点：Runtime 装入远端能力端口（不装则运行时全本地，与加端口前的构建逐字节等价）；生产装配未接线 ⇒ 触发: 网关侧装配 mesh 端口时（见 docs/design/mesh-nat-e2e-report.md §D.3 剩余缺口）

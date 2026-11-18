@@ -6,6 +6,12 @@
 > 状态:2026-09-04，当前 canonical runtime/assembly 实现。标注 `[已实现]` 的端点当前可用；能力是否真正可用以 `/v1/apeireth/capabilities` 为准。
 > 响应形状与 `apeireth-ui/src/lib/types.ts` 对齐；`frontend/companion-desktop` 是 Tauri 薄壳。
 
+## C2增补：受管文本成果与版本（2026-11-13）
+
+`/v1/artifacts`族为默认域single_operator本地工作区提供权威成果版本服务，复用既有认证、角色与域闸；active用户表或非默认域未装配时失败关闭。精确路由、strict DTO、store身份、CAS/持久回执、容量、导出ETag及错误语义以[共同契约](design/text-artifact-versions.md)为准，实测状态见[进度](status/text-artifact-versions-2026-11-13.md)。
+
+该族分页为每页1～32、正文最大256KiB，与下文旧面板的分页默认值分开。首批不接受任意文件路径，不编辑原导入Document，不把work_id当成服务端项目授权。agent的artifact_read/artifact_write与HTTP使用同一服务；agent写经原canonical治理与人工审批，人工保存不伪造工具审批。
+
 ## §1 通用约定
 
 - Base URL:`http://127.0.0.1:{port}`(port 由桌面壳为 sidecar 动态分配;手动运行时默认 8080)
