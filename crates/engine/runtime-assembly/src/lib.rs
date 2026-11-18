@@ -18,9 +18,13 @@ pub mod portable;
 pub mod consequence_backfill;
 // 数据根路径解析 (同理由根级公开): `apeireth_runtime_assembly::paths::default_data_root()`
 // 被 CLI 与 `foundation/core` 的文档交叉引用。
+#[cfg(feature = "desktop")]
+pub mod artifact_tools;
 pub mod paths;
 #[cfg(feature = "memory")]
 pub mod profile_memory;
+#[cfg(feature = "desktop")]
+pub mod sqlite_artifacts;
 pub mod system_one;
 pub use portable::{AssemblyError, PortableHost};
 

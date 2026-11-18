@@ -67,6 +67,7 @@ pub fn is_write_or_execute_capability(capability: &CapabilityId) -> bool {
         "tool.worktree_apply",
         "tool.skill_distill",
         "tool.backup_export",
+        "tool.artifact_write",
         // 创作工具面 (W1/W2/W3): 三面都**含写面** —— `tool.image_ops` 的
         // transform/crop/watermark 带 `output` 落新文件, `tool.doc_ops` 的 PDF
         // 拆/并/水印与 DOCX 生成/追加落新文件, `tool.sheet_ops` 的变换与
@@ -116,7 +117,7 @@ pub fn is_write_or_execute_capability(capability: &CapabilityId) -> bool {
     WRITE_OR_EXECUTE.contains(&id) || id.starts_with("tool.mcp")
 }
 
-/// 「L2 永不因预设放行」地板: 命中即该调用**不可**被预设改写放行。
+/// 人工审批地板: git出网写与受管成果写不可被预设或免审记忆改写放行。
 ///
 /// git 写分级 (D-P1) 的 L2 出网写 (push/fetch/remote) 永远停人工审批 ——
 /// `full` 预设的 RequireApproval→Allow 改写与 `standard` 的 `approval_remember`
@@ -126,8 +127,9 @@ pub fn human_approval_floor_applies(
     capability: &CapabilityId,
     arguments: &serde_json::Value,
 ) -> bool {
-    capability.as_str() == apeireth_tools_canonical::GIT_WRITE_CAPABILITY_ID
-        && apeireth_tools_canonical::git_write_human_approval_floor(arguments)
+    capability.as_str() == crate::artifact_tools::ARTIFACT_WRITE_CAPABILITY
+        || (capability.as_str() == apeireth_tools_canonical::GIT_WRITE_CAPABILITY_ID
+            && apeireth_tools_canonical::git_write_human_approval_floor(arguments))
 }
 
 /// Governance hook that applies a session's [`PermissionPreset`] to capability
@@ -829,7 +831,7 @@ mod tests {
     }
 
     /// 「L2 永不因预设放行」地板判定 (D-P1 git 写分级): 只有 `tool.git_write`
-    /// 的 L2 (出网) 调用命中地板; L1 与其它能力不踩。
+    /// 的 L2 (出网) 调用命中地板；本例核对git分级，成果写另有完整预设回归。
     #[test]
     fn human_approval_floor_covers_only_l2_git_write_calls() {
         let capability = CapabilityId::new("tool.git_write").unwrap();

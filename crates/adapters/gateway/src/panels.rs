@@ -533,6 +533,10 @@ pub trait WorkbenchQuery: Send + Sync {
 #[derive(Clone, Default)]
 pub struct GatewayServices {
     pub sessions: Option<Arc<dyn SessionQuery>>,
+    /// The shared managed-version service. Absent means explicitly unsupported.
+    /// Multi-user and non-default-domain requests never fall back into its
+    /// initial single-operator namespace.
+    pub artifacts: Option<Arc<dyn apeireth_protocol::artifacts::ArtifactService>>,
     pub memory: Option<Arc<dyn MemoryQuery>>,
     pub memory_commands: Option<Arc<dyn MemoryCommand>>,
     pub memory_governance: Option<Arc<dyn MemoryGovernanceCommand>>,
@@ -623,6 +627,8 @@ impl GatewayServices {
             workspaces: None,
             // 联系人面由组合根注入真实注册表 (B3a 合同面), 不走旧 PanelData 适配。
             contacts: None,
+            // 受管文本成果面由组合根注入真实版本库；旧 PanelData 不制造版本库。
+            artifacts: None,
         }
     }
 }

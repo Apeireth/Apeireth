@@ -39,6 +39,7 @@ apeireth-tools-canonical = { path = "../../capabilities/tools", optional = true 
 tokio = { workspace = true, features = ["full"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
+uuid = { workspace = true }
 sha2 = { workspace = true }
 thiserror = { workspace = true }
 async-trait = { workspace = true }

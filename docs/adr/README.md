@@ -52,6 +52,8 @@
 | [0021](0021-owned-agents-and-dynamic-modules.md) | 模块资源、独立 Agent 与隔离边界最终收敛 | **Accepted**（2026-10-28，owner 连续实施授权） | 动态 owner / 分层取消 / 独立实例 / Memory Hook / Profile 隔离 |
 | [0024](0024-mesh-line-contract-registration.md) | 登记 mesh 跨节点栈的层归属、机制内核依赖与规模上限 | **Accepted**（2026-11-11，总指挥批准） | `[layers]` 登记 4 个 mesh crate / `kernel->mesh` 方向与代价 / 并入前口径 30→34、111→125；**合并后树实测 35 crate / 132 生产边**（§2.5） |
 
+| [0025](0025-managed-text-artifact-versions.md) | 受管文本成果与不可变版本的共同服务 | Accepted（本轮C2施工授权） | protocol业务端口 / 同Arc工具与HTTP / SQLite CAS与回执 / schema6工作副本 |
+
 ## 命名
 
 `NNNN-kebab-case-title.md`，四位递增编号（`0001-...`）。模板：[_template.md](_template.md)。

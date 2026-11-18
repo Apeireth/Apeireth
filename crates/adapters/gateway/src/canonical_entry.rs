@@ -1334,7 +1334,6 @@ pub fn canonical_router_with_state(state: GatewayState) -> Router {
     // 审批 / admin 族全过门), 不再逐端点挂 route_layer —— 新路由默认在门内,
     // 漏挂面为零; 唯一豁免是 [`UNAUTHENTICATED_PROBE_PATHS`] (健康探活)。
     // 中间件自带一份门状态 (口径 + 警告/审计面), 所以 from_fn_with_state。
-    let gate_state = state.clone();
     Router::<GatewayState>::new()
         .route("/health", get(health))
         .route("/v1/models", get(list_models))
@@ -1379,21 +1378,21 @@ pub fn canonical_router_with_state(state: GatewayState) -> Router {
             "/v1/admin/domains",
             post(crate::domain_admin::create_domain),
         )
-        .merge(panel_routes())
+        .merge(crate::artifacts::routes_with_panels())
         // G-P1 指标端点 (指标数据面路由文件), 同在整面令牌门内。
         .merge(crate::panel_metrics::metrics_routes())
         // W3-① 域门 (数据域面): user_id 域解析 + 自称域校验 + 面闸, 过闸后
         // `DomainContext` 随请求扩展下行 (会话面按域路由)。挂在令牌门与角色门
         // **之内** (先认人、再判权、后判域); 域面未注入 = 兼容路径零回归。
         .layer(middleware::from_fn_with_state(
-            gate_state.clone(),
+            state.clone(),
             crate::domain_context::require_domain_context,
         ))
         // W3-② 角色门 (授权面): 挂在令牌门**之内** —— 先认人 (authn) 再判权
         // (authz)。角色面未注入 = 兼容路径零回归; 激活后按治理层 role 权限矩阵
         // 过闸 (写面/管理面/审批面), 每次裁决落 `gateway.user_action` 审计。
         .layer(middleware::from_fn_with_state(
-            gate_state.clone(),
+            state.clone(),
             require_user_capability,
         ))
         // 跨源请求闸 (2026-10-31 · 静态安全审计复核): CORS 层只加头、**不拒绝**
@@ -1403,7 +1402,7 @@ pub fn canonical_router_with_state(state: GatewayState) -> Router {
         // 令牌门包住整个 API 面 (含未匹配路径的 fallback: 强制态下未知路径也
         // 401, 不借 404/401 差别泄露路由存在性)。
         .layer(middleware::from_fn_with_state(
-            gate_state,
+            state.clone(),
             require_gateway_token,
         ))
         // CORS 白名单 (H1, 2026-09-24 安全审计): 桌面 WebView 是独立源
@@ -1425,6 +1424,7 @@ pub fn canonical_router_with_state(state: GatewayState) -> Router {
                 .allow_methods(tower_http::cors::Any)
                 .allow_headers(tower_http::cors::Any),
         )
+        .layer(middleware::from_fn(crate::artifacts::protect_response))
         .with_state(state)
 }
 /// Serve over an explicit [`GatewayState`] until the listener closes or a
