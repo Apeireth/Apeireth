@@ -1,7 +1,7 @@
 //! `rt.module_execution_contract` 的接线级证据（生产装配面选举）。
 //!
-//! 缺口（补前）: 生产组合根经 `production::collect_tool_module`
-//! (`canonical/production.rs:634`) 把所有工具模块收进来, 那条路径只会调
+//! 缺口（补前）: 生产组合根经 `production_helpers::collect_tool_module`
+//! (`canonical/production_helpers.rs`) 把所有工具模块收进来, 那条路径只会调
 //! `CapabilityProvider::tool_module()`（兼容合同）⇒ 生产里 `ContractTool` 零构造、
 //! `module_public_declarations()` 结构性为空、内部面拒答分支不可达。
 //!

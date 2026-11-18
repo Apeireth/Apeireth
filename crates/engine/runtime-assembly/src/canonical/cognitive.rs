@@ -11,6 +11,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use super::council_ballot_log::CouncilBallotLog;
+use apeireth_core::agent_contact::ContactRegistry;
 use apeireth_core::kernel::{Clock, Episode, SessionId};
 use apeireth_memory::dedup::{episode_fingerprint, DedupIndex};
 use apeireth_memory::{
@@ -43,6 +44,8 @@ use apeireth_plugin::self_assessment::{SelfAssessment, SelfAssessmentStore};
 use apeireth_protocol::canonical::{
     ContentPart, MessageRole, NormalizedMessage, NormalizedResponse,
 };
+use apeireth_runtime::canonical::agent_binding::bound_memory_plan;
+use apeireth_runtime::canonical::workspace::WorkspaceRegistry;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -1705,10 +1708,33 @@ impl BehaviorModule for MemoryRecallModule {
 #[path = "cognitive/writeback_recovery.rs"]
 mod writeback_recovery;
 
+/// 已绑定会话的记忆作用域装配面（B3b-2）：注册表单例 + 主体身份。
+///
+/// 缺位 = 已绑定会话的写回**显式跳过**（fail-closed），不是回退 Session。
+#[derive(Clone)]
+pub struct MemoryScopeWiring {
+    /// 合同侧联系人注册表（与运行时绑定闸同一实例）。
+    pub contacts: Arc<dyn ContactRegistry>,
+    /// 合同侧工作区注册表（与运行时绑定闸同一实例）。
+    pub workspaces: Arc<dyn WorkspaceRegistry>,
+    /// 记忆主体 id（默认 `local-user`，由 CLI 身份解析提供）。
+    pub subject_id: String,
+}
+
+/// AfterTurn 写回作用域：今日会话作用域 / 合同翻译作用域。
+enum WritebackScope {
+    /// 未绑定会话或 profile 私有分区 ⇒ 逐字节保持今日的 `Session` 作用域。
+    Session,
+    /// 已绑定会话 ⇒ 合同翻译出的 canonical 作用域。
+    Scoped(MemoryScope),
+}
+
 /// Persist the current successful turn after the canonical transcript commit.
 pub struct MemoryWritebackModule {
     manifest: ModuleManifest,
     profile_partition: Option<String>,
+    /// 已绑定会话的作用域装配面; 缺位 + 绑定在场 = 显式跳过写回。
+    memory_scope: Option<MemoryScopeWiring>,
     memory: Arc<dyn MemoryBackend>,
     coordinator: Option<Arc<MemoryCoordinator>>,
     wiki: Option<Arc<dyn WikiEntryStore>>,
@@ -1750,6 +1776,7 @@ impl MemoryWritebackModule {
         Self {
             manifest: ModuleManifest::new(MEMORY_WRITEBACK_MODULE_ID, "Memory writeback"),
             profile_partition: None,
+            memory_scope: None,
             memory,
             coordinator: None,
             wiki: None,
@@ -1783,6 +1810,13 @@ impl MemoryWritebackModule {
     /// Host-selected private partition. Real execution identity remains in context.
     pub fn with_profile_partition(mut self, partition: String) -> Self {
         self.profile_partition = Some(partition);
+        self
+    }
+
+    /// 接已绑定会话的记忆作用域装配面（B3b-2）。缺位 = 已绑定会话写回显式跳过。
+    #[must_use]
+    pub fn with_memory_scope(mut self, wiring: MemoryScopeWiring) -> Self {
+        self.memory_scope = Some(wiring);
         self
     }
 
@@ -1979,6 +2013,41 @@ impl BehaviorModule for MemoryWritebackModule {
     }
 }
 impl MemoryWritebackModule {
+    /// 解析本回合的写回作用域。
+    ///
+    /// * profile 私有分区 ⇒ 今日 `Session` 路径（优先级高于绑定，逐字节不变）；
+    /// * 未绑定会话 ⇒ 今日 `Session` 路径（0 回归）；
+    /// * 已绑定会话 ⇒ 合同计划；计划拒绝（archived/失效）或装配面缺位 ⇒ `None`
+    ///   = fail-closed 整段不写，绝不回退 `Session`。
+    fn writeback_scope(&self, ctx: &ModuleContext<'_>, session: &str) -> Option<WritebackScope> {
+        if self.profile_partition.is_some() {
+            return Some(WritebackScope::Session);
+        }
+        let Some(binding) = ctx.agent_binding else {
+            return Some(WritebackScope::Session);
+        };
+        let Some(wiring) = self.memory_scope.as_ref() else {
+            return None;
+        };
+        match bound_memory_plan(
+            binding,
+            &wiring.subject_id,
+            session,
+            wiring.contacts.as_ref(),
+            wiring.workspaces.as_ref(),
+        ) {
+            Ok(plan) if super::memory_scope_wire::writes_scoped(&plan) => {
+                super::memory_scope_wire::translate_scope(&plan).map(WritebackScope::Scoped)
+            }
+            Ok(_) => None,
+            Err(_) => {
+                // 绑定失效 ⇒ fail-closed：本回合整段不写，且不回退 Session。
+                self.metrics.warning();
+                None
+            }
+        }
+    }
+
     async fn writeback(
         &self,
         hook: HookPoint,
@@ -1986,6 +2055,7 @@ impl MemoryWritebackModule {
         execution: Option<&apeireth_plugin::ToolExecutionContext>,
     ) -> Result<ModuleOutcome, ModuleError> {
         let started = Instant::now();
+        // TODO(B3b-2): 恢复补写暂不翻译作用域，仍按收集时的会话锚点重放。
         if hook == HookPoint::AfterTurn && self.recovery_journal.is_some() {
             let result = self.drain_recovery(ctx, execution).await;
             self.metrics.record(
@@ -1998,11 +2068,16 @@ impl MemoryWritebackModule {
             return result;
         }
         let result = if hook == HookPoint::AfterTurn {
-            if let Some(candidate) = ctx.candidate {
-                let session = self
-                    .profile_partition
-                    .clone()
-                    .unwrap_or_else(|| session_text(ctx.session_id));
+            let session = self
+                .profile_partition
+                .clone()
+                .unwrap_or_else(|| session_text(ctx.session_id));
+            let work = self.writeback_scope(ctx, &session);
+            if let (Some(candidate), Some(work)) = (ctx.candidate, work) {
+                let scope_for = |legacy: MemoryScope| match &work {
+                    WritebackScope::Scoped(scope) => scope.clone(),
+                    WritebackScope::Session => legacy,
+                };
                 let provenance = apeireth_memory::MemoryProvenance {
                     source: "cognitive.memory_writeback".into(),
                     source_session: Some(session_text(ctx.session_id)),
@@ -2056,9 +2131,9 @@ impl MemoryWritebackModule {
                 // episode writeback below remains unchanged; generic extraction is written
                 // only through the materializer to avoid duplicate projections.
                 let input = BoundedMemoryInput {
-                    scope: MemoryScope::Session {
+                    scope: scope_for(MemoryScope::Session {
                         session_id: episodes[0].session_id.clone(),
-                    },
+                    }),
                     source_session: provenance.source_session.clone(),
                     source_trace: provenance.source_trace.clone(),
                     source_request: provenance.source_request.clone(),
@@ -2074,9 +2149,9 @@ impl MemoryWritebackModule {
                 };
                 if let Some(sink) = &self.typed_sink {
                     let typed_input = BoundedMemoryInput {
-                        scope: MemoryScope::Session {
+                        scope: scope_for(MemoryScope::Session {
                             session_id: episodes[0].session_id.clone(),
-                        },
+                        }),
                         source_session: provenance.source_session.clone(),
                         source_trace: provenance.source_trace.clone(),
                         source_request: provenance.source_request.clone(),
@@ -2092,7 +2167,7 @@ impl MemoryWritebackModule {
                     };
                     let guarded_sink = super::memory_typed_sink::ProfileTypedSink {
                         inner: sink.as_ref(),
-                        scope: MemoryScope::session(&session),
+                        scope: scope_for(MemoryScope::session(&session)),
                         provenance: provenance.clone(),
                         cancellation: execution
                             .map(|e| e.cancellation.clone())
@@ -2118,7 +2193,8 @@ impl MemoryWritebackModule {
                     Ok(materialized) => {
                         for mut item in materialized {
                             if self.profile_partition.is_some() {
-                                if item.candidate.scope != MemoryScope::session(&session) {
+                                if item.candidate.scope != scope_for(MemoryScope::session(&session))
+                                {
                                     self.metrics.warning();
                                     continue;
                                 }
@@ -2141,7 +2217,7 @@ impl MemoryWritebackModule {
                                 coord
                                     .writeback_scoped_episode(
                                         &item.episode,
-                                        &MemoryScope::session(&item.episode.session_id),
+                                        &scope_for(MemoryScope::session(&item.episode.session_id)),
                                         &provenance,
                                     )
                                     .map(|_| ())
@@ -2168,7 +2244,7 @@ impl MemoryWritebackModule {
                         coord
                             .writeback_scoped_episode(
                                 &episode,
-                                &MemoryScope::session(&session),
+                                &scope_for(MemoryScope::session(&session)),
                                 &provenance,
                             )
                             .map(|_| ())
@@ -2270,7 +2346,7 @@ impl MemoryWritebackModule {
                                         if coord
                                             .writeback_scoped_episode(
                                                 &episode,
-                                                &MemoryScope::session(&session),
+                                                &scope_for(MemoryScope::session(&session)),
                                                 &provenance,
                                             )
                                             .is_err()
@@ -4168,6 +4244,7 @@ mod tests {
             invoker: &**invoker,
             invoker_handle: Arc::clone(invoker),
             subloop: &DUMMY_SUBLOOP,
+            agent_binding: None,
         }
     }
 

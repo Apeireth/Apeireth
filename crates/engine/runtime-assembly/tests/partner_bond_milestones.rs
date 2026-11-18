@@ -74,6 +74,7 @@ async fn run(module: &PartnerBondModule, hook: HookPoint, session: &SessionId) -
         invoker: &*invoker,
         invoker_handle: Arc::clone(&invoker),
         subloop: &NO_SUB_LOOP,
+        agent_binding: None,
     };
     module.on_hook(hook, &ctx).await.expect("hook 不应失败")
 }

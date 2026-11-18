@@ -192,6 +192,7 @@ async fn run_hook(
         invoker: &*invoker,
         invoker_handle: Arc::clone(&invoker),
         subloop: &subloop,
+        agent_binding: None,
     };
     module
         .on_hook(hook, &ctx)

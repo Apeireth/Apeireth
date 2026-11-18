@@ -1839,6 +1839,7 @@ async fn role_strings_tasks_foreign_owners_and_legacy_sources_cannot_supply_corr
             invoker: invoker.as_ref(),
             invoker_handle: invoker.clone(),
             subloop: &subloop,
+            agent_binding: None,
         };
         module.on_hook(HookPoint::TurnStart, &ctx).await.unwrap();
         assert_eq!(module.metrics().proposals, 0, "{refusal}");

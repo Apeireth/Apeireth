@@ -34,7 +34,7 @@ Author: lead
 | B2 | 记忆作用域映射 + 会话 agent 绑定 + 归档语义 | `memory_scope` 受管枚举并与主体/联系人/工作区隔离（联系人 A 读不到 B 的记忆）；绑定请求携带 contact_id+agent_id+persona_revision+workspace_id+workspace_revision+expected_context_key+incarnation，任一不匹配即拒绝**且不重放消息**；归档为软删除，旧会话不静默转移到默认 Agent；全部动作有可检索审计身份 | ✅ 已完成（提交 `49213dc78`，四级口径 **IMPLEMENTED（领域层：`canonical::agent_binding` + `Session.agent_binding`；21 条契约测试 + 5 组反向验伪）**；⚠️ **未 PRODUCTION WIRED**（`admit_turn` 无调用方，`domain_plane` 默认域回落仍是未绑定会话的现役路径）、HTTP 面归 B3、canonical `MemoryScope` 翻译归 B3、审计未做） |
 | B3a | 联系人 HTTP 面（+ `workspace_binding` 校验） | `GET/POST /v1/agents/contacts`、`GET/PATCH /v1/agents/contacts/{id}`、`POST /v1/agents/contacts/{id}/archive`；身份由后端铸造；写面必须带 `expected_revision`（缺⇒400、不符⇒409 且状态逐字段不变）；归档为软删除、不可复活（**已归档是终态 ⇒ 403 `contact_archived`，不是 409 版本过期**）；`workspace_binding{workspace_id,revision}` 由服务端校验（不存在/已吊销/修订号不符 ⇒ 409 `contact_binding_conflict`）；同名不同 ID 不碰撞；审计事件与能力清单入册 | ✅ 已完成（提交 `43291e4ea`，四级口径 **IMPLEMENTED（HTTP 面 + 端口 + 审计 + 能力入册 + 4 个新错误码 + CLI 组合根接线）**；15 条网关测试 + 5 条 CLI 链路测试 + 4 组反向验伪；⚠️ **回合入口未接线 ⇒ 新建联系人当前不影响真实回合**、会话绑定面未做、`memory_scope` 只到 DTO 层未翻译、`capabilities` 只是展示投影非授权依据、绑定只存 id+revision 不存快照） |
 | B3b-1 | 会话绑定面 + 回合入口闸（`admit_turn` 上线） | `GET/POST /v1/sessions/{id}/agent-binding`；回合入口先 `admit` 后 `append`（拒绝即不重放）；绑定不合法 ⇒ 回合拒绝；已归档联系人 ⇒ fail-closed，不回落默认 Agent/默认域；旧会话不静默转移到默认 Agent | ✅ 已完成（提交 `b7bcbacc0`，四级口径 **PRODUCTION WIRED**（绑定面路由已 merge ＋ 组合根装配 registry ＋ 回合入口闸接线）；⚠️ **未做 live E2E** ⇒ 不到 HARDWARE VALIDATED；作用域翻译未做（归 B3b-2）、persona 注入未做（归 B3b-3）） |
-| B3b-2 | 装配层作用域翻译（`MemoryScopeTarget` → canonical `MemoryScope`） | 装配层把 `MemoryScopeTarget` 翻译成 canonical `MemoryScope`（`none` ⇒ **不产生 scope**，不写记忆，**禁拿 `Global` 代替**）；写回链路按翻译结果落 scope，`writes=false` ⇒ 整段跳过 materializer | ❌ 未开始（B2 领域层 `map_memory_scope` 已就位；落点必须是 `apeireth-runtime-assembly`（runtime 禁依赖 memory，生产边 132/132 顶格）） |
+| B3b-2 | 装配层作用域翻译 + 写回接线（`MemoryScopeTarget` → canonical `MemoryScope`） | 装配层把 `MemoryScopeTarget` 翻译成 canonical `MemoryScope`（`none` ⇒ **不产生 scope**，不写记忆，**禁拿 `Global` 代替**）；写回链路按翻译结果落 scope，`writes=false` ⇒ 整段跳过 materializer | ✅ 已完成（提交 `c137f5a9d`，四级口径 **PRODUCTION WIRED**：翻译层单测 + 绑定会话写回链路已接生产装配；未绑定 / profile 路径逐字节不变；失效 fail-closed 整段不写）；⚠️ **未做 live E2E**；恢复补写未翻译；`memory_scope_binding` 缺位 ⇒ 已绑定会话显式零写入 |
 | B3b-3 | persona 注入 | 绑定命中的 persona 文本注入回合（只改 system 文本，**不得**改权限/能力/工具面） | ❌ 未开始（B2 领域层 `resolve_bound_persona` 已产出，未被消费） |
 | C1 | 规范流帧 + 后端流面（身份、sequence、重放、resync） | 帧 schema 固定（`apeireth.c1.delta.v1` / `apeireth.c1.final.v1`）；每帧带 session_id/request_id/trace_id/sequence（**不带** operation/incarnation/context_key —— 裁决 2/8：宿主 operation 是不透明标签、后端不解释，后端不生成 incarnation/context_key）；sequence 单调有界；`Last-Event-ID`/`after_sequence` 有限重放，超窗发 `resync_required` 事实帧后关闭通道；`[DONE]` **只表示通道关闭**；断线后 GET 回执能恢复真实状态且不重发模型 | ✅ 已交付（提交 `e397cc687`，PR #135；四级口径 **IMPLEMENTED（领域层）** —— **未接生产装配**：全仓无生产路径调 register/publish_delta/publish_final ⇒ 端点当前不产生真实流数据 ⇒ 未登记进 `docs/gateway-api-contract.md` §2（该节标题即〔PRODUCTION WIRED〕）；**不实现 `/bridge/*`**（裁决 15）） |
 | C2 | 单次 canonical dispatch + stop 幂等 + 审批终帧 | 一个 operation 只产生一次 canonical dispatch（重连/刷新/abort 不重复调模型）；stop 单独、幂等、可审计且不撤销已发生的外部副作用；approval 终帧只带**已确认**的 approval_id/action_binding_digest/expires_at；provider 非流式回退、上游错误、超时、取消、慢客户端、大正文都有有界错误契约 | ❌ 未开始 |
@@ -457,6 +457,56 @@ GET  /v1/sessions/{session_id}/requests/{request_id}/stream   # ?after_sequence=
   CAS 骑在 `session.revision` 上（该值也会被普通 append 推进）⇒ 客户端写前必须重读；
   **绑定变更不写 SessionEvent**（只写审计）；多进程部署下 registry 仍会分叉（本批只保证单进程内一致）。
 
+### 2026-11-18 B3b-2 批次交付（提交=`c137f5a9d`；分支 `feat/backend-contracts-b3b2-20261117`，起点 `9b91de8fe`）
+
+> 任务：把合同受管作用域忠实翻译成 canonical `MemoryScope`，并让**已绑定会话**的记忆写回真的落到该作用域；
+> 不改变未绑定会话与 profile 分区路径的逐字节行为。
+
+- 落点（独立工作树 `C:\Apeireth\wt\backend-contracts-b3b2-20261117`）：
+  新建 `crates/engine/runtime-assembly/src/canonical/memory_scope_wire.rs`（168 行：`translate_scope` / `writes_scoped` + 5 条单测）、
+  `crates/engine/runtime-assembly/src/canonical/production_helpers.rs`（26 行，`collect_tool_module` **行为等价搬迁**，使 `production.rs` 净增为负）、
+  `crates/engine/runtime-assembly/tests/memory_scope_wiring.rs`（425 行 / 6 用例）；
+  改 `crates/engine/runtime-assembly/src/canonical/cognitive.rs`（`MemoryScopeWiring` + `writeback_scope` + 7 处作用域替换）、
+  `.../src/canonical/production.rs`（`ProductionBackends.memory_scope_binding` + 构造接线）、`.../src/canonical.rs`（模块声明）、
+  `crates/engine/runtime/src/canonical/module.rs`（`ModuleContext.agent_binding: Option<&'a AgentBinding>`，host 事实、只读、不参与授权判定）、
+  `.../behavior_adapter.rs`（`BehaviorInput.agent_binding: Option<AgentBinding>`，owned；`:274` 透传）、
+  `.../execute.rs`（`run_hook` 填 `session.agent_binding().cloned()`，**净增 +1 行，在 50 行余量内**）、
+  `crates/adapters/cli/src/binding_registries.rs`（`memory_scope_wiring(root)` + 搬迁 `typed_recall_identity_from_env` 及 4 个常量，
+  `lib.rs` 以 `pub use` 保持 `crate::typed_recall_identity_from_env` 公开路径与签名不变）、
+  `crates/adapters/cli/src/lib.rs`（`CognitiveBackends` 填 `memory_scope_binding`，净增 −18 行），其余 13 个测试/装配文件补 15 处 `agent_binding: None`（生产构造点仅 `behavior_adapter.rs:274` 填真实绑定）。
+- 翻译层语义（`memory_scope_wire.rs`）：`MemoryScopeTarget::User{user_id}` ⇒ `MemoryScope::User`、
+  `Persona{persona_id,user_id}` ⇒ `MemoryScope::Persona`、`Session{session_id}` ⇒ `MemoryScope::Session`，字段逐个同名；
+  `scope: None` ⇒ `None`；`MemoryScopeTarget` 无 `Global` 变体 ⇒ **`Global` 在类型上不可达**（不放行「拿 Global 顶替」）。
+- 写回判定顺序（`MemoryWritebackModule::writeback_scope`，AfterTurn 主路径）：profile 私有分区 ⇒ `Session`（**优先级高于绑定**，逐字节不变）
+  → 未绑定 ⇒ `Session`（0 回归）→ `memory_scope` 装配面缺位 ⇒ `None`（已绑定会话显式零写入，**不是回退**）
+  → `bound_memory_plan` 拒绝（archived / agent / persona / workspace 任一失效）⇒ `metrics.warning()` + `None`（**fail-closed 整段不写，不回退 `Session`**）
+  → `writes=false` ⇒ `None`（整段跳过 materializer）→ 否则 `translate_scope`。合同 `writes` 与作用域仍由 B2 `map_memory_scope` 决定（设计稿裁决 5/19 不变）。
+- 7 处硬编码 `MemoryScope::Session` 按裁决 A 统一经同一局部 scope：BoundedMemoryInput / typed_input / ProfileTypedSink 作用域 /
+  profile 分区 guard 比对 / materialize 产物写回 / legacy 原始 episodes 写回 / consolidation insight 写回；循环与落库结构未改。
+- 装配：`production.rs::ProductionBackends.memory_scope_binding: Option<MemoryScopeWiring>`（**缺位＝已绑定会话写回显式跳过**）；
+  CLI 组合根用 `binding_registries::contacts/workspaces(&default_panel_data_dir())` 的 Ok 值（与 B3b-1 注入 Runtime 的同一对进程级单例）
+  + `subject_id` 复用 `typed_recall_identity_from_env()` 的默认 `local-user`（不新造身份、不新增 env 名），开不出 ⇒ `None`（不 panic）。
+- 测试（2026-11-18 实跑）：`memory_scope_wiring` 6 passed / 0 failed（真实 runtime 回合：预存带绑定会话 → `runtime.execute` → 逐条落库记忆均为
+  `Persona{contact_id,user_id}` 且同回合无 `Session` 行；另盖未绑定 ⇒ `Session`、`Session` 合同 ⇒ `Session`、`none` ⇒ 零写入、archived ⇒ 零写入、缺装配面 ⇒ 零写入）；
+  翻译层单测 5 passed / 0 failed。
+- 反向验伪四组（红/绿两条实跑；回退后刷新 mtime 且 SHA256 同哈希）：
+  ① Persona 臂临时映射成 `Session` ⇒ 单测 **3 passed / 2 failed**（`left: Session` vs `right: Persona`），还原 ⇒ 5 passed，sha `D204F5DA…C7DC2`；
+  ② `Ok(_) => None` 改成回退 `Session` ⇒ `a_bound_none_contract_writes_nothing` **0 passed / 1 failed**（实际落 2 条 Session），还原 ⇒ 1 passed，sha `12A0C2B0…7538E`；
+  ③ 绑定读取恒 `None` ⇒ 真实回合用例 **0 passed / 1 failed**（实际 `Session`，期望 `Persona`），还原 ⇒ 1 passed，同 sha；
+  ④ 失效分支改成回退 `Session` ⇒ `an_archived_contact_fails_closed_without_any_write` **0 passed / 1 failed**（实际落 2 条 Session），还原 ⇒ 1 passed，同 sha。
+- 门禁：clippy `-D warnings` 0 警告；`fmt-check` 35 crate 全 0 diff；`arch_guard --strict` ⇒ VIOLATIONS 0（edges 132 不变、无新例外；
+  `cognitive.rs` 5758→5835 行由既有例外 EXC-0002 抑制）；`audit_unwired.py` ⇒ 本批新符号 0 孤儿；
+  `check_crate_budget.py --check` 首跑红（cli +23 / runtime +8 / runtime-assembly +273 行，新增功能代码所致）；按官方修法 `--gen` 重建基线（34 crate · 600371 行，合并 upstream/main 后重算）⇒ `--check` exit 0。
+- 尺寸棘轮联动：`execute.rs` 4960→4961（+1，余量内）、`production.rs` 1953→1946（−7）、`cli/src/lib.rs` 3788→3770（−18）；
+  新文件 168 / 26 / 425 行 ⇒ 全部 <1200 不进棘轮。
+- 边界核验：0 新外部依赖、0 新 crate（workspace 35 members）、production edges 132 不变、`apeireth-runtime` 不依赖 `apeireth-memory`、
+  LOCKED 5 项 0 触碰、未改 `MemoryScope` 本体 / Gateway HTTP 面 / C1 `canonical_stream` / C2 错误码面；未登记 `docs/gateway-api-contract.md`（无新端点）。
+- ⚠️ **诚实边界**：四级口径 **PRODUCTION WIRED**（翻译层单测 + 写回链路已接生产装配 + 6 条真实 runtime 路径测试）；
+  **未做 live E2E**（没起真实网关 / 真实记忆库打全链路流量）⇒ **不到 HARDWARE VALIDATED**；
+  **恢复补写（recovery-drain）未翻译**（早退路径只加 TODO 注释，仍按收集时会话锚点重放）；
+  `profile_partition` 路径逐字节保持（绑定不改变私有分区行为）；
+  测试用 `InMemoryContactRegistry` / `InMemoryWorkspaceRegistry`，未覆盖真实文件注册表跨进程场景；
+  `memory_scope_binding` 缺位时已绑定会话**显式零写入**（CLI 组合根开不出注册表即此形态）。
 ### 还差什么
 
 见[进度页](../status/backend-contracts-20261117.md)。

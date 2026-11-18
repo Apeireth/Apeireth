@@ -693,6 +693,7 @@ async fn organ_module_afterturn_pulls_conflict_with_injected_clock() {
         invoker: &*invoker,
         invoker_handle: Arc::clone(&invoker),
         subloop: &NO_SUB_LOOP,
+        agent_binding: None,
     };
     module
         .on_hook(HookPoint::AfterTurn, &ctx)

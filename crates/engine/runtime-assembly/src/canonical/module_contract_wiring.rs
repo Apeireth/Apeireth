@@ -3,7 +3,7 @@
 //! # The gap this file closes
 //!
 //! Every production tool module is collected through one chokepoint,
-//! `canonical/production.rs:634` `collect_tool_module`, which calls
+//! `canonical/production_helpers.rs` `collect_tool_module`, which calls
 //! `CapabilityProvider::tool_module()` — the *compatibility* default. No
 //! production provider ever elected a contract, so in production
 //! `ContractTool` was never constructed, `module_public_declarations()` was
@@ -21,7 +21,7 @@
 //! # Two application seams, one truth
 //!
 //! * [`elect_provider_module`] — construction time, the drop-in body of
-//!   `production::collect_tool_module` (a 3-line, line-neutral patch; see the
+//!   `production_helpers::collect_tool_module` (a 3-line, line-neutral patch; see the
 //!   delivery report).
 //! * [`attach`] — builder time, called by
 //!   `canonical::cognitive_registry::ProductionModules::register_with_policy`,

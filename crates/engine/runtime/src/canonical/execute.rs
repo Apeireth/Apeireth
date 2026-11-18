@@ -2561,6 +2561,7 @@ impl Runtime {
                     invocation: invocation.clone(),
                     error: error.map(str::to_owned),
                     spawner: spawner.clone(),
+                    agent_binding: session.agent_binding().cloned(),
                 };
                 if let Some(receipt) =
                     adapter
