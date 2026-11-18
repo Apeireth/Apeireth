@@ -67,6 +67,7 @@ pub mod metrics;
 pub mod module;
 mod module_host;
 pub mod module_messages;
+pub mod operation_idempotency;
 pub mod principal_authority;
 pub mod profiles;
 pub mod registered_hooks;
@@ -97,6 +98,10 @@ pub mod subloop;
 pub mod tool_route;
 pub mod trace;
 mod turn_admission;
+// C2 停止语义: 回合级取消注册表 + 幂等 stop 摘要 (进程内, 重启即失)。
+pub mod turn_cancellation;
+// C2-3: 运行时结果 ⇒ C1 终帧的纯映射 (停止 / 完成 / 待批 / 失败)。
+mod stream_wiring;
 pub mod workspace;
 // L0-L5 自升级 cycle driver (Stage 5 完整化, per R11 §7 + v2-architecture-reflection.md §6).
 // **0 装诚实**: L0/L2/L3/L4 真接 governance + Orchestrator; L5 建议模式不自动跑 git tag;
@@ -151,6 +156,10 @@ pub use module::{
     ModuleContext, ModuleDirective, ModuleError, ModuleInvocationError, ModuleInvocationRequest,
     ModuleInvocationResponse, ModuleInvoker, ModuleManifest, ModuleOutcome, PromptOverlay,
     DEFAULT_MAX_INVOCATION_DEPTH, DEFAULT_MAX_MODULE_INVOCATIONS,
+};
+pub use operation_idempotency::{
+    validate_operation_key, InvalidOperationKey, OperationAdmission, OperationGuard,
+    OperationIdempotency, OperationRequest, DEFAULT_OPERATION_CAPACITY, MAX_OPERATION_KEY_BYTES,
 };
 pub use plan_mode_control::PlanModeExitControl;
 pub use provider::{ProviderHealth, ProviderRouter, RoutedCompletion};

@@ -140,6 +140,9 @@ pub mod session_binding;
 /// 运行时错误 ⇒ HTTP 状态 + 稳定错误码的映射表 (与入口面分开住)。
 mod runtime_error_map;
 
+/// 操作幂等请求头解码 + 载荷摘要 (C2-1, 与入口面分开住)。
+mod operation_header;
+
 /// W2-② remote access face: listen knob, non-loopback fail-closed bind gate,
 /// and the wired TLS surface (material loading fail-closed, real TLS listener).
 pub mod remote_access;

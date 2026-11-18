@@ -29,7 +29,7 @@ claims:
     tests:
       - crates/engine/runtime/src/canonical/provider/compat_tests.rs
       - crates/engine/runtime/tests/canonical_multi_provider.rs
-    verified_at: b7bcbacc04ad9bca8118ae2db9fb260324ffd0c7
+    verified_at: 6cd73e9c5e1a193b984a182a013399a420160111
     verify_cmd: "cargo test -p apeireth-runtime --test canonical_multi_provider"
     owner: runtime
     next_review: "2026-11-20"
@@ -200,7 +200,7 @@ claims:
       - crates/capabilities/tools/src/accountability_view.rs
       - crates/foundation/governance/src/authorization.rs
       - crates/adapters/cli/src/egress_command.rs
-    verified_at: 553cad2519a063401edbf229ac14bcbcb5d1d48f
+    verified_at: 6cd73e9c5e1a193b984a182a013399a420160111
     verify_cmd: "cargo test -p apeireth-runtime --lib egress && cargo test -p apeireth-runtime-assembly --lib egress_gate"
     owner: runtime
     next_review: "2026-12-01"
@@ -290,7 +290,7 @@ claims:
       - crates/adapters/cli/src/lib.rs
     tests:
       - crates/adapters/gateway/tests/tls_serve.rs
-    verified_at: 553cad2519a063401edbf229ac14bcbcb5d1d48f
+    verified_at: 6cd73e9c5e1a193b984a182a013399a420160111
     verify_cmd: "cargo test -p apeireth-gateway --test tls_serve"
     owner: gateway
     next_review: "2026-11-20"
@@ -884,7 +884,7 @@ claims:
       - crates/adapters/cli/tests/gateway_panels.rs
       - crates/engine/runtime-assembly/tests/production_cognitive_v1.rs
       - crates/engine/runtime-assembly/tests/profile_memory_authorization.rs
-    verified_at: 553cad2519a063401edbf229ac14bcbcb5d1d48f
+    verified_at: 6cd73e9c5e1a193b984a182a013399a420160111
     verify_cmd: "cargo test -p apeireth-runtime --test registry_runtime_v1 --locked && cargo test -p apeireth-runtime-assembly --test capability_modules_v1 --locked"
     owner: runtime
     next_review: "2026-11-28"
@@ -928,7 +928,7 @@ claims:
       - crates/engine/runtime-assembly/tests/managed_main.rs
       - crates/adapters/cli/tests/canonical_cli_bootstrap.rs
       - crates/adapters/cli/tests/care_heartbeat_host.rs
-    verified_at: 553cad2519a063401edbf229ac14bcbcb5d1d48f
+    verified_at: 6cd73e9c5e1a193b984a182a013399a420160111
     verify_cmd: "cargo test -p apeireth-runtime --test cognitive_module_abi --locked -j 2 && cargo test -p apeireth-runtime --test canonical_subloop --locked -j 2 && cargo test -p apeireth-runtime-assembly --test convergence_agents --locked -j 2 && cargo test -p apeireth-runtime-assembly --test memory_namespace_production --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
@@ -984,7 +984,7 @@ claims:
       - crates/engine/runtime-assembly/tests/managed_main.rs
       - crates/engine/runtime-assembly/tests/production_cognitive_v1.rs
       - crates/engine/runtime-assembly/tests/portable_host.rs
-    verified_at: 553cad2519a063401edbf229ac14bcbcb5d1d48f
+    verified_at: 6cd73e9c5e1a193b984a182a013399a420160111
     verify_cmd: "cargo test -p apeireth-cli --test canonical_cli_bootstrap --test care_heartbeat_host --locked -j 2 && cargo test -p apeireth-runtime-assembly --test managed_main --test production_cognitive_v1 --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
@@ -1011,7 +1011,7 @@ claims:
       - crates/engine/runtime-assembly/tests/modular_ale.rs
       - crates/engine/runtime-assembly/tests/module_contract_wiring.rs
       - crates/adapters/cli/tests/module_contract_production.rs
-    verified_at: 553cad2519a063401edbf229ac14bcbcb5d1d48f
+    verified_at: 6cd73e9c5e1a193b984a182a013399a420160111
     verify_cmd: "cargo test -p apeireth-plugin --test module_contract --locked -j 2 && cargo test -p apeireth-runtime-assembly --test modular_ale --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
@@ -1039,7 +1039,7 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/system_one_execution.rs
       - crates/engine/runtime-assembly/tests/modular_ale.rs
-    verified_at: c137f5a9d02807a5ce4daf3b3c73b5febfd67561
+    verified_at: 6cd73e9c5e1a193b984a182a013399a420160111
     # ⚠️ **2026-11-07 收窄 + 修缺陷**（声明核验批）：
     # ① 原命令只跑 **CLI 旋钮**那一个测试目标（5 条）⇒ ⇒ 而本条自己列的
     #    `crates/engine/runtime-assembly/tests/system_one_execution.rs`（11 条）**没跑**
@@ -1073,7 +1073,7 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/module_message_pipeline.rs
       - crates/engine/runtime-assembly/tests/desktop_message_policy.rs
-    verified_at: b7bcbacc04ad9bca8118ae2db9fb260324ffd0c7
+    verified_at: 6cd73e9c5e1a193b984a182a013399a420160111
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test module_message_pipeline --locked -j 2 && cargo test -p apeireth-runtime-assembly --test desktop_message_policy --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
@@ -1094,7 +1094,7 @@ claims:
       - crates/engine/runtime-assembly/tests/mesh_execution.rs
       - crates/engine/runtime-assembly/tests/module_message_pipeline.rs
       - crates/engine/runtime-assembly/tests/mesh_production_host.rs
-    verified_at: b7bcbacc04ad9bca8118ae2db9fb260324ffd0c7
+    verified_at: 6cd73e9c5e1a193b984a182a013399a420160111
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test mesh_execution --test module_message_pipeline --locked -j 2 && cargo test -p apeireth-runtime-assembly --test mesh_production_host --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
@@ -1213,7 +1213,7 @@ claims:
     tests:
       - crates/engine/runtime/tests/committed_evidence.rs
       - crates/engine/runtime-assembly/tests/memory_autonomy_production.rs
-    verified_at: c137f5a9d02807a5ce4daf3b3c73b5febfd67561
+    verified_at: 6cd73e9c5e1a193b984a182a013399a420160111
     verify_cmd: "cargo test -p apeireth-runtime --test committed_evidence --locked -j 2 && cargo test -p apeireth-runtime-assembly --test memory_autonomy_production --locked -j 2"
     owner: runtime
     next_review: "2026-11-26"
@@ -1313,7 +1313,7 @@ claims:
       - crates/engine/runtime-assembly/tests/memory_autonomy_production.rs
       - crates/engine/memory/src/context_compiler.rs
       - crates/engine/runtime/tests/context_budget.rs
-    verified_at: c137f5a9d02807a5ce4daf3b3c73b5febfd67561
+    verified_at: 6cd73e9c5e1a193b984a182a013399a420160111
     verify_cmd: "cargo test -p apeireth-memory --lib context_compiler --locked -j 2 && cargo test -p apeireth-memory --test memory_source_evidence --locked -j 2 && cargo test -p apeireth-runtime-assembly --test memory_autonomy_production --locked -j 2 && cargo test -p apeireth-runtime --test context_budget --locked -j 2 && cargo test -p apeireth-memory --lib coordinator --locked -j 2 && cargo test -p apeireth-memory --lib retrieval --locked -j 2"
     owner: memory
     next_review: "2026-11-26"

@@ -29,6 +29,9 @@ impl Runtime {
             compaction: self.compaction.clone(),
             call_scheduler: self.call_scheduler.clone(),
             metrics: self.metrics.clone(),
+            // The idempotency table is a shared service too: a view sees the same
+            // in-flight and completed operations as the container that built it.
+            operation_idempotency: self.operation_idempotency.clone(),
             tool_completion_observer: self.tool_completion_observer.clone(),
             // The mesh capability port is a shared service like the others: the
             // snapshot keeps the same Arc, so a view taken mid-turn still routes

@@ -23,8 +23,11 @@ Author: lead
 | B3b-1 | 会话绑定面 + 回合入口闸 | **PRODUCTION WIRED**（绑定面路由已 merge ＋ 组合根装配 registry ＋ 回合入口闸已接线；⚠️ 未做 live E2E） | ✅ 已完成（提交 `b7bcbacc0`） | `cargo test -p apeireth-runtime --test turn_admission_gate --locked -j 2` ⇒ 9 passed / 0 failed；`cargo test -p apeireth-gateway --test session_binding_face --locked -j 2` ⇒ 9 passed / 0 failed（均 2026-11-17）；clippy 0 警告；fmt 0 diff；`arch_guard --strict` ⇒ VIOLATIONS 0；反向验伪七组（摘路由接线 / 摘闸接线 / 闸恒拒 / CAS 弱化 / 归档码 403→404 / 显式 null 不当解绑 / deny 不写审计）均 RED→GREEN |
 | B3b-2 | 装配层作用域翻译 + 写回接线（`MemoryScopeTarget` → canonical `MemoryScope`） | **PRODUCTION WIRED**（翻译层 + 绑定会话写回链路已接生产装配；⚠️ 未做 live E2E；profile 分区路径保持；恢复补写未翻译；`memory_scope_binding` 缺位 ⇒ 已绑定会话显式零写入） | ✅ 已完成（提交 `c137f5a9d`） | `pwsh scripts/cargo.ps1 -Slot base -Line backend-contracts-b3b2 -CargoArgs "test -p apeireth-runtime-assembly --test memory_scope_wiring"` ⇒ 6 passed / 0 failed（含真实 runtime 回合）；`cargo test -p apeireth-runtime-assembly --lib memory_scope_wire` ⇒ 5 passed / 0 failed（均 2026-11-18）；clippy 0 警告；fmt 0 diff；`arch_guard --strict` ⇒ VIOLATIONS 0；`audit_unwired.py` ⇒ 本批新符号 0 orphan；反向验伪四组（翻译层 Persona→Session / none 回退 Session / 绑定路径摘掉 / 失效回退 Session）均 RED→GREEN；合并 upstream/main（提交 `553cad251`）后按官方修法 `check_crate_budget.py --gen` 重建基线（34 crate · 600371 行），`--check` ⇒ exit 0 |
 | B3b-3 | persona 注入 | — | ❌ 未开始 | 无 |
-| C1 | 规范流帧 + 后端流面（身份 / sequence / 重放 / resync） | **IMPLEMENTED**（领域层；⚠️ 未接生产装配） | ✅ 已完成（提交 `e397cc687`，PR #135） | `cargo test -p apeireth-protocol --test canonical_stream_frames --locked -j 2` ⇒ 9 passed / 0 failed；`cargo test -p apeireth-runtime --test canonical_stream_registry --locked -j 2` ⇒ 11 passed / 0 failed；`cargo test -p apeireth-gateway --test canonical_stream_face --locked -j 2` ⇒ 7 passed / 0 failed（均 2026-11-17）；clippy 0 警告；fmt 0 diff；`arch_guard --strict` ⇒ VIOLATIONS 0（`canonical_entry.rs` 净增 0 行）；反向验伪四组（摘终帧唯一性闸 / 摘环形有界 / 超窗改错误 / 摘 `.id(sequence)`）均 RED→GREEN |
-| C2 | 单次 canonical dispatch + stop 幂等 + 审批终帧 | — | ❌ 未开始 | 无 |
+| C1 | 规范流帧 + 后端流面 + 生产装配（身份 / sequence / 重放 / resync） | **PRODUCTION WIRED**（流式回合生产路径；⚠️ 缓冲进程内，重启即失） | ✅ 已完成（领域层提交 `e397cc687`，PR #135；生产装配 C2-3 批） | `cargo test -p apeireth-protocol --test canonical_stream_frames --locked -j 2` ⇒ 9 passed / 0 failed；`cargo test -p apeireth-runtime --test canonical_stream_registry --locked -j 2` ⇒ 11 passed / 0 failed；`cargo test -p apeireth-gateway --test canonical_stream_face --locked -j 2` ⇒ 7 passed / 0 failed（均 2026-11-17）；C2-3 起 `cargo test -p apeireth-runtime --test c1_stream_wiring --locked -j 2` ⇒ 5 passed / 0 failed（真运行时回合四类终帧 + 非流式不注册）；clippy 0 警告；fmt 0 diff；`arch_guard --strict` ⇒ VIOLATIONS 0；反向验伪 C2-3 组（摘实时 delta / 审批映射 / 停止优先）均 RED→GREEN |
+| C2-0 | 错误码目录对齐（24 码封闭集） | — | ✅ 已完成（提交 `80edf9832`） | 错误帧目录随 C2-1 批次复核（24 码不变）；无独立新端点 |
+| C2-1 | operation 幂等去重（`x-apeireth-operation` + SHA-256 载荷摘要 + 进程内 1024 条表） | **PRODUCTION WIRED**（HTTP 面；⚠️ 幂等表进程内，重启即失） | ✅ 已完成（提交 `da81ac1be`） | `cargo test -p apeireth-runtime -p apeireth-gateway --locked` ⇒ 72 suites / 739 passed / 0 failed（runtime lib 188、gateway 幂等 HTTP 4）；clippy 0 警告；fmt 0 diff；`arch_guard --strict` ⇒ VIOLATIONS 0；反向验伪 2 组（Replay 改重执行 / 摘摘要比对）均 RED→GREEN |
+| C2-2 | stop/cancel 端点 + 回合级取消注入 + 流式 chunk id 对齐 | **PRODUCTION WIRED**（HTTP 面＋回合级注入；⚠️ 未做真实回合 E2E） | ✅ 已完成（本批提交；C2-2 批） | `cargo test -p apeireth-protocol --test canonical_stream_frames --locked -j 2` ⇒ 9 passed / 0 failed；`cargo test -p apeireth-runtime --test turn_cancellation_face --locked -j 2` ⇒ 6 passed / 0 failed；`cargo test -p apeireth-gateway --test stop_endpoint_face --locked -j 2` ⇒ 5 passed / 0 failed；`cargo test -p apeireth-gateway --lib --locked -j 2` ⇒ 145 passed / 0 failed；clippy 0 警告；fmt 0 diff；`arch_guard --strict` ⇒ VIOLATIONS 0；反向验伪 3 组（摘 `token.cancel()` / 摘 stopped 队列查询 / 摘 `cancellation_for` 注入）均 RED→GREEN；⚠️ 注册表进程内、重启即失；`stopped` 终帧归 C2-3 |
+| C2-3 | 审批终帧 + C1 生产装配 | **PRODUCTION WIRED**（流式回合生产路径；⚠️ C1 缓冲与停止摘要均为进程内，重启即失；审批恢复不续流） | ✅ 已完成（本批提交；C2-3 批） | `cargo test -p apeireth-runtime --test c1_stream_wiring --locked -j 2` ⇒ 5 passed / 0 failed（completed 多 delta / approval / failed / stopped E2E + 非流式不注册）；`cargo test -p apeireth-runtime --lib --locked` ⇒ 195 passed / 0 failed（含 `stream_wiring` 4 + `turn_cancellation::stop_summary` 3）；`cargo test -p apeireth-protocol --test canonical_stream_frames --locked -j 2` ⇒ 9 passed / 0 failed；`cargo test -p apeireth-runtime --test turn_cancellation_face --locked -j 2` ⇒ 6 passed / 0 failed；`cargo test -p apeireth-gateway --test stop_endpoint_face --locked -j 2` ⇒ 5 passed / 0 failed；clippy 0 警告；fmt 0 diff；`arch_guard --strict` ⇒ VIOLATIONS 0（`execute.rs` 5006 / `canonical_entry.rs` 2291 未触碰）；反向验伪 3 组（摘实时 delta / 审批终帧映射 / 停止优先）均 RED→GREEN；⚠️ C1 只注册显式 request id 的流式回合，非流式与隐式 id 不注册 |
 
 **四级口径说明**：A1 达 **IMPLEMENTED**（**仅领域层**：未持久化、无 HTTP 面、未接生产路径 ⇒ **不是** PRODUCTION WIRED）；
 A2 达 **IMPLEMENTED**（HTTP 面 + 端口 + 乐观并发 + 审计 + 能力入册 + 错误码 + **生产组合根真实注入**
@@ -40,10 +43,17 @@ B3b-2 达 **PRODUCTION WIRED**（装配层 `translate_scope` 把 `MemoryScopeTar
 ⚠️ **未做 live E2E** ⇒ 不到 HARDWARE VALIDATED；**恢复补写（recovery-drain）未翻译**，仍按会话锚点重放；
 `check_crate_budget.py --gen` 已按官方修法重建基线（34 crate · 600371 行），`--check` ⇒ exit 0）；
 persona 注入（B3b-3）**未接线**；
-C2 **尚无任何一项**达到 IMPLEMENTED；批次完成前不得在文档或回复里写「已实现 / 已接线」。
-C1 达 **IMPLEMENTED**（**仅领域层**：帧族 + 运行时权威缓冲注册表 + 网关投影面齐备；
-但**未接生产装配** ⇒ 端点当前**不产生真实流数据** ⇒ **不是** PRODUCTION WIRED；
-且因此**未登记**进 `docs/gateway-api-contract.md` 的〔PRODUCTION WIRED〕端点表）。
+C2-1 达 **PRODUCTION WIRED**（HTTP 面：`/v1/chat` 幂等键 + 摘要 + 进程内 1024 条表；⚠️ 表**进程内、重启即失、多进程不共享**，
+无头不幂等、无显式 session 不去重，回放不重放流式 delta ⇒ 不是 HARDWARE VALIDATED）。
+C2-2 达 **PRODUCTION WIRED**（stop 端点 + 回合级取消注入 + 流式 chunk id 对齐；⚠️ 未做真实模型回合 E2E，
+注册表进程内、重启即失；stop 只阻断后续工具派发，`stopped` 终帧已由 C2-3 在该回合结束时发布）。
+C2-0 只做错误码目录对齐。
+C2-3 达 **PRODUCTION WIRED**（流式回合的 provider delta 实时写 C1 权威流，结束时恰发一帧
+completed/approval/failed/stopped 终帧；5 条真运行时 E2E 钉住四类终帧与非流式不注册；
+⚠️ **C1 缓冲与停止摘要都是进程内，重启即失、多进程不共享**；只注册显式 request id 的流式回合，
+审批恢复不续流 ⇒ 不是 HARDWARE VALIDATED）。
+C1 达 **PRODUCTION WIRED**（C2-3 起生产流式回合产生真实 C1 流；帧族 + 运行时权威缓冲 + 网关投影面
+齐备，已登记进 `docs/gateway-api-contract.md` 的〔PRODUCTION WIRED〕端点表；⚠️ 权威缓冲不持久化）。
 `DEFAULT ENABLED` 是横切属性，不随阶梯走。
 
 ## 二、2026-11-17 开工前现状核查（只读调研，非交付）
@@ -88,11 +98,14 @@ C1 达 **IMPLEMENTED**（**仅领域层**：帧族 + 运行时权威缓冲注册
    `GET /v1/sessions/{sid}/requests/{rid}/stream`（`Last-Event-ID` 优先 → `?after_sequence=`，
    先订阅后重放 ＋ 交界去重；超窗 ⇒ 发 `resync_required` 事实帧后关闭通道）。
    ⚠️ 按裁决 15：**不实现 `/bridge/*`**（那是私有前端仓宿主自己的本地面）。
-   **仍缺**：**生产装配**（回合执行路径未接 `publish_delta`/`publish_final` ⇒ 端点当前不产生真实流数据
-   ⇒ 仍**不是** PRODUCTION WIRED ⇒ 也未登记进 `docs/gateway-api-contract.md` 的〔PRODUCTION WIRED〕端点表）；
-   operation 级去重与 stop/cancel（C2）；权威缓冲持久化（进程重启即失）。
-7. **C2 未开工**：无 operation 级单次 dispatch 去重、无 stop/cancel 幂等端点、无审批终帧载体。
-   （裁决与批次拆分已写入 `brief_c2.txt`：C2-0 错误码目录对齐 / C2-1 operation 幂等去重 / C2-2 stop 端点 / C2-3 审批终帧＋C1 生产装配。）
+   **生产装配已由 C2-3 落地**：流式回合在 `execute_outcome_with_sink` 注册 C1 流、实时转发 delta、
+   结束时发布唯一终帧（completed/approval/failed/stopped），`c1_stream_wiring` 5 条真运行时 E2E 钉住。
+   **仍缺**：权威缓冲持久化与跨进程共享（重启即失）、审批恢复后继续同一条流（客户端须重发回合）；
+   ~~operation 级去重（C2-1 已完成）~~、~~stop/cancel（C2-2 已完成）~~。
+7. **C2 进行中**：C2-1 operation 幂等去重已验收（提交 `da81ac1be`，HTTP 面 PRODUCTION WIRED，幂等表进程内）；
+   C2-2 stop 端点与回合级取消注入已落地（HTTP 面＋回合注入 PRODUCTION WIRED，注册表进程内）；
+   **C2-3 本批完成**：审批终帧与 C1 生产装配已接生产流式路径（见 §一证据），
+   审批恢复续流与缓冲持久化仍未做。（裁决与批次拆分见 `brief_c2.txt`。）
 8. ~~能力清单未登记~~ ⇒ **已做**（A2：`workspaces.read|workspaces.write`；B3a：`contacts.read|contacts.write`，
    均登记进 `crates/adapters/gateway/src/panels.rs`）。
 9. ~~错误码未登记~~ ⇒ **已做**（A2：`workspace_not_found` / `workspace_conflict` / `workspace_revoked`；
@@ -128,6 +141,10 @@ cargo test -p apeireth-cli --test contact_real_chain --locked -j 2          # B3
 cargo test -p apeireth-protocol --test canonical_stream_frames --locked -j 2 # C1（帧族 wire 契约）
 cargo test -p apeireth-runtime --test canonical_stream_registry --locked -j 2 # C1（权威缓冲注册表）
 cargo test -p apeireth-gateway --test canonical_stream_face --locked -j 2    # C1（后端原生 SSE 面）
+cargo test -p apeireth-gateway --test operation_idempotency_http --locked -j 2 # C2-1（幂等键 + 摘要 + 重放）
+cargo test -p apeireth-runtime --test turn_cancellation_face --locked -j 2   # C2-2（回合级取消注册表）
+cargo test -p apeireth-gateway --test stop_endpoint_face --locked -j 2       # C2-2（stop 端点幂等/404/400）
+cargo test -p apeireth-runtime --test c1_stream_wiring --locked -j 2         # C2-3（C1 生产装配 + 四类终帧）
 cargo test -p apeireth-runtime --test turn_admission_gate --locked -j 2    # B3b-1（回合入口只读闸）
 cargo test -p apeireth-gateway --test session_binding_face --locked -j 2   # B3b-1（会话绑定面 + 审计 + CAS）
 python3 scripts/arch_guard.py --strict                                      # 尺寸棘轮（VIOLATIONS 必须为 0）

@@ -89,6 +89,7 @@ use super::approval::{
     FrozenTurnContinuation, PendingApproval, PendingApprovalView,
 };
 use super::cache_trace;
+use super::canonical_stream::global_registry;
 use super::control::ControlContext;
 use super::error::{RuntimeError, RuntimeResult};
 use super::events::RuntimeEvent;
@@ -136,6 +137,11 @@ pub struct TurnRequest {
     pub system: Option<String>,
     /// Immutable intent/authorization context created before provider use.
     pub security_context: Option<TurnSecurityContext>,
+    /// Caller-minted turn identity; the runtime mints one when absent.
+    ///
+    /// Supplying it up front lets a streaming caller address the turn (stop)
+    /// from the first frame onward.
+    pub request: Option<RequestId>,
 }
 
 impl TurnRequest {
@@ -147,6 +153,7 @@ impl TurnRequest {
             model: None,
             system: None,
             security_context: None,
+            request: None,
         }
     }
 
@@ -167,6 +174,13 @@ impl TurnRequest {
     #[must_use]
     pub fn with_security_context(mut self, context: TurnSecurityContext) -> Self {
         self.security_context = Some(context);
+        self
+    }
+
+    /// Run the turn under a caller-minted request id.
+    #[must_use]
+    pub fn with_request(mut self, request: RequestId) -> Self {
+        self.request = Some(request);
         self
     }
 }
@@ -745,7 +759,7 @@ impl Runtime {
 
     pub(super) async fn execute_outcome_with_sink(
         &self,
-        request: TurnRequest,
+        mut request: TurnRequest,
         stream_sink: Option<Arc<dyn Fn(String) + Send + Sync>>,
     ) -> RuntimeResult<TurnOutcome> {
         if let Some(main) = self.managed_execution() {
@@ -758,10 +772,32 @@ impl Runtime {
         let metrics_started = std::time::Instant::now();
 
         let state = Arc::new(ModuleTurnState::new(self.config.max_module_invocations));
-        let request_id = RequestId::new();
+        let request_id = request.request.unwrap_or_else(RequestId::new);
         let trace_id = TraceId::new();
-        let mut request = request;
+        // C2-3: explicit streaming ids own one C1 stream; duplicates are refused.
+        let c1_stream = if request.request.is_some() && stream_sink.is_some() {
+            Some(
+                global_registry()
+                    .register(request.session.to_string(), request_id.to_string())
+                    .map_err(|_| RuntimeError::misconfigured("C1 stream already registered"))?,
+            )
+        } else {
+            None
+        };
+        // C2: the turn-level cancellation token lives for the whole turn; a
+        // stop cancels it and every tool context joins it as a parent.
+        let _turn_registration = super::turn_cancellation::register(request.session, request_id);
         let session_text = request.session.to_string();
+        let c1 = c1_stream.clone();
+        let trace = trace_id.to_string();
+        let stream_sink = stream_sink.map(|sink| {
+            Arc::new(move |delta: String| {
+                if let Some(handle) = c1.as_ref() {
+                    let _ = global_registry().publish_delta(handle, Some(&trace), &delta);
+                }
+                sink(delta);
+            }) as Arc<dyn Fn(String) + Send + Sync>
+        });
         if let Some(context) = request.security_context.as_mut() {
             context.trace_id = trace_id.to_string();
             if context.intent_id == "intent:" {
@@ -812,6 +848,16 @@ impl Runtime {
         // G-P1 指标埋点: 回合收束处记一拍 (成功/失败/待批分计), 不动控制流。
         self.metrics
             .record_outcome(observed_request.session, metrics_started.elapsed(), &result);
+        if let Some(handle) = c1_stream.as_ref() {
+            let mut frame = super::stream_wiring::final_frame(
+                observed_request.session,
+                request_id,
+                trace_id,
+                &result,
+                super::turn_cancellation::stop_summary(observed_request.session, request_id),
+            );
+            let _ = global_registry().publish_final(handle, &mut frame);
+        }
         result
     }
 

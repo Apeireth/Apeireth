@@ -69,6 +69,14 @@ pub enum ErrorCode {
     AgentBindingRejected,
     /// 会话版本冲突 (B3b 合同面): 客户端带来的 `expected_revision` 与会话当前修订号不符。
     SessionBindingConflict,
+    /// 操作幂等键载荷冲突 (C2-0 目录登记): 同一个操作键上已经落过**不同载荷**,
+    /// 与「同键在飞」是两回事 —— 故不复用 `operation_in_progress`。
+    /// /v1/chat 带 x-apeireth-operation 头时产生 (C2-1 起接线)。
+    OperationConflict,
+    /// 操作幂等键在飞 (C2-0 目录登记): 同一个操作键的请求还在处理中,
+    /// 不得再起一次 —— 与「同键不同载荷」是两回事, 故不复用 `operation_conflict`。
+    /// /v1/chat 带 x-apeireth-operation 头时产生 (C2-1 起接线)。
+    OperationInProgress,
     /// An unexpected internal error.
     Internal,
 }
@@ -98,6 +106,8 @@ impl ErrorCode {
             Self::ContactBindingConflict => "contact_binding_conflict",
             Self::AgentBindingRejected => "agent_binding_rejected",
             Self::SessionBindingConflict => "session_binding_conflict",
+            Self::OperationConflict => "operation_conflict",
+            Self::OperationInProgress => "operation_in_progress",
             Self::Internal => "internal",
         }
     }
@@ -146,6 +156,13 @@ impl ErrorCode {
                 "会话绑定的联系人/工作区已不可用——重新读取会话绑定, 换一位可用联系人或一个未吊销的工作区后再发起回合"
             }
             Self::SessionBindingConflict => "会话已被改动——重新读取会话拿到最新修订号, 再带着新的 expected_revision 提交",
+            // 操作面 (C2-0 目录登记): 两个码各说一条可执行动作, 且彼此语义不混。
+            Self::OperationConflict => {
+                "同一操作键已经用另一份载荷提交过——按原载荷重试, 或换一个操作键; 不要拿旧键提交新载荷"
+            }
+            Self::OperationInProgress => {
+                "同一操作键的请求还在处理中——等它结束后再重试, 不要重复提交"
+            }
             Self::Internal => "重启 Companion 后重试, 若复现请提交日志",
         }
     }
@@ -202,8 +219,86 @@ pub struct ErrorEnvelope {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
+
+    /// 目录清单：24 个变体，**顺序 = 枚举声明顺序 = `crate::error_codes` 常量目录顺序**。
+    /// 长度由返回类型钉死（`[ErrorCode; 24]`）⇒ 少列/多列一个都编译失败。
+    pub(crate) fn all_variants() -> [ErrorCode; 24] {
+        [
+            ErrorCode::AuthMissingKey,
+            ErrorCode::AuthInvalidKey,
+            ErrorCode::ProviderUnreachable,
+            ErrorCode::ProviderError,
+            ErrorCode::InvalidRequest,
+            ErrorCode::PermissionDenied,
+            ErrorCode::DomainForbidden,
+            ErrorCode::DomainRefused,
+            ErrorCode::SessionNotFound,
+            ErrorCode::RateLimited,
+            ErrorCode::ReviewRejected,
+            ErrorCode::TurnNotConverged,
+            ErrorCode::WorkspaceNotFound,
+            ErrorCode::WorkspaceConflict,
+            ErrorCode::WorkspaceRevoked,
+            ErrorCode::ContactNotFound,
+            ErrorCode::ContactConflict,
+            ErrorCode::ContactArchived,
+            ErrorCode::ContactBindingConflict,
+            ErrorCode::AgentBindingRejected,
+            ErrorCode::SessionBindingConflict,
+            ErrorCode::OperationConflict,
+            ErrorCode::OperationInProgress,
+            ErrorCode::Internal,
+        ]
+    }
+
+    /// 编译期漂移守卫：枚举里加了变体而忘了更新上面的清单 ⇒ **编译失败**
+    /// （本 match 没有通配臂）。返回值 = 该变体在清单里的位置 ⇒
+    /// [`every_variant_appears_once_in_catalog_order`] 拿它对账，顺序漂移也能抓。
+    fn variant_index(code: ErrorCode) -> usize {
+        match code {
+            ErrorCode::AuthMissingKey => 0,
+            ErrorCode::AuthInvalidKey => 1,
+            ErrorCode::ProviderUnreachable => 2,
+            ErrorCode::ProviderError => 3,
+            ErrorCode::InvalidRequest => 4,
+            ErrorCode::PermissionDenied => 5,
+            ErrorCode::DomainForbidden => 6,
+            ErrorCode::DomainRefused => 7,
+            ErrorCode::SessionNotFound => 8,
+            ErrorCode::RateLimited => 9,
+            ErrorCode::ReviewRejected => 10,
+            ErrorCode::TurnNotConverged => 11,
+            ErrorCode::WorkspaceNotFound => 12,
+            ErrorCode::WorkspaceConflict => 13,
+            ErrorCode::WorkspaceRevoked => 14,
+            ErrorCode::ContactNotFound => 15,
+            ErrorCode::ContactConflict => 16,
+            ErrorCode::ContactArchived => 17,
+            ErrorCode::ContactBindingConflict => 18,
+            ErrorCode::AgentBindingRejected => 19,
+            ErrorCode::SessionBindingConflict => 20,
+            ErrorCode::OperationConflict => 21,
+            ErrorCode::OperationInProgress => 22,
+            ErrorCode::Internal => 23,
+        }
+    }
+
+    /// 清单 ⇄ 守卫下标 ⇄ 枚举三方对账：清单第 i 位必须正好是守卫认第 i 位的变体
+    /// ⇒ 漏项会撞长度/下标, 重项会让某一位置对不上, 顺序漂移同样被抓。
+    #[test]
+    fn every_variant_appears_once_in_catalog_order() {
+        let variants = all_variants();
+        assert_eq!(variants.len(), 24, "目录清单必须是 24 个变体");
+        for (index, code) in variants.iter().enumerate() {
+            assert_eq!(
+                variant_index(*code),
+                index,
+                "{code:?} 在清单里的位置与枚举声明顺序不一致"
+            );
+        }
+    }
 
     #[test]
     fn frame_serializes_message_code_and_solution_in_contract_order() {
@@ -230,28 +325,53 @@ mod tests {
 
     #[test]
     fn every_catalog_code_has_a_nonempty_solution() {
-        let codes = [
-            ErrorCode::AuthMissingKey,
-            ErrorCode::AuthInvalidKey,
-            ErrorCode::ProviderUnreachable,
-            ErrorCode::ProviderError,
-            ErrorCode::InvalidRequest,
-            ErrorCode::SessionNotFound,
-            ErrorCode::RateLimited,
-            ErrorCode::WorkspaceNotFound,
-            ErrorCode::WorkspaceConflict,
-            ErrorCode::WorkspaceRevoked,
-            ErrorCode::ContactNotFound,
-            ErrorCode::ContactConflict,
-            ErrorCode::ContactArchived,
-            ErrorCode::ContactBindingConflict,
-            ErrorCode::AgentBindingRejected,
-            ErrorCode::SessionBindingConflict,
-            ErrorCode::Internal,
-        ];
-        for code in codes {
+        for code in all_variants() {
             assert!(!code.solution().is_empty(), "{code:?}");
             assert!(!code.as_str().is_empty(), "{code:?}");
+        }
+    }
+
+    /// 枚举 ⇄ 常量目录的双向对齐：每个变体的线串必须能被
+    /// [`crate::error_codes::parse_code`] 反解回**同一个**变体；
+    /// 且常量目录必须与枚举一一对应（数量相同、顺序相同 ⇒ 不错位）。
+    #[test]
+    fn every_variant_round_trips_through_the_constant_catalog() {
+        let consts = [
+            crate::error_codes::AUTH_MISSING_KEY,
+            crate::error_codes::AUTH_INVALID_KEY,
+            crate::error_codes::PROVIDER_UNREACHABLE,
+            crate::error_codes::PROVIDER_ERROR,
+            crate::error_codes::INVALID_REQUEST,
+            crate::error_codes::PERMISSION_DENIED,
+            crate::error_codes::DOMAIN_FORBIDDEN,
+            crate::error_codes::DOMAIN_REFUSED,
+            crate::error_codes::SESSION_NOT_FOUND,
+            crate::error_codes::RATE_LIMITED,
+            crate::error_codes::REVIEW_REJECTED,
+            crate::error_codes::TURN_NOT_CONVERGED,
+            crate::error_codes::WORKSPACE_NOT_FOUND,
+            crate::error_codes::WORKSPACE_CONFLICT,
+            crate::error_codes::WORKSPACE_REVOKED,
+            crate::error_codes::CONTACT_NOT_FOUND,
+            crate::error_codes::CONTACT_CONFLICT,
+            crate::error_codes::CONTACT_ARCHIVED,
+            crate::error_codes::CONTACT_BINDING_CONFLICT,
+            crate::error_codes::AGENT_BINDING_REJECTED,
+            crate::error_codes::SESSION_BINDING_CONFLICT,
+            crate::error_codes::OPERATION_CONFLICT,
+            crate::error_codes::OPERATION_IN_PROGRESS,
+            crate::error_codes::INTERNAL,
+        ];
+        let variants = all_variants();
+        assert_eq!(consts.len(), variants.len(), "常量目录与枚举数量不一致");
+
+        for (code, wire) in variants.iter().zip(consts.iter()) {
+            assert_eq!(code.as_str(), *wire, "{code:?} 的线串与常量目录错位");
+            assert_eq!(
+                crate::error_codes::parse_code(wire),
+                Some(*code),
+                "{wire} 无法反解回同一变体"
+            );
         }
     }
 }

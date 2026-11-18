@@ -318,6 +318,9 @@ pub struct Runtime {
     /// G-P1 指标面: 回合收束指标的进程内滚动窗口 (会话 + 全局两层),回合
     /// 收束埋点写这里, `/v1/panel/metrics` 从这里读 (见 [`super::metrics`])。
     pub(super) metrics: Arc<super::metrics::MetricsRegistry>,
+    /// C2-1 操作幂等表: (session, operation) 作用域内的终态回放/冲突裁决,
+    /// 进程内、重启即失 (见 [`super::operation_idempotency`])。
+    pub(super) operation_idempotency: super::operation_idempotency::OperationIdempotency,
     /// Optional domain-neutral observer of completed tool calls.
     ///
     /// The kernel emits one [`ToolCompletionFact`] at the single completion

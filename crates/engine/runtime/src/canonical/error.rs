@@ -215,6 +215,23 @@ pub enum RuntimeError {
         reason: String,
     },
 
+    /// A stored operation key cannot be replayed: the payload differs from the
+    /// first attempt, or the previous attempt ended without a final outcome.
+    #[error("operation {operation} cannot be replayed: {reason}")]
+    OperationConflict {
+        /// The operation key that was re-used.
+        operation: String,
+        /// Why it cannot be replayed.
+        reason: &'static str,
+    },
+
+    /// The same operation key is still in flight for this session.
+    #[error("operation {operation} is still in progress; wait for it to finish before retrying")]
+    OperationInProgress {
+        /// The operation key that is still running.
+        operation: String,
+    },
+
     /// The runtime was assembled in an unusable state.
     #[error("runtime misconfigured: {0}")]
     Misconfigured(String),

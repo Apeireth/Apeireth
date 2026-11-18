@@ -5,7 +5,7 @@
 //!   [`C1_FINAL_EVENT`] (`apeireth.c1.final.v1`, 终帧);
 //! - 帧身份 = (session_id, request_id) + 可选 trace_id; 帧序号 `sequence` 由运行时
 //!   权威缓冲分配 (从 1 单调递增, 见 `apeireth-runtime` 的 `canonical::canonical_stream`);
-//! - 终帧 `state` ∈ {completed, approval, failed, unknown}; `resync_required` 是
+//! - 终帧 `state` ∈ {completed, approval, failed, stopped, unknown}; `resync_required` 是
 //!   **显式事实** (客户端落后于环形窗口时的事实帧), 不是错误码、不是异常。
 //!
 //! 不变量 (设计稿 §C):
@@ -31,6 +31,7 @@ pub const C1_FINAL_EVENT: &str = "apeireth.c1.final.v1";
 /// - `completed`: 正常完成;
 /// - `approval`: 停在审批 (终帧携带待批清单);
 /// - `failed`: 失败 (终帧携带 `error`);
+/// - `stopped`: 被显式停止 (只阻断后续工具派发与提示工具; 已发生的副作用不撤销);
 /// - `unknown`: 状态不可知 (含 `resync_required` 事实帧)。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -39,6 +40,7 @@ pub enum C1StreamState {
     Completed,
     Approval,
     Failed,
+    Stopped,
     Unknown,
 }
 
@@ -59,6 +61,7 @@ impl C1StreamState {
             Self::Completed => "completed",
             Self::Approval => "approval",
             Self::Failed => "failed",
+            Self::Stopped => "stopped",
             Self::Unknown => "unknown",
         }
     }
@@ -166,7 +169,7 @@ pub struct C1FinalFrame {
     pub trace_id: Option<String>,
     /// 帧序号 (运行时权威缓冲分配, 从 1 单调递增)。
     pub sequence: u64,
-    /// 终态 (completed / approval / failed / unknown)。
+    /// 终态 (completed / approval / failed / stopped / unknown)。
     pub state: C1StreamState,
     /// 完整文本 (有则给出; 无则缺省)。
     #[serde(default, skip_serializing_if = "Option::is_none")]

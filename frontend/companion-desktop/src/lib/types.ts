@@ -505,17 +505,36 @@ export interface ModelInfo {
   description?: string;
 }
 
-/** 后端错误帧 machine-readable 错误码. */
+/**
+ * 后端错误帧 machine-readable 错误码.
+ *
+ * 与后端 `crates/adapters/gateway/src/error_frame.rs` 的 `ErrorCode` 枚举**一一对应、同序**
+ * （24 个封闭集）⇒ 后端加码必须两处同改: 本联合类型 + `runtime.ts` 的 `ERROR_SOLUTIONS`.
+ */
 export type ErrorCode =
   | 'auth_missing_key'
   | 'auth_invalid_key'
   | 'provider_unreachable'
   | 'provider_error'
   | 'invalid_request'
+  | 'permission_denied'
+  | 'domain_forbidden'
+  | 'domain_refused'
   | 'session_not_found'
   | 'rate_limited'
   | 'review_rejected'
   | 'turn_not_converged'
+  | 'workspace_not_found'
+  | 'workspace_conflict'
+  | 'workspace_revoked'
+  | 'contact_not_found'
+  | 'contact_conflict'
+  | 'contact_archived'
+  | 'contact_binding_conflict'
+  | 'agent_binding_rejected'
+  | 'session_binding_conflict'
+  | 'operation_conflict'
+  | 'operation_in_progress'
   | 'internal';
 
 /** 后端错误帧 (错误响应体 / SSE error 帧的规范形状). */
