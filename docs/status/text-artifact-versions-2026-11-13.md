@@ -10,7 +10,7 @@ Author: desktop-collaboration-line
 
 ## 目标与基线
 
-[完整契约与批次](../design/text-artifact-versions.md)。基线b6b98ab07795a1cb72747027418ccc34b4ecfe4a；新分支feat/c2-artifact-versions-20261113。只本地施工，不推送/合并/发布。
+[完整契约与批次](../design/text-artifact-versions.md)。基线b6b98ab07795a1cb72747027418ccc34b4ecfe4a；新分支feat/c2-artifact-versions-20261113。本页初稿为 2026-11-13 本地施工口径；2026-11-18 已进入主干合并评审（见下），仍未发布。
 
 功能源码检查点`9cc6ab3a9a375b4b0d3f3b7c842a0a621278b81c`；工程验证与文档收口提交`8b0aa464992badbe42f4ff98db725b64c12b748a`，本地`checkpoint/c2-artifact-engineering-20261113`保持指向该提交。候选程序在b6基点dirty源码构建，SHA256为`af6135d30245b3cb21790a576383d85545a07a17db7614e059e858ca69b1cf9a`，实际使用该程序完成修复后精确导出及工具共核检查，不倒填构建HEAD。
 
@@ -22,7 +22,7 @@ Author: desktop-collaboration-line
 - 私有桌面schema6文本工作面已有功能检查点；真实原生窗口完成用户编辑/迟到ACK/丢回执、同数据重启恢复、明确版本AI续做候选、拒绝与过期保护、冲突/rebase、历史恢复及精确导出。旧只读Document不改。
 - 导出实测先红：服务返回正文但缺ETag，原生端拒绝不可核验下载。已补响应头和实际red→green测试；保留原失败reservation/JSON，同数据换程序后仅GET/下载续验，零模型或写动作重放；正常重开检查通过。
 - CAS与人工审批底线均实际删除关键守卫做反向验伪，红后还原精确源码再绿。未以静态断言冒充行为证据。
-- 本轮全workspace all-targets、doc tests、strict Clippy、Windows逐crate格式检查均退出0；claims、生成STATUS/wiring、环境登记与strict接线交叉检查通过。原b6两条生产引用登记遗漏已实跑复现，按真实CI/命令注册入口补来源，不改守卫或等级。用户于2026-11-13通过本轮C2视觉验收，尚无推送/合并/发布。
+- 本轮全workspace all-targets、doc tests、strict Clippy、Windows逐crate格式检查均退出0；claims、生成STATUS/wiring、环境登记与strict接线交叉检查通过。原b6两条生产引用登记遗漏已实跑复现，按真实CI/命令注册入口补来源，不改守卫或等级。用户于2026-11-13通过本轮C2视觉验收；截至该日尚无推送/合并/发布。
 
 首批明确single_operator，不宣称多用户/非default域成果协作。现有session_users不是持久owner依据；不在未装配域回落默认库。人保存与agent审批是独立语义，同一权威内核。
 
@@ -31,6 +31,16 @@ Author: desktop-collaboration-line
 本线以`git cherry-pick -n 9cc6ab3a9`落到当前主干`c6c5a20d7`，不是整支合并旧基线分支：只带入成果/版本内核的29个文件，不带入旧基线上的会话历史与回合结果分叉内容。冲突按当前主干结构解决：保留主干本地native handler，成果路由经`artifacts::routes_with_panels()`与顶层`protect_response`接入；遗留PanelData不制造版本库，真实服务由组合根注入。`canonical_entry.rs`保持2291行，等于架构基线。
 
 本批复核门禁：四包`cargo check --all-targets`退出0；四包`--lib`回归通过（gateway首轮两例`cache-control`断言失败，根因是保护层放在认证层内侧，移到最外层后通过）；Windows逐crate格式检查35个crate零diff；四包clippy`-D warnings`零警告；strict架构守卫零违规；未接线审计退出0；crate预算按ADR0025重建为34个crate·605507行；claims真源、生成STATUS/wiring、文档索引与strict接线交叉检查在文档提交中另行复核。全量workspace、live E2E与外部模型质量仍未在本批重跑或声明。合并评审与发布状态以主干记录为准；私有前端不在本仓推送范围。
+
+## 守卫命令
+
+四包成果线定向回归（本批未重跑全量 workspace）：
+
+```powershell
+cargo test -p apeireth-protocol -p apeireth-runtime-assembly -p apeireth-gateway -p apeireth-cli --lib --locked --offline -j 2
+```
+
+文档真源与生成物另有 `python scripts/docs_truth.py --verify --check`、`python scripts/wiring_report.py --verify`；发布前仍以主干 CI 为准。
 
 ## 用户视觉验收记录（2026-11-13）
 

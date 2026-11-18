@@ -2,9 +2,9 @@
 
 [Document-Meta]
 Document: docs/adr/0025-managed-text-artifact-versions.md
-Class: ADR
+Class: DECISION
 Version: 1
-Last-Modified: 2026-11-13
+Last-Modified: 2026-11-18
 Status: Accepted（本轮用户授权范围内实施；工程/视觉验证另行登记）
 Author: desktop-collaboration-line
 
@@ -12,7 +12,7 @@ Author: desktop-collaboration-line
 
 用户在N10通过后明确批准：“就按这个方向开始C2，先落实成果和版本的前后端契约，再接可编辑文本工作面。”本决策落实已批准的新业务契约和接线，不改既有扩展ABI、LOCKED或全局版本。共同设计在本轮源码集成前已落盘并登记workline；此ADR将该工程选择集中登记，不伪造更早时间或额外用户技术签字。
 
-## 决策与替代方案
+## 决策选项、建议与替代方案
 
 - 总体最优：采用独立受管Artifact工作副本与版本记录。拒直接改既有只读Document，因为会破坏历史S2/C1快照和N10恢复；拒把本地草稿成功当作权威提交，因为断连/重启无法确认共同版本。
 - 系统最优：领域DTO与ArtifactService端口归protocol，SQLite/seal/事务实现归runtime-assembly，受治理ToolCapability与认证HTTP复用组合根显式传递的同Arc。拒在私有宿主建立独立权威DB，避免AI与人两套版本真相；拒全局Weak registry按路径查找，避免隐式接线和错误实例复用。

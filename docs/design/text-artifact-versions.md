@@ -2,9 +2,9 @@
 
 [Document-Meta]
 Document: docs/design/text-artifact-versions.md
-Class: DESIGN
+Class: SPEC
 Version: 1
-Last-Modified: 2026-11-13
+Last-Modified: 2026-11-18
 Status: 施工契约；实现与实测结果以进度页登记
 Author: desktop-collaboration-line
 
