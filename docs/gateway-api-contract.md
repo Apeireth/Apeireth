@@ -50,6 +50,8 @@
 | `/v1/chat/completions` | POST | OpenAI 兼容对话(支持 `stream:true` SSE;C2-2 起 chunk `id` = 运行时 request_id;C2-3 起流式回合在生产路径写入 C1 权威流) |
 | `/v1/sessions/{session_id}/requests/{request_id}/stream` | GET | C1 规范流 SSE(见 §11;C2-3 起真实流式回合产生流数据;`Last-Event-ID`/`after_sequence` 续发, 超窗发 `resync_required` 后关闭) |
 | `/v1/sessions/{session_id}/requests/{request_id}/stop` | POST | 停止在飞回合(见 §11;C2-2 起;幂等回放摘要, 不撤销已发生副作用) |
+| `/v1/sessions/{session_id}/agent-binding` | GET | 会话绑定读面(见 §7i;B3b-1 起;未绑定 ⇒ 200 `bound=false`, 不是 404) |
+| `/v1/sessions/{session_id}/agent-binding` | POST | 绑定/更新/显式解绑(见 §7i;B3b-1 起;必须带 `expected_revision`;`contact_id` 必带, 显式 `null` = 解绑) |
 | `/v1/approvals?session={id}` | GET | 该会话的待批审批(见 §6) |
 | `/v1/approvals/resolve` | POST | 批准/拒绝审批(见 §6) |
 | `/v1/panel/metrics` | GET | 指标聚合快照(见 §8b;会话+全局两层,空态显式空) |
@@ -593,8 +595,47 @@ bounded-context 端口 + 乐观并发比对 + 审计 + 能力入册)、领域层
 `ContactRegistry` / `FileContactRegistry`)、组合根适配
 `crates/adapters/cli/src/contact_panel.rs`(`CliContactPanel` 持真落盘注册表 +
 宿主绑定档)与 `crates/adapters/cli/src/lib.rs`(网关装配点注入 `services.contacts`)。
-**未接**: 回合入口(B3b)未接线 ⇒ 新建联系人当前**不影响真实回合**;`memory_scope` 只到
-DTO 层, 未翻译成运行时记忆作用域;会话绑定面 `POST/GET /v1/sessions/{id}/agent-binding` 未做。
+**已接线（B3b-1/B3b-2/B3b-3）**: 会话绑定面见 §7i；已绑定会话的回合入口先过闸（未绑定放行，
+绑定失效/注册表缺位 fail-closed 409 `agent_binding_rejected`，零写入），`memory_scope` 已按绑定
+翻译成运行时作用域（persona/contact/session；缺装配面或失效 ⇒ 已绑定会话显式零写入，不回退
+Session），命中 persona 在**空会话**的 system 种子槽注入（只改 system 文本，不碰权限/工具面/
+workspace scope）。**边界**: 非空会话不追溯改 system；绑定变更写审计 `gateway.session_binding_action`
+但不写 SessionEvent；注册表为进程内/单进程一致，多进程会分叉；无 live E2E。
+
+### §7i 会话绑定面 ✅(2026-11-17, 后端接线合同 B3b-1 批)
+
+`GET /v1/sessions/{session_id}/agent-binding` —— 读这张会话当前的 agent 绑定；
+`POST /v1/sessions/{session_id}/agent-binding` —— 绑定 / 更新 / 解绑。只此一张面，不另开别名。
+
+- **读面只回显已存事实**: 200 = `{session_id, bound, binding, session_revision}`；
+  未绑定 ⇒ `bound=false` 且 `binding=null`（不是 404：会话在，只是没绑定）。
+  `session_revision` 是会话当前修订号，也是下次写面要带的 CAS 值。
+- **AgentBindingDto（9 字段）**: `contact_id` / `agent_id` / `persona_revision` /
+  `workspace_id` / `workspace_revision` / `context_key`（可空）/ `incarnation`（可空）/
+  `revision`（绑定自身修订号，不是会话修订号）/ `updated_at_ms`（epoch 毫秒）。
+- **写面三态**: `contact_id` **字段缺失** ⇒ 400（不猜意图）；**显式 `null`** ⇒ 解绑
+  （当前未绑定 ⇒ 400 `invalid_request`「无可解绑」）；**有值** ⇒ 绑定或更新。绑定时
+  `agent_id` / `persona_revision` / `workspace_id` / `workspace_revision` 必填。
+- **CAS 骑会话修订号**: 写面必须带 `expected_revision`（缺 ⇒ 400 且不碰会话）；不符 ⇒
+  409 `session_binding_conflict`，`details{expected_revision, actual_revision}`。
+  注意该值也会被普通回合 append 推进 ⇒ 客户端写前必须重读。
+- **回显字段只透传**: `context_key` / `incarnation` 面既不生成也不改写；更新时省略即沿用
+  已存值，给了不同值由领域层判冲突。
+- **绑定要过注册表**: 联系人/工作区必须存在、未归档/未吊销，且 `persona_revision` /
+  `workspace_revision` 精确匹配；失败按既有码回：
+  404 `contact_not_found` / 403 `contact_archived` / 409 `contact_conflict`（人设修订号不符）
+  / 404 `workspace_not_found` / 409 `workspace_revoked` / 409 `workspace_conflict`
+  （工作区修订号不符）。注册表未装配 ⇒ 501 `unsupported`。
+- **回合入口闸（B3b-1）**: 未绑定 ⇒ 放行（零回归）；已绑定但 registry 未装配、联系人已归档、
+  或 `agent_id`/`persona_revision`/`workspace_id`/`workspace_revision` 任一不符 ⇒
+  409 `agent_binding_rejected`，**零写入**（消息未追加、revision 未推进、sessions.save 未执行），
+  且**不回落默认 Agent/默认域**。闸与 HTTP 面共用同一份 registry 实例（组合根按根目录缓存），
+  否则会出现「面刚写的绑定，闸读不到」。
+- **审计**: 建/改/解绑/拒绝都落 `gateway.session_binding_action`
+  （`session_binding.create|update|unbind|deny`），allow 与 deny 都留痕，明细不含路径与人设正文。
+- **能力**: `session_agent_binding.read` / `.bind` / `.unbind` 分开登记；过全 API 面令牌门。
+- **边界**: 绑定变更**不写 SessionEvent**（只写审计）；registry 为进程内单例，多进程部署会分叉；
+  初始面实现只覆盖单进程一致；无 live E2E（四级口径 PRODUCTION WIRED，非 HARDWARE VALIDATED）。
 
 ## §8 Trace / Audit / 事件总线
 
