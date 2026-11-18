@@ -3,7 +3,7 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: 711c12f758066f3f3d23258d51aef426d8284327923267052070a61027dae752
+claims_sha256: e36f20f3c406316bc1034b7d7fc976b80c32eb733dbc0b4074f2a454bef1cbcd
 claims_total: 61
 items:
   - id: "rt.provider_router"
@@ -1696,6 +1696,10 @@ items:
         - "crates/adapters/gateway/src/artifacts.rs"
         - "crates/adapters/gateway/src/panels.rs"
         - "crates/adapters/gateway/src/canonical_entry.rs"
+        - "crates/engine/runtime/src/canonical/turn_request.rs"
+        - "crates/engine/runtime/src/canonical/execute.rs"
+        - "crates/engine/runtime/src/canonical/module.rs"
+        - "crates/engine/runtime/src/canonical/error.rs"
     wired:
       production_refs:
         - "crates/adapters/cli/src/lib.rs"
@@ -1708,6 +1712,10 @@ items:
         - "crates/engine/runtime-assembly/src/canonical/permission_preset.rs"
         - "crates/engine/runtime-assembly/src/sqlite_artifacts.rs"
         - "crates/engine/runtime-assembly/src/sqlite_artifacts/mutations.rs"
+        - "crates/engine/runtime/src/canonical/error.rs"
+        - "crates/engine/runtime/src/canonical/execute.rs"
+        - "crates/engine/runtime/src/canonical/module.rs"
+        - "crates/engine/runtime/src/canonical/turn_request.rs"
         - "crates/foundation/protocol/src/artifacts.rs"
     default_enabled: true
     validated:
@@ -1716,6 +1724,7 @@ items:
         - "crates/engine/runtime-assembly/src/sqlite_artifacts_tests.rs"
         - "crates/engine/runtime-assembly/src/artifact_tools_tests.rs"
         - "crates/adapters/gateway/src/artifacts/tests.rs"
+        - "crates/adapters/gateway/tests/artifact_candidates_http.rs"
       claims_id: "work.artifact_versions"
     gaps:
       []
