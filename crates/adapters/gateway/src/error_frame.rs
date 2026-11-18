@@ -71,11 +71,11 @@ pub enum ErrorCode {
     SessionBindingConflict,
     /// 操作幂等键载荷冲突 (C2-0 目录登记): 同一个操作键上已经落过**不同载荷**,
     /// 与「同键在飞」是两回事 —— 故不复用 `operation_in_progress`。
-    /// ⚠️ 本批只登记目录与文案, 尚无端点产生该码 (业务接线归 C2-1)。
+    /// /v1/chat 带 x-apeireth-operation 头时产生 (C2-1 起接线)。
     OperationConflict,
     /// 操作幂等键在飞 (C2-0 目录登记): 同一个操作键的请求还在处理中,
     /// 不得再起一次 —— 与「同键不同载荷」是两回事, 故不复用 `operation_conflict`。
-    /// ⚠️ 本批只登记目录与文案, 尚无端点产生该码 (业务接线归 C2-1)。
+    /// /v1/chat 带 x-apeireth-operation 头时产生 (C2-1 起接线)。
     OperationInProgress,
     /// An unexpected internal error.
     Internal,

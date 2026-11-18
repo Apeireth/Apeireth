@@ -12,8 +12,9 @@ use apeireth_governance::{may_resolve_approval, UserCapability};
 use apeireth_guard::{IntentInput, IntentInterpreter, RuleIntentInterpreter};
 use apeireth_protocol::canonical::{ContentPart, NormalizedUsage};
 use apeireth_runtime::canonical::{
-    ApprovalDecision, ApprovalResolution, ExecutionTrace, PendingApprovalView, Runtime,
-    RuntimeError, TraceEvent, TurnOutcome, TurnRequest, TurnSecurityContext,
+    ApprovalDecision, ApprovalResolution, ExecutionTrace, OperationAdmission, OperationRequest,
+    PendingApprovalView, Runtime, RuntimeError, TraceEvent, TurnOutcome, TurnRequest,
+    TurnSecurityContext,
 };
 use axum::extract::{Extension, Query, Request, State};
 use axum::http::StatusCode;
@@ -35,6 +36,7 @@ use crate::client_tokens::{
 };
 use crate::error_frame::{ErrorCode, ErrorFrame};
 use crate::events::{events_handler, EventBus, GatewayEvent, RuntimeObservationSink};
+use crate::operation_header::operation_request;
 use crate::panels::{panel_routes, GatewayServices, GatewayState, PanelData};
 use crate::runtime_error_map::classify_runtime_error;
 
@@ -336,6 +338,22 @@ pub async fn execute_chat_attributed(
     request: CanonicalChatRequest,
     attribution: SessionAttribution,
 ) -> Result<CanonicalChatOutcome, CanonicalEntryError> {
+    execute_chat_attributed_operation(runtime, request, attribution, None).await
+}
+
+/// 归属化回合入口 + 操作幂等闸 (C2-1)。
+///
+/// `operation` 为 `None` 时与不带幂等头的请求同构: 直接抢会话写闸执行。
+/// 为 `Some` 时先登记 (session, operation): 只有新鲜请求才抢写闸执行;
+/// 已到终态的操作直接回放存储的 `TurnOutcome` —— 不再执行、不再写会话账本,
+/// 因而 W2-③ 的串行语义完全不变。登记后执行失败 (RuntimeError) 不落到终态,
+/// 由 guard 的 Drop 标成 Indeterminate, 同键重试按 `operation_conflict` 拒。
+pub(crate) async fn execute_chat_attributed_operation(
+    runtime: &Runtime,
+    request: CanonicalChatRequest,
+    attribution: SessionAttribution,
+    operation: Option<OperationRequest>,
+) -> Result<CanonicalChatOutcome, CanonicalEntryError> {
     validate_chat_input(&request.input)?;
 
     let session = request.session.unwrap_or_else(SessionId::new);
@@ -355,7 +373,27 @@ pub async fn execute_chat_attributed(
         turn = turn.with_system(system);
     }
 
-    let outcome = run_turn_serialized(runtime, turn, &attribution, None).await?;
+    let outcome = match operation {
+        None => run_turn_serialized(runtime, turn, &attribution, None).await?,
+        Some(operation) => match runtime.begin_operation(session, operation) {
+            OperationAdmission::Replay(outcome) => return Ok(turn_outcome_to_chat(outcome)),
+            OperationAdmission::Conflict { operation, reason } => {
+                return Err(CanonicalEntryError::Runtime(
+                    RuntimeError::OperationConflict { operation, reason },
+                ));
+            }
+            OperationAdmission::InProgress { operation } => {
+                return Err(CanonicalEntryError::Runtime(
+                    RuntimeError::OperationInProgress { operation },
+                ));
+            }
+            OperationAdmission::Fresh(guard) => {
+                let outcome = run_turn_serialized(runtime, turn, &attribution, None).await?;
+                guard.complete(outcome.clone());
+                outcome
+            }
+        },
+    };
     Ok(turn_outcome_to_chat(outcome))
 }
 
@@ -1748,6 +1786,7 @@ async fn native_chat(
     identity: Option<Extension<ClientIdentity>>,
     user: Option<Extension<UserContext>>,
     domain: Option<Extension<crate::domain_context::DomainContext>>,
+    headers: axum::http::HeaderMap,
     Json(request): Json<CanonicalChatRequest>,
 ) -> Result<Response, HttpError> {
     let mut request = request;
@@ -1767,6 +1806,12 @@ async fn native_chat(
     let session = request.session.unwrap_or_else(SessionId::new);
     request.session = Some(session);
     request.system = execution.seeded_system(request.system.take());
+    // C2-1: 可选的幂等键先解码 (摘要取解析后的 model/system); 非法键在
+    // 会话立案、绑主、入域之前就 400, 不留下副作用。
+    let operation = match operation_request(&headers, &request) {
+        Ok(operation) => operation,
+        Err(error) => return Err(http_error(error, request.session)),
+    };
     // W3-②: 会话→用户绑定 (首个具名写者), 跨用户审批拒的判定依据。
     bind_session_owner(&state, session, user.as_ref());
     // W3-③: 会话入域立案 (域事件过滤面)。
@@ -1787,7 +1832,13 @@ async fn native_chat(
         eprintln!("[principal-attribution] 归属登记失败 (旁路, 不阻断请求): {error}");
     }
     let attribution = attribution_for(&state, identity.as_ref());
-    let outcome = execute_chat_attributed(execution.runtime.as_ref(), request, attribution).await;
+    let outcome = execute_chat_attributed_operation(
+        execution.runtime.as_ref(),
+        request,
+        attribution,
+        operation,
+    )
+    .await;
     state.observations.flush().await;
     let outcome = outcome.map_err(|error| http_error(error, Some(session)))?;
     publish_turn_delta(&state.events, &outcome);

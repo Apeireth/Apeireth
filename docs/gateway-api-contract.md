@@ -27,9 +27,9 @@
   会话绑定面(B3b 批)的专用码:409 `agent_binding_rejected`(回合闸拒绝: 会话绑定的联系人/工作区
   已不可用)/ 409 `session_binding_conflict`(会话修订号冲突, 详情带 `expected_revision`/
   `actual_revision`) —— 同为**新增码 = 合同变更**。
-  操作幂等面(C2-0 批)登记的专用码:409 `operation_conflict`(同一操作键 + 不同载荷)/
-  409 `operation_in_progress`(同一操作键在飞) —— ⚠️ **目录与中文文案已登记, 尚无端点产生这两个码**;
-  产生它们的端点归 C2-1(幂等接线), 交付前**不得**按已实现端点/已生产码计。
+  操作幂等面(C2-1 批)的专用码:409 `operation_conflict`(同一操作键 + 不同载荷)/
+  409 `operation_in_progress`(同一操作键在飞) —— C2-1 起由 `/v1/chat` 的幂等键产生,
+  语义与作用域见 §3 的「幂等」小节。
   同为**新增码 = 合同变更**, 前端需同步(封闭集共 24 个码, 顺序见
   `crates/adapters/gateway/src/error_frame.rs` 的 `ErrorCode` 枚举)。
 - 分页:列表端点统一 `limit`(默认 50,最大 500)+ 按时间倒序;需要更多分页时再引入 cursor
@@ -44,7 +44,7 @@
 | `/v1/runtime/snapshot` | GET | 不含凭据、私有记忆、原始 prompt/CoT 的 Runtime 诊断快照 |
 | `/v1/apeireth/capabilities` | GET | 来自 GatewayServices、Runtime Registry 与 Provider Router 的动态能力清单 |
 | `/v1/modules` | GET | 来自 BehaviorRegistry 的行为模块清单；`/v1/organs` 为兼容别名 |
-| `/v1/chat` | POST | 原生对话(见 §3) |
+| `/v1/chat` | POST | 原生对话(见 §3;C2-1 起支持 `x-apeireth-operation` 幂等键) |
 | `/v1/chat/completions` | POST | OpenAI 兼容对话(支持 `stream:true` SSE) |
 | `/v1/approvals?session={id}` | GET | 该会话的待批审批(见 §6) |
 | `/v1/approvals/resolve` | POST | 批准/拒绝审批(见 §6) |
@@ -93,6 +93,25 @@
 - 挂起审批以 `finish_reason:"approval_required"` 显式终帧终止流;provider 错误经统一错误帧契约上浮
   (`{"error":{"message","code","solution"}}`,见 ledger #16)。
 - 增量链路:provider SSE → runtime sink(`execute_outcome_streaming`)→ gateway 逐 chunk 直通,非整段后分帧。
+
+**幂等(C2-1)**:`/v1/chat` 接受请求头 `x-apeireth-operation`(单值, 头名大小写不敏感,
+值去首尾空白后按 `validate_stable_id` 同规则校验:非空、≤128 字节、首字符为 ASCII 小写字母、
+只含 `a-z0-9.-_`、以 `.` 分段且每段非空)。缺头即此前行为(每次都是新回合);头非法返回
+400 `invalid_request`(文案含 operation key),且不落会话、不绑主、不入域。
+
+- **作用域**:`(session_id, operation)`。请求必须显式给 `session`;未给 session 的请求不去重
+  (每次新建会话)。幂等表在 Runtime 进程内, 重启即失, 多进程不共享。
+- **载荷摘要**:SHA-256, 编码固定三段 `(input, model, system)`, 每段 = 1 字节存在位 +
+  u32 小端长度 + UTF-8 字节;`model`/`system` 取解析后的实际值(与执行所用一致).
+- **同键裁决**:同摘要 + 已完成 ⇒ 回放首次的终态响应(HTTP 状态与响应体同首次逐字节,
+  不再执行、不再追加用户消息);同摘要 + 在飞 ⇒ 409 `operation_in_progress`;摘要不同
+  (任意态)⇒ 409 `operation_conflict`;上次执行中断、结果不确定 ⇒ 同摘要也按 409
+  `operation_conflict` 返回, 文案说明「上次执行中断、结果不确定, 请换新操作键重试」。
+- **终态口径**:200 完成与 202 审批挂起都算终态并存储(202 回放 = 同一审批视图);
+  RuntimeError 不算终态, 对应条目转为不确定态。
+- **回放边界**:回放的是终态快照, 不重放流式 delta(C2-1 只接 `/v1/chat`;
+  `/v1/chat/completions` 的 `stream:true` 不在本批范围)。表容量 1024 条, 淘汰只挑
+  已完成/不确定态的最老条目, 在飞条目绝不淘汰(可瞬时超过 1024)。
 
 ## §4 会话 `[P0]`
 
@@ -710,7 +729,12 @@ initiative(他从 `dreaming_consolidation` 苏醒主动开口)是独立事件类
 | A2 | 工作区 HTTP 契约面：列表/单读/建/选/关 + 乐观并发(`expected_revision`)+ 审计(`gateway.workspace_action`)+ 能力入册 + 错误码 `workspace_not_found`/`workspace_conflict`/`workspace_revoked`(见 §7g) | ✅ 已完成(2026-11-17, 后端接线合同 A2 批)；**不承诺持久化**(注册表进程内, 持久化属 A3 批) |
 | A3 | 工作区持久化：落盘注册表 + 跨重启恢复 + 坏记录 fail-closed + 已吊销不可复活 | ✅ 已完成(2026-11-17, 后端接线合同 A3 批)；本地文件系统介质, 非 DB/WAL |
 | B3a | 联系人 HTTP 契约面：list/create/get/update/archive + 乐观并发(`expected_revision`)+ 归档终态(403 `contact_archived`)+ 工作区绑定校验(409 `contact_binding_conflict`)+ 审计(`gateway.contact_action`)+ 能力入册 + 4 个新错误码(见 §7h) | ✅ 已完成(2026-11-17, 后端接线合同 B3a 批)；**回合入口未接线**(B3b), 新建联系人当前不影响真实回合 |
+| C2-1 | 对话操作幂等去重:`/v1/chat` 头 `x-apeireth-operation` + SHA-256 三段载荷摘要 + 进程内 1024 条表 + 两错误码 409 `operation_conflict`/`operation_in_progress`(见 §3 幂等小节) | ✅ 已完成(2026-11-18, 后端接线合同 C2-1 批);HTTP 面 PRODUCTION WIRED;**幂等表进程内, 重启即失, 多进程不共享**;`/v1/chat/completions` 未接线, 回放不重放流式 delta |
 
 实现位置:`crates/adapters/gateway/src/`(canonical_entry.rs + panels.rs + events.rs)，
 数据源为 Runtime/Assembly 注入的 bounded-context ports；CLI 组合根位于
 `crates/adapters/cli/src/gateway_panels.rs`，旧 `PanelData` 仅作为兼容适配层。
+操作幂等(C2-1)的实现位置:表与守卫在
+`crates/engine/runtime/src/canonical/operation_idempotency.rs`,头解析/载荷摘要在
+`crates/adapters/gateway/src/operation_header.rs`,入口接线在 `canonical_entry.rs` 的
+`execute_chat_attributed_operation`。

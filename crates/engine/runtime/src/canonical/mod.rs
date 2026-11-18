@@ -67,6 +67,7 @@ pub mod metrics;
 pub mod module;
 mod module_host;
 pub mod module_messages;
+pub mod operation_idempotency;
 pub mod principal_authority;
 pub mod profiles;
 pub mod registered_hooks;
@@ -151,6 +152,10 @@ pub use module::{
     ModuleContext, ModuleDirective, ModuleError, ModuleInvocationError, ModuleInvocationRequest,
     ModuleInvocationResponse, ModuleInvoker, ModuleManifest, ModuleOutcome, PromptOverlay,
     DEFAULT_MAX_INVOCATION_DEPTH, DEFAULT_MAX_MODULE_INVOCATIONS,
+};
+pub use operation_idempotency::{
+    validate_operation_key, InvalidOperationKey, OperationAdmission, OperationGuard,
+    OperationIdempotency, OperationRequest, DEFAULT_OPERATION_CAPACITY, MAX_OPERATION_KEY_BYTES,
 };
 pub use plan_mode_control::PlanModeExitControl;
 pub use provider::{ProviderHealth, ProviderRouter, RoutedCompletion};

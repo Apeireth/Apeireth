@@ -658,6 +658,9 @@ impl RuntimeBuilder {
                 .map(|generator| Arc::new(CompactionEngine::new(generator))),
             call_scheduler: self.call_scheduler,
             metrics,
+            operation_idempotency: super::operation_idempotency::OperationIdempotency::new(
+                super::operation_idempotency::DEFAULT_OPERATION_CAPACITY,
+            ),
             tool_completion_observer: self.tool_completion_observer,
             remote_port: RwLock::new(self.remote_port),
             contact_registry: self.contact_registry,
