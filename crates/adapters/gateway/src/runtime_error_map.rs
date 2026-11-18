@@ -47,6 +47,11 @@ pub(crate) fn classify_runtime_error(error: &RuntimeError) -> (StatusCode, Error
         RuntimeError::OperationInProgress { .. } => {
             (StatusCode::CONFLICT, ErrorCode::OperationInProgress)
         }
+        // A no-tools turn that still asked for tools is a caller/contract
+        // violation, not an internal failure.
+        RuntimeError::ToolUseForbidden { .. } => {
+            (StatusCode::UNPROCESSABLE_ENTITY, ErrorCode::InvalidRequest)
+        }
         _ => (StatusCode::INTERNAL_SERVER_ERROR, ErrorCode::Internal),
     }
 }

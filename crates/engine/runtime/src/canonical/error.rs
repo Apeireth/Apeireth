@@ -232,6 +232,16 @@ pub enum RuntimeError {
         operation: String,
     },
 
+    /// A turn configured without tools received provider tool calls.
+    ///
+    /// The refusal happens before any dispatch, approval, or transcript write,
+    /// so a read-only turn cannot smuggle side effects through the model.
+    #[error("model requested {count} tool call(s) in a no-tools turn")]
+    ToolUseForbidden {
+        /// How many calls the provider returned.
+        count: usize,
+    },
+
     /// The runtime was assembled in an unusable state.
     #[error("runtime misconfigured: {0}")]
     Misconfigured(String),

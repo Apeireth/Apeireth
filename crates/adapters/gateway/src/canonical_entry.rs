@@ -2264,7 +2264,7 @@ fn http_error(error: CanonicalEntryError, session: Option<SessionId>) -> HttpErr
 /// A round-limit failure carries its real budget numbers (configured limit,
 /// consumed rounds, and the approval-frozen tool name when one existed) as
 /// structured `details`, so the frame is diagnosable without a second lookup.
-fn runtime_error_frame(error: &RuntimeError) -> ErrorFrame {
+pub(crate) fn runtime_error_frame(error: &RuntimeError) -> ErrorFrame {
     let (_, code) = classify_runtime_error(error);
     let frame = ErrorFrame::new(code, error.to_string());
     match error {

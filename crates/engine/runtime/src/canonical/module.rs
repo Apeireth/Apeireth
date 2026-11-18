@@ -661,6 +661,7 @@ pub const DEFAULT_MAX_MODULE_INVOCATIONS: usize = 24;
 pub struct ModuleTurnState {
     used: AtomicUsize,
     max: usize,
+    read_only: bool,
 }
 
 impl ModuleTurnState {
@@ -668,7 +669,22 @@ impl ModuleTurnState {
         Self {
             used: AtomicUsize::new(0),
             max,
+            read_only: false,
         }
+    }
+
+    /// A turn whose module hooks must not run: no side-call budget is consumed
+    /// and no module (or registered hook) observes or mutates the turn.
+    pub(crate) fn read_only(max: usize) -> Self {
+        Self {
+            used: AtomicUsize::new(0),
+            max,
+            read_only: true,
+        }
+    }
+
+    pub(crate) fn is_read_only(&self) -> bool {
+        self.read_only
     }
 
     #[allow(dead_code)]
@@ -676,6 +692,7 @@ impl ModuleTurnState {
         Self {
             used: AtomicUsize::new(used),
             max,
+            read_only: false,
         }
     }
 
