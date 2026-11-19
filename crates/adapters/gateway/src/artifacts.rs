@@ -157,7 +157,10 @@ fn service(
 ) -> Result<Arc<dyn ArtifactService>, Response> {
     // The first service has one explicitly configured local namespace. Never
     // silently project an authenticated multi-user/domain request into it.
-    if state.user_access.is_active() || domain.is_some_and(|d| d.is_non_default()) {
+    if (state.user_access.is_active()
+        && !crate::model_connection::is_managed_single_operator(state))
+        || domain.is_some_and(|d| d.is_non_default())
+    {
         return Err(error(ArtifactError::ScopeUnavailable));
     }
     state.services.artifacts.clone().ok_or_else(|| {

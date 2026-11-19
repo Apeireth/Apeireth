@@ -3,8 +3,8 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: e36f20f3c406316bc1034b7d7fc976b80c32eb733dbc0b4074f2a454bef1cbcd
-claims_total: 61
+claims_sha256: 21df48389acf63064a6bd83c37a39906358cb610666f8dacebabb2d378e2cf6d
+claims_total: 62
 items:
   - id: "rt.provider_router"
     capability: "跨 provider fallback + 健康态（运行时路由）"
@@ -1728,3 +1728,40 @@ items:
       claims_id: "work.artifact_versions"
     gaps:
       []
+  - id: "desktop.model_connection"
+    capability: "受管桌面模型连接（凭据与下次启动配置）"
+    implemented:
+      sources:
+        - "crates/adapters/cli/src/desktop_model_connection.rs"
+        - "crates/adapters/cli/src/keyring_bootstrap.rs"
+        - "crates/adapters/cli/src/lib.rs"
+        - "crates/adapters/gateway/src/model_connection.rs"
+        - "crates/adapters/gateway/src/admin.rs"
+        - "crates/adapters/gateway/src/panels.rs"
+        - "crates/adapters/gateway/src/canonical_entry.rs"
+        - "crates/adapters/gateway/src/artifacts.rs"
+        - "crates/adapters/gateway/src/lib.rs"
+        - "crates/foundation/credentials/src/keyring.rs"
+        - "crates/foundation/credentials/src/hot_store.rs"
+    wired:
+      production_refs:
+        - "crates/adapters/cli/src/desktop_model_connection.rs"
+        - "crates/adapters/cli/src/keyring_bootstrap.rs"
+        - "crates/adapters/cli/src/lib.rs"
+        - "crates/adapters/gateway/src/admin.rs"
+        - "crates/adapters/gateway/src/artifacts.rs"
+        - "crates/adapters/gateway/src/canonical_entry.rs"
+        - "crates/adapters/gateway/src/lib.rs"
+        - "crates/adapters/gateway/src/model_connection.rs"
+        - "crates/adapters/gateway/src/panels.rs"
+        - "crates/foundation/credentials/src/hot_store.rs"
+        - "crates/foundation/credentials/src/keyring.rs"
+    default_enabled: false
+    validated:
+      tests:
+        - "crates/adapters/cli/src/desktop_model_connection_tests.rs"
+        - "crates/adapters/cli/tests/desktop_model_connection.rs"
+        - "crates/adapters/gateway/src/model_connection.rs"
+      claims_id: "desktop.model_connection"
+    gaps:
+      - "能力矩阵未出现开关 APEIRETH_DESKTOP_MANAGED（待补）"

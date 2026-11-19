@@ -30,6 +30,7 @@ pub mod memory_verify_command;
 pub mod mesh_cli;
 // B6 会话/记忆静态加密（隐患 #6）密钥面：engine `apeireth_storage::crypto` 的 CLI 出口（密钥丢失 = 显式不可恢复）。
 pub mod crypto_keys;
+mod desktop_model_connection;
 pub mod diary_store;
 pub mod nightwatch_command;
 // V5-b 暴露面体检 CLI 面 (只读零写; 与 `tool.exposure_audit` 同一内核两出口)。
@@ -1640,15 +1641,17 @@ async fn build_canonical_runtime_with_parts(
 
     let mut fallback_order: Vec<CapabilityId> = Vec::new();
 
-    let minimax = MinimaxProviderPlugin::from_env()
-        .map_err(|error| format!("minimax provider activation failed: {error}"))?;
-    fallback_order.push(CapabilityId::new("provider.minimax").unwrap());
-    builder = builder.with_plugin(Arc::new(minimax));
+    if !desktop_model_connection::managed() {
+        let minimax = MinimaxProviderPlugin::from_env()
+            .map_err(|error| format!("minimax provider activation failed: {error}"))?;
+        fallback_order.push(CapabilityId::new("provider.minimax").unwrap());
+        builder = builder.with_plugin(Arc::new(minimax));
 
-    let anthropic = AnthropicProviderPlugin::from_env()
-        .map_err(|error| format!("anthropic provider activation failed: {error}"))?;
-    fallback_order.push(CapabilityId::new("provider.anthropic").unwrap());
-    builder = builder.with_plugin(Arc::new(anthropic));
+        let anthropic = AnthropicProviderPlugin::from_env()
+            .map_err(|error| format!("anthropic provider activation failed: {error}"))?;
+        fallback_order.push(CapabilityId::new("provider.anthropic").unwrap());
+        builder = builder.with_plugin(Arc::new(anthropic));
+    }
 
     if std::env::var("APEIRETH_OPENAI_MODELS")
         .ok()
@@ -3092,6 +3095,11 @@ pub async fn dispatch_gateway_serve_with(
         None => None,
     };
 
+    // 受管桌面：模型连接档案与凭据必须在运行时装配**之前**就位（provider
+    // 只装单一 openai-compatible 协议族，凭据从进程热库读）。
+    let managed = desktop_model_connection::managed();
+    let model_connection = desktop_model_connection::prepare()?;
+
     // 机械补位 (编译断点, 网关语义零改动): 组装出口新增路由器绑定位 (H-P2),
     // 网关路径不接任务源路由, 丢弃该绑定位 —— 其自述路由节照实报「尚无任务
     // 被路由」(网关面路由接线不在本批战场)。
@@ -3156,14 +3164,22 @@ pub async fn dispatch_gateway_serve_with(
     // the runtime's credential resolver reads per request (真热更: admin 写入后
     // 下一请求即生效); a configured keyring backend additionally persists the
     // value across restarts.
-    services.credentials = crate::keyring_bootstrap::build_keyring_credential_writer();
+    services.credentials = if managed {
+        None
+    } else {
+        crate::keyring_bootstrap::build_keyring_credential_writer()
+    };
+    services.model_connection = model_connection;
     // V2-b 用户/域管理面 (双入口同源, 跨范围最小接线报备见交付说明): HTTP 面与
     // CLI `apeireth user` 共用同一 UserTable 服务 (同一 `users.json`), 域管理口
-    // 与域平面共用同一域注册表 (同一数据根)。
-    services.user_admin = Some(Arc::new(apeireth_gateway::UserAdminService::new(&data_dir)));
-    services.domain_admin = Some(Arc::new(apeireth_gateway::DomainAdminService::new(
-        domain_registry,
-    )));
+    // 与域平面共用同一域注册表 (同一数据根)。受管桌面只有单一操作者，不注入
+    // 多户管理面（身份表由 `managed_operator_access` 固定）。
+    if !managed {
+        services.user_admin = Some(Arc::new(apeireth_gateway::UserAdminService::new(&data_dir)));
+        services.domain_admin = Some(Arc::new(apeireth_gateway::DomainAdminService::new(
+            domain_registry,
+        )));
+    }
     // 技能库只读面 (GET /v1/panel/skills): 与 skill_search/skill_distill 同一
     // 技能库 (`<data_dir>/skills/`, StoredDoc 拒开语义) 的元数据投影 —— 只读,
     // 不回卡体 (卡体走 L2 封套面), 坏卡如实列拒不砖库。
@@ -3218,8 +3234,12 @@ pub async fn dispatch_gateway_serve_with(
     )?;
     // W3-②: 用户角色面显式注入 (users.json StoredDoc 拒开 + 令牌↔用户绑定一致性
     // fail-closed); 未配置用户表 = 角色面未激活 (兼容路径, 行为逐字不变)。
-    let user_access = apeireth_gateway::UserAccess::load(&data_dir, &client_tokens)
-        .map_err(|error| format!("user role face refused to open: {error}"))?;
+    let user_access = if managed {
+        apeireth_gateway::model_connection::managed_operator_access()
+    } else {
+        apeireth_gateway::UserAccess::load(&data_dir, &client_tokens)
+            .map_err(|error| format!("user role face refused to open: {error}"))?
+    };
     state.client_tokens = client_tokens;
     state.user_access = user_access;
     // W3-①: 域上下文路由面注入 (会话面按域路由 / 越域拒绝即帧 / 面闸)。

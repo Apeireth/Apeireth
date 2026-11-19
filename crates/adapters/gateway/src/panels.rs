@@ -550,6 +550,8 @@ pub struct GatewayServices {
     pub modules: Option<Arc<dyn ModuleQuery>>,
     /// Writes hot-reloaded API keys to the process credential backend (keyring).
     pub credentials: Option<Arc<dyn crate::admin::CredentialWriter>>,
+    /// Managed single-operator profile backed by the composition root keyring.
+    pub model_connection: Option<Arc<dyn crate::model_connection::ModelConnectionService>>,
     pub safety_guard: Option<Arc<dyn SafetyGuardQuery>>,
     pub workbench: Option<Arc<dyn WorkbenchQuery>>,
     /// 用户管理面 (W3-② HTTP 面): 与 CLI `apeireth user` **同一** UserTable 服务
@@ -613,6 +615,7 @@ impl GatewayServices {
             grant_commands: permissions.then(|| adapter.clone() as Arc<dyn GrantCommand>),
             modules: modules.then(|| adapter as Arc<dyn ModuleQuery>),
             credentials: None,
+            model_connection: None,
             safety_guard: None,
             workbench: None,
             // 用户/域/技能库/任务面板/关怀/性格面板面走文件事实服务或持久队列
