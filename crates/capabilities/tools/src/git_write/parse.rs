@@ -405,16 +405,38 @@ pub(super) fn grade_tag(
 ///   的文件读进提交/附注对象;
 /// - **现在为什么这样**: 按同一口径判越界 ⇒ 越界即拒绝即帧（不放行到执行面）;
 ///   凭据面（`sensitive_path` 的形状黑名单）同样 fail-closed。
-pub(super) fn check_message_file_operands(root: &Path, operands: &[String]) -> Result<(), String> {
+pub(super) enum OperandRefusal {
+    /// 工作区根不可解析 —— 与「操作数越界」区分开, 不把环境问题说成路径越界。
+    Root(String),
+    /// 操作数路径越界 / 不可解析 / 落在凭据面。
+    Contained(String),
+}
+
+impl OperandRefusal {
+    pub(super) fn message(self) -> String {
+        match self {
+            Self::Root(reason) => reason,
+            Self::Contained(reason) => format!("操作数路径越界: {reason}"),
+        }
+    }
+}
+
+pub(super) fn check_message_file_operands(
+    root: &Path,
+    operands: &[String],
+) -> Result<(), OperandRefusal> {
     if operands.is_empty() {
         // 无文件操作数 ⇒ 无需解析根 (工作区根不存在时也不该误伤普通命令)。
         return Ok(());
     }
-    let canonical_root = fs::canonicalize(root)
-        .map_err(|error| format!("工作区根不可解析 ({}): {error}", root.display()))?;
+    let canonical_root = fs::canonicalize(root).map_err(|error| {
+        OperandRefusal::Root(format!("工作区根不可解析 ({}): {error}", root.display()))
+    })?;
     for requested in operands {
         if requested.trim().is_empty() {
-            return Err("消息/附注文件路径必须非空".to_string());
+            return Err(OperandRefusal::Contained(
+                "消息/附注文件路径必须非空".to_string(),
+            ));
         }
         let candidate = if Path::new(requested).is_absolute() {
             PathBuf::from(requested)
@@ -423,22 +445,24 @@ pub(super) fn check_message_file_operands(root: &Path, operands: &[String]) -> R
         };
         // 词法层 (相对穿越 / 绝对敏感系统路径) —— 与 `resolve_contained` 同口径。
         crate::guardrail::ToolGuardrail::verify_path_access(&canonical_root, &candidate)
-            .map_err(|error| error.to_string())?;
+            .map_err(|error| OperandRefusal::Contained(error.to_string()))?;
         let canonical = fs::canonicalize(&candidate).map_err(|error| {
-            format!(
+            OperandRefusal::Contained(format!(
                 "消息/附注文件不可解析 (不存在或不可读): {}: {error}",
                 candidate.display()
-            )
+            ))
         })?;
         if !canonical.starts_with(&canonical_root) {
-            return Err(format!(
+            return Err(OperandRefusal::Contained(format!(
                 "消息/附注文件 {} 落在工作区根之外",
                 candidate.display()
-            ));
+            )));
         }
         // 凭据面排除 (fail-closed): 根内的凭据/密钥文件同样不可进提交/附注对象。
         if crate::sensitive_path::is_sensitive_path(&canonical_root, &canonical) {
-            return Err(crate::sensitive_path::credential_surface_refusal());
+            return Err(OperandRefusal::Contained(
+                crate::sensitive_path::credential_surface_refusal(),
+            ));
         }
     }
     Ok(())
