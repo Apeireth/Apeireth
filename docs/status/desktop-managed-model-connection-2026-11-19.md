@@ -5,7 +5,7 @@ Document: docs/status/desktop-managed-model-connection-2026-11-19.md
 Class: STATUS
 Version: 1
 Last-Modified: 2026-11-19
-Status: 代码、声明与最终二进制隔离复核完成；PR #148 已推送，待必需 CI 与合入；PRODUCTION WIRED，非 HARDWARE VALIDATED
+Status: 代码、声明与最终二进制隔离复核完成；PR #148 已合入 main（merge `e1d85ee31edb344485e7f4bf4e3622f791187457`，2026-11-19T05:33:08Z）；PRODUCTION WIRED，非 HARDWARE VALIDATED
 Author: desktop-collaboration-line
 
 ## 目标与检查点
@@ -76,5 +76,5 @@ Author: desktop-collaboration-line
 
 ## 还差什么
 
-- PR #148 已推送，待必需 CI（含 fuzz matrix 中 `inputs (git_write)` 与 `inputs (guard_supervisor)`）全绿后合 main；PR body 记录最终 exe SHA 与隔离证据。
+- PR #148 已合入 main（merge `e1d85ee31edb344485e7f4bf4e3622f791187457`，2026-11-19T05:33:08Z）；required 7 项全绿，fuzz matrix 的 `inputs (git_write)` 与 `inputs (guard_supervisor)` 均 SUCCESS。main 合并后 CI 以仓库 run 为准。
 - 未做真实提供方调用、桌面 C41 实机联调、多进程/跨平台凭据后端；这些不进本批 PRODUCTION WIRED 口径。
