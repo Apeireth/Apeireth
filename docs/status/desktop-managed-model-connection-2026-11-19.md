@@ -5,7 +5,7 @@ Document: docs/status/desktop-managed-model-connection-2026-11-19.md
 Class: STATUS
 Version: 1
 Last-Modified: 2026-11-19
-Status: 受管桌面同包已合入 main（PR #148，merge `e1d85ee31`，PRODUCTION WIRED，非 HARDWARE VALIDATED）；2026-11-19 补充批「会话只读恢复」已本地实现并通过模块测试，待 PR 与新同包 EXE 隔离验收
+Status: 受管桌面同包已合入 main（PR #148，merge `e1d85ee31`）；2026-11-19 补充批「会话只读恢复」已由 PR #150 合入 main（merge `81f87b253`），同包 EXE 隔离验收 109 PASS / 0 FAIL，PRODUCTION WIRED，非 HARDWARE VALIDATED
 Author: desktop-collaboration-line
 
 ## 目标与检查点
@@ -76,7 +76,7 @@ Author: desktop-collaboration-line
 - 端点：`GET /v1/sessions/{session_id}/turns`（`after` 绝对游标、`limit` 默认 8/最大 16、单页 4 MiB）与 `GET /v1/sessions/{session_id}/turn-result`（`input_sha256` + 可选 `request`/`trace_id`；歧义/身份冲突 409）。
 - 接线：`gateway/src/lib.rs`、`gateway/src/canonical_entry.rs`（路由合并 + 最外层响应保护；文件保持 2291 行 = arch baseline）。
 - 本地测试：`cargo test -p apeireth-gateway --lib turn_results --locked` 32 passed / 0 failed，覆盖 completed 精确文本、unconfirmed 空文本、重复输入身份、跨用户/未绑定拒绝、域隔离、读不取写 permit、4 MiB 预算、坏镜像 409、managed 单操作者读取与 no-store/nosniff。
-- 边界：`usage` 恒为 `null`（不从文本反推）；继承前缀不冒充子会话回合；不做 latest-turn 回落；仍然只到本地模块验证，尚未经过新 EXE 的 C4 旧库重开与 TCP 断连隔离验收。
+- 边界：`usage` 恒为 `null`（不从文本反推）；继承前缀不冒充子会话回合；不做 latest-turn 回落。已由 PR #150 合入 main，并在同包 EXE 上完成 C4 旧库重开、跨会话/认证、零写、候选回归与 TCP 断连验收（109 PASS / 0 FAIL，见下）。
 
 ## 二进制与构建
 
@@ -84,8 +84,12 @@ Author: desktop-collaboration-line
 
 最终 exe 已在最终代码合并点后重建，并完成模型连接读取/重开、旧成果读取、候选成功/过期/摘要不符/工具拒绝、普通对话与管理面拒绝的复核；另以只读方式确认旧日常根的模型连接与旧成果（head `dbdd5f51-7eb5-4dc2-a44d-0302dfc2f8ed`、sequence 3、3 个 revision）可读，进程与临时验收端口均已关闭。
 
+### 会话读面同包最终构建（2026-11-19 补充批）
+
+最终隔离复核使用的 exe：`C:\Apeireth\cargo-target\desktop-session-reads\release\apeireth.exe`，PE32+ x86_64，45,749,248 B，SHA-256 `7E39762298EBBEA36CD37A3848FF7662C9273F66143E142C711E0BCFC97E6926`，LastWrite `2026-11-19T16:55:50+08:00`；构建命令 `pwsh scripts/cargo.ps1 -Slot base -Line desktop-session-reads -CargoArgs "build --release -p apeireth-cli --locked"`；日志 `C:\Apeireth\tmp-build-discipline\desktop-session-reads-release.log`。二进制构建源码 `a51965ee0f465fa0da8802e96fcff41b6e31b401`，分支 `feat/session-turn-reads-20261119`；其后 `21f12317057a3ba489e7820b55eda7a5660de66a` 只改合同文档。合并提交 `81f87b25348a247089837bab8a919398d6c1732c`（PR #150，2026-11-19T09:27:48Z）。
+
 ## 还差什么
 
-- PR #148 已合入 main（merge `e1d85ee31edb344485e7f4bf4e3622f791187457`，2026-11-19T05:33:08Z）；required 7 项全绿，fuzz matrix 的 `inputs (git_write)` 与 `inputs (guard_supervisor)` 均 SUCCESS。main 合并后 CI 以仓库 run 为准。
-- 会话只读恢复补充批：本地模块测试已过，待 PR 合入、重构建同包 EXE，并按补充交接完成 C4 旧库重开、跨会话不可达、模型/工具零调用与 TCP 断连读回验收。
+- PR #148 已合入 main（merge `e1d85ee31edb344485e7f4bf4e3622f791187457`，2026-11-19T05:33:08Z）；required 7 项全绿，fuzz matrix 的 `inputs (git_write)` 与 `inputs (guard_supervisor)` 均 SUCCESS。main `e1d85ee31` 的 CI 最终 31/31 success（2026-11-19T14:09:51+08:00 收口）；首轮 `M2B-XV` 的 macOS `timeout_terminates_the_whole_process_group_tree` 报 `Io("Operation not permitted (os error 1)")`，复跑后 success，31/31 是复跑后的结果。
+- 会话只读恢复补充批：PR #150 已合入 main（merge `81f87b253`，2026-11-19T09:27:48Z）；同包 EXE（SHA-256 `7E397622...`）在 C4 旧库完成隔离验收 109 PASS / 0 FAIL，覆盖两条 GET、重复输入 409、跨会话/认证、旧成果身份、零写、候选回归与 TCP 断连读回。
 - 未做真实提供方调用、桌面 C41 实机联调、多进程/跨平台凭据后端；这些不进本批 PRODUCTION WIRED 口径。
