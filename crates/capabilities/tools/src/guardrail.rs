@@ -178,7 +178,8 @@ fn find_bearer_span(text: &str) -> Option<(usize, usize)> {
 /// 前置块（如 CERTIFICATE）会让**私钥块的 BEGIN 行**误落进被替换的区间
 /// ⇒ **base64 私钥体留在输出里 ⇒ 明文出境**。
 ///
-/// ⇒ 这里按块结构推进：非私钥块 ⇒ 跳到**它自己**的 END 行之后继续找。
+/// ⇒ 这里**逐个 BEGIN 标记推进**（不按块跳过）：私钥 BEGIN 可能嵌套在另一个
+/// 块的正文里，跳过整块会把内层私钥漏掉（2026-11-19 fuzz 回归）。
 fn find_pem_private_key_header(text: &str) -> Option<(usize, usize)> {
     let mut cursor = 0usize;
     while let Some(begin_at) = text[cursor..].find("-----BEGIN") {
@@ -191,17 +192,14 @@ fn find_pem_private_key_header(text: &str) -> Option<(usize, usize)> {
         if header.contains("PRIVATE KEY-----") {
             return Some((begin_at, header_end));
         }
-        // 不是私钥块 ⇒ 跳到**该块自己的** END 行之后, 继续往后找。
-        let end_at = text[header_end..]
-            .find("-----END")
-            .map(|at| header_end + at);
-        cursor = match end_at {
-            Some(at) => text[at..]
-                .find('\n')
-                .map(|offset| at + offset + 1)
-                .unwrap_or(text.len()),
-            None => text.len(),
-        };
+        // 不是私钥块 ⇒ 从下一个 BEGIN 继续找，**不跳到该块自己的 END 之后**。
+        //
+        // ⚠️ 嵌套形态（2026-11-19 fuzz 发现）：私钥 BEGIN 可能落在另一个块
+        // （如 CERTIFICATE）的正文里。若按「非私钥块 ⇒ 跳到它自己的 END 之后」
+        // 推进，就会跳过嵌在正文里的私钥 BEGIN ⇒ 只做裸标记替换 ⇒ base64 私钥体
+        // 原样留在输出里。这里改为逐个 BEGIN 前进：外层非私钥块仍保留，
+        // 内层私钥块照常整块收口（保守方向：宁可多收，不可漏收）。
+        cursor = begin_at + "-----BEGIN".len();
     }
     None
 }
@@ -722,6 +720,34 @@ mod tests {
             );
         }
     }
+
+    /// 私钥 BEGIN 嵌套在另一个非私钥块的正文里时，也必须整块收口。
+    ///
+    /// 回归：块扫描曾把非私钥块的第一个 END 视作整块结束并跳到其后，
+    /// 从而跳过嵌在该块正文里的私钥 BEGIN；随后的裸标记替换只改标签，
+    /// base64 私钥体原样留在输出里（fuzz 发现）。
+    #[test]
+    fn pem_private_header_nested_inside_another_block_is_redacted() {
+        let raw = "-----BEGIN CERTIFICATE-----\n-----BEGIN RSA PRIVATE KEY-----\nTOPSECRETBODY\n-----END RSA PRIVATE KEY-----\n-----END CERTIFICATE-----";
+        let res = ToolGuardrail::scan_and_sanitize_output(raw);
+        assert!(
+            !res.sanitized_output.contains("TOPSECRETBODY"),
+            "嵌套私钥体留在输出里: {}",
+            res.sanitized_output
+        );
+        assert!(
+            res.leaked_kinds
+                .contains(&LeakedCredentialKind::PemPrivateKey),
+            "必须报出私钥泄露: {:?}",
+            res.leaked_kinds
+        );
+        assert!(
+            !res.sanitized_output.contains("PRIVATE KEY-----"),
+            "脱敏后的输出不得再含 PRIVATE KEY-----: {}",
+            res.sanitized_output
+        );
+    }
+
     use super::*;
     use std::path::PathBuf;
 
