@@ -59,6 +59,9 @@ pub mod session_settings;
 /// Managed text artifact versions shared with governed tools.
 pub(crate) mod artifacts;
 
+/// Managed-desktop model connection profile (`/v1/admin/model-connection`).
+pub mod model_connection;
+
 /// Resident-slot (daemon) bookkeeping: PID file claim / release / liveness.
 pub mod resident;
 

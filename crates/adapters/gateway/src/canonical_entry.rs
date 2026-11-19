@@ -36,6 +36,7 @@ use crate::client_tokens::{
 };
 use crate::error_frame::{ErrorCode, ErrorFrame};
 use crate::events::{events_handler, EventBus, GatewayEvent, RuntimeObservationSink};
+use crate::model_connection as mc;
 use crate::operation_header::operation_request;
 use crate::panels::{panel_routes, GatewayServices, GatewayState, PanelData};
 use crate::runtime_error_map::classify_runtime_error;
@@ -1363,12 +1364,10 @@ pub fn canonical_router_with_state(state: GatewayState) -> Router {
             "/v1/admin/config",
             get(admin_config_get).post(admin_config_update),
         )
-        // W2-① 常驻形态: 优雅停机控制面 (计划任务 stop 走这里, 控制台信号
-        // 不可靠)。与全 API 面同一令牌门同一三态口径。
+        // W2-① 常驻形态: 优雅停机控制面; 与全 API 面同一令牌门同一三态口径。
         .route("/v1/admin/shutdown", post(admin_shutdown))
-        // V2-b 用户/域管理面 (W3-②/W3-①, owner 档): 建户/改角色/删户/开域四口
-        // 走 admin 族 (整面前缀 → AdminControl 角色门), 与 CLI `apeireth user`
-        // 同一 UserTable 服务 (双入口同源); 列表两口在面板族 (panel_routes)。
+        // V2-b 用户/域管理面 (W3-②/W3-①, owner 档): 建户/改角色/删户/开域四口走
+        // admin 族 (整面前缀 → AdminControl 角色门), 与 CLI `apeireth user` 同一 UserTable 服务; 列表两口在面板族。
         .route("/v1/admin/users", post(crate::user_admin::create_user))
         .route(
             "/v1/admin/users/:user_id",
@@ -1379,6 +1378,7 @@ pub fn canonical_router_with_state(state: GatewayState) -> Router {
             post(crate::domain_admin::create_domain),
         )
         .merge(crate::artifacts::routes_with_panels())
+        .merge(crate::model_connection::routes())
         // G-P1 指标端点 (指标数据面路由文件), 同在整面令牌门内。
         .merge(crate::panel_metrics::metrics_routes())
         // W3-① 域门 (数据域面): user_id 域解析 + 自称域校验 + 面闸, 过闸后
@@ -1414,8 +1414,7 @@ pub fn canonical_router_with_state(state: GatewayState) -> Router {
         // (非回环绑定) 由远程绑定闸强制令牌 (见 `remote_access`), 并叠加
         // 令牌门全端点校验。
         //
-        // 层序: CORS 在令牌门**之外** —— 浏览器预检 (OPTIONS, 规范上不带
-        // 凭据) 由 CORS 直接应答, 不会被令牌门 401 拦死; 真实请求仍过门。
+        // 层序: CORS 在令牌门**之外** —— 浏览器预检 (OPTIONS, 规范上不带凭据) 由 CORS 直接应答, 不会被令牌门 401 拦死; 真实请求仍过门。
         .layer(
             tower_http::cors::CorsLayer::new()
                 .allow_origin(AllowOrigin::predicate(|origin, _request_parts| {
@@ -1424,6 +1423,7 @@ pub fn canonical_router_with_state(state: GatewayState) -> Router {
                 .allow_methods(tower_http::cors::Any)
                 .allow_headers(tower_http::cors::Any),
         )
+        .layer(middleware::from_fn(mc::protect_response))
         .layer(middleware::from_fn(crate::artifacts::protect_response))
         .with_state(state)
 }

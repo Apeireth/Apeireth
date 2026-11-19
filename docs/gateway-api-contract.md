@@ -16,6 +16,12 @@
 
 候选回合使用独立内部分会话与显式 request id；provider 不声明工具，模型若仍返回 tool calls 在派发/审批/transcript 写前回 422 `candidate_tool_call_rejected`，且不执行 behavior module/hook。成功 200 回执给出基准与生成后 head、`base_is_current`、`request_id`/`trace_id`、候选正文与 SHA、`tool_calls:0`、`artifact_writes:0`；候选不落库、不自动提交，head 在生成期间变化时只回 `base_is_current:false`。四级口径：后端路由与运行时拒绝为 PRODUCTION WIRED，实现:`crates/adapters/gateway/src/artifacts.rs`、`crates/engine/runtime/src/canonical/execute.rs`；私有前端尚未接线，未做 live E2E，不声明 HARDWARE VALIDATED。候选回合仍写内部分 Session/消息/事件用于审计，不承诺零会话写。
 
+## C3增补：受管桌面模型连接（2026-11-19）
+
+`APEIRETH_DESKTOP_MANAGED=1` 的 Windows 受管桌面入口新增 `GET/POST /v1/admin/model-connection`，用于读取/保存下次启动的单一 OpenAI-compatible 模型连接。GET 返回 `schema_version`、`provider`、`base_url`、`model`、`credential_state`（`missing`/`available`/`unavailable`，仅表示凭据状态）、`storage`、`endpoint_bound`、`restart_required`；POST 只收 strict `{base_url,model,api_key?}`，返回 `{schema_version,ok,restart_required}`，客户端须再 GET 核对。凭据只进 Windows Credential Manager；配置不热换 runtime；受管模式拒绝 `/v1/admin/config` 热替换（409 `invalid_request`），只装配该协议族 provider，并要求独立强制本机令牌、无额外用户/客户端档案的单一 default owner 操作者。
+
+错误映射：400 `invalid_request`、403 `single_operator_required`、503 `profile_unavailable`/`credential_unavailable`、409 `endpoint_change_needs_key`。成果与候选服务对严格受管单操作者放行；其他用户表/客户端/非默认域仍 503 `scope_unavailable`。四级口径：PRODUCTION WIRED（代码在主干、Windows 隔离验收），非 HARDWARE VALIDATED；实现 `crates/adapters/gateway/src/model_connection.rs`、`crates/adapters/cli/src/desktop_model_connection.rs`，证据见[进度](status/desktop-managed-model-connection-2026-11-19.md)。
+
 ## §1 通用约定
 
 - Base URL:`http://127.0.0.1:{port}`(port 由桌面壳为 sidecar 动态分配;手动运行时默认 8080)

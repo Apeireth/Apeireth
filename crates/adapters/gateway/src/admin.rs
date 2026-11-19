@@ -192,6 +192,13 @@ pub async fn admin_config_update(
     State(state): State<GatewayState>,
     Json(patch): Json<ConfigPatch>,
 ) -> Result<Json<ConfigUpdateResponse>, Response> {
+    if state.services.model_connection.is_some() {
+        return Err(ErrorFrame::response(
+            StatusCode::CONFLICT,
+            ErrorCode::InvalidRequest,
+            "受管桌面请使用持久模型连接入口；当前运行时不接受热替换",
+        ));
+    }
     if let Some(provider) = patch.provider.as_deref() {
         if !valid_provider(provider) {
             return Err(ErrorFrame::response(

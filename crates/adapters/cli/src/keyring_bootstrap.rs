@@ -67,6 +67,11 @@ pub fn hot_credential_store() -> Arc<HotCredentialStore> {
 ///
 /// **返回**: Send+Sync `Arc<dyn CredentialResolver>`, runtime 拿它注入.
 pub fn build_keyring_resolver() -> Arc<dyn CredentialResolver> {
+    // 受管桌面：启动时 `desktop_model_connection::prepare` 已把唯一 profile
+    // 的凭据恢复到进程热库；不得再落到别的 profile 的 keyring / env。
+    if crate::desktop_model_connection::managed() {
+        return hot_credential_store();
+    }
     // 次层: 优先 KeyringSelector 真接 (RC-9)
     let fallback: Arc<dyn CredentialResolver> = match try_build_keyring_resolver() {
         Ok(resolver) => resolver,
