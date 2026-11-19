@@ -223,3 +223,82 @@ async fn tool_refuses_out_of_workspace_message_file_and_creates_no_commit() {
         "不得有暂存残留"
     );
 }
+
+/// ⑪ 工作区根不可解析时, **词法/分级拒绝优先**: 与根无关的确定事实（L3）不得
+/// 被环境错误掩盖（2026-11-19 fuzz 回归: 工具帧曾只报「根不可解析」）。
+#[test]
+fn lexical_refusal_wins_when_workspace_root_is_unresolvable() {
+    let root = std::env::temp_dir().join(format!(
+        "apeireth-git-write-missing-root-{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&root);
+    let command = "git commit -F msg.txt && git reset --hard";
+    let lexical = match classify_git_write(command) {
+        GitWritePlan::Refused { reason } => reason,
+        GitWritePlan::Graded { .. } => panic!("测试命令必须含 L3 拒绝面"),
+    };
+    let tool_side = match classify_git_write_under(&root, command) {
+        GitWritePlan::Refused { reason } => reason,
+        GitWritePlan::Graded { .. } => panic!("根不可解析时仍必须拒绝"),
+    };
+    assert_eq!(tool_side, lexical, "词法拒绝不得被根错误掩盖");
+}
+
+/// ⑫ 根不可解析时, 帧要给出**真因**（根路径 + 系统错误）, 且不谎称「操作数越界」。
+#[test]
+fn unresolvable_root_refusal_reports_root_cause() {
+    let root = std::env::temp_dir().join(format!(
+        "apeireth-git-write-missing-root-diag-{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&root);
+    let reason = match classify_git_write_under(&root, "git commit -F msg.txt") {
+        GitWritePlan::Refused { reason } => reason,
+        GitWritePlan::Graded { .. } => panic!("根不可解析时不得放行 -F 操作数"),
+    };
+    assert!(reason.starts_with(REFUSAL_MORPH_PREFIX), "{reason}");
+    assert!(reason.contains("工作区根不可解析"), "{reason}");
+    assert!(reason.contains(&root.display().to_string()), "{reason}");
+    assert!(!reason.contains("操作数路径越界"), "{reason}");
+}
+
+/// ⑬ 工具面同口径: 根不可解析时拒绝且**不进入执行面**（无「执行中断」帧）。
+#[tokio::test]
+async fn tool_refuses_unresolvable_root_before_execution() {
+    let root = std::env::temp_dir().join(format!(
+        "apeireth-git-write-missing-root-tool-{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&root);
+    let tool = git_write_capability(&root, authorized_git_write_policy());
+    let result = tool.invoke(&call("git commit -F msg.txt")).await;
+    assert!(!result.is_ok(), "根不可解析时必须拒绝");
+    let rendered = result.render();
+    assert!(rendered.contains("工作区根不可解析"), "{rendered}");
+    assert!(
+        !rendered.contains("执行中断"),
+        "拒绝必须发生在执行之前: {rendered}"
+    );
+}
+
+/// ⑭ 2026-11-19 CI fuzz 语料的原始输入（base64 `MS0BRgAdCgQxLQA=`）回归:
+/// 根不可解析时工具面必须与词法面给出**同一个**拒绝真因。
+#[test]
+fn fuzz_corpus_unresolvable_root_keeps_lexical_reason() {
+    let root = std::env::temp_dir().join(format!(
+        "apeireth-git-write-fuzz-root-{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&root);
+    let command = "git commit -m msg -\u{1}F\0\u{1d}\n\u{4}1-\0";
+    let lexical = match classify_git_write(command) {
+        GitWritePlan::Refused { reason } => reason,
+        GitWritePlan::Graded { .. } => panic!("fuzz 语料必须落在拒绝面"),
+    };
+    let tool_side = match classify_git_write_under(&root, command) {
+        GitWritePlan::Refused { reason } => reason,
+        GitWritePlan::Graded { .. } => panic!("根不可解析时必须拒绝"),
+    };
+    assert_eq!(tool_side, lexical, "fuzz 语料的拒绝真因被根错误改写");
+}

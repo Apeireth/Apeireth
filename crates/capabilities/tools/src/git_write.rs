@@ -231,6 +231,7 @@ fn classify_git_write_inner(root: Option<&Path>, command: &str) -> GitWritePlan 
     }
     let mut segments = Vec::new();
     let mut tier = GitWriteTier::ReversibleLocal;
+    let mut message_files = Vec::new();
     for text in &segments_text {
         let tokens = match tokenize_segment(text) {
             Ok(tokens) => tokens,
@@ -240,21 +241,20 @@ fn classify_git_write_inner(root: Option<&Path>, command: &str) -> GitWritePlan 
             continue;
         }
         // 消息/附注**文件操作数** (`-F` / `--file`) 的捕获 —— 分级面出参带回。
-        let mut message_files = Vec::new();
         match grade_segment(text, &tokens, &mut message_files) {
             Ok(segment) => {
-                // 根感知的**操作数路径包含性校验** (越界即拒绝即帧, 不进执行面)。
-                if let Some(root) = root {
-                    if let Err(reason) = check_message_file_operands(root, &message_files) {
-                        return GitWritePlan::Refused {
-                            reason: refuse_morph(format!("操作数路径越界: {reason}")),
-                        };
-                    }
-                }
                 tier = tier.strictest(segment.tier);
                 segments.push(segment);
             }
             Err(reason) => return GitWritePlan::Refused { reason },
+        }
+    }
+    // 根校验放在全部词法分级之后: 词法拒绝是确定事实, 不得被根错误掩盖。
+    if let Some(root) = root {
+        if let Err(error) = check_message_file_operands(root, &message_files) {
+            return GitWritePlan::Refused {
+                reason: refuse_morph(error.message()),
+            };
         }
     }
     if segments.is_empty() {
