@@ -104,6 +104,8 @@
 ```
 `/v1/chat/completions` 请求/响应遵循 OpenAI `chat.completions` 形状(`messages[{role,content}]`、`model`、`stream`)。
 
+`/v1/chat/completions` 额外接受可选 `session_id`(UUID):缺省时后端新铸;流式新会话建议客户端预生成 UUID 并显式传入,使客户端在发起请求前就知道会话身份。首帧 SSE chunk 的 `id` 是运行时 request id,拿到后即可用 `GET /v1/sessions/{session_id}/requests/{request_id}/stream` 订阅 C1 权威流;响应或流式终帧的 `apeireth.session_id` 回显实际会话。
+
 **流式契约**(`stream:true`,2026-09-10 起 token 级真流式,实测 210 帧 ~23ms 逐帧到达):
 - 帧序列:`role` chunk → provider 逐 content delta 各一 chunk → 终帧(带 `usage` 与 apeireth 元数据)。
 - 挂起审批以 `finish_reason:"approval_required"` 显式终帧终止流;provider 错误经统一错误帧契约上浮

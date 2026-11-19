@@ -4,7 +4,7 @@
 Document: docs/design/backend-contracts-20261117.md
 Class: SPEC
 Version: 0.1
-Last-Modified: 2026-11-17
+Last-Modified: 2026-11-19
 Status: 🟢 活跃
 Author: lead
 
@@ -181,11 +181,27 @@ GET  /v1/sessions/{session_id}/requests/{request_id}/stream   # ?after_sequence=
     附带边界：`Session.agent_binding` 沿用 `Session` 既有风格是 pub 字段 ⇒ 调用方理论上可写入未经校验的绑定，
     但回合闸会现查现校验 ⇒ 非法绑定必然被拒 ⇒ **保证落在闸上，不落在字段可见性上**。
 
-## 未决（需要前端/宿主侧确认，后端按最保守口径实现）
+## 未决与 D1 裁决（2026-11-19）
 
-- `expected_context_key` 的定义域与生成方（后端只校验 exact-match，不生成）。
-- `incarnation` 在本合同语境下的生命周期（现仅 mesh 存在层有同名概念，语义不同）。
-- 「成果版本」对象在后端尚无对应物（A.4 要求绑定到成果版本）⇒ 本批先绑 project/session/task/approval，成果版本待其对象确定。
+D1 只固定后端边界；下列 6 条已裁决，1 条已由其他批次关闭，2 条仍待前端/产品确认。
+
+### 已裁决（6 条）
+
+| 议题 | 裁决 |
+|---|---|
+| 流式新会话 `session_id` | 客户端在首个流式 `/v1/chat/completions` 请求体显式给 `session_id`（新会话可用新 UUID）；后端沿用并回显，不在首帧/响应头补发。客户端发起前即知道 session_id；首帧 SSE chunk `id` 是运行时 request id，拿到后即可拼出 C1 订阅 URL。契约见 `docs/gateway-api-contract.md` §3。 |
+| `/bridge/*` 归属 | 维持私有前端宿主本地面；后端不实现该前缀，只提供原生 `/v1` 流面，由宿主映射。 |
+| `context_key` / `incarnation` | 两者均为宿主所有 opaque 回显位；后端不生成、不解析、不归一化。重绑必须 byte-identical（`None` 与 `Some` 也算不一致），否则 409 `session_binding_conflict`；清空只能显式解绑后重绑。 |
+| 非空会话 persona | persona 仅在空会话的 system 种子槽注入；非空会话不追溯、不追加第二条 system；中途换绑定不改变已注入 persona，需新会话。 |
+| 审批恢复续流 | 流式回合以 `approval_required` 终帧结束，C1/SSE 不续流；`POST /v1/approvals/resolve` 返回恢复结果（可能再次待批），需要流式就发新回合。 |
+| 多进程一致性 | 首发限单网关进程/单活跃实例；C1 缓冲、stop 摘要、幂等表、绑定 registry 均进程内，重启即失；多进程共享与持久化属长尾，不做水平扩展承诺。 |
+
+### 已关闭
+
+- 「成果版本」对象：已由 PR #142 建模（受管 Artifact / 不可变 Revision / operation 回执），不再列为未决；见 [text-artifact-versions.md](text-artifact-versions.md)。
+
+### 仍待前端/产品确认（2 条，后端维持最保守实现）
+
 - `workspace_binding` 是否等同于文件系统工作区（`capabilities/tools/src/worktree_apply.rs` 一族）尚未裁决 ⇒ 本批按「工作区即受管根」实现。
 - 联系人 `capabilities{read,write,approval_required}` 到 `foundation/governance/src/permission.rs` 的映射粒度未定 ⇒ 本批只做**展示投影**，不作为授权依据。
 

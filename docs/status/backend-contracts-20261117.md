@@ -4,7 +4,7 @@
 Document: docs/status/backend-contracts-20261117.md
 Class: STATUS
 Status: 🟢 活跃
-Last-Modified: 2026-11-18
+Last-Modified: 2026-11-19
 Author: lead
 
 > **用途**：本工作线「做到哪了」的**唯一权威**（`AGENTS.md` §0.2：引用状态只引文件）。
@@ -117,7 +117,7 @@ C1 达 **PRODUCTION WIRED**（C2-3 起生产流式回合产生真实 C1 流；�
 9. ~~错误码未登记~~ ⇒ **已做**（A2：`workspace_not_found` / `workspace_conflict` / `workspace_revoked`；
    B3a：`contact_not_found` / `contact_conflict` / `contact_archived` / `contact_binding_conflict`；
    均进 `crates/adapters/gateway/src/error_frame.rs` 并各带 solution）。
-10. **未决 5 条**（设计稿 §未决）：`expected_context_key` 定义域、`incarnation` 生命周期、成果版本对象、`workspace_binding` 语义、联系人 `capabilities` 到 `Permission` 的映射粒度。
+10. **D1 未决裁决（2026-11-19）**：6 条已裁决——流式新会话 `session_id` 由客户端首请求显式提供；`/bridge/*` 归私有前端宿主；`context_key`/`incarnation` 必须 byte-identical；persona 仅空会话种子槽；审批恢复不续流；首发单网关进程且进程内状态重启即失。成果版本对象已由 PR #142 建模关闭；仍待前端/产品确认 2 条＝`workspace_binding` 语义、联系人 `capabilities` 到 `Permission` 的映射粒度。详见 `workline-registry.md` §一·补。
 11. **跨线协调未完成**：前端草案的 `root_kind` 与 `crates-ui/.../governance_tab.rs:867` 的轨迹 span kind 同名不同义，须与前端线对齐命名。
 
 ## 四、守卫（机器判对错）
