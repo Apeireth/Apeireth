@@ -1366,8 +1366,7 @@ pub fn canonical_router_with_state(state: GatewayState) -> Router {
         )
         // W2-① 常驻形态: 优雅停机控制面; 与全 API 面同一令牌门同一三态口径。
         .route("/v1/admin/shutdown", post(admin_shutdown))
-        // V2-b 用户/域管理面 (W3-②/W3-①, owner 档): 建户/改角色/删户/开域四口走
-        // admin 族 (整面前缀 → AdminControl 角色门), 与 CLI `apeireth user` 同一 UserTable 服务; 列表两口在面板族。
+        // V2-b 用户/域管理面 (W3-②/W3-①, owner 档): 写口走 admin 族, 列表两口在面板族。
         .route("/v1/admin/users", post(crate::user_admin::create_user))
         .route(
             "/v1/admin/users/:user_id",
@@ -1379,11 +1378,10 @@ pub fn canonical_router_with_state(state: GatewayState) -> Router {
         )
         .merge(crate::artifacts::routes_with_panels())
         .merge(crate::model_connection::routes())
+        .merge(crate::turn_results::routes())
         // G-P1 指标端点 (指标数据面路由文件), 同在整面令牌门内。
         .merge(crate::panel_metrics::metrics_routes())
-        // W3-① 域门 (数据域面): user_id 域解析 + 自称域校验 + 面闸, 过闸后
-        // `DomainContext` 随请求扩展下行 (会话面按域路由)。挂在令牌门与角色门
-        // **之内** (先认人、再判权、后判域); 域面未注入 = 兼容路径零回归。
+        // W3-① 域门: user_id 域解析 + 自称域校验 + 面闸, 过闸后 `DomainContext` 随请求扩展下行; 未注入零回归。
         .layer(middleware::from_fn_with_state(
             state.clone(),
             crate::domain_context::require_domain_context,
@@ -1399,8 +1397,7 @@ pub fn canonical_router_with_state(state: GatewayState) -> Router {
         // ⇒ 跨源 simple POST 的副作用照样发生 ⇒ 这里补「拒绝」那一半。
         // 层序: **令牌门之内** ⇒ 未过令牌门仍回 401 (不借 403/401 差别泄露路由存在性)。
         .layer(middleware::from_fn(reject_foreign_origin))
-        // 令牌门包住整个 API 面 (含未匹配路径的 fallback: 强制态下未知路径也
-        // 401, 不借 404/401 差别泄露路由存在性)。
+        // 令牌门包住整个 API 面 (含 fallback: 强制态下未知路径也 401, 不借 404/401 差别泄露路由存在性)。
         .layer(middleware::from_fn_with_state(
             state.clone(),
             require_gateway_token,
@@ -1425,6 +1422,9 @@ pub fn canonical_router_with_state(state: GatewayState) -> Router {
         )
         .layer(middleware::from_fn(mc::protect_response))
         .layer(middleware::from_fn(crate::artifacts::protect_response))
+        .layer(middleware::from_fn(
+            crate::turn_results::protect_read_response,
+        ))
         .with_state(state)
 }
 /// Serve over an explicit [`GatewayState`] until the listener closes or a
