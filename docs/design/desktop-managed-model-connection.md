@@ -59,7 +59,7 @@ Author: desktop-collaboration-line
 
 - 受管模型连接的档案、凭据、端点校验、重启加载、管理门和单协议族装配：PRODUCTION WIRED（代码在主干、Windows 隔离验收通过）。
 - 只读候选回合：沿用既有 PRODUCTION WIRED；本批回归通过，未新增语义。
-- 会话只读恢复：本地模块测试完成，尚待 PR 合入与新同包 EXE 隔离验收（IMPLEMENTED，未到 PRODUCTION WIRED）。
+- 会话只读恢复：PR #150 已合入 main（merge `81f87b253`），同包 EXE 在 C4 旧库完成隔离验收（109 PASS / 0 FAIL），PRODUCTION WIRED，非 HARDWARE VALIDATED。
 - 未做真实模型调用的桌面 E2E：隔离验收只用本地 OpenAI-compatible stub；旧日常档案只读核对，不做真实发送。
 - 未做私有前端 C41 实机联调；未做多进程/跨平台凭据后端；C1 缓冲、stop 摘要、幂等表和绑定 registry 仍是进程内，重启即失。
 - 候选回合仍写内部分 Session/消息/事件用于审计，不承诺零会话写；成果写入为零。
