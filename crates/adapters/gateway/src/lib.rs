@@ -56,6 +56,9 @@ pub mod presence;
 /// Session-scoped model + permission settings (`/v1/sessions/{id}/settings`).
 pub mod session_settings;
 
+/// Precisely identified durable turn-result reads, without execution.
+pub(crate) mod turn_results;
+
 /// Managed text artifact versions shared with governed tools.
 pub(crate) mod artifacts;
 

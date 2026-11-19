@@ -5,7 +5,7 @@ Document: docs/status/desktop-managed-model-connection-2026-11-19.md
 Class: STATUS
 Version: 1
 Last-Modified: 2026-11-19
-Status: 代码、声明与最终二进制隔离复核完成；PR #148 已合入 main（merge `e1d85ee31edb344485e7f4bf4e3622f791187457`，2026-11-19T05:33:08Z）；PRODUCTION WIRED，非 HARDWARE VALIDATED
+Status: 受管桌面同包已合入 main（PR #148，merge `e1d85ee31`，PRODUCTION WIRED，非 HARDWARE VALIDATED）；2026-11-19 补充批「会话只读恢复」已本地实现并通过模块测试，待 PR 与新同包 EXE 隔离验收
 Author: desktop-collaboration-line
 
 ## 目标与检查点
@@ -68,6 +68,16 @@ Author: desktop-collaboration-line
 
 在 `C:\Apeireth\tmp-desktop-accept\bad-data\artifacts.sqlite3` 写入非 SQLite 文本后启动 `gateway serve --port 18777`：退出码 1，stderr 为 `gateway serve failed: managed artifact service failed to open: artifact storage failure: failed to open sqlite database ...: file is not a database`。数据根未生成空库或额外文件，满足「校验失败明确报错、不静默换空库」。
 
+## 会话只读恢复面（2026-11-19 补充批）
+
+补充交接要求把日常版两条会话只读 GET 与受管模型连接、只读候选重新同包交付。本批从 C4 线移植只读投影模块，并在当前主干接线路由与响应保护层；不执行回合、不调用模型/工具、不写会话。
+
+- 新模块：`crates/adapters/gateway/src/turn_results.rs`（路由、选择器、投影、保护层）与 `turn_results/`（`committed.rs`、`history.rs` 及测试）。
+- 端点：`GET /v1/sessions/{session_id}/turns`（`after` 绝对游标、`limit` 默认 8/最大 16、单页 4 MiB）与 `GET /v1/sessions/{session_id}/turn-result`（`input_sha256` + 可选 `request`/`trace_id`；歧义/身份冲突 409）。
+- 接线：`gateway/src/lib.rs`、`gateway/src/canonical_entry.rs`（路由合并 + 最外层响应保护；文件保持 2291 行 = arch baseline）。
+- 本地测试：`cargo test -p apeireth-gateway --lib turn_results --locked` 32 passed / 0 failed，覆盖 completed 精确文本、unconfirmed 空文本、重复输入身份、跨用户/未绑定拒绝、域隔离、读不取写 permit、4 MiB 预算、坏镜像 409、managed 单操作者读取与 no-store/nosniff。
+- 边界：`usage` 恒为 `null`（不从文本反推）；继承前缀不冒充子会话回合；不做 latest-turn 回落；仍然只到本地模块验证，尚未经过新 EXE 的 C4 旧库重开与 TCP 断连隔离验收。
+
 ## 二进制与构建
 
 最终隔离复核使用的 exe：`C:\Apeireth\cargo-target\desktop-managed\release\apeireth.exe`，PE32+ x86_64，45,633,536 B，SHA-256 `56D158DF894BEEC8AFD665C4CB3F8702AE16DFE30437DFD1F38F65390E4A466F`，版本 `2.0.0-rc.5`；LastWrite `2026-11-19T13:04:29.7335445+08:00`。构建命令：`pwsh scripts/cargo.ps1 -Slot base -Line desktop-managed -CargoArgs "build --release -p apeireth-cli --locked"`；日志 `C:\Apeireth\tmp-build-discipline\desktop-release-merge.log`。该二进制由合并点 `a5cb783eba54a880f1b144c94b8d666f74ad1d0f` 的源码构建，包含 #142/#143 成果与候选、#146/#147 fuzz 修复及本批受管模型连接；docs 提交不改代码。早先 `7950452A5428C45A1D5C47894B334A4491B72775E0F775D87CC0A005EA4F29B4` 与 `AF494A9C9A79708F0E9734626F9959A5B36E36FA479F1086453636B0E37B632C` 均已被本次重建取代，不是交付物。
@@ -77,4 +87,5 @@ Author: desktop-collaboration-line
 ## 还差什么
 
 - PR #148 已合入 main（merge `e1d85ee31edb344485e7f4bf4e3622f791187457`，2026-11-19T05:33:08Z）；required 7 项全绿，fuzz matrix 的 `inputs (git_write)` 与 `inputs (guard_supervisor)` 均 SUCCESS。main 合并后 CI 以仓库 run 为准。
+- 会话只读恢复补充批：本地模块测试已过，待 PR 合入、重构建同包 EXE，并按补充交接完成 C4 旧库重开、跨会话不可达、模型/工具零调用与 TCP 断连读回验收。
 - 未做真实提供方调用、桌面 C41 实机联调、多进程/跨平台凭据后端；这些不进本批 PRODUCTION WIRED 口径。

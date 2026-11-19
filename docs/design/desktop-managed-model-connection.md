@@ -38,6 +38,17 @@ Author: desktop-collaboration-line
 
 `POST /v1/artifacts/:artifact_id/candidates` 的契约、基准校验、逐轮禁工具、零成果写入和内部分会话边界不变。能力探测对候选路径 GET 仍返回 405 且 `Allow: POST`，不触发模型调用。候选生成前后 head 与版本数不变；过期基准和摘要不符在调用 provider 前拒绝。
 
+## 与日常会话读面的兼容
+
+补充批恢复日常版两条只读 GET，均从该会话的持久日志投影，不执行回合、不调用模型/工具、不写消息、不推进 revision：
+
+- `GET /v1/sessions/{session_id}/turn-result`：`input_sha256`（64 位小写十六进制）必填，`request` / `trace_id` 可选；同一摘要命中多个回合且未给 `request` ⇒ 409，给了 `request` 但摘要不符 ⇒ 409。200 回 `state=completed` 时给最终助手原文与完成时刻，`state=unconfirmed` 时 `text=null`；`usage` 恒为 `null`，不从文本反推。
+- `GET /v1/sessions/{session_id}/turns`：`after` 为绝对日志游标，`limit` 默认 8/最大 16；每个回合的 `cursor` 是 `TurnStarted` 日志下标，写入后不变；单页 4 MiB 上限，放不下就停页并置 `has_more`，不截断正文、不跳过回合；单回合自身超限 ⇒ 413。
+- 两条 GET 都过令牌门与用户归属；非 owner 只能读自己名下会话，跨用户与不存在统一 404；域视图走域管理器；读取是快照，不取回合写 permit。响应（含拒绝帧）带 `no-store` 与 `nosniff`。
+- 只匹配本会话自己的回合：继承前缀（fork/复制）不冒充子会话执行，缺相邻原始输入或提交标记不自洽 ⇒ 409 不可验证，不回落到 latest-turn 或 legacy 相邻消息。
+
+边界：会话日志是唯一证据，provider 原始用量与 CoT 不可重建；会话存储为进程内时重启即失，持久存储才跨重启可读。
+
 ## 旧库与失败边界
 
 旧日常数据根的模型档案和 Windows 凭据可被新构建读取；旧成果库的 store_id、artifact、head revision、版本历史和正文摘要保持不变。凭据服务不存在时如实返回 `credential_state=missing`，不伪造可用；数据根迁移导致 keyring namespace 变化时同样如实缺失，不静默换库。
@@ -48,6 +59,7 @@ Author: desktop-collaboration-line
 
 - 受管模型连接的档案、凭据、端点校验、重启加载、管理门和单协议族装配：PRODUCTION WIRED（代码在主干、Windows 隔离验收通过）。
 - 只读候选回合：沿用既有 PRODUCTION WIRED；本批回归通过，未新增语义。
+- 会话只读恢复：本地模块测试完成，尚待 PR 合入与新同包 EXE 隔离验收（IMPLEMENTED，未到 PRODUCTION WIRED）。
 - 未做真实模型调用的桌面 E2E：隔离验收只用本地 OpenAI-compatible stub；旧日常档案只读核对，不做真实发送。
 - 未做私有前端 C41 实机联调；未做多进程/跨平台凭据后端；C1 缓冲、stop 摘要、幂等表和绑定 registry 仍是进程内，重启即失。
 - 候选回合仍写内部分 Session/消息/事件用于审计，不承诺零会话写；成果写入为零。
@@ -60,4 +72,5 @@ Author: desktop-collaboration-line
 - `cargo test -p apeireth-cli --test desktop_model_connection --locked -j 2`
 - `cargo test -p apeireth-gateway --lib model_connection --locked -j 2`
 - `cargo test -p apeireth-gateway --test artifact_candidates_http --locked -j 2`
+- `cargo test -p apeireth-gateway --lib turn_results --locked -j 2`
 - `python scripts/docs_truth.py --verify --block-stale`

@@ -68,6 +68,8 @@
 | `/v1/sessions/{session_id}/requests/{request_id}/stop` | POST | 停止在飞回合(见 §11;C2-2 起;幂等回放摘要, 不撤销已发生副作用) |
 | `/v1/sessions/{session_id}/agent-binding` | GET | 会话绑定读面(见 §7i;B3b-1 起;未绑定 ⇒ 200 `bound=false`, 不是 404) |
 | `/v1/sessions/{session_id}/agent-binding` | POST | 绑定/更新/显式解绑(见 §7i;B3b-1 起;必须带 `expected_revision`;`contact_id` 必带, 显式 `null` = 解绑) |
+| `/v1/sessions/{session_id}/turns` | GET | 会话回合只读分页(见 §7j;`after` 绝对游标, `limit` 默认 8/最大 16, 单页 4 MiB 上限) |
+| `/v1/sessions/{session_id}/turn-result` | GET | 按持久身份精确重读单个回合(见 §7j;`input_sha256` + 可选 `request`/`trace_id`; 歧义 409) |
 | `/v1/approvals?session={id}` | GET | 该会话的待批审批(见 §6) |
 | `/v1/approvals/resolve` | POST | 批准/拒绝审批(见 §6) |
 | `/v1/panel/metrics` | GET | 指标聚合快照(见 §8b;会话+全局两层,空态显式空) |
@@ -655,6 +657,53 @@ workspace scope）。**边界**: 非空会话不追溯改 system；绑定变更�
 - **能力**: `session_agent_binding.read` / `.bind` / `.unbind` 分开登记；过全 API 面令牌门。
 - **边界**: 绑定变更**不写 SessionEvent**（只写审计）；registry 为进程内单例，多进程部署会分叉；
   初始面实现只覆盖单进程一致；无 live E2E（四级口径 PRODUCTION WIRED，非 HARDWARE VALIDATED）。
+
+### §7j 会话回合只读恢复面 ✅(2026-11-19, 补充交接 P0)
+
+`GET /v1/sessions/{session_id}/turns` 与
+`GET /v1/sessions/{session_id}/turn-result`：只从该会话已持久化的日志恢复既有回合，
+不执行回合、不调用模型/工具、不写消息、不推进 revision、不产生审批。
+
+**turn-result 选择器**
+
+- `input_sha256` 必填，必须是 64 位小写十六进制；`request` / `trace_id` 可选，必须是规范 UUID。
+  未知 query 字段 ⇒ 400 `invalid_request`。
+- 选择只匹配**本会话自己的**回合：必须同时有相邻的原始用户输入与可验证的完成标记；
+  继承前缀（fork/复制会话）里的回合不冒充子会话执行。没有 latest-turn 回落。
+- 同一摘要命中多个回合且未给 `request` ⇒ 409 `invalid_request`（歧义）；
+  给了 `request` 但该回合的输入摘要不同 ⇒ 409；补充 `request` 后必须恰好命中一个回合；
+  `trace_id` 只用于交叉核对，不参与选择，不一致同样 409。查不到会话/回合 ⇒ 404 `session_not_found`。
+- 200 帧：`{schema:1, source:"session_log", session, input_sha256, state, request, trace_id, text, usage, recorded_at?}`。
+  `state=completed` 时 `text` 是该回合的最终助手文本原文（含原空白与 Unicode），`recorded_at` 为完成时刻毫秒；
+  `state=unconfirmed` 时没有可验证完成，`text=null` 且省略 `recorded_at`。
+  `usage` 恒为 `null`：旧日志没有可复核的原始用量，服务端不从文本反推。
+
+**turns 分页**
+
+- `after` 是绝对日志游标（默认 0，不得超过当前日志长度）；`limit` 默认 8，允许 1–16。
+  未知 query 字段或越界值 ⇒ 400 `invalid_request`。
+- 200 帧：`{schema:1, source:"session_log", session, revision, turns, next_cursor, has_more}`；
+  每个 `turns[]` 含 `cursor`（该回合 `TurnStarted` 的日志下标，写入后不变）、`input_sha256`、`input`、
+  `request`、`trace_id`、`state`、`text`、`usage`、`recorded_at?`。
+- `completed` 给最终助手原文；`unconfirmed` 给 `text=null`，同一 cursor 在后续页可刷新为 completed。
+- 单页序列化上限 4 MiB，按整回合计入：放不下就停在本页并把 `has_more=true`，**不截断正文、不跳过回合**；
+  单个回合自身超过上限 ⇒ 413 `invalid_request`。
+- 日志镜像/提交标记不自洽、回合缺相邻输入或完成窗口含他回合事实 ⇒ 409 `invalid_request`（不可验证），
+  不猜测、不降级成 legacy 相邻消息。
+
+**认证、归属与保护**
+
+- 两条 GET 都过全 API 面令牌门；用户表启用时必须绑定用户（未绑定 403 `permission_denied`）；
+  非 owner 只能读自己名下会话，跨用户与不存在统一 404（不泄漏存在性）。
+- 域视图按域管理器读取；读取是会话快照，**不取回合写 permit**，不排队等待正在执行的回合。
+- 响应（含 401/403/404 拒绝帧）统一加 `Cache-Control: no-store` 与 `X-Content-Type-Options: nosniff`。
+- 错误码：400 `invalid_request`（选择器/分页/不可验证）、403 `permission_denied`、
+  404 `session_not_found`、409 `invalid_request`（歧义/身份冲突）、413 `invalid_request`（超出页预算）、
+  500 `internal`（会话记录不可读）。
+
+**边界**：只读恢复不重发模型、不重放工具、不补审批、不返回原始 CoT；
+`usage` 与 provider 原始回包不可从日志重建，宁可为 `null` 也不伪造；
+可行范围取决于会话日志本身，进程内会话存储重启即失，持久会话存储可跨重启读取。
 
 ## §8 Trace / Audit / 事件总线
 
