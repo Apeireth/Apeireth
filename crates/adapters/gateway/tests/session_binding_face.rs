@@ -16,6 +16,8 @@
 //! 代码自己算出来的值当答案；每条断言都做过反向验伪（见交付说明）。
 
 mod common;
+#[path = "session_binding_face/desktop_contact.rs"]
+mod desktop_contact;
 
 use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, Mutex};
@@ -66,6 +68,8 @@ struct Harness {
     workspaces: Arc<InMemoryWorkspaceRegistry>,
     audit: Arc<StubAudit>,
     clock: Arc<VirtualClock>,
+    provider: Arc<common::FakeProvider>,
+    tool_calls: Arc<AtomicUsize>,
 }
 
 async fn harness() -> Harness {
@@ -79,8 +83,8 @@ async fn harness() -> Harness {
         .with_clock(clock.clone())
         .with_session_store(store.clone())
         .with_governance(common::allow_all())
-        .with_plugin(common::TestPlugin::provider(provider))
-        .with_plugin(common::TestPlugin::calculator(tool_calls))
+        .with_plugin(common::TestPlugin::provider(provider.clone()))
+        .with_plugin(common::TestPlugin::calculator(tool_calls.clone()))
         .with_default_model(common::MODEL)
         .with_contact_registry(Some(contacts.clone() as Arc<dyn ContactRegistry>))
         .with_workspace_registry(Some(workspaces.clone() as Arc<dyn WorkspaceRegistry>))
@@ -97,6 +101,8 @@ async fn harness() -> Harness {
         workspaces,
         audit,
         clock,
+        provider,
+        tool_calls,
     }
 }
 

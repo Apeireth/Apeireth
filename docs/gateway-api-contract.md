@@ -68,6 +68,7 @@
 | `/v1/sessions/{session_id}/requests/{request_id}/stop` | POST | 停止在飞回合(见 §11;C2-2 起;幂等回放摘要, 不撤销已发生副作用) |
 | `/v1/sessions/{session_id}/agent-binding` | GET | 会话绑定读面(见 §7i;B3b-1 起;未绑定 ⇒ 200 `bound=false`, 不是 404) |
 | `/v1/sessions/{session_id}/agent-binding` | POST | 绑定/更新/显式解绑(见 §7i;B3b-1 起;必须带 `expected_revision`;`contact_id` 必带, 显式 `null` = 解绑) |
+| `/v1/sessions/{session_id}/contact-session` | POST | 按登记创建空的联系人会话，或核对同一会话的原绑定（§7i） |
 | `/v1/sessions/{session_id}/turns` | GET | 会话回合只读分页(见 §7j;`after` 绝对游标, `limit` 默认 8/最大 16, 单页 4 MiB 上限) |
 | `/v1/sessions/{session_id}/turn-result` | GET | 按持久身份精确重读单个回合(见 §7j;`input_sha256` + 可选 `request`/`trace_id`; 歧义 409) |
 | `/v1/approvals?session={id}` | GET | 该会话的待批审批(见 §6) |
@@ -657,6 +658,14 @@ workspace scope）。**边界**: 非空会话不追溯改 system；绑定变更�
 - **能力**: `session_agent_binding.read` / `.bind` / `.unbind` 分开登记；过全 API 面令牌门。
 - **边界**: 绑定变更**不写 SessionEvent**（只写审计）；registry 为进程内单例，多进程部署会分叉；
   初始面实现只覆盖单进程一致；无 live E2E（四级口径 PRODUCTION WIRED，非 HARDWARE VALIDATED）。
+
+#### 桌面联系人空会话立案
+
+`POST /v1/sessions/{session_id}/contact-session` 接受 `contact_id`、`context_key`、`incarnation` 和可选 `require_existing`（默认 `false`）。仅向经令牌认证的单操作者提供。运行时从已登记联系人解析 agent、人设、工作区和修订号，在同一会话写闸内新建并持久化空会话与绑定。未登记工作区返回 409 `contact_binding_conflict`，`details.reason=workspace_required`。动作本身没有消息或模型调用。
+
+成功返回 200 `{schema:1, session_id, contact_id, context_key, incarnation}`。同一 `context_key`、联系人及绑定修订号再次打开仅核对原会话。回包中的 `incarnation` 是本次宿主请求的回显，持久绑定继续保存创建时的值。已有普通会话、其他联系人或过期绑定返回 409 `session_binding_conflict`。`require_existing=true` 时缺失会话也返回 409，`details.reason=contact_session_missing`。
+
+原生 `POST /v1/chat` 接受可选 `expected_contact_id`。指定时必须提交显式会话，由同一写闸校验既有绑定，拒绝缺失、解绑或身份不同的会话。该模式仅提供文字对话，运行时关闭工具。联系人能力展示字段和工作区登记均不改变已有权限映射。兼容聊天请求沿用三段操作摘要，联系人操作摘要附带身份字段。
 
 ### §7j 会话回合只读恢复面 ✅(2026-11-19, 补充交接 P0)
 

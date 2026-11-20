@@ -615,6 +615,7 @@ async fn unconfigured_im_channels_leave_the_local_approval_flow_untouched() {
             input: "calculate 1 + 1".to_string(),
             model: None,
             system: None,
+            expected_contact_id: None,
         },
     )
     .await
@@ -652,6 +653,7 @@ async fn unconfigured_im_channels_leave_the_local_approval_flow_untouched() {
             input: "continue".to_string(),
             model: None,
             system: None,
+            expected_contact_id: None,
         },
     )
     .await

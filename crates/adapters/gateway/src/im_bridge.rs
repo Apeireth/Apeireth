@@ -271,6 +271,7 @@ impl ImTurnHandler for CanonicalChainHandler {
             input: text.to_string(),
             model: None,
             system: None,
+            expected_contact_id: None,
         };
         // W2-③: IM 桥是进程内客户端 `im-bridge` —— 回合同样过会话写闸串行
         // (与桌面/TUI/web 的回合排队不交叠); 具名审计面留 W3 (见残余表)。
