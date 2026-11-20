@@ -5,12 +5,22 @@
 //! adapter source itself from drifting back into orchestration.
 
 const CANONICAL_ENTRY: &str = include_str!("../src/canonical_entry.rs");
+const CHAT_REQUEST: &str = include_str!("../src/canonical_entry/chat_request.rs");
+const NATIVE_HTTP: &str = include_str!("../src/canonical_entry/native_http.rs");
+const SERIALIZED_TURN: &str = include_str!("../src/canonical_entry/serialized_turn.rs");
 
 #[test]
 fn canonical_gateway_entry_delegates_semantics_to_runtime_execute() {
     assert!(
-        CANONICAL_ENTRY.contains("runtime.execute_outcome("),
-        "the production gateway chat path must enter Runtime::execute_outcome"
+        CANONICAL_ENTRY.contains(".route(\"/v1/chat\", native_http::route())")
+            && NATIVE_HTTP.contains("post(native_chat)")
+            && NATIVE_HTTP.contains("execute_chat_attributed_operation(&runtime,"),
+        "the native route must delegate to the attributed canonical adapter"
+    );
+    assert!(
+        CANONICAL_ENTRY.contains("run_turn_serialized(runtime, turn,")
+            && SERIALIZED_TURN.contains("runtime.execute_outcome(turn)"),
+        "the canonical adapter must enter Runtime::execute_outcome under session serialization"
     );
     assert!(
         CANONICAL_ENTRY.contains("pub async fn execute_chat"),
@@ -44,9 +54,16 @@ fn canonical_gateway_entry_does_not_reach_around_the_runtime() {
         "master_token",
         "/v1/panel/",
     ] {
-        assert!(
-            !CANONICAL_ENTRY.contains(forbidden),
-            "canonical_entry must stay a transport adapter and not import {forbidden:?}"
-        );
+        for (name, source) in [
+            ("canonical_entry", CANONICAL_ENTRY),
+            ("chat_request", CHAT_REQUEST),
+            ("native_http", NATIVE_HTTP),
+            ("serialized_turn", SERIALIZED_TURN),
+        ] {
+            assert!(
+                !source.contains(forbidden),
+                "{name} must stay a transport adapter and not import {forbidden:?}"
+            );
+        }
     }
 }
