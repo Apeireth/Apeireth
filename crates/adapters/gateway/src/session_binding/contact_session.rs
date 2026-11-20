@@ -23,7 +23,8 @@ pub(crate) fn supports_scope(
     domain: Option<&Extension<DomainContext>>,
 ) -> bool {
     identity.is_some_and(|Extension(identity)| identity.authenticated)
-        && !state.user_access.is_active()
+        && (!state.user_access.is_active()
+            || crate::model_connection::is_managed_single_operator(state))
         && !domain.is_some_and(|Extension(domain)| domain.is_non_default())
 }
 

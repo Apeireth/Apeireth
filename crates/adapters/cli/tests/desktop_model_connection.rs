@@ -251,6 +251,38 @@ async fn missing_token_inactive_role_and_expanded_user_scope_stay_closed() {
 }
 
 #[tokio::test]
+async fn contacts_allow_only_the_managed_operator_shape_with_an_active_user_table() {
+    let (_root, state) = state().await;
+    let session = SessionId::new();
+    let path = format!("/v1/sessions/{session}/contact-session");
+    let input = json!({"contact_id": session.to_string(), "context_key": "a".repeat(64),
+                        "incarnation": "managed-test"});
+    let (status, _) = http(
+        state.clone(),
+        "POST",
+        &path,
+        Some(input.clone()),
+        Some(TOKEN),
+    )
+    .await;
+    // This fixture deliberately omits the contact registry. Reaching its
+    // explicit unsupported response proves the authorized managed scope passed.
+    assert_eq!(status, StatusCode::NOT_IMPLEMENTED);
+
+    let mut expanded = state;
+    let mut users = managed_operator_access().table().unwrap().clone();
+    users.users.push(UserRecord {
+        user_id: "other".into(),
+        role: "guest".into(),
+        client_names: vec!["other-client".into()],
+        domain: None,
+    });
+    expanded.user_access = UserAccess::from_table(UserTable::new(users.users));
+    let (status, _) = http(expanded, "POST", &path, Some(input), Some(TOKEN)).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
 async fn strict_config_body_cannot_echo_secret_or_accept_unknown_fields() {
     let (_root, state) = state().await;
     let (status,body)=http(state,"POST","/v1/admin/model-connection",Some(json!({"base_url":"https://model.example/v1","model":"model-a","api_key":"fixture-do-not-echo","unexpected":true})),Some(TOKEN)).await;

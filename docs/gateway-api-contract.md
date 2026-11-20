@@ -663,7 +663,7 @@ workspace scope）。**边界**: 非空会话不追溯改 system；绑定变更�
 
 #### 桌面联系人空会话立案
 
-`POST /v1/sessions/{session_id}/contact-session` 接受 `contact_id`、`context_key`、`incarnation` 和可选 `require_existing`（默认 `false`）。仅向经令牌认证的单操作者提供。运行时从已登记联系人解析 agent、人设、工作区和修订号，在同一会话写闸内新建并持久化空会话与绑定。未登记工作区返回 409 `contact_binding_conflict`，`details.reason=workspace_required`。动作本身没有消息或模型调用。
+`POST /v1/sessions/{session_id}/contact-session` 接受 `contact_id`、`context_key`、`incarnation` 和可选 `require_existing`（默认 `false`）。仅向经令牌认证的单操作者提供，包括通过模型连接入口所用严格单操作者核验的受管桌面。其他活动用户表和非默认域返回 403。运行时从已登记联系人解析 agent、人设、工作区和修订号，在同一会话写闸内新建并持久化空会话与绑定。未登记工作区返回 409 `contact_binding_conflict`，`details.reason=workspace_required`。动作本身没有消息或模型调用。
 
 成功返回 200 `{schema:1, session_id, contact_id, context_key, incarnation}`。同一 `context_key`、联系人及绑定修订号再次打开仅核对原会话。回包中的 `incarnation` 是本次宿主请求的回显，持久绑定继续保存创建时的值。已有普通会话、其他联系人或过期绑定返回 409 `session_binding_conflict`。`require_existing=true` 时缺失会话也返回 409，`details.reason=contact_session_missing`。
 
