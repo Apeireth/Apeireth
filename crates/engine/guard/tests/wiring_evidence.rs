@@ -47,6 +47,10 @@ use apeireth_guard::{
 // 撞上 `--locked` 门禁）。`include_str!` 是**编译期**读文件，不引入任何依赖。
 const CLI_ROOT: &str = include_str!("../../../adapters/cli/src/lib.rs");
 const GATEWAY_ENTRY: &str = include_str!("../../../adapters/gateway/src/canonical_entry.rs");
+const NATIVE_HTTP: &str =
+    include_str!("../../../adapters/gateway/src/canonical_entry/native_http.rs");
+const SERIALIZED_TURN: &str =
+    include_str!("../../../adapters/gateway/src/canonical_entry/serialized_turn.rs");
 // ⚠️ **2026-10-31 合并批**：main 把「工具派发闸」从 `execute.rs` 抽到了
 // `canonical/dispatch_admission.rs`（`execute.rs` 只剩**完成级**的 Deny 分支）
 // ⇒ 只钉 `execute.rs` 会让本测试的「拒绝即帧」断言**失去对象**（而对源码做字符串
@@ -87,7 +91,7 @@ impl ProductionStack {
     }
 }
 
-/// 按**网关生产路径**的同形造可信意图（`gateway/src/canonical_entry.rs`）。
+/// 按网关原生回合适配器的同形造可信意图（`canonical_entry/serialized_turn.rs`）。
 ///
 /// 用户的原话只要求「检查 / 解释」⇒ 规则意图解释器判成**只读意图**
 /// （`mutation_policy = Deny`）。这就是「越权」的**基线**：
@@ -388,11 +392,18 @@ fn the_production_composition_root_registers_the_guard_hook_in_the_governance_pi
 #[test]
 fn the_gateway_production_entry_builds_the_trusted_intent_the_guard_aligns_against() {
     assert!(
-        GATEWAY_ENTRY.contains("RuleIntentInterpreter.interpret("),
+        GATEWAY_ENTRY.contains(".route(\"/v1/chat\", native_http::route())")
+            && NATIVE_HTTP.contains("post(native_chat)")
+            && NATIVE_HTTP.contains("execute_chat_attributed_operation("),
+        "原生对话入口必须调用构造可信意图的回合适配器"
+    );
+    assert!(
+        SERIALIZED_TURN.contains("RuleIntentInterpreter.interpret("),
         "网关生产入口必须用护栏的意图解释器造可信信封"
     );
     assert!(
-        GATEWAY_ENTRY.contains("with_intent(intent)"),
+        SERIALIZED_TURN.contains("with_intent(intent)")
+            && SERIALIZED_TURN.contains(".with_security_context(context)"),
         "可信意图必须绑进 TurnSecurityContext 送进 runtime"
     );
 }
