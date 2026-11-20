@@ -85,6 +85,7 @@ pub const DEFAULT_TIMEOUT_MS: u64 = 60_000;
 /// 内足以分配数十 GiB → OOM (H11)。超过阈值即返回 `ProviderError::BadResponse`
 /// 终止该流, 而不是继续吞字节。
 const MAX_SSE_BUFFER_BYTES: usize = 1024 * 1024;
+const MAX_JSON_COMPLETION_BYTES: usize = 4 * 1024 * 1024;
 
 /// A handle to the credential resolver, shared between a plugin and its
 /// capability across the registration→initialize timing gap. Holds a resolver
@@ -319,6 +320,33 @@ impl OpenAiCompatibleProviderCapability {
             &self.reasoning,
         )
     }
+
+    async fn read_json_completion(
+        &self,
+        mut response: reqwest::Response,
+        model: &str,
+    ) -> Result<apeireth_protocol::canonical::NormalizedResponse, ProviderError> {
+        let bad_response = |detail: String| ProviderError::BadResponse {
+            provider: self.id.to_string(),
+            detail,
+        };
+        let mut body = Vec::new();
+        while let Some(chunk) = response
+            .chunk()
+            .await
+            .map_err(|error| bad_response(format!("response read: {error}")))?
+        {
+            if chunk.len() > MAX_JSON_COMPLETION_BYTES - body.len() {
+                return Err(bad_response(
+                    "JSON completion exceeds the response limit".into(),
+                ));
+            }
+            body.extend_from_slice(&chunk);
+        }
+        let body = serde_json::from_slice(&body)
+            .map_err(|error| bad_response(format!("response json parse: {error}")))?;
+        self.adapt_response(body, model)
+    }
 }
 
 #[async_trait]
@@ -442,6 +470,22 @@ impl ProviderCapability for OpenAiCompatibleProviderCapability {
         if !status.is_success() {
             let body_text = response.text().await.unwrap_or_default();
             return Err(self.classify_status(status, body_text));
+        }
+
+        // Some compatible endpoints answer a streaming request with one ordinary
+        // JSON completion. Keep that same response as the final result.
+        let is_json = response
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| value.split(';').next())
+            .is_some_and(|value| value.trim().eq_ignore_ascii_case("application/json"));
+        if is_json {
+            let completion = self.read_json_completion(response, &request.model).await?;
+            if !completion.content.is_empty() {
+                on_delta(completion.content.clone());
+            }
+            return Ok(completion);
         }
 
         let mut buffer: Vec<u8> = Vec::new();
@@ -936,6 +980,79 @@ mod tests {
         assert!(reasoned_text.ends_with("结论"), "{reasoned_text}");
     }
     mod reasoning_contract;
+
+    #[tokio::test]
+    async fn a_json_reply_to_a_stream_request_finishes_the_original_call() {
+        use std::time::Duration;
+        use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+        use tokio::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (socket, _) = listener.accept().await.unwrap();
+            let mut socket = BufReader::new(socket);
+            let mut content_length = None;
+            loop {
+                let mut line = String::new();
+                assert!(socket.read_line(&mut line).await.unwrap() > 0);
+                if line == "\r\n" {
+                    break;
+                }
+                if let Some(("content-length", value)) = line.to_ascii_lowercase().split_once(':') {
+                    content_length = Some(value.trim().parse::<usize>().unwrap());
+                }
+            }
+            let mut body = vec![0; content_length.expect("request content length")];
+            socket.read_exact(&mut body).await.unwrap();
+            let request: serde_json::Value = serde_json::from_slice(&body).unwrap();
+            assert_eq!(request["stream"], true);
+
+            let text = r#"{"id":"same-request","choices":[{"message":{"role":"assistant","content":"完整正文"},"finish_reason":"stop"}],"usage":{"prompt_tokens":5,"completion_tokens":3,"total_tokens":8}}"#;
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: Application/JSON; charset=UTF-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{text}", text.len(),
+            );
+            socket
+                .get_mut()
+                .write_all(response.as_bytes())
+                .await
+                .unwrap();
+            drop(socket);
+            assert!(
+                tokio::time::timeout(Duration::from_millis(100), listener.accept())
+                    .await
+                    .is_err(),
+                "JSON compatibility must finish the original request"
+            );
+        });
+        let resolver = Arc::new(Mutex::new(Some(Arc::new(
+            apeireth_plugin::StaticCredentials::new()
+                .with(OPENAI_COMPATIBLE_API_KEY, "fixture-only"),
+        ) as Arc<dyn CredentialResolver>)));
+        let cap = OpenAiCompatibleProviderCapability::new(
+            format!("http://{address}"),
+            vec!["gpt-4o-mini".into()],
+            http(),
+            DEFAULT_TIMEOUT_MS,
+            resolver,
+        )
+        .unwrap();
+
+        let delivered = Arc::new(Mutex::new(Vec::new()));
+        let sink = delivered.clone();
+        let completion = cap
+            .complete_streaming(
+                &request(),
+                Arc::new(move |text| sink.lock().unwrap().push(text)),
+            )
+            .await
+            .unwrap();
+        assert_eq!(completion.content, "完整正文");
+        assert_eq!(delivered.lock().unwrap().as_slice(), ["完整正文"]);
+        assert_eq!(completion.finish_reason, Some(NormalizedFinishReason::Stop));
+        assert_eq!(completion.usage, NormalizedUsage::new(5, 3));
+        server.await.unwrap();
+    }
 
     /// The streaming path forwards incremental content deltas (not one final
     /// blob) and reassembles the same canonical response the non-streaming

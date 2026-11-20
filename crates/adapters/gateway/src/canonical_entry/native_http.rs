@@ -56,44 +56,62 @@ async fn native_chat(
         .acquire_owned()
         .await
         .map_err(|_| owner_failed(session))?;
+    let (progress, reader) = native_stream::requested(&headers)
+        .then(native_stream::channel)
+        .unzip();
+    let stream_request = progress.as_ref().map(|value| value.request);
     // Only admitted work is detached. Dropping the HTTP JoinHandle drops the
     // waiter, while the worker retains its permit and the original operation.
-    tokio::spawn(async move {
+    let worker = tokio::spawn(async move {
         let _permit = permit;
-        // W3-②: 会话→用户绑定 (首个具名写者), 跨用户审批拒的判定依据。
-        if !contact_mode {
-            bind_session_owner(&state, session, user.as_ref());
-            // W3-③: 会话入域立案 (域事件过滤面)。
-            admit_domain_session(&state, &runtime, session).await?;
-        }
+        let outcome = async {
+            // W3-②: 会话→用户绑定 (首个具名写者), 跨用户审批拒的判定依据。
+            if !contact_mode {
+                bind_session_owner(&state, session, user.as_ref());
+                // W3-③: 会话入域立案 (域事件过滤面)。
+                admit_domain_session(&state, &runtime, session).await?;
+            }
 
-        // **主体 → 会话**归属登记（2026-11-01 安全审计 P1 收口）:
-        // episode 维度的「被遗忘权」要成立, 必须能把 episode 归到主体
-        // ⇒ 靠 memory 侧的 `memory_principal_sessions` 映射连接
-        // ⇒ 生产侧原先**无写入方** ⇒ 那一维的被遗忘权无法生效。
-        // 主体 = 域面 `user_id`（人/账户级）；**无 user_id ⇒ 不登记**
-        //（宁可归属不可判定, 也不要错归属 ⇒ 误删风险）。
-        // ⚠️ **旁路**: 写失败 ⇒ 记审计、**不阻断主流程**。
-        if let Err(error) = crate::principal_attribution::record_principal_attribution(
-            &state,
-            identity.as_ref().map(|Extension(identity)| identity),
-            session,
-        ) {
-            eprintln!("[principal-attribution] 归属登记失败 (旁路, 不阻断请求): {error}");
+            // Keep episode ownership attached to the same principal for both delivery modes.
+            if let Err(error) = crate::principal_attribution::record_principal_attribution(
+                &state,
+                identity.as_ref().map(|Extension(identity)| identity),
+                session,
+            ) {
+                eprintln!("[principal-attribution] 归属登记失败 (旁路, 不阻断请求): {error}");
+            }
+            let attribution = attribution_for(&state, identity.as_ref());
+            let progress = progress.map(TurnProgress::Native);
+            let outcome = execute_chat_attributed_operation(
+                &runtime,
+                request,
+                attribution,
+                operation,
+                progress,
+            )
+            .await;
+            state.observations.flush().await;
+            outcome.map_err(|error| http_error(error, Some(session)))
         }
-        let attribution = attribution_for(&state, identity.as_ref());
-        let outcome =
-            execute_chat_attributed_operation(&runtime, request, attribution, operation).await;
-        state.observations.flush().await;
-        let outcome = outcome.map_err(|error| http_error(error, Some(session)))?;
-        publish_turn_delta(&state.events, &outcome);
-        Ok(chat_http_response(outcome))
-    })
-    .await
-    .map_err(|_| owner_failed(session))?
+        .await;
+        let stopped = stream_request.and_then(|request| {
+            native_stream::stopped_request(session, request, outcome.as_ref().ok())
+        });
+        let reply = outcome.map(|outcome| {
+            if stopped.is_none() {
+                publish_turn_delta(&state.events, &outcome);
+            }
+            chat_http_response(outcome)
+        });
+        (reply, stopped)
+    });
+    if let Some(reader) = reader {
+        return Ok(reader.response(session, worker));
+    }
+    worker.await.map_err(|_| owner_failed(session))?.0
 }
 
-fn owner_failed(session: SessionId) -> HttpError {
+pub(super) fn owner_failed(session: SessionId) -> HttpError {
     (
         StatusCode::INTERNAL_SERVER_ERROR,
         Json(ErrorBody {

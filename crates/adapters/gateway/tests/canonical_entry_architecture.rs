@@ -7,6 +7,7 @@
 const CANONICAL_ENTRY: &str = include_str!("../src/canonical_entry.rs");
 const CHAT_REQUEST: &str = include_str!("../src/canonical_entry/chat_request.rs");
 const NATIVE_HTTP: &str = include_str!("../src/canonical_entry/native_http.rs");
+const NATIVE_STREAM: &str = include_str!("../src/canonical_entry/native_stream.rs");
 const SERIALIZED_TURN: &str = include_str!("../src/canonical_entry/serialized_turn.rs");
 
 #[test]
@@ -14,12 +15,14 @@ fn canonical_gateway_entry_delegates_semantics_to_runtime_execute() {
     assert!(
         CANONICAL_ENTRY.contains(".route(\"/v1/chat\", native_http::route())")
             && NATIVE_HTTP.contains("post(native_chat)")
-            && NATIVE_HTTP.contains("execute_chat_attributed_operation(&runtime,"),
+            && NATIVE_HTTP.contains("execute_chat_attributed_operation("),
         "the native route must delegate to the attributed canonical adapter"
     );
     assert!(
-        CANONICAL_ENTRY.contains("run_turn_serialized(runtime, turn,")
-            && SERIALIZED_TURN.contains("runtime.execute_outcome(turn)"),
+        SERIALIZED_TURN.contains("run_turn_serialized(runtime, turn,")
+            && SERIALIZED_TURN.contains("runtime.execute_outcome(turn)")
+            && SERIALIZED_TURN
+                .contains("execute_outcome_streaming(turn.with_request(request), sink)"),
         "the canonical adapter must enter Runtime::execute_outcome under session serialization"
     );
     assert!(
@@ -58,6 +61,7 @@ fn canonical_gateway_entry_does_not_reach_around_the_runtime() {
             ("canonical_entry", CANONICAL_ENTRY),
             ("chat_request", CHAT_REQUEST),
             ("native_http", NATIVE_HTTP),
+            ("native_stream", NATIVE_STREAM),
             ("serialized_turn", SERIALIZED_TURN),
         ] {
             assert!(

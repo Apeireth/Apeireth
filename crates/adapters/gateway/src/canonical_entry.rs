@@ -9,12 +9,10 @@ use std::sync::{Arc, RwLock};
 
 use apeireth_core::kernel::{ids::ContactId, ApprovalId, RequestId, SessionId, Timestamp};
 use apeireth_governance::{may_resolve_approval, UserCapability};
-use apeireth_guard::{IntentInput, IntentInterpreter, RuleIntentInterpreter};
 use apeireth_protocol::canonical::{ContentPart, NormalizedUsage};
 use apeireth_runtime::canonical::{
-    ApprovalDecision, ApprovalResolution, ExecutionTrace, OperationAdmission, OperationRequest,
-    PendingApprovalView, Runtime, RuntimeError, TraceEvent, TurnOutcome, TurnRequest,
-    TurnSecurityContext,
+    ApprovalDecision, ApprovalResolution, ExecutionTrace, PendingApprovalView, Runtime,
+    RuntimeError, TraceEvent, TurnOutcome, TurnRequest,
 };
 use axum::extract::{Extension, Query, Request, State};
 use axum::http::StatusCode;
@@ -44,8 +42,9 @@ use crate::session_binding::contact_session;
 mod chat_request;
 pub use chat_request::CanonicalChatRequest;
 mod native_http;
+mod native_stream;
 mod serialized_turn;
-use serialized_turn::run_turn_serialized;
+use serialized_turn::{execute_chat_attributed_operation, run_turn_serialized, TurnProgress};
 
 /// Transport-neutral response returned after canonical execution.
 #[derive(Debug, Clone, Serialize)]
@@ -290,71 +289,7 @@ pub async fn execute_chat_attributed(
     request: CanonicalChatRequest,
     attribution: SessionAttribution,
 ) -> Result<CanonicalChatOutcome, CanonicalEntryError> {
-    execute_chat_attributed_operation(runtime, request, attribution, None).await
-}
-
-/// 归属化回合入口 + 操作幂等闸 (C2-1)。
-///
-/// `operation` 为 `None` 时与不带幂等头的请求同构: 直接抢会话写闸执行。
-/// 为 `Some` 时先登记 (session, operation): 只有新鲜请求才抢写闸执行;
-/// 已到终态的操作直接回放存储的 `TurnOutcome` —— 不再执行、不再写会话账本,
-/// 因而 W2-③ 的串行语义完全不变。登记后执行失败 (RuntimeError) 不落到终态,
-/// 由 guard 的 Drop 标成 Indeterminate, 同键重试按 `operation_conflict` 拒。
-pub(crate) async fn execute_chat_attributed_operation(
-    runtime: &Runtime,
-    request: CanonicalChatRequest,
-    attribution: SessionAttribution,
-    operation: Option<OperationRequest>,
-) -> Result<CanonicalChatOutcome, CanonicalEntryError> {
-    validate_chat_input(&request.input)?;
-    let expected_contact = request.expected_contact_id;
-    let session = request.effective_session()?;
-    let input = request.input;
-    let intent = RuleIntentInterpreter.interpret(IntentInput {
-        session_id: session.to_string(),
-        trace_id: String::new(),
-        user_request: input.clone(),
-        created_at_ms: 0,
-    });
-    let context = TurnSecurityContext::new(intent.intent_id.clone(), "").with_intent(intent);
-    let mut turn = TurnRequest::new(session, input).with_security_context(context);
-    if let Some(model) = request.model {
-        turn = turn.with_model(model);
-    }
-    if let Some(system) = request.system {
-        turn = turn.with_system(system);
-    }
-
-    let outcome = match operation {
-        None => run_turn_serialized(runtime, turn, &attribution, None, expected_contact).await?,
-        Some(operation) => match runtime.begin_operation(session, operation) {
-            OperationAdmission::Replay(outcome) => {
-                if let Some(contact) = expected_contact {
-                    let _permit = runtime.sessions().write_permit(session).await;
-                    contact_session::verify_contact(runtime.sessions(), session, contact).await?;
-                }
-                return Ok(turn_outcome_to_chat(outcome));
-            }
-            OperationAdmission::Conflict { operation, reason } => {
-                return Err(CanonicalEntryError::Runtime(
-                    RuntimeError::OperationConflict { operation, reason },
-                ));
-            }
-            OperationAdmission::InProgress { operation } => {
-                return Err(CanonicalEntryError::Runtime(
-                    RuntimeError::OperationInProgress { operation },
-                ));
-            }
-            OperationAdmission::Fresh(guard) => {
-                let outcome =
-                    run_turn_serialized(runtime, turn, &attribution, None, expected_contact)
-                        .await?;
-                guard.complete(outcome.clone());
-                outcome
-            }
-        },
-    };
-    Ok(turn_outcome_to_chat(outcome))
+    execute_chat_attributed_operation(runtime, request, attribution, None, None).await
 }
 
 /// Resolve a pending approval through the canonical runtime API.
@@ -2049,8 +1984,14 @@ async fn openai_chat_streaming(
         }
 
         // W2-③: 流式回合同样过会话写闸 (排队 + 串行 + 归属审计)。
-        let outcome =
-            run_turn_serialized(runtime.as_ref(), turn, &attribution, Some(sink), None).await;
+        let outcome = run_turn_serialized(
+            runtime.as_ref(),
+            turn,
+            &attribution,
+            Some(TurnProgress::Callback(sink)),
+            None,
+        )
+        .await;
         observations.flush().await;
 
         match outcome {
