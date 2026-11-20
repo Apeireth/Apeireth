@@ -150,6 +150,10 @@ pub(crate) async fn capabilities(State(state): State<GatewayState>) -> Response 
             crate::session_binding::session_binding_capability_group(
                 state.runtime.contact_registry().is_some()
                     && state.runtime.workspace_registry().is_some(),
+                contacts_supported
+                    && !state.user_access.is_active()
+                    && (matches!(state.token_gate, crate::canonical_entry::GatewayTokenGate::Enforced(_))
+                        || !state.client_tokens.is_empty()),
             ),
             { "name": "permissions", "capabilities": [
                 cap("permissions.approval.read", true, false, &["list"], true, true),

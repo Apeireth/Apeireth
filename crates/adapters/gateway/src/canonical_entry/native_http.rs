@@ -22,6 +22,11 @@ async fn native_chat(
     Json(request): Json<CanonicalChatRequest>,
 ) -> Result<Response, HttpError> {
     let mut request = request;
+    let contact_mode = request.expected_contact_id.is_some();
+    if contact_mode && !contact_session::supports_scope(&state, identity.as_ref(), domain.as_ref())
+    {
+        return Ok(contact_session::scope_refused());
+    }
     let execution = match chat_execution(
         &state,
         domain.as_ref().map(|Extension(context)| context),
@@ -35,7 +40,9 @@ async fn native_chat(
     if let Err(error) = validate_chat_input(&request.input) {
         return Err(http_error(error, request.session));
     }
-    let session = request.session.unwrap_or_else(SessionId::new);
+    let session = request
+        .effective_session()
+        .map_err(|error| http_error(error, request.session))?;
     request.session = Some(session);
     request.system = execution.seeded_system(request.system.take());
     // C2-1: 可选的幂等键先解码 (摘要取解析后的 model/system); 非法键在
@@ -54,9 +61,11 @@ async fn native_chat(
     tokio::spawn(async move {
         let _permit = permit;
         // W3-②: 会话→用户绑定 (首个具名写者), 跨用户审批拒的判定依据。
-        bind_session_owner(&state, session, user.as_ref());
-        // W3-③: 会话入域立案 (域事件过滤面)。
-        admit_domain_session(&state, &runtime, session).await?;
+        if !contact_mode {
+            bind_session_owner(&state, session, user.as_ref());
+            // W3-③: 会话入域立案 (域事件过滤面)。
+            admit_domain_session(&state, &runtime, session).await?;
+        }
 
         // **主体 → 会话**归属登记（2026-11-01 安全审计 P1 收口）:
         // episode 维度的「被遗忘权」要成立, 必须能把 episode 归到主体

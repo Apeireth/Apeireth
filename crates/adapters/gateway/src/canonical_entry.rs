@@ -7,7 +7,7 @@
 
 use std::sync::{Arc, RwLock};
 
-use apeireth_core::kernel::{ApprovalId, RequestId, SessionId, Timestamp};
+use apeireth_core::kernel::{ids::ContactId, ApprovalId, RequestId, SessionId, Timestamp};
 use apeireth_governance::{may_resolve_approval, UserCapability};
 use apeireth_guard::{IntentInput, IntentInterpreter, RuleIntentInterpreter};
 use apeireth_protocol::canonical::{ContentPart, NormalizedUsage};
@@ -39,36 +39,13 @@ use crate::events::{events_handler, EventBus, GatewayEvent, RuntimeObservationSi
 use crate::model_connection as mc;
 use crate::panels::{panel_routes, GatewayServices, GatewayState, PanelData};
 use crate::runtime_error_map::classify_runtime_error;
+use crate::session_binding::contact_session;
 
+mod chat_request;
+pub use chat_request::CanonicalChatRequest;
 mod native_http;
-
-/// Native gateway request. HTTP and CLI transports can both construct it.
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct CanonicalChatRequest {
-    /// Existing canonical session, or a fresh session when omitted.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub session: Option<SessionId>,
-    /// User input for this turn.
-    pub input: String,
-    /// Optional model override.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub model: Option<String>,
-    /// System instruction used only when the session is new.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub system: Option<String>,
-}
-
-impl CanonicalChatRequest {
-    /// A request containing one user turn.
-    pub fn new(input: impl Into<String>) -> Self {
-        Self {
-            session: None,
-            input: input.into(),
-            model: None,
-            system: None,
-        }
-    }
-}
+mod serialized_turn;
+use serialized_turn::run_turn_serialized;
 
 /// Transport-neutral response returned after canonical execution.
 #[derive(Debug, Clone, Serialize)]
@@ -298,33 +275,6 @@ impl SessionAttribution {
     }
 }
 
-/// 持会话写闸跑一个回合 (W2-③ 并发写语义: **排队 + 审计**)。
-///
-/// 同一会话的回合先到先服务串行 —— 第二个客户端的回合**排队**等前一个跑完,
-/// 不发 busy 帧、不交叠写会话账本; 入场事实 (排第几 / 等多久) 落
-/// `gateway.session_client` 审计行, 排队因此可观测可审计。
-async fn run_turn_serialized(
-    runtime: &Runtime,
-    turn: TurnRequest,
-    attribution: &SessionAttribution,
-    on_delta: Option<Arc<dyn Fn(String) + Send + Sync>>,
-) -> Result<TurnOutcome, RuntimeError> {
-    let permit = runtime.sessions().write_permit(turn.session).await;
-    record_session_client(
-        attribution.audit.as_deref(),
-        turn.session,
-        &attribution.client,
-        "turn",
-        Some(permit.admission()),
-    );
-    let outcome = match on_delta {
-        Some(sink) => runtime.execute_outcome_streaming(turn, sink).await,
-        None => runtime.execute_outcome(turn).await,
-    };
-    drop(permit);
-    outcome
-}
-
 /// Invoke the canonical runtime through the real gateway entry adapter.
 pub async fn execute_chat(
     runtime: &Runtime,
@@ -357,8 +307,8 @@ pub(crate) async fn execute_chat_attributed_operation(
     operation: Option<OperationRequest>,
 ) -> Result<CanonicalChatOutcome, CanonicalEntryError> {
     validate_chat_input(&request.input)?;
-
-    let session = request.session.unwrap_or_else(SessionId::new);
+    let expected_contact = request.expected_contact_id;
+    let session = request.effective_session()?;
     let input = request.input;
     let intent = RuleIntentInterpreter.interpret(IntentInput {
         session_id: session.to_string(),
@@ -376,9 +326,15 @@ pub(crate) async fn execute_chat_attributed_operation(
     }
 
     let outcome = match operation {
-        None => run_turn_serialized(runtime, turn, &attribution, None).await?,
+        None => run_turn_serialized(runtime, turn, &attribution, None, expected_contact).await?,
         Some(operation) => match runtime.begin_operation(session, operation) {
-            OperationAdmission::Replay(outcome) => return Ok(turn_outcome_to_chat(outcome)),
+            OperationAdmission::Replay(outcome) => {
+                if let Some(contact) = expected_contact {
+                    let _permit = runtime.sessions().write_permit(session).await;
+                    contact_session::verify_contact(runtime.sessions(), session, contact).await?;
+                }
+                return Ok(turn_outcome_to_chat(outcome));
+            }
             OperationAdmission::Conflict { operation, reason } => {
                 return Err(CanonicalEntryError::Runtime(
                     RuntimeError::OperationConflict { operation, reason },
@@ -390,7 +346,9 @@ pub(crate) async fn execute_chat_attributed_operation(
                 ));
             }
             OperationAdmission::Fresh(guard) => {
-                let outcome = run_turn_serialized(runtime, turn, &attribution, None).await?;
+                let outcome =
+                    run_turn_serialized(runtime, turn, &attribution, None, expected_contact)
+                        .await?;
                 guard.complete(outcome.clone());
                 outcome
             }
@@ -1949,6 +1907,7 @@ async fn openai_chat(
         input,
         model: request.model.clone(),
         system: execution.seeded_system((!system.is_empty()).then_some(system)),
+        expected_contact_id: None,
     };
     let model_name = request.model.unwrap_or_default();
     let attribution = attribution_for(&state, identity.as_ref());
@@ -2090,7 +2049,8 @@ async fn openai_chat_streaming(
         }
 
         // W2-③: 流式回合同样过会话写闸 (排队 + 串行 + 归属审计)。
-        let outcome = run_turn_serialized(runtime.as_ref(), turn, &attribution, Some(sink)).await;
+        let outcome =
+            run_turn_serialized(runtime.as_ref(), turn, &attribution, Some(sink), None).await;
         observations.flush().await;
 
         match outcome {
