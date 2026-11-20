@@ -4,7 +4,7 @@
 //! 缺头 = 今日路径, 不做幂等; 有头 = 语法必须合法（与核心稳定标识同规则）,
 //! 否则 400 invalid_request, 文案带 operation key。
 //!
-//! 载荷摘要固定编码三段 (input, model, system), 每段 = 1 字节存在位 +
+//! 载荷摘要固定编码三段 (input, model, system)，指定联系人时追加第四段。每段 = 1 字节存在位 +
 //! u32 小端长度 + UTF-8 字节; 缺段只有存在位 0。model 与 system 取入口
 //! 解析后的实际值, 所以同一请求在模型热切换前后会落到不同摘要（按不同载荷处理）。
 
@@ -43,6 +43,10 @@ pub(crate) fn operation_request(
         &request.input,
         request.model.as_deref(),
         request.system.as_deref(),
+        request
+            .expected_contact_id
+            .map(|id| id.to_string())
+            .as_deref(),
     );
     let operation = OperationRequest::new(key, digest)
         .map_err(|error| CanonicalEntryError::InvalidRequest(error.to_string()))?;
@@ -50,9 +54,17 @@ pub(crate) fn operation_request(
 }
 
 /// 固定编码的载荷摘要: 段边界由长度前缀钉死, 不做分隔符拼接。
-fn payload_digest(input: &str, model: Option<&str>, system: Option<&str>) -> [u8; 32] {
+fn payload_digest(
+    input: &str,
+    model: Option<&str>,
+    system: Option<&str>,
+    contact: Option<&str>,
+) -> [u8; 32] {
     let mut hasher = Sha256::new();
-    for field in [Some(input), model, system] {
+    for field in [Some(input), model, system]
+        .into_iter()
+        .chain(contact.map(Some))
+    {
         match field {
             Some(value) => {
                 hasher.update([1u8]);
@@ -117,12 +129,17 @@ mod tests {
 
     #[test]
     fn field_boundaries_do_not_collide() {
-        let joined = payload_digest("ab", None, None);
-        let model_split = payload_digest("a", Some("b"), None);
-        let system_split = payload_digest("a", None, Some("b"));
+        let joined = payload_digest("ab", None, None, None);
+        let model_split = payload_digest("a", Some("b"), None, None);
+        let system_split = payload_digest("a", None, Some("b"), None);
         assert_ne!(joined, model_split);
         assert_ne!(joined, system_split);
         assert_ne!(model_split, system_split);
-        assert_eq!(payload_digest("ab", None, None), joined);
+        assert_ne!(joined, payload_digest("ab", None, None, Some("contact-a")));
+        assert_ne!(
+            payload_digest("ab", None, None, Some("contact-a")),
+            payload_digest("ab", None, None, Some("contact-b"))
+        );
+        assert_eq!(payload_digest("ab", None, None, None), joined);
     }
 }

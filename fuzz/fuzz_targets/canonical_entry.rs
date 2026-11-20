@@ -279,9 +279,7 @@ fn chat_entry_face(payload: &[u8], flags: u8) {
     };
     let request = CanonicalChatRequest {
         session: Some(session_id()),
-        input: input.clone(),
-        model: None,
-        system: None,
+        ..CanonicalChatRequest::new(input.clone())
     };
 
     let mut future = Box::pin(apeireth_gateway::canonical_entry::execute_chat(

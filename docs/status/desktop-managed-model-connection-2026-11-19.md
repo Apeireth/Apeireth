@@ -4,7 +4,7 @@
 Document: docs/status/desktop-managed-model-connection-2026-11-19.md
 Class: STATUS
 Version: 1
-Last-Modified: 2026-11-19
+Last-Modified: 2026-11-20
 Status: 受管桌面同包已合入 main（PR #148，merge `e1d85ee31`）；2026-11-19 补充批「会话只读恢复」已由 PR #150 合入 main（merge `81f87b253`），同包 EXE 隔离验收 109 PASS / 0 FAIL，PRODUCTION WIRED，非 HARDWARE VALIDATED
 Author: desktop-collaboration-line
 
@@ -93,3 +93,15 @@ Author: desktop-collaboration-line
 - PR #148 已合入 main（merge `e1d85ee31edb344485e7f4bf4e3622f791187457`，2026-11-19T05:33:08Z）；required 7 项全绿，fuzz matrix 的 `inputs (git_write)` 与 `inputs (guard_supervisor)` 均 SUCCESS。main `e1d85ee31` 的 CI 最终 31/31 success（2026-11-19T14:09:51+08:00 收口）；首轮 `M2B-XV` 的 macOS `timeout_terminates_the_whole_process_group_tree` 报 `Io("Operation not permitted (os error 1)")`，复跑后 success，31/31 是复跑后的结果。
 - 会话只读恢复补充批：PR #150 已合入 main（merge `81f87b253`，2026-11-19T09:27:48Z）；同包 EXE（SHA-256 `7E397622...`）在 C4 旧库完成隔离验收 109 PASS / 0 FAIL，覆盖两条 GET、重复输入 409、跨会话/认证、旧成果身份、零写、候选回归与 TCP 断连读回。
 - 未做真实提供方调用、桌面 C41 实机联调、多进程/跨平台凭据后端；这些不进本批 PRODUCTION WIRED 口径。
+
+## 原生对话断连补修（2026-11-20）
+
+主干 `bcd191aa2` 的会话读面已恢复。实际桌面使用的 `POST /v1/chat` 仍把运行时执行放在 HTTP 等待者内。客户端断开导致等待者取消时，没有收到完成提交。交付 10 的 Windows 二进制在 TCP 普通关闭与 RST 后均按原身份读回 `unconfirmed`，与桌面 C45 一致。
+
+本地修复检查点 `783b50c71` 将已校验请求交给有界的网关任务，任务持有原执行及幂等守卫，继续经由同一运行时完成会话提交。真实 HTTP 回归先在主干证明断连失败，再在候选证明带键与无键请求均只执行一次、保持原 request 和 trace、完成读回。带键请求在运行中仍是 `operation_in_progress`，完成后回放同一结果。
+
+隔离验收使用合成提供方、新建数据根和操作系统分配的回环端口。回归入口为 `cargo test -p apeireth-gateway --test operation_idempotency_http --locked`。对独立网关使用 `python -B scripts/native_chat_disconnect_probe.py <EXE> --sha256 <SHA-256>` 验证，普通关闭和 RST 均在同一运行进程内只执行一次，完成后重启按原 request、trace、摘要和正文读回。当前会话存储、鉴权及域归属合同沿用既有定义。运行中网关进程退出仍可能留下 `unconfirmed`。
+
+Windows x86_64 release EXE 来自 `783b50c71`，使用 `pwsh scripts/cargo.ps1 -Slot base -Line native-chat-disconnect-package -CargoArgs "build --release -p apeireth-cli --locked --offline -j 2"` 构建。已验副本位于 `C:/Apeireth/_local-archives/native-chat-disconnect-20261120/apeireth.exe`，SHA-256 `BA448CDF4E4D95BA34F828E0899C62460E3DB19E6DB56874C07C95DA662D7E0C`。
+
+定向网关测试涵盖普通对话、流式帧、会话绑定、鉴权、域隔离、主体归属、TLS 和候选成果。网关所有 targets 的 Clippy、逐 crate 的工作区 fmt 和严格架构守卫通过。此处记本地检查点，合并与日常部署状态以独立记录为准。

@@ -6,11 +6,15 @@
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 
 use apeireth_core::kernel::{
     CapabilityId, Clock, ModelId, PluginId, SessionId, Timestamp, VirtualClock,
 };
-use apeireth_gateway::canonical_router;
+use apeireth_gateway::{
+    build_gateway_state_with_services, canonical_router, canonical_router_with_state,
+    GatewayServices, GatewayTokenGate,
+};
 use apeireth_governance::AllowAll;
 use apeireth_plugin::{
     CapabilityKind, Plugin, PluginContext, PluginManifest, PluginResult, ProviderCapability,
@@ -25,6 +29,17 @@ use async_trait::async_trait;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use http_body_util::BodyExt;
+use hyper_util::{
+    rt::{TokioExecutor, TokioIo},
+    server::conn::auto::Builder as AutoConnBuilder,
+    service::TowerToHyperService,
+};
+use tokio::{
+    io::AsyncWriteExt,
+    net::{TcpListener, TcpStream},
+    sync::{oneshot, Notify, Semaphore},
+    time::{sleep, timeout},
+};
 use tower::ServiceExt;
 use uuid::Uuid;
 
@@ -35,14 +50,35 @@ struct SingleShotProvider {
     id: CapabilityId,
     calls: AtomicUsize,
     text: &'static str,
+    gate: Option<ProviderGate>,
+}
+
+struct ProviderGate {
+    entered: Notify,
+    release: Semaphore,
 }
 
 impl SingleShotProvider {
     fn new(text: &'static str) -> Arc<Self> {
+        Self::with_gate(text, None)
+    }
+
+    fn gated(text: &'static str) -> Arc<Self> {
+        Self::with_gate(
+            text,
+            Some(ProviderGate {
+                entered: Notify::new(),
+                release: Semaphore::new(0),
+            }),
+        )
+    }
+
+    fn with_gate(text: &'static str, gate: Option<ProviderGate>) -> Arc<Self> {
         Arc::new(Self {
             id: CapabilityId::new("provider.fake").expect("valid capability id"),
             calls: AtomicUsize::new(0),
             text,
+            gate,
         })
     }
 
@@ -70,6 +106,10 @@ impl ProviderCapability for SingleShotProvider {
         request: &NormalizedRequest,
     ) -> Result<NormalizedResponse, ProviderError> {
         let call = self.calls.fetch_add(1, Ordering::SeqCst);
+        if let Some(gate) = &self.gate {
+            gate.entered.notify_one();
+            gate.release.acquire().await.unwrap().forget();
+        }
         Ok(NormalizedResponse {
             id: format!("response-{}", call + 1),
             model: request.model.clone(),
@@ -306,4 +346,147 @@ async fn a_request_without_the_header_runs_twice() {
         second_body["request"], first_body["request"],
         "without a key each request is its own turn"
     );
+}
+
+#[tokio::test]
+async fn disconnected_unkeyed_native_turn_commits_with_the_original_identity() {
+    disconnect_and_read_back(None).await;
+}
+
+#[tokio::test]
+async fn disconnected_keyed_native_turn_retains_idempotency() {
+    disconnect_and_read_back(Some("operation-before-disconnect")).await;
+}
+
+async fn disconnect_and_read_back(operation: Option<&str>) {
+    const TOKEN: &str = "native-disconnect-fixture-token";
+    const TEXT: &str = "answer after the client disconnected";
+    const DIGEST: &str = "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824";
+    const DEADLINE: Duration = Duration::from_secs(5);
+    let provider = SingleShotProvider::gated(TEXT);
+    let runtime = runtime_with(provider.clone()).await;
+    let mut state = build_gateway_state_with_services(runtime.clone(), GatewayServices::default());
+    state.token_gate = GatewayTokenGate::Enforced(TOKEN.into());
+    let router = canonical_router_with_state(state);
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let (closed, connection_closed) = oneshot::channel();
+    let server = tokio::spawn(async move {
+        let (stream, _) = listener.accept().await.unwrap();
+        let builder = AutoConnBuilder::new(TokioExecutor::new());
+        let _ = builder
+            .serve_connection_with_upgrades(
+                TokioIo::new(stream),
+                TowerToHyperService::new(router.clone()),
+            )
+            .await;
+        closed.send(()).unwrap();
+        axum::serve(listener, router).await.unwrap();
+    });
+    let session = SessionId::new();
+    let body = serde_json::json!({"session":session,"input":"hello"}).to_string();
+    let operation_header = operation
+        .map(|key| format!("{OPERATION_HEADER}: {key}\r\n"))
+        .unwrap_or_default();
+    let request = format!("POST /v1/chat HTTP/1.1\r\nHost: {address}\r\nAuthorization: Bearer {TOKEN}\r\nContent-Type: application/json\r\nContent-Length: {}\r\n{operation_header}Connection: close\r\n\r\n{body}", body.len());
+    let mut socket = TcpStream::connect(address).await.unwrap();
+    socket.write_all(request.as_bytes()).await.unwrap();
+    let gate = provider.gate.as_ref().unwrap();
+    timeout(DEADLINE, gate.entered.notified()).await.unwrap();
+    drop(socket);
+    // The server drops its HTTP waiter before the provider yields a result.
+    timeout(DEADLINE, connection_closed).await.unwrap().unwrap();
+
+    let client = reqwest::Client::builder()
+        .no_proxy()
+        .timeout(DEADLINE)
+        .build()
+        .unwrap();
+    let read_uri = format!("http://{address}/v1/sessions/{session}/turn-result");
+    let read = |request: Option<String>, trace: Option<String>| {
+        let mut call = client
+            .get(&read_uri)
+            .bearer_auth(TOKEN)
+            .query(&[("input_sha256", DIGEST)]);
+        if let Some(request) = request {
+            call = call.query(&[("request", request)]);
+        }
+        if let Some(trace) = trace {
+            call = call.query(&[("trace_id", trace)]);
+        }
+        call
+    };
+    let pending = read(None, None).send().await.unwrap();
+    assert_eq!(pending.status(), StatusCode::OK);
+    let pending: serde_json::Value = pending.json().await.unwrap();
+    assert_eq!(pending["state"], "unconfirmed");
+    assert!(pending["text"].is_null());
+    let request = pending["request"].as_str().unwrap().to_owned();
+    let trace = pending["trace_id"].as_str().unwrap().to_owned();
+
+    let post = || {
+        client
+            .post(format!("http://{address}/v1/chat"))
+            .bearer_auth(TOKEN)
+            .header(OPERATION_HEADER, operation.unwrap())
+            .header("content-type", "application/json")
+            .body(body.clone())
+    };
+    if operation.is_some() {
+        let in_flight = post().send().await.unwrap();
+        assert_eq!(in_flight.status(), StatusCode::CONFLICT);
+        let in_flight: serde_json::Value = in_flight.json().await.unwrap();
+        assert_eq!(in_flight["error"]["code"], "operation_in_progress");
+    }
+    gate.release.add_permits(1);
+    let completed = timeout(DEADLINE, async {
+        loop {
+            let result = read(Some(request.clone()), Some(trace.clone()))
+                .send()
+                .await
+                .unwrap();
+            assert_eq!(result.status(), StatusCode::OK);
+            let result: serde_json::Value = result.json().await.unwrap();
+            if result["state"] == "completed" {
+                break result;
+            }
+            sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("the disconnected admitted turn must commit its result");
+    assert_eq!(completed["text"], TEXT);
+    assert_eq!(completed["session"], session.to_string());
+    assert_eq!(completed["request"], request);
+    assert_eq!(completed["trace_id"], trace);
+    assert_eq!(completed["input_sha256"], DIGEST);
+
+    let after = transcript(runtime.as_ref(), session).await;
+    if operation.is_some() {
+        let replay = post().send().await.unwrap();
+        assert_eq!(replay.status(), StatusCode::OK);
+        let replay: serde_json::Value = replay.json().await.unwrap();
+        assert_eq!(replay["request"], request);
+        assert_eq!(replay["trace_id"], trace);
+        assert_eq!(replay["text"], TEXT);
+    }
+    let history = client
+        .get(format!("http://{address}/v1/sessions/{session}/turns"))
+        .bearer_auth(TOKEN)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(history.status(), StatusCode::OK);
+    let history: serde_json::Value = history.json().await.unwrap();
+    let turns = history["turns"].as_array().unwrap();
+    assert_eq!(turns.len(), 1);
+    assert_eq!(turns[0]["state"], "completed");
+    assert_eq!(turns[0]["request"], request);
+    assert_eq!(turns[0]["trace_id"], trace);
+    assert_eq!(turns[0]["text"], TEXT);
+    assert_eq!(transcript(runtime.as_ref(), session).await, after);
+    assert_eq!(provider.call_count(), 1);
+    server.abort();
+    let _ = server.await;
 }

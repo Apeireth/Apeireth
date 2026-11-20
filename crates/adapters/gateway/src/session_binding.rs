@@ -41,6 +41,8 @@ use crate::domain_context::DomainContext;
 use crate::error_frame::{ErrorCode, ErrorEnvelope, ErrorFrame};
 use crate::panels::GatewayState;
 
+pub(crate) mod contact_session;
+
 /// 会话绑定审计事件名 (allow / deny 共用一条事件, 动作词区分)。
 pub const SESSION_BINDING_AUDIT_EVENT: &str = "gateway.session_binding_action";
 /// 审计动作词：新建绑定。
@@ -892,6 +894,10 @@ fn session_conflict_frame(expected: u64, actual: u64) -> Response {
 pub fn session_binding_routes() -> axum::Router<GatewayState> {
     axum::Router::new()
         .route(
+            contact_session::ROUTE,
+            axum::routing::post(contact_session::open),
+        )
+        .route(
             "/v1/sessions/:session_id/agent-binding",
             axum::routing::get(get_session_binding),
         )
@@ -905,7 +911,10 @@ pub fn session_binding_routes() -> axum::Router<GatewayState> {
 ///
 /// 读面只读会话 ⇒ 恒可用；`bind` 需要联系人/工作区注册表 ⇒ 随注册表装配状态登记；
 /// `unbind` 只清会话上的绑定 ⇒ 恒可用。
-pub fn session_binding_capability_group(registry_installed: bool) -> serde_json::Value {
+pub fn session_binding_capability_group(
+    registry_installed: bool,
+    contact_sessions: bool,
+) -> serde_json::Value {
     serde_json::json!({
         "name": "session_agent_binding",
         "capabilities": [
@@ -932,6 +941,14 @@ pub fn session_binding_capability_group(registry_installed: bool) -> serde_json:
                 &["unbind"],
                 true,
                 true,
+            ),
+            crate::capabilities::cap(
+                "session_agent_binding.open_contact",
+                false,
+                true,
+                &["open"],
+                registry_installed && contact_sessions,
+                registry_installed && contact_sessions,
             ),
         ],
     })

@@ -4,13 +4,15 @@
 Document: docs/status/backend-contracts-20261117.md
 Class: STATUS
 Status: 🟢 活跃
-Last-Modified: 2026-11-19
+Last-Modified: 2026-11-20
 Author: lead
 
 > **用途**：本工作线「做到哪了」的**唯一权威**（`AGENTS.md` §0.2：引用状态只引文件）。
 > 目标形态见[设计稿](../design/backend-contracts-20261117.md)。
 
 ## 一、批次状态（对照设计稿 §批次与验收）
+
+2026-11-20 桌面续接增加空联系人会话立案、原绑定核对与文字回合的期望身份校验。范围为已登记工作区的单操作者，能力投影对权限的映射继续待裁决。 [网关合同 §7i](../gateway-api-contract.md)
 
 | 批次 | 目标 | 四级口径 | 状态 | 证据 |
 |---|---|---|---|---|
