@@ -5,8 +5,8 @@
       "loc": 20404
     },
     "crates/adapters/gateway": {
-      "files": 55,
-      "loc": 27214
+      "files": 58,
+      "loc": 27554
     },
     "crates/adapters/sdk": {
       "files": 22,
