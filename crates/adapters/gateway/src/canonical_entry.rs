@@ -37,9 +37,10 @@ use crate::client_tokens::{
 use crate::error_frame::{ErrorCode, ErrorFrame};
 use crate::events::{events_handler, EventBus, GatewayEvent, RuntimeObservationSink};
 use crate::model_connection as mc;
-use crate::operation_header::operation_request;
 use crate::panels::{panel_routes, GatewayServices, GatewayState, PanelData};
 use crate::runtime_error_map::classify_runtime_error;
+
+mod native_http;
 
 /// Native gateway request. HTTP and CLI transports can both construct it.
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -1341,7 +1342,7 @@ pub fn canonical_router_with_state(state: GatewayState) -> Router {
         .route("/v1/providers", get(list_providers))
         .route("/v1/runtime/snapshot", get(runtime_snapshot))
         .route("/v1/apeireth/runtime/snapshot", get(runtime_snapshot))
-        .route("/v1/chat", post(native_chat))
+        .route("/v1/chat", native_http::route())
         .route("/v1/chat/completions", post(openai_chat))
         .route("/v1/approvals", get(list_pending_approvals))
         .route("/v1/approvals/resolve", post(native_resolve_approval))
@@ -1764,13 +1765,13 @@ fn chat_execution<'a>(
 /// 过滤不丢首帧; 已立案 = 幂等原样。域面未接线 = 不动 (兼容路径零变化)。
 async fn admit_domain_session(
     state: &GatewayState,
-    execution: &DomainChatExecution<'_>,
+    runtime: &Runtime,
     session: SessionId,
 ) -> Result<(), HttpError> {
     if state.domains.is_none() {
         return Ok(());
     }
-    let manager = execution.runtime.sessions();
+    let manager = runtime.sessions();
     let record = manager
         .load_or_create(session)
         .await
@@ -1779,70 +1780,6 @@ async fn admit_domain_session(
         .save(&record)
         .await
         .map_err(|error| http_error(CanonicalEntryError::Runtime(error), Some(session)))
-}
-
-async fn native_chat(
-    State(state): State<GatewayState>,
-    identity: Option<Extension<ClientIdentity>>,
-    user: Option<Extension<UserContext>>,
-    domain: Option<Extension<crate::domain_context::DomainContext>>,
-    headers: axum::http::HeaderMap,
-    Json(request): Json<CanonicalChatRequest>,
-) -> Result<Response, HttpError> {
-    let mut request = request;
-    let execution = match chat_execution(
-        &state,
-        domain.as_ref().map(|Extension(context)| context),
-        "/v1/chat",
-    ) {
-        Ok(execution) => execution,
-        Err(refusal) => return Ok(refusal),
-    };
-    request.model = execution.resolve_model(request.model.take(), hot_model_override(&state));
-    // 输入校验先于会话立案: 400 请求不落空会话 (与 execute 内的校验同一实现)。
-    if let Err(error) = validate_chat_input(&request.input) {
-        return Err(http_error(error, request.session));
-    }
-    let session = request.session.unwrap_or_else(SessionId::new);
-    request.session = Some(session);
-    request.system = execution.seeded_system(request.system.take());
-    // C2-1: 可选的幂等键先解码 (摘要取解析后的 model/system); 非法键在
-    // 会话立案、绑主、入域之前就 400, 不留下副作用。
-    let operation = match operation_request(&headers, &request) {
-        Ok(operation) => operation,
-        Err(error) => return Err(http_error(error, request.session)),
-    };
-    // W3-②: 会话→用户绑定 (首个具名写者), 跨用户审批拒的判定依据。
-    bind_session_owner(&state, session, user.as_ref());
-    // W3-③: 会话入域立案 (域事件过滤面)。
-    admit_domain_session(&state, &execution, session).await?;
-
-    // **主体 → 会话**归属登记（2026-11-01 安全审计 P1 收口）:
-    // episode 维度的「被遗忘权」要成立, 必须能把 episode 归到主体
-    // ⇒ 靠 memory 侧的 `memory_principal_sessions` 映射连接
-    // ⇒ 生产侧原先**无写入方** ⇒ 那一维的被遗忘权无法生效。
-    // 主体 = 域面 `user_id`（人/账户级）；**无 user_id ⇒ 不登记**
-    //（宁可归属不可判定, 也不要错归属 ⇒ 误删风险）。
-    // ⚠️ **旁路**: 写失败 ⇒ 记审计、**不阻断主流程**。
-    if let Err(error) = crate::principal_attribution::record_principal_attribution(
-        &state,
-        identity.as_ref().map(|Extension(identity)| identity),
-        session,
-    ) {
-        eprintln!("[principal-attribution] 归属登记失败 (旁路, 不阻断请求): {error}");
-    }
-    let attribution = attribution_for(&state, identity.as_ref());
-    let outcome = execute_chat_attributed_operation(
-        execution.runtime.as_ref(),
-        request,
-        attribution,
-        operation,
-    )
-    .await;
-    state.observations.flush().await;
-    let outcome = outcome.map_err(|error| http_error(error, Some(session)))?;
-    publish_turn_delta(&state.events, &outcome);
-    Ok(chat_http_response(outcome))
 }
 
 /// Emit the final assistant text as a transport delta. Lifecycle semantics are
@@ -2016,7 +1953,7 @@ async fn openai_chat(
     let model_name = request.model.unwrap_or_default();
     let attribution = attribution_for(&state, identity.as_ref());
     // W3-③: 会话入域立案 (域事件过滤面; 输入校验已过)。
-    admit_domain_session(&state, &execution, session).await?;
+    admit_domain_session(&state, execution.runtime, session).await?;
 
     // True incremental streaming: deltas flow from the provider through the
     // canonical loop to the client as they arrive. Non-streaming providers
