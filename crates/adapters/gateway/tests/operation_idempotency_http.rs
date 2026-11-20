@@ -475,6 +475,15 @@ async fn a_native_stream_stop_uses_the_registered_request_and_wins_the_terminal_
     let request_id = started["request"].as_str().unwrap();
     let gate = provider.gate.as_ref().unwrap();
     timeout(DEADLINE, gate.entered.notified()).await.unwrap();
+    let read_replay = || {
+        Request::get(format!(
+            "/v1/sessions/{session}/requests/{request_id}/stream"
+        ))
+        .body(Body::empty())
+        .unwrap()
+    };
+    let response = router.clone().oneshot(read_replay()).await.unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
     let stop = Request::post(format!("/v1/sessions/{session}/requests/{request_id}/stop"))
         .body(Body::empty())
         .unwrap();
@@ -497,6 +506,8 @@ async fn a_native_stream_stop_uses_the_registered_request_and_wins_the_terminal_
     let mut replay = stream_body(&router, request()).await;
     assert_eq!(next_frame(&mut replay).await.unwrap(), expected);
     assert!(next_frame(&mut replay).await.is_none());
+    let response = router.oneshot(read_replay()).await.unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
     assert_eq!(provider.call_count(), 1);
 }
 

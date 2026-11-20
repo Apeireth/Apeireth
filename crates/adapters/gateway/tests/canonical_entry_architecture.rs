@@ -21,8 +21,8 @@ fn canonical_gateway_entry_delegates_semantics_to_runtime_execute() {
     assert!(
         SERIALIZED_TURN.contains("run_turn_serialized(runtime, turn,")
             && SERIALIZED_TURN.contains("runtime.execute_outcome(turn)")
-            && SERIALIZED_TURN
-                .contains("execute_outcome_streaming(turn.with_request(request), sink)"),
+            && SERIALIZED_TURN.contains("turn.with_request(request).without_stream_replay()")
+            && SERIALIZED_TURN.contains("runtime.execute_outcome_streaming(turn, sink)"),
         "the canonical adapter must enter Runtime::execute_outcome under session serialization"
     );
     assert!(

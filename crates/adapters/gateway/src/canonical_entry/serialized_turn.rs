@@ -92,9 +92,8 @@ pub(super) async fn run_turn_serialized(
         Some(TurnProgress::Callback(sink)) => runtime.execute_outcome_streaming(turn, sink).await,
         Some(TurnProgress::Native(progress)) => {
             let (request, sink) = progress.start(turn.session);
-            runtime
-                .execute_outcome_streaming(turn.with_request(request), sink)
-                .await
+            let turn = turn.with_request(request).without_stream_replay();
+            runtime.execute_outcome_streaming(turn, sink).await
         }
         None => runtime.execute_outcome(turn).await,
     }

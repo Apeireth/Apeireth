@@ -45,6 +45,7 @@ pub struct TurnRequest {
     pub request: Option<RequestId>,
     /// Per-turn tool policy; normal turns advertise tools.
     pub tool_policy: TurnToolPolicy,
+    skip_stream_replay: bool,
 }
 
 impl TurnRequest {
@@ -58,6 +59,7 @@ impl TurnRequest {
             security_context: None,
             request: None,
             tool_policy: TurnToolPolicy::Advertise,
+            skip_stream_replay: false,
         }
     }
 
@@ -86,6 +88,18 @@ impl TurnRequest {
     pub fn with_request(mut self, request: RequestId) -> Self {
         self.request = Some(request);
         self
+    }
+
+    /// Deliver live deltas to the caller without retaining a separate replay
+    /// stream. The explicit request identity still addresses the running turn.
+    #[must_use]
+    pub fn without_stream_replay(mut self) -> Self {
+        self.skip_stream_replay = true;
+        self
+    }
+
+    pub(super) fn stream_replay_enabled(&self) -> bool {
+        !self.skip_stream_replay
     }
 
     /// Run the turn without advertising or executing tools.
