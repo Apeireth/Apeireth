@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::domain_context::DomainContext;
 use crate::panels::GatewayState;
-use crate::{ClientIdentity, GatewayTokenGate};
+use crate::ClientIdentity;
 
 const PATH: &str = "/v1/admin/desktop-capabilities";
 
@@ -102,12 +102,11 @@ fn authorize(
     client: Option<&Extension<ClientIdentity>>,
     domain: Option<&Extension<DomainContext>>,
 ) -> Result<Arc<dyn DesktopCapabilityService>, Response> {
-    if !crate::model_connection::is_managed_single_operator(state)
-        || domain.is_some_and(|Extension(domain)| domain.is_non_default())
-        || !client.is_some_and(|Extension(identity)| {
-            identity.authenticated && identity.client == GatewayTokenGate::ENV_FACE_CLIENT_NAME
-        })
-    {
+    if !crate::model_connection::is_authenticated_managed_operator(
+        state,
+        client.map(|extension| &extension.0),
+        domain.map(|extension| &extension.0),
+    ) {
         return Err(error(
             StatusCode::FORBIDDEN,
             "single_operator_required",

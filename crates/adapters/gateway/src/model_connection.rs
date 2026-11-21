@@ -12,7 +12,9 @@ use axum::routing::get;
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 
+use crate::domain_context::DomainContext;
 use crate::panels::GatewayState;
+use crate::{ClientIdentity, GatewayTokenGate};
 
 /// Secret-free configuration and credential availability, never connectivity.
 #[derive(Clone, Debug, Serialize)]
@@ -131,6 +133,18 @@ pub(crate) fn is_managed_single_operator(state: &GatewayState) -> bool {
             .is_some_and(|token| token.len() >= 32)
         && state.client_tokens.is_empty()
         && state.user_access.table() == managed_operator_access().table()
+}
+
+pub(crate) fn is_authenticated_managed_operator(
+    state: &GatewayState,
+    client: Option<&ClientIdentity>,
+    domain: Option<&DomainContext>,
+) -> bool {
+    is_managed_single_operator(state)
+        && !domain.is_some_and(DomainContext::is_non_default)
+        && client.is_some_and(|identity| {
+            identity.authenticated && identity.client == GatewayTokenGate::ENV_FACE_CLIENT_NAME
+        })
 }
 
 fn failure(error: ModelConnectionError) -> Response {

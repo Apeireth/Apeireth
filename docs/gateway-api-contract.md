@@ -41,6 +41,25 @@
 `restart_required` 表示保存值与本次装配不同，正常重开后重新核对。现有任务继续沿用当前运行时。
 配置文件 `desktop-capabilities.json` 仅由受管桌面后端加载，使用版本校验与原子写入。
 
+## 受管桌面网页阅读
+
+`POST /v1/admin/desktop-web-reader` 接收 `{"url":"https://example.org/article"}`。
+只接受默认域的认证受管桌面操作者。明确发起读取后，后端用 GET 获取公开 HTTPS 正文。
+地址上限为 4096 UTF‑8 字节。每一跳独立核验公网地址和 443 端口，DNS 地址通过校验后用于实际连接。
+读取不带用户 Cookie、凭据或自定义头，最多四次重定向、8 秒及 512 KiB 响应体。每个网关一次处理一个读取。
+响应接受 UTF‑8 的 HTML、XHTML 和纯文本，不执行网页脚本，也不请求图片、样式或内嵌页面。
+
+成功返回 `{schema_version:1,page:{source_origin,title,text,content_kind,truncated}}`。
+`source_origin` 是最终站点源，`title` 可为 null，`content_kind` 为 `html` 或 `text`。
+标题上限 512 UTF‑8 字节，正文上限 64 KiB，正文截断由 `truncated` 标记。
+结果带 `Cache-Control: no-store` 和 `X-Content-Type-Options: nosniff`。
+读取不会写入会话、记忆或项目。
+
+错误为 400 `invalid_request` 或 `invalid_url`、403 `single_operator_required` 或
+`web_destination_denied`、413 `reader_request_too_large` 或 `web_page_too_large`、
+415 `web_page_unsupported`、422 `web_page_empty`、429 `web_reader_busy`、
+502 `web_upstream_unavailable`、504 `web_read_timeout`，并沿用网关的令牌与角色拒绝。
+
 ## §1 通用约定
 
 - Base URL:`http://127.0.0.1:{port}`(port 由桌面壳为 sidecar 动态分配;手动运行时默认 8080)
