@@ -474,14 +474,6 @@ pub fn is_valid_server_name(name: &str) -> bool {
     chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '-')
 }
 
-/// Whether `raw` is an absolute http(s) URL.
-pub fn is_http_url(raw: &str) -> bool {
-    match url::Url::parse(raw) {
-        Ok(url) => matches!(url.scheme(), "http" | "https") && url.host_str().is_some(),
-        Err(_) => false,
-    }
-}
-
 pub(super) fn remote_target(raw: &str) -> Option<(url::Url, EgressDestination)> {
     let url = url::Url::parse(raw).ok()?;
     let destination = EgressDestination::parse(&url).ok()?;
