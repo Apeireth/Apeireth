@@ -3057,6 +3057,8 @@ pub async fn dispatch_gateway_serve_with(
     // 拒开; 逃生阀与令牌表互斥拒开; 非回环绑定必须有可校验令牌 (逃生阀
     // `none` = 操作者明示自担, 放行但留审计)。
     let gate = apeireth_gateway::GatewayTokenGate::from_env();
+    let native_folder_grant_token =
+        crate::contract_panels::take_native_folder_grant_token(bind, &gate)?;
     let data_dir = default_panel_data_dir();
     let client_tokens = apeireth_gateway::ClientTokenTable::load(Some(&data_dir))
         .map_err(|error| format!("client token configuration refused to open: {error}"))?;
@@ -3211,7 +3213,7 @@ pub async fn dispatch_gateway_serve_with(
     } else {
         None
     };
-    crate::contract_panels::wire_workspace_panel(&mut services)?;
+    crate::contract_panels::wire_workspace_panel(&mut services, native_folder_grant_token)?;
     crate::contact_panel::wire_contacts(&mut services, default_panel_data_dir())?;
     // W2-②: 客户端令牌表 (令牌族第二面) 显式注入; 远程绑定闸与 TLS 接口桩的
     // 清场事实随装配进审计面 (逃生阀可裸奔, 但必须留痕)。

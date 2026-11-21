@@ -756,6 +756,7 @@ pub fn panel_admin_face(endpoint: &str) -> bool {
 pub fn panel_routes() -> Router<GatewayState> {
     Router::new()
         .route("/v1/panel/sessions", get(list_sessions))
+        .merge(crate::workspace_panel::folder_grant_routes())
         .route("/v1/panel/traces", get(list_traces))
         .route("/v1/panel/traces/:trace_id", get(trace_detail))
         .route("/v1/tools/list", get(list_tools))

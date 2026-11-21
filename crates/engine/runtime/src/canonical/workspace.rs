@@ -75,8 +75,12 @@ use parking_lot::Mutex;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
 
+mod desktop_folder_grants;
 mod desktop_roots;
 
+pub use desktop_folder_grants::{
+    DesktopFolderIdentity, DESKTOP_FOLDER_LEASE_SECONDS, DESKTOP_GRANTED_WORKSPACE_SOURCE,
+};
 pub use desktop_roots::DESKTOP_MANAGED_WORKSPACE_SOURCE;
 
 /// Longest permitted safe root display, in bytes.
@@ -608,7 +612,18 @@ pub trait WorkspaceRegistry: Send + Sync {
         Err(desktop_roots::desktop_workspace_required())
     }
 
-    /// Runs a synchronous operation with the live isolated desktop root and current scope.
+    /// Record a Windows folder selected by the authenticated native host.
+    fn grant_desktop_folder(
+        &self,
+        _display_name: &str,
+        _directory: &Path,
+        _identity: &DesktopFolderIdentity,
+        _now_ms: u64,
+    ) -> Result<Workspace, WorkspaceError> {
+        Err(desktop_folder_grants::folder_grant_unavailable())
+    }
+
+    /// Runs a synchronous operation with a verified desktop root and current scope.
     /// The operation is serialized against revision changes and must not re-enter the registry.
     fn with_desktop_workspace_root(
         &self,
@@ -1128,6 +1143,7 @@ pub struct FileWorkspaceRegistry {
     root: PathBuf,
     workspaces_dir: PathBuf,
     inner: Mutex<RegistryInner>,
+    desktop_folder_leases: Mutex<desktop_folder_grants::DesktopFolderLeases>,
 }
 
 impl FileWorkspaceRegistry {
@@ -1192,6 +1208,7 @@ impl FileWorkspaceRegistry {
             root,
             workspaces_dir,
             inner: Mutex::new(inner),
+            desktop_folder_leases: Mutex::default(),
         })
     }
 
@@ -1311,15 +1328,24 @@ impl FileWorkspaceRegistry {
 
 impl WorkspaceRegistry for FileWorkspaceRegistry {
     fn list(&self) -> Vec<Workspace> {
-        self.inner.lock().workspaces.values().cloned().collect()
+        let mut workspaces: Vec<_> = self.inner.lock().workspaces.values().cloned().collect();
+        for workspace in &mut workspaces {
+            self.project_folder_grant_availability(workspace);
+        }
+        workspaces
     }
 
     fn get(&self, workspace_id: &WorkspaceId) -> Option<Workspace> {
-        self.inner.lock().workspaces.get(workspace_id).cloned()
+        let mut workspace = self.inner.lock().workspaces.get(workspace_id).cloned()?;
+        self.project_folder_grant_availability(&mut workspace);
+        Some(workspace)
     }
 
     fn current_selection(&self) -> Option<WorkspaceId> {
-        self.inner.lock().selected
+        let selected = self.inner.lock().selected?;
+        self.get(&selected)
+            .filter(|workspace| !workspace.is_desktop_folder_grant() || workspace.can_select)
+            .map(|_| selected)
     }
 
     fn create(&self, request: WorkspaceCreateRequest) -> Result<Workspace, WorkspaceError> {
@@ -1357,6 +1383,16 @@ impl WorkspaceRegistry for FileWorkspaceRegistry {
         now_ms: u64,
     ) -> Result<Workspace, WorkspaceError> {
         self.provision_desktop_workspace(display_name, permission_scope, now_ms)
+    }
+
+    fn grant_desktop_folder(
+        &self,
+        display_name: &str,
+        directory: &Path,
+        identity: &DesktopFolderIdentity,
+        now_ms: u64,
+    ) -> Result<Workspace, WorkspaceError> {
+        self.provision_desktop_folder_grant(display_name, directory, identity, now_ms)
     }
 
     fn with_desktop_workspace_root(
@@ -1399,6 +1435,7 @@ impl WorkspaceRegistry for FileWorkspaceRegistry {
             .get(workspace_id)
             .expect("checked above")
             .clone();
+        self.require_live_folder_grant(&workspace)?;
         // The selection is a registry-level fact: it is written down before the
         // in-memory state moves, so a failed write leaves it as it was.
         self.write_selection(Some(*workspace_id))?;
@@ -1414,6 +1451,7 @@ impl WorkspaceRegistry for FileWorkspaceRegistry {
         now_ms: u64,
     ) -> Result<Workspace, WorkspaceError> {
         let next = self.mutate_workspace(workspace_id, expected_revision, |workspace| {
+            workspace.require_regular_root()?;
             workspace.apply_permission_scope(permission_scope, now_ms);
             Ok(())
         })?;
@@ -1429,6 +1467,7 @@ impl WorkspaceRegistry for FileWorkspaceRegistry {
         now_ms: u64,
     ) -> Result<Workspace, WorkspaceError> {
         let next = self.mutate_workspace(workspace_id, expected_revision, |workspace| {
+            workspace.require_regular_root()?;
             workspace.rebind_root(root, now_ms);
             Ok(())
         })?;
@@ -1447,6 +1486,7 @@ impl WorkspaceRegistry for FileWorkspaceRegistry {
             Ok(())
         })?;
         self.commit(next.clone());
+        self.desktop_folder_leases.lock().remove(workspace_id);
         // A revoked workspace must not stay the current selection. The
         // revocation itself is already durable at this point, so a failure to
         // clear the selection is reported as a storage error *after* the fact —
@@ -1475,6 +1515,7 @@ impl WorkspaceRegistry for FileWorkspaceRegistry {
         if current.is_revoked() {
             return Err(WorkspaceError::Revoked);
         }
+        self.require_live_folder_grant(&current)?;
         Ok(current)
     }
 
@@ -1483,7 +1524,11 @@ impl WorkspaceRegistry for FileWorkspaceRegistry {
             .lock()
             .workspaces
             .values()
-            .find(|workspace| workspace.root == root && !workspace.is_revoked())
+            .find(|workspace| {
+                workspace.root == root
+                    && !workspace.is_revoked()
+                    && !workspace.is_desktop_folder_grant()
+            })
             .cloned()
     }
 }

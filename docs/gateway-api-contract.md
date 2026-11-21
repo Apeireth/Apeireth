@@ -504,6 +504,15 @@ bounded-context 端口)、组合根适配 `crates/adapters/cli/src/gateway_panel
   `desktop_managed`，`root_display` 为目录叶子名。该模式要求 `root_kind: "managed"`，
   `permission_scope` 接受 `read`（默认）或 `approval_write`（写入仍需批准）。
   关闭工作区会吊销登记并保留文件。旧版网关按未知字段返回 400，客户端应如实报告创建失败。
+- **已有目录临时授权**：配套 Windows 原生桌面用系统选择器确认后，可从受管进程调用
+  `GET/POST /v1/admin/desktop-folder-grants`。探测和发放均要求受管回环单操作者的
+  Bearer 凭据及原生宿主从继承管道交给后端的独立凭据。浏览器来源和通用建工作区端点
+  不能提交绝对路径。发放时比对原生选择和后端打开的目录句柄身份，返回标准
+  `WorkspaceDto`，其中 `source=desktop_temporary`、`root_kind=temporary`、
+  `permission_scope=read`、`expires_at` 为 epoch 毫秒。列表优先展示仍有效的临时授权。
+  租约最长 30 分钟并随当前运行时退出失效。每次使用核对权限、到期时间、修订和目录身份，
+  `/v1/workspace-chat` 对应会话只暴露根目录里的 UTF-8 文本读取。按原修订关闭后保留目录和文件。
+  重启或到期后读回记录为 `unavailable`，显式撤销记录为 `revoked`。
 - **读面不泄露根路径**: `root_display` 只含**叶子名**(无父目录/盘符/分隔符),
   响应体里没有绝对根路径;宿主若交回不安全的展示名, 网关 500 `internal`
   且**不回显该值**(宁拒不宽)。

@@ -45,6 +45,11 @@ use crate::domain_context::DomainContext;
 use crate::error_frame::{ErrorCode, ErrorEnvelope, ErrorFrame};
 use crate::panels::GatewayState;
 
+mod folder_grants;
+
+pub(crate) use folder_grants::routes as folder_grant_routes;
+pub use folder_grants::{NativeFolderGrant, NativeFolderGrantToken};
+
 /// Audit event name for every workspace action (create / select / close / deny).
 pub const WORKSPACE_AUDIT_EVENT: &str = "gateway.workspace_action";
 
@@ -232,8 +237,8 @@ impl WorkspacePanelError {
 
 /// The bounded-context port the composition root implements.
 ///
-/// The port speaks DTOs, never domain rows: the gateway therefore has no field
-/// that could carry an absolute root path.
+/// All read surfaces speak only DTOs. The native folder grant command is the
+/// only port input that can carry a selected absolute directory.
 #[async_trait]
 pub trait WorkspacePanel: Send + Sync {
     /// List the bounded set of workspaces the host knows about.
@@ -254,6 +259,21 @@ pub trait WorkspacePanel: Send + Sync {
     ) -> Result<WorkspaceDto, WorkspacePanelError> {
         Err(WorkspacePanelError::InvalidRequest {
             reason: "宿主未装配独立工作区目录".to_string(),
+        })
+    }
+
+    /// Proof configured by the paired native launcher for this gateway process.
+    fn native_folder_grant_token(&self) -> Option<&NativeFolderGrantToken> {
+        None
+    }
+
+    /// Register a native-selected directory after the gateway verifies its launcher proof.
+    async fn grant_native_folder(
+        &self,
+        _request: NativeFolderGrant,
+    ) -> Result<WorkspaceDto, WorkspacePanelError> {
+        Err(WorkspacePanelError::InvalidRequest {
+            reason: "宿主未装配临时目录授权。".to_string(),
         })
     }
 
@@ -358,10 +378,13 @@ pub async fn list_workspaces(
         }
         Some(limit) => limit,
     };
-    let rows = match panel.list_workspaces().await {
+    let mut rows = match panel.list_workspaces().await {
         Ok(rows) => rows,
         Err(reason) => return crate::panels::panel_error(reason),
     };
+    // The bounded desktop catalog must still carry all currently usable short leases.
+    // Keep the ordinary rows in their registry order within the remaining budget.
+    rows.sort_by_key(|row| !folder_grants::is_live_temporary(row));
     let mut workspaces = Vec::with_capacity(rows.len().min(limit));
     for row in rows.into_iter().take(limit) {
         match guard_workspace_dto(row) {
@@ -411,14 +434,7 @@ pub async fn create_workspace(
     };
     let client_label = identity_label(client.as_ref());
     if request.root_provisioning.is_some()
-        && !(crate::model_connection::is_managed_single_operator(&state)
-            && !domain
-                .as_ref()
-                .is_some_and(|Extension(domain)| domain.is_non_default())
-            && client.as_ref().is_some_and(|Extension(identity)| {
-                identity.authenticated
-                    && identity.client == crate::GatewayTokenGate::ENV_FACE_CLIENT_NAME
-            }))
+        && !managed_workspace_operator(&state, client.as_ref(), domain.as_ref())
     {
         record_workspace_audit(
             &state,
@@ -487,6 +503,19 @@ pub async fn create_workspace(
             error.into_response()
         }
     }
+}
+
+fn managed_workspace_operator(
+    state: &GatewayState,
+    client: Option<&Extension<ClientIdentity>>,
+    domain: Option<&Extension<DomainContext>>,
+) -> bool {
+    crate::model_connection::is_managed_single_operator(state)
+        && !domain.is_some_and(|Extension(domain)| domain.is_non_default())
+        && client.is_some_and(|Extension(identity)| {
+            identity.authenticated
+                && identity.client == crate::GatewayTokenGate::ENV_FACE_CLIENT_NAME
+        })
 }
 
 /// `POST /v1/workspaces/{workspace_id}/select` — select one workspace.

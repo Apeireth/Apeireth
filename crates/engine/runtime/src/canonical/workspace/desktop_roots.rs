@@ -153,9 +153,14 @@ impl FileWorkspaceRegistry {
         storage_atomic::with_file_lock(&lock, || {
             let workspace = self.read_workspace_from_disk(workspace_id)?;
             check_mutable_workspace(&workspace, expected_revision)?;
-            if workspace.workspace_id != *workspace_id
-                || workspace.status != WorkspaceStatus::Ready
-                || workspace.root_kind != WorkspaceRootKind::Managed
+            if workspace.workspace_id != *workspace_id || workspace.status != WorkspaceStatus::Ready
+            {
+                return Err(desktop_workspace_required());
+            }
+            if workspace.is_desktop_folder_grant() {
+                return self.access_granted_desktop_folder(&workspace, operation);
+            }
+            if workspace.root_kind != WorkspaceRootKind::Managed
                 || workspace.source != DESKTOP_MANAGED_WORKSPACE_SOURCE
                 || workspace.permission_scope == WorkspacePermissionScope::Write
             {
