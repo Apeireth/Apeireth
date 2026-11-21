@@ -3,7 +3,7 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: d4284c3ea0aea6c443fe85eb0f2cdd4277f8c9c72befc5fec57baec9c708e984
+claims_sha256: a7657ffad84544348af88517ce7ed6b0bb5e2f88f0bbe43d223ca99b4403462b
 claims_total: 63
 items:
   - id: "rt.provider_router"
@@ -208,6 +208,7 @@ items:
         - "crates/engine/runtime/src/canonical/provider.rs"
         - "crates/engine/runtime/src/canonical/runtime.rs"
         - "crates/engine/runtime-assembly/src/egress_gate.rs"
+        - "crates/engine/runtime-assembly/src/canonical/production.rs"
         - "crates/engine/runtime-assembly/src/egress_ledger.rs"
         - "crates/engine/runtime-assembly/src/accountability.rs"
         - "crates/engine/runtime-assembly/src/notification_duty.rs"
@@ -224,6 +225,7 @@ items:
         - "crates/capabilities/tools/src/accountability_view.rs"
         - "crates/engine/runtime-assembly/src/accountability.rs"
         - "crates/engine/runtime-assembly/src/accountability_probe.rs"
+        - "crates/engine/runtime-assembly/src/canonical/production.rs"
         - "crates/engine/runtime-assembly/src/consequence.rs"
         - "crates/engine/runtime-assembly/src/egress_gate.rs"
         - "crates/engine/runtime-assembly/src/egress_ledger.rs"
@@ -232,7 +234,7 @@ items:
         - "crates/engine/runtime/src/canonical/provider.rs"
         - "crates/engine/runtime/src/canonical/runtime.rs"
         - "crates/foundation/governance/src/authorization.rs"
-    default_enabled: false
+    default_enabled: true
     validated:
       tests:
         - "crates/engine/runtime/src/canonical/provider/compat_tests.rs"
@@ -328,7 +330,7 @@ items:
     gaps:
       []
   - id: "sec.gateway_tls"
-    capability: "Gateway TLS 真接线（PEM 真加载 fail-closed + TLS listener + 三态状态面）"
+    capability: "Gateway TLS（非回环监听强制令牌及 TLS；回环按配置启用）"
     implemented:
       sources:
         - "crates/adapters/gateway/src/remote_access.rs"
@@ -345,11 +347,12 @@ items:
     validated:
       tests:
         - "crates/adapters/gateway/tests/tls_serve.rs"
+        - "crates/adapters/cli/tests/remote_access_e2e.rs"
       claims_id: "sec.gateway_tls"
     gaps:
       []
   - id: "sec.storage_envelope_crypto"
-    capability: "会话/记忆静态信封加密 + 备份恢复（B6 库级 + B6-2a sessions.data 试点）"
+    capability: "会话与已提交操作证据静态封缄（显式开启，事务迁移与密钥探针）"
     implemented:
       sources:
         - "crates/engine/storage/src/crypto/mod.rs"
@@ -462,20 +465,25 @@ items:
     gaps:
       - "未找到生产引用（待核）"
   - id: "rel.release_asset_verify"
-    capability: "发布资产校验脚本（SHA-256 + 签名状态如实报，B8）"
+    capability: "发布资产完整性与验签（Windows Authenticode 门禁与独立 Sigstore 信封）"
     implemented:
       sources:
         - "scripts/verify-release-assets.ps1"
         - ".github/workflows/publish-release.yml"
+        - ".github/workflows/cosign.yml"
+        - "scripts/release/cosign-sign-all.sh"
+        - "scripts/release/cosign-verify.sh"
         - "docs/packaging/release-asset-verification.md"
         - "docs/04-internal/backend-enhancement/B8-release-signing-2026-10-19.md"
     wired:
       production_refs:
+        - ".github/workflows/cosign.yml"
         - ".github/workflows/publish-release.yml"
     default_enabled: "n/a"
     validated:
       tests:
         - "scripts/test_verify_release_assets.py"
+        - "scripts/test_cosign_release.py"
       claims_id: "rel.release_asset_verify"
     gaps:
       []
@@ -501,7 +509,7 @@ items:
     gaps:
       []
   - id: "sec.credential_endpoint_binding"
-    capability: "凭据 ↔ 端点绑定（凭据只发往 audience ∪ 显式绑定内的端点；运行时换端点默认拒绝）"
+    capability: "凭据与端点绑定（单请求快照；显式绑定为该凭据的允许范围）"
     implemented:
       sources:
         - "crates/engine/provider/src/endpoint_binding.rs"
@@ -510,6 +518,8 @@ items:
         - "crates/engine/provider/src/canonical_openai_compatible.rs"
         - "crates/foundation/plugin/src/credentials.rs"
         - "crates/foundation/credentials/src/hot_store.rs"
+        - "crates/foundation/credentials/src/keyring_resolver.rs"
+        - "crates/foundation/credentials/src/credential_record.rs"
         - "crates/adapters/gateway/src/admin.rs"
         - "crates/adapters/cli/src/keyring_bootstrap.rs"
     wired:
@@ -520,7 +530,9 @@ items:
         - "crates/engine/provider/src/canonical_minimax.rs"
         - "crates/engine/provider/src/canonical_openai_compatible.rs"
         - "crates/engine/provider/src/endpoint_binding.rs"
+        - "crates/foundation/credentials/src/credential_record.rs"
         - "crates/foundation/credentials/src/hot_store.rs"
+        - "crates/foundation/credentials/src/keyring_resolver.rs"
         - "crates/foundation/plugin/src/credentials.rs"
     default_enabled: true
     validated:
@@ -528,6 +540,7 @@ items:
         - "crates/engine/provider/tests/endpoint_binding.rs"
         - "crates/adapters/gateway/tests/admin_binding_warning.rs"
         - "crates/adapters/gateway/tests/admin_config.rs"
+        - "crates/adapters/cli/src/keyring_bootstrap.rs"
       claims_id: "sec.credential_endpoint_binding"
     gaps:
       []
