@@ -1,7 +1,7 @@
 # 发布资产校验与签名（来源验证环节）
 
-> **状态（0 装口径，2026-10-20）**：本环节已交付 = **SHA-256 清单校验脚本 + 本文流程**（Windows 实测）；
-> **代码签名证书接入** 与 **可复现构建证明** = **排期待办（未交付）**，见 [§4](#4-已知边界与排期待办)。
+> **状态（2026-11-21）**。Windows 安装包发布强制 SHA-256 清单校验与 Authenticode 验签。
+> 真实签名证书接入、正式发布和可复现构建证明仍需验收，见 [§4](#4-已知边界与排期待办)。
 > 适用面：Windows 发布物（本批实测平台）；其他平台的等价校验见 [§3.4](#34-其他平台与手工等价比对)。
 > 台账与实测记录：[B8-release-signing-2026-10-19.md](../04-internal/backend-enhancement/B8-release-signing-2026-10-19.md)。
 
@@ -27,16 +27,17 @@
 
    ```powershell
    pwsh -File scripts/generate-release-manifest.ps1 -DistDir target/desktop-nsis -Version <tag> -ReleaseTag <tag>
-   pwsh -File scripts/verify-release-assets.ps1 -ArtifactPath <每个 *.exe> -ManifestPath target/desktop-nsis/SHA256SUMS
+   pwsh -File scripts/verify-release-assets.ps1 -ArtifactPath <每个 *.exe> -ManifestPath target/desktop-nsis/SHA256SUMS -RequireSignature
    ```
 
-   哈希全部一致（exit 0）才上传制品并进入发布；任何 FAIL（不一致/缺项）即停。
+   哈希全部一致且每个安装包签名有效时才上传并发布，缺项或验签失败会阻断。
    `SHA256SUMS` 与 `releaseon` 随 Release 一并发布。手工等价命令仍为
    `pwsh -File scripts/verify-release-assets.ps1 -ArtifactPath dist\<产物> -ManifestPath dist\SHA256SUMS`。
 4. **随包发布**：`SHA256SUMS`（与 `releaseon`）与安装包同页发布，供用户侧校验。
    （2026-10-21 起由 `publish-release.yml` 的 `files:` 一并上传。）
-5. **签名步骤（排期待办）**：代码签名证书接入后，在本步对 exe/MSI 签名并把签名
-   状态写入 `releaseon`。**当前发布物未签名，如实标注，不假装**。
+5. **签名证书接入**。在生成清单之前完成安装包签名和时间戳。当前工作流未配置证书或签名步骤，未签名构件无法通过第 3 步。
+
+独立历史包工序使用 `.sigstore.json` 信封。签名与验签使用同一构件和经过复核的公钥，Scoop 清单与作业中实际构建的 ZIP 进行哈希对照。真实运行仍需配置签名材料和仓库公钥。
 
 ## 3. 用户侧（下载 → 校验 → 再安装）
 
@@ -53,7 +54,7 @@ pwsh -File scripts/verify-release-assets.ps1 -ArtifactPath <下载的安装包> 
 
 输出逐件报告三样事实：**期望哈希 / 实算哈希 / 签名状态**。看结论行即可：
 
-- `RESULT: PASS` — 哈希与官方清单一致；签名状态照实显示（当前发布物显示「未签名」属常态，如实记载）；
+- `RESULT: PASS` — 哈希与官方清单一致。未使用 `-RequireSignature` 时，旧版发布物可能显示未签名。
 - `RESULT: FAIL` — 哈希不一致、清单缺项或门槛未过，**不要安装**；
 - 想把「必须有有效签名」当硬门槛：加 `-RequireSignature`（签名非有效即失败）。
 
@@ -81,7 +82,7 @@ Linux / macOS 用 `sha256sum -c SHA256SUMS`（或 `shasum -a 256`）比对同一
 | 代码签名证书接入 | **排期待办（未交付）** | owner 决策（证书采购/托管/时间戳服务），登记不实施 |
 | 可复现构建证明 | **排期待办（未交付）** | 哈希只证明「文件=清单」；「二进制←源码提交」的证明链未建立 |
 | 其他平台校验链 | **未实测** | 本批只在 Windows 实测；Linux/macOS 命令按 §3.4 等价，未跑过不称已验证 |
-| 发布流水线自动校验 | **已接线（2026-10-21）**：`publish-release.yml` Windows job 构建后生成 `SHA256SUMS`/`releaseon` 并逐件校验，exit 0 才上传/发布；清单随 Release 发布 | 远程 CI 首跑未实测（需 tag 触发）；本地脚本正反两路 smoke 实测通过；是否把 claim 从 IMPLEMENTED 抬到 PRODUCTION WIRED 由效率线按 `docs/status/claims.yaml` 口径裁定 |
+| 发布流水线自动校验 | `publish-release.yml` 要求 Windows 安装包哈希匹配并通过 Authenticode 才进入上传和发布。 | 本地合成校验通过，真实远端签名发布未验证。 |
 
 ## 5. 关联材料
 
