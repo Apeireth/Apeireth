@@ -60,6 +60,20 @@
 415 `web_page_unsupported`、422 `web_page_empty`、429 `web_reader_busy`、
 502 `web_upstream_unavailable`、504 `web_read_timeout`，并沿用网关的令牌与角色拒绝。
 
+## 会话上一次提供方请求的上下文
+
+`GET /v1/sessions/{session_id}/provider-context` 沿用会话历史的鉴权、归属和域约束。
+不接受查询参数。会话不存在或不可见时返回 404。
+成功返回 `{schema:1,session,provider_request}`。有观测记录时
+`provider_request` 为 `{request,trace_id,provider,model,input_tokens,context_window}`，
+与原回合请求和执行跟踪关联。字段仅描述该会话上一次有记录的单次提供方调用。
+
+`input_tokens` 取提供方为本次请求明确返回、可无损转换的正整数，目前从 OpenAI 兼容返回格式读取
+`usage.prompt_tokens`。缺失、零值或溢出返回 null。
+`context_window` 来自同一提供方为实际模型声明的窗口。缺省、换用未匹配的模型或仅有通用路由下界时为 null。
+新请求发起后，旧观测失效。新请求没有可确认结果时 `provider_request` 为 null，旧会话没有此字段时同样返回 null。
+该读面不会估算待发送草稿，响应标记为 `no-store`。
+
 ## §1 通用约定
 
 - Base URL:`http://127.0.0.1:{port}`(port 由桌面壳为 sidecar 动态分配;手动运行时默认 8080)

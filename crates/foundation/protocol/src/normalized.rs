@@ -587,7 +587,29 @@ pub struct NormalizedResponse {
     pub raw_metadata: serde_json::Map<String, serde_json::Value>,
 }
 
+const PROVIDER_CONTEXT_INPUT_KEY: &str = "apeireth.provider_context_input_tokens";
+
 impl NormalizedResponse {
+    /// Record the exact provider-reported context input for this response.
+    /// Keep missing, zero and overflowing reports distinct from legacy accounting counts.
+    #[must_use]
+    pub fn with_provider_context_input(mut self, reported: Option<u64>) -> Self {
+        self.raw_metadata.remove(PROVIDER_CONTEXT_INPUT_KEY);
+        if let Some(tokens) = reported.and_then(context_input_tokens) {
+            self.raw_metadata
+                .insert(PROVIDER_CONTEXT_INPUT_KEY.into(), tokens.into());
+        }
+        self
+    }
+
+    /// Positive, losslessly decoded context input reported by the provider adapter.
+    pub fn provider_context_input(&self) -> Option<u32> {
+        self.raw_metadata
+            .get(PROVIDER_CONTEXT_INPUT_KEY)
+            .and_then(serde_json::Value::as_u64)
+            .and_then(context_input_tokens)
+    }
+
     /// 创建简单响应
     pub fn text(
         id: impl Into<String>,
@@ -604,6 +626,10 @@ impl NormalizedResponse {
             raw_metadata: serde_json::Map::new(),
         }
     }
+}
+
+fn context_input_tokens(value: u64) -> Option<u32> {
+    u32::try_from(value).ok().filter(|tokens| *tokens > 0)
 }
 
 #[cfg(test)]

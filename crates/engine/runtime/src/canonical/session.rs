@@ -36,6 +36,7 @@ use super::event_log::{
     SurfaceOp, SurfaceView,
 };
 use super::project_workspace::ProjectWorkspaceBinding;
+pub use super::provider_request_context::ProviderRequestContext;
 
 /// Session-level permission posture applied to subsequent turns.
 ///
@@ -124,6 +125,8 @@ pub struct Session {
     /// The exact workspace revision attached when opening a project session.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     project_workspace: Option<ProjectWorkspaceBinding>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) last_provider_request: Option<ProviderRequestContext>,
     /// Durable session-scoped settings (model override + permission preset).
     ///
     /// `#[serde(default)]` is the on-disk migration path: sessions persisted
@@ -192,6 +195,7 @@ impl Session {
             authorization_epoch: None,
             agent_binding: None,
             project_workspace: None,
+            last_provider_request: None,
             messages: Vec::new(),
             events: Vec::new(),
             log: Vec::new(),
@@ -212,6 +216,11 @@ impl Session {
     /// default-domain path.
     pub fn agent_binding(&self) -> Option<&AgentBinding> {
         self.agent_binding.as_ref()
+    }
+
+    /// Most recent completed provider exchange for this session's own work.
+    pub fn last_provider_request(&self) -> Option<&ProviderRequestContext> {
+        self.last_provider_request.as_ref()
     }
 
     /// The durable workspace authorization identity for an ordinary project session.
@@ -608,6 +617,8 @@ struct SessionRepr {
     #[serde(default)]
     project_workspace: Option<ProjectWorkspaceBinding>,
     #[serde(default)]
+    last_provider_request: Option<ProviderRequestContext>,
+    #[serde(default)]
     settings: SessionSettings,
     #[serde(default)]
     quota: CognitiveQuota,
@@ -633,6 +644,7 @@ impl From<SessionRepr> for Session {
             authorization_epoch: repr.authorization_epoch,
             agent_binding: repr.agent_binding,
             project_workspace: repr.project_workspace,
+            last_provider_request: repr.last_provider_request,
             settings: repr.settings,
             quota: repr.quota,
             messages: repr.messages,

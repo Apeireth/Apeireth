@@ -50,6 +50,7 @@
 
 use std::sync::Arc;
 
+use super::provider_request_context::{remote_completion, ProviderRequestContext};
 use apeireth_core::kernel::{ApprovalId, CapabilityId, RequestId, SessionId, Timestamp, TraceId};
 use apeireth_governance::{verify_action_binding, BindingMismatchAudit};
 use apeireth_governance::{Action, Decision, GovernanceRequest, TurnSecurityContext};
@@ -1670,6 +1671,7 @@ impl Runtime {
                     }
                     let provider_request =
                         NormalizedRequest::new(continuation.model.clone(), provider_messages);
+                    self.clear_provider_request(&mut session).await?;
                     let attempt = self
                         .route_completion(
                             &provider_request,
@@ -1767,6 +1769,8 @@ impl Runtime {
                     );
                 }
 
+                session.last_provider_request =
+                    ProviderRequestContext::observed(&routed, request_id, trace_id);
                 let mut response = routed.response;
                 if let Some(task) = &self.task {
                     task.observe(&response);
@@ -3079,11 +3083,7 @@ impl Runtime {
                         sink(response.content.clone());
                     }
                 }
-                Ok(super::provider::RoutedCompletion {
-                    served_by: desc.capability,
-                    response,
-                    failed_attempts: Vec::new(),
-                })
+                Ok(remote_completion(desc, response, &request.model))
             }
             ModelRouteResolution::Ambiguous { candidates } => {
                 Err(RuntimeError::AmbiguousModelRoute {
