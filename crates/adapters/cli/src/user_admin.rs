@@ -16,6 +16,10 @@
 //! 管理面失守); 表非空后一切管理动作都要 owner 令牌。破坏性不变量: 最后一个
 //! owner 不可删除/降级 ([`apeireth_governance::UserTable`] 拒)。
 //!
+//! 删户是「五账遗忘 + users.json 删除」同一合同：先做用户表预检，再按该用户
+//! 实际域选择权威 `cognitive.sqlite3`；库缺席、归属不可判定、任一账未确认清空
+//! 都保留账号供重试。非默认域绝不拿默认库代跑。
+//!
 //! 发令牌序 (问责链不得断, 落盘前过 `validate_client_user_bindings`): 令牌条目
 //! 声明 `user_id` 的, **先建用户再写绑定**; 删用户前**先摘令牌绑定** —— 悬空/
 //! 名实不符的绑定会让管理动作拒开 (网关侧同一把闸: 装载期拒开)。
@@ -24,23 +28,41 @@
 //! 与退出码, 不伪造 `gateway.user_action` 审计行 (那是网关角色门的面)。
 
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
+use apeireth_core::user_domain::{DomainRegistry, DomainUserId, UserDomainError};
+use apeireth_gateway::user_admin::{GovernedUserRemovalPlan, PrincipalForgetAttempt};
+use apeireth_gateway::PrincipalForgetDto;
 use apeireth_gateway::{
     resolve_user_identity, ClientTokenTable, GateVerdict, GatewayTokenGate, UserAdminService,
 };
 use apeireth_governance::{UserCapability, UserIdentity, UserTable};
+use apeireth_memory::{MemoryGovernanceStore, SqliteMemoryStore};
 
 /// `apeireth user` 的用法行 (错误帧随行, 帮助面同源)。
 const USAGE: &str = "Usage:\n  apeireth user add --user-id ID --role owner|member|guest [--clients NAME[,NAME...]] [--domain DOMAIN] [--token TOKEN]\n  apeireth user list [--token TOKEN]\n  apeireth user role --user-id ID --role owner|member|guest [--token TOKEN]\n  apeireth user remove --user-id ID [--token TOKEN]";
 
 /// 在默认数据目录 (`APEIRETH_DATA_DIR` / `~/.apeireth`) 执行管理命令。
 pub fn run_user_admin(args: &[String]) -> Result<String, String> {
-    run_user_admin_at(&crate::default_panel_data_dir(), args)
+    run_user_admin_with_paths(
+        &crate::default_panel_data_dir(),
+        &crate::cognitive_db_path(),
+        args,
+    )
 }
 
 /// 在指定数据目录执行管理命令 (测试与运维同入口)。
 pub fn run_user_admin_at(data_dir: &Path, args: &[String]) -> Result<String, String> {
+    run_user_admin_with_paths(data_dir, &data_dir.join("cognitive.sqlite3"), args)
+}
+
+/// 用户管理实现。`default_memory_db` 显式注入，确保生产遵守
+/// `APEIRETH_COGNITIVE_DB`，测试也只触碰自己的临时目录。
+fn run_user_admin_with_paths(
+    data_dir: &Path,
+    default_memory_db: &Path,
+    args: &[String],
+) -> Result<String, String> {
     let (action, options) = parse_user_admin(args)?;
     let tokens = ClientTokenTable::load(Some(data_dir))
         .map_err(|error| format!("client token table refused to open: {error}"))?;
@@ -107,15 +129,105 @@ pub fn run_user_admin_at(data_dir: &Path, args: &[String]) -> Result<String, Str
         "remove" => {
             let user_id = required(&options, "user-id")?;
             require_manager(&tokens, &users, bearer, &gate)?;
-            let removed = service
-                .remove(user_id)
+            let plan = service
+                .prepare_governed_remove(user_id)
                 .map_err(|error| format!("refusing to remove user: {error}"))?;
-            Ok(format!("removed user {}", removed.user_id))
+            let attempt = principal_forget_attempt(data_dir, default_memory_db, &plan);
+            let completed = service
+                .finish_governed_remove(plan, attempt)
+                .map_err(|error| format!("refusing to remove user: {error}"))?;
+            Ok(format!(
+                "removed user {}; memory_forgotten=true ({})",
+                completed.removed.user_id, completed.memory_note
+            ))
         }
         other => Err(format!(
             "unknown user command: {other} (expected add, list, role, or remove)\n{USAGE}"
         )),
     }
+}
+
+/// 解析目标用户实际所在的记忆库：未开专属域按现有域解析合同回落默认域；已开
+/// 专属域则只选该域自己的库。默认域路径保留 `APEIRETH_COGNITIVE_DB` 覆写。
+fn target_memory_db(
+    data_dir: &Path,
+    default_memory_db: &Path,
+    plan: &GovernedUserRemovalPlan,
+) -> Result<(DomainUserId, PathBuf), String> {
+    let registry = DomainRegistry::open(data_dir)
+        .map_err(|error| format!("target memory domain refused to open: {error}"))?;
+    let target = plan.target();
+    let domain_ref = target.domain.as_deref().unwrap_or(&target.user_id);
+    let requested = DomainUserId::new(domain_ref)
+        .map_err(|error| format!("target memory domain is invalid: {error}"))?;
+    let domain = if requested.as_str() == apeireth_core::user_domain::DEFAULT_DOMAIN_ID {
+        registry.load_default()
+    } else {
+        match registry.load(&requested) {
+            Ok(domain) => Ok(domain),
+            // 与运行时 DomainSessionPlane::resolve 同合同：尚未开专属域的绑定用户
+            // 共享默认域；坏域配置则拒开，不猜、不回落。
+            Err(UserDomainError::NotFound(_)) => registry.load_default(),
+            Err(error) => Err(UserDomainError::Refused(format!(
+                "user domain `{requested}` refused to open: {error}"
+            ))),
+        }
+    }
+    .map_err(|error| format!("target memory domain refused to resolve: {error}"))?;
+
+    let path = if domain.is_default() {
+        default_memory_db.to_path_buf()
+    } else {
+        registry
+            .layout()
+            .data_dir(&domain.user_id)
+            .join("cognitive.sqlite3")
+    };
+    Ok((domain.user_id, path))
+}
+
+/// 对目标域权威库执行主体遗忘。库缺席时不调用 `SqliteMemoryStore::open`，避免
+/// 新建一份空库再把「空」误当成目标没有数据的证明。
+fn principal_forget_attempt(
+    data_dir: &Path,
+    default_memory_db: &Path,
+    plan: &GovernedUserRemovalPlan,
+) -> PrincipalForgetAttempt {
+    let (domain_id, path) = match target_memory_db(data_dir, default_memory_db, plan) {
+        Ok(resolved) => resolved,
+        Err(error) => return PrincipalForgetAttempt::ScopeUnavailable(error),
+    };
+    if !path.is_file() {
+        return PrincipalForgetAttempt::Unavailable(format!(
+            "target memory store for domain {domain_id:?} is absent at {}; no empty database was created",
+            path.display()
+        ));
+    }
+    let store = match SqliteMemoryStore::open(&path) {
+        Ok(store) => store,
+        Err(error) => {
+            return PrincipalForgetAttempt::Attempted(Err(format!(
+                "target memory store refused to open at {}: {error}",
+                path.display()
+            )));
+        }
+    };
+    let principal_id = &plan.target().user_id;
+    let at_ms = chrono::Utc::now().timestamp_millis();
+    let outcome =
+        MemoryGovernanceStore::forget_principal(&store, principal_id, at_ms, Some("user removed"))
+            .map(|outcome| PrincipalForgetDto {
+                principal_id: principal_id.clone(),
+                episode: outcome.episode,
+                preference: outcome.preference,
+                commitment: outcome.commitment,
+                temporal: outcome.temporal,
+                persona: outcome.persona,
+                refused: false,
+                reason: None,
+            })
+            .map_err(|error| error.to_string());
+    PrincipalForgetAttempt::Attempted(outcome)
 }
 
 /// 管理动作的角色门: 令牌→用户→角色链解析, 只有 [`UserCapability::ManageUsers`]
