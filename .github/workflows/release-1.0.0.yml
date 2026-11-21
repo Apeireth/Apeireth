@@ -154,31 +154,24 @@ jobs:
       - name: Build ${{ matrix.target }} package
         shell: bash
         run: |
-          # 注: set -uo pipefail (no -e) — 包装脚本 metadata 不全 (per 1.0 release engineer §D-06),
-          # 失败仅记 ::warning:: 不阻塞 CI. 真正 CI gate 在 release-gate job (5/5 jobs).
-          set -uo pipefail
+          set -euo pipefail
           chmod +x packaging/${{ matrix.target }}/build.* 2>/dev/null || true
           if [[ "${{ matrix.target }}" == "msi" || "${{ matrix.target }}" == "scoop" ]]; then
-            echo "::warning::Windows package — using WIF-injected PATH, see packaging/${{ matrix.target }}/build.ps1"
-            powershell -ExecutionPolicy Bypass -File "packaging/${{ matrix.target }}/build.ps1" \
-              || echo "::warning::${{ matrix.target }} build.ps1 non-fatal skip"
+            powershell -ExecutionPolicy Bypass -File "packaging/${{ matrix.target }}/build.ps1"
           else
-            bash "packaging/${{ matrix.target }}/build.sh" \
-              || echo "::warning::${{ matrix.target }} build.sh non-fatal skip"
+            bash "packaging/${{ matrix.target }}/build.sh"
           fi
           # arch 二次处理 (deb/tarball/docker 多架构)
           if [[ "${{ matrix.target }}" == "deb" ]]; then
             if [[ "${{ matrix.arch }}" == "arm64" ]]; then
               # cargo-deb --target aarch64-unknown-linux-gnu (上游支持)
-              cargo deb --target aarch64-unknown-linux-gnu --no-build \
-                || echo "::warning::cargo deb arm64 non-fatal skip"
+              cargo deb --target aarch64-unknown-linux-gnu --no-build
             fi
           fi
           if [[ "${{ matrix.target }}" == "tarball" ]]; then
             if [[ "${{ matrix.arch }}" == "arm64" ]]; then
               # tarball build.sh 默认 amd64, arm64 走 cross
-              cargo build --release --workspace --locked --target aarch64-unknown-linux-musl \
-                || echo "::warning::cargo build arm64 non-fatal skip"
+              cargo build --release --workspace --locked --target aarch64-unknown-linux-musl
             fi
           fi
           if [[ "${{ matrix.target }}" == "docker" ]]; then
@@ -188,8 +181,7 @@ jobs:
             docker buildx build \
               --platform "${PLATFORM}" \
               -t "ghcr.io/apeireth/apeireth:${APEIRETH_VERSION}-${PLATFORM##*/}" \
-              --load . \
-              || echo "::warning::docker ${PLATFORM} build failed (best-effort, 不阻塞 CI; 跟 release-gate 解耦)"
+              --load .
             # 多架构 push 单独在 docker-multi-arch job 跑 (避免每 arch 重复 push)
             # 注: Dockerfile 多架构 \$TARGETARCH 已修 (commit 45963574), 失败是 buildx/QEMU 临时问题
           fi
@@ -208,7 +200,7 @@ jobs:
             packaging/scoop/*.json
             packaging/brew/*.rb
             target/cargo-bundle/$(if [[ "${{ runner.os }}" == "macOS" ]]; then echo "macos"; else echo "linux"; fi)/*.tar.gz
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 30
 
   # =========================================================================
@@ -375,13 +367,13 @@ jobs:
         run: bash scripts/release-1.0-checklist.sh --dry-run
 
       - name: 12 项 release checklist (live, 跳过需要交互的项)
-        run: bash scripts/release-1.0-checklist.sh --skip 4,5,6 || true
+        run: bash scripts/release-1.0-checklist.sh --skip 4,5,6
 
       - name: 升级脚本 dry-run (D-07 一次性迁移)
-        run: bash scripts/upgrade/v2.0.0-alpha-to-v1.0.0.sh --dry-run || true
+        run: bash scripts/upgrade/v2.0.0-alpha-to-v1.0.0.sh --dry-run
 
       - name: 卸载脚本 dry-run (8 包 0 残留)
-        run: bash scripts/uninstall/uninstall.sh --dry-run || true
+        run: bash scripts/uninstall/uninstall.sh --dry-run
 
       # === 上传报告 ===
       - name: Upload checklist report
@@ -390,7 +382,7 @@ jobs:
         with:
           name: release-checklist-report
           path: reports/r20-v1.0.0-release-checklist-*.md
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 365
 
   # =========================================================================
@@ -403,6 +395,9 @@ jobs:
     if: always()
     steps:
       - name: Check all jobs succeeded
+        env:
+          RELEASE_REF: ${{ github.ref }}
+          RELEASE_TAG: ${{ github.ref_name }}
         run: |
           if [[ "${{ needs.build-packages.result }}" != "success" ]]; then
             echo "❌ build-packages failed: ${{ needs.build-packages.result }}"
@@ -423,6 +418,41 @@ jobs:
           echo "================================================"
           echo "  ✅ 1.0 release gate: 5/5 jobs success"
           echo "  Version: ${APEIRETH_VERSION}"
-          echo "  Ref: ${{ github.ref }}"
-          echo "  Tag: ${{ github.ref_name }}"
+          echo "  Ref: ${RELEASE_REF}"
+          echo "  Tag: ${RELEASE_TAG}"
           echo "================================================"
+
+      - name: Record trusted release source identity
+        if: github.event_name == 'push'
+        env:
+          RELEASE_REF: ${{ github.ref }}
+          RELEASE_SHA: ${{ github.sha }}
+          SOURCE_REPOSITORY: ${{ github.repository }}
+          SOURCE_RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          if [[ ! "${RELEASE_REF}" =~ ^refs/tags/v1\.0\.0(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "❌ release source is not an allowed v1.0.0 tag"
+            exit 1
+          fi
+          if [[ ! "${RELEASE_SHA}" =~ ^[0-9a-f]{40}$ ]] || [[ ! "${SOURCE_RUN_ID}" =~ ^[0-9]+$ ]]; then
+            echo "❌ invalid release source identity"
+            exit 1
+          fi
+          jq -n \
+            --arg repository "${SOURCE_REPOSITORY}" \
+            --arg workflow ".github/workflows/release-1.0.0.yml" \
+            --arg run_id "${SOURCE_RUN_ID}" \
+            --arg ref "${RELEASE_REF}" \
+            --arg sha "${RELEASE_SHA}" \
+            '{repository:$repository, workflow:$workflow, run_id:$run_id, ref:$ref, sha:$sha}' \
+            > release-source.json
+
+      - name: Upload trusted release source identity
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-source-provenance
+          path: release-source.json
+          if-no-files-found: error
+          retention-days: 365

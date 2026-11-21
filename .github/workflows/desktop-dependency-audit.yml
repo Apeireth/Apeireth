@@ -1,0 +1,31 @@
+name: Desktop dependency audit
+
+# The desktop shell has an independent Cargo.lock and is not covered by a
+# root-workspace `cargo audit`. Avoid blocking unrelated backend changes on an
+# already-known desktop backlog: this workflow runs when that lock changes.
+# The shipping workflow separately audits it on every release.
+on:
+  pull_request:
+    paths:
+      - 'frontend/companion-desktop/src-tauri/Cargo.lock'
+  push:
+    branches: ['**']
+    paths:
+      - 'frontend/companion-desktop/src-tauri/Cargo.lock'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cargo-audit-desktop:
+    name: cargo audit (desktop Cargo.lock)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.97.1
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@cargo-audit
+      - name: Audit the independent desktop lockfile
+        run: cargo audit --file frontend/companion-desktop/src-tauri/Cargo.lock --deny warnings

@@ -137,7 +137,7 @@ jobs:
           path: |
             target/release/rpmbuild/RPMS/*/*.rpm
             target/rpm/**/*.rpm
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 30
 
   # ==========================================================================
@@ -227,8 +227,7 @@ jobs:
       - name: Verify formula syntax (brew audit --strict)
         run: |
           brew tap apeireth/tap https://github.com/apeireth/homebrew-tap 2>/dev/null || true
-          brew audit --strict --new --formula apeireth 2>&1 | tee /tmp/brew-audit.log || \
-            (echo "⚠️  brew audit 警告 (非阻塞, 见 /tmp/brew-audit.log)"; exit 0)
+          brew audit --strict --new --formula apeireth 2>&1 | tee /tmp/brew-audit.log
 
       - name: Upload formula artifact
         if: ${{ !inputs.skip_upload }}
@@ -394,7 +393,9 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: apeireth-cyclonedx-sbom
-          path: cyclonedx-sbom.json
+          path: |
+            cyclonedx-sbom.json
+            sbom/*.cdx.json
           if-no-files-found: error
           retention-days: 90
 
@@ -464,12 +465,15 @@ jobs:
 
       - name: Report 6/6 success
         if: needs.build-deb.result == 'success' && needs.build-rpm.result == 'success' && needs.build-tarball.result == 'success' && needs.build-brew.result == 'success' && needs.build-scoop.result == 'success' && needs.security-and-sbom.result == 'success'
+        env:
+          RELEASE_REF: ${{ github.ref }}
+          RELEASE_TAG: ${{ github.ref_name }}
         run: |
           echo "================================================"
           echo "  ✅ 1.0 release 6-package gate: 6/6 jobs success"
           echo "  Version: ${APEIRETH_VERSION}"
-          echo "  Ref: ${{ github.ref }}"
-          echo "  Tag: ${{ github.ref_name }}"
+          echo "  Ref: ${RELEASE_REF}"
+          echo "  Tag: ${RELEASE_TAG}"
           echo ""
           echo "  8 项不修改承诺: 0 改 LOCKED, 0 引 NewAPI, 编译期 hardcode, 6 哲学锚穿透"
           echo "  6 包: deb / rpm / tarball / brew / scoop / security+sbom"

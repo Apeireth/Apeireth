@@ -470,7 +470,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # scan-history 需要全历史
+          # Keep full history on PRs until a validated base..head blob-range
+          # scanner exists. Otherwise a credential added and removed inside
+          # the PR could evade the final-tree scan.
+          fetch-depth: 0
 
       - name: Bootstrap Ubuntu DNS for system dependencies
         if: runner.os == 'Linux'

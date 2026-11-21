@@ -13,7 +13,7 @@ on:
       - 'v*'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build-windows-installer:
@@ -26,6 +26,12 @@ jobs:
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.97.1
+
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@cargo-audit
+
+      - name: Audit independent desktop lockfile before shipping
+        run: cargo audit --file frontend/companion-desktop/src-tauri/Cargo.lock --deny warnings
 
       - name: Install pnpm
         uses: pnpm/action-setup@v6
@@ -48,22 +54,32 @@ jobs:
 
       - name: Verify tag matches version sources
         shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          $version = '${{ github.ref_name }}'.TrimStart('v')
+          if ($env:RELEASE_TAG -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+(?:-(?:alpha|beta|rc|preview)\.[0-9]+)?$') {
+            Write-Error "unsupported release tag format"
+            exit 1
+          }
+          $version = $env:RELEASE_TAG.Substring(1)
           ./scripts/check-release-version.ps1 -ExpectedVersion $version -Strict
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
       - name: Build NSIS installer (stage frontend + sidecar, tauri bundle)
         shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          $version = '${{ github.ref_name }}'.TrimStart('v')
+          $version = $env:RELEASE_TAG.Substring(1)
           ./packaging/desktop/build-desktop-nsis.ps1 -Version $version -Target x86_64-pc-windows-msvc
 
       - name: Generate SHA-256 manifest (SHA256SUMS)
         shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          $version = '${{ github.ref_name }}'.TrimStart('v')
-          ./scripts/generate-release-manifest.ps1 -DistDir target/desktop-nsis -Version $version -ReleaseTag '${{ github.ref_name }}'
+          $version = $env:RELEASE_TAG.Substring(1)
+          ./scripts/generate-release-manifest.ps1 -DistDir target/desktop-nsis -Version $version -ReleaseTag $env:RELEASE_TAG
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
       - name: Verify installer assets against the manifest
@@ -77,7 +93,7 @@ jobs:
           }
           foreach ($installer in $installers) {
             Write-Host "verifying $($installer.Name) against $manifest"
-            ./scripts/verify-release-assets.ps1 -ArtifactPath $installer.FullName -ManifestPath $manifest
+            ./scripts/verify-release-assets.ps1 -ArtifactPath $installer.FullName -ManifestPath $manifest -RequireSignature
             if ($LASTEXITCODE -ne 0) { exit 1 }
           }
 
@@ -92,6 +108,8 @@ jobs:
     name: Create GitHub Release
     runs-on: ubuntu-latest
     needs: build-windows-installer
+    permissions:
+      contents: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -125,7 +143,7 @@ jobs:
 
             - **Windows 10/11 (x64)**: download `Apeireth Companion_<version>_x64-setup.exe` (version = this tag without the leading `v`), double-click to install. The installer bundles the complete backend (sidecar) — no Rust toolchain or compilation required.
             - Integrity: `SHA256SUMS` lists the SHA-256 of every published asset and is verified in the build pipeline before publishing; each installer also ships its own `.sha256` sidecar.
-            - **Unsigned build notice**: installers are not Authenticode-signed yet (`Get-AuthenticodeSignature` = `NotSigned` on the rc build); Windows may show a SmartScreen prompt. Verify the SHA-256 against `SHA256SUMS` before running, or build from source per [INSTALL.md](INSTALL.md).
+            - Authenticity: the publish job requires a valid Authenticode signature and verifies it together with `SHA256SUMS`; unsigned or invalid installers are not published.
             - macOS / Linux: no prebuilt installer yet — build from source per [INSTALL.md](INSTALL.md).
 
             ---

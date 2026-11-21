@@ -18,8 +18,9 @@ on:
     inputs:
       seconds:
         description: '每个 target 跑多少秒'
+        type: number
         required: false
-        default: '120'
+        default: 120
   pull_request:
     paths:
       - 'fuzz/**'
@@ -78,11 +79,19 @@ jobs:
         run: cargo install cargo-fuzz --locked
       - name: Choose run budget
         id: budget
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          RUN_SECONDS: ${{ inputs.seconds || 120 }}
         run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
+          set -euo pipefail
+          if [ "${EVENT_NAME}" = "pull_request" ]; then
             echo "args=-runs=3000" >> "$GITHUB_OUTPUT"
           else
-            echo "args=-max_total_time=${{ github.event.inputs.seconds || 120 }}" >> "$GITHUB_OUTPUT"
+            if [[ ! "${RUN_SECONDS}" =~ ^[0-9]+$ ]] || (( RUN_SECONDS < 10 || RUN_SECONDS > 3600 )); then
+              echo "::error::seconds must be an integer between 10 and 3600"
+              exit 1
+            fi
+            echo "args=-max_total_time=${RUN_SECONDS}" >> "$GITHUB_OUTPUT"
           fi
       - name: fuzz ${{ matrix.target }}
         working-directory: fuzz
@@ -128,11 +137,19 @@ jobs:
         run: cargo install cargo-fuzz --locked
       - name: Choose run budget
         id: budget
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          RUN_SECONDS: ${{ inputs.seconds || 120 }}
         run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
+          set -euo pipefail
+          if [ "${EVENT_NAME}" = "pull_request" ]; then
             echo "args=-runs=3000" >> "$GITHUB_OUTPUT"
           else
-            echo "args=-max_total_time=${{ github.event.inputs.seconds || 120 }}" >> "$GITHUB_OUTPUT"
+            if [[ ! "${RUN_SECONDS}" =~ ^[0-9]+$ ]] || (( RUN_SECONDS < 10 || RUN_SECONDS > 3600 )); then
+              echo "::error::seconds must be an integer between 10 and 3600"
+              exit 1
+            fi
+            echo "args=-max_total_time=${RUN_SECONDS}" >> "$GITHUB_OUTPUT"
           fi
       - name: fuzz ${{ matrix.target }}
         working-directory: crates/engine/image/codecs/fuzz

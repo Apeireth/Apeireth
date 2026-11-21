@@ -85,7 +85,14 @@ fi
 COSIGN_VERSION=$("${COSIGN_BIN}" version 2>&1 | head -1 || echo "unknown")
 echo "✓ cosign 版本: ${COSIGN_VERSION}"
 
-# 3. 私钥存在 (DRY-RUN 跳过)
+# 3. dist 目录始终必须存在. Dry-run validates the same release manifest;
+# it only skips cryptographic operations.
+if [[ ! -d "${DIST_DIR}" ]]; then
+    echo "❌ dist 目录不存在: ${DIST_DIR}"
+    exit 1
+fi
+
+# 4. 私钥存在 (DRY-RUN 跳过)
 if [[ "${DRY_RUN}" == "false" ]]; then
     if [[ ! -f "${COSIGN_KEY}" ]]; then
         echo "❌ 私钥文件不存在: ${COSIGN_KEY}"
@@ -93,16 +100,10 @@ if [[ "${DRY_RUN}" == "false" ]]; then
         echo "   存储: GitHub Actions Secret COSIGN_KEY (per docs/security/cosign-keys.md §3)"
         exit 1
     fi
-    # 4. 公钥存在
+    # 5. 公钥存在
     if [[ ! -f "${COSIGN_PUB}" ]]; then
         echo "❌ 公钥文件不存在: ${COSIGN_PUB}"
         echo "   生成: cosign generate-key-pair 后 commit cosign.pub 到 docs/security/"
-        exit 1
-    fi
-    # 5. dist 目录存在
-    if [[ ! -d "${DIST_DIR}" ]]; then
-        echo "❌ dist 目录不存在: ${DIST_DIR}"
-        echo "   跑 packaging/<target>/build.{sh,ps1} 8 包, 产物进 ${DIST_DIR}/"
         exit 1
     fi
 fi
@@ -117,8 +118,8 @@ sign_blob() {
     local desc="$3"
 
     if [[ ! -f "${pkg}" ]]; then
-        echo "  ⚠️  跳过 ${desc}: ${pkg} 不存在 (可能该包在当前 OS 不 build)"
-        return 0
+        echo "  ❌ 缺少预期发布产物 ${desc}: ${pkg}"
+        return 1
     fi
 
     if [[ "${DRY_RUN}" == "true" ]]; then
@@ -219,17 +220,25 @@ fi
 echo ""
 echo "=== 签名验证 (cosign verify-blob) ==="
 VERIFY_FAIL=0
+VERIFY_TOTAL=0
+if [[ "${DRY_RUN}" == "true" ]]; then
+    echo "  [DRY-RUN] expected artifact manifest complete; cryptographic verification skipped"
+    exit 0
+fi
 for sig in "${SIG_DIR}"/*.sig; do
     [[ -e "${sig}" ]] || continue
-    pkg="${sig%.sig}"
+    pkg="${DIST_DIR}/$(basename "${sig%.sig}")"
     if [[ ! -f "${pkg}" ]]; then
-        echo "  ⚠️  跳过: ${pkg} 缺失, 无法验"
+        echo "  ❌ 签名没有对应发布产物: ${pkg}"
+        VERIFY_FAIL=$((VERIFY_FAIL+1))
         continue
     fi
-    if [[ "${DRY_RUN}" == "true" ]]; then
-        echo "  [DRY-RUN] cosign verify-blob --key ${COSIGN_PUB} --signature ${sig} ${pkg}"
+    if [[ ! -s "${sig}.bundle" ]] || [[ ! -s "${sig}.cert" ]]; then
+        echo "  ❌ ${pkg##*/} 缺少非空 .bundle 或 .cert"
+        VERIFY_FAIL=$((VERIFY_FAIL+1))
         continue
     fi
+    VERIFY_TOTAL=$((VERIFY_TOTAL+1))
     if "${COSIGN_BIN}" verify-blob \
         --key "${COSIGN_PUB}" \
         --signature "${sig}" \
@@ -241,13 +250,18 @@ for sig in "${SIG_DIR}"/*.sig; do
     fi
 done
 
+if [[ ${VERIFY_TOTAL} -eq 0 ]]; then
+    echo "❌ 没有任何可验证签名，拒绝 0/0 通过"
+    exit 1
+fi
+
 # === 报告 ===
 echo ""
 echo "=================================================="
 echo "  cosign 8 包签名完成 (per R20 阶段 6)"
 echo "  签名目录: ${SIG_DIR}/"
 echo "  公钥:     ${COSIGN_PUB}"
-echo "  验证失败: ${VERIFY_FAIL}/$({ ls -1 "${SIG_DIR}"/*.sig 2>/dev/null | wc -l; } || echo 0)"
+echo "  验证失败: ${VERIFY_FAIL}/${VERIFY_TOTAL}"
 echo "=================================================="
 echo ""
 echo "用户验证命令 (per docs/security/cosign-keys.md §6.2):"

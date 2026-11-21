@@ -26,6 +26,8 @@ set -o pipefail
 PKG="${1:-}"
 COSIGN_BIN="${COSIGN_BIN:-cosign}"
 COSIGN_PUB="${COSIGN_PUB:-./docs/security/cosign.pub}"
+COSIGN_OIDC_ISSUER="${COSIGN_OIDC_ISSUER:-https://token.actions.githubusercontent.com}"
+COSIGN_CERT_IDENTITY_REGEXP="${COSIGN_CERT_IDENTITY_REGEXP:-^https://github\.com/apeireth/apeireth/\.github/workflows/(cosign|release-1\.0\.0)\.yml@refs/(heads/main|tags/v[0-9].*)$}"
 
 # === 帮助 ===
 if [[ -z "${PKG}" ]] || [[ "${PKG}" == "--help" ]] || [[ "${PKG}" == "-h" ]]; then
@@ -76,7 +78,9 @@ if [[ "${PKG}" == *"/"* ]] && [[ "${PKG}" != *".deb" ]] && [[ "${PKG}" != *".rpm
     && [[ "${PKG}" != *".rb" ]] && [[ "${PKG}" != *".json" ]]; then
     echo ">>> Docker OCI 验签: ${PKG}"
     echo "    (走 Fulcio + Rekor 透明日志, 1.0 release 1-of-1 阈值, per docs/security/cosign-keys.md §4)"
-    "${COSIGN_BIN}" verify "${PKG}" 2>&1
+    "${COSIGN_BIN}" verify "${PKG}" \
+        --certificate-identity-regexp "${COSIGN_CERT_IDENTITY_REGEXP}" \
+        --certificate-oidc-issuer "${COSIGN_OIDC_ISSUER}" 2>&1
     exit $?
 fi
 
@@ -86,6 +90,11 @@ if [[ ! -f "${SIG}" ]]; then
     echo "❌ 签名文件不存在: ${SIG}"
     echo "   期望: ${PKG} 旁边有同名 .sig 文件 (per scripts/release/cosign-sign-all.sh 产物)"
     echo "   下载: https://github.com/apeireth/apeireth/releases/tag/v1.0.0 (签名在 assets)"
+    exit 2
+fi
+
+if [[ ! -s "${SIG}.bundle" ]] || [[ ! -s "${SIG}.cert" ]]; then
+    echo "❌ 签名证明不完整: 需要非空 ${SIG}.bundle 和 ${SIG}.cert"
     exit 2
 fi
 
