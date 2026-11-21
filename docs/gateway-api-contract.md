@@ -22,6 +22,11 @@
 
 错误映射：400 `invalid_request`、403 `single_operator_required`、503 `profile_unavailable`/`credential_unavailable`、409 `endpoint_change_needs_key`。成果与候选服务对严格受管单操作者放行；其他用户表/客户端/非默认域仍 503 `scope_unavailable`。四级口径：PRODUCTION WIRED（代码在主干、Windows 隔离验收），非 HARDWARE VALIDATED；实现 `crates/adapters/gateway/src/model_connection.rs`、`crates/adapters/cli/src/desktop_model_connection.rs`，证据见[进度](status/desktop-managed-model-connection-2026-11-19.md)。
 
+## 后端安全增补（2026-11-21）
+
+- 普通网关的 `POST /v1/admin/config` 更换模型端点来源时，必须同笔提供凭据，或由凭据后端确认该凭据已绑定目标来源，否则返回 409 `invalid_request`。凭据与端点不能一并保存时返回 503。Windows 受管桌面仍遵循上文的模型连接契约。
+- `DELETE /v1/admin/users/{user_id}` 先验证账号可删，再请求对目标主体做记忆遗忘。治理服务不可用、目标域不可确认、返回拒绝或任一账本未确认时保留账号，并在响应中返回 `deleted: false`。原成功回执保持 `deleted: true`、`user_id`、`memory_forgotten: true`、`memory_note`。记忆遗忘按现有治理语义执行，存储介质、备份和供应商侧副本另有独立生命周期。
+
 ## §1 通用约定
 
 - Base URL:`http://127.0.0.1:{port}`(port 由桌面壳为 sidecar 动态分配;手动运行时默认 8080)

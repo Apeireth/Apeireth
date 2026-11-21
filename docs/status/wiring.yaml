@@ -3,8 +3,8 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: 1c109ec60452012df25f2d5c9f6218e863229d827c860405894415533570fe79
-claims_total: 62
+claims_sha256: e5cfdb7136d9df4e85d14da63dc2edc0f7c34642b70ea590d28eaa760c886bda
+claims_total: 63
 items:
   - id: "rt.provider_router"
     capability: "跨 provider fallback + 健康态（运行时路由）"
@@ -157,6 +157,25 @@ items:
       tests:
         - "crates/capabilities/tools/src/object_access.rs"
       claims_id: "sec.object_access"
+    gaps:
+      []
+  - id: "sec.governed_user_removal"
+    capability: "删除用户前确认目标域及各记忆账本的遗忘结果"
+    implemented:
+      sources:
+        - "crates/adapters/gateway/src/user_admin.rs"
+        - "crates/adapters/cli/src/user_admin.rs"
+    wired:
+      production_refs:
+        - "crates/adapters/cli/src/user_admin.rs"
+        - "crates/adapters/gateway/src/user_admin.rs"
+    default_enabled: true
+    validated:
+      tests:
+        - "crates/adapters/gateway/tests/user_admin_endpoints.rs"
+        - "crates/adapters/cli/tests/user_admin.rs"
+        - "crates/adapters/cli/tests/user_admin_dual_entry.rs"
+      claims_id: "sec.governed_user_removal"
     gaps:
       []
   - id: "sec.exposure_audit"
@@ -491,8 +510,12 @@ items:
         - "crates/engine/provider/src/canonical_openai_compatible.rs"
         - "crates/foundation/plugin/src/credentials.rs"
         - "crates/foundation/credentials/src/hot_store.rs"
+        - "crates/adapters/gateway/src/admin.rs"
+        - "crates/adapters/cli/src/keyring_bootstrap.rs"
     wired:
       production_refs:
+        - "crates/adapters/cli/src/keyring_bootstrap.rs"
+        - "crates/adapters/gateway/src/admin.rs"
         - "crates/engine/provider/src/canonical_anthropic.rs"
         - "crates/engine/provider/src/canonical_minimax.rs"
         - "crates/engine/provider/src/canonical_openai_compatible.rs"
@@ -503,6 +526,8 @@ items:
     validated:
       tests:
         - "crates/engine/provider/tests/endpoint_binding.rs"
+        - "crates/adapters/gateway/tests/admin_binding_warning.rs"
+        - "crates/adapters/gateway/tests/admin_config.rs"
       claims_id: "sec.credential_endpoint_binding"
     gaps:
       []
