@@ -83,6 +83,71 @@ class SecretScanTests(unittest.TestCase):
         self.assertIn("[history] removed.rs:1:", result.stdout)
         self.assertNotIn(credential, result.stdout + result.stderr)
 
+    def test_contextual_high_entropy_value_is_rejected_without_echoing_it(self):
+        credential_body = "Q7z_" * 25
+        (self.repo / "policy.md").write_text(
+            'Select-String -Path reports -Pattern "' + credential_body + '" -Recurse\n'
+        )
+        self.commit()
+        result = self.scan("scan-all")
+        output = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("Contextual high-entropy credential", output)
+        self.assertNotIn(credential_body, output)
+
+    def test_legacy_directory_is_not_blanket_allowlisted(self):
+        credential = "sk" + "-" + "R8T6" * 8
+        path = self.repo / "legacy" / "new-source.rs"
+        path.parent.mkdir()
+        path.write_text('let value = "' + credential + '";\n')
+        self.commit()
+        result = self.scan("scan-all")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("legacy/new-source.rs:1:", result.stdout)
+        self.assertNotIn(credential, result.stdout + result.stderr)
+
+    def test_gitleaks_regex_definition_does_not_exempt_a_literal_in_config(self):
+        credential = "sk" + "-" + "S9V7" * 8
+        (self.repo / ".gitleaks.toml").write_text(
+            "[allowlist]\npaths = []\nregexes = []\n\n"
+            "[[rules]]\nid = \"fixture\"\n"
+            "regex = '''sk-[A-Za-z0-9]{20,255}'''\n"
+            "# leaked literal: " + credential + "\n"
+        )
+        self.commit()
+        result = self.scan("scan-all")
+        output = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 1)
+        self.assertIn(".gitleaks.toml:8:", output)
+        self.assertNotIn(credential, output)
+
+    def test_current_fixture_requires_blob_path_line_and_match_identity(self):
+        credential = "sk" + "-" + "T8W6" * 8
+        path = self.repo / "legacy" / "fixture.rs"
+        path.parent.mkdir()
+        path.write_text('let value = "' + credential + '";\n')
+        self.commit()
+        blob = self.git("hash-object", "--", "legacy/fixture.rs").stdout.strip()
+        fixture = dict(
+            Blob=blob,
+            Path="legacy/fixture.rs",
+            Line=1,
+            MatchSha256=hashlib.sha256(credential.encode()).hexdigest(),
+        )
+        with tempfile.TemporaryDirectory() as tools:
+            self.scanner = Path(tools) / SCANNER.name
+            shutil.copyfile(SCANNER, self.scanner)
+            registry = Path(tools) / "secret-scan-current-fixtures.json"
+            registry.write_text(json.dumps([fixture]))
+            result = self.scan("scan-all")
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("immutable current fixtures: 1", result.stdout)
+            with path.open("a") as out:
+                out.write("// any change invalidates the reviewed blob\n")
+            result = self.scan("scan-all")
+            self.assertEqual(result.returncode, 1)
+            self.assertNotIn(credential, result.stdout + result.stderr)
+
     def test_reviewed_history_exception_requires_every_immutable_identity_field(self):
         credential = "sk" + "-" + "Z8Q6" * 8
         path = self.repo / "fixture.rs"

@@ -53,6 +53,10 @@ $SecretPatterns = @(
     @{ Name = 'OpenAI API Key (sk- prefix)'; Pattern = 'sk-(?!ant-)[A-Za-z0-9]{20,255}'; Tags = @('openai', 'apikey') },
     @{ Name = 'Anthropic API Key (sk-ant- prefix)'; Pattern = 'sk-ant-[A-Za-z0-9_-]{20,255}'; Tags = @('anthropic', 'apikey') },
     @{ Name = 'MiniMax / minimaxi API Key'; Pattern = 'sk-cp-[A-Za-z0-9-]{20,255}'; Tags = @('minimax', 'apikey') },
+    # Some providers expose long opaque values whose service prefix can be
+    # removed accidentally while the credential body remains usable. Require
+    # credential-like context to avoid treating ordinary hashes as secrets.
+    @{ Name = 'Contextual high-entropy credential'; Pattern = '(?i)(?:api[_ -]?key|secret|token|credential|pattern)\s*[:=]?\s*["'']?[A-Za-z0-9_-]{80,255}'; Tags = @('generic', 'high-entropy') },
     # AWS
     @{ Name = 'AWS Access Key ID'; Pattern = 'AKIA[0-9A-Z]{16}'; Tags = @('aws', 'access-key') },
     @{ Name = 'AWS Secret Access Key'; Pattern = 'aws_secret_access_key\s*=\s*["'']?[A-Za-z0-9/+=]{40}["'']?'; Tags = @('aws', 'secret-key') },
@@ -80,8 +84,6 @@ $SecretPatterns = @(
 $AllowlistPaths = @(
     # V5-a 脱敏测试样例（PEM 形态假键，测私钥体脱敏覆盖用——假键非真凭据）
     'crates/capabilities/tools/src/redaction_bridge.rs',
-    'legacy/*',
-    'legacy/**/*',
     'frontend/companion-desktop/tests/*',
     'crates/adapters/cli/tests/*',
     'crates/adapters/sdk/examples/*',
@@ -99,13 +101,9 @@ $AllowlistPaths = @(
     'crates/foundation/governance/src/input_security.rs',
     'crates/adapters/sdk/src/voice/*',
     'frontend/companion-desktop/src-tauri/src/logging.rs',
-    '.gitleaks.toml',
     # 真凭证存放位置 (per .gitignore, 不入库)
     'apikey-ultra.txt', 'apikey-*.txt',
-    '*.git-credentials', 'Users*.git-credentials',
-    # 历史已 redact 的报告 (per R215 git filter-repo)
-    'reports/*',
-    'r129-3-run-api-helper.ps1'
+    '*.git-credentials', 'Users*.git-credentials'
 )
 
 # ============================================================================
@@ -161,6 +159,28 @@ function Test-PathAllowed {
         try {
             if ($Path -match $pattern) { return $true }
         } catch {}
+    }
+    return $false
+}
+
+function Get-MatchSha256 {
+    param([string]$Match)
+    return [Convert]::ToHexString([System.Security.Cryptography.SHA256]::HashData(
+        [Text.Encoding]::UTF8.GetBytes($Match))).ToLowerInvariant()
+}
+
+function Test-GitleaksRegexDefinition {
+    param($Finding, [string]$Path)
+    if ($Path -cne '.gitleaks.toml') { return $false }
+
+    # The scanner configuration necessarily contains detector regexes. Exempt
+    # only quoted regex definitions with actual metacharacters; a literal
+    # credential placed in the config remains a finding.
+    if ($Finding.Snippet -notmatch "^\s*(?:regex\s*=\s*)?'''[^']+''',?\s*$") {
+        return $false
+    }
+    foreach ($metacharacter in @('\', '[', ']', '{', '}', '(', ')', '+', '*', '?')) {
+        if ($Finding.Snippet.Contains($metacharacter)) { return $true }
     }
     return $false
 }
@@ -222,16 +242,17 @@ function Invoke-ScanAll {
 
 function Invoke-ScanHistory {
     $findings = @()
-    # 仅扫 source files (skip .lock / .json / .png / .md / .txt 减少 IO)
-    # 真 key 历史兜底仍依赖 filter-repo; 这里只快速发现泄漏
+    # Scan text-bearing documentation and configuration too: credentials have
+    # previously appeared in .md/.txt/.json files. Skip only lockfiles,
+    # archives, executables and known binary media.
     $blobs = & git rev-list --all --objects 2>$null
     $scanned = 0
     foreach ($line in $blobs) {
         if ($line -notmatch '^([0-9a-f]{40})\s+(.+)$') { continue }
         $sha = $Matches[1]
         $path = $Matches[2]
-        # 跳过大文件 / binary / docs
-        if ($path -match '\.(lock|json|png|jpg|jpeg|gif|ico|pdf|zip|tar|gz|md|txt|wasm|exe|dll|so|dylib)$') { continue }
+        # 跳过大文件 / binary
+        if ($path -match '\.(lock|png|jpg|jpeg|gif|ico|pdf|zip|tar|gz|mp3|wav|wasm|exe|dll|so|dylib)$') { continue }
         $contentLines = & git cat-file -p $sha 2>$null
         if ($null -eq $contentLines) { continue }
         # Native command output is an array of lines; implicit string conversion
@@ -271,6 +292,17 @@ if (Test-Path $historyFixtureFile) {
         ConvertFrom-Json -ErrorAction Stop)
 }
 
+# Reviewed synthetic fixtures in the current tree. Each exception is bound to
+# the complete git blob plus path, line and match hash; changing any byte makes
+# it fail closed and require fresh review. Directory-wide exceptions are not
+# accepted for legacy or report trees.
+$currentFixtures = @()
+$currentFixtureFile = Join-Path $PSScriptRoot 'secret-scan-current-fixtures.json'
+if (Test-Path $currentFixtureFile) {
+    $currentFixtures = @(Get-Content $currentFixtureFile -Raw -ErrorAction Stop |
+        ConvertFrom-Json -ErrorAction Stop)
+}
+
 switch ($Mode) {
     'scan-staged'   { $findings = Invoke-ScanStaged }
     'scan-all'      { $findings = Invoke-ScanAll }
@@ -279,19 +311,30 @@ switch ($Mode) {
     default { Write-Host "Unknown mode: $Mode"; exit 2 }
 }
 
-# 过滤: immutable historical fixtures, then existing allowlist paths
+# 过滤: immutable historical/current fixtures, then narrowly scoped allowlists
 $reviewedHistoryCount = 0
+$reviewedCurrentCount = 0
 $filtered = foreach ($f in $findings) {
     $checkPath = $f.File -replace '^\[history\]\s*', ''
+    $matchHash = Get-MatchSha256 -Match $f.Match
     if ($f.HistoryBlob) {
-        $matchHash = [Convert]::ToHexString([System.Security.Cryptography.SHA256]::HashData(
-            [Text.Encoding]::UTF8.GetBytes($f.Match))).ToLowerInvariant()
         $reviewed = @($historyFixtures | Where-Object {
             $_.Blob -ceq $f.HistoryBlob -and $_.Path -ceq $checkPath -and
             $_.Line -eq $f.Line -and $_.MatchSha256 -ceq $matchHash
         })
         if ($reviewed.Count -gt 0) { $reviewedHistoryCount++; continue }
+    } else {
+        $absolutePath = Join-Path $RepoRoot $checkPath
+        $blob = if (Test-Path $absolutePath -PathType Leaf) {
+            (& git hash-object -- $checkPath 2>$null | Select-Object -First 1)
+        } else { $null }
+        $reviewed = @($currentFixtures | Where-Object {
+            $_.Blob -ceq $blob -and $_.Path -ceq $checkPath -and
+            $_.Line -eq $f.Line -and $_.MatchSha256 -ceq $matchHash
+        })
+        if ($reviewed.Count -gt 0) { $reviewedCurrentCount++; continue }
     }
+    if (Test-GitleaksRegexDefinition -Finding $f -Path $checkPath) { continue }
     if (Test-PathAllowed -Path $checkPath -AllowlistPaths $AllowlistPaths) { continue }
     if ($allowlist -and (Test-PathAllowed -Path $checkPath -AllowlistPaths $allowlist.Paths)) { continue }
     # allowlist regexes
@@ -309,6 +352,7 @@ $filtered = foreach ($f in $findings) {
 }
 
 Write-Host "[secret-scan] Reviewed immutable historical fixtures: $reviewedHistoryCount"
+Write-Host "[secret-scan] Reviewed immutable current fixtures: $reviewedCurrentCount"
 
 if ($filtered.Count -eq 0) {
     Write-Host "[OK] No secrets found." -ForegroundColor Green
@@ -326,7 +370,7 @@ $filtered | ForEach-Object {
 Write-Host ""
 Write-Host "Action required:" -ForegroundColor Yellow
 Write-Host "  1. If this is a REAL secret: rotate + use placeholder ([REDACTED-name-Nchars])" -ForegroundColor Yellow
-Write-Host "  2. If this is a test pattern: add file to scripts/secret-scan.ps1 AllowlistPaths" -ForegroundColor Yellow
+Write-Host "  2. If this is a reviewed fixture: bind its blob/path/line/match hash in the fixture registry" -ForegroundColor Yellow
 Write-Host "  3. If false positive in test: prefix with placeholder like ghp_aaaa..." -ForegroundColor Yellow
 Write-Host "  4. See docs/04-internal/secret-management-policy.md" -ForegroundColor Yellow
 exit 1

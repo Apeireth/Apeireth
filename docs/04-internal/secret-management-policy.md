@@ -209,7 +209,7 @@ git gc --prune=now --aggressive
 
 # 5. 验证 (应 0 命中)
 git rev-list --all --objects | Select-String "kug0t7Jik3" -ErrorAction SilentlyContinue
-Select-String -Path reports -Pattern "kug0t7Jik3-CLvvPauLHx8IjzwB9ANsnTFI_HXF9c4vhERO7gYqB6KOL4ldK3pdj2esU3EVaN6w4jl3z9fGUOwjLQz1EXzXjPATISo4BFMAbaEHOb8YRsUg" -Recurse
+Select-String -Path reports -Pattern "[REDACTED-credential]" -Recurse
 
 # 6. 验证 cargo test + clippy 仍绿
 cargo test -p apeireth-host -p apeireth-sovereignty -p apeireth-team-lead -p apeireth-arbitration -p apeireth-memory -p apeireth-companion --lib  # （v1 时代旧 crate 名，crate 清单见根 ARCHITECTURE.md（现行 18-crate））
