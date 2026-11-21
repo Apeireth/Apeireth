@@ -71,7 +71,7 @@ pub fn run_egress_at(data_root: &std::path::Path, args: &[String]) -> Result<Str
     );
     if entries.is_empty() {
         frame.push_str(
-            "（暂无出网记录。可用 APEIRETH_ENABLE_EGRESS_GATE=1 在脱敏之外开启账本。）\n",
+            "（账本为空，只等于「没有记录」。设 APEIRETH_ENABLE_EGRESS_GATE=1 可在脱敏之外开启账本。）\n",
         );
         return Ok(frame);
     }

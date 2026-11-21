@@ -491,6 +491,10 @@ fn parse_endpoint(base_url: &str) -> Option<Endpoint> {
     if has_explicit_port && port.is_none() {
         return None;
     }
+    let port = match (scheme.as_str(), port) {
+        ("http", Some(80)) | ("https", Some(443)) => None,
+        (_, port) => port,
+    };
     let host = authority
         .host()
         .trim_start_matches('[')
@@ -575,7 +579,11 @@ mod tests {
         );
         assert_eq!(
             endpoint_origin("https://api.example.com:443/other"),
-            Some("https://api.example.com:443".to_string())
+            Some("https://api.example.com".to_string())
+        );
+        assert_eq!(
+            endpoint_origin("https://api.example.com:8443/other"),
+            Some("https://api.example.com:8443".to_string())
         );
         assert_eq!(
             endpoint_origin("http://[::1]:8080/v1"),
@@ -585,6 +593,8 @@ mod tests {
         for endpoint in [
             "https://API.Example.com/v1",
             "https://api.example.com:443/other",
+            "https://api.example.com:8443/other",
+            "http://127.0.0.1:80/v1",
             "http://[::1]:8080/v1",
         ] {
             assert_eq!(
