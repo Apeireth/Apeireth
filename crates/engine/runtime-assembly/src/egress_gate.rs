@@ -22,8 +22,8 @@ use std::sync::{Arc, Mutex};
 use apeireth_core::kernel::Clock;
 use apeireth_governance::authorization::{AuthorizationAction, AuthorizationPolicy};
 use apeireth_protocol::canonical::{ContentPart, NormalizedRequest, NormalizedResponse};
-use apeireth_runtime::canonical::egress_gate::{EgressGate, EgressVerdict};
-use apeireth_tools_canonical::redaction_bridge::RedactionBridge;
+use apeireth_runtime::canonical::egress_gate::{EgressGate, EgressVerdict, ResponseRestorer};
+use apeireth_tools_canonical::redaction_bridge::{RedactionBridge, RedactionHit};
 
 use crate::accountability::{AccountabilityLedger, Affected, Boundary, ImpactStatement, Outcome};
 use crate::consequence::{ConsequenceTracker, OutcomeSource};
@@ -43,9 +43,9 @@ pub const EGRESS_USAGE_CHAT: &str = "chat";
 
 /// 生产出网闸：用 `RedactionBridge` 把请求里的 PII 换成不可逆占位。
 ///
-/// 线程安全：`RedactionBridge` 内部有本会话登记簿（真值驻留处），用互斥量串行化。
+/// 生产路由的出境与回程共享单次请求专有的登记簿。
 pub struct RedactionEgressGate {
-    bridge: Mutex<RedactionBridge>,
+    legacy_bridge: Option<Mutex<RedactionBridge>>,
     /// **出网动作序号**（单调递增）：与毫秒时间戳一起组成 `action_id`。
     ///
     /// 修「同毫秒两次出网 ⇒ 同 `action_id`」的碰撞（2026-10-25 实测发现）：
@@ -74,15 +74,16 @@ pub struct RedactionEgressGate {
 }
 
 impl RedactionEgressGate {
-    /// 新建闸（新会话键 = 新登记簿），账本走内存（不持久）。
+    /// 新建闸，账本走内存（不持久）。
     pub fn new() -> Self {
         Self::with_ledger(Arc::new(EgressLedger::new(None)))
     }
 
-    /// 用指定会话键新建（同一会话的占位恒同、跨会话换别名）。
+    /// 为直接使用 `vet` 和 `restore` 的调用方建立独立登记簿。
+    /// `prepare` 始终为单次请求生成新登记簿。
     pub fn with_session_key(session_key: [u8; 32]) -> Self {
         Self {
-            bridge: Mutex::new(RedactionBridge::with_session_key(session_key)),
+            legacy_bridge: Some(Mutex::new(RedactionBridge::with_session_key(session_key))),
             action_seq: AtomicU64::new(0),
             ledger: Arc::new(EgressLedger::new(None)),
             authorization: None,
@@ -95,7 +96,7 @@ impl RedactionEgressGate {
     /// 用指定账本新建（生产接线：账本落盘）。
     pub fn with_ledger(ledger: Arc<EgressLedger>) -> Self {
         Self {
-            bridge: Mutex::new(RedactionBridge::new_session()),
+            legacy_bridge: None,
             action_seq: AtomicU64::new(0),
             ledger,
             authorization: None,
@@ -149,7 +150,7 @@ impl RedactionEgressGate {
     fn record(
         &self,
         verdict: &str,
-        hits: &[apeireth_tools_canonical::redaction_bridge::RedactionHit],
+        hits: &[RedactionHit],
         destination: &str,
         usage: &str,
         reason: Option<String>,
@@ -235,7 +236,7 @@ impl EgressGate for RedactionEgressGate {
     /// 且只还原本会话登记簿登记过的指纹；未登记占位**不还原、照实留痕**。
     /// 对出境面不可逆：出去的请求里只有占位，没有真值。
     fn restore(&self, response: &mut NormalizedResponse) {
-        let Ok(mut bridge) = self.bridge.lock() else {
+        let Some(Ok(mut bridge)) = self.legacy_bridge.as_ref().map(Mutex::lock) else {
             // 登记簿不可用 → 不还原（占位保留）。**不泄漏**：保持占位比还原错更安全。
             return;
         };
@@ -244,6 +245,49 @@ impl EgressGate for RedactionEgressGate {
     }
 
     fn vet(&self, request: &NormalizedRequest) -> EgressVerdict {
+        match &self.legacy_bridge {
+            Some(bridge) => match bridge.lock() {
+                Ok(mut bridge) => self.vet_with_bridge(request, &mut bridge),
+                Err(_) => self.deny("出境脱敏登记簿不可用".into()),
+            },
+            None => self.prepare(request).0,
+        }
+    }
+
+    fn prepare(&self, request: &NormalizedRequest) -> (EgressVerdict, Option<ResponseRestorer>) {
+        let mut bridge = RedactionBridge::new_session();
+        let verdict = self.vet_with_bridge(request, &mut bridge);
+        let restore: Option<ResponseRestorer> = match verdict {
+            EgressVerdict::Redacted(_) => {
+                Some(Box::new(move |response: &mut NormalizedResponse| {
+                    response.content = bridge.restore_for_local(&response.content).text;
+                }))
+            }
+            EgressVerdict::Pass => Some(Box::new(|_| {})),
+            EgressVerdict::Deny { .. } => None,
+        };
+        (verdict, restore)
+    }
+}
+
+impl RedactionEgressGate {
+    fn deny(&self, reason: String) -> EgressVerdict {
+        self.record(
+            "deny",
+            &[],
+            "provider",
+            EGRESS_USAGE_CHAT,
+            Some(reason.clone()),
+        );
+        self.declare_impact("provider", false);
+        EgressVerdict::Deny { reason }
+    }
+
+    fn vet_with_bridge(
+        &self,
+        request: &NormalizedRequest,
+        bridge: &mut RedactionBridge,
+    ) -> EgressVerdict {
         // 授权判定**先于**脱敏：没授权就不必做脱敏工作量，也不必进登记簿。
         //
         // 粒度：资源固定 `egress`，scope 装**用途**（当前唯一用途 `chat`）。
@@ -264,41 +308,32 @@ impl EgressGate for RedactionEgressGate {
                          `{EGRESS_USAGE_CHAT}` 用途出网权限 —— 已拒绝本次出网"
                     )
                 };
-                self.record(
-                    "deny",
-                    &[],
-                    "provider",
-                    EGRESS_USAGE_CHAT,
-                    Some(reason.clone()),
-                );
-                self.declare_impact("provider", false);
-                return EgressVerdict::Deny { reason };
+                return self.deny(reason);
             }
         }
-        let Ok(mut bridge) = self.bridge.lock() else {
-            // 登记簿锁被 poison = 无法保证「真值不出境」→ 拒绝即帧。
-            return EgressVerdict::Deny {
-                reason: "出境脱敏闸不可用（登记簿锁被污染）—— 已拒绝本次出网".to_string(),
-            };
-        };
+        if request
+            .messages
+            .iter()
+            .flat_map(|message| &message.content)
+            .any(|part| matches!(part, ContentPart::ImageUrl { .. }))
+        {
+            return self.deny("出境脱敏闸无法检查图像内容，已拒绝本次出网".into());
+        }
         let mut replaced = request.clone();
-        let mut any_hit = false;
         let mut hits = Vec::new();
         for message in &mut replaced.messages {
             for part in &mut message.content {
                 if let ContentPart::Text { text } = part {
-                    let redaction = bridge.redact_for_egress(text);
-                    if !redaction.hits.is_empty() {
-                        any_hit = true;
-                        hits.extend(redaction.hits);
-                        *text = redaction.text;
-                    }
+                    redact_text(bridge, text, &mut hits);
                 }
+            }
+            for call in &mut message.tool_calls {
+                redact_arguments(bridge, &mut call.arguments, &mut hits);
             }
         }
         // 出域账本：每次判定记一行（**零真值**：只记对象类型与指纹）。
         // 记账失败**不阻断出网**（账本是观测面，不是闸）。
-        if any_hit {
+        if !hits.is_empty() {
             self.record("redacted", &hits, "provider", EGRESS_USAGE_CHAT, None);
             self.declare_impact("provider", true);
             EgressVerdict::Redacted(replaced)
@@ -306,6 +341,31 @@ impl EgressGate for RedactionEgressGate {
             self.record("pass", &[], "provider", EGRESS_USAGE_CHAT, None);
             self.declare_impact("provider", true);
             EgressVerdict::Pass
+        }
+    }
+}
+
+fn redact_text(bridge: &mut RedactionBridge, text: &mut String, hits: &mut Vec<RedactionHit>) {
+    let report = bridge.redact_for_egress(text);
+    if !report.hits.is_empty() {
+        *text = report.text;
+        hits.extend(report.hits);
+    }
+}
+
+fn redact_arguments(
+    bridge: &mut RedactionBridge,
+    value: &mut serde_json::Value,
+    hits: &mut Vec<RedactionHit>,
+) {
+    use serde_json::Value;
+    let mut pending = vec![value];
+    while let Some(value) = pending.pop() {
+        match value {
+            Value::String(text) => redact_text(bridge, text, hits),
+            Value::Array(array) => pending.extend(array),
+            Value::Object(object) => pending.extend(object.values_mut()),
+            _ => {}
         }
     }
 }
@@ -515,6 +575,48 @@ mod tests {
     }
 
     #[test]
+    fn unscannable_image_content_is_denied_without_recording_the_url() {
+        let gate = RedactionEgressGate::new();
+        let mut request = request_with("图像描述");
+        request.messages[0].content.push(ContentPart::ImageUrl {
+            url: "https://images.example.test/private-object".into(),
+            detail: None,
+        });
+        assert!(matches!(gate.vet(&request), EgressVerdict::Deny { .. }));
+        let entries = gate.ledger().entries();
+        assert_eq!(entries[0].verdict, "deny");
+        assert!(!serde_json::to_string(&entries)
+            .unwrap()
+            .contains("private-object"));
+    }
+
+    #[test]
+    fn nested_tool_arguments_are_redacted_without_changing_their_shape() {
+        use apeireth_protocol::canonical::ToolCall;
+        let gate = RedactionEgressGate::new();
+        let mut request = request_with("历史工具参数");
+        request.messages[0].tool_calls.push(ToolCall {
+            id: "test-call".into(),
+            name: "test-tool".into(),
+            arguments: serde_json::json!({"recipients": ["alice@example.test"], "limit": 1}),
+        });
+        let EgressVerdict::Redacted(redacted) = gate.vet(&request) else {
+            panic!("tool argument should be redacted");
+        };
+        let call = &redacted.messages[0].tool_calls[0];
+        assert_eq!(call.id, "test-call");
+        assert_eq!(call.arguments["limit"], 1);
+        assert!(call.arguments["recipients"][0]
+            .as_str()
+            .unwrap()
+            .starts_with("__AP_"));
+        assert_eq!(
+            request.messages[0].tool_calls[0].arguments["recipients"][0],
+            "alice@example.test"
+        );
+    }
+
+    #[test]
     fn pii_is_replaced_by_placeholder() {
         let gate = RedactionEgressGate::new();
         // 一个能被 PII 检出的样本：邮箱。
@@ -543,7 +645,8 @@ mod tests {
 
         let gate = RedactionEgressGate::new();
         let request = request_with("联系 alice@example.com 就行");
-        let redacted = match gate.vet(&request) {
+        let (verdict, restorer) = gate.prepare(&request);
+        let redacted = match verdict {
             EgressVerdict::Redacted(redacted) => redacted,
             other => panic!("应脱敏: {other:?}"),
         };
@@ -564,7 +667,7 @@ mod tests {
             tool_calls: Vec::new(),
             raw_metadata: Default::default(),
         };
-        gate.restore(&mut response);
+        restorer.expect("redacted request has a response restorer")(&mut response);
         // 回程面换回真值。
         assert!(
             response.content.contains("alice@example.com"),
@@ -588,12 +691,30 @@ mod tests {
             tool_calls: Vec::new(),
             raw_metadata: Default::default(),
         };
-        gate.restore(&mut response);
+        let (_, restorer) = gate.prepare(&request_with("alice@example.com"));
+        restorer.expect("redacted request has a response restorer")(&mut response);
         assert!(
             response.content.contains("__AP_EMAIL_deadbeef0000__"),
             "未登记占位应原样留痕: {}",
             response.content
         );
+    }
+
+    #[test]
+    fn one_requests_restorer_does_not_reveal_another_requests_value() {
+        let gate = RedactionEgressGate::new();
+        let (verdict_a, restore_a) = gate.prepare(&request_with("alice@example.com"));
+        let EgressVerdict::Redacted(redacted_a) = verdict_a else {
+            panic!("request A must be redacted");
+        };
+        let alias_a = ContentPart::join_text(&redacted_a.messages[0].content);
+        let (_, restore_b) = gate.prepare(&request_with("bob@example.com"));
+        let mut response_b = NormalizedResponse::text("b", "test-model", &alias_a);
+        restore_b.unwrap()(&mut response_b);
+        assert_eq!(response_b.content, alias_a);
+        let mut response_a = NormalizedResponse::text("a", "test-model", alias_a);
+        restore_a.unwrap()(&mut response_a);
+        assert_eq!(response_a.content, "alice@example.com");
     }
 
     /// 出网闸每次判定都记一行（零真值：只有对象类型与指纹）。
