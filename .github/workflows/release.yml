@@ -268,22 +268,39 @@ jobs:
           Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
           irm get.scoop.sh | iex
 
+      - name: Build portable ZIP for Scoop manifest
+        run: |
+          powershell -ExecutionPolicy Bypass -File packaging/zip/build.ps1
+
       - name: Build scoop manifest
         env:
           APEIRETH_BUCKET_REPO: apeireth/scoop-bucket
         run: |
           powershell -ExecutionPolicy Bypass -File packaging/scoop/build.ps1
 
-      - name: Verify manifest JSON syntax
+      - name: Verify manifest binds to the locally built ZIP
         run: |
           $json = Get-Content packaging/scoop/apeireth.json -Raw
           $parsed = $json | ConvertFrom-Json
-          if (-not $parsed.version) { Write-Error "❌ manifest 缺 version"; exit 1 }
-          if (-not $parsed.url) { Write-Error "❌ manifest 缺 url"; exit 1 }
-          if ($parsed.hash -match "REPLACE_WITH_RELEASE_SHA256_AT_TAG_TIME") {
-            Write-Warning "⚠️  manifest 仍是 placeholder sha256 (估补)"
+          $release = $parsed.architecture.'64bit'
+          $zip = "target/apeireth-${env:APEIRETH_VERSION}-windows-x86_64.zip"
+          if ($env:GITHUB_REPOSITORY -notmatch '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$') {
+            Write-Error "invalid GITHUB_REPOSITORY contract"
+            exit 1
           }
-          Write-Host "✅ manifest JSON 语法正确"
+          if (-not (Test-Path -LiteralPath $zip -PathType Leaf)) {
+            Write-Error "locally built ZIP is missing"
+            exit 1
+          }
+          $repositoryUrl = "https://github.com/${env:GITHUB_REPOSITORY}"
+          $expectedUrl = "${repositoryUrl}/releases/download/v${env:APEIRETH_VERSION}/apeireth-${env:APEIRETH_VERSION}-windows-x86_64.zip"
+          $expectedHash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash
+          if ($parsed.version -ne $env:APEIRETH_VERSION) { Write-Error "manifest version mismatch"; exit 1 }
+          if ($parsed.homepage -ne $repositoryUrl) { Write-Error "manifest repository mismatch"; exit 1 }
+          if (-not $release) { Write-Error "manifest missing architecture.64bit"; exit 1 }
+          if ($release.url -ne $expectedUrl) { Write-Error "manifest URL mismatch"; exit 1 }
+          if ($release.hash -ne $expectedHash) { Write-Error "manifest hash mismatch"; exit 1 }
+          Write-Host "Scoop manifest is bound to the locally built ZIP."
 
       - name: Upload manifest artifact
         if: ${{ !inputs.skip_upload }}

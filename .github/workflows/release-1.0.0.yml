@@ -156,7 +156,11 @@ jobs:
         run: |
           set -euo pipefail
           chmod +x packaging/${{ matrix.target }}/build.* 2>/dev/null || true
-          if [[ "${{ matrix.target }}" == "msi" || "${{ matrix.target }}" == "scoop" ]]; then
+          if [[ "${{ matrix.target }}" == "scoop" ]]; then
+            # The Scoop manifest must hash the exact ZIP uploaded by this job.
+            powershell -ExecutionPolicy Bypass -File "packaging/zip/build.ps1"
+            powershell -ExecutionPolicy Bypass -File "packaging/scoop/build.ps1"
+          elif [[ "${{ matrix.target }}" == "msi" ]]; then
             powershell -ExecutionPolicy Bypass -File "packaging/${{ matrix.target }}/build.ps1"
           else
             bash "packaging/${{ matrix.target }}/build.sh"
@@ -188,12 +192,17 @@ jobs:
 
       # === Upload 包产物 (per arch) ===
       - name: Upload ${{ matrix.target }}-${{ matrix.arch }} artifact
+        if: matrix.target != 'docker'
         uses: actions/upload-artifact@v7
         with:
           name: apeireth-${{ matrix.target }}-${{ matrix.arch }}
           path: |
             target/debian/*.deb
             target/release/rpmbuild/RPMS/*/*.rpm
+            target/*.tar.gz
+            target/*.tar.gz.sha256
+            target/*.zip
+            target/*.zip.sha256
             dist/*.tar.gz
             dist/*.tar.xz
             target/msi/*.msi

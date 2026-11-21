@@ -72,7 +72,7 @@ if [[ ! -f "${COSIGN_PUB}" ]]; then
     exit 2
 fi
 
-# === Docker OCI 走 cosign verify (无 .sig 文件, 走 Fulcio+Rekor) ===
+# === Docker OCI 走 cosign verify (签名随 OCI image 存储, 走 Fulcio+Rekor) ===
 if [[ "${PKG}" == *"/"* ]] && [[ "${PKG}" != *".deb" ]] && [[ "${PKG}" != *".rpm" ]] \
     && [[ "${PKG}" != *".tar.gz" ]] && [[ "${PKG}" != *".zip" ]] && [[ "${PKG}" != *".msi" ]] \
     && [[ "${PKG}" != *".rb" ]] && [[ "${PKG}" != *".json" ]]; then
@@ -84,17 +84,12 @@ if [[ "${PKG}" == *"/"* ]] && [[ "${PKG}" != *".deb" ]] && [[ "${PKG}" != *".rpm
     exit $?
 fi
 
-# === 文件包验签 (有 .sig 文件) ===
-SIG="${PKG}.sig"
-if [[ ! -f "${SIG}" ]]; then
-    echo "❌ 签名文件不存在: ${SIG}"
-    echo "   期望: ${PKG} 旁边有同名 .sig 文件 (per scripts/release/cosign-sign-all.sh 产物)"
+# === File package verification (standardized Sigstore bundle) ===
+BUNDLE="${PKG}.sigstore.json"
+if [[ ! -s "${BUNDLE}" ]]; then
+    echo "❌ Sigstore bundle 缺失或为空: ${BUNDLE}"
+    echo "   期望: ${PKG} 旁边有同名 .sigstore.json 文件"
     echo "   下载: https://github.com/apeireth/apeireth/releases/tag/v1.0.0 (签名在 assets)"
-    exit 2
-fi
-
-if [[ ! -s "${SIG}.bundle" ]] || [[ ! -s "${SIG}.cert" ]]; then
-    echo "❌ 签名证明不完整: 需要非空 ${SIG}.bundle 和 ${SIG}.cert"
     exit 2
 fi
 
@@ -106,12 +101,12 @@ fi
 # === 验签 ===
 echo ">>> 验签: ${PKG}"
 echo "    公钥: ${COSIGN_PUB}"
-echo "    签名: ${SIG}"
+echo "    bundle: ${BUNDLE}"
 echo ""
 
 if "${COSIGN_BIN}" verify-blob \
+    --bundle "${BUNDLE}" \
     --key "${COSIGN_PUB}" \
-    --signature "${SIG}" \
     "${PKG}"; then
     echo ""
     echo "✅ 验签通过 — 包来源可信, 可安全安装"

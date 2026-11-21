@@ -31,12 +31,25 @@ set -o pipefail
 
 # === 环境变量 (可覆盖) ===
 COSIGN_BIN="${COSIGN_BIN:-cosign}"
-COSIGN_KEY="${COSIGN_KEY:-./cosign.key}"
+# COSIGN_KEY_B64 is the CI secret material. COSIGN_KEY_PATH is the decoded
+# file consumed by cosign; COSIGN_KEY remains a backwards-compatible local
+# path alias only. Never print either secret material or a caller-provided path.
+COSIGN_KEY_B64="${COSIGN_KEY_B64:-}"
+COSIGN_KEY_PATH="${COSIGN_KEY_PATH:-${COSIGN_KEY:-./cosign.key}}"
 COSIGN_PUB="${COSIGN_PUB:-./docs/security/cosign.pub}"
 DIST_DIR="${DIST_DIR:-./dist}"
 SIG_DIR="${DIST_DIR}/signatures"
 VERSION="${APEIRETH_VERSION:-1.0.0}"
 DRY_RUN=false
+KEY_WORK_DIR=""
+
+cleanup_key_material() {
+    if [[ -n "${KEY_WORK_DIR}" ]] && [[ -d "${KEY_WORK_DIR}" ]]; then
+        rm -f -- "${KEY_WORK_DIR}/cosign.key" "${KEY_WORK_DIR}/derived-cosign.pub"
+        rmdir -- "${KEY_WORK_DIR}" 2>/dev/null || true
+    fi
+}
+trap cleanup_key_material EXIT HUP INT TERM
 
 # === 参数解析 ===
 for arg in "$@"; do
@@ -64,7 +77,7 @@ echo "  R20 阶段 6 — cosign 8 包签名 (1.0 release)"
 echo "  版本:   ${VERSION}"
 echo "  模式:   $(if [[ "${DRY_RUN}" == "true" ]]; then echo "DRY-RUN"; else echo "LIVE"; fi)"
 echo "  cosign: ${COSIGN_BIN}"
-echo "  私钥:   ${COSIGN_KEY}"
+echo "  私钥源: $(if [[ -n "${COSIGN_KEY_B64}" ]]; then echo "encoded CI secret"; else echo "local key file"; fi)"
 echo "  公钥:   ${COSIGN_PUB}"
 echo "  dist:   ${DIST_DIR}"
 echo "  sigs:   ${SIG_DIR}"
@@ -92,30 +105,58 @@ if [[ ! -d "${DIST_DIR}" ]]; then
     exit 1
 fi
 
-# 4. 私钥存在 (DRY-RUN 跳过)
+# 4. Prepare and validate private key (DRY-RUN skips cryptographic material).
 if [[ "${DRY_RUN}" == "false" ]]; then
-    if [[ ! -f "${COSIGN_KEY}" ]]; then
-        echo "❌ 私钥文件不存在: ${COSIGN_KEY}"
-        echo "   生成: cosign generate-key-pair"
-        echo "   存储: GitHub Actions Secret COSIGN_KEY (per docs/security/cosign-keys.md §3)"
+    umask 077
+    KEY_WORK_DIR=$(mktemp -d "${TMPDIR:-/tmp}/apeireth-cosign-key.XXXXXX")
+
+    if [[ -n "${COSIGN_KEY_B64}" ]]; then
+        if [[ -z "${COSIGN_PASSWORD:-}" ]]; then
+            echo "❌ COSIGN_PASSWORD 未配置，拒绝交互式或空口令签名"
+            exit 1
+        fi
+        COSIGN_KEY_PATH="${KEY_WORK_DIR}/cosign.key"
+        if printf '%s' "${COSIGN_KEY_B64}" | base64 --decode > "${COSIGN_KEY_PATH}" 2>/dev/null; then
+            :
+        elif printf '%s' "${COSIGN_KEY_B64}" | base64 -D > "${COSIGN_KEY_PATH}" 2>/dev/null; then
+            :
+        else
+            echo "❌ COSIGN_KEY_B64 不是有效的 base64 私钥材料"
+            exit 1
+        fi
+    fi
+
+    if [[ ! -s "${COSIGN_KEY_PATH}" ]]; then
+        echo "❌ 私钥文件缺失或为空"
+        echo "   CI: 配置 COSIGN_KEY(base64) + COSIGN_PASSWORD；本地: 设置 COSIGN_KEY_PATH"
         exit 1
     fi
-    # 5. 公钥存在
-    if [[ ! -f "${COSIGN_PUB}" ]]; then
+    # 5. Public key must exist and match the injected private key.
+    if [[ ! -s "${COSIGN_PUB}" ]]; then
         echo "❌ 公钥文件不存在: ${COSIGN_PUB}"
         echo "   生成: cosign generate-key-pair 后 commit cosign.pub 到 docs/security/"
         exit 1
     fi
+    if ! "${COSIGN_BIN}" public-key --key "${COSIGN_KEY_PATH}" \
+        > "${KEY_WORK_DIR}/derived-cosign.pub" 2>/dev/null; then
+        echo "❌ 无法从私钥导出公钥（检查私钥格式和 COSIGN_PASSWORD）"
+        exit 1
+    fi
+    if ! cmp -s "${KEY_WORK_DIR}/derived-cosign.pub" "${COSIGN_PUB}"; then
+        echo "❌ 私钥与仓库中已审核的公钥不匹配"
+        exit 1
+    fi
+    echo "✓ 私钥材料已解码并与已审核公钥匹配"
 fi
 
 mkdir -p "${SIG_DIR}"
 
 # === 通用签名函数 ===
-# 用法: sign_blob <pkg_path> <sig_path> <desc>
+# 用法: sign_blob <pkg_path> <desc>
 sign_blob() {
     local pkg="$1"
-    local sig="$2"
-    local desc="$3"
+    local desc="$2"
+    local bundle="${SIG_DIR}/$(basename "${pkg}").sigstore.json"
 
     if [[ ! -f "${pkg}" ]]; then
         echo "  ❌ 缺少预期发布产物 ${desc}: ${pkg}"
@@ -123,26 +164,31 @@ sign_blob() {
     fi
 
     if [[ "${DRY_RUN}" == "true" ]]; then
-        echo "  [DRY-RUN] cosign sign-blob --key <key> ${pkg} → ${sig}"
+        echo "  [DRY-RUN] cosign sign-blob --key <key> --bundle ${bundle} ${pkg}"
         return 0
     fi
 
-    # 同时输出 .sig (signature) + .cert (证书) + 透明日志条目
+    # The standardized Sigstore bundle carries the signature and the Rekor
+    # inclusion material. Self-managed-key signing does not create a Fulcio
+    # certificate, so an independent .cert file would be a false requirement.
     "${COSIGN_BIN}" sign-blob \
-        --key "${COSIGN_KEY}" \
-        --output-signature "${sig}" \
-        --output-certificate "${sig}.cert" \
-        --bundle "${sig}.bundle" \
+        --yes \
+        --key "${COSIGN_KEY_PATH}" \
+        --bundle "${bundle}" \
         "${pkg}" >/dev/null 2>&1
+    if [[ ! -s "${bundle}" ]]; then
+        echo "  ❌ cosign 未生成非空 Sigstore bundle: ${bundle}"
+        return 1
+    fi
 
     # SHA256 fallback (apt/rpm 自带校验)
     if command -v sha256sum >/dev/null 2>&1; then
-        sha256sum "${pkg}" | awk '{print $1}' > "${sig%.sig}.sha256"
+        sha256sum "${pkg}" | awk '{print $1}' > "${bundle%.sigstore.json}.sha256"
     fi
 
     local size
     size=$(stat -c '%s' "${pkg}" 2>/dev/null || stat -f '%z' "${pkg}" 2>/dev/null || echo "?")
-    echo "  ✓ ${desc} (${size} bytes) → ${sig}"
+    echo "  ✓ ${desc} (${size} bytes) → ${bundle}"
 }
 
 # === 8 包签名 ===
@@ -150,67 +196,51 @@ sign_blob() {
 echo "[1/8] deb 签名 (Ubuntu/Debian)"
 sign_blob \
     "${DIST_DIR}/apeireth_${VERSION}_amd64.deb" \
-    "${SIG_DIR}/apeireth_${VERSION}_amd64.deb.sig" \
     "deb (linux/amd64)"
 
 echo "[2/8] rpm 签名 (RHEL/Fedora)"
 sign_blob \
     "${DIST_DIR}/apeireth-${VERSION}-1.x86_64.rpm" \
-    "${SIG_DIR}/apeireth-${VERSION}-1.x86_64.rpm.sig" \
     "rpm (linux/amd64)"
 
 echo "[3/8] brew 签名 (macOS formula)"
 sign_blob \
     "${DIST_DIR}/apeireth.rb" \
-    "${SIG_DIR}/apeireth.rb.sig" \
     "brew (macOS)"
 
 echo "[4/8] scoop 签名 (Windows manifest)"
 sign_blob \
     "${DIST_DIR}/apeireth.json" \
-    "${SIG_DIR}/apeireth.json.sig" \
     "scoop (Windows)"
 
-echo "[5/8] tarball 签名 (Linux/macOS 离线包)"
+echo "[5/8] tarball 签名 (Linux 离线包)"
 sign_blob \
-    "${DIST_DIR}/apeireth-${VERSION}-linux-amd64.tar.gz" \
-    "${SIG_DIR}/apeireth-${VERSION}-linux-amd64.tar.gz.sig" \
+    "${DIST_DIR}/apeireth-${VERSION}-linux-x86_64.tar.gz" \
     "tarball (linux/amd64)"
-sign_blob \
-    "${DIST_DIR}/apeireth-${VERSION}-darwin-universal.tar.gz" \
-    "${SIG_DIR}/apeireth-${VERSION}-darwin-universal.tar.gz.sig" \
-    "tarball (macOS universal)"
 
 echo "[6/8] zip 签名 (Windows 通用)"
 sign_blob \
-    "${DIST_DIR}/apeireth-${VERSION}-windows-amd64.zip" \
-    "${SIG_DIR}/apeireth-${VERSION}-windows-amd64.zip.sig" \
+    "${DIST_DIR}/apeireth-${VERSION}-windows-x86_64.zip" \
     "zip (windows/amd64)"
 
 echo "[7/8] MSI 签名 (Windows Installer, signtool + cosign)"
 # Authenticode 走 signtool (单独 CI job, per docs/security/cosign-keys.md §1)
 # cosign 走供应链签名 (本脚本)
 sign_blob \
-    "${DIST_DIR}/apeireth-${VERSION}.msi" \
-    "${SIG_DIR}/apeireth-${VERSION}.msi.sig" \
+    "${DIST_DIR}/apeireth-${VERSION}-windows-x86_64.msi" \
     "MSI (windows/amd64)"
 
 echo "[8/8] Docker 签名 (cosign sign OCI, GitHub OIDC Fulcio)"
 # Docker 走 cosign sign (不是 sign-blob), 用 OIDC token 而非本地私钥
 DOCKER_IMAGE="${DOCKER_IMAGE:-ghcr.io/apeireth/apeireth:${VERSION}}"
-DOCKER_SIG="${SIG_DIR}/apeireth-docker-${VERSION}.sig"
-DOCKER_CERT="${SIG_DIR}/apeireth-docker-${VERSION}.crt"
 
 if command -v docker >/dev/null 2>&1 && docker image inspect "${DOCKER_IMAGE}" >/dev/null 2>&1; then
     if [[ "${DRY_RUN}" == "true" ]]; then
         echo "  [DRY-RUN] cosign sign ${DOCKER_IMAGE} (OIDC)"
     else
         # OIDC 签名: 走 GitHub Actions token (Fulcio CA 短期证书)
-        "${COSIGN_BIN}" sign \
-            --output-signature "${DOCKER_SIG}" \
-            --output-certificate "${DOCKER_CERT}" \
-            "${DOCKER_IMAGE}" >/dev/null 2>&1
-        echo "  ✓ Docker (${DOCKER_IMAGE}) → ${DOCKER_SIG}"
+        "${COSIGN_BIN}" sign --yes "${DOCKER_IMAGE}" >/dev/null 2>&1
+        echo "  ✓ Docker signature stored with OCI image (${DOCKER_IMAGE})"
     fi
 else
     echo "  ⚠️  跳过 Docker: ${DOCKER_IMAGE} 不在本地 docker (CI 阶段由 release-1.0.0.yml docker-multi-arch job 推 GHCR 后签)"
@@ -225,23 +255,23 @@ if [[ "${DRY_RUN}" == "true" ]]; then
     echo "  [DRY-RUN] expected artifact manifest complete; cryptographic verification skipped"
     exit 0
 fi
-for sig in "${SIG_DIR}"/*.sig; do
-    [[ -e "${sig}" ]] || continue
-    pkg="${DIST_DIR}/$(basename "${sig%.sig}")"
+for bundle in "${SIG_DIR}"/*.sigstore.json; do
+    [[ -e "${bundle}" ]] || continue
+    pkg="${DIST_DIR}/$(basename "${bundle%.sigstore.json}")"
     if [[ ! -f "${pkg}" ]]; then
         echo "  ❌ 签名没有对应发布产物: ${pkg}"
         VERIFY_FAIL=$((VERIFY_FAIL+1))
         continue
     fi
-    if [[ ! -s "${sig}.bundle" ]] || [[ ! -s "${sig}.cert" ]]; then
-        echo "  ❌ ${pkg##*/} 缺少非空 .bundle 或 .cert"
+    if [[ ! -s "${bundle}" ]]; then
+        echo "  ❌ ${pkg##*/} 缺少非空 Sigstore bundle"
         VERIFY_FAIL=$((VERIFY_FAIL+1))
         continue
     fi
     VERIFY_TOTAL=$((VERIFY_TOTAL+1))
     if "${COSIGN_BIN}" verify-blob \
+        --bundle "${bundle}" \
         --key "${COSIGN_PUB}" \
-        --signature "${sig}" \
         "${pkg}" >/dev/null 2>&1; then
         echo "  ✓ ${pkg##*/}"
     else
@@ -265,7 +295,7 @@ echo "  验证失败: ${VERIFY_FAIL}/${VERIFY_TOTAL}"
 echo "=================================================="
 echo ""
 echo "用户验证命令 (per docs/security/cosign-keys.md §6.2):"
-echo "  cosign verify-blob --key ${COSIGN_PUB} --signature <pkg>.sig <pkg>"
+echo "  cosign verify-blob --bundle <pkg>.sigstore.json --key ${COSIGN_PUB} <pkg>"
 echo ""
 echo "或用本仓验证脚本:"
 echo "  bash scripts/release/cosign-verify.sh <pkg_path>"

@@ -73,6 +73,10 @@ on:
         description: 'Skip preparing a reviewed public-key update artifact'
         type: boolean
         default: true
+      run_keygen:
+        description: 'Explicitly run the manual emergency key-generation job'
+        type: boolean
+        default: false
 
 env:
   CARGO_TERM_COLOR: always
@@ -115,8 +119,9 @@ jobs:
   keygen:
     name: cosign keygen (1-of-1 阈值, owner 手动 re-key)
     runs-on: ubuntu-22.04
-    # R21 续 D-1 100%: 只在 owner 手动触发时跑 (re-key 场景)
-    if: github.event_name == 'workflow_dispatch'
+    # Key generation is never a side effect of verify-only or re-sign dispatch.
+    # It requires a separate, explicit owner choice.
+    if: github.event_name == 'workflow_dispatch' && inputs.run_keygen == true
     timeout-minutes: 30  # R21 续 D-1 100%: 显式 timeout (cosign-installer + keygen + fingerprint 估 5min, 给 30min 缓冲)
     # R21 续 D-1 100%: per-job 最小化
     permissions:
@@ -131,10 +136,10 @@ jobs:
           fetch-depth: 0
 
       # === cosign 二进制: sigstore/cosign-installer (业界标准) ===
-      - name: Install cosign v2.4.1
-        uses: sigstore/cosign-installer@v3
+      - name: Install cosign v3.1.4
+        uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
         with:
-          cosign-release: 'v2.4.1'
+          cosign-release: 'v3.1.4'
 
       # === 生成 ECDSA P-256 key pair (1-of-1 阈值, 跟 cosign-keys.md §5 一致) ===
       - name: Generate cosign key pair
@@ -228,6 +233,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Verify signing workflow contracts
+        run: python -m unittest scripts.test_cosign_release -v
 
       # === R21 续 D-1 100%: 解析 run_url input → run_id (workflow_dispatch 重签模式) ===
       # 必须在 Download step 之前 (GHA step 按 declaration order 跑)
@@ -394,23 +402,20 @@ jobs:
             cp "dist_raw/apeireth-scoop-x64/packaging/scoop/apeireth.json" "dist/"
           fi
 
-          # 5. tarball amd64: dist_raw/apeireth-tarball-amd64/target/apeireth-${VERSION}-linux-amd64.tar.gz
-          if [[ -f "dist_raw/apeireth-tarball-amd64/target/apeireth-${VERSION}-linux-${ARCH}.tar.gz" ]]; then
-            cp "dist_raw/apeireth-tarball-amd64/target/apeireth-${VERSION}-linux-${ARCH}.tar.gz" "dist/"
-          fi
-          # 5b. tarball darwin universal (由 brew job 或单独 step 推)
-          # 注: release-1.0.0.yml 没显式 build darwin-universal.tar.gz (仅 brew formula),
-          #     此处只复制实际存在的 tarball
-          if [[ -f "dist_raw/apeireth-tarball-amd64/target/apeireth-${VERSION}-darwin-universal.tar.gz" ]]; then
-            cp "dist_raw/apeireth-tarball-amd64/target/apeireth-${VERSION}-darwin-universal.tar.gz" "dist/"
+          # 5. Linux tarball: packaging/tarball derives x86_64 from its Rust target.
+          if [[ -f "dist_raw/apeireth-tarball-amd64/target/apeireth-${VERSION}-linux-x86_64.tar.gz" ]]; then
+            cp "dist_raw/apeireth-tarball-amd64/target/apeireth-${VERSION}-linux-x86_64.tar.gz" "dist/"
           fi
 
-          # 6. zip (Windows): release-1.0.0.yml 没显式 build zip, owner 续补 R21
-          #     placeholder 跳过, cosign-sign-all.sh §[6/8] 容忍文件缺失
+          # 6. Windows ZIP and Scoop manifest are produced together. The
+          # manifest builder verifies that its hash/URL bind to this ZIP.
+          if [[ -f "dist_raw/apeireth-scoop-x64/target/apeireth-${VERSION}-windows-x86_64.zip" ]]; then
+            cp "dist_raw/apeireth-scoop-x64/target/apeireth-${VERSION}-windows-x86_64.zip" "dist/"
+          fi
 
-          # 7. MSI: dist_raw/apeireth-msi-x64/target/msi/apeireth-${VERSION}.msi
-          if [[ -f "dist_raw/apeireth-msi-x64/target/msi/apeireth-${VERSION}.msi" ]]; then
-            cp "dist_raw/apeireth-msi-x64/target/msi/apeireth-${VERSION}.msi" "dist/"
+          # 7. MSI: use the filename emitted by packaging/msi/build.ps1.
+          if [[ -f "dist_raw/apeireth-msi-x64/target/msi/apeireth-${VERSION}-windows-x86_64.msi" ]]; then
+            cp "dist_raw/apeireth-msi-x64/target/msi/apeireth-${VERSION}-windows-x86_64.msi" "dist/"
           fi
 
           # 8. Docker: 不在 artifact (走 GHCR push, 由 docker-multi-arch job 推)
@@ -424,17 +429,20 @@ jobs:
           echo ">>> 总产物数: $(ls -1 dist/ 2>/dev/null | wc -l)"
 
       # === cosign 二进制: sigstore/cosign-installer (业界标准, O-2) ===
-      - name: Install cosign v2.4.1
-        uses: sigstore/cosign-installer@v3
+      - name: Install cosign v3.1.4
+        uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
         with:
-          cosign-release: 'v2.4.1'
+          cosign-release: 'v3.1.4'
 
       # === 7 形态 sign-blob (deb/rpm/brew/scoop/tarball/zip/MSI) ===
       # 私钥走 env: COSIGN_KEY (GHA Secret, base64-encoded)
       # 注: 私钥永不入 step log (env 注入 GHA 内部, 不 echo)
       - name: cosign sign-blob (7 形态)
         env:
-          COSIGN_KEY: ${{ secrets.COSIGN_KEY }}
+          # The repository secret remains base64 text, but the signing script
+          # materializes it as a mode-0600 temporary file and never logs it.
+          COSIGN_KEY_B64: ${{ secrets.COSIGN_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
           COSIGN_PUB: docs/security/cosign.pub
           DIST_DIR: dist
           APEIRETH_VERSION: ${{ env.APEIRETH_VERSION }}
@@ -458,13 +466,13 @@ jobs:
           echo ">>> Docker 镜像签名: ${DOCKER_IMAGE}"
           # 等 60s 让 GHCR 镜像索引稳定 (multi-arch 推完后)
           sleep 60
-          if ! cosign sign "${DOCKER_IMAGE}"; then
+          if ! cosign sign --yes "${DOCKER_IMAGE}"; then
             echo "❌ Docker 签名失败 (1.0 release tag 阻塞)"
             exit 1
           fi
           echo ">>> Docker OCI 签名完成 (Fulcio + Rekor 透明日志)"
 
-      # === Upload 8 包 .sig 产物 ===
+      # === Upload standardized Sigstore bundle artifacts ===
       - name: Upload cosign signatures
         uses: actions/upload-artifact@v7
         with:
@@ -519,6 +527,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Verify signing workflow contracts
+        run: python -m unittest scripts.test_cosign_release -v
 
       # === R21 续 D-1 100%: 解析 run_url input → run_id (verify-only 模式) ===
       # 必须在 Download step 之前 (GHA step 按 declaration order 跑)
@@ -608,8 +619,9 @@ jobs:
             cp -n "dist_raw/apeireth-rpm-amd64/target/release/rpmbuild/RPMS/x86_64/apeireth-${VERSION}-1.x86_64.rpm" "dist/" 2>/dev/null || true
             cp -n "dist_raw/apeireth-brew-universal/packaging/brew/apeireth.rb" "dist/" 2>/dev/null || true
             cp -n "dist_raw/apeireth-scoop-x64/packaging/scoop/apeireth.json" "dist/" 2>/dev/null || true
-            cp -n "dist_raw/apeireth-tarball-amd64/target/apeireth-${VERSION}-linux-amd64.tar.gz" "dist/" 2>/dev/null || true
-            cp -n "dist_raw/apeireth-msi-x64/target/msi/apeireth-${VERSION}.msi" "dist/" 2>/dev/null || true
+            cp -n "dist_raw/apeireth-tarball-amd64/target/apeireth-${VERSION}-linux-x86_64.tar.gz" "dist/" 2>/dev/null || true
+            cp -n "dist_raw/apeireth-scoop-x64/target/apeireth-${VERSION}-windows-x86_64.zip" "dist/" 2>/dev/null || true
+            cp -n "dist_raw/apeireth-msi-x64/target/msi/apeireth-${VERSION}-windows-x86_64.msi" "dist/" 2>/dev/null || true
           fi
           rm -rf dist_raw/
           echo ">>> Verify job 8 包 ready:"
@@ -627,10 +639,10 @@ jobs:
           run-id: ${{ fromJSON(steps.signed_run.outputs.run_id) }}
           github-token: ${{ github.token }}
 
-      - name: Install cosign v2.4.1
-        uses: sigstore/cosign-installer@v3
+      - name: Install cosign v3.1.4
+        uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
         with:
-          cosign-release: 'v2.4.1'
+          cosign-release: 'v3.1.4'
 
       # === 8 包 verify-blob 守门 (7 形态) ===
       # 公钥: docs/security/cosign.pub (1.0 release 真实公钥, 已 commit)
@@ -654,27 +666,26 @@ jobs:
             "apeireth-${APEIRETH_VERSION}-1.x86_64.rpm"
             "apeireth.rb"
             "apeireth.json"
-            "apeireth-${APEIRETH_VERSION}-linux-amd64.tar.gz"
-            "apeireth-${APEIRETH_VERSION}-darwin-universal.tar.gz"
-            "apeireth-${APEIRETH_VERSION}-windows-amd64.zip"
-            "apeireth-${APEIRETH_VERSION}.msi"
+            "apeireth-${APEIRETH_VERSION}-linux-x86_64.tar.gz"
+            "apeireth-${APEIRETH_VERSION}-windows-x86_64.zip"
+            "apeireth-${APEIRETH_VERSION}-windows-x86_64.msi"
           )
           FAIL=0
           TOTAL=${#EXPECTED[@]}
           for name in "${EXPECTED[@]}"; do
             pkg="dist/${name}"
-            sig="dist/signatures/${name}.sig"
+            bundle="dist/signatures/${name}.sigstore.json"
             if [[ ! -f "${pkg}" ]]; then
               echo "  ❌ 缺少预期发布产物: ${name}"
               FAIL=$((FAIL+1))
               continue
             fi
-            if [[ ! -s "${sig}" ]] || [[ ! -s "${sig}.bundle" ]] || [[ ! -s "${sig}.cert" ]]; then
-              echo "  ❌ ${name} 缺少完整签名/.bundle/.cert"
+            if [[ ! -s "${bundle}" ]]; then
+              echo "  ❌ ${name} 缺少非空 Sigstore bundle"
               FAIL=$((FAIL+1))
               continue
             fi
-            if cosign verify-blob --key "${COSIGN_PUB}" --signature "${sig}" "${pkg}" >/dev/null 2>&1; then
+            if cosign verify-blob --bundle "${bundle}" --key "${COSIGN_PUB}" "${pkg}" >/dev/null 2>&1; then
               echo "  ✓ ${name}"
             else
               echo "  ❌ ${name} verify 失败"
@@ -772,31 +783,34 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install cosign v2.4.1
-        uses: sigstore/cosign-installer@v3
+      - name: Install cosign v3.1.4
+        uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
         with:
-          cosign-release: 'v2.4.1'
+          cosign-release: 'v3.1.4'
 
       # === 从 secrets.COSIGN_KEY 导出公钥 (跟 sign 用的同一对) ===
       - name: Export cosign public key
         env:
-          COSIGN_KEY: ${{ secrets.COSIGN_KEY }}
+          COSIGN_KEY_B64: ${{ secrets.COSIGN_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
         shell: bash
         run: |
           set -euo pipefail
-          if [[ -z "${COSIGN_KEY}" ]]; then
+          if [[ -z "${COSIGN_KEY_B64}" ]] || [[ -z "${COSIGN_PASSWORD}" ]]; then
             echo "❌ secrets.COSIGN_KEY 未配置, 无法准备公钥更新 artifact"
-            echo "   owner 需先在 GHA UI 配置: Settings → Secrets and variables → Actions"
-            echo "   配 GHA Secret: COSIGN_KEY = base64(私钥内容)"
+            echo "   owner 需配置 COSIGN_KEY(base64) 与 COSIGN_PASSWORD"
             exit 1
           fi
-          # === 私钥从 env 写到临时文件 (owner 显式配置, 不入 log) ===
-          mkdir -p /tmp/cosign-pubkey
-          echo "${COSIGN_KEY}" | base64 -d > /tmp/cosign-pubkey/cosign.key
+          umask 077
+          KEY_DIR="$(mktemp -d "${RUNNER_TEMP:-/tmp}/apeireth-cosign-pubkey.XXXXXX")"
+          trap 'rm -f -- "${KEY_DIR}/cosign.key"; rmdir -- "${KEY_DIR}" 2>/dev/null || true' EXIT
+          if ! printf '%s' "${COSIGN_KEY_B64}" | base64 --decode > "${KEY_DIR}/cosign.key" 2>/dev/null; then
+            echo "❌ secrets.COSIGN_KEY 不是有效的 base64 私钥材料"
+            exit 1
+          fi
+          test -s "${KEY_DIR}/cosign.key"
           # === 导出公钥 ===
-          cosign public-key --key /tmp/cosign-pubkey/cosign.key > docs/security/cosign.pub
-          # === 清理私钥 (防御性, 永不入下一 step) ===
-          rm -f /tmp/cosign-pubkey/cosign.key
+          cosign public-key --key "${KEY_DIR}/cosign.key" > docs/security/cosign.pub
           echo ">>> 公钥已导出: docs/security/cosign.pub ($(stat -c '%s' docs/security/cosign.pub) bytes)"
 
       # === 更新 cosign-keys.md §2 placeholder (per O-5 不假装) ===
