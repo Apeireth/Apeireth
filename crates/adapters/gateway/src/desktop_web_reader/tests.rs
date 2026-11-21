@@ -78,6 +78,27 @@ fn page_projection_enforces_text_media_utf8_and_budgets() {
     assert_eq!(page.title, None);
 }
 
+#[test]
+fn minified_html_separates_headings_paragraphs_and_lists_without_splitting_inline_text() {
+    let page = project(fetched(
+        "text/html",
+        concat!(
+            "<!doctype html><head><title>Example Domain</title>",
+            "<script>hidden()</script></head><body><main>",
+            "<H1 class=\"heading\">Example <strong>Domain</strong></H1><p class=\"copy\">",
+            "This domain is for <em>documentation</em> examples.",
+            "<p>Works with <a href=\"https://example.org\">inline links</a>, too.",
+            "<ul><li>One<li>Two</ul><div>Learn<br data-line>more</div></main></body>"
+        ),
+    ))
+    .unwrap();
+    assert_eq!(page.title.as_deref(), Some("Example Domain"));
+    assert_eq!(
+        page.text,
+        "Example Domain\nThis domain is for documentation examples.\nWorks with inline links, too.\nOne\nTwo\nLearn\nmore"
+    );
+}
+
 #[tokio::test]
 async fn one_pending_reader_is_bounded_and_returns_a_fixed_busy_error() {
     let reader = Reader::new();

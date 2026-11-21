@@ -7,6 +7,7 @@ use apeireth_tools_canonical::egress::{
     ControlledEgress, EgressDestination, EgressError, EgressHttpResponse,
     PUBLIC_HTTPS_URL_MAX_BYTES,
 };
+use apeireth_tools_canonical::fetch::html_text::extract_reading_text;
 use apeireth_tools_canonical::fetch::{extract_text, extract_title};
 use axum::extract::{rejection::JsonRejection, DefaultBodyLimit, OriginalUri, Request, State};
 use axum::http::{header, StatusCode};
@@ -253,7 +254,7 @@ fn project(response: EgressHttpResponse) -> Result<Page, ReaderError> {
                     let (title, _) = bounded_text(&title, TITLE_LIMIT);
                     (!title.is_empty()).then(|| title.to_owned())
                 });
-            let text = extract_text(raw).map_err(|_| ReaderError::Empty)?;
+            let text = extract_reading_text(raw).map_err(|_| ReaderError::Empty)?;
             (title, readable_text(&text))
         }
         ContentKind::Text => (None, readable_text(raw)),
