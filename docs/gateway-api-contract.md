@@ -22,6 +22,25 @@
 
 错误映射：400 `invalid_request`、403 `single_operator_required`、503 `profile_unavailable`/`credential_unavailable`、409 `endpoint_change_needs_key`。成果与候选服务对严格受管单操作者放行；其他用户表/客户端/非默认域仍 503 `scope_unavailable`。四级口径：PRODUCTION WIRED（代码在主干、Windows 隔离验收），非 HARDWARE VALIDATED；实现 `crates/adapters/gateway/src/model_connection.rs`、`crates/adapters/cli/src/desktop_model_connection.rs`，证据见[进度](status/desktop-managed-model-connection-2026-11-19.md)。
 
+## 受管桌面能力配置
+
+默认域的认证受管桌面操作者使用 `GET /v1/admin/desktop-capabilities` 读取
+`{schema_version:1, revision, configured, effective, restart_required}`。
+`configured` 和 `effective` 都包含三个布尔值：
+
+| 字段 | 初始值 | 启用范围 |
+|---|---|---|
+| `project_file_tools` | `true` | 项目工作区文件工具。工作区修订、目录范围和逐次写审批仍由执行链核验。 |
+| `preference_learning` | `true` | 从明确表述学习偏好。关闭后停止该模块学习，原有偏好记录和召回继续保留。 |
+| `skill_search` | `false` | 普通对话可查找本机技能库条目。项目对话的文件工具范围由工作区合同决定。 |
+
+`POST /v1/admin/desktop-capabilities` 接受严格的 `{expected_revision, configured}`，
+两层对象都拒绝未知字段，三个配置值须显式提供。服务持久保存配置后返回同一读面结构。
+修订不符返回 `409 capability_revision_conflict`。配置未变化时保留原修订。
+`effective` 来自本进程实际装入的工具与行为模块，表示装配状态，逐次工具调用仍走原治理链。
+`restart_required` 表示保存值与本次装配不同，正常重开后重新核对。现有任务继续沿用当前运行时。
+配置文件 `desktop-capabilities.json` 仅由受管桌面后端加载，使用版本校验与原子写入。
+
 ## §1 通用约定
 
 - Base URL:`http://127.0.0.1:{port}`(port 由桌面壳为 sidecar 动态分配;手动运行时默认 8080)
@@ -588,10 +607,10 @@ A2 批**不承诺持久化**(注册表为进程内实现, 持久化属 A3 批)�
   **联系人逐字段不变**。
 - **归档是终态, 不是冲突**: 已归档再写 ⇒ **403 `contact_archived`**;默认列表不含已归档
   (需 `?include_archived=true`);归档不可复活。
-- **工作区绑定**: 写面可带 `workspace_id` + `revision`, 服务端校验工作区**存在/未吊销/
-  修订号精确匹配**;不符 ⇒ **409 `contact_binding_conflict`** + `details.reason`
-  (`workspace_not_found` / `workspace_revoked` / `workspace_revision_mismatch`),
-  且**零字段变化**。绑定**只存 id + revision, 不存快照**。
+- **工作区绑定**: 写面可带 `workspace_id` + `revision`。服务端校验工作区存在、可选且修订号精确匹配。临时目录授权不能登记到联系人。
+  校验失败返回 **409 `contact_binding_conflict`**，`details.reason` 为
+  `workspace_not_found`、`workspace_revoked`、`workspace_revision_mismatch` 或 `workspace_unavailable`。
+  绑定只保存 id 和修订。修改绑定后，历史会话保留原记录，继续交谈须新开会话。
 - **存在性不泄露**: 不存在 / 不可见 = 同帧 404 `contact_not_found`(消息恒定
   「联系人不存在或不可见」)。
 - **可检索审计**: 建/改/归档/被拒都落审计行 `gateway.contact_action`
@@ -630,6 +649,10 @@ A2 批**不承诺持久化**(注册表为进程内实现, 持久化属 A3 批)�
      "memory_scope": "contact", "workspace_binding": { "workspace_id": "…", "revision": 7 } }`,
   可省字段同上)→ **201** `{"contact":{…}}`。
 - 改(PATCH, 请求体必须带 `expected_revision`)→ **200** `{"contact":{…}}`。
+  `persona`、`capabilities`、`workspace_binding` 至少提供一项，所有指定字段与新联系人修订一并保存。
+  省略 `workspace_binding` 保留当前绑定，显式 `null` 解除绑定。
+  未修改的旧版联系人记录仍可读取。修改绑定的记录采用第 2 版格式，
+  若需要使用早期版本运行时，先备份当前数据并恢复升级前数据。
 - 归档(POST)→ **200** `{"contact":{…}}`;之后 `status` = `archived`。
 
 - 错误模型(与 §1 同一帧形):400 `invalid_request`(缺 `expected_revision` /

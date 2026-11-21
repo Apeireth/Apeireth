@@ -1272,6 +1272,7 @@ pub fn canonical_router_with_state(state: GatewayState) -> Router {
         )
         .merge(crate::artifacts::routes_with_panels())
         .merge(crate::model_connection::routes())
+        .merge(crate::desktop_capabilities::routes())
         .merge(crate::turn_results::routes())
         // G-P1 指标端点 (指标数据面路由文件), 同在整面令牌门内。
         .merge(crate::panel_metrics::metrics_routes())
@@ -1315,6 +1316,9 @@ pub fn canonical_router_with_state(state: GatewayState) -> Router {
                 .allow_headers(tower_http::cors::Any),
         )
         .layer(middleware::from_fn(mc::protect_response))
+        .layer(middleware::from_fn(
+            crate::desktop_capabilities::protect_response,
+        ))
         .layer(middleware::from_fn(crate::artifacts::protect_response))
         .layer(middleware::from_fn(
             crate::turn_results::protect_read_response,
