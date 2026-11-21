@@ -1,5 +1,13 @@
 # Cosign 公钥评审与轮换
 
+[Document-Meta]
+Document: docs/security/cosign-keys.md
+Class: GUIDE
+Version: 0.1
+Status: 现行
+Last-Modified: 2026-11-21
+Author: Codex
+
 本页登记 Apeireth 发布物 `cosign sign-blob` 的公开验证密钥。公钥不是秘密，
 但它是发布信任根：修改必须经过安全评审，不能由工作流直接推送或自动合并。
 
