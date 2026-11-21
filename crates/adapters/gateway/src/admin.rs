@@ -10,7 +10,7 @@ use std::sync::RwLock;
 
 use apeireth_core::kernel::CapabilityId;
 use axum::extract::State;
-use axum::http::StatusCode;
+use axum::http::{StatusCode, Uri};
 use axum::response::Response;
 use axum::Json;
 use serde::{Deserialize, Serialize};
@@ -43,17 +43,15 @@ pub trait CredentialWriter: Send + Sync {
     /// # 为什么默认实现是 **Err**（而不是静默忽略）
     ///
     /// 「静默丢弃绑定」会让部署方以为绑定生效了（实际没生效 ⇒ 保护是假的）。
-    /// ⇒ 不支持绑定的写入端**必须如实报失败**。
+    /// ⇒ 不支持绑定的写入端**必须如实报失败**，且返回 `Err` 时不得先写入
+    /// 凭据，否则一个失败的复合操作仍会留下部分状态。
     fn write_with_endpoints(
         &self,
-        name: &str,
-        value: &str,
+        _name: &str,
+        _value: &str,
         _endpoints: &[String],
     ) -> Result<(), String> {
-        // ⚠️ **先把凭据写了**（不能因为「不支持绑定」就把凭据也丢掉 ⇒ 功能回归）；
-        //    再如实报「绑定未登记」⇒ 调用方看到 warning，不会误以为绑定生效。
-        self.write(name, value)?;
-        Err("该凭据写入端不支持端点绑定声明（凭据已写入，但绑定未登记）".to_string())
+        Err("该凭据写入端不支持凭据与端点的成对保存；未写入任何状态".to_string())
     }
 
     /// 该凭据**已声明**的端点（`None` = **未声明** ⇒ 不参与绑定闸；空 `Some` = 声明了但为空）。
@@ -64,8 +62,8 @@ pub trait CredentialWriter: Send + Sync {
     /// ⇒ ⇒ 于是「**只改端点、不带凭据**」时，若这把凭据**从未声明绑定**，
     /// 它会**静默跟随**到新端点 ⇒ ⇒ 真实 API key 可能被发往非预期主机。
     ///
-    /// ⇒ ⇒ 本方法让网关能**读出**绑定状态 ⇒ ⇒ 在热更响应里**如实告警**
-    /// （「失败显式化 ⇒ 没有静默降级」）⇒ ⇒ 而不是假装没有这回事。
+    /// ⇒ ⇒ 本方法让网关能**读出**绑定状态 ⇒ ⇒ 跨 origin 热更时只有已显式
+    /// 绑定的目标才能沿用现有凭据；未知或不匹配一律在变更前拒绝。
     ///
     /// ⚠️ 默认实现返回 `None`（「该写入端不可知」）⇒ ⇒ 与同 trait 既有
     /// 「默认实现 = 如实报失败」风格一致 ⇒ ⇒ **不假装**绑定存在。
@@ -218,40 +216,106 @@ pub async fn admin_config_update(
         }
     }
 
+    // Keep one write guard for the whole synchronous transaction. Axum can
+    // execute two no-await handlers on different runtime workers, so dropping
+    // a read snapshot here would let both requests validate against the same
+    // old endpoint and then interleave their credential/config writes.
+    let mut config = state
+        .hot_config
+        .write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let current_provider = config.provider.clone();
+    let current_base_url = config.base_url.clone();
+    let provider = patch
+        .provider
+        .as_deref()
+        .unwrap_or(&current_provider)
+        .to_string();
+
+    // Reusing a credential at another origin is never an implicit partial
+    // update. A caller may still use any valid custom endpoint by either
+    // declaring that origin in the credential store beforehand or supplying
+    // the credential in the same request.
+    if let Some(target) = patch.base_url.as_deref() {
+        let current_origin = endpoint_origin(&current_base_url);
+        let target_origin = endpoint_origin(target).expect("validated base_url has an origin");
+        let provider_changed =
+            normalize_provider(&provider) != normalize_provider(&current_provider);
+        if (provider_changed || current_origin.as_deref() != Some(target_origin.as_str()))
+            && patch.api_key.is_none()
+        {
+            let name = credential_name(&provider);
+            let explicitly_bound = state
+                .services
+                .credentials
+                .as_ref()
+                .and_then(|writer| writer.bound_endpoints(&name))
+                .is_some_and(|endpoints| {
+                    endpoints.iter().any(|endpoint| {
+                        endpoint_origin(endpoint).as_deref() == Some(target_origin.as_str())
+                    })
+                });
+            if !explicitly_bound {
+                return Err(ErrorFrame::response(
+                    StatusCode::CONFLICT,
+                    ErrorCode::InvalidRequest,
+                    "更换模型端点来源时必须同笔提供 api_key，或先为现有凭据显式声明目标端点；配置保持不变",
+                ));
+            }
+        }
+    }
+
+    // A compound credential+endpoint write must succeed before any gateway or
+    // provider state is changed. This is failure atomicity: the trait contract
+    // guarantees that `Err` means no credential-side mutation, including for
+    // writers that do not support endpoint metadata at all. It does not claim
+    // a coherent credential+binding read across concurrent provider requests.
+    let compound_credential_written = match (patch.base_url.as_deref(), patch.api_key.as_deref()) {
+        (Some(endpoint), Some(api_key)) => {
+            let Some(writer) = &state.services.credentials else {
+                return Err(ErrorFrame::response(
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    ErrorCode::Internal,
+                    "当前凭据后端不支持凭据与端点的成对保存；配置保持不变",
+                ));
+            };
+            let name = credential_name(&provider);
+            if writer
+                .write_with_endpoints(&name, api_key, &[endpoint.trim().to_string()])
+                .is_err()
+            {
+                return Err(ErrorFrame::response(
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    ErrorCode::Internal,
+                    "凭据与端点未能成对保存；配置保持不变",
+                ));
+            }
+            true
+        }
+        _ => false,
+    };
+
     // Validation passed: mutate the hot config state, then push the fields that
     // can reach the running graph (base_url -> provider capability, api_key ->
     // keyring) outward. Anything that cannot take effect is reported honestly
     // in `warnings` rather than faked.
     let mut warnings = Vec::new();
-    {
-        let mut config = state
-            .hot_config
-            .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        if let Some(provider) = patch.provider.clone() {
-            config.provider = provider;
-        }
-        if let Some(base_url) = patch.base_url.clone() {
-            config.base_url = base_url;
-        }
-        if let Some(api_key) = patch.api_key.clone() {
-            config.api_key = Some(api_key);
-        }
-        if let Some(model) = patch.model.clone() {
-            config.model = Some(model);
-            config.admin_model_set = true;
-        }
-        if let Some(capabilities) = patch.capabilities.clone() {
-            config.capabilities = capabilities;
-        }
+    if let Some(provider) = patch.provider.clone() {
+        config.provider = provider;
     }
-
-    let provider = state
-        .hot_config
-        .read()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .provider
-        .clone();
+    if let Some(base_url) = patch.base_url.clone() {
+        config.base_url = base_url;
+    }
+    if let Some(api_key) = patch.api_key.clone() {
+        config.api_key = Some(api_key);
+    }
+    if let Some(model) = patch.model.clone() {
+        config.model = Some(model);
+        config.admin_model_set = true;
+    }
+    if let Some(capabilities) = patch.capabilities.clone() {
+        config.capabilities = capabilities;
+    }
 
     if !provider_registered(&state, &provider) {
         warnings.push(format!(
@@ -281,76 +345,25 @@ pub async fn admin_config_update(
         );
     }
 
-    // ⚠️ **只改端点、不带凭据** ⇒ ⇒ 这把凭据将**跟随**到新端点
-    // ⇒ ⇒ 若它**从未声明绑定** ⇒ ⇒ 绑定闸不拦 ⇒ ⇒ 真实 key 可能被发往非预期主机
-    // ⇒ ⇒ 这里**如实告警**（2026-11-04）：失败显式化 ⇒ 没有静默降级。
-    // ⇒ ⇒ 顺带把「显式绑定」的做法告诉操作者（同笔提交 api_key）。
-    if patch.base_url.is_some() && patch.api_key.is_none() {
+    if let Some(api_key) = patch
+        .api_key
+        .as_deref()
+        .filter(|_| !compound_credential_written)
+    {
         let name = credential_name(&provider);
-        let declared = state
-            .services
-            .credentials
-            .as_ref()
-            .and_then(|writer| writer.bound_endpoints(&name));
-        match declared {
-            None => warnings.push(format!(
-                "凭据 {name} **未声明端点绑定** ⇒ 本次只改端点 ⇒ 该凭据将被发往 {}                  （要显式绑定：请与 base_url **同笔**提交 api_key）",
-                patch.base_url.as_deref().unwrap_or_default()
-            )),
-            Some(list) if list.is_empty() => warnings.push(format!(
-                "凭据 {name} 的端点绑定**为空** ⇒ 本次只改端点 ⇒ 该凭据将被发往 {}                  （要显式绑定：请与 base_url **同笔**提交 api_key）",
-                patch.base_url.as_deref().unwrap_or_default()
-            )),
-            Some(list) => {
-                let target = patch.base_url.as_deref().unwrap_or_default();
-                let matches = list.iter().any(|raw| {
-                    raw.trim_start_matches("https://")
-                        .trim_start_matches("http://")
-                        .trim_end_matches('/')
-                        == target
-                            .trim_start_matches("https://")
-                            .trim_start_matches("http://")
-                            .trim_end_matches('/')
-                });
-                if !matches {
-                    warnings.push(format!(
-                        "凭据 {name} 当前绑定在 {list:?}，与新端点 {target} **不一致**                          ⇒ 绑定闸会在下一次请求时**拒发**该凭据                          （要让它跟随新端点：请与 base_url **同笔**提交 api_key 重新声明绑定）"
-                    ));
-                }
-            }
-        }
-    }
-
-    if let Some(api_key) = patch.api_key.as_deref() {
-        let name = credential_name(&provider);
-        // ⚠️ **同笔**带 `base_url` + `api_key` ⇒ 视为一次**显式的端点绑定声明**
-        // （安全审计 P1：凭据与端点是两份独立配置 ⇒ 只改端点会把旧凭据发给新主机；
-        //   ⇒ 「换端点 + 换凭据」同笔提交 = 部署方明确说「这个凭据属于这个端点」）。
-        // ⇒ 绑定**与凭据同库写入**（`HotCredentialStore::set_with_endpoints`）
-        // ⇒ 之后**只改端点**不再能把这把凭据带走。
-        let bound_endpoint = patch
-            .base_url
-            .as_deref()
-            .map(|url| url.trim().to_string())
-            .filter(|url| !url.is_empty());
         match &state.services.credentials {
             Some(writer) => {
-                let result = match &bound_endpoint {
-                    Some(endpoint) => {
-                        writer.write_with_endpoints(&name, api_key, &[endpoint.clone()])
-                    }
-                    None => writer.write(&name, api_key),
-                };
-                if let Err(error) = result {
+                if let Err(error) = writer.write(&name, api_key) {
                     warnings.push(format!("api_key 未写入 keyring ({name}): {error}"));
                 }
             }
             None => warnings.push(format!(
                 "api_key 未写入 keyring ({name}): gateway 未挂凭据写入端口"
             )),
-        }
+        };
     }
 
+    drop(config);
     Ok(Json(ConfigUpdateResponse { ok: true, warnings }))
 }
 
@@ -413,34 +426,84 @@ pub(crate) fn valid_provider(provider: &str) -> bool {
 /// M17 (2026-09-24 审计): https 强制, `http://` 仅放行环回主机
 /// (本地 Ollama/vLLM 开发场景)。远端明文 HTTP 会把 Bearer API key 裸奔。
 pub(crate) fn valid_base_url(base_url: &str) -> bool {
-    let base_url = base_url.trim();
-    if let Some(rest) = base_url.strip_prefix("https://") {
-        let host = url_host(rest);
-        return !host.is_empty() && !host.chars().any(char::is_whitespace);
-    }
-    if let Some(rest) = base_url.strip_prefix("http://") {
-        return is_loopback_host(rest);
-    }
-    false
+    let Some(uri) = parse_endpoint(base_url) else {
+        return false;
+    };
+    uri.scheme == "https"
+        || uri.scheme == "http" && matches!(uri.host.as_str(), "localhost" | "127.0.0.1" | "::1")
 }
 
-/// 从 `scheme://` 之后的部分取 host 段 (去 userinfo / path / port)。
-fn url_host(after_scheme: &str) -> &str {
-    let authority = after_scheme.split(['/', '?', '#']).next().unwrap_or("");
-    let authority = authority.rsplit('@').next().unwrap_or(authority);
-    match authority.rsplit_once(':') {
-        Some((host, port)) if !port.is_empty() && port.chars().all(|c| c.is_ascii_digit()) => host,
-        _ => authority,
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Endpoint {
+    scheme: String,
+    host: String,
+    port: Option<u16>,
+}
+
+impl Endpoint {
+    fn origin(&self) -> String {
+        let host = if self.host.contains(':') {
+            format!("[{}]", self.host)
+        } else {
+            self.host.clone()
+        };
+        match self.port {
+            Some(port) => format!("{}://{host}:{port}", self.scheme),
+            None => format!("{}://{host}", self.scheme),
+        }
     }
 }
 
-/// `http://` 是否指向环回主机 (本地开发 LLM 端点)。
-fn is_loopback_host(after_scheme: &str) -> bool {
-    let host = url_host(after_scheme)
+fn parse_endpoint(base_url: &str) -> Option<Endpoint> {
+    let raw = base_url.trim();
+    if raw != base_url
+        || raw.is_empty()
+        || raw.contains(['?', '#'])
+        || raw.chars().any(char::is_whitespace)
+    {
+        return None;
+    }
+    let uri = raw.parse::<Uri>().ok()?;
+    let scheme = uri.scheme_str()?.to_ascii_lowercase();
+    if !matches!(scheme.as_str(), "http" | "https") {
+        return None;
+    }
+    let authority = uri.authority()?;
+    if authority.as_str().contains('@') {
+        return None;
+    }
+    // `http::Uri` accepts an authority such as `host:99999`, but exposes no
+    // parsed port for it. Reqwest rejects that URL. Refuse any syntactically
+    // explicit port that did not parse as `u16`, so validation and the actual
+    // outbound client cannot disagree about the destination.
+    let authority_text = authority.as_str();
+    let has_explicit_port = if authority_text.starts_with('[') {
+        let end = authority_text.find(']')?;
+        match &authority_text[end + 1..] {
+            "" => false,
+            tail if tail.starts_with(':') => true,
+            _ => return None,
+        }
+    } else {
+        authority_text.contains(':')
+    };
+    let port = authority.port_u16();
+    if has_explicit_port && port.is_none() {
+        return None;
+    }
+    let host = authority
+        .host()
         .trim_start_matches('[')
         .trim_end_matches(']')
         .to_ascii_lowercase();
-    matches!(host.as_str(), "localhost" | "127.0.0.1" | "::1")
+    if host.is_empty() {
+        return None;
+    }
+    Some(Endpoint { scheme, host, port })
+}
+
+fn endpoint_origin(base_url: &str) -> Option<String> {
+    parse_endpoint(base_url).map(|endpoint| endpoint.origin())
 }
 
 /// Mask an API key as `sk-****c4a` (first 3 + redacted middle + last 3).
@@ -462,6 +525,20 @@ pub type HotConfigHandle = std::sync::Arc<RwLock<GatewayRuntimeConfig>>;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    #[derive(Default)]
+    struct WriteOnly(Mutex<Vec<(String, String)>>);
+
+    impl CredentialWriter for WriteOnly {
+        fn write(&self, name: &str, value: &str) -> Result<(), String> {
+            self.0
+                .lock()
+                .unwrap()
+                .push((name.to_string(), value.to_string()));
+            Ok(())
+        }
+    }
 
     #[test]
     fn masks_long_and_short_keys() {
@@ -477,8 +554,57 @@ mod tests {
 
         assert!(valid_base_url("https://api.example.com/v1"));
         assert!(valid_base_url("http://localhost:8080"));
+        assert!(valid_base_url("http://[::1]:8080/v1"));
         assert!(!valid_base_url("ftp://example.com"));
         assert!(!valid_base_url("not-a-url"));
+        assert!(!valid_base_url("https://user:pass@example.com/v1"));
+        assert!(!valid_base_url("https://example.com/v1?key=value"));
+        assert!(!valid_base_url("http://example.com/v1"));
+        assert!(!valid_base_url("https://example.com:99999/v1"));
+        assert!(!valid_base_url("https://example.com:notaport/v1"));
+        assert!(!valid_base_url("https://[::1]garbage/v1"));
+        assert!(!valid_base_url(" https://example.com/v1"));
+        assert!(!valid_base_url("https://example.com/v1 "));
+    }
+
+    #[test]
+    fn endpoint_origin_normalizes_case_and_path_without_merging_ports() {
+        assert_eq!(
+            endpoint_origin("https://API.Example.com/v1"),
+            Some("https://api.example.com".to_string())
+        );
+        assert_eq!(
+            endpoint_origin("https://api.example.com:443/other"),
+            Some("https://api.example.com:443".to_string())
+        );
+        assert_eq!(
+            endpoint_origin("http://[::1]:8080/v1"),
+            Some("http://[::1]:8080".to_string())
+        );
+
+        for endpoint in [
+            "https://API.Example.com/v1",
+            "https://api.example.com:443/other",
+            "http://[::1]:8080/v1",
+        ] {
+            assert_eq!(
+                endpoint_origin(endpoint),
+                apeireth_provider::endpoint_binding::endpoint_origin(endpoint),
+                "admin and provider binding parsers must agree for {endpoint}"
+            );
+        }
+    }
+
+    #[test]
+    fn unsupported_compound_write_is_side_effect_free() {
+        let writer = WriteOnly::default();
+        let result = writer.write_with_endpoints(
+            "provider.synthetic.api_key",
+            "synthetic-value",
+            &["https://endpoint.example/v1".to_string()],
+        );
+        assert!(result.is_err());
+        assert!(writer.0.lock().unwrap().is_empty());
     }
 
     #[test]

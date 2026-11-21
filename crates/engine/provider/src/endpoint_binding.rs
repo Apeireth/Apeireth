@@ -163,7 +163,10 @@ pub fn endpoint_origin(url: &str) -> Option<String> {
     // IPv6 字面量：`[::1]:8443`
     let (host, port) = if let Some(stripped) = authority.strip_prefix('[') {
         let (host_part, tail) = stripped.split_once(']')?;
-        let port = tail.strip_prefix(':').map(str::to_string);
+        let port = match tail {
+            "" => None,
+            value => Some(value.strip_prefix(':')?.to_string()),
+        };
         (host_part.to_string(), port)
     } else {
         match authority.split_once(':') {
@@ -175,17 +178,20 @@ pub fn endpoint_origin(url: &str) -> Option<String> {
         return None;
     }
     let host = host.to_ascii_lowercase();
+    let rendered_host = if host.contains(':') {
+        format!("[{host}]")
+    } else {
+        host
+    };
     let port = match port {
         Some(p) if p.is_empty() => return None,
         Some(p) => {
-            if !p.chars().all(|c| c.is_ascii_digit()) {
-                return None;
-            }
-            format!(":{p}")
+            let parsed = p.parse::<u16>().ok()?;
+            format!(":{parsed}")
         }
         None => String::new(),
     };
-    Some(format!("{scheme}://{host}{port}"))
+    Some(format!("{scheme}://{rendered_host}{port}"))
 }
 
 #[cfg(test)]
@@ -224,6 +230,10 @@ mod tests {
             Some("http://127.0.0.1:8080".to_string())
         );
         assert_eq!(
+            endpoint_origin("http://[::1]:8080/v1"),
+            Some("http://[::1]:8080".to_string())
+        );
+        assert_eq!(
             endpoint_origin("https://user:pass@api.example.com/x"),
             Some("https://api.example.com".to_string())
         );
@@ -236,6 +246,8 @@ mod tests {
         assert_eq!(endpoint_origin("api.example.com"), None);
         assert_eq!(endpoint_origin("https://"), None);
         assert_eq!(endpoint_origin("https://host:notaport/x"), None);
+        assert_eq!(endpoint_origin("https://host:99999/x"), None);
+        assert_eq!(endpoint_origin("https://[::1]garbage/x"), None);
     }
 
     #[test]

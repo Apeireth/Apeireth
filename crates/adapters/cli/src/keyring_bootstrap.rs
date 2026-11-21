@@ -148,7 +148,8 @@ fn try_build_keyring_backend() -> Result<Arc<dyn KeyringBackend>, String> {
 /// 2. keyring backend (可选持久层) —— 仅服务进程重启后的存活; 未配置 keyring
 ///    backend 时跳过 (热更仍生效, 重启回退启动值)。
 ///
-/// 只有持久层写入失败才返 Err (此时热更已生效, 错误文案如实说明)。
+/// 只有持久层写入失败才返 Err。普通单值写沿用既有「热值已生效、持久化失败」
+/// 语义；凭据+端点复合写则持久层先行，保证 `Err` 时运行时复合状态不变。
 pub fn build_keyring_credential_writer() -> Option<Arc<dyn CredentialWriter>> {
     Some(Arc::new(HotCredentialWriter {
         store: hot_credential_store(),
@@ -178,8 +179,8 @@ impl CredentialWriter for HotCredentialWriter {
 
     /// 该凭据**已声明**的端点（`None` = 未声明 ⇒ 不参与绑定闸）。
     ///
-    /// ⚠️ 这是**只读查询**，不接触密文 ⇒ ⇒ 网关据此在热更响应里
-    /// **如实告警**「只改端点 ⇒ 未绑定凭据会跟随到新主机」（2026-11-04）。
+    /// ⚠️ 这是**只读查询**，不接触密文；网关据此在跨 origin 热更前
+    /// fail-closed，未绑定凭据不会静默跟随到新主机。
     fn bound_endpoints(&self, name: &str) -> Option<Vec<String>> {
         self.store.declared_endpoints(name)
     }
@@ -197,15 +198,16 @@ impl CredentialWriter for HotCredentialWriter {
         value: &str,
         endpoints: &[String],
     ) -> Result<(), String> {
-        self.store
-            .set_with_endpoints(name, value, endpoints.iter().cloned());
+        // Persist first for failure atomicity: an `Err` must not leave a new
+        // hot credential without its endpoint declaration. This does not make
+        // provider-side binding+credential reads a coherent snapshot.
         if let Some(backend) = &self.durable {
             backend
                 .set(name, &SecretBuf::from_str(value))
-                .map_err(|error| {
-                    format!("已热更生效（下次请求使用），但 keyring 持久化失败: {error}")
-                })?;
+                .map_err(|error| format!("keyring 持久化失败，运行时凭据未变更: {error}"))?;
         }
+        self.store
+            .set_with_endpoints(name, value, endpoints.iter().cloned());
         Ok(())
     }
 }
@@ -213,6 +215,58 @@ impl CredentialWriter for HotCredentialWriter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use apeireth_credentials::keyring::KeyringError;
+
+    struct RejectingBackend;
+
+    impl KeyringBackend for RejectingBackend {
+        fn get(&self, service: &str) -> apeireth_credentials::keyring::Result<SecretBuf> {
+            Err(KeyringError::UnknownService {
+                service: service.to_string(),
+            })
+        }
+
+        fn set(
+            &self,
+            _service: &str,
+            _secret: &SecretBuf,
+        ) -> apeireth_credentials::keyring::Result<()> {
+            Err(KeyringError::Backend("synthetic rejection".to_string()))
+        }
+
+        fn delete(&self, service: &str) -> apeireth_credentials::keyring::Result<()> {
+            Err(KeyringError::UnknownService {
+                service: service.to_string(),
+            })
+        }
+
+        fn list(&self) -> apeireth_credentials::keyring::Result<Vec<String>> {
+            Ok(Vec::new())
+        }
+
+        fn backend_name(&self) -> &'static str {
+            "synthetic-rejecting"
+        }
+    }
+
+    #[test]
+    fn failed_durable_compound_write_leaves_the_hot_store_unchanged() {
+        let store = Arc::new(HotCredentialStore::new());
+        let writer = HotCredentialWriter {
+            store: Arc::clone(&store),
+            durable: Some(Arc::new(RejectingBackend)),
+        };
+        let name = "provider.atomic-test.api_key";
+
+        let result = writer.write_with_endpoints(
+            name,
+            "synthetic-value",
+            &["https://endpoint.example/v1".to_string()],
+        );
+        assert!(result.is_err());
+        assert!(store.resolve(name).is_none());
+        assert_eq!(store.declared_endpoints(name), None);
+    }
 
     /// 真热更接线: admin 写入端口 (`build_keyring_credential_writer`) 与 provider
     /// 取值端 (`build_keyring_resolver`) 共享同一运行时凭据库 —— 写入后**下一次**
@@ -269,6 +323,18 @@ mod tests {
             writer.bound_endpoints(name),
             Some(vec!["https://a.example/v1".to_string()]),
             "同笔登记的绑定必须查得到"
+        );
+
+        // Same-provider key rotation is value-only: it must not erase the
+        // already declared destination and silently return the key to an
+        // unmanaged state.
+        writer
+            .write(name, "synthetic-rotated-value")
+            .expect("rotate key");
+        assert_eq!(
+            writer.bound_endpoints(name),
+            Some(vec!["https://a.example/v1".to_string()]),
+            "只换同名凭据值必须保留原端点声明"
         );
 
         // ③ 查询结果里**不含任何密文**。
