@@ -106,13 +106,11 @@ pwsh -NoProfile -File packaging/service/apeireth-service.ps1 uninstall
    不保证**写面**可写;
 2. **防火墙**: 默认绑定 `127.0.0.1` (仅本机)。确需 LAN/远程访问时: 非回环绑定
    (`-Bind 0.0.0.0` 或 env `APEIRETH_LISTEN`) + 主机防火墙只放行可信网段;
-   **非回环绑定强制令牌**: 令牌族两面皆空时网关拒绝启动 (fail-closed), 显式
-   `APEIRETH_GATEWAY_TOKEN=none` 为逃生阀 (明示不设防, 留审计)。
-   TLS **已接线**（**四级口径：PRODUCTION WIRED** —— 真 rustls `ServerConfig` +
-   `TlsAcceptor`; `APEIRETH_TLS_CERT` / `APEIRETH_TLS_KEY` 提供证书 ⇒ 启用;
-   材料不全 ⇒ **拒绝启动**, fail-closed）,
-   每客户端**权限**分级属 W3/E 轴范围, 当前版本不提供。
-   ⭐ **逃生阀下的停机口径** (2026-11-05 · F-2 修复后重写): 角色门**只认已认证
+   **非回环绑定要求认证和 TLS**。配置 `APEIRETH_GATEWAY_TOKEN` 或客户端令牌表，
+   以及 `APEIRETH_TLS_CERT` 和 `APEIRETH_TLS_KEY`。缺少可用材料时拒绝启动。
+   `APEIRETH_GATEWAY_TOKEN=none` 仅限回环。对外使用反向代理的部署也应保留认证，
+   同机代理可以转发到仅监听回环的后端。
+   **回环兼容模式的停机口径**：角色门**只认已认证
    身份** ⇒ ⇒ 未认证 / 逃生阀口径下的过门身份是 `anonymous` (**未认证**) ⇒ ⇒
    它**不是**任何用户 ⇒ ⇒ 用户表 `client_names` 里写 `anonymous` **不会**让调用方
    变成 owner ⇒ ⇒ **没有**「绑 `anonymous` 就能停机」这回事 ⇒ ⇒ 管理面 (含

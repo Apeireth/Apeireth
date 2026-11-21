@@ -1324,10 +1324,7 @@ pub fn canonical_router_with_state(state: GatewayState) -> Router {
 /// Serve over an explicit [`GatewayState`] until the listener closes or a
 /// shutdown fires (see [`serve_with_shutdown`] for the shutdown contract).
 ///
-/// TLS 面 (B5 真接线): `APEIRETH_TLS_CERT` / `APEIRETH_TLS_KEY` 旋钮在场时
-/// **真加载**材料并走 TLS listener; 材料坏 = fail-closed **拒绝启动** ——
-/// 错误在任何端点被服务前帧化返回, 绝不静默降级明文。未设旋钮 = 明文,
-/// 回环缺省语义不变。
+/// 非回环监听强制 TLS；回环允许明文。TLS 材料不完整或无效时拒绝启动。
 ///
 /// Keeping the state explicit lets embedders and tests hold the observation
 /// sink handle across the shutdown boundary — which is exactly what the
@@ -1347,17 +1344,22 @@ pub async fn serve_state_with_shutdown(
 }
 
 /// [`serve_state_with_shutdown`] 的显式材料形态: `tls = Some(..)` 走 TLS
-/// listener, `None` 保持明文 —— 组合根/测试可直接给材料, 不经环境旋钮。
+/// listener。`None` 只允许用于回环监听。
 pub async fn serve_state_with_tls(
     listener: tokio::net::TcpListener,
     state: GatewayState,
     tls: Option<crate::remote_access::TlsMaterial>,
     external_shutdown: impl std::future::Future<Output = ()> + Send + 'static,
 ) -> std::io::Result<()> {
-    let endpoint = listener
-        .local_addr()
-        .map(|addr| addr.to_string())
-        .unwrap_or_else(|_| "unknown".to_string());
+    let address = listener.local_addr()?;
+    crate::remote_access::enforce_remote_bind(
+        &address.ip().to_string(),
+        &state.token_gate,
+        &state.client_tokens,
+    )
+    .and_then(|clearance| clearance.require_tls(tls.is_some()))
+    .map_err(|error| std::io::Error::new(std::io::ErrorKind::PermissionDenied, error))?;
+    let endpoint = address.to_string();
     state.events.publish(GatewayEvent::new(
         "backend_ready",
         serde_json::json!({ "service": "apeireth-gateway-2.0", "endpoint": endpoint }),
