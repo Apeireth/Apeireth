@@ -1,5 +1,6 @@
 //! Registry lifecycle facade and dispatcher catalog views. No second registry.
 use super::error::{RuntimeError, RuntimeResult};
+use super::project_workspace::{ProjectFileCapability, ProjectWorkspaceBinding};
 use super::runtime::Runtime;
 use super::runtime_builder::RuntimeBuilder;
 use apeireth_core::kernel::{CapabilityId, PluginId, SessionId};
@@ -12,7 +13,11 @@ impl Runtime {
         self.capabilities
             .capabilities()
             .into_iter()
-            .filter(|tool| tool.model_visible() && tool.module_contract().model_visible())
+            .filter(|tool| {
+                tool.model_visible()
+                    && tool.module_contract().model_visible()
+                    && ProjectFileCapability::classify(tool.id()).is_none()
+            })
             .map(|tool| {
                 let registration = self
                     .capabilities
@@ -66,7 +71,10 @@ impl Runtime {
                     .or_else(|| self.resolve_tool(name).map(|t| t.id().clone()))
                     .or_else(|| routes.resolve(name).ok().map(|r| r.capability_id.clone()));
                 !routes.is_ambiguous(name)
-                    && id.is_some_and(|id| self.dispatcher.allows(session, &id))
+                    && id.is_some_and(|id| {
+                        ProjectFileCapability::classify(&id).is_none()
+                            && self.dispatcher.allows(session, &id)
+                    })
             })
             .collect()
     }
@@ -90,6 +98,7 @@ impl Runtime {
         request: apeireth_core::kernel::RequestId,
         trace: apeireth_core::kernel::TraceId,
         security: Option<&apeireth_governance::TurnSecurityContext>,
+        project_workspace: Option<ProjectWorkspaceBinding>,
         approved: bool,
         automatic: bool,
     ) -> Result<Arc<dyn ToolCapability>, apeireth_protocol::canonical::ToolResult> {
@@ -147,9 +156,13 @@ impl Runtime {
                 intent_id: security.map(|s| s.intent_id.clone()),
                 authorization_context: security.and_then(|s| s.authorization_context.clone()),
                 approved,
-                host_context: security
-                    .cloned()
-                    .map(|security| Arc::new(security) as Arc<dyn std::any::Any + Send + Sync>),
+                host_context: project_workspace
+                    .map(|binding| Arc::new(binding) as Arc<dyn std::any::Any + Send + Sync>)
+                    .or_else(|| {
+                        security.cloned().map(|security| {
+                            Arc::new(security) as Arc<dyn std::any::Any + Send + Sync>
+                        })
+                    }),
             },
             cancellation: {
                 let parents = self

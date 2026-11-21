@@ -247,6 +247,15 @@ pub trait WorkspacePanel: Send + Sync {
         &self,
         command: WorkspaceCreateCommand,
     ) -> Result<WorkspaceDto, WorkspacePanelError>;
+    /// Allocate a new host-owned root for this workspace. Hosts opt in explicitly.
+    async fn create_isolated_workspace(
+        &self,
+        _command: WorkspaceCreateCommand,
+    ) -> Result<WorkspaceDto, WorkspacePanelError> {
+        Err(WorkspacePanelError::InvalidRequest {
+            reason: "宿主未装配独立工作区目录".to_string(),
+        })
+    }
 
     /// Select one workspace at an expected revision.
     async fn select_workspace(
@@ -282,6 +291,15 @@ pub struct WorkspaceCreateRequest {
     /// Requested expiry in epoch milliseconds (temporary roots only).
     #[serde(default)]
     pub expires_at: Option<i64>,
+    /// Opt in to a new host-owned directory on a managed desktop.
+    #[serde(default)]
+    root_provisioning: Option<WorkspaceRootProvisioning>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum WorkspaceRootProvisioning {
+    IsolatedV1,
 }
 
 /// The body of the two write faces: the revision the caller saw.
@@ -375,10 +393,11 @@ pub async fn get_workspace(
     }
 }
 
-/// `POST /v1/workspaces` — create one workspace under the host's managed root.
+/// `POST /v1/workspaces` — create a workspace with a host-assigned root.
 pub async fn create_workspace(
     State(state): State<GatewayState>,
     client: Option<Extension<ClientIdentity>>,
+    domain: Option<Extension<DomainContext>>,
     body: Result<Json<WorkspaceCreateRequest>, JsonRejection>,
 ) -> Response {
     let Json(request) = match body {
@@ -390,6 +409,34 @@ pub async fn create_workspace(
     let Some(panel) = state.services.workspaces.as_ref() else {
         return crate::panels::unsupported("workspaces.write");
     };
+    let client_label = identity_label(client.as_ref());
+    if request.root_provisioning.is_some()
+        && !(crate::model_connection::is_managed_single_operator(&state)
+            && !domain
+                .as_ref()
+                .is_some_and(|Extension(domain)| domain.is_non_default())
+            && client.as_ref().is_some_and(|Extension(identity)| {
+                identity.authenticated
+                    && identity.client == crate::GatewayTokenGate::ENV_FACE_CLIENT_NAME
+            }))
+    {
+        record_workspace_audit(
+            &state,
+            WORKSPACE_ACTION_DENY,
+            "/v1/workspaces",
+            "",
+            "deny",
+            Some("managed_operator_required"),
+            client_label,
+        )
+        .await;
+        return error_response(
+            StatusCode::FORBIDDEN,
+            ErrorCode::PermissionDenied,
+            "独立工作区需要认证的受管桌面操作者。",
+            None,
+        );
+    }
     let command = WorkspaceCreateCommand {
         display_name: request.display_name,
         root_kind: request.root_kind.unwrap_or(WorkspaceRootKind::Managed),
@@ -398,8 +445,13 @@ pub async fn create_workspace(
             .unwrap_or(WorkspacePermissionScope::Read),
         expires_at: request.expires_at,
     };
-    let client_label = identity_label(client.as_ref());
-    match panel.create_workspace(command).await {
+    let outcome = match request.root_provisioning {
+        Some(WorkspaceRootProvisioning::IsolatedV1) => {
+            panel.create_isolated_workspace(command).await
+        }
+        None => panel.create_workspace(command).await,
+    };
+    match outcome {
         Ok(dto) => {
             let dto = match guard_workspace_dto(dto) {
                 Ok(dto) => dto,

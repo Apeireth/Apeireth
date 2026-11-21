@@ -27,6 +27,8 @@
 
 pub mod accounting;
 pub mod agent_binding;
+mod project_workspace;
+pub use project_workspace::ProjectWorkspaceBinding;
 pub mod approval;
 pub mod behavior_adapter;
 mod behavior_projection;

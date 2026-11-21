@@ -1,6 +1,8 @@
 use super::*;
 use apeireth_guard::{IntentInput, IntentInterpreter, RuleIntentInterpreter};
-use apeireth_runtime::canonical::{OperationAdmission, OperationRequest, TurnSecurityContext};
+use apeireth_runtime::canonical::{
+    OperationAdmission, OperationRequest, ProjectWorkspaceBinding, TurnSecurityContext,
+};
 
 pub(super) enum TurnProgress {
     Callback(Arc<dyn Fn(String) + Send + Sync>),
@@ -15,6 +17,7 @@ pub(super) async fn execute_chat_attributed_operation(
     attribution: SessionAttribution,
     operation: Option<OperationRequest>,
     progress: Option<TurnProgress>,
+    workspace: Option<ProjectWorkspaceBinding>,
 ) -> Result<CanonicalChatOutcome, CanonicalEntryError> {
     validate_chat_input(&request.input)?;
     let expected_contact = request.expected_contact_id;
@@ -34,6 +37,9 @@ pub(super) async fn execute_chat_attributed_operation(
     if let Some(system) = request.system {
         turn = turn.with_system(system);
     }
+    if let Some(binding) = workspace {
+        turn = turn.with_project_workspace(binding);
+    }
 
     let outcome = match operation {
         None => {
@@ -44,6 +50,12 @@ pub(super) async fn execute_chat_attributed_operation(
                 if let Some(contact) = expected_contact {
                     let _permit = runtime.sessions().write_permit(session).await;
                     contact_session::verify_contact(runtime.sessions(), session, contact).await?;
+                }
+                if let Some(binding) = workspace {
+                    let _permit = runtime.sessions().write_permit(session).await;
+                    runtime
+                        .verify_project_workspace_session(session, binding)
+                        .await?;
                 }
                 return Ok(turn_outcome_to_chat(outcome));
             }

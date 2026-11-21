@@ -123,6 +123,13 @@ pub enum RuntimeError {
         reason: String,
     },
 
+    /// A project session or its workspace revision failed exact admission.
+    #[error("session {session} project workspace rejected: {reason}")]
+    ProjectWorkspaceRejected {
+        session: SessionId,
+        reason: &'static str,
+    },
+
     /// The session store could not serve or persist a session.
     #[error("session {session} could not be {operation}: {reason}")]
     Session {

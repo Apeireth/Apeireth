@@ -128,6 +128,10 @@ C1 达 **PRODUCTION WIRED**（C2-3 起生产流式回合产生真实 C1 流；�
 10. **D1 未决裁决（2026-11-19）**：6 条已裁决——流式新会话 `session_id` 由客户端首请求显式提供；`/bridge/*` 归私有前端宿主；`context_key`/`incarnation` 必须 byte-identical；persona 仅空会话种子槽；审批恢复不续流；首发单网关进程且进程内状态重启即失。成果版本对象已由 PR #142 建模关闭；仍待前端/产品确认 2 条＝`workspace_binding` 语义、联系人 `capabilities` 到 `Permission` 的映射粒度。详见 `workline-registry.md` §一·补。
 11. **跨线协调未完成**：前端草案的 `root_kind` 与 `crates-ui/.../governance_tab.rs:867` 的轨迹 span kind 同名不同义，须与前端线对齐命名。
 
+## 三·补 桌面项目工作区增量（2026-11-21）
+
+**PRODUCTION WIRED**。受管单操作者可按 `isolated_v1` 创建独立实体目录，并通过 `POST /v1/workspace-chat` 使用它。首轮保存会话与工作区修订绑定。限域回合只使用项目文件工具，写入需要确认过的 `approval_write` 及当次审批。关闭登记使后续文件操作及旧审批失效，原文件保留。既有普通回合和共享根登记沿用原合同。Windows 隔离网关以回环合成模型验证了同名目录、真实文件读写、重启后原审批、撤销和普通会话兼容。范围仅为根目录中的 UTF-8 文本文件。已有本机目录的原生选择授权和过期回收继续按独立合同推进。 [工作区与回合合同](../gateway-api-contract.md)
+
 ## 四、守卫（机器判对错）
 
 ```text

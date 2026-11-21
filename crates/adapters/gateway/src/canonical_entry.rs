@@ -289,7 +289,7 @@ pub async fn execute_chat_attributed(
     request: CanonicalChatRequest,
     attribution: SessionAttribution,
 ) -> Result<CanonicalChatOutcome, CanonicalEntryError> {
-    execute_chat_attributed_operation(runtime, request, attribution, None, None).await
+    execute_chat_attributed_operation(runtime, request, attribution, None, None, None).await
 }
 
 /// Resolve a pending approval through the canonical runtime API.
@@ -1235,7 +1235,7 @@ pub fn canonical_router_with_state(state: GatewayState) -> Router {
         .route("/v1/providers", get(list_providers))
         .route("/v1/runtime/snapshot", get(runtime_snapshot))
         .route("/v1/apeireth/runtime/snapshot", get(runtime_snapshot))
-        .route("/v1/chat", native_http::route())
+        .merge(native_http::routes())
         .route("/v1/chat/completions", post(openai_chat))
         .route("/v1/approvals", get(list_pending_approvals))
         .route("/v1/approvals/resolve", post(native_resolve_approval))

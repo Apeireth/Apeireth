@@ -48,6 +48,7 @@ pub struct CliWorkspacePanel {
     managed_root: PathBuf,
     scope_ceiling: WorkspacePermissionScope,
     source: String,
+    allow_isolated_creation: bool,
 }
 
 impl CliWorkspacePanel {
@@ -64,6 +65,7 @@ impl CliWorkspacePanel {
             managed_root: managed_root.into(),
             scope_ceiling: HOST_SCOPE_CEILING,
             source: "cli".to_string(),
+            allow_isolated_creation: false,
         }
     }
 
@@ -87,7 +89,13 @@ impl CliWorkspacePanel {
             managed_root: managed_root.into(),
             scope_ceiling: HOST_SCOPE_CEILING,
             source: "cli".to_string(),
+            allow_isolated_creation: false,
         })
+    }
+
+    fn enable_isolated_creation(mut self) -> Self {
+        self.allow_isolated_creation = true;
+        self
     }
 
     /// 换掉工作区来源标签 (写进 `source` 字段)。
@@ -166,6 +174,23 @@ fn project_workspace(workspace: &Workspace) -> WorkspaceDto {
     }
 }
 
+fn validate_managed_create(command: &WorkspaceCreateCommand) -> Result<(), WorkspacePanelError> {
+    if command.root_kind != WorkspaceRootKind::Managed {
+        return Err(WorkspacePanelError::InvalidRequest {
+            reason: format!(
+                "宿主只装配受管根, 暂不支持 {} 根",
+                command.root_kind.source_label()
+            ),
+        });
+    }
+    if command.expires_at.is_some() {
+        return Err(WorkspacePanelError::InvalidRequest {
+            reason: "受管工作区不接受 expires_at (过期时间只属于临时工作区)".to_string(),
+        });
+    }
+    Ok(())
+}
+
 #[async_trait]
 impl WorkspacePanel for CliWorkspacePanel {
     async fn list_workspaces(&self) -> Result<Vec<WorkspaceDto>, String> {
@@ -191,20 +216,7 @@ impl WorkspacePanel for CliWorkspacePanel {
         &self,
         command: WorkspaceCreateCommand,
     ) -> Result<WorkspaceDto, WorkspacePanelError> {
-        // 宿主只装配受管根: 其它根类型如实拒开, 不假装支持。
-        if command.root_kind != WorkspaceRootKind::Managed {
-            return Err(WorkspacePanelError::InvalidRequest {
-                reason: format!(
-                    "宿主只装配受管根, 暂不支持 {} 根",
-                    command.root_kind.source_label()
-                ),
-            });
-        }
-        if command.expires_at.is_some() {
-            return Err(WorkspacePanelError::InvalidRequest {
-                reason: "受管工作区不接受 expires_at (过期时间只属于临时工作区)".to_string(),
-            });
-        }
+        validate_managed_create(&command)?;
         let request = DomainWorkspaceCreateRequest {
             root_kind: WorkspaceRootKind::Managed,
             root: self.managed_root.clone(),
@@ -218,6 +230,26 @@ impl WorkspacePanel for CliWorkspacePanel {
             Ok(workspace) => Ok(project_workspace(&workspace)),
             Err(error) => Err(map_workspace_error(error)),
         }
+    }
+
+    async fn create_isolated_workspace(
+        &self,
+        command: WorkspaceCreateCommand,
+    ) -> Result<WorkspaceDto, WorkspacePanelError> {
+        if !self.allow_isolated_creation {
+            return Err(WorkspacePanelError::InvalidRequest {
+                reason: "宿主未装配独立工作区目录".to_string(),
+            });
+        }
+        validate_managed_create(&command)?;
+        self.registry
+            .create_desktop_workspace(
+                &command.display_name,
+                command.permission_scope,
+                now_millis().max(0) as u64,
+            )
+            .map(|workspace| project_workspace(&workspace))
+            .map_err(map_workspace_error)
     }
 
     async fn select_workspace(
@@ -298,13 +330,22 @@ pub(crate) fn wire_workspace_panel(services: &mut GatewayServices) -> Result<(),
     // A3 批: 注册表**落盘**在数据根 (`APEIRETH_DATA_DIR` / `~/.apeireth`) 下 ⇒
     // 重启后 `GET /v1/panel/workspaces` 仍列出同一批工作区, revision 单调。
     // 落盘开不出来 ⇒ **fail-closed** (启动失败), 不降级成进程内注册表假装成功。
-    let workspace_panel = Arc::new(CliWorkspacePanel::new_persistent(
+    let workspace_panel = CliWorkspacePanel::new_persistent(
         std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")),
         crate::default_panel_data_dir(),
-    )?);
+    )?;
+    let workspace_panel = if crate::desktop_model_connection::managed() {
+        workspace_panel.enable_isolated_creation()
+    } else {
+        workspace_panel
+    };
     // 宿主把受管根绑成一个工作区 (身份 + 叶子名展示; 路径不出宿主)。
     // 幂等: 受管根已登记过就复用那一个身份, 不新铸。
     bind_managed_workspace(&workspace_panel, "默认工作区")?;
-    services.workspaces = Some(workspace_panel as Arc<dyn WorkspacePanel>);
+    services.workspaces = Some(Arc::new(workspace_panel));
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "desktop_workspace_tests.rs"]
+mod desktop_workspace_tests;

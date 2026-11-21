@@ -823,6 +823,7 @@ impl Runtime {
         let mut session = self.sessions.load_or_create(request.session).await?;
         self.dispatcher.bind_session_principal(&mut session)?;
         // 先闸后写: 绑定不再成立 ⇒ 直接 Err ⇒ 本回合零写入 (消息未追加、revision 未推进)。
+        self.admit_project_workspace(&mut session, request.project_workspace)?;
         let admission = super::turn_admission::admit_turn(self, &mut session).await?;
         if session
             .events
@@ -969,10 +970,11 @@ impl Runtime {
         let tools = if self.single_shot_task() || request.tools_disabled() {
             Vec::new()
         } else {
-            self.tool_declarations_for_session(request.session)
+            self.turn_tool_declarations(&session, request.project_workspace)?
         };
-        let continuation =
+        let mut continuation =
             FrozenTurnContinuation::start_of_round(request_id, trace_id, model.clone(), 1);
+        continuation.project_workspace = request.project_workspace;
 
         self.advance(
             session,
@@ -1198,7 +1200,18 @@ impl Runtime {
         }
 
         let now = Timestamp::from_clock(self.clock.as_ref());
-        if approval.is_expired(now) {
+        let project_workspace = approval.continuation.project_workspace;
+        let project_binding_expired = match (session.project_workspace_binding(), project_workspace)
+        {
+            (None, None) => false,
+            (Some(stored), Some(frozen))
+                if stored == frozen && session.agent_binding().is_none() =>
+            {
+                self.confirm_project_workspace(session.id, frozen).is_err()
+            }
+            _ => true,
+        };
+        if approval.is_expired(now) || project_binding_expired {
             let expired = {
                 let mut expired = approval.clone();
                 expired.status = ApprovalStatus::Expired;
@@ -1225,13 +1238,18 @@ impl Runtime {
                 &mut session,
                 &approval.continuation.tool_calls,
                 approval.continuation.next_tool_index,
-                "operation expired before tool dispatch",
+                if project_binding_expired {
+                    "project workspace binding changed before tool dispatch"
+                } else {
+                    "operation expired before tool dispatch"
+                },
                 self.clock.as_ref(),
             );
             self.sessions.save(&session).await?;
             return Ok(ApprovalResolution::Expired);
         }
 
+        let tools = self.turn_tool_declarations(&session, project_workspace)?;
         let decision_label = decision.label();
         match decision {
             ApprovalDecision::Reject { reason } | ApprovalDecision::Cancel { reason } => {
@@ -1337,7 +1355,6 @@ impl Runtime {
                     }
                 }
 
-                let tools = self.tool_declarations_for_session(session_id);
                 let mut trace =
                     ExecutionTrace::new(approval.trace_id, session_id, approval.request_id);
                 trace.record(
@@ -1405,14 +1422,15 @@ impl Runtime {
                 // once. Notify governance after the claim is durable so hooks
                 // with session-scoped approval memory can suppress the next
                 // identical approval prompt when `approval_remember` is on.
-                self.governance
-                    .approval_resolved(&approval.session_id, &approval.capability_id);
+                if project_workspace.is_none() {
+                    self.governance
+                        .approval_resolved(&approval.session_id, &approval.capability_id);
+                }
 
                 let mut continuation = approval.continuation.clone();
                 continuation.approved_tool_index = Some(continuation.next_tool_index);
                 continuation.approved_approval_id = Some(approval_id);
 
-                let tools = self.tool_declarations_for_session(session_id);
                 let mut trace =
                     ExecutionTrace::new(approval.trace_id, session_id, approval.request_id);
                 trace.record(
@@ -1587,7 +1605,7 @@ impl Runtime {
                 // one summary pass surface-replaces the compressible prefix
                 // (summary in view, originals archived, view replayable). Any
                 // failure leaves the session exactly as it was.
-                if !self.single_shot_task() {
+                if !self.single_shot_task() && continuation.project_workspace.is_none() {
                     self.compact_session_if_due(
                         &mut session,
                         &continuation.model,
@@ -1614,10 +1632,12 @@ impl Runtime {
                 }
 
                 let spill_scope = session_id.to_string();
-                let spill_sink = self
-                    .context_spill
-                    .as_ref()
-                    .map(|writer| (writer.as_ref(), spill_scope.as_str()));
+                let spill_sink = self.context_spill.as_ref().and_then(|writer| {
+                    continuation
+                        .project_workspace
+                        .is_none()
+                        .then_some((writer.as_ref(), spill_scope.as_str()))
+                });
                 let mut injected_budget_chars = self.config.context_budget_chars;
                 let mut budgeted_view = super::behavior_projection::budget_module_context(
                     &session_view,
@@ -1634,6 +1654,9 @@ impl Runtime {
                 // progress, never retry without end.
                 let mut overflow_attempts: u32 = 0;
                 let routed = loop {
+                    if let Some(binding) = continuation.project_workspace {
+                        self.confirm_project_workspace(session_id, binding)?;
+                    }
                     let provider_messages = self.project_provider_messages(
                         &compose_provider_messages(&budgeted_view, &retry_scaffolding),
                         &continuation.model,
@@ -2408,7 +2431,10 @@ impl Runtime {
         module_state: &Arc<ModuleTurnState>,
         security_context: Option<&TurnSecurityContext>,
     ) -> RuntimeResult<HookEffects> {
-        if self.isolated_task() || module_state.is_read_only() {
+        if self.isolated_task()
+            || module_state.is_read_only()
+            || session.project_workspace_binding().is_some()
+        {
             return Ok(HookEffects::default());
         }
         match self
@@ -2791,7 +2817,7 @@ impl Runtime {
         request_id: RequestId,
         trace_id: TraceId,
     ) {
-        if self.isolated_task() {
+        if self.isolated_task() || request.project_workspace.is_some() {
             return;
         }
         let mut session = self
@@ -2801,6 +2827,9 @@ impl Runtime {
             .ok()
             .flatten()
             .unwrap_or_else(|| Session::new(request.session, self.clock.as_ref()));
+        if session.project_workspace_binding().is_some() {
+            return;
+        }
         let messages = session.messages.clone();
         let model = request
             .model
@@ -3276,7 +3305,11 @@ impl Runtime {
         //
         // 观察者是外部扩展点, 其 panic 不得破坏已经落账的完成事实, 也不得
         // 中止本回合: 事件与轨迹在上方已写入, 这里只做隔离, 不重试、不补发。
-        if let Some(observer) = &self.tool_completion_observer {
+        if let Some(observer) = self
+            .tool_completion_observer
+            .as_ref()
+            .filter(|_| session.project_workspace_binding().is_none())
+        {
             let fact = ToolCompletionFact {
                 session: session.id,
                 request: request_id,

@@ -1638,6 +1638,10 @@ async fn build_canonical_runtime_with_parts(
     builder = parallel_dispatch_wiring::attach(builder);
     builder = cognitive.register_with_policy(builder, &policy)?;
     builder = managed_artifacts::attach(builder, &policy, artifacts);
+    if desktop_model_connection::managed() {
+        let registry = binding_registries::workspaces(&default_panel_data_dir())?;
+        builder = apeireth_runtime_assembly::project_file_tools::attach(builder, &policy, registry);
+    }
 
     let mut fallback_order: Vec<CapabilityId> = Vec::new();
 
