@@ -1574,9 +1574,7 @@ async fn build_canonical_runtime_with_parts(
         }),
     );
     builder = builder.with_governance(governance_chain::production(containment));
-    // 出网闸 (ADR-0014 §1.2: 把上下文发给模型就是行动): 默认关
-    // (`APEIRETH_ENABLE_EGRESS_GATE=1` 才装配; 值也可以直接是授权策略 JSON),
-    // 关时请求逐字节不变。
+    // 出网闸默认脱敏。显式设置为 `1` 或授权策略 JSON 时才建立账本。
     //
     // 账本落盘到数据根 (`egress-ledger.jsonl`) —— 生产上必须落盘,
     // 否则「记录已知流向」只在内存里, 进程一退就没了。

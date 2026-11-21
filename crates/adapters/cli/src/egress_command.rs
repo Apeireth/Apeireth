@@ -71,8 +71,7 @@ pub fn run_egress_at(data_root: &std::path::Path, args: &[String]) -> Result<Str
     );
     if entries.is_empty() {
         frame.push_str(
-            "（账本为空 —— 可能还没开过出网闸（APEIRETH_ENABLE_EGRESS_GATE=1），\
-             或这一条判定之前还没有出网发生过。空账本不等于「没外流过」，只等于「没有记录」。）\n",
+            "（暂无出网记录。可用 APEIRETH_ENABLE_EGRESS_GATE=1 在脱敏之外开启账本。）\n",
         );
         return Ok(frame);
     }

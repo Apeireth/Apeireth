@@ -22,7 +22,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use futures::StreamExt;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, Command};
 use tokio::sync::{oneshot, watch};
 
@@ -196,6 +196,27 @@ fn stdio_command(command: &str) -> Command {
     process
 }
 
+const MAX_MESSAGE_BYTES: usize = 4 * 1024 * 1024;
+
+async fn read_frame(
+    reader: &mut (impl AsyncBufRead + Unpin),
+    frame: &mut Vec<u8>,
+    limit: usize,
+) -> std::io::Result<usize> {
+    frame.clear();
+    let size = reader
+        .take(limit as u64 + 1)
+        .read_until(b'\n', frame)
+        .await?;
+    if size > limit {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "MCP frame exceeds its size limit",
+        ));
+    }
+    Ok(size)
+}
+
 // A cancelled request cannot leave a routing entry until an external reply.
 struct PendingReply {
     receiver: Option<oneshot::Receiver<JsonRpcResponse>>,
@@ -259,18 +280,11 @@ impl StdioChannel {
         let reader_router = Arc::clone(&router);
         let reader_broken = Arc::clone(&broken);
         let reader = tokio::spawn(async move {
-            let mut lines = BufReader::new(stdout).lines();
-            loop {
-                match lines.next_line().await {
-                    Ok(Some(line)) => {
-                        if line.trim().is_empty() {
-                            continue;
-                        }
-                        if let Ok(response) = serde_json::from_str::<JsonRpcResponse>(&line) {
-                            reader_router.route(response);
-                        }
-                    }
-                    _ => break,
+            let mut reader = BufReader::new(stdout);
+            let mut frame = Vec::new();
+            while let Ok(1..) = read_frame(&mut reader, &mut frame, MAX_MESSAGE_BYTES).await {
+                if let Ok(response) = serde_json::from_slice::<JsonRpcResponse>(&frame) {
+                    reader_router.route(response);
                 }
             }
             reader_broken.store(true, Ordering::SeqCst);
@@ -479,11 +493,22 @@ impl HttpChannel {
 #[async_trait]
 impl McpChannel for HttpChannel {
     async fn request(&self, request: JsonRpcRequest) -> Result<JsonRpcResponse, McpError> {
-        let response = self.post(&request).await?;
-        response
-            .json::<JsonRpcResponse>()
+        let mut response = self.post(&request).await?;
+        let mut body = Vec::new();
+        while let Some(chunk) = response
+            .chunk()
             .await
-            .map_err(|e| transport_error("decoding JSON-RPC response", e.without_url()))
+            .map_err(|e| transport_error("reading JSON-RPC response", e.without_url()))?
+        {
+            if chunk.len() > MAX_MESSAGE_BYTES.saturating_sub(body.len()) {
+                return Err(McpError::Transport(
+                    "MCP response exceeds its size limit".into(),
+                ));
+            }
+            body.extend_from_slice(&chunk);
+        }
+        serde_json::from_slice(&body)
+            .map_err(|_| McpError::Transport("invalid JSON-RPC response".into()))
     }
 
     async fn notify(&self, notification: JsonRpcRequest) -> Result<(), McpError> {
@@ -536,7 +561,14 @@ impl SseChannel {
                 let Ok(bytes) = chunk else {
                     break;
                 };
-                buffer.push_bytes(&bytes);
+                if bytes.len() > MAX_MESSAGE_BYTES.saturating_sub(buffer.pending_len()) {
+                    break;
+                }
+                let text = String::from_utf8_lossy(&bytes);
+                if text.len() > MAX_MESSAGE_BYTES.saturating_sub(buffer.pending_len()) {
+                    break;
+                }
+                buffer.push_str(&text);
                 for frame in buffer.drain_frames() {
                     if frame.is_endpoint() {
                         let Some(endpoint) = same_origin_endpoint(&base, &frame.data()) else {
@@ -683,6 +715,17 @@ impl Drop for SseChannel {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn stdio_reader_stops_at_the_size_bound() {
+        let mut reader = BufReader::new(&b"{}\n123456\n"[..]);
+        let mut frame = Vec::new();
+        assert_eq!(read_frame(&mut reader, &mut frame, 3).await.unwrap(), 3);
+        assert_eq!(frame, b"{}\n");
+        let error = read_frame(&mut reader, &mut frame, 4).await.unwrap_err();
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+        assert_eq!(frame.len(), 5);
+    }
 
     #[test]
     fn configured_targets_require_public_https_or_literal_loopback() {

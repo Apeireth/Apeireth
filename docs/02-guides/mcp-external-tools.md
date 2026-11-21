@@ -43,6 +43,8 @@
 `stdio` 子进程仅收到系统、路径、用户档案、临时目录及语言所需的显式环境变量，
 不继承任意环境变量（如运行时模型密钥）。它仍以启动者账户权限运行，接入前应核实程序来源。
 
+MCP 传输限制单个 stdio 帧、HTTP 响应体或 SSE 待处理缓冲区最多为 4 MiB。超限时停止读取并返回错误。
+
 次入口是数据目录里的 `mcp-servers.json`，走存储文档信封
 （`{"name":"mcp-servers","version":1,"compatible_versions":[1],"body":{"servers":[...]}}`），
 用 `StoredDoc` 单文档拒开语义加载：坏 JSON / 串档 / 版本不可读一律**拒绝打开**，
