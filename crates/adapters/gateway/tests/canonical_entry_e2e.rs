@@ -715,6 +715,48 @@ async fn openai_compatible_stream_ends_with_pending_approval_frame() {
 }
 
 #[tokio::test]
+async fn native_stream_returns_the_original_pending_approval_without_running_the_tool() {
+    let calculator_calls = Arc::new(AtomicUsize::new(0));
+    let runtime = Arc::new(
+        Runtime::builder()
+            .with_clock(frozen_clock())
+            .with_governance(Arc::new(approval_policy()))
+            .with_plugin(TestPlugin::provider(FakeProvider::new()))
+            .with_plugin(TestPlugin::calculator(calculator_calls.clone()))
+            .with_default_model(MODEL)
+            .build()
+            .await
+            .unwrap(),
+    );
+    let router = canonical_router(runtime);
+    let session = SessionId::new();
+    let mut request = native_request(session, "calculate 1 + 1");
+    request.headers_mut().insert(
+        "accept",
+        "application/x-apeireth-turn+ndjson".parse().unwrap(),
+    );
+    let response = router.clone().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response.headers()["content-type"],
+        "application/x-apeireth-turn+ndjson"
+    );
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let lines = std::str::from_utf8(&bytes).unwrap();
+    let started: serde_json::Value = serde_json::from_str(lines.lines().next().unwrap()).unwrap();
+    let terminal: serde_json::Value = serde_json::from_str(lines.lines().last().unwrap()).unwrap();
+    assert_eq!(started["kind"], "started");
+    assert_eq!(terminal["kind"], "final");
+    assert_eq!(terminal["status"], 202);
+    assert_eq!(terminal["body"]["request"], started["request"]);
+    assert_eq!(terminal["body"]["session"], session.to_string());
+    let (status, inbox) = json_body(router.oneshot(inbox_request(session)).await.unwrap()).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(inbox["approvals"][0], terminal["body"]);
+    assert_eq!(calculator_calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
 async fn approval_inbox_lists_pending_for_the_same_session() {
     let provider = FakeProvider::new();
     let calculator_calls = Arc::new(AtomicUsize::new(0));

@@ -720,7 +720,10 @@ impl Runtime {
         let request_id = request.request.unwrap_or_else(RequestId::new);
         let trace_id = TraceId::new();
         // C2-3: explicit streaming ids own one C1 stream; duplicates are refused.
-        let c1_stream = if request.request.is_some() && stream_sink.is_some() {
+        let c1_stream = if request.request.is_some()
+            && stream_sink.is_some()
+            && request.stream_replay_enabled()
+        {
             Some(
                 global_registry()
                     .register(request.session.to_string(), request_id.to_string())

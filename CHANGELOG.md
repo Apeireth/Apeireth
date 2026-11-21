@@ -1,5 +1,9 @@
 # Changelog — Apeireth
 
+## [Unreleased] — 原生对话可协商流式交付
+
+- `/v1/chat` 支持实时文本增量，并保留原生会话、联系人、工具治理、审批及幂等回执语义。流断线后已受理的任务可从会话只读接口核对，用户明确停止后按原回合回执呈现停止事实。[网关接口](docs/gateway-api-contract.md)
+
 ## [Unreleased] — 受管文本成果与版本（2026-11-13，C2本地候选）
 
 - 新增人和 agent 共用的 Artifact/Revision/operation 回执服务：单事务 CAS、持久幂等、不可变历史、恢复追加新版本、精确 UTF-8 导出。agent 通过受治理的读取/写入工具调用，人工 HTTP 保存使用同一实例。

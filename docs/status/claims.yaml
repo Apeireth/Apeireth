@@ -290,7 +290,7 @@ claims:
       - crates/adapters/cli/src/lib.rs
     tests:
       - crates/adapters/gateway/tests/tls_serve.rs
-    verified_at: 249125b7b8a2757e3326074544972bf79e71fe57
+    verified_at: "f0b950903064c8522ab667374bc25854eb8cf004"
     verify_cmd: "cargo test -p apeireth-gateway --test tls_serve"
     owner: gateway
     next_review: "2026-11-20"
@@ -490,7 +490,7 @@ claims:
       - crates/foundation/credentials/src/hot_store.rs
     tests:
       - crates/engine/provider/tests/endpoint_binding.rs
-    verified_at: 1180c3462
+    verified_at: "f0b950903064c8522ab667374bc25854eb8cf004"
     verify_cmd: "cargo test -p apeireth-provider --test endpoint_binding --locked"
     owner: provider
     next_review: "2026-12-01"
@@ -884,7 +884,7 @@ claims:
       - crates/adapters/cli/tests/gateway_panels.rs
       - crates/engine/runtime-assembly/tests/production_cognitive_v1.rs
       - crates/engine/runtime-assembly/tests/profile_memory_authorization.rs
-    verified_at: e51327a5d2c736e9029baa4adc546f47d21f9193
+    verified_at: "f0b950903064c8522ab667374bc25854eb8cf004"
     verify_cmd: "cargo test -p apeireth-runtime --test registry_runtime_v1 --locked && cargo test -p apeireth-runtime-assembly --test capability_modules_v1 --locked"
     owner: runtime
     next_review: "2026-11-28"
@@ -984,7 +984,7 @@ claims:
       - crates/engine/runtime-assembly/tests/managed_main.rs
       - crates/engine/runtime-assembly/tests/production_cognitive_v1.rs
       - crates/engine/runtime-assembly/tests/portable_host.rs
-    verified_at: 249125b7b8a2757e3326074544972bf79e71fe57
+    verified_at: "f0b950903064c8522ab667374bc25854eb8cf004"
     verify_cmd: "cargo test -p apeireth-cli --test canonical_cli_bootstrap --test care_heartbeat_host --locked -j 2 && cargo test -p apeireth-runtime-assembly --test managed_main --test production_cognitive_v1 --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
@@ -1213,7 +1213,7 @@ claims:
     tests:
       - crates/engine/runtime/tests/committed_evidence.rs
       - crates/engine/runtime-assembly/tests/memory_autonomy_production.rs
-    verified_at: e51327a5d2c736e9029baa4adc546f47d21f9193
+    verified_at: "f0b950903064c8522ab667374bc25854eb8cf004"
     verify_cmd: "cargo test -p apeireth-runtime --test committed_evidence --locked -j 2 && cargo test -p apeireth-runtime-assembly --test memory_autonomy_production --locked -j 2"
     owner: runtime
     next_review: "2026-11-26"
@@ -1313,7 +1313,7 @@ claims:
       - crates/engine/runtime-assembly/tests/memory_autonomy_production.rs
       - crates/engine/memory/src/context_compiler.rs
       - crates/engine/runtime/tests/context_budget.rs
-    verified_at: 7f91de399aad8b461b0840d8a77f97492e5a33ea
+    verified_at: "f0b950903064c8522ab667374bc25854eb8cf004"
     verify_cmd: "cargo test -p apeireth-memory --lib context_compiler --locked -j 2 && cargo test -p apeireth-memory --test memory_source_evidence --locked -j 2 && cargo test -p apeireth-runtime-assembly --test memory_autonomy_production --locked -j 2 && cargo test -p apeireth-runtime --test context_budget --locked -j 2 && cargo test -p apeireth-memory --lib coordinator --locked -j 2 && cargo test -p apeireth-memory --lib retrieval --locked -j 2"
     owner: memory
     next_review: "2026-11-26"
@@ -1384,7 +1384,7 @@ claims:
     tests:
       - crates/engine/runtime-assembly/examples/memory_longterm_eval/tests.rs
       - crates/engine/provider/tests/canonical_openai_compatible.rs
-    verified_at: e636339d07f23f00f150adc0353c0f99714f98ef
+    verified_at: "f0b950903064c8522ab667374bc25854eb8cf004"
     verify_cmd: "cargo test -p apeireth-runtime-assembly --example memory_longterm_eval --locked -j 2"
     owner: runtime-assembly
     next_review: "2026-11-20"
@@ -1434,7 +1434,7 @@ claims:
       - crates/engine/runtime-assembly/src/artifact_tools_tests.rs
       - crates/adapters/gateway/src/artifacts/tests.rs
       - crates/adapters/gateway/tests/artifact_candidates_http.rs
-    verified_at: 249125b7b8a2757e3326074544972bf79e71fe57
+    verified_at: "f0b950903064c8522ab667374bc25854eb8cf004"
     verify_cmd: "cargo test -p apeireth-protocol -p apeireth-runtime-assembly -p apeireth-gateway -p apeireth-cli --lib --locked --offline -j 2"
     owner: runtime-assembly
     next_review: "2026-11-27"
@@ -1460,7 +1460,7 @@ claims:
       - crates/adapters/cli/src/desktop_model_connection_tests.rs
       - crates/adapters/cli/tests/desktop_model_connection.rs
       - crates/adapters/gateway/src/model_connection.rs
-    verified_at: 249125b7b8a2757e3326074544972bf79e71fe57
+    verified_at: "f0b950903064c8522ab667374bc25854eb8cf004"
     verify_cmd: "cargo test -p apeireth-cli --lib desktop_model_connection --locked -j 2 && cargo test -p apeireth-cli --test desktop_model_connection --locked -j 2 && cargo test -p apeireth-gateway --lib model_connection --locked -j 2"
     owner: cli
     next_review: "2026-12-03"

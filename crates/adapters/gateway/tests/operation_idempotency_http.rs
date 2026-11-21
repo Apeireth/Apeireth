@@ -45,12 +45,16 @@ use uuid::Uuid;
 
 const MODEL: &str = "fake-model-1";
 const OPERATION_HEADER: &str = "x-apeireth-operation";
+const NATIVE_STREAM: &str = "application/x-apeireth-turn+ndjson";
+const STREAM_PARTS: [&str; 2] = ["先到\n", "后到"];
+const DEADLINE: Duration = Duration::from_secs(5);
 
 struct SingleShotProvider {
     id: CapabilityId,
     calls: AtomicUsize,
     text: &'static str,
     gate: Option<ProviderGate>,
+    burst: usize,
 }
 
 struct ProviderGate {
@@ -60,25 +64,31 @@ struct ProviderGate {
 
 impl SingleShotProvider {
     fn new(text: &'static str) -> Arc<Self> {
-        Self::with_gate(text, None)
+        Self::with_gate(text, None, 0)
     }
 
     fn gated(text: &'static str) -> Arc<Self> {
+        Self::gated_burst(text, 0)
+    }
+
+    fn gated_burst(text: &'static str, burst: usize) -> Arc<Self> {
         Self::with_gate(
             text,
             Some(ProviderGate {
                 entered: Notify::new(),
                 release: Semaphore::new(0),
             }),
+            burst,
         )
     }
 
-    fn with_gate(text: &'static str, gate: Option<ProviderGate>) -> Arc<Self> {
+    fn with_gate(text: &'static str, gate: Option<ProviderGate>, burst: usize) -> Arc<Self> {
         Arc::new(Self {
             id: CapabilityId::new("provider.fake").expect("valid capability id"),
             calls: AtomicUsize::new(0),
             text,
             gate,
+            burst,
         })
     }
 
@@ -98,7 +108,8 @@ impl ProviderCapability for SingleShotProvider {
             ModelId::new(MODEL).expect("valid model id"),
             self.id.clone(),
         )
-        .with_feature(ModelFeature::ToolCalls)]
+        .with_feature(ModelFeature::ToolCalls)
+        .with_feature(ModelFeature::Streaming)]
     }
 
     async fn complete(
@@ -119,6 +130,20 @@ impl ProviderCapability for SingleShotProvider {
             tool_calls: Vec::new(),
             raw_metadata: serde_json::Map::new(),
         })
+    }
+
+    async fn complete_streaming(
+        &self,
+        request: &NormalizedRequest,
+        on_delta: Arc<dyn Fn(String) + Send + Sync>,
+    ) -> Result<NormalizedResponse, ProviderError> {
+        on_delta(STREAM_PARTS[0].to_owned());
+        for _ in 0..self.burst {
+            on_delta("burst".to_owned());
+        }
+        let result = self.complete(request).await?;
+        on_delta(STREAM_PARTS[1].to_owned());
+        Ok(result)
     }
 }
 
@@ -208,6 +233,35 @@ fn chat_request(session: SessionId, input: &str, operation: Option<&str>) -> Req
             .expect("request serializes"),
         ))
         .expect("request builds")
+}
+
+fn stream_request(session: SessionId, input: &str, operation: &str) -> Request<Body> {
+    let mut request = chat_request(session, input, Some(operation));
+    request
+        .headers_mut()
+        .insert("accept", NATIVE_STREAM.parse().unwrap());
+    request
+}
+
+async fn stream_body(router: &axum::Router, request: Request<Body>) -> Body {
+    let response = timeout(DEADLINE, router.clone().oneshot(request))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()["content-type"], NATIVE_STREAM);
+    response.into_body()
+}
+
+async fn next_frame(body: &mut Body) -> Option<serde_json::Value> {
+    let bytes = timeout(DEADLINE, body.frame())
+        .await
+        .unwrap()?
+        .unwrap()
+        .into_data()
+        .unwrap();
+    assert_eq!(bytes.last(), Some(&b'\n'));
+    Some(serde_json::from_slice(&bytes).unwrap())
 }
 
 async fn json_body(response: axum::http::Response<Body>) -> (StatusCode, serde_json::Value) {
@@ -350,19 +404,147 @@ async fn a_request_without_the_header_runs_twice() {
 
 #[tokio::test]
 async fn disconnected_unkeyed_native_turn_commits_with_the_original_identity() {
-    disconnect_and_read_back(None).await;
+    disconnect_and_read_back(None, false).await;
 }
 
 #[tokio::test]
 async fn disconnected_keyed_native_turn_retains_idempotency() {
-    disconnect_and_read_back(Some("operation-before-disconnect")).await;
+    disconnect_and_read_back(Some("operation-before-disconnect"), false).await;
 }
 
-async fn disconnect_and_read_back(operation: Option<&str>) {
+#[tokio::test]
+async fn disconnected_stream_reader_preserves_native_turn_and_readback() {
+    disconnect_and_read_back(Some("stream-before-disconnect"), true).await;
+}
+
+#[tokio::test]
+async fn streamed_deltas_arrive_before_completion_and_replay_is_final_only() {
+    let provider = SingleShotProvider::gated("先到\n后到");
+    let router = canonical_router(runtime_with(provider.clone()).await);
+    let session = SessionId::new();
+    let operation = "desktop.stream-timing";
+    let mut reader = stream_body(&router, stream_request(session, "hello", operation)).await;
+    let started = next_frame(&mut reader).await.unwrap();
+    assert_eq!(started["kind"], "started");
+    assert_eq!(started["session"], session.to_string());
+    assert!(Uuid::parse_str(started["request"].as_str().unwrap()).is_ok());
+    assert_eq!(
+        next_frame(&mut reader).await.unwrap(),
+        serde_json::json!({
+            "kind":"delta", "sequence":1, "text":STREAM_PARTS[0]
+        })
+    );
+
+    let gate = provider.gate.as_ref().unwrap();
+    timeout(DEADLINE, gate.entered.notified()).await.unwrap();
+    let mut duplicate = stream_body(&router, stream_request(session, "hello", operation)).await;
+    let conflict = next_frame(&mut duplicate).await.unwrap();
+    assert_eq!(conflict["kind"], "final");
+    assert_eq!(conflict["status"], 409);
+    assert_eq!(conflict["body"]["error"]["code"], "operation_in_progress");
+    assert!(next_frame(&mut duplicate).await.is_none());
+
+    gate.release.add_permits(1);
+    assert_eq!(
+        next_frame(&mut reader).await.unwrap(),
+        serde_json::json!({
+            "kind":"delta", "sequence":2, "text":STREAM_PARTS[1]
+        })
+    );
+    let reply = next_frame(&mut reader).await.unwrap();
+    assert_eq!(reply["kind"], "final");
+    assert_eq!(reply["status"], 200);
+    assert_eq!(reply["body"]["request"], started["request"]);
+    assert_eq!(reply["body"]["text"], "先到\n后到");
+    assert!(next_frame(&mut reader).await.is_none());
+
+    let mut replay = stream_body(&router, stream_request(session, "hello", operation)).await;
+    assert_eq!(next_frame(&mut replay).await.unwrap(), reply);
+    assert!(next_frame(&mut replay).await.is_none());
+    assert_eq!(provider.call_count(), 1);
+}
+
+#[tokio::test]
+async fn a_native_stream_stop_uses_the_registered_request_and_wins_the_terminal_frame() {
+    let provider = SingleShotProvider::gated("settled after stop");
+    let router = canonical_router(runtime_with(provider.clone()).await);
+    let session = SessionId::new();
+    let request = || stream_request(session, "hello", "desktop.stop-timing");
+    let mut reader = stream_body(&router, request()).await;
+    let started = next_frame(&mut reader).await.unwrap();
+    let request_id = started["request"].as_str().unwrap();
+    let gate = provider.gate.as_ref().unwrap();
+    timeout(DEADLINE, gate.entered.notified()).await.unwrap();
+    let read_replay = || {
+        Request::get(format!(
+            "/v1/sessions/{session}/requests/{request_id}/stream"
+        ))
+        .body(Body::empty())
+        .unwrap()
+    };
+    let response = router.clone().oneshot(read_replay()).await.unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    let stop = Request::post(format!("/v1/sessions/{session}/requests/{request_id}/stop"))
+        .body(Body::empty())
+        .unwrap();
+    let (status, stop) = json_body(router.clone().oneshot(stop).await.unwrap()).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(stop["state"], "stopped");
+    gate.release.add_permits(1);
+    assert_eq!(next_frame(&mut reader).await.unwrap()["kind"], "delta");
+    let expected = serde_json::json!({"kind":"stopped", "session":session, "request":request_id});
+    // The provider may finish while stop prevents further tool work. Only the
+    // stopped fact is terminal and remains the same on an operation replay.
+    let terminal = loop {
+        let frame = next_frame(&mut reader).await.unwrap();
+        if frame["kind"] != "delta" {
+            break frame;
+        }
+    };
+    assert_eq!(terminal, expected);
+    assert!(next_frame(&mut reader).await.is_none());
+    let mut replay = stream_body(&router, request()).await;
+    assert_eq!(next_frame(&mut replay).await.unwrap(), expected);
+    assert!(next_frame(&mut replay).await.is_none());
+    let response = router.oneshot(read_replay()).await.unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    assert_eq!(provider.call_count(), 1);
+}
+
+#[tokio::test]
+async fn a_full_preview_queue_marks_a_gap_and_preserves_the_final_receipt() {
+    let provider = SingleShotProvider::gated_burst("full canonical answer", 40);
+    let router = canonical_router(runtime_with(provider.clone()).await);
+    let session = SessionId::new();
+    let mut reader = stream_body(&router, stream_request(session, "hello", "desktop.burst")).await;
+    let gate = provider.gate.as_ref().unwrap();
+    timeout(DEADLINE, gate.entered.notified()).await.unwrap();
+
+    // Do not consume progress until the provider's burst has already filled its delivery queue.
+    assert_eq!(next_frame(&mut reader).await.unwrap()["kind"], "started");
+    gate.release.add_permits(1);
+    let mut sequences = Vec::new();
+    let terminal = loop {
+        let frame = next_frame(&mut reader).await.unwrap();
+        if frame["kind"] != "delta" {
+            break frame;
+        }
+        sequences.push(frame["sequence"].as_u64().unwrap());
+    };
+    assert_eq!(sequences.first(), Some(&1));
+    assert_eq!(sequences.last(), Some(&42));
+    assert!(sequences.windows(2).any(|pair| pair[1] > pair[0] + 1));
+    assert_eq!(terminal["kind"], "final");
+    assert_eq!(terminal["status"], 200);
+    assert_eq!(terminal["body"]["text"], "full canonical answer");
+    assert!(next_frame(&mut reader).await.is_none());
+    assert_eq!(provider.call_count(), 1);
+}
+
+async fn disconnect_and_read_back(operation: Option<&str>, streaming: bool) {
     const TOKEN: &str = "native-disconnect-fixture-token";
     const TEXT: &str = "answer after the client disconnected";
     const DIGEST: &str = "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824";
-    const DEADLINE: Duration = Duration::from_secs(5);
     let provider = SingleShotProvider::gated(TEXT);
     let runtime = runtime_with(provider.clone()).await;
     let mut state = build_gateway_state_with_services(runtime.clone(), GatewayServices::default());
@@ -389,7 +571,12 @@ async fn disconnect_and_read_back(operation: Option<&str>) {
     let operation_header = operation
         .map(|key| format!("{OPERATION_HEADER}: {key}\r\n"))
         .unwrap_or_default();
-    let request = format!("POST /v1/chat HTTP/1.1\r\nHost: {address}\r\nAuthorization: Bearer {TOKEN}\r\nContent-Type: application/json\r\nContent-Length: {}\r\n{operation_header}Connection: close\r\n\r\n{body}", body.len());
+    let accept = if streaming {
+        concat!("Accept: ", "application/x-apeireth-turn+ndjson", "\r\n")
+    } else {
+        ""
+    };
+    let request = format!("POST /v1/chat HTTP/1.1\r\nHost: {address}\r\nAuthorization: Bearer {TOKEN}\r\nContent-Type: application/json\r\nContent-Length: {}\r\n{operation_header}{accept}Connection: close\r\n\r\n{body}", body.len());
     let mut socket = TcpStream::connect(address).await.unwrap();
     socket.write_all(request.as_bytes()).await.unwrap();
     let gate = provider.gate.as_ref().unwrap();

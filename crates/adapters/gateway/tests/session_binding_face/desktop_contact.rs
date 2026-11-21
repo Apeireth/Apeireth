@@ -228,13 +228,48 @@ async fn desktop_contact_recheck_requires_an_existing_bound_session() {
 #[tokio::test]
 async fn desktop_native_chat_checks_contact_before_writing_and_runs_first_text_turn_without_tools()
 {
+    exercise_contact_chat(false).await;
+}
+
+#[tokio::test]
+async fn desktop_streamed_chat_keeps_contact_persona_tool_refusal_and_operation_scope() {
+    exercise_contact_chat(true).await;
+}
+
+async fn send_chat(
+    router: &Router,
+    mut request: Request<Body>,
+    streaming: bool,
+) -> (StatusCode, String) {
+    if !streaming {
+        return send(router, request).await;
+    }
+    request.headers_mut().insert(
+        "accept",
+        HeaderValue::from_static("application/x-apeireth-turn+ndjson"),
+    );
+    let (status, body) = send(router, request).await;
+    assert_eq!(status, StatusCode::OK);
+    let terminal: Value = serde_json::from_str(body.lines().last().unwrap()).unwrap();
+    assert_eq!(terminal["kind"], "final");
+    let canonical_status =
+        StatusCode::from_u16(terminal["status"].as_u64().unwrap() as u16).unwrap();
+    (canonical_status, terminal["body"].to_string())
+}
+
+async fn exercise_contact_chat(streaming: bool) {
     let (harness, router, a, b, _) = desktop().await;
-    let session = session_id(9203);
+    let session = session_id(if streaming { 9303 } else { 9203 });
     let (status, body) = send(&router, open(session, &a, "first-host", false)).await;
     assert_eq!(status, StatusCode::OK, "{body}");
     let before = saved(&harness, session).await;
 
-    let (status, body) = send(&router, chat(session, &b, "must not reach provider")).await;
+    let (status, body) = send_chat(
+        &router,
+        chat(session, &b, "must not reach provider"),
+        streaming,
+    )
+    .await;
     assert_eq!(status, StatusCode::CONFLICT, "{body}");
     assert_eq!(error_code(&body), "agent_binding_rejected");
     assert_eq!(harness.provider.call_count(), 0);
@@ -245,13 +280,18 @@ async fn desktop_native_chat_checks_contact_before_writing_and_runs_first_text_t
 
     // The common fixture asks to call the calculator on its first provider
     // call even if no tools were advertised. The runtime must refuse it.
-    let (status, body) = send(&router, chat(session, &a, "test the tool refusal")).await;
+    let (status, body) = send_chat(
+        &router,
+        chat(session, &a, "test the tool refusal"),
+        streaming,
+    )
+    .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
     assert_eq!(error_code(&body), "invalid_request");
     assert_eq!(harness.provider.call_count(), 1);
     assert_eq!(harness.tool_calls.load(Ordering::SeqCst), 0);
 
-    let empty = session_id(9204);
+    let empty = session_id(if streaming { 9304 } else { 9204 });
     let (status, body) = send(&router, open(empty, &a, "first-host", false)).await;
     assert_eq!(status, StatusCode::OK, "{body}");
     assert!(saved(&harness, empty).await.messages.is_empty());
@@ -263,7 +303,7 @@ async fn desktop_native_chat_checks_contact_before_writing_and_runs_first_text_t
         );
         request
     };
-    let (status, body) = send(&router, receipt(&a)).await;
+    let (status, body) = send_chat(&router, receipt(&a), streaming).await;
     assert_eq!(status, StatusCode::OK, "{body}");
     let outcome: Value = serde_json::from_str(&body).unwrap();
     assert_eq!(outcome["session"], empty.to_string());
@@ -284,12 +324,12 @@ async fn desktop_native_chat_checks_contact_before_writing_and_runs_first_text_t
         "{system_texts:?}"
     );
 
-    let (status, body) = send(&router, receipt(&a)).await;
+    let (status, body) = send_chat(&router, receipt(&a), streaming).await;
     assert_eq!(status, StatusCode::OK, "{body}");
     let replay: Value = serde_json::from_str(&body).unwrap();
     assert_eq!(replay["request"], outcome["request"]);
 
-    let (status, body) = send(&router, receipt(&b)).await;
+    let (status, body) = send_chat(&router, receipt(&b), streaming).await;
     assert_eq!(status, StatusCode::CONFLICT, "{body}");
     assert_eq!(error_code(&body), "operation_conflict");
     assert_eq!(
