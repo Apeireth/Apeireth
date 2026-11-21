@@ -331,7 +331,7 @@ claims:
       - crates/engine/storage/tests/sealed_backup_restore.rs
       - crates/engine/runtime-assembly/src/canonical/session_seal.rs
       - crates/engine/runtime-assembly/src/sqlite_session.rs
-    verified_at: "ade8a8f73e91e599dc0bd480e30d0799a971c16c"
+    verified_at: "2869c46c6183204820946e2a2598b47263a28592"
     verify_cmd: "cargo test -p apeireth-runtime-assembly --lib sqlite_session --locked -j 2 && cargo test -p apeireth-runtime-assembly --lib session_seal --locked -j 2 && cargo test -p apeireth-cli --lib crypto_keys --locked -j 2"
     owner: storage
     next_review: "2026-11-20"
@@ -465,7 +465,7 @@ claims:
     tests:
       - scripts/test_verify_release_assets.py
       - scripts/test_cosign_release.py
-    verified_at: "372a6f838cc9e988343df0fa0b7f2d44a5e9b8d1"
+    verified_at: "2869c46c6183204820946e2a2598b47263a28592"
     # 2026-11-07 换验证面：原命令含 `<hex>` / `<asset>` 占位符 + 参数名写错（脚本要 -ArtifactPath，不是 -Path）
     # ⇒ ⇒ 那条命令**跑不了** ⇒ ⇒ 验证面是装饰品；现改为可自动运行的行为契约自测（10 用例，无占位符）
     verify_cmd: "python3 -m unittest scripts.test_verify_release_assets scripts.test_cosign_release"
@@ -486,7 +486,7 @@ claims:
       - frontend/companion-desktop/src-tauri/src/sqlite_workbench.rs
       - frontend/companion-desktop/src-tauri/src/pg_client.rs
       - frontend/companion-desktop/src-tauri/src/mysql_client.rs
-    verified_at: c9251271
+    verified_at: "f0cda398a08f7a02586da8b24afd806e4d41a8df"
     # ⚠️ **2026-11-06 收窄**（主指挥拍板 B1）：原命令跑的是**整个 src-tauri workspace**
     # ⇒ ⇒ 含 `tests/supervisor_lifecycle.rs` ⇒ ⇒ 而那条断言的是 **2026-11-04 之前**的
     # 「桌面自铸服务令牌可开管理面」契约 ⇒ ⇒ 已被 **P0-1「管理面 fail-closed」**
@@ -498,7 +498,7 @@ claims:
     verify_cmd: "cd frontend/companion-desktop/src-tauri && cargo test --locked --lib sqlite_workbench && cargo test --locked --lib pg_client && cargo test --locked --lib mysql_client"
     owner: companion-desktop
     next_review: "2026-11-20"
-    notes: "词法级写类拒绝（DML / CTE 内嵌 DML / EXPLAIN ANALYZE / SELECT INTO / FOR UPDATE 全拒，fail-closed）+ PG `BEGIN READ ONLY` / MySQL `START TRANSACTION READ ONLY` 纵深。桌面 CI 执行面（2026-10-22 复核）：companion-desktop-ci.yml 的 `cargo test --workspace --all-targets`（src-tauri 独立 workspace）执行本断言；PR #36 起该 gate 3/3 success。 残余：无跨平台 live E2E（如实）。"
+    notes: "词法级写类拒绝（DML / CTE 内嵌 DML / EXPLAIN ANALYZE / SELECT INTO / FOR UPDATE 全拒，fail-closed）+ PG `BEGIN READ ONLY` / MySQL `START TRANSACTION READ ONLY` 纵深。桌面 CI 执行面（2026-10-22 复核）：companion-desktop-ci.yml 的 `cargo test --workspace --all-targets`（src-tauri 独立 workspace）执行本断言；PR #36 起该 gate 3/3 success。 残余：无跨平台 live E2E（如实）。；2026-11-21 历史公开桌面升级 bundled SQLite 依赖，列名读取改用等价迭代器。只读查询与工作区限制接线保持，隔离副本的 SQLite 定向与独立全测试通过。"
 
   - id: sec.credential_endpoint_binding
     title: "凭据与端点绑定（单请求快照；显式绑定为该凭据的允许范围）"
@@ -521,7 +521,7 @@ claims:
       - crates/adapters/gateway/tests/admin_binding_warning.rs
       - crates/adapters/gateway/tests/admin_config.rs
       - crates/adapters/cli/src/keyring_bootstrap.rs
-    verified_at: "372a6f838cc9e988343df0fa0b7f2d44a5e9b8d1"
+    verified_at: "2869c46c6183204820946e2a2598b47263a28592"
     verify_cmd: "cargo test -p apeireth-provider --test endpoint_binding --locked && cargo test -p apeireth-gateway --test admin_binding_warning --test admin_config --locked && cargo test -p apeireth-cli --lib keyring_bootstrap --locked"
     owner: provider
     next_review: "2026-12-01"
@@ -1244,7 +1244,7 @@ claims:
     tests:
       - crates/engine/runtime/tests/committed_evidence.rs
       - crates/engine/runtime-assembly/tests/memory_autonomy_production.rs
-    verified_at: "ade8a8f73e91e599dc0bd480e30d0799a971c16c"
+    verified_at: "2869c46c6183204820946e2a2598b47263a28592"
     verify_cmd: "cargo test -p apeireth-runtime --test committed_evidence --locked -j 2 && cargo test -p apeireth-runtime-assembly --test memory_autonomy_production --locked -j 2"
     owner: runtime
     next_review: "2026-11-26"
@@ -1491,7 +1491,7 @@ claims:
       - crates/adapters/cli/src/desktop_model_connection_tests.rs
       - crates/adapters/cli/tests/desktop_model_connection.rs
       - crates/adapters/gateway/src/model_connection.rs
-    verified_at: "372a6f838cc9e988343df0fa0b7f2d44a5e9b8d1"
+    verified_at: "2869c46c6183204820946e2a2598b47263a28592"
     verify_cmd: "cargo test -p apeireth-cli --lib desktop_model_connection --locked -j 2 && cargo test -p apeireth-cli --test desktop_model_connection --locked -j 2 && cargo test -p apeireth-gateway --lib model_connection --locked -j 2"
     owner: cli
     next_review: "2026-12-03"
