@@ -34,8 +34,14 @@
 - `transport`：`stdio`（子进程 + 换行分隔 JSON-RPC）/ `http`（HTTP JSON-RPC
   直答）/ `sse`（事件流传响应 + 消息端点收请求）；
 - `stdio` 必须给 `command`（可选 `args`），且不得带 `url`；`http` / `sse`
-  必须给 `url`（http(s)），且不得带 `command`；
+  必须给 `url`，且不得带 `command`。配置直接授权一个服务端点。公网端点要求 HTTPS，
+  本机端点可使用 HTTP(S) 和回环 IP 字面量（如 `127.0.0.1` 或 `[::1]`）。URL 拒绝
+  用户信息和片段，DNS 解析结果必须全部是公网地址并钉住到连接。网络传输不使用环境代理或
+  HTTP 重定向。SSE 宣布的消息端点必须保持原有协议、主机和端口；
 - `enabled`：显式给出，不设默认。
+
+`stdio` 子进程仅收到系统、路径、用户档案、临时目录及语言所需的显式环境变量，
+不继承任意环境变量（如运行时模型密钥）。它仍以启动者账户权限运行，接入前应核实程序来源。
 
 次入口是数据目录里的 `mcp-servers.json`，走存储文档信封
 （`{"name":"mcp-servers","version":1,"compatible_versions":[1],"body":{"servers":[...]}}`），

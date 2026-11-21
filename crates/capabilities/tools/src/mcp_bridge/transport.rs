@@ -18,6 +18,7 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use async_trait::async_trait;
 use futures::StreamExt;
@@ -25,12 +26,13 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, Command};
 use tokio::sync::{oneshot, watch};
 
-use apeireth_plugin::mcp::sse::{absolutize_endpoint, SseBuffer};
+use apeireth_plugin::mcp::sse::SseBuffer;
 use apeireth_plugin::mcp::{Id, JsonRpcRequest, JsonRpcResponse};
 
+use crate::egress::{EgressDestination, EgressPolicy};
 use crate::mcp::McpError;
 
-use super::config::{McpServerSpec, McpTransportKind};
+use super::config::{remote_target, McpServerSpec, McpTransportKind};
 
 /// One JSON-RPC link to one external server.
 #[async_trait]
@@ -169,6 +171,31 @@ pub(super) fn transport_error(context: &str, error: impl std::fmt::Display) -> M
     McpError::Transport(format!("{context}: {error}"))
 }
 
+fn stdio_command(command: &str) -> Command {
+    let mut process = Command::new(command);
+    process.env_clear();
+    for key in [
+        "PATH",
+        "HOME",
+        "USERPROFILE",
+        "APPDATA",
+        "LOCALAPPDATA",
+        "SystemRoot",
+        "WINDIR",
+        "COMSPEC",
+        "PATHEXT",
+        "TEMP",
+        "TMP",
+        "TMPDIR",
+        "LANG",
+    ] {
+        if let Some(value) = std::env::var_os(key) {
+            process.env(key, value);
+        }
+    }
+    process
+}
+
 // A cancelled request cannot leave a routing entry until an external reply.
 struct PendingReply {
     receiver: Option<oneshot::Receiver<JsonRpcResponse>>,
@@ -205,7 +232,7 @@ pub struct StdioChannel {
 impl StdioChannel {
     /// Spawn `command` with `args` and wrap its standard streams.
     pub async fn open(command: &str, args: &[String]) -> Result<Arc<dyn McpChannel>, McpError> {
-        let mut process = Command::new(command);
+        let mut process = stdio_command(command);
         // Unix：子进程归独立进程组 ⇒ 终止时能整组 kill（非 Unix 侧由 Job Object 收敛）。
         #[cfg(unix)]
         super::process_owner::ProcessOwner::configure(&mut process);
@@ -373,27 +400,72 @@ impl Drop for StdioChannel {
 
 /// An HTTP endpoint answering JSON-RPC requests directly.
 pub struct HttpChannel {
-    client: reqwest::Client,
-    url: String,
+    target: url::Url,
+    destination: EgressDestination,
+}
+
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+const HTTP_RESPONSE_TIMEOUT: Duration = Duration::from_secs(30);
+
+fn parse_remote_target(raw: &str) -> Result<(url::Url, EgressDestination), McpError> {
+    remote_target(raw).ok_or_else(|| McpError::Transport("invalid remote endpoint".to_string()))
+}
+
+async fn pinned_http_client(destination: &EgressDestination) -> Result<reqwest::Client, McpError> {
+    let mut builder = reqwest::Client::builder()
+        .no_proxy()
+        .redirect(reqwest::redirect::Policy::none())
+        .connect_timeout(CONNECT_TIMEOUT);
+    if destination.address.is_none() {
+        let addrs = tokio::time::timeout(
+            CONNECT_TIMEOUT,
+            tokio::net::lookup_host((destination.host.as_str(), destination.port)),
+        )
+        .await
+        .map_err(|e| transport_error("resolving remote endpoint", e))?
+        .map_err(|e| transport_error("resolving remote endpoint", e))?
+        .collect::<Vec<_>>();
+        EgressPolicy::PublicInternetOnly
+            .validate_resolved(destination, &addrs)
+            .map_err(|e| transport_error("validating remote endpoint", e))?;
+        builder = builder.resolve_to_addrs(&destination.host, &addrs);
+    }
+    builder
+        .build()
+        .map_err(|e| transport_error("opening remote transport", e.without_url()))
+}
+
+fn same_origin_endpoint(base: &url::Url, endpoint: &str) -> Option<url::Url> {
+    let target = base.join(endpoint).ok()?;
+    if target.origin() != base.origin()
+        || !target.username().is_empty()
+        || target.password().is_some()
+        || target.fragment().is_some()
+    {
+        return None;
+    }
+    Some(target)
 }
 
 impl HttpChannel {
     /// A channel posting every message to `url`.
     pub fn open(url: &str) -> Result<Arc<dyn McpChannel>, McpError> {
+        let (target, destination) = parse_remote_target(url)?;
         Ok(Arc::new(Self {
-            client: reqwest::Client::new(),
-            url: url.to_string(),
+            target,
+            destination,
         }))
     }
 
     async fn post(&self, message: &JsonRpcRequest) -> Result<reqwest::Response, McpError> {
-        let response = self
-            .client
-            .post(&self.url)
+        let response = pinned_http_client(&self.destination)
+            .await?
+            .post(self.target.clone())
+            .timeout(HTTP_RESPONSE_TIMEOUT)
             .json(message)
             .send()
             .await
-            .map_err(|e| transport_error("posting JSON-RPC message", e))?;
+            .map_err(|e| transport_error("posting JSON-RPC message", e.without_url()))?;
         if !response.status().is_success() {
             return Err(McpError::Transport(format!(
                 "endpoint answered HTTP {}",
@@ -411,7 +483,7 @@ impl McpChannel for HttpChannel {
         response
             .json::<JsonRpcResponse>()
             .await
-            .map_err(|e| transport_error("decoding JSON-RPC response", e))
+            .map_err(|e| transport_error("decoding JSON-RPC response", e.without_url()))
     }
 
     async fn notify(&self, notification: JsonRpcRequest) -> Result<(), McpError> {
@@ -424,7 +496,7 @@ impl McpChannel for HttpChannel {
 pub struct SseChannel {
     client: reqwest::Client,
     base_url: String,
-    endpoint: watch::Receiver<Option<String>>,
+    endpoint: watch::Receiver<Option<url::Url>>,
     router: Arc<PendingRouter>,
     broken: Arc<AtomicBool>,
     reader: Mutex<Option<tokio::task::JoinHandle<()>>>,
@@ -433,13 +505,18 @@ pub struct SseChannel {
 impl SseChannel {
     /// Open the event stream at `url` and wait for its message endpoint.
     pub async fn open(url: &str) -> Result<Arc<dyn McpChannel>, McpError> {
-        let client = reqwest::Client::new();
-        let response = client
-            .get(url)
-            .header("Accept", "text/event-stream")
-            .send()
-            .await
-            .map_err(|e| transport_error("opening event stream", e))?;
+        let (base, destination) = parse_remote_target(url)?;
+        let client = pinned_http_client(&destination).await?;
+        let response = tokio::time::timeout(
+            HTTP_RESPONSE_TIMEOUT,
+            client
+                .get(base.clone())
+                .header("Accept", "text/event-stream")
+                .send(),
+        )
+        .await
+        .map_err(|e| transport_error("opening event stream", e))?
+        .map_err(|e| transport_error("opening event stream", e.without_url()))?;
         if !response.status().is_success() {
             return Err(McpError::Transport(format!(
                 "event stream answered HTTP {}",
@@ -447,12 +524,11 @@ impl SseChannel {
             )));
         }
 
-        let (endpoint_tx, endpoint_rx) = watch::channel::<Option<String>>(None);
+        let (endpoint_tx, endpoint_rx) = watch::channel::<Option<url::Url>>(None);
         let router = Arc::new(PendingRouter::default());
         let broken = Arc::new(AtomicBool::new(false));
         let reader_router = Arc::clone(&router);
         let reader_broken = Arc::clone(&broken);
-        let base_url = url.to_string();
         let reader = tokio::spawn(async move {
             let mut stream = response.bytes_stream();
             let mut buffer = SseBuffer::new();
@@ -463,7 +539,11 @@ impl SseChannel {
                 buffer.push_bytes(&bytes);
                 for frame in buffer.drain_frames() {
                     if frame.is_endpoint() {
-                        let endpoint = absolutize_endpoint(&base_url, &frame.data());
+                        let Some(endpoint) = same_origin_endpoint(&base, &frame.data()) else {
+                            reader_broken.store(true, Ordering::SeqCst);
+                            reader_router.fail_all();
+                            return;
+                        };
                         let _ = endpoint_tx.send(Some(endpoint));
                     } else if frame.is_message() {
                         if let Ok(response) = serde_json::from_str::<JsonRpcResponse>(&frame.data())
@@ -489,12 +569,11 @@ impl SseChannel {
         Ok(Arc::new(channel))
     }
 
-    async fn wait_for_endpoint(&self) -> Result<String, McpError> {
+    async fn wait_for_endpoint(&self) -> Result<url::Url, McpError> {
         let mut endpoint = self.endpoint.clone();
         if let Some(value) = endpoint.borrow().as_ref() {
             return Ok(value.clone());
         }
-        let deadline = std::time::Duration::from_secs(10);
         let wait = async {
             loop {
                 if endpoint.changed().await.is_err() {
@@ -505,7 +584,7 @@ impl SseChannel {
                 }
             }
         };
-        tokio::time::timeout(deadline, wait)
+        tokio::time::timeout(CONNECT_TIMEOUT, wait)
             .await
             .ok()
             .flatten()
@@ -524,11 +603,12 @@ impl SseChannel {
         let endpoint = self.wait_for_endpoint().await?;
         let response = self
             .client
-            .post(&endpoint)
+            .post(endpoint)
+            .timeout(HTTP_RESPONSE_TIMEOUT)
             .json(message)
             .send()
             .await
-            .map_err(|e| transport_error("posting JSON-RPC message", e))?;
+            .map_err(|e| transport_error("posting JSON-RPC message", e.without_url()))?;
         if !response.status().is_success() {
             return Err(McpError::Transport(format!(
                 "message endpoint answered HTTP {}",
@@ -597,5 +677,52 @@ impl Drop for SseChannel {
             reader.abort();
         }
         self.router.fail_all();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn configured_targets_require_public_https_or_literal_loopback() {
+        for url in [
+            "https://tools.example.test/mcp",
+            "http://127.0.0.1:8080/mcp",
+            "http://[::1]:8080/mcp",
+        ] {
+            assert!(HttpChannel::open(url).is_ok(), "{url}");
+        }
+        for url in [
+            "http://tools.example.test/mcp",
+            "https://192.0.2.1/mcp",
+            "https://[fc00::1]/mcp",
+            "https://user@tools.example.test/mcp",
+            "https://tools.example.test/mcp#fragment",
+        ] {
+            assert!(HttpChannel::open(url).is_err(), "{url}");
+        }
+    }
+
+    #[test]
+    fn stream_message_endpoint_stays_on_configured_origin() {
+        let base = url::Url::parse("https://tools.example.test/events").unwrap();
+        assert_eq!(
+            same_origin_endpoint(&base, "/messages?session=demo")
+                .unwrap()
+                .as_str(),
+            "https://tools.example.test/messages?session=demo"
+        );
+        for endpoint in [
+            "http://tools.example.test/messages",
+            "https://tools.example.test:8443/messages",
+            "https://other.example.test/messages",
+            "https://user@tools.example.test/messages",
+        ] {
+            assert!(
+                same_origin_endpoint(&base, endpoint).is_none(),
+                "{endpoint}"
+            );
+        }
     }
 }
