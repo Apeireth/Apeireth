@@ -32,6 +32,9 @@ pub const KEY_LOSS_BOUNDARY: &str = "密钥丢失 = 不可恢复（无后门）"
 
 /// 密钥文件格式标识。
 const KEY_FILE_FORMAT: &str = "apeireth-session-seal-key/v1";
+/// 行绑定密文信封；其后的 hex 仍是 storage `SealedField`。
+const ROW_SEAL_PREFIX: &str = "APSR2:";
+const ROW_PARTITION_DOMAIN: &str = "apeireth.session.row.v2";
 
 fn switch_on(key: &str) -> bool {
     enabled_value(std::env::var(key).ok().as_deref())
@@ -88,7 +91,9 @@ pub fn load_key_file(path: &Path) -> Result<PartitionKey, String> {
     Ok(PartitionKey::from_bytes(partition, dek))
 }
 
-/// 写密钥文件（0600，仅 Unix 设权限位；其他平台由调用方保证）。
+/// 独占写密钥文件（0600，仅 Unix 设权限位；其他平台由调用方保证）。
+///
+/// 目标已存在时拒绝，避免调用方的先检查后写竞态覆盖另一把可用密钥。
 pub fn write_key_file(path: &Path, key: &PartitionKey) -> Result<(), String> {
     let material = KeyFile {
         format: KEY_FILE_FORMAT.to_string(),
@@ -98,7 +103,7 @@ pub fn write_key_file(path: &Path, key: &PartitionKey) -> Result<(), String> {
     let json = serde_json::to_string_pretty(&material)
         .map_err(|error| format!("会话封缄密钥文件序列化失败: {error}"))?;
     let mut options = std::fs::OpenOptions::new();
-    options.write(true).create(true).truncate(true);
+    options.write(true).create_new(true);
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt;
@@ -108,8 +113,40 @@ pub fn write_key_file(path: &Path, key: &PartitionKey) -> Result<(), String> {
         .open(path)
         .map_err(|error| format!("会话封缄密钥文件写入失败 {}: {error}", path.display()))?;
     use std::io::Write as _;
-    file.write_all(json.as_bytes())
-        .map_err(|error| format!("会话封缄密钥文件写入失败 {}: {error}", path.display()))?;
+    if let Err(error) = file
+        .write_all(json.as_bytes())
+        .and_then(|()| file.sync_all())
+    {
+        drop(file);
+        let _ = std::fs::remove_file(path);
+        return Err(format!(
+            "会话封缄密钥文件写入失败 {}: {error}",
+            path.display()
+        ));
+    }
+    drop(file);
+    if let Err(error) = sync_key_parent(path) {
+        let _ = std::fs::remove_file(path);
+        return Err(format!(
+            "会话封缄密钥文件目录项落盘失败 {}: {error}",
+            path.display()
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn sync_key_parent(path: &Path) -> std::io::Result<()> {
+    std::fs::File::open(
+        path.parent()
+            .filter(|path| !path.as_os_str().is_empty())
+            .unwrap_or(Path::new(".")),
+    )?
+    .sync_all()
+}
+
+#[cfg(not(unix))]
+fn sync_key_parent(_path: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
@@ -163,6 +200,19 @@ impl SessionSealer {
         self.key.partition().as_str()
     }
 
+    fn row_key(&self, row_ref: &str) -> Result<PartitionKey, String> {
+        if row_ref.is_empty() {
+            return Err("会话封缄行引用不得为空".to_string());
+        }
+        let partition = PartitionId::new(format!(
+            "{}|{ROW_PARTITION_DOMAIN}|{}:{row_ref}",
+            self.partition(),
+            row_ref.len()
+        ))
+        .map_err(|error| format!("会话封缄行引用非法: {error}"))?;
+        Ok(PartitionKey::from_bytes(partition, *self.key.expose_dek()))
+    }
+
     /// 明文 → 落盘形态（hex 编码的 `SealedField`，与 `SqliteFieldSink` 产物同格式）。
     pub fn seal_to_text(&self, plaintext: &[u8]) -> Result<String, String> {
         self.key
@@ -174,6 +224,9 @@ impl SessionSealer {
     /// 落盘形态 → 明文。明文旧行（非密文形态）= 原样返回（过渡兼容）；
     /// 是密文形态但解不开 = 硬错误（篡改/换钥/换分区）。
     pub fn open_text(&self, stored: &str) -> Result<Vec<u8>, String> {
+        if stored.starts_with(ROW_SEAL_PREFIX) {
+            return Err("会话解封失败：行绑定密文缺少行引用".to_string());
+        }
         match SealedField::from_hex(stored) {
             Ok(sealed) => self
                 .key
@@ -185,7 +238,40 @@ impl SessionSealer {
 
     /// 该落盘值是否已是密文形态（迁移工具与测试共用，避免各自字节判定）。
     pub fn is_sealed(stored: &str) -> bool {
-        SealedField::from_hex(stored).is_ok()
+        Self::is_row_sealed(stored) || SealedField::from_hex(stored).is_ok()
+    }
+
+    /// 明文 → 与稳定行引用绑定的 v2 落盘形态。
+    pub fn seal_row_to_text(&self, row_ref: &str, plaintext: &[u8]) -> Result<String, String> {
+        self.row_key(row_ref)?
+            .seal(plaintext)
+            .map(|sealed| format!("{ROW_SEAL_PREFIX}{}", sealed.to_hex()))
+            .map_err(|error| format!("会话封缄失败: {error}"))
+    }
+
+    /// 按行引用开封 v2；旧的分区级 v1 密文和明文仍兼容读取。
+    pub fn open_row_text(&self, row_ref: &str, stored: &str) -> Result<Vec<u8>, String> {
+        let Some(hex) = stored.strip_prefix(ROW_SEAL_PREFIX) else {
+            return self.open_text(stored);
+        };
+        let sealed = SealedField::from_hex(hex)
+            .map_err(|error| format!("会话解封失败（行绑定密文形态非法）: {error}"))?;
+        self.row_key(row_ref)?
+            .open(&sealed)
+            .map_err(|error| format!("会话解封失败（行引用、密文或密钥不符）: {error}"))
+    }
+
+    /// 已完成 v2 迁移的在线读路径：明文/v1 一律视为降级，不再走迁移兼容。
+    pub fn open_current_row_text(&self, row_ref: &str, stored: &str) -> Result<Vec<u8>, String> {
+        if !Self::is_row_sealed(stored) {
+            return Err("会话解封失败：受保护在线读遇到非 v2 行".to_string());
+        }
+        self.open_row_text(row_ref, stored)
+    }
+
+    /// 是否带行绑定 v2 信封；即使内部 hex 损坏也判作密文并在开封时硬失败。
+    pub fn is_row_sealed(stored: &str) -> bool {
+        stored.starts_with(ROW_SEAL_PREFIX)
     }
 }
 
@@ -278,6 +364,21 @@ mod tests {
     }
 
     #[test]
+    fn key_file_write_never_overwrites_an_existing_key() {
+        let path = scratch("no-overwrite.json");
+        write_key_file(&path, &key()).expect("first write");
+        let original = std::fs::read(&path).expect("original");
+        let replacement =
+            PartitionKey::from_bytes(PartitionId::new("sessions").expect("partition"), [8u8; 32]);
+        assert!(
+            write_key_file(&path, &replacement).is_err(),
+            "已存在的有效密钥不得被覆盖"
+        );
+        assert_eq!(std::fs::read(&path).expect("after"), original);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
     fn key_file_rejects_wrong_format_and_bad_dek() {
         let path = scratch("bad.json");
         std::fs::write(
@@ -317,6 +418,45 @@ mod tests {
             legacy.as_bytes().to_vec()
         );
         assert!(!SessionSealer::is_sealed(legacy));
+    }
+
+    #[test]
+    fn row_bound_ciphertext_round_trips_and_keeps_v1_compatibility() {
+        let sealer = SessionSealer::new(key());
+        let plaintext = br#"{"id":"s1"}"#;
+        let v2 = sealer
+            .seal_row_to_text("sessions:s1", plaintext)
+            .expect("seal row");
+        assert!(SessionSealer::is_row_sealed(&v2));
+        assert!(SessionSealer::is_sealed(&v2));
+        assert_eq!(
+            sealer.open_row_text("sessions:s1", &v2).expect("open v2"),
+            plaintext
+        );
+        assert!(sealer.open_text(&v2).is_err(), "v2 不得脱离行引用解封");
+        assert!(sealer
+            .open_current_row_text("sessions:s1", "plaintext")
+            .is_err());
+
+        let v1 = sealer.seal_to_text(plaintext).expect("seal legacy v1");
+        assert_eq!(
+            sealer
+                .open_row_text("sessions:s1", &v1)
+                .expect("open legacy v1"),
+            plaintext
+        );
+    }
+
+    #[test]
+    fn row_bound_ciphertext_cannot_move_between_rows() {
+        let sealer = SessionSealer::new(key());
+        let sealed = sealer
+            .seal_row_to_text("sessions:s1", b"payload")
+            .expect("seal");
+        assert!(
+            sealer.open_row_text("sessions:s2", &sealed).is_err(),
+            "同钥分区内换行也必须拒解"
+        );
     }
 
     #[test]

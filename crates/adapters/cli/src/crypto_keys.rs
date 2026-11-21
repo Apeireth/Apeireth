@@ -19,14 +19,15 @@
 //! (审计归口治理面); live E2E 未实测。
 
 use std::io::Write as _;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
+use apeireth_core::storage_atomic::{self, OWNER_ONLY_MODE};
 use apeireth_storage::crypto::{
     KdfParams, KeyWrapFile, PartitionId, PartitionKey, RecoveryKey, UnlockKey, KEY_LOSS_BOUNDARY,
 };
 
 /// `apeireth crypto` 用法帧。
-pub const USAGE: &str = "apeireth crypto\n\nUsage:\n  apeireth crypto wrap --partition <ID> --keys <FILE> --recovery-out <FILE>\n  apeireth crypto recovery-export --keys <FILE> --out <FILE>\n  apeireth crypto unlock --keys <FILE> [--recovery <FILE>] [--out <KEYFILE>]\n\n  wrap / recovery-export 从 stdin 读一行口令 (终端回显);\n  unlock 缺省读口令, --recovery <FILE> 改用恢复件 (hex);\n  --out <KEYFILE> 导出解锁后的分区密钥材料 (0600), 供 B6-2a 会话封缄 daemon 读取\n  (配 APEIRETH_ENABLE_SESSION_SEAL=1 + APEIRETH_SESSION_SEAL_KEY_FILE)。\n  密钥丢失 = 不可恢复 (无后门): 恢复件导出后请离线保管。";
+pub const USAGE: &str = "apeireth crypto\n\nUsage:\n  apeireth crypto wrap --partition <ID> --keys <FILE> --recovery-out <FILE>\n  apeireth crypto recovery-export --keys <FILE> --out <FILE>\n  apeireth crypto unlock --keys <FILE> [--recovery <FILE>] [--out <KEYFILE>]\n\n  wrap / recovery-export 从 stdin 读一行口令 (终端回显);\n  unlock 缺省读口令, --recovery <FILE> 改用恢复件 (hex);\n  --out <KEYFILE> 导出解锁后的分区密钥材料 (Unix 0600；其他平台须由调用方限制目标 OS ACL), 供 B6-2a 会话封缄 daemon 读取\n  (配 APEIRETH_ENABLE_SESSION_SEAL=1 + APEIRETH_SESSION_SEAL_KEY_FILE)。\n  密钥丢失 = 不可恢复 (无后门): 恢复件导出后请离线保管。";
 
 /// `apeireth crypto` 入口。
 pub fn run_crypto(args: &[String]) -> Result<String, String> {
@@ -80,13 +81,22 @@ fn run_wrap(args: &[String]) -> Result<String, String> {
     )
     .map_err(|error| error.to_string())?;
 
-    std::fs::write(
-        &keys_path,
-        key_wrap.to_json().map_err(|error| error.to_string())?,
-    )
-    .map_err(|error| error.to_string())?;
-    std::fs::write(&recovery_path, format!("{}\n", recovery.to_hex()))
-        .map_err(|error| error.to_string())?;
+    let key_json = key_wrap.to_json().map_err(|error| error.to_string())?;
+    write_new_secret(&keys_path, key_json.as_bytes(), "包裹密钥")?;
+    if let Err(error) = write_new_secret(
+        &recovery_path,
+        format!("{}\n", recovery.to_hex()).as_bytes(),
+        "恢复件",
+    ) {
+        let cleanup = std::fs::remove_file(&keys_path);
+        return Err(match cleanup {
+            Ok(()) => format!("{error}；已回退本次包裹密钥文件"),
+            Err(cleanup) => format!(
+                "{error}；回退包裹密钥文件失败 {}: {cleanup}",
+                keys_path.display()
+            ),
+        });
+    }
 
     Ok(format!(
         "crypto wrap: ok partition={} keys={} recovery={} (恢复件只此一次导出, 离线保管; {})",
@@ -109,7 +119,7 @@ fn run_recovery_export(args: &[String]) -> Result<String, String> {
         ));
     }
 
-    let key_wrap = read_key_wrap(&keys_path)?;
+    let (observed, key_wrap) = read_key_wrap_observed(&keys_path)?;
     let passphrase = read_passphrase("口令 (stdin 一行, 回显): ")?;
     let dek = key_wrap
         .unlock(&UnlockKey::Passphrase(passphrase))
@@ -120,13 +130,22 @@ fn run_recovery_export(args: &[String]) -> Result<String, String> {
     updated
         .add_recovery_slot(&dek, &recovery)
         .map_err(|error| error.to_string())?;
-    std::fs::write(
-        &keys_path,
-        updated.to_json().map_err(|error| error.to_string())?,
-    )
-    .map_err(|error| error.to_string())?;
-    std::fs::write(&out_path, format!("{}\n", recovery.to_hex()))
-        .map_err(|error| error.to_string())?;
+    let updated_json = updated.to_json().map_err(|error| error.to_string())?;
+    write_new_secret(
+        &out_path,
+        format!("{}\n", recovery.to_hex()).as_bytes(),
+        "恢复件",
+    )?;
+    if let Err(error) = replace_if_unchanged(&keys_path, &observed, updated_json.as_bytes()) {
+        let cleanup = std::fs::remove_file(&out_path);
+        return Err(match cleanup {
+            Ok(()) => format!("{error}；新恢复件未生效且已移除"),
+            Err(cleanup) => format!(
+                "{error}；新恢复件未生效，且临时恢复件清理失败 {}: {cleanup}",
+                out_path.display()
+            ),
+        });
+    }
 
     Ok(format!(
         "crypto recovery-export: ok partition={} recovery={} (旧恢复件已作废; {})",
@@ -174,18 +193,22 @@ fn run_unlock(args: &[String]) -> Result<String, String> {
         }
         apeireth_runtime_assembly::canonical::session_seal::write_key_file(&out_path, &dek)?;
         frame.push_str(&format!(
-            "\ncrypto unlock: key material -> {} (0600; 配 APEIRETH_ENABLE_SESSION_SEAL=1 + APEIRETH_SESSION_SEAL_KEY_FILE)",
+            "\ncrypto unlock: key material -> {} (Unix 0600；其他平台须由调用方限制目标 OS ACL；配 APEIRETH_ENABLE_SESSION_SEAL=1 + APEIRETH_SESSION_SEAL_KEY_FILE)",
             out_path.display()
         ));
     }
     Ok(frame)
 }
 
-fn read_key_wrap(path: &std::path::Path) -> Result<KeyWrapFile, String> {
+fn read_key_wrap(path: &Path) -> Result<KeyWrapFile, String> {
+    read_key_wrap_observed(path).map(|(_, key_wrap)| key_wrap)
+}
+
+fn read_key_wrap_observed(path: &Path) -> Result<(Vec<u8>, KeyWrapFile), String> {
     // 读失败要带**路径 + 下一步动作**：此前只回裸 `No such file or directory
     // (os error 2)` —— 用户看不出是哪个文件、更不知道先去 `crypto wrap`
     // （真机实测 2026-10-25）。
-    let text = std::fs::read_to_string(path).map_err(|error| {
+    let bytes = std::fs::read(path).map_err(|error| {
         if error.kind() == std::io::ErrorKind::NotFound {
             return format!(
                 "密钥文件不存在: {} （先用 `apeireth crypto wrap --partition <ID> --keys <FILE> --recovery-out <FILE>` 创建）",
@@ -194,8 +217,70 @@ fn read_key_wrap(path: &std::path::Path) -> Result<KeyWrapFile, String> {
         }
         format!("密钥文件读取失败 {}: {error}", path.display())
     })?;
-    KeyWrapFile::from_json(&text)
-        .map_err(|error| format!("密钥文件解析失败 {}: {error}", path.display()))
+    let text = std::str::from_utf8(&bytes)
+        .map_err(|error| format!("密钥文件解析失败 {}: {error}", path.display()))?;
+    let key_wrap = KeyWrapFile::from_json(text)
+        .map_err(|error| format!("密钥文件解析失败 {}: {error}", path.display()))?;
+    Ok((bytes, key_wrap))
+}
+
+fn write_new_secret(path: &Path, bytes: &[u8], label: &str) -> Result<(), String> {
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt as _;
+        options.mode(OWNER_ONLY_MODE);
+    }
+    let mut file = options
+        .open(path)
+        .map_err(|error| format!("{label}文件独占创建失败 {}: {error}", path.display()))?;
+    if let Err(error) = file.write_all(bytes).and_then(|()| file.sync_all()) {
+        drop(file);
+        let _ = std::fs::remove_file(path);
+        return Err(format!("{label}文件写入失败 {}: {error}", path.display()));
+    }
+    drop(file);
+    if let Err(error) = sync_secret_parent(path) {
+        let _ = std::fs::remove_file(path);
+        return Err(format!(
+            "{label}文件目录项落盘失败 {}: {error}",
+            path.display()
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn sync_secret_parent(path: &Path) -> std::io::Result<()> {
+    std::fs::File::open(
+        path.parent()
+            .filter(|path| !path.as_os_str().is_empty())
+            .unwrap_or(Path::new(".")),
+    )?
+    .sync_all()
+}
+
+#[cfg(not(unix))]
+fn sync_secret_parent(_path: &Path) -> std::io::Result<()> {
+    Ok(())
+}
+
+fn replace_if_unchanged(path: &Path, observed: &[u8], replacement: &[u8]) -> Result<(), String> {
+    let lock_path = storage_atomic::lock_path_for(path);
+    storage_atomic::with_file_lock(&lock_path, || {
+        let current = std::fs::read(path)
+            .map_err(|error| format!("密钥文件替换前复核失败 {}: {error}", path.display()))?;
+        if current != observed {
+            return Err(format!(
+                "密钥文件在操作期间已变化，拒绝覆盖: {}",
+                path.display()
+            ));
+        }
+        storage_atomic::write_atomic_durable(path, replacement, OWNER_ONLY_MODE)
+            .map_err(|error| format!("密钥文件原子替换失败 {}: {error}", path.display()))
+    })
+    .map_err(|error| format!("密钥文件锁获取失败 {}: {error}", lock_path.display()))?
 }
 
 /// 从 stdin 读一行口令 (终端回显 —— 未接无回显输入, 见文件头 0 装诚实)。
@@ -299,6 +384,47 @@ mod tests {
         ]))
         .unwrap_err();
         assert!(error.contains("refused"), "覆盖必须拒: {error}");
+    }
+
+    #[test]
+    fn exclusive_secret_create_preserves_an_existing_file() {
+        let dir = temp_dir("exclusive-create");
+        let target = dir.path().join("secret.txt");
+        write_new_secret(&target, b"first", "测试密钥").expect("first create");
+        let error = write_new_secret(&target, b"second", "测试密钥")
+            .expect_err("existing target must not be replaced");
+        assert!(error.contains("独占创建失败"), "{error}");
+        assert_eq!(std::fs::read(&target).expect("read"), b"first");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+            assert_eq!(
+                std::fs::metadata(&target)
+                    .expect("metadata")
+                    .permissions()
+                    .mode()
+                    & 0o777,
+                0o600
+            );
+        }
+    }
+
+    #[test]
+    fn key_replacement_requires_the_observed_bytes() {
+        let dir = temp_dir("replace-cas");
+        let target = dir.path().join("keys.json");
+        std::fs::write(&target, b"observed").expect("seed");
+        let observed = std::fs::read(&target).expect("observe");
+        std::fs::write(&target, b"concurrent").expect("concurrent change");
+
+        let error = replace_if_unchanged(&target, &observed, b"replacement")
+            .expect_err("stale writer must fail");
+        assert!(error.contains("操作期间已变化"), "{error}");
+        assert_eq!(std::fs::read(&target).expect("read"), b"concurrent");
+
+        let current = std::fs::read(&target).expect("observe current");
+        replace_if_unchanged(&target, &current, b"replacement").expect("fresh replace");
+        assert_eq!(std::fs::read(&target).expect("read"), b"replacement");
     }
 
     /// 全链路 (wrap 文件形态 → engine 解包 → recovery-export 换新恢复件):
