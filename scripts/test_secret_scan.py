@@ -29,14 +29,15 @@ class SecretScanTests(unittest.TestCase):
         self.git("add", ".")
         self.git("commit", "-qm", "test: record scanner fixture")
 
-    def scan(self, mode):
+    def scan(self, mode, *extra):
         return subprocess.run(
             ["pwsh", "-NoProfile", "-File", str(self.scanner), "-Mode", mode,
-             "-RepoRoot", str(self.repo)],
+             "-RepoRoot", str(self.repo), *extra],
             cwd=self.repo, capture_output=True, text=True, timeout=60,
         )
 
     def test_line_boundaries_do_not_create_a_credential(self):
+        (self.repo / "empty.txt").write_bytes(b"")
         (self.repo / "fixture.rs").write_text(
             'let secret =\n    "a_long_symbol_name_without_credentials";\n'
         )
@@ -74,6 +75,9 @@ class SecretScanTests(unittest.TestCase):
         credential = "sk" + "-" + "Z8Q6" * 8
         path = self.repo / "removed.rs"
         path.write_text('let value = "' + credential + '";\n')
+        # Exercise the history reader's discard path. It must not leak a null
+        # pipeline record that later renders as a blank secret finding.
+        (self.repo / "image.png").write_bytes(b"\x89PNG\r\n\x1a\n")
         self.commit()
         path.unlink()
         self.commit()
@@ -81,7 +85,40 @@ class SecretScanTests(unittest.TestCase):
         result = self.scan("scan-history")
         self.assertEqual(result.returncode, 1)
         self.assertIn("[history] removed.rs:1:", result.stdout)
+        self.assertNotIn("  :: - ", result.stdout)
+        self.assertIn("History ref: HEAD ->", result.stdout)
+        self.assertIn("History coverage: refs=1", result.stdout)
         self.assertNotIn(credential, result.stdout + result.stderr)
+
+    def test_history_scans_only_the_explicitly_selected_ref(self):
+        (self.repo / "clean.txt").write_text("clean\n")
+        self.commit()
+        original_branch = self.git("branch", "--show-current").stdout.strip()
+        self.git("checkout", "-qb", "other-history")
+        credential = "sk" + "-" + "U8X6" * 8
+        (self.repo / "other.rs").write_text('let value = "' + credential + '";\n')
+        self.commit()
+        self.git("checkout", "-q", original_branch)
+
+        default_result = self.scan("scan-history")
+        self.assertEqual(default_result.returncode, 0,
+                         default_result.stdout + default_result.stderr)
+        selected = self.scan("scan-history", "-HistoryRef", "refs/heads/other-history")
+        self.assertEqual(selected.returncode, 1)
+        self.assertIn("History ref: refs/heads/other-history ->", selected.stdout)
+        self.assertNotIn(credential, selected.stdout + selected.stderr)
+
+    def test_history_invalid_ref_and_oversized_text_fail_closed(self):
+        (self.repo / "large.txt").write_text("ordinary-text-" * 20)
+        self.commit()
+        invalid = self.scan("scan-history", "-HistoryRef", "--all")
+        self.assertEqual(invalid.returncode, 2)
+        self.assertIn("failed closed", invalid.stdout)
+
+        oversized = self.scan("scan-history", "-MaxHistoryBlobBytes", "32")
+        self.assertEqual(oversized.returncode, 2)
+        self.assertIn("oversized=", oversized.stdout)
+        self.assertIn("failed closed", oversized.stdout)
 
     def test_contextual_high_entropy_value_is_rejected_without_echoing_it(self):
         credential_body = "Q7z_" * 25

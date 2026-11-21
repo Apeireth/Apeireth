@@ -518,4 +518,7 @@ jobs:
 
       - name: "Secret scan: git history (scan-history, 防御 force-push 偷渡)"
         shell: pwsh
-        run: pwsh scripts/secret-scan.ps1 -Mode scan-history
+        # HEAD is deliberate: on pull_request checkout it contains the merge
+        # commit plus every PR/base ancestor, including an add-then-delete
+        # credential commit, without scanning unrelated server-side refs.
+        run: pwsh scripts/secret-scan.ps1 -Mode scan-history -HistoryRef HEAD

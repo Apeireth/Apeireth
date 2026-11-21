@@ -51,6 +51,10 @@ on:
     #   ⇒ 覆盖不丢：依赖变了照跑 + 每周 cron 仍跑 + cargo-deny 每次 PR 查 advisories。
     paths:
       - '**/Cargo.lock'
+      - 'audit.toml'
+      - 'deny.toml'
+      - 'scripts/vet.sh'
+      - 'scripts/test_advisory_policy.py'
       - '.github/workflows/cargo-audit.yml'
       # ⭐ 排除**独立 workspace**（`crates-ui/`，ADR-0015）⇒ ⇒ 主仓的 audit
       #   **根本不覆盖**它的依赖 ⇒ ⇒ 让主仓 workflow 为它触发**既无信息量、又发邮件**
@@ -61,6 +65,10 @@ on:
     # ⚠️ 同上：PR 侧也只在依赖变动时跑（RUSTSEC 覆盖由 cargo-deny 的 advisories 兜底）。
     paths:
       - '**/Cargo.lock'
+      - 'audit.toml'
+      - 'deny.toml'
+      - 'scripts/vet.sh'
+      - 'scripts/test_advisory_policy.py'
       - '.github/workflows/cargo-audit.yml'
       # ⭐ 同上：排除独立 workspace（crates-ui）⇒ ⇒ PR 侧也不产生「无 job 的失败 run」。
       - '!crates-ui/**'
@@ -86,6 +94,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Verify RustSec ignore policy parity
+        run: python -m unittest scripts.test_advisory_policy -v
+
       - name: Install Rust toolchain (stable)
         uses: dtolnay/rust-toolchain@1.97.1
 
@@ -106,7 +117,8 @@ jobs:
       - name: Run cargo audit (json + exit code)
         # 0 vulnerabilities 期望; 有 vuln 时 fails CI
         # CI fix 2026-08: cargo-audit 0.22 默认不读项目 audit.toml (仅 ~/.cargo/audit.toml),
-        # 需要 ignore 时用 --ignore 显式同步 audit.toml / deny.toml 清单 (真实漏洞 0 ignore)。
+        # 需要 ignore 时用 --ignore 显式同步 audit.toml / deny.toml / scripts/vet.sh
+        # 清单；scripts/test_advisory_policy.py 会阻止四处漂移（真实漏洞 0 ignore）。
         # 2026-10-06 复核批 (交接工作包 §4.4): 原 21 条 --ignore 全部 unmatched (与
         # audit.toml 20 条 / deny.toml 10 条同样漂移), 按 0-ignore austere 模式清空,
         # 三处同步为空; 新增 ignore 须三处同步并写理由。

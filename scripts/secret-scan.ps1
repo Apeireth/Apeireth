@@ -20,6 +20,7 @@
 #   pwsh scripts/secret-scan.ps1 -Mode scan-staged    # 扫 git staged (pre-commit)
 #   pwsh scripts/secret-scan.ps1 -Mode scan-all       # 扫 working tree (CI gate)
 #   pwsh scripts/secret-scan.ps1 -Mode scan-history   # 扫 git history (cleanup audit)
+#   pwsh scripts/secret-scan.ps1 -Mode scan-history -HistoryRef HEAD,refs/tags/v2.0.0
 #   pwsh scripts/secret-scan.ps1 -Mode allowlist-test # 验证 .gitleaks.toml allowlist
 #
 # **Exit codes**:
@@ -34,7 +35,17 @@ param(
     [string]$Mode = 'scan-staged',
 
     [string]$RepoRoot = (Get-Location).Path,
-    [string]$ConfigFile = '.gitleaks.toml'
+    [string]$ConfigFile = '.gitleaks.toml',
+
+    [string[]]$HistoryRef = @('HEAD'),
+
+    [ValidateRange(1, 104857600)]
+    [long]$MaxHistoryBlobBytes = 10485760,
+
+    # Keep each request window below the smallest common anonymous-pipe buffer
+    # (Windows: 4 KiB), otherwise a synchronous writer can block before reads.
+    [ValidateRange(1, 64)]
+    [int]$HistoryBatchSize = 64
 )
 
 # ============================================================================
@@ -240,32 +251,197 @@ function Invoke-ScanAll {
     return $findings
 }
 
+function Resolve-HistoryRefs {
+    $resolved = @()
+    foreach ($ref in $HistoryRef) {
+        if ([string]::IsNullOrWhiteSpace($ref) -or $ref -match '[\x00-\x20~^:?*\[\\]' -or
+            $ref.Contains('..') -or $ref.Contains('@{') -or $ref.StartsWith('-')) {
+            throw "history ref rejected by syntax policy"
+        }
+        if ($ref -ne 'HEAD' -and $ref -notmatch '^[0-9a-fA-F]{40,64}$' -and
+            $ref -notmatch '^refs/(heads|tags)/[A-Za-z0-9._/-]+$' -and
+            $ref -notmatch '^refs/remotes/(origin|upstream)/[A-Za-z0-9._/-]+$') {
+            throw "history ref is outside the allowed namespaces"
+        }
+        $commit = @(& git -C $RepoRoot rev-parse --verify --end-of-options "$ref^{commit}" 2>$null)
+        if ($LASTEXITCODE -ne 0 -or $commit.Count -ne 1 -or $commit[0] -notmatch '^[0-9a-f]{40,64}$') {
+            throw "history ref did not resolve to exactly one commit"
+        }
+        $resolved += [PSCustomObject]@{ Ref = $ref; Commit = $commit[0] }
+    }
+    if ($resolved.Count -eq 0) { throw "no history refs were selected" }
+    return $resolved
+}
+
+function Get-HistoryBlobEntries {
+    param($ResolvedRefs)
+    $arguments = @('-C', $RepoRoot, 'rev-list', '--objects', '--filter=object:type=blob')
+    $arguments += @($ResolvedRefs | ForEach-Object { $_.Commit })
+    $arguments += '--'
+    $lines = @(& git @arguments 2>$null)
+    if ($LASTEXITCODE -ne 0) { throw "git rev-list failed for selected history refs" }
+
+    $seen = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    $entries = @()
+    foreach ($line in $lines) {
+        if ($line -notmatch '^([0-9a-f]{40,64})\s+(.+)$') { continue }
+        $sha = $Matches[1]
+        if (-not $seen.Add($sha)) { continue }
+        $entries += [PSCustomObject]@{ Sha = $sha; Path = $Matches[2] }
+    }
+    if ($entries.Count -eq 0) { throw "selected history refs produced no mapped blobs" }
+    return $entries
+}
+
+function Read-GitBatchLine {
+    param([IO.Stream]$Stream)
+    $bytes = [Collections.Generic.List[byte]]::new()
+    while ($true) {
+        $value = $Stream.ReadByte()
+        if ($value -lt 0) { throw "git cat-file ended before its response header" }
+        if ($value -eq 10) { break }
+        if ($value -ne 13) { $bytes.Add([byte]$value) }
+        if ($bytes.Count -gt 4096) { throw "git cat-file returned an oversized response header" }
+    }
+    return [Text.Encoding]::ASCII.GetString($bytes.ToArray())
+}
+
+function Read-GitBatchBytes {
+    param([IO.Stream]$Stream, [long]$Length, [switch]$Discard)
+    if ($Length -lt 0) { throw "git cat-file returned a negative blob size" }
+    if ($Discard) {
+        $buffer = [byte[]]::new(65536)
+        $remaining = $Length
+        while ($remaining -gt 0) {
+            $wanted = [int][Math]::Min($buffer.Length, $remaining)
+            $read = $Stream.Read($buffer, 0, $wanted)
+            if ($read -le 0) { throw "git cat-file ended inside a blob" }
+            $remaining -= $read
+        }
+        # A literal `return $null` writes a null record to PowerShell's success
+        # stream. Invoke-ScanHistory itself is a pipeline-producing function, so
+        # one such record per discarded binary blob would be mistaken for an
+        # empty finding by its caller. Return without emitting a record.
+        return
+    }
+    if ($Length -gt [int]::MaxValue) { throw "blob is too large to buffer safely" }
+    $result = [byte[]]::new([int]$Length)
+    $offset = 0
+    while ($offset -lt $result.Length) {
+        $read = $Stream.Read($result, $offset, $result.Length - $offset)
+        if ($read -le 0) { throw "git cat-file ended inside a blob" }
+        $offset += $read
+    }
+    Write-Output -NoEnumerate $result
+}
+
+function Complete-GitBatchRecord {
+    param([IO.Stream]$Stream)
+    $separator = $Stream.ReadByte()
+    if ($separator -eq 13) { $separator = $Stream.ReadByte() }
+    if ($separator -ne 10) { throw "git cat-file blob separator was invalid" }
+}
+
 function Invoke-ScanHistory {
     $findings = @()
-    # Scan text-bearing documentation and configuration too: credentials have
-    # previously appeared in .md/.txt/.json files. Skip only lockfiles,
-    # archives, executables and known binary media.
-    $blobs = & git rev-list --all --objects 2>$null
-    $scanned = 0
-    foreach ($line in $blobs) {
-        if ($line -notmatch '^([0-9a-f]{40})\s+(.+)$') { continue }
-        $sha = $Matches[1]
-        $path = $Matches[2]
-        # 跳过大文件 / binary
-        if ($path -match '\.(lock|png|jpg|jpeg|gif|ico|pdf|zip|tar|gz|mp3|wav|wasm|exe|dll|so|dylib)$') { continue }
-        $contentLines = & git cat-file -p $sha 2>$null
-        if ($null -eq $contentLines) { continue }
-        # Native command output is an array of lines; implicit string conversion
-        # joins it with spaces and creates cross-line matches and wrong locations.
-        $content = $contentLines -join "`n"
-        if ($content.Length -gt 500000) { continue }  # 跳过大文件 (> 500KB)
-        $blobFindings = @(Scan-Content -Content $content -FilePath "[history] $path")
-        foreach ($finding in $blobFindings) {
-            $finding | Add-Member -NotePropertyName HistoryBlob -NotePropertyValue $sha
+    $resolvedRefs = @(Resolve-HistoryRefs)
+    foreach ($mapping in $resolvedRefs) {
+        Write-Host "[secret-scan] History ref: $($mapping.Ref) -> $($mapping.Commit)"
+    }
+    $entries = @(Get-HistoryBlobEntries -ResolvedRefs $resolvedRefs)
+
+    $startInfo = [Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = 'git'
+    $startInfo.UseShellExecute = $false
+    $startInfo.RedirectStandardInput = $true
+    $startInfo.RedirectStandardOutput = $true
+    foreach ($argument in @('-C', $RepoRoot, 'cat-file', '--batch')) {
+        [void]$startInfo.ArgumentList.Add($argument)
+    }
+    $process = [Diagnostics.Process]::new()
+    $process.StartInfo = $startInfo
+    if (-not $process.Start()) { throw "could not start persistent git cat-file process" }
+
+    $textScanned = 0
+    $binarySkipped = 0
+    $oversized = 0
+    $scannedBytes = [long]0
+    $processed = 0
+    try {
+        $process.StandardInput.NewLine = "`n"
+        $stream = $process.StandardOutput.BaseStream
+        for ($offset = 0; $offset -lt $entries.Count; $offset += $HistoryBatchSize) {
+            $last = [Math]::Min($offset + $HistoryBatchSize, $entries.Count)
+            for ($index = $offset; $index -lt $last; $index++) {
+                $process.StandardInput.WriteLine($entries[$index].Sha)
+            }
+            $process.StandardInput.Flush()
+
+            for ($index = $offset; $index -lt $last; $index++) {
+                $entry = $entries[$index]
+                $header = Read-GitBatchLine -Stream $stream
+                if ($header -notmatch '^([0-9a-f]{40,64})\s+blob\s+([0-9]+)$' -or
+                    $Matches[1] -cne $entry.Sha) {
+                    throw "git cat-file response did not match the requested blob"
+                }
+                $size = [long]$Matches[2]
+                $knownBinary = $entry.Path -match '(?i)\.(png|jpe?g|gif|ico|pdf|zip|tar|gz|7z|mp3|wav|wasm|exe|dll|so|dylib)$'
+                if ($knownBinary) {
+                    [void](Read-GitBatchBytes -Stream $stream -Length $size -Discard)
+                    $binarySkipped++
+                } elseif ($size -gt $MaxHistoryBlobBytes) {
+                    [void](Read-GitBatchBytes -Stream $stream -Length $size -Discard)
+                    $oversized++
+                } else {
+                    $bytes = Read-GitBatchBytes -Stream $stream -Length $size
+                    if ([Array]::IndexOf($bytes, [byte]0) -ge 0) {
+                        $binarySkipped++
+                    } else {
+                        $content = [Text.Encoding]::UTF8.GetString($bytes)
+                        $blobFindings = @(Scan-Content -Content $content -FilePath "[history] $($entry.Path)")
+                        foreach ($finding in $blobFindings) {
+                            $finding | Add-Member -NotePropertyName HistoryBlob -NotePropertyValue $entry.Sha
+                        }
+                        $findings += $blobFindings
+                        $textScanned++
+                        $scannedBytes += $size
+                    }
+                }
+                [void](Complete-GitBatchRecord -Stream $stream)
+                $processed++
+                if ($processed % 5000 -eq 0) {
+                    Write-Host "[scan-history] $processed/$($entries.Count) blobs processed..."
+                }
+            }
         }
-        $findings += $blobFindings
-        $scanned++
-        if ($scanned % 500 -eq 0) { Write-Host "[scan-history] $scanned blobs scanned..." }
+        $process.StandardInput.Close()
+        $process.WaitForExit()
+        if ($process.ExitCode -ne 0) { throw "git cat-file batch process failed" }
+    } finally {
+        if (-not $process.HasExited) {
+            try { $process.StandardInput.Close() } catch {}
+            try { $process.Kill() } catch {}
+        }
+        $process.Dispose()
+    }
+
+    if ($processed -ne $entries.Count -or
+        $processed -ne ($textScanned + $binarySkipped + $oversized)) {
+        throw "history coverage counters did not reconcile"
+    }
+    foreach ($finding in $findings) {
+        if ($null -eq $finding -or
+            [string]::IsNullOrWhiteSpace([string]$finding.File) -or
+            [int]$finding.Line -lt 1 -or [int]$finding.Column -lt 1 -or
+            [string]::IsNullOrWhiteSpace([string]$finding.Pattern) -or
+            [string]::IsNullOrWhiteSpace([string]$finding.Match) -or
+            [string]::IsNullOrWhiteSpace([string]$finding.HistoryBlob)) {
+            throw "history scan produced incomplete finding metadata"
+        }
+    }
+    Write-Host "[secret-scan] History coverage: refs=$($resolvedRefs.Count) blobs=$processed text=$textScanned binary=$binarySkipped oversized=$oversized bytes=$scannedBytes"
+    if ($oversized -gt 0) {
+        throw "history scan omitted oversized non-binary blobs; raise MaxHistoryBlobBytes explicitly after review"
     }
     return $findings
 }
@@ -306,7 +482,13 @@ if (Test-Path $currentFixtureFile) {
 switch ($Mode) {
     'scan-staged'   { $findings = Invoke-ScanStaged }
     'scan-all'      { $findings = Invoke-ScanAll }
-    'scan-history'  { $findings = Invoke-ScanHistory }
+    'scan-history'  {
+        try { $findings = Invoke-ScanHistory }
+        catch {
+            Write-Host "[FAIL] History scan infrastructure failed closed: $($_.Exception.Message)" -ForegroundColor Red
+            exit 2
+        }
+    }
     'allowlist-test' { Write-Host "[OK] Allowlist test mode (no scan)"; return 0 }
     default { Write-Host "Unknown mode: $Mode"; exit 2 }
 }
