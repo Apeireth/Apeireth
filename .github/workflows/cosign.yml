@@ -70,7 +70,7 @@ on:
         required: false
         default: ''
       skip_publish:
-        description: 'Skip preparing a reviewed public-key update artifact'
+        description: 'Keep true for release operations; false prepares a public-key review artifact only'
         type: boolean
         default: true
       run_keygen:
@@ -121,7 +121,7 @@ jobs:
     runs-on: ubuntu-22.04
     # Key generation is never a side effect of verify-only or re-sign dispatch.
     # It requires a separate, explicit owner choice.
-    if: github.event_name == 'workflow_dispatch' && inputs.run_keygen == true
+    if: github.event_name == 'workflow_dispatch' && inputs.run_keygen == true && inputs.skip_publish == true && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     timeout-minutes: 30  # R21 续 D-1 100%: 显式 timeout (cosign-installer + keygen + fingerprint 估 5min, 给 30min 缓冲)
     # R21 续 D-1 100%: per-job 最小化
     permissions:
@@ -220,7 +220,7 @@ jobs:
     # - workflow_dispatch + skip_sign=true (默认): 跳过 (verify-only 模式)
     if: |
       github.event_name == 'workflow_run' ||
-      (github.event_name == 'workflow_dispatch' && inputs.skip_sign != true)
+      (github.event_name == 'workflow_dispatch' && inputs.skip_sign == false && inputs.skip_publish == true && inputs.run_keygen == false)
     timeout-minutes: 60  # R21 续 D-1 100%: 8 包 sign + 跨 workflow download, 估 30min, 给 60min
     # R21 续 D-1 100%: per-job permissions
     permissions:
@@ -515,8 +515,11 @@ jobs:
     #    verify-only 模式下**本来就不产签名** ⇒ 跳过 ≠ 失败。
     #    ⇒ 但**只限本处**；仓内其余聚合门一律严格判 `!= success`（skipped ≠ pass）。
     if: |
-      (github.event_name == 'workflow_run' && needs.sign.result == 'success') ||
-      (github.event_name == 'workflow_dispatch' && (needs.sign.result == 'success' || needs.sign.result == 'skipped'))
+      !cancelled() && (
+        (github.event_name == 'workflow_run' && needs.sign.result == 'success') ||
+        (github.event_name == 'workflow_dispatch' && inputs.skip_publish == true && inputs.run_keygen == false &&
+          (needs.sign.result == 'success' || (inputs.skip_sign == true && needs.sign.result == 'skipped')))
+      )
     timeout-minutes: 30  # R21 续 D-1 100%: 8 包 verify + 跨 workflow download
     # R21 续 D-1 100%: per-job permissions
     permissions:
@@ -758,8 +761,8 @@ jobs:
   # =========================================================================
   # 6 哲学锚:
   #   - S-2 实事求是: 替换 markdown §2 placeholder, 不假装已就位
-  #   - O-3 干到底: 1 commit 落地 (cosign.pub binary + cosign-keys.md §2 更新)
-  #   - O-5 不假装: 只在 verify 通过后才推, 不推失败版本的 pubkey
+  #   - O-3 干到底: 准备 cosign.pub + cosign-keys.md 审查 artifact
+  #   - O-5 不假装: 公钥候选准备与发行验签分开，工作流不激活信任根
   # 8 项不修改承诺:
   #   - 0 改 24 LOCKED crate
   #   - 0 改 workspace version 1.0.0
@@ -771,11 +774,8 @@ jobs:
   publish-pubkey:
     name: prepare cosign.pub + cosign-keys.md update
     runs-on: ubuntu-22.04
-    needs: verify
-    # R21 续 D-1 100%: 条件
-    # Public-key rotation must be an explicit manual action. The workflow
-    # prepares an artifact for review; it never pushes directly to a branch.
-    if: needs.verify.result == 'success' && github.event_name == 'workflow_dispatch' && inputs.skip_publish != true
+    # Initial provisioning cannot depend on an already trusted repository key.
+    if: github.event_name == 'workflow_dispatch' && inputs.skip_publish == false && inputs.run_keygen == false && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     timeout-minutes: 30
     permissions:
       contents: read
@@ -813,74 +813,16 @@ jobs:
           cosign public-key --key "${KEY_DIR}/cosign.key" > docs/security/cosign.pub
           echo ">>> 公钥已导出: docs/security/cosign.pub ($(stat -c '%s' docs/security/cosign.pub) bytes)"
 
-      # === 更新 cosign-keys.md §2 placeholder (per O-5 不假装) ===
-      - name: Update cosign-keys.md §2 placeholder
-        shell: python
+      # === 更新稳定标记区域；每次轮换都重算指纹与真实 UTC 登记日期 ===
+      - name: Prepare reviewable cosign public-key record
+        shell: bash
         run: |
-          import re
-          import hashlib
-          from pathlib import Path
-
-          pubkey_path = Path("docs/security/cosign.pub")
-          keys_md_path = Path("docs/security/cosign-keys.md")
-
-          if not pubkey_path.exists():
-              raise SystemExit(f"❌ {pubkey_path} 不存在")
-
-          pubkey_text = pubkey_path.read_text(encoding="utf-8").strip()
-          # === sha256 of DER SubjectPublicKeyInfo (per §2.1) ===
-          from cryptography.hazmat.primitives.serialization import load_pem_public_key
-          from cryptography.hazmat.backends import default_backend
-          pubkey_obj = load_pem_public_key(pubkey_text.encode("ascii"), backend=default_backend())
-          from cryptography.hazmat.primitives import serialization
-          pubkey_der = pubkey_obj.public_bytes(
-              encoding=serialization.Encoding.DER,
-              format=serialization.PublicFormat.SubjectPublicKeyInfo,
-          )
-          fingerprint = hashlib.sha256(pubkey_der).hexdigest()
-
-          content = keys_md_path.read_text(encoding="utf-8")
-          if "-----BEGIN PUBLIC KEY-----" not in content:
-              raise SystemExit("❌ cosign-keys.md §2 placeholder 找不到")
-
-          # === 替换 §2 placeholder (per O-5 不假装) ===
-          new_content = re.sub(
-              r"-----BEGIN PUBLIC KEY-----.*?-----END PUBLIC KEY-----",
-              pubkey_text,
-              content,
-              count=1,
-              flags=re.DOTALL,
-          )
-
-          # === 替换 §2.1 fingerprint placeholder ===
-          today = "2026-08-06"  # per commit time (Mavis 整合时由 owner 回填)
-          new_content = re.sub(
-              r"\| 生成时间 \| `<release 时回填>` \|",
-              f"| 生成时间 | {today} |",
-              new_content,
-              count=1,
-          )
-          new_content = re.sub(
-              r"\| Key ID \(sha256 fingerprint\) \| `<release 时回填>` \|",
-              f"| Key ID (sha256 fingerprint) | `{fingerprint}` |",
-              new_content,
-              count=1,
-          )
-
-          # === 替换 §2 顶部 "公钥是 placeholder" 提示 ===
-          new_content = new_content.replace(
-              "> ⚠️ **1.0 release 真实公钥** (Mavis 拍板后由 devops_engineer 替换):",
-              "> ✅ **1.0 release 真实公钥** (per .github/workflows/cosign.yml publish-pubkey job):",
-              1,
-          )
-          new_content = new_content.replace(
-              "> - 上面 PEM 内容是 **placeholder**, 真实 release **必须替换**",
-              "> - 上面 PEM 内容是 **真实公钥** (verify job 用此公钥验签, 1.0 release tag 必查)",
-              1,
-          )
-
-          keys_md_path.write_text(new_content, encoding="utf-8")
-          print(f">>> cosign-keys.md §2 + §2.1 已更新 (fingerprint: {fingerprint})")
+          set -euo pipefail
+          RECORDED_DATE="$(date -u +%F)"
+          python3 scripts/update_cosign_key_docs.py \
+            --pubkey docs/security/cosign.pub \
+            --document docs/security/cosign-keys.md \
+            --recorded-date "${RECORDED_DATE}"
 
       - name: Show diff (owner review)
         shell: bash

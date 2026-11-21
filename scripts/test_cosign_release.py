@@ -20,6 +20,8 @@ COSIGN_WORKFLOW = ROOT / ".github" / "workflows" / "cosign.yml"
 COSIGN_INSTALLER_SHA = "756fe2d284c7292c4e9b62c8a28f1e5629c59532"
 SCOOP_BUILD = ROOT / "packaging" / "scoop" / "build.ps1"
 SCOOP_MANIFEST = ROOT / "packaging" / "scoop" / "apeireth.json"
+UPDATE_KEY_DOCS = ROOT / "scripts" / "update_cosign_key_docs.py"
+COSIGN_KEYS_DOC = ROOT / "docs" / "security" / "cosign-keys.md"
 VERSION = "1.0.0"
 EXPECTED = [
     f"apeireth_{VERSION}_amd64.deb",
@@ -217,6 +219,103 @@ esac
             "if: github.event_name == 'workflow_dispatch' && inputs.run_keygen == true",
             workflow,
         )
+
+    def test_public_key_publishing_stays_review_only_and_fail_closed(self):
+        workflow = COSIGN_WORKFLOW.read_text(encoding="utf-8")
+        document = COSIGN_KEYS_DOC.read_text(encoding="utf-8")
+        publish = workflow[workflow.index("\n  publish-pubkey:"):]
+        self.assertIn("scripts/update_cosign_key_docs.py", workflow)
+        self.assertIn('RECORDED_DATE="$(date -u +%F)"', workflow)
+        self.assertNotIn('today = "2026-08-06"', workflow)
+        self.assertIn('if [[ -z "${COSIGN_KEY_B64}" ]]', workflow)
+        self.assertIn("actions/upload-artifact", workflow)
+        self.assertNotIn("git push", publish)
+        self.assertNotIn("needs: verify", publish)
+        self.assertIn("inputs.skip_publish == false", publish)
+        self.assertIn("github.event.repository.default_branch", publish)
+        self.assertIn("COSIGN_ACTIVE_PUBLIC_KEY_BEGIN", document)
+        self.assertIn("COSIGN_ACTIVE_METADATA_BEGIN", document)
+
+    def test_public_key_review_record_is_repeatably_rotated(self):
+        def synthetic_pem(x: str, y: str) -> tuple[str, bytes]:
+            der = bytes.fromhex(
+                "3059301306072a8648ce3d020106082a8648ce3d03010703420004" + x + y
+            )
+            body = base64.b64encode(der).decode("ascii")
+            wrapped = "\n".join(body[index:index + 64] for index in range(0, len(body), 64))
+            return f"-----BEGIN PUBLIC KEY-----\n{wrapped}\n-----END PUBLIC KEY-----\n", der
+
+        key_one, der_one = synthetic_pem(
+            "6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296",
+            "4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5",
+        )
+        key_two, der_two = synthetic_pem(
+            "7cf27b188d034f7e8a52380304b51ac3c08969e277f21b35a60b48fc47669978",
+            "07775510db8ed040293d9ac69f7430dbba7dade63ce982299e04b79d227873d1",
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            document = root / "cosign-keys.md"
+            public_key = root / "cosign.pub"
+            shutil.copyfile(COSIGN_KEYS_DOC, document)
+
+            public_key.write_text(key_one, encoding="ascii")
+            first = subprocess.run(
+                [
+                    os.fspath(Path(os.sys.executable)), os.fspath(UPDATE_KEY_DOCS),
+                    "--pubkey", os.fspath(public_key), "--document", os.fspath(document),
+                    "--recorded-date", "2026-11-21",
+                ],
+                cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
+                errors="replace", timeout=30,
+            )
+            self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+            first_fingerprint = hashlib.sha256(der_one).hexdigest()
+            first_record = document.read_text(encoding="utf-8")
+            self.assertIn(first_fingerprint, first_record)
+            self.assertIn("2026-11-21", first_record)
+            self.assertNotIn("NOT CONFIGURED —", first_record)
+
+            public_key.write_text(key_two, encoding="ascii")
+            second = subprocess.run(
+                [
+                    os.fspath(Path(os.sys.executable)), os.fspath(UPDATE_KEY_DOCS),
+                    "--pubkey", os.fspath(public_key), "--document", os.fspath(document),
+                    "--recorded-date", "2026-11-22",
+                ],
+                cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
+                errors="replace", timeout=30,
+            )
+            self.assertEqual(second.returncode, 0, second.stdout + second.stderr)
+            second_record = document.read_text(encoding="utf-8")
+            self.assertIn(hashlib.sha256(der_two).hexdigest(), second_record)
+            self.assertNotIn(first_fingerprint, second_record)
+            self.assertIn("2026-11-22", second_record)
+            self.assertEqual(second_record.count("-----BEGIN PUBLIC KEY-----"), 1)
+            self.assertEqual(second_record.count("COSIGN_ACTIVE_METADATA_BEGIN"), 1)
+
+    def test_public_key_review_record_rejects_invalid_key_without_editing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            document = root / "cosign-keys.md"
+            public_key = root / "cosign.pub"
+            shutil.copyfile(COSIGN_KEYS_DOC, document)
+            before = document.read_bytes()
+            public_key.write_text(
+                "-----BEGIN PUBLIC KEY-----\nINVALID\n-----END PUBLIC KEY-----\n",
+                encoding="ascii",
+            )
+            result = subprocess.run(
+                [
+                    os.fspath(Path(os.sys.executable)), os.fspath(UPDATE_KEY_DOCS),
+                    "--pubkey", os.fspath(public_key), "--document", os.fspath(document),
+                    "--recorded-date", "2026-11-21",
+                ],
+                cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
+                errors="replace", timeout=30,
+            )
+            self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual(document.read_bytes(), before)
 
     @unittest.skipUnless(shutil.which("pwsh"), "PowerShell is required")
     def test_scoop_manifest_binds_to_the_locally_built_zip(self):
