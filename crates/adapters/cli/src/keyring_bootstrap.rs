@@ -32,10 +32,14 @@
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 
-use apeireth_credentials::keyring::{AuditSink, CountingAudit, KeyringBackend, NoopAudit};
+use apeireth_credentials::keyring::{
+    AuditSink, CountingAudit, KeyringBackend, KeyringError, NoopAudit,
+};
 use apeireth_credentials::keyring_resolver::KeyringCredentialResolver;
 use apeireth_credentials::{
-    HotCredentialStore, KeyringSelector, LayeredCredentialResolver, SecretBuf,
+    bound_credential_reference, bound_record_service, decode_credential_record,
+    encode_credential_record, is_bound_credential_reference, HotCredentialStore, KeyringSelector,
+    LayeredCredentialResolver, SecretBuf,
 };
 use apeireth_gateway::CredentialWriter;
 use apeireth_plugin::CredentialResolver;
@@ -142,14 +146,9 @@ fn try_build_keyring_backend() -> Result<Arc<dyn KeyringBackend>, String> {
 
 /// `/v1/admin/config` 的 api_key 热写端口。
 ///
-/// 写入两层:
-/// 1. [`hot_credential_store`] (主层, 总是成功) —— 与 `build_keyring_resolver`
-///    共享同一实例, 下一次 provider 请求的 `resolve` 即取新值 (真热更);
-/// 2. keyring backend (可选持久层) —— 仅服务进程重启后的存活; 未配置 keyring
-///    backend 时跳过 (热更仍生效, 重启回退启动值)。
-///
-/// 只有持久层写入失败才返 Err。普通单值写沿用既有「热值已生效、持久化失败」
-/// 语义；凭据+端点复合写则持久层先行，保证 `Err` 时运行时复合状态不变。
+/// 写入两层: 可选 keyring 持久层先行，成功后才原子替换运行时值与绑定。
+/// 因此任何持久化错误都不会留下一个仅热生效的新凭据版本。未配置 keyring
+/// 时只更新进程热库，重启后仍按既有启动值路径恢复。
 pub fn build_keyring_credential_writer() -> Option<Arc<dyn CredentialWriter>> {
     Some(Arc::new(HotCredentialWriter {
         store: hot_credential_store(),
@@ -162,50 +161,177 @@ struct HotCredentialWriter {
     durable: Option<Arc<dyn KeyringBackend>>,
 }
 
+enum DurableBinding {
+    Missing,
+    Unmanaged,
+    Bound(Vec<String>),
+}
+
+fn keyring_error_class(error: &KeyringError) -> &'static str {
+    match error {
+        KeyringError::UnknownService { .. } => "unknown_service",
+        KeyringError::InvalidServiceName(_) => "invalid_service_name",
+        KeyringError::ServiceNameTooLong { .. } => "service_name_too_long",
+        KeyringError::BackendUnavailable(_) => "backend_unavailable",
+        KeyringError::AccessDenied { .. } => "access_denied",
+        KeyringError::Io { .. } => "io",
+        KeyringError::Crypto(_) => "crypto",
+        KeyringError::Format(_) => "format",
+        KeyringError::SecretTooLong { .. } => "secret_too_long",
+        KeyringError::Backend(_) => "backend",
+    }
+}
+
+impl HotCredentialWriter {
+    fn read_durable_binding(&self, name: &str) -> Result<DurableBinding, String> {
+        let Some(backend) = &self.durable else {
+            return Ok(DurableBinding::Missing);
+        };
+        let original = match backend.get(name) {
+            Ok(stored) => stored,
+            Err(KeyringError::UnknownService { .. }) => return Ok(DurableBinding::Missing),
+            Err(error) => {
+                return Err(format!(
+                    "keyring read failed ({})",
+                    keyring_error_class(&error)
+                ))
+            }
+        };
+        let referenced = is_bound_credential_reference(&original)
+            .map_err(|error| format!("keyring credential reference refused: {error}"))?;
+        let stored = if referenced {
+            backend.get(&bound_record_service(name)).map_err(|error| {
+                format!(
+                    "keyring bound credential read failed ({})",
+                    keyring_error_class(&error)
+                )
+            })?
+        } else {
+            original
+        };
+        let record = decode_credential_record(&stored)
+            .map_err(|error| format!("keyring credential record refused: {error}"))?;
+        match record.endpoints() {
+            Some(_) if !referenced => {
+                Err("unreferenced bound credential record refused".to_string())
+            }
+            Some(endpoints) => Ok(DurableBinding::Bound(endpoints.to_vec())),
+            None if referenced => {
+                Err("keyring bound credential is missing its binding".to_string())
+            }
+            None => Ok(DurableBinding::Unmanaged),
+        }
+    }
+
+    fn effective_binding(&self, name: &str) -> Result<Option<Vec<String>>, String> {
+        if let Some(snapshot) = self.store.resolve_snapshot(name) {
+            if let Some(endpoints) = snapshot.bound_endpoints() {
+                return Ok(Some(endpoints.to_vec()));
+            }
+        }
+        match self.read_durable_binding(name)? {
+            DurableBinding::Bound(endpoints) => Ok(Some(endpoints)),
+            DurableBinding::Missing | DurableBinding::Unmanaged => Ok(None),
+        }
+    }
+
+    fn persist_bound(&self, name: &str, value: &str, endpoints: &[String]) -> Result<(), String> {
+        let Some(backend) = &self.durable else {
+            return Ok(());
+        };
+        let companion = bound_record_service(name);
+        let encoded = encode_credential_record(value, Some(endpoints))
+            .map_err(|error| format!("keyring bound credential encode failed: {error}"))?;
+        let marker_active = match backend.get(name) {
+            Ok(stored) => is_bound_credential_reference(&stored)
+                .map_err(|error| format!("keyring credential reference refused: {error}"))?,
+            Err(KeyringError::UnknownService { .. }) => false,
+            Err(error) => {
+                return Err(format!(
+                    "keyring read failed ({})",
+                    keyring_error_class(&error)
+                ))
+            }
+        };
+        backend.set(&companion, &encoded).map_err(|error| {
+            format!(
+                "keyring bound credential persistence failed ({})",
+                keyring_error_class(&error)
+            )
+        })?;
+        if marker_active {
+            return Ok(());
+        }
+        if let Err(error) = backend.set(name, &bound_credential_reference()) {
+            let cleanup_failed = backend.delete(&companion).is_err();
+            return Err(format!(
+                "keyring credential reference persistence failed ({}); companion cleanup {}",
+                keyring_error_class(&error),
+                if cleanup_failed {
+                    "failed"
+                } else {
+                    "completed"
+                }
+            ));
+        }
+        Ok(())
+    }
+
+    fn persist_unmanaged(&self, name: &str, value: &str) -> Result<(), String> {
+        let Some(backend) = &self.durable else {
+            return Ok(());
+        };
+        backend
+            .set(name, &SecretBuf::from_str(value))
+            .map_err(|error| {
+                format!(
+                    "keyring credential persistence failed ({})",
+                    keyring_error_class(&error)
+                )
+            })
+    }
+}
+
 impl CredentialWriter for HotCredentialWriter {
     fn write(&self, name: &str, value: &str) -> Result<(), String> {
-        // 主层先写: 每次请求现解析的 resolver 立即可见。
-        self.store.set(name, value);
-        // 持久层尽力而为: 失败不影响本次热更, 但要如实上报。
-        if let Some(backend) = &self.durable {
-            backend
-                .set(name, &SecretBuf::from_str(value))
-                .map_err(|error| {
-                    format!("已热更生效（下次请求使用），但 keyring 持久化失败: {error}")
-                })?;
+        if value.is_empty() {
+            return Err("credential value must not be empty".to_string());
+        }
+        let endpoints = self.effective_binding(name)?;
+        if let Some(endpoints) = endpoints {
+            self.persist_bound(name, value, &endpoints)?;
+            self.store
+                .set_with_endpoints(name, value, endpoints.into_iter());
+        } else {
+            self.persist_unmanaged(name, value)?;
+            self.store.set(name, value);
         }
         Ok(())
     }
 
     /// 该凭据**已声明**的端点（`None` = 未声明 ⇒ 不参与绑定闸）。
     ///
-    /// ⚠️ 这是**只读查询**，不接触密文；网关据此在跨 origin 热更前
-    /// fail-closed，未绑定凭据不会静默跟随到新主机。
+    /// 查询不向调用方暴露密文；为保证绑定与值同版本，必要时会读取并解码
+    /// 同一个受保护的 keyring 伴随记录。
     fn bound_endpoints(&self, name: &str) -> Option<Vec<String>> {
-        self.store.declared_endpoints(name)
+        self.effective_binding(name).ok().flatten()
     }
 
     /// 写入凭据**并**登记它的端点绑定（安全审计 P1 的「凭据库维度」）。
     ///
-    /// 绑定与凭据**存在同一个 store** ⇒ 换端点配置**改不到**这份绑定
-    /// ⇒ 未绑定的端点拿不到这把凭据。
-    ///
-    /// ⚠️ 持久层（OS keyring）只存**值**（keyring 的值模型没有附加元数据的位置）
-    /// ⇒ **绑定只活在进程内**（重启后需要重新声明）⇒ 如实在此说明，不假装持久。
+    /// 运行时 store 与 keyring 伴随记录都把绑定和值作为一个凭据版本处理。
+    /// 旧服务名只保存不含密钥的引用标记，旧二进制不会误把结构化记录连同
+    /// 真密钥发送到网络。
     fn write_with_endpoints(
         &self,
         name: &str,
         value: &str,
         endpoints: &[String],
     ) -> Result<(), String> {
-        // Persist first for failure atomicity: an `Err` must not leave a new
-        // hot credential without its endpoint declaration. This does not make
-        // provider-side binding+credential reads a coherent snapshot.
-        if let Some(backend) = &self.durable {
-            backend
-                .set(name, &SecretBuf::from_str(value))
-                .map_err(|error| format!("keyring 持久化失败，运行时凭据未变更: {error}"))?;
+        if value.is_empty() {
+            return Err("credential value must not be empty".to_string());
         }
+        self.persist_bound(name, value, endpoints)?;
         self.store
             .set_with_endpoints(name, value, endpoints.iter().cloned());
         Ok(())
@@ -215,7 +341,9 @@ impl CredentialWriter for HotCredentialWriter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use apeireth_credentials::keyring::KeyringError;
+    use apeireth_credentials::keyring::{InMemoryKeyring, NoopAudit};
+    use std::collections::BTreeMap;
+    use std::sync::Mutex;
 
     struct RejectingBackend;
 
@@ -231,7 +359,9 @@ mod tests {
             _service: &str,
             _secret: &SecretBuf,
         ) -> apeireth_credentials::keyring::Result<()> {
-            Err(KeyringError::Backend("synthetic rejection".to_string()))
+            Err(KeyringError::Backend(
+                "synthetic rejection containing sk-must-not-escape".to_string(),
+            ))
         }
 
         fn delete(&self, service: &str) -> apeireth_credentials::keyring::Result<()> {
@@ -246,6 +376,60 @@ mod tests {
 
         fn backend_name(&self) -> &'static str {
             "synthetic-rejecting"
+        }
+    }
+
+    struct MarkerRejectingBackend {
+        marker_name: String,
+        values: Mutex<BTreeMap<String, Vec<u8>>>,
+    }
+
+    impl KeyringBackend for MarkerRejectingBackend {
+        fn get(&self, service: &str) -> apeireth_credentials::keyring::Result<SecretBuf> {
+            self.values
+                .lock()
+                .unwrap()
+                .get(service)
+                .map(|value| SecretBuf::new(value.clone()))
+                .ok_or_else(|| KeyringError::UnknownService {
+                    service: service.to_string(),
+                })
+        }
+
+        fn set(
+            &self,
+            service: &str,
+            secret: &SecretBuf,
+        ) -> apeireth_credentials::keyring::Result<()> {
+            if service == self.marker_name {
+                return Err(KeyringError::Backend(
+                    "marker rejection containing sk-must-not-escape".to_string(),
+                ));
+            }
+            self.values
+                .lock()
+                .unwrap()
+                .insert(service.to_string(), secret.expose().to_vec());
+            Ok(())
+        }
+
+        fn delete(&self, service: &str) -> apeireth_credentials::keyring::Result<()> {
+            self.values
+                .lock()
+                .unwrap()
+                .remove(service)
+                .map(|_| ())
+                .ok_or_else(|| KeyringError::UnknownService {
+                    service: service.to_string(),
+                })
+        }
+
+        fn list(&self) -> apeireth_credentials::keyring::Result<Vec<String>> {
+            Ok(self.values.lock().unwrap().keys().cloned().collect())
+        }
+
+        fn backend_name(&self) -> &'static str {
+            "synthetic-marker-rejecting"
         }
     }
 
@@ -264,8 +448,72 @@ mod tests {
             &["https://endpoint.example/v1".to_string()],
         );
         assert!(result.is_err());
+        assert!(!result.unwrap_err().contains("sk-must-not-escape"));
         assert!(store.resolve(name).is_none());
         assert_eq!(store.declared_endpoints(name), None);
+    }
+
+    #[test]
+    fn failed_reference_write_rolls_back_the_unreferenced_companion() {
+        let name = "provider.marker-failure.api_key";
+        let backend = Arc::new(MarkerRejectingBackend {
+            marker_name: name.to_string(),
+            values: Mutex::new(BTreeMap::new()),
+        });
+        let store = Arc::new(HotCredentialStore::new());
+        let writer = HotCredentialWriter {
+            store: Arc::clone(&store),
+            durable: Some(backend.clone()),
+        };
+
+        let error = writer
+            .write_with_endpoints(
+                name,
+                "synthetic-value",
+                &["https://endpoint.example".to_string()],
+            )
+            .expect_err("marker write must fail");
+        assert!(!error.contains("sk-must-not-escape"));
+        assert!(store.resolve(name).is_none());
+        assert!(backend.get(&bound_record_service(name)).is_err());
+    }
+
+    #[test]
+    fn bound_keyring_record_survives_restart_and_key_only_rotation() {
+        let backend = Arc::new(InMemoryKeyring::new(Arc::new(NoopAudit)));
+        let name = "provider.restart-test.api_key";
+        let endpoints = vec!["https://model.example/v1".to_string()];
+        let writer = HotCredentialWriter {
+            store: Arc::new(HotCredentialStore::new()),
+            durable: Some(backend.clone()),
+        };
+        writer
+            .write_with_endpoints(name, "synthetic-first-value", &endpoints)
+            .expect("persist bound credential");
+
+        let marker = backend.get(name).expect("reference marker");
+        assert!(is_bound_credential_reference(&marker).unwrap());
+        assert!(!std::str::from_utf8(marker.expose())
+            .unwrap()
+            .contains("synthetic-first-value"));
+
+        let restarted = KeyringCredentialResolver::new(backend.clone());
+        let snapshot = restarted.resolve_snapshot(name).expect("restart snapshot");
+        assert_eq!(snapshot.secret().expose(), "synthetic-first-value");
+        assert_eq!(snapshot.bound_endpoints(), Some(endpoints.as_slice()));
+
+        let rotated_writer = HotCredentialWriter {
+            store: Arc::new(HotCredentialStore::new()),
+            durable: Some(backend.clone()),
+        };
+        rotated_writer
+            .write(name, "synthetic-rotated-value")
+            .expect("rotate while retaining binding");
+        let rotated = KeyringCredentialResolver::new(backend)
+            .resolve_snapshot(name)
+            .expect("rotated snapshot");
+        assert_eq!(rotated.secret().expose(), "synthetic-rotated-value");
+        assert_eq!(rotated.bound_endpoints(), Some(endpoints.as_slice()));
     }
 
     /// 真热更接线: admin 写入端口 (`build_keyring_credential_writer`) 与 provider
