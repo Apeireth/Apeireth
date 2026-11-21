@@ -165,9 +165,8 @@ mod tests {
     fn malformed_versioned_values_do_not_downgrade_to_legacy() {
         let mut bytes = ENVELOPE_PREFIX.to_vec();
         bytes.extend_from_slice(br#"{"secret":"synthetic"}"#);
-        let error = match decode_credential_record(&SecretBuf::new(bytes)) {
-            Err(error) => error,
-            Ok(_) => panic!("malformed record unexpectedly decoded"),
+        let Err(error) = decode_credential_record(&SecretBuf::new(bytes)) else {
+            panic!("malformed record unexpectedly decoded");
         };
         assert_eq!(error, CredentialRecordError::Malformed);
         assert!(!format!("{error}").contains("synthetic"));

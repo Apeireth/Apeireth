@@ -279,7 +279,7 @@ fn migrate_protected_store(
     use rusqlite::OptionalExtension as _;
 
     let transaction =
-        rusqlite::Transaction::new_unchecked(connection, rusqlite::TransactionBehavior::Immediate)?;
+        connection.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
     transaction.execute_batch(
         "CREATE TABLE IF NOT EXISTS apeireth_session_seal_state (
              singleton INTEGER PRIMARY KEY CHECK(singleton = 1),

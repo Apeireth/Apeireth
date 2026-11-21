@@ -300,8 +300,7 @@ impl CredentialWriter for HotCredentialWriter {
         let endpoints = self.effective_binding(name)?;
         if let Some(endpoints) = endpoints {
             self.persist_bound(name, value, &endpoints)?;
-            self.store
-                .set_with_endpoints(name, value, endpoints.into_iter());
+            self.store.set_with_endpoints(name, value, endpoints);
         } else {
             self.persist_unmanaged(name, value)?;
             self.store.set(name, value);
