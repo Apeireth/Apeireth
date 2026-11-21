@@ -904,6 +904,14 @@ mod tests {
     }
 
     #[test]
+    fn embedded_factory_matches_the_public_activation_query() {
+        assert_eq!(
+            egress_gate_from_env().is_some(),
+            egress_gate_enabled_from_env()
+        );
+    }
+
+    #[test]
     fn default_factory_redacts_without_writing_audit_files() {
         let temp = tempfile::tempdir().unwrap();
         let paths = ["egress", "impact", "consequence"].map(|name| temp.path().join(name));
