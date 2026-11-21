@@ -14,7 +14,7 @@ Author: Codex
 
 | 批次 | 当前状态 | 验证入口 |
 |---|---|---|
-| A | 工具域名解析须全部通过公网判定。MCP HTTP/SSE 禁止代理和自动跳转，SSE 消息端点保持同源，stdio 清理环境。源码提交 `3431a5ff1`。 | `cargo test -p apeireth-tools-canonical --lib --test mcp_bridge_e2e --locked -j 2` |
+| A | 工具域名解析须全部通过公网判定。MCP HTTP/SSE 禁止代理和自动跳转，SSE 消息端点保持同源，stdio 清理环境。源码提交 `3431a5ff1`，移除孤儿辅助入口 `7c2b6121e` 后复跑通过。 | `cargo test -p apeireth-tools-canonical --lib --test mcp_bridge_e2e --locked -j 2` |
 | B | HTTP 与 CLI 共用删户预检和结果确认。目标主体、域或五账结果无法确认时保留账号。HTTP 暂拒独立用户域遗忘，CLI 仅用可确定的目标域数据库。源码提交 `9574f0145`。 | `cargo test -p apeireth-gateway --test user_admin_endpoints --locked -j 2`；`cargo test -p apeireth-cli --test user_admin --test user_admin_dual_entry --locked -j 2` |
 | C | 普通网关按端点来源和供应商类型核对已有绑定，串行化管理更新。凭据写入端不支持绑定或持久化失败时保留旧的运行时状态。Windows 受管入口现有令牌与端点合同保持。源码提交 `af877a2f7`。 | `cargo test -p apeireth-gateway --lib --test admin_binding_warning --test admin_config --locked -j 2`；`cargo test -p apeireth-cli --lib keyring_bootstrap --locked`；`cargo test -p apeireth-provider --test endpoint_binding --locked` |
 | E（模型出境） | 已接入当前生产 ProviderRouter 路径。启用时拒绝无法检查的图像，脱敏历史工具参数的字符串值，并以单次请求登记簿还原最终回复。默认关闭。源码提交 `146aec08a`。 | `cargo test -p apeireth-runtime -p apeireth-runtime-assembly --lib --locked -j 2` |
@@ -47,4 +47,6 @@ test partial_forget_result_keeps_the_account_and_retry_succeeds ... ok
 - 独立旧桌面壳锁仍命中 `RUSTSEC-2026-0459` 和 `RUSTSEC-2026-0538`。私有桌面两个宿主锁在相同公告库未命中 vulnerability，严格模式仍有警告。桌面宿主、客户端存储及打包由前端施工线负责。
 - 真实发行签名需要有效 Authenticode 及签名链公钥配置。当前已验证本地检查和 dry-run，实际 Actions、真实产物签名及 SLSA/attestation 尚待验收。
 - 本机全仓槽位守卫发现既有未登记前端构建产物目录 `C:\Apeireth\cargo-target-ui-manual-20261118`。当前安全批的 Cargo 测试在已登记 base 槽位运行。
+- 全仓 crate 体量守卫仍报 CLI、gateway、tools、provider、runtime 和 runtime-assembly 超基线。维持现有基线，下一批按实际复杂度收敛。
+- 融合通道检查缺语料跳过。总门禁未放行，完整深门禁和多平台 CI 未验证。
 - 生产云端、远程及其他平台仍需相应的发布验收。

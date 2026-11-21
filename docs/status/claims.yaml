@@ -90,7 +90,7 @@ claims:
       - crates/capabilities/tools/src/mcp_bridge/catalog.rs
       - crates/engine/runtime-assembly/tests/production_mcp_factory.rs
       - crates/engine/runtime-assembly/tests/convergence_mcp.rs
-    verified_at: 3431a5ff1bb1efcd8e738a2c22c5a2635017e667
+    verified_at: 7c2b6121ecd68dd144435d2de8470c24f1edac9a
     verify_cmd: "cargo test -p apeireth-tools-canonical mcp_bridge"
     owner: tools
     next_review: "2026-11-20"
