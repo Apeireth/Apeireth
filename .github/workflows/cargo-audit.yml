@@ -92,16 +92,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Verify RustSec ignore policy parity
         run: python -m unittest scripts.test_advisory_policy -v
 
       - name: Install Rust toolchain (stable)
-        uses: dtolnay/rust-toolchain@1.97.1
+        uses: dtolnay/rust-toolchain@766a42937d994bd78bb4591385445c188ccb3f09 # 1.97.1
 
       - name: Cache cargo registry
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: |
             ~/.cargo/registry
@@ -112,7 +112,7 @@ jobs:
 
       - name: Install cargo-audit
         # 2026-08 CI fix: crates.io 无 cargo-audit ^1.1 (最新 0.20.x), 改用 install-action 装最新
-        uses: taiki-e/install-action@cargo-audit
+        uses: taiki-e/install-action@075303a1bd9aeb1afdcc49c7f9a0e520a9afc269 # cargo-audit
 
       - name: Run cargo audit (json + exit code)
         # 0 vulnerabilities 期望; 有 vuln 时 fails CI
@@ -293,7 +293,7 @@ jobs:
 
       - name: Upload audit report (artifact)
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: cargo-audit-report
           path: |
@@ -303,7 +303,7 @@ jobs:
       - name: Upload SARIF to Code Scanning (R66)
         if: always()
         # 2026-10-03: v3 已 EOL (GitHub 强制退役旧主版), 升 v4 —— 否则本步必败
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@1bd86f2fdb4b86187fa4059f16f31a3202acc9ea # v4
         with:
           sarif_file: audit-report.sarif
           category: cargo-audit
