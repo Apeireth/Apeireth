@@ -3,7 +3,7 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: 7e14ae748b53c3ed9403ac61a78501f0d839be4411d51167ee436feadafe80bb
+claims_sha256: 79fb4f97b3685cdc189df510039e5fad68615564a7c21b27d21519e91942a290
 claims_total: 63
 items:
   - id: "rt.provider_router"
@@ -165,16 +165,19 @@ items:
       sources:
         - "crates/adapters/gateway/src/user_admin.rs"
         - "crates/adapters/cli/src/user_admin.rs"
+        - "crates/foundation/core/src/storage_atomic.rs"
     wired:
       production_refs:
         - "crates/adapters/cli/src/user_admin.rs"
         - "crates/adapters/gateway/src/user_admin.rs"
+        - "crates/foundation/core/src/storage_atomic.rs"
     default_enabled: true
     validated:
       tests:
         - "crates/adapters/gateway/tests/user_admin_endpoints.rs"
         - "crates/adapters/cli/tests/user_admin.rs"
         - "crates/adapters/cli/tests/user_admin_dual_entry.rs"
+        - "crates/adapters/gateway/src/user_admin.rs"
       claims_id: "sec.governed_user_removal"
     gaps:
       []
@@ -359,12 +362,14 @@ items:
         - "crates/adapters/cli/src/crypto_keys.rs"
         - "crates/engine/runtime-assembly/src/canonical/session_seal.rs"
         - "crates/engine/runtime-assembly/src/sqlite_session.rs"
+        - "crates/foundation/core/src/storage_atomic.rs"
     wired:
       production_refs:
         - "crates/adapters/cli/src/crypto_keys.rs"
         - "crates/engine/runtime-assembly/src/canonical/session_seal.rs"
         - "crates/engine/runtime-assembly/src/sqlite_session.rs"
         - "crates/engine/storage/src/crypto/mod.rs"
+        - "crates/foundation/core/src/storage_atomic.rs"
     default_enabled: false
     validated:
       tests:
@@ -372,6 +377,7 @@ items:
         - "crates/engine/storage/tests/sealed_backup_restore.rs"
         - "crates/engine/runtime-assembly/src/canonical/session_seal.rs"
         - "crates/engine/runtime-assembly/src/sqlite_session.rs"
+        - "crates/adapters/cli/src/crypto_keys.rs"
       claims_id: "sec.storage_envelope_crypto"
     gaps:
       []
@@ -522,6 +528,7 @@ items:
         - "crates/foundation/credentials/src/credential_record.rs"
         - "crates/adapters/gateway/src/admin.rs"
         - "crates/adapters/cli/src/keyring_bootstrap.rs"
+        - "crates/foundation/credentials/src/keyring.rs"
     wired:
       production_refs:
         - "crates/adapters/cli/src/keyring_bootstrap.rs"
@@ -532,6 +539,7 @@ items:
         - "crates/engine/provider/src/endpoint_binding.rs"
         - "crates/foundation/credentials/src/credential_record.rs"
         - "crates/foundation/credentials/src/hot_store.rs"
+        - "crates/foundation/credentials/src/keyring.rs"
         - "crates/foundation/credentials/src/keyring_resolver.rs"
         - "crates/foundation/plugin/src/credentials.rs"
     default_enabled: true
@@ -1781,6 +1789,7 @@ items:
         - "crates/adapters/gateway/src/lib.rs"
         - "crates/foundation/credentials/src/keyring.rs"
         - "crates/foundation/credentials/src/hot_store.rs"
+        - "crates/foundation/core/src/storage_atomic.rs"
     wired:
       production_refs:
         - "crates/adapters/cli/src/desktop_model_connection.rs"
@@ -1792,6 +1801,7 @@ items:
         - "crates/adapters/gateway/src/lib.rs"
         - "crates/adapters/gateway/src/model_connection.rs"
         - "crates/adapters/gateway/src/panels.rs"
+        - "crates/foundation/core/src/storage_atomic.rs"
         - "crates/foundation/credentials/src/hot_store.rs"
         - "crates/foundation/credentials/src/keyring.rs"
     default_enabled: false
