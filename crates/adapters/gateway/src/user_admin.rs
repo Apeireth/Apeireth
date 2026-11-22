@@ -27,7 +27,7 @@
 
 use std::path::{Path, PathBuf};
 
-use apeireth_core::user_domain::DomainUserId;
+use apeireth_core::{storage_atomic, stored_doc::StoredDocError, user_domain::DomainUserId};
 use apeireth_governance::{UserAccessError, UserRecord, UserRole, UserTable};
 use axum::extract::{Extension, Path as AxumPath, State};
 use axum::http::StatusCode;
@@ -99,8 +99,8 @@ pub enum PrincipalForgetAttempt {
 
 /// 「五账确认清空 + users.json 原子写入删除」的成功结果。
 ///
-/// 这不是跨 SQLite/users.json 的分布式原子事务；失败状态通过保留账号与可重试
-/// 结果显式收敛。
+/// 这不是跨 SQLite/users.json 的分布式原子事务；失败状态分开报告遗忘完成度、
+/// 账号是否已从当前用户表删除，以及持久性待核对的情况。
 #[derive(Debug, Clone)]
 pub struct GovernedUserRemoval {
     /// 实际从用户表删除的行。
@@ -109,8 +109,7 @@ pub struct GovernedUserRemoval {
     pub memory_note: String,
 }
 
-/// 级联删除失败状态。账号未删除；`memory_forgotten` 单独说明遗忘是否已经完成，
-/// 因而调用方可以如实展示状态并安全重试。
+/// 级联删除未能确认完成。账号可能已从当前用户表删除，此时须先核对，不能盲重试。
 #[derive(Debug, Clone)]
 pub struct GovernedUserRemovalError {
     code: &'static str,
@@ -132,9 +131,15 @@ impl GovernedUserRemovalError {
         &self.detail
     }
 
-    /// 待删用户（失败时仍在用户表内）。
+    /// 操作目标。
     pub fn target(&self) -> &UserAdminDto {
         &self.target
+    }
+
+    /// 账号是否已从当前用户表删除（这种情况下崩溃持久性尚未确认）。
+    pub fn deleted(&self) -> bool {
+        self.user_error()
+            .is_some_and(UserAdminError::target_replaced)
     }
 
     /// 五账是否全部确认清空。
@@ -155,11 +160,16 @@ impl GovernedUserRemovalError {
 
 impl std::fmt::Display for GovernedUserRemovalError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let deleted = self.deleted();
         write!(
             f,
-            "{}: {}; deleted=false memory_forgotten={} ({})",
+            "{}: {}; deleted={deleted} memory_forgotten={} ({})",
             self.code, self.detail, self.memory_forgotten, self.memory_note
-        )
+        )?;
+        if deleted {
+            f.write_str(" account_durability_confirmed=false retryable=false")?;
+        }
+        Ok(())
     }
 }
 
@@ -200,16 +210,23 @@ pub enum UserAdminError {
     Conflict(String),
     /// 配置/存储拒开 (坏 `users.json` / IO): 500 `runtime_error`。
     Storage(String),
+    /// 当前用户表已替换，崩溃持久性未确认: 500 `runtime_error`。
+    StorageDurabilityUnconfirmed(String),
 }
 
 impl UserAdminError {
+    fn target_replaced(&self) -> bool {
+        matches!(self, Self::StorageDurabilityUnconfirmed(_))
+    }
+
     /// 真因文本 (审计/CLI/错误帧)。
     pub fn message(&self) -> &str {
         match self {
             Self::Invalid(message)
             | Self::NotFound(message)
             | Self::Conflict(message)
-            | Self::Storage(message) => message,
+            | Self::Storage(message)
+            | Self::StorageDurabilityUnconfirmed(message) => message,
         }
     }
 
@@ -219,7 +236,9 @@ impl UserAdminError {
             Self::Invalid(_) => StatusCode::BAD_REQUEST,
             Self::NotFound(_) => StatusCode::NOT_FOUND,
             Self::Conflict(_) => StatusCode::CONFLICT,
-            Self::Storage(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::Storage(_) | Self::StorageDurabilityUnconfirmed(_) => {
+                StatusCode::INTERNAL_SERVER_ERROR
+            }
         }
     }
 
@@ -229,7 +248,7 @@ impl UserAdminError {
             Self::Invalid(_) => "invalid_request",
             Self::NotFound(_) => "not_found",
             Self::Conflict(_) => "conflict",
-            Self::Storage(_) => "runtime_error",
+            Self::Storage(_) | Self::StorageDurabilityUnconfirmed(_) => "runtime_error",
         }
     }
 }
@@ -370,6 +389,15 @@ impl UserAdminService {
         plan: GovernedUserRemovalPlan,
         attempt: PrincipalForgetAttempt,
     ) -> Result<GovernedUserRemoval, GovernedUserRemovalError> {
+        self.finish_governed_remove_with(plan, attempt, |users| self.save_user_table(users))
+    }
+
+    fn finish_governed_remove_with(
+        &self,
+        plan: GovernedUserRemovalPlan,
+        attempt: PrincipalForgetAttempt,
+        save: impl FnOnce(&UserTable) -> Result<(), UserAdminError>,
+    ) -> Result<GovernedUserRemoval, GovernedUserRemovalError> {
         let target = plan.target;
         let outcome = match attempt {
             PrincipalForgetAttempt::Unavailable(detail) => {
@@ -416,13 +444,17 @@ impl UserAdminService {
             });
         }
 
-        match self.remove_after_forget(&target) {
+        match self.remove_after_forget(&target, save) {
             Ok(removed) => Ok(GovernedUserRemoval {
                 removed,
                 memory_note,
             }),
             Err(error) => Err(GovernedUserRemovalError {
-                code: "user.remove_failed",
+                code: if error.target_replaced() {
+                    "user.remove_durability_unconfirmed"
+                } else {
+                    "user.remove_failed"
+                },
                 detail: error.message().to_string(),
                 target,
                 memory_forgotten: true,
@@ -435,7 +467,11 @@ impl UserAdminService {
     /// 账号落盘只允许从 [`Self::finish_governed_remove`] 进入，避免生产调用方绕过
     /// 遗忘确认直接删 `users.json`。这里重读并逐字段比较预检目标，可检测遗忘
     /// 期间的行变化；没有声称提供跨进程锁或跨存储 CAS。
-    fn remove_after_forget(&self, expected: &UserAdminDto) -> Result<UserAdminDto, UserAdminError> {
+    fn remove_after_forget(
+        &self,
+        expected: &UserAdminDto,
+        save: impl FnOnce(&UserTable) -> Result<(), UserAdminError>,
+    ) -> Result<UserAdminDto, UserAdminError> {
         let (users, removed) = self.prepare_remove(&expected.user_id)?;
         if &removed != expected {
             return Err(UserAdminError::Conflict(format!(
@@ -443,7 +479,7 @@ impl UserAdminService {
                 expected.user_id
             )));
         }
-        self.commit(&users)?;
+        self.commit_with(&users, save)?;
         Ok(removed)
     }
 
@@ -474,9 +510,28 @@ impl UserAdminService {
 
     /// 落盘前的最后闸: 令牌表↔用户表绑定一致性 (问责链不得断) + 持久化。
     fn commit(&self, users: &UserTable) -> Result<(), UserAdminError> {
+        self.commit_with(users, |users| self.save_user_table(users))
+    }
+
+    fn commit_with(
+        &self,
+        users: &UserTable,
+        save: impl FnOnce(&UserTable) -> Result<(), UserAdminError>,
+    ) -> Result<(), UserAdminError> {
         self.validate_bindings(users)?;
-        users.save(&self.data_dir).map_err(|error| {
-            UserAdminError::Storage(format!("user table refused to save: {error}"))
+        save(users)
+    }
+
+    fn save_user_table(&self, users: &UserTable) -> Result<(), UserAdminError> {
+        users.save(&self.data_dir).map_err(|error| match &error {
+            UserAccessError::Stored(StoredDocError::Io { source, .. })
+                if storage_atomic::target_replaced(source) =>
+            {
+                UserAdminError::StorageDurabilityUnconfirmed(format!(
+                    "user table update was published, but durability could not be confirmed: {error}. Verify the current user table before retrying"
+                ))
+            }
+            _ => UserAdminError::Storage(format!("user table refused to save: {error}")),
         })
     }
 }
@@ -571,29 +626,26 @@ fn principal_forget_error(
     })
 }
 
-/// 删除未完成帧。`deleted` 与 `memory_forgotten` 分开报，调用方可安全重试，
-/// 不会再把「端口缺席 / 部分遗忘 / 遗忘失败」误报成删户成功。
-fn deletion_blocked_response(
-    status: StatusCode,
-    code: &str,
-    user_id: &str,
-    detail: &str,
-    memory_forgotten: bool,
-    memory_note: &str,
-) -> Response {
-    (
-        status,
-        Json(serde_json::json!({
-            "error": code,
-            "user_id": user_id,
-            "detail": detail,
-            "deleted": false,
-            "memory_forgotten": memory_forgotten,
-            "memory_note": memory_note,
-            "retryable": true,
-        })),
-    )
-        .into_response()
+/// 遗忘与删户分别回执。如果账号已经从当前表删除，调用方应先核对存储状态。
+fn deletion_error_response(error: &GovernedUserRemovalError) -> Response {
+    let status = error
+        .user_error()
+        .map(UserAdminError::http_status)
+        .unwrap_or(StatusCode::CONFLICT);
+    let deleted = error.deleted();
+    let mut body = serde_json::json!({
+        "error": error.code(),
+        "user_id": error.target().user_id,
+        "detail": error.detail(),
+        "deleted": deleted,
+        "memory_forgotten": error.memory_forgotten(),
+        "memory_note": error.memory_note(),
+        "retryable": !deleted,
+    });
+    if deleted {
+        body["account_durability_confirmed"] = serde_json::Value::Bool(false);
+    }
+    (status, Json(body)).into_response()
 }
 
 fn record_user_remove(
@@ -805,19 +857,14 @@ pub async fn delete_user(
                 .into_response()
         }
         Err(error) => {
-            record_user_remove(&state, &user, &endpoint, false, domain_label.as_deref());
-            let status = error
-                .user_error()
-                .map(UserAdminError::http_status)
-                .unwrap_or(StatusCode::CONFLICT);
-            deletion_blocked_response(
-                status,
-                error.code(),
-                &error.target().user_id,
-                error.detail(),
-                error.memory_forgotten(),
-                error.memory_note(),
-            )
+            record_user_remove(
+                &state,
+                &user,
+                &endpoint,
+                error.deleted(),
+                domain_label.as_deref(),
+            );
+            deletion_error_response(&error)
         }
     }
 }
@@ -835,6 +882,7 @@ pub(crate) fn error_response(error: &UserAdminError) -> Response {
         UserAdminError::Storage(_) => {
             "重启 Companion 后重试, 若复现请提交日志 (坏用户表拒开, 0 静默回退)"
         }
+        UserAdminError::StorageDurabilityUnconfirmed(_) => "先核对当前用户表，再决定是否重试",
     };
     crate::panels::admin_error(error.http_status(), error.code(), error.message(), solution)
 }
@@ -1024,5 +1072,65 @@ mod tests {
             .finish_governed_remove(plan, complete_attempt("member-1"))
             .expect("完整遗忘后可删");
         assert_eq!(completed.removed.user_id, "member-1");
+    }
+
+    #[tokio::test]
+    async fn governed_removal_receipts_distinguish_failure_before_and_after_replacement() {
+        for published in [false, true] {
+            let dir = temp_dir(&format!("remove-save-failure-{published}"));
+            let service = UserAdminService::new(&dir);
+            service.add("owner-1", "owner", vec![], None).unwrap();
+            service.add("member-1", "member", vec![], None).unwrap();
+            let plan = service.prepare_governed_remove("member-1").unwrap();
+            let error = service
+                .finish_governed_remove_with(plan, complete_attempt("member-1"), |users| {
+                    // Inject a storage outcome after the real forget and account checks.
+                    // For the post-replacement case make the new table visible on disk first.
+                    if published {
+                        service.save_user_table(users)?;
+                        Err(UserAdminError::StorageDurabilityUnconfirmed(
+                            "injected parent directory sync failure".to_string(),
+                        ))
+                    } else {
+                        Err(UserAdminError::Storage(
+                            "injected failure before replacement".to_string(),
+                        ))
+                    }
+                })
+                .expect_err("the write's durability was not confirmed");
+
+            let users = service.load().unwrap();
+            assert!(users.identity_for_user("owner-1").is_some());
+            assert_eq!(users.identity_for_user("member-1").is_none(), published);
+
+            let response = deletion_error_response(&error);
+            assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+            let bytes = axum::body::to_bytes(response.into_body(), 8192)
+                .await
+                .unwrap();
+            let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+            assert_eq!(body["user_id"], "member-1");
+            assert_eq!(body["deleted"], published);
+            assert_eq!(body["memory_forgotten"], true);
+            assert_eq!(body["retryable"], !published);
+
+            let cli = error.to_string();
+            assert!(
+                cli.contains(&format!("deleted={published} memory_forgotten=true")),
+                "{cli}"
+            );
+            if published {
+                assert_eq!(body["error"], "user.remove_durability_unconfirmed");
+                assert_eq!(body["account_durability_confirmed"], false);
+                assert!(
+                    cli.contains("account_durability_confirmed=false retryable=false"),
+                    "{cli}"
+                );
+            } else {
+                assert_eq!(body["error"], "user.remove_failed");
+                assert!(body.get("account_durability_confirmed").is_none());
+                assert!(!cli.contains("account_durability_confirmed="), "{cli}");
+            }
+        }
     }
 }

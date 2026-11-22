@@ -24,8 +24,9 @@
 
 ## 后端安全增补（2026-11-21）
 
-- 普通网关的 `POST /v1/admin/config` 更换模型端点来源时，必须同笔提供凭据，或由凭据后端确认该凭据已绑定目标来源，否则返回 409 `invalid_request`。凭据与端点不能一并保存时返回 503。Windows 受管桌面仍遵循上文的模型连接契约。
+- 普通网关的 `POST /v1/admin/config` 更换模型端点来源时，必须同笔提供凭据，或由凭据后端确认该凭据已绑定目标来源，否则返回 409 `invalid_request`。成对保存未确认时返回 503，运行中配置保持原值。持久记录可能已成对发布，操作方应先核对存储状态再重试。Windows 受管桌面仍遵循上文的模型连接契约。
 - `DELETE /v1/admin/users/{user_id}` 先验证账号可删，再请求对目标主体做记忆遗忘。治理服务不可用、目标域不可确认、返回拒绝或任一账本未确认时保留账号，并在响应中返回 `deleted: false`。原成功回执保持 `deleted: true`、`user_id`、`memory_forgotten: true`、`memory_note`。记忆遗忘按现有治理语义执行，存储介质、备份和供应商侧副本另有独立生命周期。
+- 若已替换用户表、随后父目录同步失败，返回 HTTP 500 `user.remove_durability_unconfirmed`，包含 `user_id`、`detail`、`deleted: true`、`memory_forgotten: true`、`memory_note`、`retryable: false` 和 `account_durability_confirmed: false`。`deleted` 表示本次替换已发布。调用者应重读用户表并核对实际状态。
 
 ## 受管桌面能力配置
 
