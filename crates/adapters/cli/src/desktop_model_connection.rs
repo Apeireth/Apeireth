@@ -73,7 +73,22 @@ struct ManagedConnection {
     backend: Arc<dyn KeyringBackend>,
     boot: Profile,
     writes: Mutex<()>,
-    persist: fn(&Path, &[u8], u32) -> std::io::Result<()>,
+    persist: fn(&Path, &[u8]) -> Result<(), ProfileWriteFailure>,
+}
+
+enum ProfileWriteFailure {
+    BeforePublication,
+    DurabilityUnconfirmed,
+}
+
+fn persist_profile(path: &Path, bytes: &[u8]) -> Result<(), ProfileWriteFailure> {
+    storage_atomic::write_atomic_durable(path, bytes, OWNER_ONLY_MODE).map_err(|error| {
+        if storage_atomic::target_replaced(&error) {
+            ProfileWriteFailure::DurabilityUnconfirmed
+        } else {
+            ProfileWriteFailure::BeforePublication
+        }
+    })
 }
 
 fn namespace(root: &Path) -> Result<String, Error> {
@@ -127,7 +142,7 @@ impl ManagedConnection {
             backend,
             boot,
             writes: Mutex::new(()),
-            persist: storage_atomic::write_atomic_durable,
+            persist: persist_profile,
         })
     }
 
@@ -218,11 +233,17 @@ impl ManagedConnection {
             profile.credential_endpoint = Some(profile.base_url.clone());
         }
         let bytes = serde_json::to_vec_pretty(&profile).map_err(|_| Error::Storage)?;
-        if (self.persist)(&self.root.join(FILE), &bytes, OWNER_ONLY_MODE).is_err() {
-            if let Some(service) = new_service {
-                let _ = self.backend.delete(&service);
+        match (self.persist)(&self.root.join(FILE), &bytes) {
+            Ok(()) => {}
+            // The published profile needs the new slot. A crash may recover the
+            // older profile, so retain its slot until durability is confirmed.
+            Err(ProfileWriteFailure::DurabilityUnconfirmed) => return Err(Error::Storage),
+            Err(ProfileWriteFailure::BeforePublication) => {
+                if let Some(service) = new_service {
+                    let _ = self.backend.delete(&service);
+                }
+                return Err(Error::Storage);
             }
-            return Err(Error::Storage);
         }
         // The current runtime keeps the boot value in the shared hot store;
         // it never rereads the retired OS slot after this profile commit.

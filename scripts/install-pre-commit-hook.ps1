@@ -76,8 +76,8 @@ if command -v pwsh >/dev/null 2>&1; then
     pwsh "$scriptPath" -Mode scan-staged
     exit `$?
 else
-    echo "[secret-scan] pwsh not found in PATH, skipping (manual scan recommended)"
-    exit 0
+    echo "[secret-scan] pwsh not found in PATH; refusing commit because the secret gate cannot run" >&2
+    exit 2
 fi
 "@
 

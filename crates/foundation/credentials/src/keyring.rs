@@ -154,11 +154,15 @@ pub trait KeyringBackend: Send + Sync {
     /// 读取服务凭据明文; 不存在 → `UnknownService`.
     fn get(&self, service: &str) -> Result<SecretBuf>;
 
-    /// 写入/覆盖服务凭据.
-    ///
-    /// 实现方 (加密文件后端) 在底层存储**已损坏/被篡改**时必须返回错误
-    /// **拒绝写入** (fail-closed), 不得以空表起步静默覆盖全部既有凭据 (H5).
+    /// 写入或覆盖服务凭据。加密存储损坏或被篡改时必须拒绝写入 (H5)。
+    /// 禁止以空表起步静默覆盖全部既有凭据。
     fn set(&self, service: &str, secret: &SecretBuf) -> Result<()>;
+
+    /// Whether an error from this backend's `set` proves the attempted value was never published.
+    /// Backends unable to distinguish publication from durability leave the outcome unconfirmed.
+    fn set_rejected_before_publish(&self, _error: &KeyringError) -> bool {
+        false
+    }
 
     /// 删除服务凭据; 不存在 → `UnknownService`.
     ///
@@ -980,18 +984,14 @@ impl KeyringBackend for EncryptedFileBackend {
             }
         };
         all.insert(service.to_string(), secret.expose().to_vec());
-        match self.save_all(&all) {
-            Ok(()) => {
-                self.audit
-                    .record(AuditEvent::Set, service, "encrypted-file", true);
-                Ok(())
-            }
-            Err(e) => {
-                self.audit
-                    .record(AuditEvent::Set, service, "encrypted-file", false);
-                Err(e)
-            }
-        }
+        let result = self.save_all(&all);
+        self.audit
+            .record(AuditEvent::Set, service, "encrypted-file", result.is_ok());
+        result
+    }
+
+    fn set_rejected_before_publish(&self, error: &KeyringError) -> bool {
+        !matches!(error, KeyringError::Io { source, .. } if storage_atomic::target_replaced(source))
     }
 
     fn delete(&self, service: &str) -> Result<()> {

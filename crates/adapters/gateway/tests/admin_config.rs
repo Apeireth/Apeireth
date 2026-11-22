@@ -64,25 +64,49 @@ impl Drop for EnvGuard {
 /// A process-local credential backend shared by the gateway's writer and the
 /// runtime's resolver, mirroring the production keyring read/write split.
 #[derive(Clone, Default)]
-struct SharedCredentials(Arc<Mutex<HashMap<String, String>>>);
+struct SharedCredentials {
+    values: Arc<Mutex<HashMap<String, String>>>,
+    bindings: Arc<Mutex<HashMap<String, Vec<String>>>>,
+}
 
 impl CredentialWriter for SharedCredentials {
     fn write(&self, name: &str, value: &str) -> Result<(), String> {
-        self.0
+        self.values
             .lock()
             .unwrap()
             .insert(name.to_string(), value.to_string());
         Ok(())
     }
+
+    fn write_with_endpoints(
+        &self,
+        name: &str,
+        value: &str,
+        endpoints: &[String],
+    ) -> Result<(), String> {
+        let mut values = self.values.lock().unwrap();
+        let mut bindings = self.bindings.lock().unwrap();
+        values.insert(name.to_string(), value.to_string());
+        bindings.insert(name.to_string(), endpoints.to_vec());
+        Ok(())
+    }
+
+    fn bound_endpoints(&self, name: &str) -> Option<Vec<String>> {
+        self.bindings.lock().unwrap().get(name).cloned()
+    }
 }
 
 impl CredentialResolver for SharedCredentials {
     fn resolve(&self, name: &str) -> Option<Secret> {
-        self.0
+        self.values
             .lock()
             .unwrap()
             .get(name)
             .map(|value| Secret::new(value.clone()))
+    }
+
+    fn bound_endpoints(&self, name: &str) -> Option<Vec<String>> {
+        self.bindings.lock().unwrap().get(name).cloned()
     }
 }
 

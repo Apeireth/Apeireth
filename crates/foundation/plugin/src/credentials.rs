@@ -49,6 +49,42 @@ impl fmt::Display for Secret {
     }
 }
 
+/// One coherent credential read: the secret and its optional endpoint binding.
+///
+/// Resolvers with mutable storage override [`CredentialResolver::resolve_snapshot`]
+/// so these fields are captured under one protection boundary. `None` binding
+/// preserves the legacy unmanaged meaning; `Some([])` explicitly authorizes no
+/// destinations.
+pub struct CredentialSnapshot {
+    secret: Secret,
+    bound_endpoints: Option<Vec<String>>,
+}
+
+impl CredentialSnapshot {
+    /// Build a snapshot from one resolver read.
+    pub fn new(secret: Secret, bound_endpoints: Option<Vec<String>>) -> Self {
+        Self {
+            secret,
+            bound_endpoints,
+        }
+    }
+
+    /// Borrow the redacted secret container.
+    pub fn secret(&self) -> &Secret {
+        &self.secret
+    }
+
+    /// Consume the snapshot and return the secret for immediate request use.
+    pub fn into_secret(self) -> Secret {
+        self.secret
+    }
+
+    /// Explicitly authorized endpoint declarations, when this credential is managed.
+    pub fn bound_endpoints(&self) -> Option<&[String]> {
+        self.bound_endpoints.as_deref()
+    }
+}
+
 /// Supplies secrets by name.
 ///
 /// Names are logical (`provider.anthropic.api_key`), not locations. A plugin
@@ -79,6 +115,16 @@ pub trait CredentialResolver: Send + Sync {
     /// **origin**（scheme + host + 端口），不含路径。
     fn bound_endpoints(&self, _name: &str) -> Option<Vec<String>> {
         None
+    }
+
+    /// Resolve the value and binding as one logical snapshot.
+    ///
+    /// Immutable/legacy resolvers can use this compatibility default. Mutable
+    /// resolvers must override it and read both fields under the same lock or
+    /// backend record; providers use this method before attaching credentials.
+    fn resolve_snapshot(&self, name: &str) -> Option<CredentialSnapshot> {
+        let secret = self.resolve(name)?;
+        Some(CredentialSnapshot::new(secret, self.bound_endpoints(name)))
     }
 }
 
@@ -141,6 +187,11 @@ mod tests {
             Some("k".to_string())
         );
         assert!(r.resolve("provider.other.api_key").is_none());
+        let snapshot = r
+            .resolve_snapshot("provider.fake.api_key")
+            .expect("snapshot");
+        assert_eq!(snapshot.secret().expose(), "k");
+        assert!(snapshot.bound_endpoints().is_none());
     }
 
     #[test]

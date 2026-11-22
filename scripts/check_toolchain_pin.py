@@ -14,12 +14,15 @@
 
 * 出现**浮动**引用（`@stable` / `@beta`）⇒ **失败**；
 * 出现**版本号**引用但与 `rust-toolchain.toml` 的 `channel` 不一致 ⇒ **失败**；
+* 发行工作流可使用本文件登记的官方 action commit SHA；SHA 必须与当前 channel 的
+  精确映射一致，行尾版本注释只供人阅读，不能证明版本；
 * `@nightly` 允许（miri / kani 等确需 nightly），但**必须显式**（不许 `@nightly` 之外的浮动别名）。
 
 # 为什么允许「两处都写版本号」
 
-单一真源是 `rust-toolchain.toml`；workflow 里那 35 处**只能写版本号**
-（GitHub Actions 的 `uses:` 不能引用仓库内文件）⇒ 这是**不可避免的重复**
+单一真源是 `rust-toolchain.toml`；普通 workflow 写版本号，发布信任链 workflow 写
+经官方 ref 解析登记的 commit SHA（GitHub Actions 的 `uses:` 不能引用仓库内文件）
+⇒ 这是**不可避免的重复**
 ⇒ ⇒ 与其追求「不重复」，不如让重复**被机器盯着**（这与本仓其它棘轮同思路）。
 
 # 用法
@@ -53,10 +56,57 @@ ALLOWED_FLOATING = {"nightly"}
 #: 禁止出现的**浮动**别名（stable/beta 会随时间漂移 ⇒ 与「可重现」矛盾）。
 FORBIDDEN_FLOATING = {"stable", "beta"}
 
+#: 官方 `dtolnay/rust-toolchain` 生成态分支到 action commit 的精确映射。
+#:
+#: 2026-11-21 只读验证命令：
+#: `git ls-remote https://github.com/dtolnay/rust-toolchain.git refs/heads/1.97.1`
+#: 对应 commit 的 action.yml 将 `toolchain: 1.97.1` 直接写入 env，不依赖
+#: `github.action_ref`。注释不是证据；守卫只认这里登记的完整 SHA。
+PINNED_ACTION_COMMITS = {
+    "1.97.1": "766a42937d994bd78bb4591385445c188ccb3f09",
+}
+
+COMMIT_SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$")
+
 REF_PATTERN = re.compile(r"dtolnay/rust-toolchain@([A-Za-z0-9._-]+)")
 SHELL_TOOLCHAIN_PATTERN = re.compile(
     r"(?m)^\s*rustup\s+(?:toolchain\s+install|default)\s+([A-Za-z0-9._-]+)"
 )
+
+
+def toolchain_ref_problem(
+    ref: str,
+    channel: str,
+    commit_map: dict[str, str] | None = None,
+) -> str | None:
+    """Return the semantic mismatch for one action ref, if any.
+
+    Version refs keep the repository's historical behavior. Full commit refs
+    are accepted only when the expected workspace channel has an explicit,
+    exact official mapping. Call-site comments are deliberately not inputs.
+    """
+
+    if ref in FORBIDDEN_FLOATING:
+        return (
+            f"浮动引用 `@{ref}` ⇒ CI 装的版本会随时间漂移"
+            f"（仓库声明 `{channel}`）⇒ 改成 `@{channel}` 或登记的官方 commit SHA"
+        )
+    if ref in ALLOWED_FLOATING:
+        return None
+    if COMMIT_SHA_PATTERN.fullmatch(ref):
+        mapping = PINNED_ACTION_COMMITS if commit_map is None else commit_map
+        expected = mapping.get(channel)
+        if expected is None:
+            return f"commit SHA `{ref}` 没有对应工作区工具链 `{channel}` 的官方登记映射"
+        if ref != expected:
+            return (
+                f"commit SHA `{ref}` 与工作区工具链 `{channel}` 的官方登记 SHA"
+                f" `{expected}` 不一致"
+            )
+        return None
+    if ref != channel:
+        return f"版本 `@{ref}` 与 rust-toolchain.toml 的 channel `{channel}` 不一致"
+    return None
 
 
 def check_merge_gate_provisioning() -> list[str]:
@@ -108,21 +158,15 @@ def main() -> int:
             ref = match.group(1)
             line = text[: match.start()].count("\n") + 1
             where = f"{path.relative_to(ROOT)}:{line}"
+            problem = toolchain_ref_problem(ref, channel)
+            if problem:
+                problems.append(f"{where}: {problem}")
             if ref in FORBIDDEN_FLOATING:
-                problems.append(
-                    f"{where}: 浮动引用 `@{ref}` ⇒ CI 装的版本会随时间漂移"
-                    f"（仓库声明 `{channel}`）⇒ 改成 `@{channel}`"
-                )
                 floating += 1
             elif ref in ALLOWED_FLOATING:
                 nightly += 1
-            elif ref == channel:
+            elif problem is None:
                 pinned += 1
-            else:
-                problems.append(
-                    f"{where}: 版本 `@{ref}` 与 `rust-toolchain.toml` 的"
-                    f" `channel = \"{channel}\"` **不一致**"
-                )
         shell_installs = SHELL_TOOLCHAIN_PATTERN.finditer(text) if path.name == "merge-gate.yml" else []
         for match in shell_installs:
             ref = match.group(1)

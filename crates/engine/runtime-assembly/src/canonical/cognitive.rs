@@ -5516,9 +5516,8 @@ mod tests {
             // memory_writeback 之间（顺序由 production 注册点固定）。
             MEMORY_WRITEBACK_MODULE_ID,
         ];
-        // 问责闭环第 ③ 步 · 自动回填面：**默认关**（与问责面同一个开关）——
-        // 开关开时它在模块表**首位**。
-        if crate::egress_gate::egress_gate_enabled_from_env() {
+        // 显式配置出网记录时，问责回填位于模块表首位。
+        if crate::egress_gate::egress_accountability_enabled_from_env() {
             expected.insert(0, "accountability.backfill");
         }
         assert_eq!(modules.ids(), expected);

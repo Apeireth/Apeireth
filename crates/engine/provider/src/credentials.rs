@@ -31,7 +31,7 @@
 
 use std::collections::BTreeMap;
 
-use apeireth_plugin::{CredentialResolver, Secret};
+use apeireth_plugin::{CredentialResolver, CredentialSnapshot, Secret};
 
 /// The logical credential name for the minimax provider's API key.
 ///
@@ -168,6 +168,16 @@ impl CredentialResolver for EnvCredentialResolver {
     /// （协议族 provider 的自定义端点仍可用，厂商 provider 仍由默认端点兜底）。
     fn bound_endpoints(&self, name: &str) -> Option<Vec<String>> {
         self.bindings.get(name).cloned()
+    }
+
+    fn resolve_snapshot(&self, name: &str) -> Option<CredentialSnapshot> {
+        // Mappings and bindings are immutable after construction; the only
+        // mutable input is the environment value, which is read exactly once.
+        let secret = self.resolve(name)?;
+        Some(CredentialSnapshot::new(
+            secret,
+            self.bindings.get(name).cloned(),
+        ))
     }
 }
 

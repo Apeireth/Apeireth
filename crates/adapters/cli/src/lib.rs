@@ -1574,9 +1574,7 @@ async fn build_canonical_runtime_with_parts(
         }),
     );
     builder = builder.with_governance(governance_chain::production(containment));
-    // 出网闸 (ADR-0014 §1.2: 把上下文发给模型就是行动): 默认关
-    // (`APEIRETH_ENABLE_EGRESS_GATE=1` 才装配; 值也可以直接是授权策略 JSON),
-    // 关时请求逐字节不变。
+    // 出网闸默认脱敏。显式设置为 `1` 或授权策略 JSON 时才建立账本。
     //
     // 账本落盘到数据根 (`egress-ledger.jsonl`) —— 生产上必须落盘,
     // 否则「记录已知流向」只在内存里, 进程一退就没了。
@@ -3049,9 +3047,7 @@ pub async fn dispatch_gateway_serve_with(
     port: u16,
     pid_file: Option<&std::path::Path>,
 ) -> Result<String, String> {
-    // W2-② 认证面 / 远程面配置闸先行 (fail-closed 即帧, 零副作用): 坏令牌配置
-    // 拒开; 逃生阀与令牌表互斥拒开; 非回环绑定必须有可校验令牌 (逃生阀
-    // `none` = 操作者明示自担, 放行但留审计)。
+    // 先验证接入配置，非回环必须具备认证和 TLS。
     let gate = apeireth_gateway::GatewayTokenGate::from_env();
     let data_dir = default_panel_data_dir();
     let client_tokens = apeireth_gateway::ClientTokenTable::load(Some(&data_dir))
@@ -3069,6 +3065,9 @@ pub async fn dispatch_gateway_serve_with(
     if let Some(refusal) = tls_surface.refusal() {
         return Err(refusal);
     }
+    bind_clearance
+        .require_tls(tls_surface.is_enabled())
+        .map_err(|error| error.to_string())?;
 
     // 单实例占位先行: 活着的既有实例直接显式拒绝 (不装配运行时、不双开)。
     // 占位租约随函数退出自动释放 (优雅/出错路径都会清掉自己的 PID 文件)。
@@ -3209,8 +3208,7 @@ pub async fn dispatch_gateway_serve_with(
     };
     crate::contract_panels::wire_workspace_panel(&mut services)?;
     crate::contact_panel::wire_contacts(&mut services, default_panel_data_dir())?;
-    // W2-②: 客户端令牌表 (令牌族第二面) 显式注入; 远程绑定闸与 TLS 接口桩的
-    // 清场事实随装配进审计面 (逃生阀可裸奔, 但必须留痕)。
+    // 注入客户端令牌表并保留接入裁决的审计事实。
     let mut state =
         apeireth_gateway::build_gateway_state_with_services(Arc::clone(&runtime), services);
     // R3 生产情绪源接线 (兑现 R3 报备的「归口 CLI 接线面」): 网关装配出的

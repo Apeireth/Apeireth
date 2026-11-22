@@ -292,13 +292,8 @@ impl EgressPolicy {
     /// `PublicInternetOnly` is conservative: if any resolved address is not
     /// public, the whole destination is denied.
     ///
-    /// M12 (2026-09-24 审计): `ExplicitAllowList` 不再对解析结果放任——
-    /// allowlisted 主机名在表内, 但其 DNS 可能指向 169.254.169.254 (云元
-    /// 数据) / 内网 / 回环, 而重定向链上每跳只重查主机名不查 IP, 表内主机
-    /// 名即可被打穿。主机名解析出的地址落入 Loopback/LinkLocal/Private/
-    /// Unspecified/Broadcast 一律拒绝。IP 字面量目的地保持"显式入表即
-    /// 信任" (运维显式放行本地/元数据地址的配置语义, `direct_ip_transport_
-    /// works` 锚定)。
+    /// An allow-listed hostname must also resolve exclusively to public IPs.
+    /// An explicitly allow-listed IP literal is an operator trust decision.
     pub fn validate_resolved(
         &self,
         destination: &EgressDestination,
@@ -308,7 +303,8 @@ impl EgressPolicy {
             Self::DenyAll => Err(EgressError::DestinationDenied {
                 reason: "egress policy is DenyAll".into(),
             }),
-            Self::PublicInternetOnly => {
+            Self::ExplicitAllowList(_) if destination.address.is_some() => Ok(()),
+            Self::PublicInternetOnly | Self::ExplicitAllowList(_) => {
                 if addresses.is_empty() {
                     return Err(EgressError::ResolutionFailed {
                         host: destination.host.clone(),
@@ -324,30 +320,6 @@ impl EgressPolicy {
                                 destination.host
                             ),
                         });
-                    }
-                }
-                Ok(())
-            }
-            Self::ExplicitAllowList(_) => {
-                // 仅约束主机名目的地; IP 字面量 = 显式入表即信任。
-                if destination.address.is_none() {
-                    for addr in addresses {
-                        if matches!(
-                            classify_ip(addr.ip()),
-                            EgressIpClass::Loopback
-                                | EgressIpClass::LinkLocal
-                                | EgressIpClass::Private
-                                | EgressIpClass::Unspecified
-                                | EgressIpClass::Broadcast
-                        ) {
-                            return Err(EgressError::DestinationDenied {
-                                reason: format!(
-                                    "allow-listed host {} resolved to non-routable address {}",
-                                    destination.host,
-                                    addr.ip()
-                                ),
-                            });
-                        }
                     }
                 }
                 Ok(())
@@ -383,7 +355,11 @@ impl EgressDestination {
         let port = url
             .port_or_known_default()
             .ok_or_else(|| EgressError::InvalidUrl("url has no valid port".into()))?;
-        let address = host.parse::<IpAddr>().ok();
+        let address = match url.host() {
+            Some(url::Host::Ipv4(ip)) => Some(IpAddr::V4(ip)),
+            Some(url::Host::Ipv6(ip)) => Some(IpAddr::V6(ip)),
+            _ => None,
+        };
         Ok(Self {
             scheme: url.scheme().to_string(),
             host: host.to_ascii_lowercase(),
@@ -1144,6 +1120,28 @@ mod tests {
         let d = dest("https://example.com");
         let addrs = [SocketAddr::new("93.184.216.34".parse().unwrap(), 443)];
         assert!(policy.validate_resolved(&d, &addrs).is_ok());
+    }
+
+    #[test]
+    fn allowlist_rejects_mixed_public_and_special_addresses() {
+        let policy = EgressPolicy::ExplicitAllowList(allowlist(&[("example.test", Some(443))]));
+        let destination = dest("https://example.test");
+        let public = "93.184.216.34:443".parse().unwrap();
+        for address in [
+            "100.64.0.1:443",
+            "192.0.2.1:443",
+            "224.0.0.1:443",
+            "[::ffff:100.64.0.1]:443",
+        ] {
+            assert!(matches!(
+                policy.validate_resolved(&destination, &[public, address.parse().unwrap()]),
+                Err(EgressError::DestinationDenied { .. })
+            ));
+        }
+        assert!(matches!(
+            policy.validate_resolved(&destination, &[]),
+            Err(EgressError::ResolutionFailed { .. })
+        ));
     }
 
     #[test]

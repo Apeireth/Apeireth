@@ -26,6 +26,8 @@ set -o pipefail
 PKG="${1:-}"
 COSIGN_BIN="${COSIGN_BIN:-cosign}"
 COSIGN_PUB="${COSIGN_PUB:-./docs/security/cosign.pub}"
+COSIGN_OIDC_ISSUER="${COSIGN_OIDC_ISSUER:-https://token.actions.githubusercontent.com}"
+COSIGN_CERT_IDENTITY_REGEXP="${COSIGN_CERT_IDENTITY_REGEXP:-^https://github\.com/apeireth/apeireth/\.github/workflows/(cosign|release-1\.0\.0)\.yml@refs/(heads/main|tags/v[0-9].*)$}"
 
 # === 帮助 ===
 if [[ -z "${PKG}" ]] || [[ "${PKG}" == "--help" ]] || [[ "${PKG}" == "-h" ]]; then
@@ -70,21 +72,23 @@ if [[ ! -f "${COSIGN_PUB}" ]]; then
     exit 2
 fi
 
-# === Docker OCI 走 cosign verify (无 .sig 文件, 走 Fulcio+Rekor) ===
+# === Docker OCI 走 cosign verify (签名随 OCI image 存储, 走 Fulcio+Rekor) ===
 if [[ "${PKG}" == *"/"* ]] && [[ "${PKG}" != *".deb" ]] && [[ "${PKG}" != *".rpm" ]] \
     && [[ "${PKG}" != *".tar.gz" ]] && [[ "${PKG}" != *".zip" ]] && [[ "${PKG}" != *".msi" ]] \
     && [[ "${PKG}" != *".rb" ]] && [[ "${PKG}" != *".json" ]]; then
     echo ">>> Docker OCI 验签: ${PKG}"
     echo "    (走 Fulcio + Rekor 透明日志, 1.0 release 1-of-1 阈值, per docs/security/cosign-keys.md §4)"
-    "${COSIGN_BIN}" verify "${PKG}" 2>&1
+    "${COSIGN_BIN}" verify "${PKG}" \
+        --certificate-identity-regexp "${COSIGN_CERT_IDENTITY_REGEXP}" \
+        --certificate-oidc-issuer "${COSIGN_OIDC_ISSUER}" 2>&1
     exit $?
 fi
 
-# === 文件包验签 (有 .sig 文件) ===
-SIG="${PKG}.sig"
-if [[ ! -f "${SIG}" ]]; then
-    echo "❌ 签名文件不存在: ${SIG}"
-    echo "   期望: ${PKG} 旁边有同名 .sig 文件 (per scripts/release/cosign-sign-all.sh 产物)"
+# === File package verification (standardized Sigstore bundle) ===
+BUNDLE="${PKG}.sigstore.json"
+if [[ ! -s "${BUNDLE}" ]]; then
+    echo "❌ Sigstore bundle 缺失或为空: ${BUNDLE}"
+    echo "   期望: ${PKG} 旁边有同名 .sigstore.json 文件"
     echo "   下载: https://github.com/apeireth/apeireth/releases/tag/v1.0.0 (签名在 assets)"
     exit 2
 fi
@@ -97,12 +101,12 @@ fi
 # === 验签 ===
 echo ">>> 验签: ${PKG}"
 echo "    公钥: ${COSIGN_PUB}"
-echo "    签名: ${SIG}"
+echo "    bundle: ${BUNDLE}"
 echo ""
 
 if "${COSIGN_BIN}" verify-blob \
+    --bundle "${BUNDLE}" \
     --key "${COSIGN_PUB}" \
-    --signature "${SIG}" \
     "${PKG}"; then
     echo ""
     echo "✅ 验签通过 — 包来源可信, 可安全安装"

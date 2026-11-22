@@ -26,13 +26,15 @@ const MODEL: &str = "MiniMax-M3";
 /// 一个**声明了绑定**的 resolver（模拟部署方显式声明「这个凭据可以去哪儿」）。
 struct BoundResolver {
     inner: StaticCredentials,
+    credential_name: String,
     bound: Vec<String>,
 }
 
 impl BoundResolver {
-    fn new(bound: Vec<String>) -> Self {
+    fn new(credential_name: &str, bound: Vec<String>) -> Self {
         Self {
-            inner: StaticCredentials::new().with(ANTHROPIC_API_KEY, FAKE_KEY),
+            inner: StaticCredentials::new().with(credential_name, FAKE_KEY),
+            credential_name: credential_name.to_string(),
             bound,
         }
     }
@@ -42,8 +44,8 @@ impl CredentialResolver for BoundResolver {
     fn resolve(&self, name: &str) -> Option<Secret> {
         self.inner.resolve(name)
     }
-    fn bound_endpoints(&self, _name: &str) -> Option<Vec<String>> {
-        Some(self.bound.clone())
+    fn bound_endpoints(&self, name: &str) -> Option<Vec<String>> {
+        (name == self.credential_name.as_str()).then(|| self.bound.clone())
     }
 }
 
@@ -139,7 +141,10 @@ async fn anthropic_allows_the_vendor_default_endpoint() {
 async fn anthropic_allows_a_custom_endpoint_once_the_binding_is_declared() {
     let plugin = anthropic_plugin(
         "https://gw.internal/anthropic",
-        Arc::new(BoundResolver::new(vec!["https://gw.internal".to_string()])),
+        Arc::new(BoundResolver::new(
+            ANTHROPIC_API_KEY,
+            vec!["https://gw.internal".to_string()],
+        )),
     );
     plugin
         .provider_for_test()
@@ -152,6 +157,31 @@ async fn anthropic_allows_a_custom_endpoint_once_the_binding_is_declared() {
             "a declared binding must allow the host: {text}"
         );
     }
+}
+
+/// A credential revision with an explicit custom binding must not retain the
+/// vendor fallback as a second destination.
+#[tokio::test]
+async fn explicit_custom_binding_replaces_the_vendor_fallback() {
+    let plugin = anthropic_plugin(
+        DEFAULT_BASE_URL,
+        Arc::new(BoundResolver::new(
+            ANTHROPIC_API_KEY,
+            vec!["https://gw.internal".to_string()],
+        )),
+    );
+    plugin
+        .provider_for_test()
+        .set_credential_audience(vec![DEFAULT_BASE_URL.to_string()]);
+
+    let error = plugin
+        .provider_for_test()
+        .complete(&request())
+        .await
+        .expect_err("the old vendor fallback must not widen an explicit binding");
+    let text = format!("{error:?}");
+    assert!(text.contains("not bound to endpoint"), "{text}");
+    assert!(!text.contains(FAKE_KEY), "{text}");
 }
 
 /// 协议族 provider：**未声明绑定时不拦截**（不误伤部署方自选端点）。
@@ -175,9 +205,10 @@ async fn protocol_family_provider_is_not_intercepted_without_a_declaration() {
 async fn protocol_family_provider_is_enforced_once_a_binding_is_declared() {
     let plugin = openai_plugin(
         "https://attacker.example/v1",
-        Arc::new(BoundResolver::new(vec![
-            "https://api.deepseek.com".to_string()
-        ])),
+        Arc::new(BoundResolver::new(
+            OPENAI_COMPATIBLE_API_KEY,
+            vec!["https://api.deepseek.com".to_string()],
+        )),
     );
     let err = plugin
         .provider_for_test()

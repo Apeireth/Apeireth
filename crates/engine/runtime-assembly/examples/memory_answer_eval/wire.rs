@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use apeireth_core::kernel::{CapabilityId, ModelId};
-use apeireth_plugin::{CredentialResolver, ProviderCapability, ProviderError};
+use apeireth_plugin::{CredentialResolver, ProviderCapability, ProviderError, Secret};
 use apeireth_protocol::canonical::{ModelDescriptor, NormalizedRequest, NormalizedResponse};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -97,8 +97,7 @@ impl EvalHttpProvider {
         {
             return Err(bad("evaluation endpoint requires HTTPS (or loopback HTTP), no URL credentials/query/fragment, a model and a positive timeout"));
         }
-        // The explicit origin binding is checked before a secret is resolved.
-        check_binding(credentials.as_ref(), &endpoint)?;
+        resolve_wire_key(credentials.as_ref(), &endpoint)?;
         let endpoint = if url
             .path()
             .trim_end_matches('/')
@@ -163,23 +162,18 @@ impl EvalHttpProvider {
     }
 }
 
-fn check_binding(
+fn resolve_wire_key(
     credentials: &dyn CredentialResolver,
     endpoint: &str,
-) -> Result<(), ProviderError> {
-    let verdict = apeireth_provider::endpoint_binding::ensure_credential_bound_to_endpoint(
+) -> Result<Secret, ProviderError> {
+    // Evaluation requires a binding, so the fallback audience is empty.
+    apeireth_provider::endpoint_binding::resolve_credential_for_endpoint(
         credentials,
+        PROVIDER,
         apeireth_provider::credentials::OPENAI_COMPATIBLE_API_KEY,
         endpoint,
-        None,
-    )?;
-    if verdict == apeireth_provider::endpoint_binding::EndpointBindingVerdict::Unmanaged {
-        return Err(ProviderError::AuthFailed {
-            provider: PROVIDER.into(),
-            detail: "evaluation credentials require an explicit endpoint-origin binding".into(),
-        });
-    }
-    Ok(())
+        Some(&[]),
+    )
 }
 
 /// Failed attempts must keep their wire evidence too. The evaluation transport
@@ -218,14 +212,7 @@ impl ProviderCapability for EvalHttpProvider {
                     .into(),
             });
         }
-        check_binding(self.credentials.as_ref(), &self.endpoint)?;
-        let key = self
-            .credentials
-            .resolve(apeireth_provider::credentials::OPENAI_COMPATIBLE_API_KEY)
-            .ok_or_else(|| ProviderError::AuthFailed {
-                provider: PROVIDER.into(),
-                detail: "temporary evaluation credential is unavailable".into(),
-            })?;
+        let key = resolve_wire_key(self.credentials.as_ref(), &self.endpoint)?;
         let body = build_body(request, &self.model, PROVIDER, &self.options)?;
         let bytes = serde_json::to_vec(&body).map_err(|_| ProviderError::BadResponse {
             provider: PROVIDER.into(),

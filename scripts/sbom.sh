@@ -78,8 +78,8 @@ echo ""
 if ! command -v cargo-cyclonedx >/dev/null 2>&1; then
     echo "❌ cargo-cyclonedx 未装"
     echo "  fallback install: cargo install cargo-cyclonedx --locked"
-    echo "  本地 SKIP (CI release.yml 的 security-and-sbom job 必须装)"
-    exit 0
+    echo "  无法生成 SBOM，发布门禁拒绝跳过"
+    exit 2
 fi
 
 # ----------------------------------------------------------------------------
@@ -119,7 +119,7 @@ while IFS= read -r -d '' f; do
     CRATE_DIR="$(dirname "${f}")"
     CRATE_NAME="$(basename "${CRATE_DIR}")"
     # 改名: <crate>__<basename>.cdx.json 避免重名
-    mv "${f}" "${SBOM_DIR}/${CRATE_NAME}__${BASENAME}" 2>/dev/null || true
+    mv "${f}" "${SBOM_DIR}/${CRATE_NAME}__${BASENAME}"
     COLLECTED=$((COLLECTED + 1))
 done < <(find "${REPO_ROOT}/crates" -name "*.cdx.json" -type f -print0 2>/dev/null)
 echo "  收集了 ${COLLECTED} 个 per-crate SBOM"
@@ -177,8 +177,9 @@ if command -v jq >/dev/null 2>&1; then
     COMPONENT_COUNT="$(jq '.components // [] | length' "${SBOM_OUT}" 2>/dev/null)"
     echo "  ✅ JSON 合法, specVersion=${GENERATED_SPEC}, components=${COMPONENT_COUNT}"
 else
-    echo "  ⚠️  jq 未装, 跳过 JSON 验证 (CI release.yml 必须装)"
+    echo "  ❌ jq 未装，无法验证 SBOM JSON"
     echo "  fallback install: choco install jq / apt install jq / brew install jq"
+    exit 2
 fi
 
 # ----------------------------------------------------------------------------

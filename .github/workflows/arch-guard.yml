@@ -60,9 +60,14 @@ jobs:
       - name: Baseline ratchet (report-only)
         if: github.event_name == 'pull_request'
         shell: pwsh
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          git fetch origin ${{ github.base_ref }} --depth=1
-          $numstat = git diff --numstat origin/${{ github.base_ref }} -- scripts/arch-baseline.txt
+          if ($env:BASE_SHA -notmatch '^[0-9a-f]{40}$') {
+            Write-Error "invalid pull request base identity"
+            exit 1
+          }
+          $numstat = git diff --numstat $env:BASE_SHA -- scripts/arch-baseline.txt
           if ($numstat) {
             $parts = $numstat -split "\s+"
             $added = [int]$parts[0]

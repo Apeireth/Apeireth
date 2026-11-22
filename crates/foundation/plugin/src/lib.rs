@@ -106,7 +106,9 @@ pub use bounds::{
     validate_resource_bounds, validate_version, BoundError, ResourceBounds,
 };
 pub use capability::{CapabilityDescriptor, CapabilityKind};
-pub use credentials::{CredentialResolver, NoCredentials, Secret, StaticCredentials};
+pub use credentials::{
+    CredentialResolver, CredentialSnapshot, NoCredentials, Secret, StaticCredentials,
+};
 pub use error::{PluginError, PluginResult};
 pub use manager::PluginManager;
 pub use manifest::PluginManifest;

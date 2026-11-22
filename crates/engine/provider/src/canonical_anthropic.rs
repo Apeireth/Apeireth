@@ -180,25 +180,13 @@ impl AnthropicProviderCapability {
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
             guard.clone()
         };
-        crate::endpoint_binding::ensure_credential_bound_to_endpoint(
+        crate::endpoint_binding::resolve_credential_for_endpoint(
             resolver.as_ref(),
+            self.id.as_str(),
             &self.credential_key,
             &self.base_url,
             audience.as_deref(),
         )
-        .map_err(|err| match err {
-            ProviderError::AuthFailed { provider, detail } => ProviderError::AuthFailed {
-                provider,
-                detail: format!("{detail} (credential {})", self.credential_key),
-            },
-            other => other,
-        })?;
-        resolver
-            .resolve(&self.credential_key)
-            .ok_or_else(|| ProviderError::AuthFailed {
-                provider: self.id.to_string(),
-                detail: format!("missing API key for {}", self.credential_key),
-            })
     }
 
     /// Translate a canonical request into an Anthropic Messages API body.

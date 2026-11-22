@@ -14,10 +14,8 @@
 #
 # 工具链要求 (0 装 PASS 边界):
 #   - cargo (Rust stable, per rust-toolchain.toml)
-#   - cargo-audit    : 已装在 ~/.cargo/bin, 若缺 → 此步 SKIP, exit 0
-#   - cargo-deny     : 已装在 ~/.cargo/bin, 若缺 → 此步 SKIP, exit 0
-#   - cargo-vet      : 可选 (TP20-S5 后置); 若缺 → 此步 SKIP, exit 0, 但
-#                      CI release.yml 的 security-and-sbom job 必须装
+#   - cargo-audit / cargo-deny / cargo-vet: 缺任一工具都失败；发布供应链
+#     验证不得把“检查器没运行”当成通过。
 #
 # 安装 fallback (主人拍板, 工具失败时文档标注):
 #   cargo install cargo-vet   --locked --root tools/
@@ -86,9 +84,9 @@ elif [[ -x "${TOOLS_DIR}/bin/cargo-vet.exe" ]] || [[ -x "${TOOLS_DIR}/bin/cargo-
     VET_EXIT=${PIPESTATUS[0]}
     echo "  exit=${VET_EXIT} (local tools/)"
 else
-    echo "  ⚠️  cargo-vet 未装, SKIP 这一步 (CI release.yml 必须装)"
+    echo "  ❌ cargo-vet 未装，无法完成发布供应链验证"
     echo "  fallback install: cargo install cargo-vet --locked --root ${TOOLS_DIR}"
-    VET_EXIT=0  # 本地 SKIP 不算失败; release gate 由 CI 守门
+    VET_EXIT=1
 fi
 echo ""
 
@@ -98,9 +96,15 @@ echo ""
 if [[ "${APEIRETH_FAST:-0}" != "1" ]]; then
     echo ">>> [2/3] cargo audit (RustSec advisory-db)"
     if command -v cargo-audit >/dev/null 2>&1; then
-        cargo audit --json > "${REPO_ROOT}/audit-report.json" 2> "${REPO_ROOT}/audit-audit.stderr.txt"
+        cargo audit --json --deny warnings \
+            --ignore RUSTSEC-2024-0436 \
+            --ignore RUSTSEC-2026-0543 \
+            > "${REPO_ROOT}/audit-report.json" 2> "${REPO_ROOT}/audit-audit.stderr.txt"
         AUDIT_EXIT=$?
-        cargo audit 2>&1 | tee "${REPORTS_DIR}/tp20-s5-cargo-audit-stdout-${DATE}.txt" > /dev/null
+        cargo audit --deny warnings \
+            --ignore RUSTSEC-2024-0436 \
+            --ignore RUSTSEC-2026-0543 \
+            2>&1 | tee "${REPORTS_DIR}/tp20-s5-cargo-audit-stdout-${DATE}.txt" > /dev/null
         echo "  exit=${AUDIT_EXIT} (0=clean, 1=vuln found, 2=advisory-db error)"
     else
         echo "  ❌ cargo-audit 未装 (TP20-S5 必须装, 不 fallback)"

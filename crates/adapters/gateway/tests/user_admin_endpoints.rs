@@ -12,19 +12,23 @@
 //! 5. **审计行** —— 每次管理动作落 `gateway.user_action` (user/role/action/decision),
 //!    令牌值零泄漏; 坏 `users.json` 拒开 (500, 不回退空表)。
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use apeireth_core::stored_doc::StoredDoc;
-use apeireth_core::user_domain::DomainRegistry;
+use apeireth_core::user_domain::{DomainRegistry, DomainRole};
+use apeireth_gateway::user_admin::PrincipalForgetAttempt;
+use apeireth_gateway::EpisodeMutationDto;
 use apeireth_gateway::{
     build_gateway_state_with_services, canonical_router_with_state, AuditCommand,
     ClientTokenConfig, ClientTokenSpec, ClientTokenTable, DomainAdminService, GatewayServices,
-    GatewayState, GatewayTokenGate, UserAccess, UserAdminService, USER_ACTION_AUDIT_EVENT,
+    GatewayState, GatewayTokenGate, MemoryGovernanceCommand, PrincipalForgetDto, UserAccess,
+    UserAdminService, USER_ACTION_AUDIT_EVENT,
 };
 use apeireth_governance::{UserRecord, UserTable};
-use apeireth_runtime::canonical::Runtime;
+use apeireth_runtime::canonical::{DomainSessionPlane, Runtime};
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use http_body_util::BodyExt;
@@ -77,9 +81,100 @@ impl AuditCommand for RecordingAudit {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+enum ForgetMode {
+    Complete,
+    Partial,
+    Error,
+}
+
+/// 纯合成主体遗忘端口：只返回受控状态，不接触真实记忆或外部系统。
+#[derive(Debug)]
+struct ControlledForget {
+    mode: Mutex<ForgetMode>,
+    calls: Mutex<Vec<String>>,
+}
+
+impl ControlledForget {
+    fn new(mode: ForgetMode) -> Self {
+        Self {
+            mode: Mutex::new(mode),
+            calls: Mutex::new(Vec::new()),
+        }
+    }
+
+    fn set_mode(&self, mode: ForgetMode) {
+        *self.mode.lock().unwrap() = mode;
+    }
+
+    fn calls(&self) -> Vec<String> {
+        self.calls.lock().unwrap().clone()
+    }
+}
+
+#[async_trait::async_trait]
+impl MemoryGovernanceCommand for ControlledForget {
+    async fn protect_episode(
+        &self,
+        _id: &str,
+        _expected_rev: u64,
+    ) -> Result<EpisodeMutationDto, String> {
+        Err("unused synthetic protect".to_string())
+    }
+
+    async fn unprotect_episode(
+        &self,
+        _id: &str,
+        _expected_rev: u64,
+    ) -> Result<EpisodeMutationDto, String> {
+        Err("unused synthetic unprotect".to_string())
+    }
+
+    async fn forget_episode(
+        &self,
+        _id: &str,
+        _expected_rev: u64,
+        _reason: Option<&str>,
+    ) -> Result<EpisodeMutationDto, String> {
+        Err("unused synthetic episode forget".to_string())
+    }
+
+    async fn forget_principal(
+        &self,
+        principal_id: &str,
+        _reason: Option<&str>,
+    ) -> Result<PrincipalForgetDto, String> {
+        self.calls.lock().unwrap().push(principal_id.to_string());
+        match *self.mode.lock().unwrap() {
+            ForgetMode::Complete => Ok(PrincipalForgetDto {
+                principal_id: principal_id.to_string(),
+                episode: true,
+                preference: true,
+                commitment: true,
+                temporal: true,
+                persona: true,
+                refused: false,
+                reason: None,
+            }),
+            ForgetMode::Partial => Ok(PrincipalForgetDto {
+                principal_id: principal_id.to_string(),
+                episode: false,
+                preference: true,
+                commitment: true,
+                temporal: true,
+                persona: true,
+                refused: false,
+                reason: None,
+            }),
+            ForgetMode::Error => Err("synthetic memory refusal".to_string()),
+        }
+    }
+}
+
 struct Harness {
     state: GatewayState,
     audit: Arc<RecordingAudit>,
+    forget: Option<Arc<ControlledForget>>,
     dir: PathBuf,
 }
 
@@ -157,10 +252,18 @@ async fn fixture(tag: &str) -> Harness {
 
 /// 从一个已有数据目录装配网关 (双入口同源的"入口面"就是这里的管理服务)。
 async fn harness_from(dir: &Path) -> Harness {
+    let forget = Arc::new(ControlledForget::new(ForgetMode::Complete));
+    harness_from_with_forget(dir, Some(forget)).await
+}
+
+async fn harness_from_with_forget(dir: &Path, forget: Option<Arc<ControlledForget>>) -> Harness {
     let runtime = Arc::new(Runtime::builder().build().await.unwrap());
     let audit = Arc::new(RecordingAudit::default());
     let services = GatewayServices {
         audit_commands: Some(audit.clone()),
+        memory_governance: forget
+            .clone()
+            .map(|forget| forget as Arc<dyn MemoryGovernanceCommand>),
         user_admin: Some(Arc::new(UserAdminService::new(dir))),
         domain_admin: Some(Arc::new(DomainAdminService::new(
             DomainRegistry::open(dir).unwrap(),
@@ -174,6 +277,7 @@ async fn harness_from(dir: &Path) -> Harness {
     Harness {
         state,
         audit,
+        forget,
         dir: dir.to_path_buf(),
     }
 }
@@ -211,6 +315,51 @@ async fn status_and_body(response: axum::http::Response<Body>) -> (StatusCode, S
     let status = response.status();
     let bytes = response.into_body().collect().await.unwrap().to_bytes();
     (status, String::from_utf8_lossy(&bytes).into_owned())
+}
+
+fn add_unbound_target(harness: &Harness, user_id: &str, domain: Option<&str>) {
+    harness
+        .state
+        .services
+        .user_admin
+        .as_ref()
+        .expect("user admin")
+        .add(user_id, "member", Vec::new(), domain)
+        .expect("synthetic deletion target");
+}
+
+fn account_exists(harness: &Harness, user_id: &str) -> bool {
+    UserTable::load(&harness.dir)
+        .unwrap()
+        .expect("table")
+        .identity_for_user(user_id)
+        .is_some()
+}
+
+async fn delete_as_owner(router: &axum::Router, user_id: &str) -> (StatusCode, String) {
+    status_and_body(
+        router
+            .clone()
+            .oneshot(request(
+                "DELETE",
+                &format!("/v1/admin/users/{user_id}"),
+                Some(OWNER_TOKEN),
+                Body::empty(),
+            ))
+            .await
+            .unwrap(),
+    )
+    .await
+}
+
+fn assert_retryable_block(status: StatusCode, text: &str, expected_code: &str, user_id: &str) {
+    assert_eq!(status, StatusCode::CONFLICT, "{text}");
+    let body: serde_json::Value = serde_json::from_str(text).unwrap();
+    assert_eq!(body["error"], expected_code, "{text}");
+    assert_eq!(body["user_id"], user_id, "{text}");
+    assert_eq!(body["deleted"], false, "{text}");
+    assert_eq!(body["memory_forgotten"], false, "{text}");
+    assert_eq!(body["retryable"], true, "{text}");
 }
 
 /// 403 拒绝帧的公共断言: 码是 `permission_denied`, 且零令牌泄漏。
@@ -345,6 +494,17 @@ async fn owner_walks_the_full_user_admin_chain_over_http() {
     let body: serde_json::Value = serde_json::from_str(&text).unwrap();
     assert_eq!(body["deleted"], true);
     assert_eq!(body["user_id"], "user-member-b");
+    assert_eq!(body["memory_forgotten"], true);
+    assert!(
+        body["memory_note"]
+            .as_str()
+            .is_some_and(|note| note.contains("episode=true") && note.contains("persona=true")),
+        "成功帧必须逐账如实确认: {text}"
+    );
+    assert_eq!(
+        harness.forget.as_ref().unwrap().calls(),
+        vec!["user-member-b".to_string()]
+    );
 
     // 落盘可回读 (同一 UserTable 事实)。
     let table = UserTable::load(&harness.dir).unwrap().expect("table");
@@ -616,6 +776,10 @@ async fn destructive_invariants_hold_on_the_http_face_too() {
     .await;
     assert_eq!(status, StatusCode::CONFLICT, "{text}");
     assert!(text.contains("inconsistent"), "{text}");
+    assert!(
+        harness.forget.as_ref().unwrap().calls().is_empty(),
+        "用户表预检拒绝时不得先擦记忆"
+    );
 
     // 先摘令牌绑定, 再删用户: 成功 (发令牌序)。
     write_tokens(
@@ -639,6 +803,153 @@ async fn destructive_invariants_hold_on_the_http_face_too() {
     assert_eq!(status, StatusCode::OK, "{text}");
     let table = UserTable::load(&harness.dir).unwrap().expect("table");
     assert_eq!(table.users.len(), 2);
+}
+
+/// 遗忘端口缺席不是「没有记忆」的证据：账号保留，补齐同一端口后可安全重试。
+#[tokio::test]
+async fn absent_forget_port_keeps_the_account_and_retry_succeeds() {
+    let mut harness = fixture("forget-absent").await;
+    add_unbound_target(&harness, "user-delete", None);
+    let forget = harness.forget.clone().expect("synthetic forget");
+    harness.state.services.memory_governance = None;
+
+    let first_router = canonical_router_with_state(harness.state.clone());
+    let (status, text) = delete_as_owner(&first_router, "user-delete").await;
+    assert_retryable_block(status, &text, "memory.forget_unavailable", "user-delete");
+    assert!(account_exists(&harness, "user-delete"));
+    assert!(forget.calls().is_empty(), "端口缺席时不应产生合成遗忘调用");
+
+    harness.state.services.memory_governance =
+        Some(forget.clone() as Arc<dyn MemoryGovernanceCommand>);
+    let retry_router = canonical_router_with_state(harness.state.clone());
+    let (status, text) = delete_as_owner(&retry_router, "user-delete").await;
+    assert_eq!(status, StatusCode::OK, "{text}");
+    let body: serde_json::Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(body["deleted"], true, "{text}");
+    assert_eq!(body["memory_forgotten"], true, "{text}");
+    assert!(!account_exists(&harness, "user-delete"));
+    assert_eq!(forget.calls(), vec!["user-delete".to_string()]);
+}
+
+/// `Ok(dto)` 也可能只完成部分账；任一 false 都保留账号，修复后重试才删除。
+#[tokio::test]
+async fn partial_forget_result_keeps_the_account_and_retry_succeeds() {
+    let harness = fixture("forget-partial").await;
+    add_unbound_target(&harness, "user-delete", None);
+    let forget = harness.forget.clone().expect("synthetic forget");
+    forget.set_mode(ForgetMode::Partial);
+    let router = canonical_router_with_state(harness.state.clone());
+
+    let (status, text) = delete_as_owner(&router, "user-delete").await;
+    assert_retryable_block(status, &text, "memory.forget_incomplete", "user-delete");
+    assert!(text.contains("incomplete=episode"), "{text}");
+    assert!(text.contains("episode=false"), "{text}");
+    assert!(account_exists(&harness, "user-delete"));
+
+    forget.set_mode(ForgetMode::Complete);
+    let (status, text) = delete_as_owner(&router, "user-delete").await;
+    assert_eq!(status, StatusCode::OK, "{text}");
+    assert!(!account_exists(&harness, "user-delete"));
+    assert_eq!(
+        forget.calls(),
+        vec!["user-delete".to_string(), "user-delete".to_string()]
+    );
+}
+
+/// 遗忘调用报错时账号仍在；同一路径的第二次幂等尝试成功后才落用户表。
+#[tokio::test]
+async fn failed_forget_keeps_the_account_and_retry_succeeds() {
+    let harness = fixture("forget-error").await;
+    add_unbound_target(&harness, "user-delete", None);
+    let forget = harness.forget.clone().expect("synthetic forget");
+    forget.set_mode(ForgetMode::Error);
+    let router = canonical_router_with_state(harness.state.clone());
+
+    let (status, text) = delete_as_owner(&router, "user-delete").await;
+    assert_retryable_block(status, &text, "memory.forget_refused", "user-delete");
+    assert!(text.contains("synthetic memory refusal"), "{text}");
+    assert!(account_exists(&harness, "user-delete"));
+
+    forget.set_mode(ForgetMode::Complete);
+    let (status, text) = delete_as_owner(&router, "user-delete").await;
+    assert_eq!(status, StatusCode::OK, "{text}");
+    assert!(!account_exists(&harness, "user-delete"));
+    assert_eq!(forget.calls().len(), 2);
+}
+
+/// 当前 HTTP 端口只代表默认域治理。目标实际落在已开非默认域时必须拒绝，且
+/// 默认端口一次都不能被调用，防止「擦错账本再报目标成功」。
+#[tokio::test]
+async fn non_default_domain_never_uses_the_default_forget_port() {
+    let mut harness = fixture("forget-scope").await;
+    add_unbound_target(&harness, "user-delete", Some("private-domain"));
+    let registry = harness
+        .state
+        .services
+        .domain_admin
+        .as_ref()
+        .unwrap()
+        .registry()
+        .clone();
+    registry
+        .create("private-domain", "Private", DomainRole::Owner)
+        .expect("open synthetic non-default domain");
+    harness.state.domains = Some(Arc::new(DomainSessionPlane::new(registry, BTreeMap::new())));
+    let forget = harness.forget.clone().expect("synthetic default forget");
+    let router = canonical_router_with_state(harness.state.clone());
+
+    let (status, text) = delete_as_owner(&router, "user-delete").await;
+    assert_retryable_block(
+        status,
+        &text,
+        "memory.forget_scope_unavailable",
+        "user-delete",
+    );
+    assert!(text.contains("non-default memory domain"), "{text}");
+    assert!(account_exists(&harness, "user-delete"));
+    assert!(
+        forget.calls().is_empty(),
+        "非默认域目标不得调用默认域遗忘端口"
+    );
+}
+
+/// 预检后若用户行被其它写者改动，第二阶段不得按旧计划删除新行；记忆状态单独
+/// 报已完成，账号保留供基于新快照重试。
+#[tokio::test]
+async fn a_changed_user_row_is_not_deleted_by_a_stale_forget_plan() {
+    let harness = fixture("forget-stale-plan").await;
+    add_unbound_target(&harness, "user-delete", None);
+    let service = harness.state.services.user_admin.as_ref().unwrap();
+    let plan = service
+        .prepare_governed_remove("user-delete")
+        .expect("preflight plan");
+    service
+        .set_role("user-delete", "guest")
+        .expect("synthetic concurrent change");
+
+    let error = service
+        .finish_governed_remove(
+            plan,
+            PrincipalForgetAttempt::Attempted(Ok(PrincipalForgetDto {
+                principal_id: "user-delete".to_string(),
+                episode: true,
+                preference: true,
+                commitment: true,
+                temporal: true,
+                persona: true,
+                refused: false,
+                reason: None,
+            })),
+        )
+        .expect_err("stale plan must retain changed account");
+    assert_eq!(error.code(), "user.remove_failed");
+    assert!(error.memory_forgotten());
+    assert!(error.detail().contains("changed while principal forget"));
+    let table = UserTable::load(&harness.dir).unwrap().unwrap();
+    let changed = table
+        .identity_for_user("user-delete")
+        .expect("retained user");
+    assert_eq!(changed.role.as_str(), "guest");
 }
 
 // ---------------------------------------------------------------------------

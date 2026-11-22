@@ -93,12 +93,12 @@ jobs:
             arch: arm64
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0  # 需 git tag 信息
 
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@1.97.1
+        uses: dtolnay/rust-toolchain@766a42937d994bd78bb4591385445c188ccb3f09 # 1.97.1
         with:
           # 装所有可能 target (rustup target add 幂等, ~1s/target)
           # 比嵌套表达式更稳. 覆盖:
@@ -111,7 +111,7 @@ jobs:
           targets: aarch64-unknown-linux-gnu,aarch64-unknown-linux-musl,x86_64-unknown-linux-musl,aarch64-apple-darwin,x86_64-apple-darwin,x86_64-pc-windows-msvc
 
       - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           cache-bin: ${{ matrix.target != 'docker' }}
 
@@ -136,15 +136,15 @@ jobs:
       # === docker 走 buildx (单 image, multi-arch 推到 GHCR) ===
       - name: Set up QEMU (docker arm64)
         if: matrix.target == 'docker' && matrix.arch == 'arm64'
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
 
       - name: Set up Docker Buildx (docker)
         if: matrix.target == 'docker'
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
 
       - name: Log in to GHCR (docker)
         if: matrix.target == 'docker'
-        uses: docker/login-action@v4
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -154,31 +154,28 @@ jobs:
       - name: Build ${{ matrix.target }} package
         shell: bash
         run: |
-          # 注: set -uo pipefail (no -e) — 包装脚本 metadata 不全 (per 1.0 release engineer §D-06),
-          # 失败仅记 ::warning:: 不阻塞 CI. 真正 CI gate 在 release-gate job (5/5 jobs).
-          set -uo pipefail
+          set -euo pipefail
           chmod +x packaging/${{ matrix.target }}/build.* 2>/dev/null || true
-          if [[ "${{ matrix.target }}" == "msi" || "${{ matrix.target }}" == "scoop" ]]; then
-            echo "::warning::Windows package — using WIF-injected PATH, see packaging/${{ matrix.target }}/build.ps1"
-            powershell -ExecutionPolicy Bypass -File "packaging/${{ matrix.target }}/build.ps1" \
-              || echo "::warning::${{ matrix.target }} build.ps1 non-fatal skip"
+          if [[ "${{ matrix.target }}" == "scoop" ]]; then
+            # The Scoop manifest must hash the exact ZIP uploaded by this job.
+            powershell -ExecutionPolicy Bypass -File "packaging/zip/build.ps1"
+            powershell -ExecutionPolicy Bypass -File "packaging/scoop/build.ps1"
+          elif [[ "${{ matrix.target }}" == "msi" ]]; then
+            powershell -ExecutionPolicy Bypass -File "packaging/${{ matrix.target }}/build.ps1"
           else
-            bash "packaging/${{ matrix.target }}/build.sh" \
-              || echo "::warning::${{ matrix.target }} build.sh non-fatal skip"
+            bash "packaging/${{ matrix.target }}/build.sh"
           fi
           # arch 二次处理 (deb/tarball/docker 多架构)
           if [[ "${{ matrix.target }}" == "deb" ]]; then
             if [[ "${{ matrix.arch }}" == "arm64" ]]; then
               # cargo-deb --target aarch64-unknown-linux-gnu (上游支持)
-              cargo deb --target aarch64-unknown-linux-gnu --no-build \
-                || echo "::warning::cargo deb arm64 non-fatal skip"
+              cargo deb --target aarch64-unknown-linux-gnu --no-build
             fi
           fi
           if [[ "${{ matrix.target }}" == "tarball" ]]; then
             if [[ "${{ matrix.arch }}" == "arm64" ]]; then
               # tarball build.sh 默认 amd64, arm64 走 cross
-              cargo build --release --workspace --locked --target aarch64-unknown-linux-musl \
-                || echo "::warning::cargo build arm64 non-fatal skip"
+              cargo build --release --workspace --locked --target aarch64-unknown-linux-musl
             fi
           fi
           if [[ "${{ matrix.target }}" == "docker" ]]; then
@@ -188,27 +185,31 @@ jobs:
             docker buildx build \
               --platform "${PLATFORM}" \
               -t "ghcr.io/apeireth/apeireth:${APEIRETH_VERSION}-${PLATFORM##*/}" \
-              --load . \
-              || echo "::warning::docker ${PLATFORM} build failed (best-effort, 不阻塞 CI; 跟 release-gate 解耦)"
+              --load .
             # 多架构 push 单独在 docker-multi-arch job 跑 (避免每 arch 重复 push)
             # 注: Dockerfile 多架构 \$TARGETARCH 已修 (commit 45963574), 失败是 buildx/QEMU 临时问题
           fi
 
       # === Upload 包产物 (per arch) ===
       - name: Upload ${{ matrix.target }}-${{ matrix.arch }} artifact
-        uses: actions/upload-artifact@v7
+        if: matrix.target != 'docker'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: apeireth-${{ matrix.target }}-${{ matrix.arch }}
           path: |
             target/debian/*.deb
             target/release/rpmbuild/RPMS/*/*.rpm
+            target/*.tar.gz
+            target/*.tar.gz.sha256
+            target/*.zip
+            target/*.zip.sha256
             dist/*.tar.gz
             dist/*.tar.xz
             target/msi/*.msi
             packaging/scoop/*.json
             packaging/brew/*.rb
             target/cargo-bundle/$(if [[ "${{ runner.os }}" == "macOS" ]]; then echo "macos"; else echo "linux"; fi)/*.tar.gz
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 30
 
   # =========================================================================
@@ -222,16 +223,16 @@ jobs:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v1.0.0')
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
 
       - name: Log in to GHCR
-        uses: docker/login-action@v4
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -260,13 +261,13 @@ jobs:
       (github.event_name == 'workflow_dispatch' && inputs.skip_security != true)
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@1.97.1
+        uses: dtolnay/rust-toolchain@766a42937d994bd78bb4591385445c188ccb3f09 # 1.97.1
 
       - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
 
       # === cargo-audit: RustSec advisory db (5 守门 #3 audit append-only) ===
       - name: Install cargo-audit
@@ -316,10 +317,10 @@ jobs:
       (github.event_name == 'workflow_dispatch' && inputs.skip_perf != true)
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@1.97.1
+        uses: dtolnay/rust-toolchain@766a42937d994bd78bb4591385445c188ccb3f09 # 1.97.1
 
       # keyring → dbus-secret-service → libdbus-sys 需要系统库 (cargo bench 全编译)
       - name: Bootstrap Ubuntu DNS for system dependencies
@@ -331,7 +332,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
 
       - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
 
       # The current root workspace has no benchmark target. Keep this release
       # slot as a deterministic engine validation until a benchmark is owned.
@@ -340,7 +341,7 @@ jobs:
           cargo test -p apeireth-memory --tests --locked
 
       - name: Upload bench baseline
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: engine-validation-1.0.0
           path: target/criterion/
@@ -361,13 +362,13 @@ jobs:
     if: always() && needs.build-packages.result == 'success'
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@1.97.1
+        uses: dtolnay/rust-toolchain@766a42937d994bd78bb4591385445c188ccb3f09 # 1.97.1
 
       - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
 
       # === 发布清单 12 项 checklist (9 P0 + 3 P1) ===
       # 任何 P0 fail 阻塞 1.0 release tag
@@ -375,22 +376,22 @@ jobs:
         run: bash scripts/release-1.0-checklist.sh --dry-run
 
       - name: 12 项 release checklist (live, 跳过需要交互的项)
-        run: bash scripts/release-1.0-checklist.sh --skip 4,5,6 || true
+        run: bash scripts/release-1.0-checklist.sh --skip 4,5,6
 
       - name: 升级脚本 dry-run (D-07 一次性迁移)
-        run: bash scripts/upgrade/v2.0.0-alpha-to-v1.0.0.sh --dry-run || true
+        run: bash scripts/upgrade/v2.0.0-alpha-to-v1.0.0.sh --dry-run
 
       - name: 卸载脚本 dry-run (8 包 0 残留)
-        run: bash scripts/uninstall/uninstall.sh --dry-run || true
+        run: bash scripts/uninstall/uninstall.sh --dry-run
 
       # === 上传报告 ===
       - name: Upload checklist report
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: release-checklist-report
           path: reports/r20-v1.0.0-release-checklist-*.md
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 365
 
   # =========================================================================
@@ -403,6 +404,9 @@ jobs:
     if: always()
     steps:
       - name: Check all jobs succeeded
+        env:
+          RELEASE_REF: ${{ github.ref }}
+          RELEASE_TAG: ${{ github.ref_name }}
         run: |
           if [[ "${{ needs.build-packages.result }}" != "success" ]]; then
             echo "❌ build-packages failed: ${{ needs.build-packages.result }}"
@@ -423,6 +427,41 @@ jobs:
           echo "================================================"
           echo "  ✅ 1.0 release gate: 5/5 jobs success"
           echo "  Version: ${APEIRETH_VERSION}"
-          echo "  Ref: ${{ github.ref }}"
-          echo "  Tag: ${{ github.ref_name }}"
+          echo "  Ref: ${RELEASE_REF}"
+          echo "  Tag: ${RELEASE_TAG}"
           echo "================================================"
+
+      - name: Record trusted release source identity
+        if: github.event_name == 'push'
+        env:
+          RELEASE_REF: ${{ github.ref }}
+          RELEASE_SHA: ${{ github.sha }}
+          SOURCE_REPOSITORY: ${{ github.repository }}
+          SOURCE_RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          if [[ ! "${RELEASE_REF}" =~ ^refs/tags/v1\.0\.0(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "❌ release source is not an allowed v1.0.0 tag"
+            exit 1
+          fi
+          if [[ ! "${RELEASE_SHA}" =~ ^[0-9a-f]{40}$ ]] || [[ ! "${SOURCE_RUN_ID}" =~ ^[0-9]+$ ]]; then
+            echo "❌ invalid release source identity"
+            exit 1
+          fi
+          jq -n \
+            --arg repository "${SOURCE_REPOSITORY}" \
+            --arg workflow ".github/workflows/release-1.0.0.yml" \
+            --arg run_id "${SOURCE_RUN_ID}" \
+            --arg ref "${RELEASE_REF}" \
+            --arg sha "${RELEASE_SHA}" \
+            '{repository:$repository, workflow:$workflow, run_id:$run_id, ref:$ref, sha:$sha}' \
+            > release-source.json
+
+      - name: Upload trusted release source identity
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: release-source-provenance
+          path: release-source.json
+          if-no-files-found: error
+          retention-days: 365
