@@ -19,7 +19,7 @@
 | `gap.memory_update` | PRODUCTION WIRED | ON | - | `7f91de399aad` | 2026-11-20 |
 | `gap.prompt_stabilizer_unwired` | NOT IMPLEMENTED | - | - | `c9251271` | 2026-11-20 |
 | `sec.linux_containment` | PRODUCTION WIRED | - | - | `1c1632559260` | 2026-11-20 |
-| `sec.gateway_tls` | PRODUCTION WIRED | OFF | `APEIRETH_TLS_CERT` | `ade8a8f73e91` | 2026-11-20 |
+| `sec.gateway_tls` | PRODUCTION WIRED | OFF | `APEIRETH_TLS_CERT` | `5e3a08b2215f` | 2026-12-06 |
 | `sec.storage_envelope_crypto` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_SESSION_SEAL` | `be53f8f3d832` | 2026-12-06 |
 | `gov.chain_skeleton` | PRODUCTION WIRED | ON | - | `d59a9c01bb00` | 2026-11-20 |
 | `gov.chain_hook_adapter` | PRODUCTION WIRED | ON | - | `ade8a8f73e91` | 2026-11-20 |
