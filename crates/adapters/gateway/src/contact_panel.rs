@@ -23,7 +23,7 @@
 
 use apeireth_core::agent_contact::PersonaText;
 use apeireth_core::kernel::ids::ContactId;
-use apeireth_runtime::canonical::workspace::WorkspaceStatus;
+use apeireth_runtime::canonical::workspace::{WorkspaceStatus, DESKTOP_GRANTED_WORKSPACE_SOURCE};
 use async_trait::async_trait;
 use axum::extract::rejection::{JsonRejection, QueryRejection};
 use axum::extract::{Extension, Path, Query, State};
@@ -1075,6 +1075,15 @@ async fn check_workspace_binding(
         return Err(binding_conflict_response(
             &binding.workspace_id,
             "workspace_revision_mismatch",
+        ));
+    }
+    if workspace.status != WorkspaceStatus::Ready
+        || !workspace.can_select
+        || workspace.source == DESKTOP_GRANTED_WORKSPACE_SOURCE
+    {
+        return Err(binding_conflict_response(
+            &binding.workspace_id,
+            "workspace_unavailable",
         ));
     }
     Ok(())

@@ -27,6 +27,58 @@
 - 普通网关的 `POST /v1/admin/config` 更换模型端点来源时，必须同笔提供凭据，或由凭据后端确认该凭据已绑定目标来源，否则返回 409 `invalid_request`。凭据与端点不能一并保存时返回 503。Windows 受管桌面仍遵循上文的模型连接契约。
 - `DELETE /v1/admin/users/{user_id}` 先验证账号可删，再请求对目标主体做记忆遗忘。治理服务不可用、目标域不可确认、返回拒绝或任一账本未确认时保留账号，并在响应中返回 `deleted: false`。原成功回执保持 `deleted: true`、`user_id`、`memory_forgotten: true`、`memory_note`。记忆遗忘按现有治理语义执行，存储介质、备份和供应商侧副本另有独立生命周期。
 
+## 受管桌面能力配置
+
+默认域的认证受管桌面操作者使用 `GET /v1/admin/desktop-capabilities` 读取
+`{schema_version:1, revision, configured, effective, restart_required}`。
+`configured` 和 `effective` 都包含三个布尔值：
+
+| 字段 | 初始值 | 启用范围 |
+|---|---|---|
+| `project_file_tools` | `true` | 项目工作区文件工具。工作区修订、目录范围和逐次写审批仍由执行链核验。 |
+| `preference_learning` | `true` | 从明确表述学习偏好。关闭后停止该模块学习，原有偏好记录和召回继续保留。 |
+| `skill_search` | `false` | 普通对话可查找本机技能库条目。项目对话的文件工具范围由工作区合同决定。 |
+
+`POST /v1/admin/desktop-capabilities` 接受严格的 `{expected_revision, configured}`，
+两层对象都拒绝未知字段，三个配置值须显式提供。服务持久保存配置后返回同一读面结构。
+修订不符返回 `409 capability_revision_conflict`。配置未变化时保留原修订。
+`effective` 来自本进程实际装入的工具与行为模块，表示装配状态，逐次工具调用仍走原治理链。
+`restart_required` 表示保存值与本次装配不同，正常重开后重新核对。现有任务继续沿用当前运行时。
+配置文件 `desktop-capabilities.json` 仅由受管桌面后端加载，使用版本校验与原子写入。
+
+## 受管桌面网页阅读
+
+`POST /v1/admin/desktop-web-reader` 接收 `{"url":"https://example.org/article"}`。
+只接受默认域的认证受管桌面操作者。明确发起读取后，后端用 GET 获取公开 HTTPS 正文。
+地址上限为 4096 UTF‑8 字节。每一跳独立核验公网地址和 443 端口，DNS 地址通过校验后用于实际连接。
+读取不带用户 Cookie、凭据或自定义头，最多四次重定向、8 秒及 512 KiB 响应体。每个网关一次处理一个读取。
+响应接受 UTF‑8 的 HTML、XHTML 和纯文本，不执行网页脚本，也不请求图片、样式或内嵌页面。
+
+成功返回 `{schema_version:1,page:{source_origin,title,text,content_kind,truncated}}`。
+`source_origin` 是最终站点源，`title` 可为 null，`content_kind` 为 `html` 或 `text`。
+标题上限 512 UTF‑8 字节，正文上限 64 KiB，正文截断由 `truncated` 标记。
+结果带 `Cache-Control: no-store` 和 `X-Content-Type-Options: nosniff`。
+读取不会写入会话、记忆或项目。
+
+错误为 400 `invalid_request` 或 `invalid_url`、403 `single_operator_required` 或
+`web_destination_denied`、413 `reader_request_too_large` 或 `web_page_too_large`、
+415 `web_page_unsupported`、422 `web_page_empty`、429 `web_reader_busy`、
+502 `web_upstream_unavailable`、504 `web_read_timeout`，并沿用网关的令牌与角色拒绝。
+
+## 会话上一次提供方请求的上下文
+
+`GET /v1/sessions/{session_id}/provider-context` 沿用会话历史的鉴权、归属和域约束。
+不接受查询参数。会话不存在或不可见时返回 404。
+成功返回 `{schema:1,session,provider_request}`。有观测记录时
+`provider_request` 为 `{request,trace_id,provider,model,input_tokens,context_window}`，
+与原回合请求和执行跟踪关联。字段仅描述该会话上一次有记录的单次提供方调用。
+
+`input_tokens` 取提供方为本次请求明确返回、可无损转换的正整数，目前从 OpenAI 兼容返回格式读取
+`usage.prompt_tokens`。缺失、零值或溢出返回 null。
+`context_window` 来自同一提供方为实际模型声明的窗口。缺省、换用未匹配的模型或仅有通用路由下界时为 null。
+新请求发起后，旧观测失效。新请求没有可确认结果时 `provider_request` 为 null，旧会话没有此字段时同样返回 null。
+该读面不会估算待发送草稿，响应标记为 `no-store`。
+
 ## §1 通用约定
 
 - Base URL:`http://127.0.0.1:{port}`(port 由桌面壳为 sidecar 动态分配;手动运行时默认 8080)
@@ -498,13 +550,28 @@ bounded-context 端口)、组合根适配 `crates/adapters/cli/src/gateway_panel
 `POST /v1/workspaces` —— 建;`POST /v1/workspaces/{workspace_id}/select` —— 选择;
 `POST /v1/workspaces/{workspace_id}/close` —— 关闭(= 吊销)。
 
-- **受管根是宿主事实, 不是客户端事实**: 建请求体**不含**任何根路径(只有
-  `display_name` / `root_kind` / `permission_scope` / `expires_at`),根由宿主在组合根
-  装配(CLI 侧 = 进程当前根);客户端塞 `root` 等未知字段 = 400 `invalid_request`
+- 建请求体接受 `display_name`、`root_kind`、`permission_scope`、`expires_at` 和可选的
+  `root_provisioning`。省略 `root_provisioning` 时仍使用宿主原有的受管根
+  （CLI 为进程当前目录）。提交 `root` 等未知字段返回 400 `invalid_request`
   (请求体 `deny_unknown_fields`)。`root_kind` 词表 = `managed|temporary|preset`
   (与前端 `governance_tab.rs` 的 span kind **不同名**, 后端口径以本行为准)。
+- `root_provisioning: "isolated_v1"` 仅向经令牌认证的受管桌面单操作者开放。
+  宿主在数据根的 `managed-workspace-roots/<workspace_id>/` 下新建实体目录，然后持久化登记。
+  `display_name` 仅作展示，同名记录各有自己的目录。创建响应和随后读回的 `source` 为
+  `desktop_managed`，`root_display` 为目录叶子名。该模式要求 `root_kind: "managed"`，
+  `permission_scope` 接受 `read`（默认）或 `approval_write`（写入仍需批准）。
+  关闭工作区会吊销登记并保留文件。旧版网关按未知字段返回 400，客户端应如实报告创建失败。
+- **已有目录临时授权**：配套 Windows 原生桌面用系统选择器确认后，可从受管进程调用
+  `GET/POST /v1/admin/desktop-folder-grants`。探测和发放均要求受管回环单操作者的
+  Bearer 凭据及原生宿主从继承管道交给后端的独立凭据。浏览器来源和通用建工作区端点
+  不能提交绝对路径。发放时比对原生选择和后端打开的目录句柄身份，返回标准
+  `WorkspaceDto`，其中 `source=desktop_temporary`、`root_kind=temporary`、
+  `permission_scope=read`、`expires_at` 为 epoch 毫秒。列表优先展示仍有效的临时授权。
+  租约最长 30 分钟并随当前运行时退出失效。每次使用核对权限、到期时间、修订和目录身份，
+  `/v1/workspace-chat` 对应会话只暴露根目录里的 UTF-8 文本读取。按原修订关闭后保留目录和文件。
+  重启或到期后读回记录为 `unavailable`，显式撤销记录为 `revoked`。
 - **读面不泄露根路径**: `root_display` 只含**叶子名**(无父目录/盘符/分隔符),
-  响应体里没有绝对根路径;宿主若交回不安全的展示名, 网关 500 `internal_error`
+  响应体里没有绝对根路径;宿主若交回不安全的展示名, 网关 500 `internal`
   且**不回显该值**(宁拒不宽)。
 - **乐观并发(选/关必须带修订号)**: `expected_revision` 缺失 = 400 `invalid_request`;
   与现值不符 = **409 `workspace_conflict`**(详情带 `expected_revision` /
@@ -512,8 +579,8 @@ bounded-context 端口)、组合根适配 `crates/adapters/cli/src/gateway_panel
   再原子复核一次)。
 - **吊销 ≠ 冲突**: 已吊销的工作区再选/再关 = **403 `workspace_revoked`**
   (状态不可用, 不是并发冲突——分类写死在此)。
-- **作用域宿主确认**: 客户端提交的是 *requested* scope, 宿主确认后才生效
-  (CLI 侧上限 = `write`);`can_write` 只表示**合同允许写**, 不表示已获人工批准。
+- 客户端提交请求作用域，由宿主确认后生效。沿用宿主原有受管根的创建请求在 CLI
+  侧仍按 `write` 截断。`can_write` 表示登记允许写入，具体操作仍须经过管辖该操作的授权。
 - **存在性不泄露**: 不存在 / 他人 / 他域 = 同帧 404 `workspace_not_found`;
   非默认域请求按面闸 403 `domain_forbidden`(恒定帧)。
 - **可检索审计**: 建/选/关/被拒(冲突或吊销)都落审计行 `gateway.workspace_action`
@@ -545,24 +612,22 @@ bounded-context 端口)、组合根适配 `crates/adapters/cli/src/gateway_panel
   `can_write` / `expires_at`(可空, **epoch 毫秒**)/ `source` / `updated_at_ms`
   (**epoch 毫秒**)。
 - 列表 = `{"workspaces":[…],"count":N}`;单体 = `{"workspace":{…}}`。
-- 建(POST, 请求体
-  `{ "display_name": "校对发布清单", "root_kind": "managed", "permission_scope": "write", "expires_at": 1800000000000 }`,
-  `root_kind` / `permission_scope` / `expires_at` 可省)→ **201** `{"workspace":{…}}`。
+- 建(POST, 受管桌面请求体示例
+  `{ "display_name": "校对发布清单", "root_provisioning": "isolated_v1", "permission_scope": "approval_write" }`)
+  → **201** `{"workspace":{…}}`。
 - 选/关(POST, 请求体 `{ "expected_revision": 7 }`)→ **200** `{"workspace":{…}}`};
   关闭后 `status` = `revoked`、`can_select` = false、`revision` +1。
 
 - 错误模型(与 §1 同一帧形):400 `invalid_request`(缺 `expected_revision` /
-  未知字段 / `limit` 越界)/ 401(令牌门)/ 403 `permission_denied`(角色门)/
+  未知字段 / `limit` 越界 / 独立目录创建请求无效)/ 401(令牌门)/ 403 `permission_denied`(角色或受管单操作者门)/
   403 `workspace_revoked` / 403 `domain_forbidden`(非默认域)/ 404 `workspace_not_found`/
-  409 `workspace_conflict` / 500 `internal_error`(宿主交回不安全展示名)/ 501
+  409 `workspace_conflict` / 500 `internal`(宿主目录或登记失败，或交回不安全展示名)/ 501
   `unsupported`(服务未接线)。
 
 实现:`crates/adapters/gateway/src/workspace_panel.rs`(DTO + `WorkspacePanel`
 bounded-context 端口 + 乐观并发比对 + 审计)、领域层
-`crates/engine/runtime/src/canonical/workspace.rs`(A1 批: `Workspace` /
-`WorkspaceRegistry` / `InMemoryWorkspaceRegistry`)、组合根适配
-`crates/adapters/cli/src/gateway_panels.rs`(`CliWorkspacePanel` 持真
-`InMemoryWorkspaceRegistry` + 宿主受管根)与
+`crates/engine/runtime/src/canonical/workspace.rs`（`Workspace`、`WorkspaceRegistry` 与注册表）、组合根适配
+`crates/adapters/cli/src/contract_panels.rs`（`CliWorkspacePanel` 持有持久化注册表及宿主受管根）与
 `crates/adapters/cli/src/lib.rs`(网关装配点注入 `services.workspaces`)。
 A2 批**不承诺持久化**(注册表为进程内实现, 持久化属 A3 批)。
 
@@ -580,10 +645,10 @@ A2 批**不承诺持久化**(注册表为进程内实现, 持久化属 A3 批)�
   **联系人逐字段不变**。
 - **归档是终态, 不是冲突**: 已归档再写 ⇒ **403 `contact_archived`**;默认列表不含已归档
   (需 `?include_archived=true`);归档不可复活。
-- **工作区绑定**: 写面可带 `workspace_id` + `revision`, 服务端校验工作区**存在/未吊销/
-  修订号精确匹配**;不符 ⇒ **409 `contact_binding_conflict`** + `details.reason`
-  (`workspace_not_found` / `workspace_revoked` / `workspace_revision_mismatch`),
-  且**零字段变化**。绑定**只存 id + revision, 不存快照**。
+- **工作区绑定**: 写面可带 `workspace_id` + `revision`。服务端校验工作区存在、可选且修订号精确匹配。临时目录授权不能登记到联系人。
+  校验失败返回 **409 `contact_binding_conflict`**，`details.reason` 为
+  `workspace_not_found`、`workspace_revoked`、`workspace_revision_mismatch` 或 `workspace_unavailable`。
+  绑定只保存 id 和修订。修改绑定后，历史会话保留原记录，继续交谈须新开会话。
 - **存在性不泄露**: 不存在 / 不可见 = 同帧 404 `contact_not_found`(消息恒定
   「联系人不存在或不可见」)。
 - **可检索审计**: 建/改/归档/被拒都落审计行 `gateway.contact_action`
@@ -622,6 +687,10 @@ A2 批**不承诺持久化**(注册表为进程内实现, 持久化属 A3 批)�
      "memory_scope": "contact", "workspace_binding": { "workspace_id": "…", "revision": 7 } }`,
   可省字段同上)→ **201** `{"contact":{…}}`。
 - 改(PATCH, 请求体必须带 `expected_revision`)→ **200** `{"contact":{…}}`。
+  `persona`、`capabilities`、`workspace_binding` 至少提供一项，所有指定字段与新联系人修订一并保存。
+  省略 `workspace_binding` 保留当前绑定，显式 `null` 解除绑定。
+  未修改的旧版联系人记录仍可读取。修改绑定的记录采用第 2 版格式，
+  若需要使用早期版本运行时，先备份当前数据并恢复升级前数据。
 - 归档(POST)→ **200** `{"contact":{…}}`;之后 `status` = `archived`。
 
 - 错误模型(与 §1 同一帧形):400 `invalid_request`(缺 `expected_revision` /
@@ -686,6 +755,16 @@ workspace scope）。**边界**: 非空会话不追溯改 system；绑定变更�
 成功返回 200 `{schema:1, session_id, contact_id, context_key, incarnation}`。同一 `context_key`、联系人及绑定修订号再次打开仅核对原会话。回包中的 `incarnation` 是本次宿主请求的回显，持久绑定继续保存创建时的值。已有普通会话、其他联系人或过期绑定返回 409 `session_binding_conflict`。`require_existing=true` 时缺失会话也返回 409，`details.reason=contact_session_missing`。
 
 原生 `POST /v1/chat` 接受可选 `expected_contact_id`。指定时必须提交显式会话，由同一写闸校验既有绑定，拒绝缺失、解绑或身份不同的会话。该模式仅提供文字对话，运行时关闭工具。联系人能力展示字段和工作区登记均不改变已有权限映射。兼容聊天请求沿用三段操作摘要，联系人操作摘要附带身份字段。
+
+#### 桌面项目工作区会话
+
+认证的受管桌面单操作者在默认域调用 `POST /v1/workspace-chat`。请求包含显式 `session` UUID、`input`、`workspace_binding` 对象，可带 `model` 和 `system`。`workspace_binding` 包含 `workspace_id` UUID 及 `revision`。通用 `/v1/chat` 保留旧客户端合同。桌面用专用路径发限域请求，旧版网关会拒绝该路径。
+
+后端在空白项目会话上保存工作区绑定。后续回合必须带同一 ID 和修订号，改变绑定或从普通回合入口访问会被拒绝。工作区需要由 `isolated_v1` 创建并处于可用状态。`409 workspace_conflict` 表示原绑定无法确认。已完成的限域操作重放也要核对原会话和当前修订号。`x-apeireth-operation` 的摘要包含工作区身份和修订号，JSON 与原生 NDJSON 交付沿用 §3。
+
+`read` 工作区的模型只收到 `project_files_read`。`approval_write` 工作区在会话权限允许时还可收到 `project_files_write`。支持根目录中按名称访问的 UTF-8 文本文件，最多 128 KiB。读取返回正文与内容摘要，缺少文件时返回 `revision: "missing"`。写入要求同一内容修订与当次人工批准，创建使用无覆盖发布，替换使用原子发布。凭据文件、链接和绝对路径不属于该文件面。
+
+工作区撤销与文件操作共用登记锁。撤销后不能再读写或通过旧审批执行。已发给模型的回合可能返回，已完成文件保持原样。正常重启可重新核对原工作区和仍有效的待批回合。
 
 ### §7j 会话回合只读恢复面 ✅(2026-11-19, 补充交接 P0)
 

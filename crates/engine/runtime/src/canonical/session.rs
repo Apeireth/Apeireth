@@ -35,6 +35,8 @@ use super::event_log::{
     compaction_entries, fold_surface, fork_placeholder, open_tool_calls, ForkRecord, LogEntry,
     SurfaceOp, SurfaceView,
 };
+use super::project_workspace::ProjectWorkspaceBinding;
+pub use super::provider_request_context::ProviderRequestContext;
 
 /// Session-level permission posture applied to subsequent turns.
 ///
@@ -120,6 +122,11 @@ pub struct Session {
     /// before this field existed load as unbound and lose nothing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agent_binding: Option<AgentBinding>,
+    /// The exact workspace revision attached when opening a project session.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    project_workspace: Option<ProjectWorkspaceBinding>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) last_provider_request: Option<ProviderRequestContext>,
     /// Durable session-scoped settings (model override + permission preset).
     ///
     /// `#[serde(default)]` is the on-disk migration path: sessions persisted
@@ -187,6 +194,8 @@ impl Session {
             tool_scope: None,
             authorization_epoch: None,
             agent_binding: None,
+            project_workspace: None,
+            last_provider_request: None,
             messages: Vec::new(),
             events: Vec::new(),
             log: Vec::new(),
@@ -207,6 +216,25 @@ impl Session {
     /// default-domain path.
     pub fn agent_binding(&self) -> Option<&AgentBinding> {
         self.agent_binding.as_ref()
+    }
+
+    /// Most recent completed provider exchange for this session's own work.
+    pub fn last_provider_request(&self) -> Option<&ProviderRequestContext> {
+        self.last_provider_request.as_ref()
+    }
+
+    /// The durable workspace authorization identity for an ordinary project session.
+    pub fn project_workspace_binding(&self) -> Option<ProjectWorkspaceBinding> {
+        self.project_workspace
+    }
+
+    pub(super) fn set_project_workspace_binding(
+        &mut self,
+        binding: ProjectWorkspaceBinding,
+        clock: &dyn Clock,
+    ) {
+        self.project_workspace = Some(binding);
+        self.touch(clock);
     }
 
     /// Binds this session to an agent (one contact, one workspace).
@@ -464,6 +492,7 @@ impl Session {
         // session. The inherited binding still has to pass the fail-closed
         // gate on its own turn (archived contact ⇒ refuse).
         child.agent_binding = self.agent_binding.clone();
+        child.project_workspace = self.project_workspace;
         child.inherited_event_count = Some(prefix_end_seq);
         child.log = self.log[..prefix_end_seq].to_vec();
         // The facts of the inherited prefix: the records that carry execution
@@ -586,6 +615,10 @@ struct SessionRepr {
     #[serde(default)]
     agent_binding: Option<AgentBinding>,
     #[serde(default)]
+    project_workspace: Option<ProjectWorkspaceBinding>,
+    #[serde(default)]
+    last_provider_request: Option<ProviderRequestContext>,
+    #[serde(default)]
     settings: SessionSettings,
     #[serde(default)]
     quota: CognitiveQuota,
@@ -610,6 +643,8 @@ impl From<SessionRepr> for Session {
             tool_scope: repr.tool_scope,
             authorization_epoch: repr.authorization_epoch,
             agent_binding: repr.agent_binding,
+            project_workspace: repr.project_workspace,
+            last_provider_request: repr.last_provider_request,
             settings: repr.settings,
             quota: repr.quota,
             messages: repr.messages,

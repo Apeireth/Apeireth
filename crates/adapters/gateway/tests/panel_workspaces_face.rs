@@ -23,13 +23,19 @@
 
 use std::sync::{Arc, Mutex};
 
+use apeireth_gateway::model_connection::{
+    managed_operator_access, ModelConnectionError, ModelConnectionPatch, ModelConnectionService,
+    ModelConnectionView,
+};
+use apeireth_gateway::workspace_panel::{NativeFolderGrant, NativeFolderGrantToken};
 use apeireth_gateway::{
     build_gateway_state_with_services, canonical_router_with_state, AuditCommand, GatewayServices,
     GatewayState, GatewayTokenGate, WorkspaceCreateCommand, WorkspaceDto, WorkspacePanel,
     WorkspacePanelError,
 };
 use apeireth_runtime::canonical::workspace::{
-    WorkspacePermissionScope, WorkspaceRootKind, WorkspaceStatus,
+    WorkspacePermissionScope, WorkspaceRootKind, WorkspaceStatus, DESKTOP_FOLDER_LEASE_SECONDS,
+    DESKTOP_GRANTED_WORKSPACE_SOURCE,
 };
 use apeireth_runtime::canonical::Runtime;
 use async_trait::async_trait;
@@ -50,6 +56,8 @@ struct StubWorkspacePanel {
     created: Mutex<Vec<WorkspaceCreateCommand>>,
     selected: Mutex<Vec<(String, u64)>>,
     closed: Mutex<Vec<(String, u64)>>,
+    native_grant_token: Option<NativeFolderGrantToken>,
+    native_grants: Mutex<Vec<NativeFolderGrant>>,
     select_result: Mutex<Option<Result<WorkspaceDto, WorkspacePanelError>>>,
     close_result: Mutex<Option<Result<WorkspaceDto, WorkspacePanelError>>>,
 }
@@ -83,6 +91,31 @@ impl WorkspacePanel for StubWorkspacePanel {
             WorkspaceStatus::Ready,
             &command.display_name,
         ))
+    }
+
+    fn native_folder_grant_token(&self) -> Option<&NativeFolderGrantToken> {
+        self.native_grant_token.as_ref()
+    }
+
+    async fn grant_native_folder(
+        &self,
+        command: NativeFolderGrant,
+    ) -> Result<WorkspaceDto, WorkspacePanelError> {
+        let mut row = sample_workspace(
+            UNKNOWN_WORKSPACE_ID,
+            0,
+            WorkspaceStatus::Ready,
+            &command.display_name,
+        );
+        row.root_kind = WorkspaceRootKind::Temporary;
+        row.source = DESKTOP_GRANTED_WORKSPACE_SOURCE.to_string();
+        row.permission_scope = WorkspacePermissionScope::Read;
+        row.can_write = false;
+        row.can_create_temporary = false;
+        row.expires_at = Some(row.updated_at_ms + (DESKTOP_FOLDER_LEASE_SECONDS * 1000) as i64);
+        self.native_grants.lock().unwrap().push(command);
+        self.rows.lock().unwrap().push(row.clone());
+        Ok(row)
     }
 
     async fn select_workspace(
@@ -213,6 +246,200 @@ fn stub_services(rows: Vec<WorkspaceDto>) -> (GatewayServices, Arc<StubWorkspace
         ..GatewayServices::default()
     };
     (services, panel)
+}
+
+struct FixtureManagedModel;
+
+impl ModelConnectionService for FixtureManagedModel {
+    fn read(&self) -> Result<ModelConnectionView, ModelConnectionError> {
+        Err(ModelConnectionError::CredentialUnavailable)
+    }
+
+    fn save(&self, _: ModelConnectionPatch) -> Result<ModelConnectionView, ModelConnectionError> {
+        Err(ModelConnectionError::CredentialUnavailable)
+    }
+}
+
+#[tokio::test]
+async fn native_folder_issuance_requires_the_exact_separate_pairing_credential() {
+    const ENDPOINT: &str = "/v1/admin/desktop-folder-grants";
+    const HEADER: &str = "x-apeireth-native-folder-grant";
+    const NATIVE_TOKEN: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const WRONG_NATIVE_TOKEN: &str =
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab";
+    let panel = Arc::new(StubWorkspacePanel {
+        native_grant_token: NativeFolderGrantToken::parse(NATIVE_TOKEN),
+        ..StubWorkspacePanel::default()
+    });
+    let services = GatewayServices {
+        workspaces: Some(panel.clone()),
+        model_connection: Some(Arc::new(FixtureManagedModel)),
+        ..GatewayServices::default()
+    };
+    let mut state = harness(services, GatewayTokenGate::Enforced(TOKEN.to_string())).await;
+    state.user_access = managed_operator_access();
+    let router = canonical_router_with_state(state);
+    let directory = std::env::temp_dir().join("explicitly-selected-fixture-directory");
+    let grant = serde_json::json!({
+        "display_name": "仅此次选择",
+        "directory": directory,
+        "directory_identity": {
+            "volume_serial_number": "0123456789abcdef",
+            "file_id": "0123456789abcdef0123456789abcdef",
+        },
+    });
+
+    for (bearer, headers, browser, expected) in [
+        (None, &[NATIVE_TOKEN][..], false, StatusCode::UNAUTHORIZED),
+        (Some(TOKEN), &[][..], false, StatusCode::FORBIDDEN),
+        (
+            Some(TOKEN),
+            &[WRONG_NATIVE_TOKEN][..],
+            false,
+            StatusCode::FORBIDDEN,
+        ),
+        (
+            Some(TOKEN),
+            &[NATIVE_TOKEN, NATIVE_TOKEN][..],
+            false,
+            StatusCode::FORBIDDEN,
+        ),
+        (
+            Some(TOKEN),
+            &[NATIVE_TOKEN][..],
+            true,
+            StatusCode::FORBIDDEN,
+        ),
+    ] {
+        let mut request = post(ENDPOINT, bearer, grant.clone());
+        for token in headers {
+            request.headers_mut().append(HEADER, token.parse().unwrap());
+        }
+        if browser {
+            request
+                .headers_mut()
+                .insert("origin", "http://127.0.0.1:7125".parse().unwrap());
+        }
+        let (status, body) = status_and_body(router.clone().oneshot(request).await.unwrap()).await;
+        assert_eq!(status, expected, "body={body}");
+        assert!(!body.contains(NATIVE_TOKEN));
+    }
+
+    let generic = post("/v1/workspaces", Some(TOKEN), grant.clone());
+    assert_eq!(
+        router.clone().oneshot(generic).await.unwrap().status(),
+        StatusCode::BAD_REQUEST
+    );
+    assert!(panel.native_grants.lock().unwrap().is_empty());
+    assert!(panel.created.lock().unwrap().is_empty());
+
+    let mut probe = get(ENDPOINT, Some(TOKEN));
+    probe
+        .headers_mut()
+        .insert(HEADER, NATIVE_TOKEN.parse().unwrap());
+    let response = router.clone().oneshot(probe).await.unwrap();
+    assert_eq!(response.headers()["cache-control"], "no-store");
+    let (status, body) = status_and_body(response).await;
+    assert_eq!(status, StatusCode::OK, "body={body}");
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&body).unwrap(),
+        serde_json::json!({
+            "schema_version": 1, "permission_scope": "read", "lease_seconds": DESKTOP_FOLDER_LEASE_SECONDS,
+        })
+    );
+    assert!(panel.native_grants.lock().unwrap().is_empty());
+
+    let mut increased = grant.clone();
+    increased["permission_scope"] = serde_json::json!("approval_write");
+    let mut invalid = post(ENDPOINT, Some(TOKEN), increased);
+    invalid
+        .headers_mut()
+        .insert(HEADER, NATIVE_TOKEN.parse().unwrap());
+    assert_eq!(
+        router.clone().oneshot(invalid).await.unwrap().status(),
+        StatusCode::BAD_REQUEST
+    );
+    assert!(panel.native_grants.lock().unwrap().is_empty());
+
+    let mut request = post(ENDPOINT, Some(TOKEN), grant);
+    request
+        .headers_mut()
+        .insert(HEADER, NATIVE_TOKEN.parse().unwrap());
+    let response = router.clone().oneshot(request).await.unwrap();
+    assert_eq!(response.headers()["cache-control"], "no-store");
+    let (status, body) = status_and_body(response).await;
+    assert_eq!(status, StatusCode::CREATED, "body={body}");
+    assert!(!body.contains("explicitly-selected-fixture-directory"));
+    assert!(!body.contains("volume_serial_number"));
+    let value: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let row = &value["workspace"];
+    assert_eq!(row["root_kind"], "temporary");
+    assert_eq!(row["source"], DESKTOP_GRANTED_WORKSPACE_SOURCE);
+    assert_eq!(row["permission_scope"], "read");
+    assert_eq!(row["can_write"], false);
+    let readback = get(
+        &format!("/v1/workspaces/{UNKNOWN_WORKSPACE_ID}"),
+        Some(TOKEN),
+    );
+    let (status, body) = status_and_body(router.oneshot(readback).await.unwrap()).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&body).unwrap(),
+        value
+    );
+    let issued = panel.native_grants.lock().unwrap();
+    assert_eq!(issued.len(), 1);
+    assert_eq!(issued[0].directory, directory);
+    assert_eq!(
+        issued[0].directory_identity.file_id,
+        "0123456789abcdef0123456789abcdef"
+    );
+}
+
+#[tokio::test]
+async fn bounded_catalog_keeps_live_temporary_grants_ahead_of_ordinary_rows() {
+    let mut rows: Vec<_> = (0..60)
+        .map(|index| {
+            sample_workspace(
+                &format!("12345678-1234-4234-9234-{index:012x}"),
+                0,
+                WorkspaceStatus::Ready,
+                &format!("ordinary {index}"),
+            )
+        })
+        .collect();
+    let mut unavailable =
+        sample_workspace(WORKSPACE_ID, 0, WorkspaceStatus::Unavailable, "expired");
+    unavailable.root_kind = WorkspaceRootKind::Temporary;
+    unavailable.source = DESKTOP_GRANTED_WORKSPACE_SOURCE.to_string();
+    unavailable.can_select = false;
+    rows.insert(1, unavailable);
+    let mut live = sample_workspace(
+        UNKNOWN_WORKSPACE_ID,
+        0,
+        WorkspaceStatus::Ready,
+        "live grant",
+    );
+    live.root_kind = WorkspaceRootKind::Temporary;
+    live.source = DESKTOP_GRANTED_WORKSPACE_SOURCE.to_string();
+    rows.push(live);
+    let (services, _) = stub_services(rows);
+    let state = harness(services, GatewayTokenGate::Enforced(TOKEN.to_string())).await;
+    let response = canonical_router_with_state(state)
+        .oneshot(get("/v1/panel/workspaces", Some(TOKEN)))
+        .await
+        .unwrap();
+    let (status, body) = status_and_body(response).await;
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["count"], 50);
+    let rows = body["workspaces"].as_array().unwrap();
+    let names: Vec<_> = rows
+        .iter()
+        .take(4)
+        .map(|row| row["display_name"].as_str().unwrap())
+        .collect();
+    assert_eq!(names, ["live grant", "ordinary 0", "expired", "ordinary 1"]);
 }
 
 /// 1. 读面形状: 行字段集合逐字 (十三项) + 包形 `{workspaces, count}`。

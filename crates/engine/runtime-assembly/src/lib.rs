@@ -24,6 +24,8 @@ pub mod paths;
 #[cfg(feature = "memory")]
 pub mod profile_memory;
 #[cfg(feature = "desktop")]
+pub mod project_file_tools;
+#[cfg(feature = "desktop")]
 pub mod sqlite_artifacts;
 pub mod system_one;
 pub use portable::{AssemblyError, PortableHost};

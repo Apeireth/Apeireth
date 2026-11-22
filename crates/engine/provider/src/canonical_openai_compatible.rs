@@ -490,6 +490,7 @@ impl ProviderCapability for OpenAiCompatibleProviderCapability {
         let mut tool_args: BTreeMap<usize, String> = BTreeMap::new();
         let mut finish_reason: Option<String> = None;
         let mut usage: Option<serde_json::Value> = None;
+        let mut response_model: Option<String> = None;
 
         loop {
             let chunk = response
@@ -529,6 +530,11 @@ impl ProviderCapability for OpenAiCompatibleProviderCapability {
                     };
                     if let Some(usage_value) = value.get("usage").filter(|u| !u.is_null()) {
                         usage = Some(usage_value.clone());
+                    }
+                    if let Some(model) = value.get("model").and_then(serde_json::Value::as_str) {
+                        if !model.is_empty() {
+                            response_model = Some(model.to_string());
+                        }
                     }
                     let Some(choices) = value.get("choices").and_then(|c| c.as_array()) else {
                         continue;
@@ -603,6 +609,9 @@ impl ProviderCapability for OpenAiCompatibleProviderCapability {
         });
         if let Some(usage) = usage {
             synthetic["usage"] = usage;
+        }
+        if let Some(model) = response_model {
+            synthetic["model"] = model.into();
         }
         self.adapt_response(synthetic, &request.model)
     }
@@ -1141,7 +1150,7 @@ mod tests {
     #[tokio::test]
     async fn complete_streaming_forwards_incremental_deltas() {
         let base_url = sse_mock_server(&[
-            "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\"}}]}",
+            "data: {\"model\":\"gpt-4o-mini-served\",\"choices\":[{\"delta\":{\"role\":\"assistant\"}}]}",
             "data: {\"choices\":[{\"delta\":{\"content\":\"你\"}}]}",
             "data: {\"choices\":[{\"delta\":{\"content\":\"好\"}}]}",
             "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":5,\"completion_tokens\":2,\"total_tokens\":7}}",
@@ -1175,6 +1184,8 @@ mod tests {
         let deltas = deltas.lock().unwrap().clone();
         assert_eq!(deltas, vec!["你".to_string(), "好".to_string()]);
         assert_eq!(response.content, "你好");
+        assert_eq!(response.model, "gpt-4o-mini-served");
+        assert_eq!(response.provider_context_input(), Some(5));
         assert_eq!(
             response.finish_reason,
             Some(NormalizedFinishReason::Stop),

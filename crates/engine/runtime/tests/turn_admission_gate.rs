@@ -11,8 +11,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use apeireth_core::agent_contact::{
-    Contact, ContactCreateRequest, ContactRegistry, ContractMemoryScope, InMemoryContactRegistry,
-    PersonaText,
+    Contact, ContactCreateRequest, ContactPatch, ContactRegistry, ContactWorkspaceBinding,
+    ContractMemoryScope, InMemoryContactRegistry, PersonaText,
 };
 use apeireth_core::kernel::system_clock;
 use apeireth_core::kernel::{CapabilityId, ModelId, PluginId, SessionId};
@@ -466,6 +466,71 @@ async fn a_stale_persona_revision_binding_is_rejected_without_writing_the_turn()
         0,
         "拒绝 ⇒ provider 一次都没被叫"
     );
+}
+
+#[tokio::test]
+async fn a_contact_workspace_detach_and_restore_does_not_revive_a_historical_turn() {
+    let contacts = Arc::new(InMemoryContactRegistry::new());
+    let workspaces = Arc::new(InMemoryWorkspaceRegistry::new());
+    let contact = create_contact(&contacts, "gate-contact", Some("原人设"));
+    let workspace = create_workspace(&workspaces, "gate-workspace");
+    let registered = ContactWorkspaceBinding {
+        workspace_id: workspace.workspace_id,
+        revision: workspace.revision,
+    };
+    let change = |revision, workspace_binding| {
+        contacts
+            .update(
+                &contact.contact_id(),
+                revision,
+                ContactPatch {
+                    workspace_binding: Some(workspace_binding),
+                    ..ContactPatch::default()
+                },
+                NOW_MS + revision,
+            )
+            .expect("update workspace registration")
+    };
+    let registered_contact = change(0, Some(registered));
+    let historical = resolve_binding(&registered_contact, &workspace, &contacts, &workspaces);
+    let detached = change(1, None);
+    assert!(resolve_agent_binding(
+        &AgentBindingRequest::for_current(&detached, &workspace),
+        contacts.as_ref(),
+        workspaces.as_ref(),
+        NOW_MS,
+    )
+    .is_err());
+    let restored = change(2, Some(registered));
+    let fresh = resolve_binding(&restored, &workspace, &contacts, &workspaces);
+    assert_ne!(
+        historical.contact_workspace_revision(),
+        fresh.contact_workspace_revision()
+    );
+
+    let (runtime, provider) = runtime_with(
+        Some(contacts as Arc<dyn ContactRegistry>),
+        Some(workspaces as Arc<dyn WorkspaceRegistry>),
+    )
+    .await;
+    let session = session_with_binding(historical);
+    let session_id = session.id;
+    runtime
+        .sessions()
+        .save(&session)
+        .await
+        .expect("historical session");
+    let before = snapshot(&runtime, &session_id).await;
+    let error = runtime
+        .execute(TurnRequest::new(session_id, "历史会话").with_model(MODEL))
+        .await
+        .expect_err("historical binding remains stale after restoration");
+    assert!(
+        matches!(error, RuntimeError::AgentBindingRejected { .. }),
+        "{error:?}"
+    );
+    assert_eq!(snapshot(&runtime, &session_id).await, before);
+    assert_eq!(provider.calls.load(Ordering::SeqCst), 0);
 }
 
 // ---------------------------------------------------------------------------

@@ -30,6 +30,7 @@ pub mod memory_verify_command;
 pub mod mesh_cli;
 // B6 会话/记忆静态加密（隐患 #6）密钥面：engine `apeireth_storage::crypto` 的 CLI 出口（密钥丢失 = 显式不可恢复）。
 pub mod crypto_keys;
+mod desktop_capabilities;
 mod desktop_model_connection;
 pub mod diary_store;
 pub mod nightwatch_command;
@@ -1190,6 +1191,16 @@ fn build_production_governance_parts_from_env() -> (
     Arc<std::sync::Mutex<PermissionPolicy>>,
     Arc<BehaviorChainGuardHook>,
 ) {
+    build_production_governance_parts_with_skill_search(skill_search_enabled_from_env())
+}
+
+fn build_production_governance_parts_with_skill_search(
+    skill_search: bool,
+) -> (
+    GovernancePipeline,
+    Arc<std::sync::Mutex<PermissionPolicy>>,
+    Arc<BehaviorChainGuardHook>,
+) {
     let enable_local_read_tools = local_read_tools_enabled_from_env();
     let (pipeline, policy, guard_hook) = build_production_governance_parts_with_dataset(
         enable_local_read_tools,
@@ -1198,7 +1209,7 @@ fn build_production_governance_parts_from_env() -> (
         git_write_risk_level_from_env(),
         worktree_plan_enabled_from_env(),
         worktree_apply_enabled_from_env(),
-        skill_search_enabled_from_env(),
+        skill_search,
         skill_distill_enabled_from_env(),
         content_feed_enabled_from_env(),
         care_schedule_enabled_from_env(),
@@ -1381,6 +1392,14 @@ fn build_production_governance_parts_from_env() -> (
 
 /// 装配本体 (回传 W3.6 probe 槽与 R1b-2c 审批社交源句柄, 开关关 = None)。**网关形态的装配根**（`gateway serve` 走这条）; 公开以便测试钉住两条根共用部件。
 pub async fn build_canonical_runtime_assembly_from_env() -> Result<BioParts, String> {
+    build_canonical_runtime_assembly(None).await
+}
+
+type DesktopSettings = apeireth_gateway::desktop_capabilities::DesktopCapabilitySettings;
+
+async fn build_canonical_runtime_assembly(
+    desktop: Option<DesktopSettings>,
+) -> Result<BioParts, String> {
     let artifacts = managed_artifacts::open(default_panel_data_dir()).await?;
     // B-P1 并行构造独立模块: 会话存储打开与认知侧组装互不依赖 (不同库/不同表),
     // 双任务并行推进 —— 启动到 ready 的等待 ≈ max(两侧) 而非两者之和。
@@ -1391,9 +1410,15 @@ pub async fn build_canonical_runtime_assembly_from_env() -> Result<BioParts, Str
     let cognitive_task = tokio::spawn(async move {
         let voice_emotion = VoiceEmotionSource::default();
         let care_heartbeat = CareHeartbeatSource::new();
-        let (cognitive, memory, cost_router) =
-            build_cognitive_modules_from_env(cognitive_clock, &voice_emotion, &care_heartbeat)
-                .await?;
+        let (cognitive, memory, cost_router) = build_cognitive_modules_at(
+            cognitive_db_path(),
+            cognitive_clock,
+            default_domain_backup_config(),
+            &voice_emotion,
+            &care_heartbeat,
+            desktop,
+        )
+        .await?;
         Ok::<_, String>((
             cognitive,
             memory,
@@ -1423,7 +1448,8 @@ pub async fn build_canonical_runtime_assembly_from_env() -> Result<BioParts, Str
         Arc::clone(&clock),
     ));
     let (runtime, policy, guard_hook, nociception) =
-        build_canonical_runtime_with_parts(sessions, cognitive, clock, artifacts.clone()).await?;
+        build_canonical_runtime_with_parts(sessions, cognitive, clock, artifacts.clone(), desktop)
+            .await?;
     Ok((
         (
             runtime,
@@ -1459,6 +1485,7 @@ async fn build_domain_partner_runtime(
         None,
         voice_emotion,
         care_heartbeat,
+        None,
     )
     .await?;
     // W3.6: 域伙伴运行时同样把关怀心跳 probe 迟绑定到自己的槽 (开关关 = no-op)。
@@ -1466,7 +1493,7 @@ async fn build_domain_partner_runtime(
         .bio_probe_slots()
         .fill_care_status(care_heartbeat.status_probe());
     let (runtime, _policy, _guard_hook, _nociception) =
-        build_canonical_runtime_with_parts(sessions, cognitive, clock, None).await?;
+        build_canonical_runtime_with_parts(sessions, cognitive, clock, None, None).await?;
     Ok(runtime)
 }
 
@@ -1526,6 +1553,7 @@ async fn build_canonical_runtime_with_parts(
     cognitive: apeireth_runtime_assembly::ProductionCognitiveModules,
     clock: Arc<dyn apeireth_core::kernel::Clock>,
     artifacts: ArtifactHandle,
+    desktop: Option<DesktopSettings>,
 ) -> Result<
     (
         Runtime,
@@ -1547,7 +1575,12 @@ async fn build_canonical_runtime_with_parts(
     let resolver: Arc<dyn apeireth_plugin::CredentialResolver> =
         keyring_bootstrap::build_keyring_resolver();
     builder = builder.with_credentials(Arc::clone(&resolver));
-    let (governance, policy, guard_hook) = build_production_governance_parts_from_env();
+    let (governance, policy, guard_hook) = match desktop {
+        Some(settings) => {
+            build_production_governance_parts_with_skill_search(settings.skill_search)
+        }
+        None => build_production_governance_parts_from_env(),
+    };
     // 生物机制族 W3.3 外部事件源: 免疫记忆只在 `APEIRETH_ENABLE_IMMUNE_MEMORY=1`
     // 时挂到 guard hook; `shared_immune_memory()` 取回的是 hook 正在使用的同一份
     // 句柄 (hook 的 observe 与器官审议门的 Conflict 拉取共享状态)。未挂载 = None
@@ -1636,6 +1669,12 @@ async fn build_canonical_runtime_with_parts(
     builder = parallel_dispatch_wiring::attach(builder);
     builder = cognitive.register_with_policy(builder, &policy)?;
     builder = managed_artifacts::attach(builder, &policy, artifacts);
+    if desktop_model_connection::managed()
+        && desktop.is_none_or(|settings| settings.project_file_tools)
+    {
+        let registry = binding_registries::workspaces(&default_panel_data_dir())?;
+        builder = apeireth_runtime_assembly::project_file_tools::attach(builder, &policy, registry);
+    }
 
     let mut fallback_order: Vec<CapabilityId> = Vec::new();
 
@@ -1803,28 +1842,6 @@ pub enum CanonicalCliTurn {
     PendingApproval(PendingApprovalView),
 }
 
-async fn build_cognitive_modules_from_env(
-    clock: Arc<dyn apeireth_core::kernel::Clock>,
-    voice_emotion: &VoiceEmotionSource,
-    care_heartbeat: &CareHeartbeatSource,
-) -> Result<
-    (
-        apeireth_runtime_assembly::ProductionCognitiveModules,
-        Arc<dyn MemoryBackend>,
-        Arc<apeireth_core::cost_router::CostRouter>,
-    ),
-    String,
-> {
-    build_cognitive_modules_at(
-        cognitive_db_path(),
-        clock,
-        default_domain_backup_config(),
-        voice_emotion,
-        care_heartbeat,
-    )
-    .await
-}
-
 /// G5 备份导出的工具面配置 (默认域专属, 旋钮开才注入 = 注册即闸)。
 ///
 /// **域伙伴运行时 (W3-③) 不注入**: 全量打包面能外带整个数据根 (跨域数据
@@ -1844,6 +1861,7 @@ async fn build_cognitive_modules_at(
     backup_config: Option<apeireth_tools_canonical::backup::BackupExportConfig>,
     voice_emotion: &VoiceEmotionSource,
     care_heartbeat: &CareHeartbeatSource,
+    desktop: Option<DesktopSettings>,
 ) -> Result<
     (
         apeireth_runtime_assembly::ProductionCognitiveModules,
@@ -1979,7 +1997,13 @@ async fn build_cognitive_modules_at(
     let organs_enabled = std::env::var(ENABLE_ORGANS_ENV)
         .ok()
         .is_some_and(|value| value.trim() == "1");
-    let preference_learning_enabled = preference_learning_enabled_from_env();
+    let preference_learning_enabled = desktop
+        .map_or_else(preference_learning_enabled_from_env, |settings| {
+            settings.preference_learning
+        });
+    let skill_search_enabled = desktop.map_or_else(skill_search_enabled_from_env, |settings| {
+        settings.skill_search
+    });
     let shell_enabled = std::env::var(ENABLE_SHELL_ENV)
         .ok()
         .is_some_and(|value| value.trim() == "1");
@@ -2127,8 +2151,8 @@ async fn build_cognitive_modules_at(
         // 书→技能沉淀 (I1): 写面子依赖 file_write 总闸族 (fail-closed); 技能库
         // = 数据目录 `skills/` (每卡一 StoredDoc), 任一旋钮开才落技能库目录。
         skill_distill: skill_distill_enabled_from_env(),
-        skill_search: skill_search_enabled_from_env(),
-        skills_dir: (skill_distill_enabled_from_env() || skill_search_enabled_from_env())
+        skill_search: skill_search_enabled,
+        skills_dir: (skill_distill_enabled_from_env() || skill_search_enabled)
             .then(|| default_panel_data_dir().join(apeireth_tools_canonical::skill::SKILLS_SUBDIR)),
         // MCP 外部工具桥: 装配时加载服务器列表 (env 主入口 / 数据目录次入口,
         // 坏配置拒开), 数据目录与面板其余持久档同位。
@@ -3049,6 +3073,8 @@ pub async fn dispatch_gateway_serve_with(
 ) -> Result<String, String> {
     // 先验证接入配置，非回环必须具备认证和 TLS。
     let gate = apeireth_gateway::GatewayTokenGate::from_env();
+    let native_folder_grant_token =
+        crate::contract_panels::take_native_folder_grant_token(bind, &gate)?;
     let data_dir = default_panel_data_dir();
     let client_tokens = apeireth_gateway::ClientTokenTable::load(Some(&data_dir))
         .map_err(|error| format!("client token configuration refused to open: {error}"))?;
@@ -3098,6 +3124,9 @@ pub async fn dispatch_gateway_serve_with(
     // 只装单一 openai-compatible 协议族，凭据从进程热库读）。
     let managed = desktop_model_connection::managed();
     let model_connection = desktop_model_connection::prepare()?;
+    let desktop_capabilities = managed
+        .then(|| desktop_capabilities::Prepared::load(&data_dir))
+        .transpose()?;
 
     // 机械补位 (编译断点, 网关语义零改动): 组装出口新增路由器绑定位 (H-P2),
     // 网关路径不接任务源路由, 丢弃该绑定位 —— 其自述路由节照实报「尚无任务
@@ -3117,7 +3146,12 @@ pub async fn dispatch_gateway_serve_with(
         _bio_approval,
         nociception,
         artifacts,
-    ) = build_canonical_runtime_assembly_from_env().await?;
+    ) = build_canonical_runtime_assembly(
+        desktop_capabilities
+            .as_ref()
+            .map(desktop_capabilities::Prepared::settings),
+    )
+    .await?;
     let runtime = Arc::new(runtime);
     // W3.6: 常驻宿主同样把痛觉/再生 probe 绑定到装配时装入的观察者。
     bio_pain_wiring::bind_reader(&bio_probe_slots, nociception.as_ref());
@@ -3169,6 +3203,7 @@ pub async fn dispatch_gateway_serve_with(
         crate::keyring_bootstrap::build_keyring_credential_writer()
     };
     services.model_connection = model_connection;
+    services.desktop_capabilities = desktop_capabilities.map(|profile| profile.attach(&runtime));
     // V2-b 用户/域管理面 (双入口同源, 跨范围最小接线报备见交付说明): HTTP 面与
     // CLI `apeireth user` 共用同一 UserTable 服务 (同一 `users.json`), 域管理口
     // 与域平面共用同一域注册表 (同一数据根)。受管桌面只有单一操作者，不注入
@@ -3206,7 +3241,7 @@ pub async fn dispatch_gateway_serve_with(
     } else {
         None
     };
-    crate::contract_panels::wire_workspace_panel(&mut services)?;
+    crate::contract_panels::wire_workspace_panel(&mut services, native_folder_grant_token)?;
     crate::contact_panel::wire_contacts(&mut services, default_panel_data_dir())?;
     // 注入客户端令牌表并保留接入裁决的审计事实。
     let mut state =

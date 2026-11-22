@@ -27,6 +27,8 @@
 
 pub mod accounting;
 pub mod agent_binding;
+mod project_workspace;
+pub use project_workspace::ProjectWorkspaceBinding;
 pub mod approval;
 pub mod behavior_adapter;
 mod behavior_projection;
@@ -88,6 +90,7 @@ pub mod system_one;
 pub mod egress_gate;
 mod execution_view;
 pub mod provider;
+mod provider_request_context;
 pub mod quota;
 pub mod runtime;
 pub mod runtime_builder;

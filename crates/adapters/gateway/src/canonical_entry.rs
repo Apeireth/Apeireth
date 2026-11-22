@@ -289,7 +289,7 @@ pub async fn execute_chat_attributed(
     request: CanonicalChatRequest,
     attribution: SessionAttribution,
 ) -> Result<CanonicalChatOutcome, CanonicalEntryError> {
-    execute_chat_attributed_operation(runtime, request, attribution, None, None).await
+    execute_chat_attributed_operation(runtime, request, attribution, None, None, None).await
 }
 
 /// Resolve a pending approval through the canonical runtime API.
@@ -1235,7 +1235,7 @@ pub fn canonical_router_with_state(state: GatewayState) -> Router {
         .route("/v1/providers", get(list_providers))
         .route("/v1/runtime/snapshot", get(runtime_snapshot))
         .route("/v1/apeireth/runtime/snapshot", get(runtime_snapshot))
-        .route("/v1/chat", native_http::route())
+        .merge(native_http::routes())
         .route("/v1/chat/completions", post(openai_chat))
         .route("/v1/approvals", get(list_pending_approvals))
         .route("/v1/approvals/resolve", post(native_resolve_approval))
@@ -1272,6 +1272,8 @@ pub fn canonical_router_with_state(state: GatewayState) -> Router {
         )
         .merge(crate::artifacts::routes_with_panels())
         .merge(crate::model_connection::routes())
+        .merge(crate::desktop_capabilities::routes())
+        .merge(crate::desktop_web_reader::routes())
         .merge(crate::turn_results::routes())
         // G-P1 指标端点 (指标数据面路由文件), 同在整面令牌门内。
         .merge(crate::panel_metrics::metrics_routes())
@@ -1315,7 +1317,13 @@ pub fn canonical_router_with_state(state: GatewayState) -> Router {
                 .allow_headers(tower_http::cors::Any),
         )
         .layer(middleware::from_fn(mc::protect_response))
+        .layer(middleware::from_fn(
+            crate::desktop_capabilities::protect_response,
+        ))
         .layer(middleware::from_fn(crate::artifacts::protect_response))
+        .layer(middleware::from_fn(
+            crate::desktop_web_reader::protect_response,
+        ))
         .layer(middleware::from_fn(
             crate::turn_results::protect_read_response,
         ))

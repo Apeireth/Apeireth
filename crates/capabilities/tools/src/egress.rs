@@ -19,7 +19,7 @@ use std::time::Duration;
 use async_trait::async_trait;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
-use url::Url;
+use url::{Host, Url};
 
 /// Default total/connect/read timeout for controlled egress.
 pub const DEFAULT_EGRESS_TIMEOUT: Duration = Duration::from_secs(30);
@@ -27,6 +27,8 @@ pub const DEFAULT_EGRESS_TIMEOUT: Duration = Duration::from_secs(30);
 pub const DEFAULT_MAX_RESPONSE_BYTES: usize = 1024 * 1024;
 /// Default maximum number of redirect hops.
 pub const DEFAULT_MAX_REDIRECTS: usize = 10;
+/// Maximum address length for the public HTTPS transport, including redirects.
+pub const PUBLIC_HTTPS_URL_MAX_BYTES: usize = 4096;
 
 /// Errors produced by the controlled egress boundary.
 #[derive(Debug, thiserror::Error)]
@@ -92,6 +94,19 @@ pub fn classify_ip(ip: IpAddr) -> EgressIpClass {
 /// True when `ip` is permitted by a `PublicInternetOnly` policy.
 pub fn is_public_ip(ip: IpAddr) -> bool {
     classify_ip(ip) == EgressIpClass::Public
+}
+
+fn is_standard_public_https_address(ip: IpAddr) -> bool {
+    let IpAddr::V6(ip) = ip else {
+        return true;
+    };
+    if ip.to_ipv4_mapped().is_some() {
+        return true;
+    }
+    let [first, second, ..] = ip.segments();
+    // Keep ordinary global unicast. Exclude transition tunnels and special
+    // assignments which may translate an otherwise public-looking address.
+    (first & 0xe000) == 0x2000 && first != 0x2002 && !(first == 0x2001 && (second & 0xfe00) == 0)
 }
 
 fn classify_ipv4(ip: Ipv4Addr) -> EgressIpClass {
@@ -425,6 +440,7 @@ pub struct ControlledEgress {
     max_response_bytes: usize,
     max_redirects: usize,
     resolver: Arc<dyn EgressResolver>,
+    public_https_only: bool,
 }
 
 impl std::fmt::Debug for ControlledEgress {
@@ -434,6 +450,7 @@ impl std::fmt::Debug for ControlledEgress {
             .field("timeout", &self.timeout)
             .field("max_response_bytes", &self.max_response_bytes)
             .field("max_redirects", &self.max_redirects)
+            .field("public_https_only", &self.public_https_only)
             .finish_non_exhaustive()
     }
 }
@@ -446,6 +463,15 @@ impl ControlledEgress {
             max_response_bytes: DEFAULT_MAX_RESPONSE_BYTES,
             max_redirects: DEFAULT_MAX_REDIRECTS,
             resolver: Arc::new(TokioResolver),
+            public_https_only: false,
+        }
+    }
+
+    /// Allow only public HTTPS port 443 on the initial request and every redirect.
+    pub fn public_https_only() -> Self {
+        Self {
+            public_https_only: true,
+            ..Self::new(EgressPolicy::PublicInternetOnly)
         }
     }
 
@@ -502,13 +528,87 @@ impl ControlledEgress {
         headers: &[(&str, &str)],
     ) -> Result<EgressHttpResponse, EgressError> {
         validate_headers(headers)?;
-        let parsed = Url::parse(url).map_err(|e| EgressError::InvalidUrl(e.to_string()))?;
-        let first = EgressDestination::parse(&parsed)?;
-        self.policy.validate_destination(&first)?;
+        if self.public_https_only
+            && (url.len() > PUBLIC_HTTPS_URL_MAX_BYTES
+                || url
+                    .chars()
+                    .any(|c| c.is_control() || c.is_whitespace() || c == '\\')
+                || !url.split_once("://").is_some_and(|(scheme, suffix)| {
+                    let authority = suffix.split(['/', '?', '#']).next().unwrap_or_default();
+                    scheme.eq_ignore_ascii_case("https")
+                        && !authority.is_empty()
+                        && !authority.contains('@')
+                }))
+        {
+            return Err(EgressError::InvalidUrl(
+                "expected an absolute public HTTPS URL".into(),
+            ));
+        }
+        let mut parsed = Url::parse(url).map_err(|e| EgressError::InvalidUrl(e.to_string()))?;
+        if self.public_https_only {
+            parsed.set_fragment(None);
+        }
+        self.checked_destination(&parsed)?;
 
         tokio::time::timeout(self.timeout, self.get_inner(parsed, headers))
             .await
             .map_err(|_| EgressError::Timeout)?
+    }
+
+    fn checked_destination(&self, url: &Url) -> Result<EgressDestination, EgressError> {
+        let mut destination = EgressDestination::parse(url)?;
+        if self.public_https_only {
+            // The serialized IPv6 host includes brackets; use the parsed literal
+            // so the public-address check never treats it as a DNS name.
+            if let Some(Host::Ipv6(ip)) = url.host() {
+                destination.address = Some(ip.into());
+            }
+            let host = destination.host.trim_end_matches('.');
+            let local_name = destination.address.is_none()
+                && (!host.contains('.')
+                    || host.ends_with(".localhost")
+                    || host.ends_with(".local")
+                    || host == "home.arpa"
+                    || host.ends_with(".home.arpa"));
+            if destination.scheme != "https"
+                || destination.port != 443
+                || url.as_str().len() > PUBLIC_HTTPS_URL_MAX_BYTES
+                || destination.host.len() > 253
+                || local_name
+            {
+                return Err(EgressError::DestinationDenied {
+                    reason: "expected a public HTTPS destination on port 443".into(),
+                });
+            }
+        }
+        self.policy.validate_destination(&destination)?;
+        Ok(destination)
+    }
+
+    fn redirect_target(&self, current: &Url, location: &str) -> Result<Url, EgressError> {
+        if self.public_https_only && location.len() > PUBLIC_HTTPS_URL_MAX_BYTES {
+            return Err(EgressError::RedirectDenied {
+                reason: "redirect address exceeds limit".into(),
+            });
+        }
+        let mut target = current
+            .join(location)
+            .map_err(|e| EgressError::RedirectDenied {
+                reason: format!("invalid redirect location: {e}"),
+            })?;
+        if current.scheme() == "https" && target.scheme() == "http" {
+            return Err(EgressError::RedirectDenied {
+                reason: "https to http redirect downgrade is denied".into(),
+            });
+        }
+        if self.public_https_only {
+            target.set_fragment(None);
+            self.checked_destination(&target)
+                .map_err(|_| EgressError::RedirectDenied {
+                    reason: "redirect destination is outside the public HTTPS policy".into(),
+                })?;
+        }
+        Ok(target)
     }
 
     async fn get_inner(
@@ -522,10 +622,19 @@ impl ControlledEgress {
                 return Err(EgressError::TooManyRedirects);
             }
 
-            let destination = EgressDestination::parse(&current)?;
-            self.policy.validate_destination(&destination)?;
+            let destination = self.checked_destination(&current)?;
             let addresses = self.resolve(&destination).await?;
             self.policy.validate_resolved(&destination, &addresses)?;
+            if self.public_https_only
+                && addresses
+                    .iter()
+                    .any(|address| !is_standard_public_https_address(address.ip()))
+            {
+                return Err(EgressError::DestinationDenied {
+                    reason: "special-purpose IPv6 addresses are outside the public HTTPS policy"
+                        .into(),
+                });
+            }
 
             let response = self
                 .send(&destination, &addresses, &current, headers)
@@ -538,17 +647,7 @@ impl ControlledEgress {
                     .get(reqwest::header::LOCATION)
                     .and_then(|v| v.to_str().ok())
                 {
-                    let next = current
-                        .join(location)
-                        .map_err(|e| EgressError::RedirectDenied {
-                            reason: format!("invalid redirect location: {e}"),
-                        })?;
-                    if current.scheme() == "https" && next.scheme() == "http" {
-                        return Err(EgressError::RedirectDenied {
-                            reason: "https to http redirect downgrade is denied".into(),
-                        });
-                    }
-                    current = next;
+                    current = self.redirect_target(&current, location)?;
                     hops += 1;
                     continue;
                 }
@@ -922,6 +1021,92 @@ mod tests {
                 .get("file:///etc/passwd")
                 .await,
             Err(EgressError::UnsupportedScheme(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn public_https_reader_refuses_local_or_credentialed_destinations_before_connecting() {
+        let reader = ControlledEgress::public_https_only();
+        for address in [
+            "https://127.0.0.1/",
+            "https://[::1]/",
+            "https://[::ffff:10.0.0.1]/",
+            "https://10.0.0.1/",
+            "https://100.100.100.200/",
+            "https://169.254.169.254/",
+            "https://desk.local/",
+            "https://my-workstation/",
+            "https://work.home.arpa/",
+            "https://example.org:444/",
+        ] {
+            assert!(
+                matches!(
+                    reader.get(address).await,
+                    Err(EgressError::DestinationDenied { .. })
+                ),
+                "unexpected result for {address}"
+            );
+        }
+        for address in [
+            "http://example.org/",
+            "file:///example.org/",
+            "https:///example.org/",
+            "https://user:secret@example.org/",
+            "https://@example.org/",
+            "https://example.org/\tsecret",
+        ] {
+            assert!(
+                matches!(reader.get(address).await, Err(EgressError::InvalidUrl(_))),
+                "unexpected result for {address}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn public_https_redirect_authority_and_resolved_addresses_are_rechecked() {
+        let reader = ControlledEgress {
+            resolver: Arc::new(FakeResolver {
+                addrs: vec![
+                    SocketAddr::new("93.184.216.34".parse().unwrap(), 443),
+                    SocketAddr::new("192.168.1.15".parse().unwrap(), 443),
+                ],
+            }),
+            ..ControlledEgress::public_https_only()
+        };
+        let from = url("https://public.example.org/start");
+        for target in [
+            "http://next.example.org/",
+            "https://next.example.org:8443/",
+            "https://fixture:secret@next.example.org/",
+            "//next.local/",
+            "file:///unavailable",
+        ] {
+            assert!(
+                matches!(
+                    reader.redirect_target(&from, target),
+                    Err(EgressError::RedirectDenied { .. })
+                ),
+                "unexpected result for {target}"
+            );
+        }
+        let target = reader
+            .redirect_target(&from, "https://next.example.org/ok#fragment")
+            .unwrap();
+        assert_eq!(target.as_str(), "https://next.example.org/ok");
+        assert!(matches!(
+            reader.get(target.as_str()).await,
+            Err(EgressError::DestinationDenied { .. })
+        ));
+
+        let reader = ControlledEgress {
+            resolver: Arc::new(FakeResolver {
+                addrs: vec![SocketAddr::new("2001:0::1".parse().unwrap(), 443)],
+            }),
+            ..ControlledEgress::public_https_only()
+        };
+        assert!(matches!(
+            reader.get(target.as_str()).await,
+            Err(EgressError::DestinationDenied { .. })
         ));
     }
 

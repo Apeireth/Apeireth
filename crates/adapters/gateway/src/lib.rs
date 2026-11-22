@@ -62,6 +62,8 @@ pub(crate) mod turn_results;
 /// Managed text artifact versions shared with governed tools.
 pub(crate) mod artifacts;
 
+pub mod desktop_capabilities;
+mod desktop_web_reader;
 /// Managed-desktop model connection profile (`/v1/admin/model-connection`).
 pub mod model_connection;
 

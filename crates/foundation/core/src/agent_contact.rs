@@ -32,7 +32,7 @@ use std::sync::Mutex;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
 
-use crate::kernel::ids::{ContactAgentId, ContactId};
+use crate::kernel::ids::{ContactAgentId, ContactId, WorkspaceId};
 use crate::storage_atomic;
 use crate::stored_doc::{self, DocCompat};
 
@@ -60,7 +60,8 @@ pub const MAX_LISTED_CONTACTS: usize = 512;
 const CONTACT_DOC_NAME: &str = "agent-contact";
 
 /// 联系人文档版本（落盘信封的 version）。
-const CONTACT_DOC_VERSION: u32 = 1;
+const LEGACY_CONTACT_DOC_VERSION: u32 = 1;
+const CONTACT_DOC_VERSION: u32 = 2;
 
 /// 单个联系人目录下的文档文件名。
 const CONTACT_FILE_NAME: &str = "contact.json";
@@ -325,6 +326,7 @@ pub struct Contact {
     persona: Option<PersonaText>,
     memory_scope: ContractMemoryScope,
     capabilities: ContactCapabilities,
+    workspace_binding: Option<ContactWorkspaceBindingRecord>,
     revision: u64,
     updated_at_ms: u64,
 }
@@ -357,6 +359,7 @@ impl Contact {
             persona: request.persona.clone(),
             memory_scope: request.memory_scope,
             capabilities: status.default_capabilities(),
+            workspace_binding: None,
             revision: 0,
             updated_at_ms: request.now_ms,
         })
@@ -412,6 +415,16 @@ impl Contact {
         self.capabilities
     }
 
+    /// The authoritative binding, or an explicit detach. Legacy rows have no binding field.
+    pub fn workspace_binding(&self) -> Option<Option<ContactWorkspaceBinding>> {
+        self.workspace_binding.map(|record| record.binding)
+    }
+
+    /// Contact revision at which the authoritative workspace binding was last changed.
+    pub fn workspace_binding_revision(&self) -> Option<u64> {
+        self.workspace_binding.map(|record| record.contact_revision)
+    }
+
     /// 记录版本号（单调；任何写入 +1）。
     pub fn revision(&self) -> u64 {
         self.revision
@@ -455,6 +468,7 @@ impl Contact {
             persona: self.persona.clone(),
             memory_scope: self.memory_scope,
             capabilities: self.capabilities,
+            workspace_binding: self.workspace_binding,
             revision: self.revision,
             updated_at_ms: self.updated_at_ms,
         }
@@ -481,23 +495,28 @@ impl Contact {
             persona: record.persona,
             memory_scope: record.memory_scope,
             capabilities: record.capabilities,
+            workspace_binding: record.workspace_binding,
             revision: record.revision,
             updated_at_ms: record.updated_at_ms,
         })
     }
 
-    /// 写入人设：人设版本 +1、记录版本 +1。
-    fn apply_persona(&mut self, persona: PersonaText, now_ms: u64) {
-        self.persona = Some(persona);
-        self.persona_revision += 1;
+    /// Update the supplied fields as a single contact revision.
+    fn apply_patch(&mut self, patch: ContactPatch, now_ms: u64) {
         self.revision += 1;
-        self.updated_at_ms = now_ms;
-    }
-
-    /// 写入能力展示投影：记录版本 +1（**不动**人设版本号）。
-    fn apply_capabilities(&mut self, capabilities: ContactCapabilities, now_ms: u64) {
-        self.capabilities = capabilities;
-        self.revision += 1;
+        if let Some(persona) = patch.persona {
+            self.persona = Some(persona);
+            self.persona_revision += 1;
+        }
+        if let Some(capabilities) = patch.capabilities {
+            self.capabilities = capabilities;
+        }
+        if let Some(binding) = patch.workspace_binding {
+            self.workspace_binding = Some(ContactWorkspaceBindingRecord {
+                binding,
+                contact_revision: self.revision,
+            });
+        }
         self.updated_at_ms = now_ms;
     }
 
@@ -667,10 +686,44 @@ pub struct ContactRecord {
     pub memory_scope: ContractMemoryScope,
     /// 能力展示投影。
     pub capabilities: ContactCapabilities,
+    /// Binding authority for version 2 records.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace_binding: Option<ContactWorkspaceBindingRecord>,
     /// 记录版本号。
     pub revision: u64,
     /// 最后写入时间（epoch 毫秒）。
     pub updated_at_ms: u64,
+}
+
+/// Workspace identity pinned by the contact registration.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ContactWorkspaceBinding {
+    /// ID of the registered workspace.
+    pub workspace_id: WorkspaceId,
+    /// Revision the operator selected.
+    pub revision: u64,
+}
+
+/// Present on records with an authoritative binding, including a deliberate detach.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ContactWorkspaceBindingRecord {
+    /// Workspace binding, or a persisted detach.
+    pub binding: Option<ContactWorkspaceBinding>,
+    /// Record revision at this binding change.
+    pub contact_revision: u64,
+}
+
+/// Fields committed atomically by a contact update.
+#[derive(Default)]
+pub struct ContactPatch {
+    /// Updated persona, when supplied.
+    pub persona: Option<PersonaText>,
+    /// Updated display capability projection, when supplied.
+    pub capabilities: Option<ContactCapabilities>,
+    /// Outer omission preserves the binding. Inner omission explicitly detaches it.
+    pub workspace_binding: Option<Option<ContactWorkspaceBinding>>,
 }
 
 /// 创建请求（后端内部结构）。
@@ -763,6 +816,19 @@ pub trait ContactRegistry: Send + Sync {
     /// 新建联系人（身份由后端铸造）。
     fn create(&self, request: ContactCreateRequest) -> Result<Contact, ContactError>;
 
+    /// Commit a patch under one exact revision check.
+    fn update(
+        &self,
+        _contact_id: &ContactId,
+        _expected_revision: u64,
+        _patch: ContactPatch,
+        _now_ms: u64,
+    ) -> Result<Contact, ContactError> {
+        Err(ContactError::InvalidRequest {
+            reason: "atomic contact updates unavailable".into(),
+        })
+    }
+
     /// 写入人设（人设版本 +1、记录版本 +1）。
     fn update_persona(
         &self,
@@ -770,7 +836,17 @@ pub trait ContactRegistry: Send + Sync {
         expected_revision: u64,
         persona: PersonaText,
         now_ms: u64,
-    ) -> Result<Contact, ContactError>;
+    ) -> Result<Contact, ContactError> {
+        self.update(
+            contact_id,
+            expected_revision,
+            ContactPatch {
+                persona: Some(persona),
+                ..ContactPatch::default()
+            },
+            now_ms,
+        )
+    }
 
     /// 写入能力**展示投影**（记录版本 +1；人设版本不动）。
     fn update_capabilities(
@@ -779,7 +855,17 @@ pub trait ContactRegistry: Send + Sync {
         expected_revision: u64,
         capabilities: ContactCapabilities,
         now_ms: u64,
-    ) -> Result<Contact, ContactError>;
+    ) -> Result<Contact, ContactError> {
+        self.update(
+            contact_id,
+            expected_revision,
+            ContactPatch {
+                capabilities: Some(capabilities),
+                ..ContactPatch::default()
+            },
+            now_ms,
+        )
+    }
 
     /// 归档（软删除；不可复活）。
     fn archive(
@@ -832,11 +918,11 @@ impl ContactRegistry for InMemoryContactRegistry {
         Ok(contact)
     }
 
-    fn update_persona(
+    fn update(
         &self,
         contact_id: &ContactId,
         expected_revision: u64,
-        persona: PersonaText,
+        patch: ContactPatch,
         now_ms: u64,
     ) -> Result<Contact, ContactError> {
         mutate_contact(
@@ -845,25 +931,7 @@ impl ContactRegistry for InMemoryContactRegistry {
             contact_id,
             expected_revision,
             |contact| {
-                contact.apply_persona(persona, now_ms);
-            },
-        )
-    }
-
-    fn update_capabilities(
-        &self,
-        contact_id: &ContactId,
-        expected_revision: u64,
-        capabilities: ContactCapabilities,
-        now_ms: u64,
-    ) -> Result<Contact, ContactError> {
-        mutate_contact(
-            &self.inner,
-            None,
-            contact_id,
-            expected_revision,
-            |contact| {
-                contact.apply_capabilities(capabilities, now_ms);
+                contact.apply_patch(patch, now_ms);
             },
         )
     }
@@ -922,12 +990,7 @@ impl FileContactRegistry {
             if !file.is_file() {
                 continue;
             }
-            let doc = stored_doc::open_single::<ContactRecord>(&file, &contact_doc_compat())
-                .map_err(|error| storage_error("读联系人文档", &file, error))?;
-            let contact =
-                Contact::from_record(doc.body).map_err(|error| ContactError::InvalidRequest {
-                    reason: format!("storage: 联系人文档非法 ({}): {error}", file.display()),
-                })?;
+            let contact = read_contact(&file)?;
             contacts.insert(contact.contact_id(), contact);
         }
         Ok(Self {
@@ -966,11 +1029,11 @@ impl ContactRegistry for FileContactRegistry {
         Ok(contact)
     }
 
-    fn update_persona(
+    fn update(
         &self,
         contact_id: &ContactId,
         expected_revision: u64,
-        persona: PersonaText,
+        patch: ContactPatch,
         now_ms: u64,
     ) -> Result<Contact, ContactError> {
         mutate_contact(
@@ -979,25 +1042,7 @@ impl ContactRegistry for FileContactRegistry {
             contact_id,
             expected_revision,
             |contact| {
-                contact.apply_persona(persona, now_ms);
-            },
-        )
-    }
-
-    fn update_capabilities(
-        &self,
-        contact_id: &ContactId,
-        expected_revision: u64,
-        capabilities: ContactCapabilities,
-        now_ms: u64,
-    ) -> Result<Contact, ContactError> {
-        mutate_contact(
-            &self.inner,
-            Some(&self.root),
-            contact_id,
-            expected_revision,
-            |contact| {
-                contact.apply_capabilities(capabilities, now_ms);
+                contact.apply_patch(patch, now_ms);
             },
         )
     }
@@ -1040,14 +1085,13 @@ fn list_contacts(inner: &RegistryInner, include_archived: bool) -> Vec<Contact> 
 /// 固定次序：**NotFound → Archived → RevisionConflict**。
 /// 过期版本一律**不改状态**。
 fn checked_contact(
-    inner: &RegistryInner,
+    contact: Contact,
     contact_id: &ContactId,
     expected_revision: u64,
 ) -> Result<Contact, ContactError> {
-    let contact = inner
-        .contacts
-        .get(contact_id)
-        .ok_or(ContactError::NotFound(*contact_id))?;
+    if contact.contact_id != *contact_id {
+        return Err(ContactError::NotFound(*contact_id));
+    }
     if contact.status == ContactStatus::Archived {
         return Err(ContactError::Archived);
     }
@@ -1057,7 +1101,12 @@ fn checked_contact(
             actual: contact.revision,
         });
     }
-    Ok(contact.clone())
+    if contact.revision == u64::MAX {
+        return Err(ContactError::InvalidRequest {
+            reason: "contact revision exhausted".into(),
+        });
+    }
+    Ok(contact)
 }
 
 /// 统一的写入路径：核对 → 改副本 → （落盘）→ 提交内存。
@@ -1071,13 +1120,32 @@ fn mutate_contact(
     apply: impl FnOnce(&mut Contact),
 ) -> Result<Contact, ContactError> {
     let mut guard = inner.lock().unwrap_or_else(|e| e.into_inner());
-    let inner = &mut *guard;
-    let mut updated = checked_contact(inner, contact_id, expected_revision)?;
-    apply(&mut updated);
-    if let Some(root) = root {
-        persist_contact(root, &updated)?;
-    }
-    inner.contacts.insert(*contact_id, updated.clone());
+    let update = |current| -> Result<Contact, ContactError> {
+        let mut updated = checked_contact(current, contact_id, expected_revision)?;
+        apply(&mut updated);
+        Ok(updated)
+    };
+    let updated = if let Some(root) = root {
+        let file = contact_file(root, contact_id);
+        if !file.is_file() {
+            return Err(ContactError::NotFound(*contact_id));
+        }
+        let lock = storage_atomic::lock_path_for(&file);
+        storage_atomic::with_file_lock(&lock, || {
+            let updated = update(read_contact(&file)?)?;
+            write_contact(&file, &updated)?;
+            Ok(updated)
+        })
+        .map_err(|error| storage_error("加锁", &lock, error))??
+    } else {
+        let current = guard
+            .contacts
+            .get(contact_id)
+            .cloned()
+            .ok_or(ContactError::NotFound(*contact_id))?;
+        update(current)?
+    };
+    guard.contacts.insert(*contact_id, updated.clone());
     Ok(updated)
 }
 
@@ -1099,25 +1167,53 @@ fn contact_file(root: &Path, contact_id: &ContactId) -> PathBuf {
 
 /// 联系人文档的版本契约。
 fn contact_doc_compat() -> DocCompat {
-    DocCompat::exact(CONTACT_DOC_NAME, CONTACT_DOC_VERSION)
+    DocCompat::new(
+        CONTACT_DOC_NAME,
+        CONTACT_DOC_VERSION,
+        vec![LEGACY_CONTACT_DOC_VERSION, CONTACT_DOC_VERSION],
+    )
+}
+
+fn read_contact(file: &Path) -> Result<Contact, ContactError> {
+    let doc = stored_doc::open_single::<ContactRecord>(file, &contact_doc_compat())
+        .map_err(|error| storage_error("读联系人文档", file, error))?;
+    if (doc.version == CONTACT_DOC_VERSION) != doc.body.workspace_binding.is_some()
+        || doc.body.persona_revision > doc.body.revision
+        || doc.body.workspace_binding.is_some_and(|record| {
+            record.contact_revision == 0 || record.contact_revision > doc.body.revision
+        })
+    {
+        return Err(storage_error(
+            "读联系人文档",
+            file,
+            "invalid contact record",
+        ));
+    }
+    Contact::from_record(doc.body).map_err(|error| storage_error("读联系人文档", file, error))
+}
+
+fn write_contact(file: &Path, contact: &Contact) -> Result<(), ContactError> {
+    let version = if contact.workspace_binding.is_some() {
+        CONTACT_DOC_VERSION
+    } else {
+        LEGACY_CONTACT_DOC_VERSION
+    };
+    stored_doc::save_single(
+        file,
+        &DocCompat::exact(CONTACT_DOC_NAME, version),
+        contact.to_record(),
+        stored_doc::DEFAULT_DOC_MODE,
+    )
+    .map_err(|error| storage_error("写联系人文档", file, error))?;
+    Ok(())
 }
 
 /// 把一条联系人写盘（持久档原子写 + 文件锁，全部走仓内既有工具）。
 fn persist_contact(root: &Path, contact: &Contact) -> Result<(), ContactError> {
     let file = contact_file(root, &contact.contact_id());
     let lock = storage_atomic::lock_path_for(&file);
-    let record = contact.to_record();
-    storage_atomic::with_file_lock(&lock, || {
-        stored_doc::save_single(
-            &file,
-            &contact_doc_compat(),
-            record,
-            stored_doc::DEFAULT_DOC_MODE,
-        )
-    })
-    .map_err(|error| storage_error("加锁", &lock, error))?
-    .map_err(|error| storage_error("写联系人文档", &file, error))?;
-    Ok(())
+    storage_atomic::with_file_lock(&lock, || write_contact(&file, contact))
+        .map_err(|error| storage_error("加锁", &lock, error))?
 }
 
 /// 存储故障 ⇒ [`ContactError::InvalidRequest`]（`reason` 以 `"storage: "` 开头）。

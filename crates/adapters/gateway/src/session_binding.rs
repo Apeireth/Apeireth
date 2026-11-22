@@ -367,6 +367,21 @@ pub async fn post_session_binding(
         )
         .await;
     };
+    if session.project_workspace_binding().is_some() {
+        return deny(
+            &state,
+            &session_label,
+            "",
+            "project_workspace_bound",
+            client_label,
+            ErrorFrame::response(
+                StatusCode::CONFLICT,
+                ErrorCode::SessionBindingConflict,
+                "项目工作区会话有固定的范围。",
+            ),
+        )
+        .await;
+    }
     if session.revision != expected_revision {
         return deny(
             &state,

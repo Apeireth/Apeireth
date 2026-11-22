@@ -2,14 +2,20 @@
 
 use super::*;
 use crate::operation_header::operation_request;
+use apeireth_runtime::canonical::ProjectWorkspaceBinding;
 use tokio::sync::Semaphore;
 
 /// Each router bounds its running and session-queued detached requests.
 /// A request still waiting for a slot belongs to its HTTP connection.
 const MAX_ADMITTED_REQUESTS: usize = 128;
 
-pub(super) fn route() -> axum::routing::MethodRouter<GatewayState> {
-    post(native_chat).layer(Extension(Arc::new(Semaphore::new(MAX_ADMITTED_REQUESTS))))
+const WORKSPACE_CHAT: &str = "/v1/workspace-chat";
+
+pub(super) fn routes() -> Router<GatewayState> {
+    Router::new()
+        .route("/v1/chat", post(native_chat))
+        .route(WORKSPACE_CHAT, post(workspace_chat))
+        .layer(Extension(Arc::new(Semaphore::new(MAX_ADMITTED_REQUESTS))))
 }
 
 async fn native_chat(
@@ -21,6 +27,76 @@ async fn native_chat(
     headers: axum::http::HeaderMap,
     Json(request): Json<CanonicalChatRequest>,
 ) -> Result<Response, HttpError> {
+    dispatch(
+        state, capacity, identity, user, domain, headers, request, None,
+    )
+    .await
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WorkspaceChat {
+    session: SessionId,
+    input: String,
+    model: Option<String>,
+    system: Option<String>,
+    workspace_binding: ProjectWorkspaceBinding,
+}
+
+async fn workspace_chat(
+    State(state): State<GatewayState>,
+    Extension(capacity): Extension<Arc<Semaphore>>,
+    identity: Option<Extension<ClientIdentity>>,
+    user: Option<Extension<UserContext>>,
+    domain: Option<Extension<crate::domain_context::DomainContext>>,
+    headers: axum::http::HeaderMap,
+    Json(request): Json<WorkspaceChat>,
+) -> Result<Response, HttpError> {
+    if !crate::model_connection::is_managed_single_operator(&state)
+        || !identity
+            .as_ref()
+            .is_some_and(|Extension(id)| id.authenticated)
+        || domain
+            .as_ref()
+            .is_some_and(|Extension(domain)| domain.is_non_default())
+    {
+        return Ok(ErrorFrame::response(
+            StatusCode::FORBIDDEN,
+            ErrorCode::PermissionDenied,
+            "项目工作区需要认证的桌面单操作者运行时。",
+        ));
+    }
+    let chat = CanonicalChatRequest {
+        session: Some(request.session),
+        input: request.input,
+        model: request.model,
+        system: request.system,
+        expected_contact_id: None,
+    };
+    dispatch(
+        state,
+        capacity,
+        identity,
+        user,
+        domain,
+        headers,
+        chat,
+        Some(request.workspace_binding),
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn dispatch(
+    state: GatewayState,
+    capacity: Arc<Semaphore>,
+    identity: Option<Extension<ClientIdentity>>,
+    user: Option<Extension<UserContext>>,
+    domain: Option<Extension<crate::domain_context::DomainContext>>,
+    headers: axum::http::HeaderMap,
+    request: CanonicalChatRequest,
+    workspace: Option<ProjectWorkspaceBinding>,
+) -> Result<Response, HttpError> {
     let mut request = request;
     let contact_mode = request.expected_contact_id.is_some();
     if contact_mode && !contact_session::supports_scope(&state, identity.as_ref(), domain.as_ref())
@@ -30,7 +106,11 @@ async fn native_chat(
     let execution = match chat_execution(
         &state,
         domain.as_ref().map(|Extension(context)| context),
-        "/v1/chat",
+        if workspace.is_some() {
+            WORKSPACE_CHAT
+        } else {
+            "/v1/chat"
+        },
     ) {
         Ok(execution) => execution,
         Err(refusal) => return Ok(refusal),
@@ -47,7 +127,7 @@ async fn native_chat(
     request.system = execution.seeded_system(request.system.take());
     // C2-1: 可选的幂等键先解码 (摘要取解析后的 model/system); 非法键在
     // 会话立案、绑主、入域之前就 400, 不留下副作用。
-    let operation = match operation_request(&headers, &request) {
+    let operation = match operation_request(&headers, &request, workspace) {
         Ok(operation) => operation,
         Err(error) => return Err(http_error(error, request.session)),
     };
@@ -73,12 +153,14 @@ async fn native_chat(
             }
 
             // Keep episode ownership attached to the same principal for both delivery modes.
-            if let Err(error) = crate::principal_attribution::record_principal_attribution(
-                &state,
-                identity.as_ref().map(|Extension(identity)| identity),
-                session,
-            ) {
-                eprintln!("[principal-attribution] 归属登记失败 (旁路, 不阻断请求): {error}");
+            if workspace.is_none() {
+                if let Err(error) = crate::principal_attribution::record_principal_attribution(
+                    &state,
+                    identity.as_ref().map(|Extension(identity)| identity),
+                    session,
+                ) {
+                    eprintln!("[principal-attribution] 归属登记失败 (旁路, 不阻断请求): {error}");
+                }
             }
             let attribution = attribution_for(&state, identity.as_ref());
             let progress = progress.map(TurnProgress::Native);
@@ -88,6 +170,7 @@ async fn native_chat(
                 attribution,
                 operation,
                 progress,
+                workspace,
             )
             .await;
             state.observations.flush().await;

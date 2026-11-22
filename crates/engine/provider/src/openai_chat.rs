@@ -372,6 +372,10 @@ pub fn parse_response_with_reasoning(
         }
     }
 
+    let reported_input = body
+        .get("usage")
+        .and_then(|usage| usage.get("prompt_tokens"))
+        .and_then(serde_json::Value::as_u64);
     Ok(NormalizedResponse {
         id: body
             .get("id")
@@ -384,7 +388,8 @@ pub fn parse_response_with_reasoning(
         usage,
         tool_calls,
         raw_metadata: serde_json::Map::new(),
-    })
+    }
+    .with_provider_context_input(reported_input))
 }
 
 /// Read one usage counter and clamp it into `u32` (M11).
@@ -718,6 +723,7 @@ mod tests {
         assert_eq!(resp.model, "wire-model");
         assert_eq!(resp.finish_reason, Some(NormalizedFinishReason::Stop));
         assert_eq!(resp.usage.total_tokens, 15);
+        assert_eq!(resp.provider_context_input(), Some(10));
     }
 
     #[test]
@@ -727,6 +733,7 @@ mod tests {
         });
         let resp = parse_response(body, "m", "provider.test").unwrap();
         assert_eq!(resp.usage, NormalizedUsage::default());
+        assert_eq!(resp.provider_context_input(), None);
         assert_eq!(resp.finish_reason, Some(NormalizedFinishReason::Length));
     }
 
@@ -746,6 +753,7 @@ mod tests {
         assert_eq!(resp.usage.prompt_tokens, u32::MAX);
         assert_eq!(resp.usage.completion_tokens, u32::MAX);
         assert_eq!(resp.usage.total_tokens, u32::MAX);
+        assert_eq!(resp.provider_context_input(), None);
     }
 
     /// 缓存命中列: 从原始 usage 的**真实**缓存字段填充 (details 形状与顶列

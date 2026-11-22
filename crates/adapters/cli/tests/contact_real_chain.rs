@@ -409,7 +409,19 @@ async fn contact_binding_is_validated_and_stored_without_snapshot() {
         .to_string();
     let workspace_revision = workspace["revision"].as_u64().expect("revision");
 
-    let contact = create_contact(router.clone(), "校对发布清单").await;
+    let (status, created) = call(
+        router.clone(),
+        "POST",
+        "/v1/agents/contacts",
+        Some(serde_json::json!({
+            "display_name": "校对发布清单",
+            "workspace_binding": {"workspace_id": workspace_id, "revision": workspace_revision},
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    let contact = created["contact"].clone();
+    assert_eq!(contact["workspace_binding"]["workspace_id"], workspace_id);
     let contact_id = contact["contact_id"]
         .as_str()
         .expect("contact_id")
@@ -447,18 +459,22 @@ async fn contact_binding_is_validated_and_stored_without_snapshot() {
         "绑定冲突后联系人必须逐字段不变: after={after}"
     );
 
-    // 合法绑定 ⇒ 放行, DTO 回显 id + 修订号。
+    // 组合写入只产生一个联系人修订。
     let (status, body) = call(
         router.clone(),
         "PATCH",
         &format!("/v1/agents/contacts/{contact_id}"),
         Some(serde_json::json!({
             "expected_revision": revision,
+            "persona": "综合校对发布清单。",
             "workspace_binding": {"workspace_id": workspace_id, "revision": workspace_revision},
         })),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "body={body}");
+    assert_eq!(body["contact"]["revision"], revision + 1);
+    assert_eq!(body["contact"]["persona_revision"], 1);
+    assert_eq!(body["contact"]["persona"], "综合校对发布清单。");
     assert_eq!(
         body["contact"]["workspace_binding"]["workspace_id"],
         workspace_id.as_str()
@@ -468,8 +484,12 @@ async fn contact_binding_is_validated_and_stored_without_snapshot() {
         workspace_revision
     );
 
-    // 绑定档真落盘, 且**只有** id + 修订号 (没有工作区快照、没有根路径)。
-    let binding_file = data_dir.join("agents").join("contact-bindings.json");
+    // 联系人和授权修订共用一份原子记录，绑定只含身份和修订。
+    let binding_file = data_dir
+        .join("agents")
+        .join("contacts")
+        .join(&contact_id)
+        .join("contact.json");
     assert!(
         binding_file.exists(),
         "绑定档必须真落盘: {}",
@@ -489,7 +509,7 @@ async fn contact_binding_is_validated_and_stored_without_snapshot() {
         "绑定档不得含绝对根路径: {text}"
     );
 
-    // 重启后绑定还在 (绑定档是真源)。
+    // 重新装配后的详情仍返回同一批字段。
     let router = router_over(managed_root.clone(), data_dir.clone()).await;
     let (status, body) = call(
         router.clone(),
@@ -525,8 +545,22 @@ async fn contact_binding_is_validated_and_stored_without_snapshot() {
     let text = std::fs::read_to_string(&binding_file).expect("binding");
     assert!(
         !text.contains(&workspace_id),
-        "解绑后档里不该再有这条绑定: {text}"
+        "解绑后的联系人记录不再含该工作区身份: {text}"
     );
+    let legacy_file = data_dir.join("agents").join("contact-bindings.json");
+    let legacy = std::fs::read_to_string(legacy_file).expect("existing sidecar");
+    assert!(legacy.contains(&workspace_id));
+    let reopened = router_over(managed_root, data_dir).await;
+    let (status, body) = call(
+        reopened,
+        "GET",
+        &format!("/v1/agents/contacts/{contact_id}"),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert!(body["contact"]["workspace_binding"].is_null(), "{body}");
+    assert_eq!(body["contact"]["revision"], current_revision + 1);
 }
 
 /// 5. 可检索审计: 建/改/归档/被拒都落行, 详情里没有绝对路径。

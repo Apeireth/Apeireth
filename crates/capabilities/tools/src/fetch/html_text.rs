@@ -28,12 +28,23 @@ impl std::fmt::Display for HtmlExtractError {
 
 /// Extract readable plain text from an HTML document.
 pub fn extract_text(html: &str) -> Result<String, HtmlExtractError> {
+    extract(html, false)
+}
+
+/// Extract visible reading text, retaining line breaks at HTML block boundaries.
+pub fn extract_reading_text(html: &str) -> Result<String, HtmlExtractError> {
+    extract(html, true)
+}
+
+fn extract(html: &str, preserve_blocks: bool) -> Result<String, HtmlExtractError> {
     if html.trim().is_empty() {
         return Err(HtmlExtractError::Empty);
     }
     let mut out = String::with_capacity(html.len() / 2);
     // 0 = normal, 1 = inside script, 2 = inside style, 3 = inside pre.
     let mut in_skip: u8 = 0;
+    let mut skipped_tag = None;
+    let mut in_head = false;
     let mut chars = html.chars().peekable();
     while let Some(c) = chars.next() {
         if c == '<' {
@@ -47,6 +58,38 @@ pub fn extract_text(html: &str) -> Result<String, HtmlExtractError> {
                 chars.next();
             }
             let tag_lc = tag.trim().to_lowercase();
+            if preserve_blocks {
+                let closing = tag_lc.starts_with('/');
+                let name = tag_lc
+                    .trim_start_matches('/')
+                    .split(|c: char| c.is_ascii_whitespace() || c == '/')
+                    .next()
+                    .unwrap_or_default();
+                if let Some(skipped) = skipped_tag {
+                    if closing && name == skipped {
+                        skipped_tag = None;
+                    }
+                } else if !closing {
+                    skipped_tag = match name {
+                        "script" => Some("script"),
+                        "style" => Some("style"),
+                        "pre" => Some("pre"),
+                        "title" => Some("title"),
+                        _ => None,
+                    };
+                }
+                if skipped_tag.is_some() {
+                    continue;
+                }
+                match name {
+                    "head" => in_head = !closing,
+                    "body" if !closing => in_head = false,
+                    "td" | "th" if !in_head => out.push(' '),
+                    name if !in_head && is_reading_block(name) => out.push('\n'),
+                    _ => (),
+                }
+                continue;
+            }
             if tag_lc.starts_with("script") {
                 in_skip = 1;
                 continue;
@@ -84,7 +127,7 @@ pub fn extract_text(html: &str) -> Result<String, HtmlExtractError> {
             }
             continue;
         }
-        if in_skip > 0 {
+        if in_skip > 0 || skipped_tag.is_some() || in_head {
             continue;
         }
         match c {
@@ -120,17 +163,74 @@ pub fn extract_text(html: &str) -> Result<String, HtmlExtractError> {
                         }
                     }
                 };
-                out.push(decoded);
+                out.push(if preserve_blocks && decoded.is_whitespace() {
+                    ' '
+                } else {
+                    decoded
+                });
             }
+            c if preserve_blocks && c.is_whitespace() => out.push(' '),
             _ => out.push(c),
         }
     }
-    let trimmed = out.split_whitespace().collect::<Vec<_>>().join(" ");
+    let trimmed = if preserve_blocks {
+        out.lines()
+            .map(collapse_whitespace)
+            .filter(|line| !line.is_empty())
+            .collect::<Vec<_>>()
+            .join("\n")
+    } else {
+        collapse_whitespace(&out)
+    };
     if trimmed.is_empty() {
         Err(HtmlExtractError::NoText)
     } else {
         Ok(trimmed)
     }
+}
+
+fn collapse_whitespace(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn is_reading_block(name: &str) -> bool {
+    matches!(
+        name,
+        "address"
+            | "article"
+            | "aside"
+            | "blockquote"
+            | "br"
+            | "caption"
+            | "dd"
+            | "div"
+            | "dl"
+            | "dt"
+            | "fieldset"
+            | "figcaption"
+            | "figure"
+            | "footer"
+            | "h1"
+            | "h2"
+            | "h3"
+            | "h4"
+            | "h5"
+            | "h6"
+            | "header"
+            | "hr"
+            | "li"
+            | "main"
+            | "nav"
+            | "ol"
+            | "p"
+            | "section"
+            | "table"
+            | "tbody"
+            | "tfoot"
+            | "thead"
+            | "tr"
+            | "ul"
+    )
 }
 
 /// Extract `(url, link_text)` pairs from `href="..."` anchors.
