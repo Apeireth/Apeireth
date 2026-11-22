@@ -135,7 +135,7 @@ fn run_user_admin_with_paths(
             let attempt = principal_forget_attempt(data_dir, default_memory_db, &plan);
             let completed = service
                 .finish_governed_remove(plan, attempt)
-                .map_err(|error| format!("refusing to remove user: {error}"))?;
+                .map_err(|error| format!("user removal {user_id:?}: {error}"))?;
             Ok(format!(
                 "removed user {}; memory_forgotten=true ({})",
                 completed.removed.user_id, completed.memory_note

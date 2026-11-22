@@ -82,7 +82,7 @@ fn failed_profile_commit_does_not_publish_or_orphan_the_new_key() {
         .unwrap();
     let original = fs_err::read(root.path().join(FILE)).unwrap();
     let keys = backend.list().unwrap();
-    service.persist = |_, _, _| Err(std::io::Error::other("fixture persistence unavailable"));
+    service.persist = |_, _| Err(ProfileWriteFailure::BeforePublication);
     assert!(matches!(
         service.save(patch("https://other.example/v1", Some("fixture-secret-b"))),
         Err(Error::Storage)
@@ -93,6 +93,38 @@ fn failed_profile_commit_does_not_publish_or_orphan_the_new_key() {
         service.read().unwrap().credential_state,
         CredentialState::Available
     );
+}
+
+#[test]
+fn published_profile_with_unconfirmed_durability_keeps_both_credential_slots() {
+    let (root, backend, service) = setup();
+    service
+        .save(patch("https://model.example/v1", Some("fixture-secret-a")))
+        .unwrap();
+    let mut service = ManagedConnection::new(root.path().into(), backend.clone()).unwrap();
+    let old_slot = service.boot.credential_service.clone().unwrap();
+    service.persist = |path, bytes| {
+        persist_profile(path, bytes)?;
+        Err(ProfileWriteFailure::DurabilityUnconfirmed)
+    };
+    assert!(matches!(
+        service.save(patch("https://other.example/v1", Some("fixture-secret-b"))),
+        Err(Error::Storage)
+    ));
+
+    let reopened = ManagedConnection::new(root.path().into(), backend.clone()).unwrap();
+    let new_slot = reopened.boot.credential_service.as_ref().unwrap();
+    assert_ne!(&old_slot, new_slot);
+    assert_eq!(backend.list().unwrap().len(), 2);
+    assert_eq!(
+        backend.get(&old_slot).unwrap().expose(),
+        b"fixture-secret-a"
+    );
+    assert_eq!(backend.get(new_slot).unwrap().expose(), b"fixture-secret-b");
+    let view = reopened.read().unwrap();
+    assert_eq!(view.base_url, "https://other.example/v1");
+    assert_eq!(view.credential_state, CredentialState::Available);
+    assert!(view.endpoint_bound);
 }
 
 struct Unavailable;

@@ -32,6 +32,7 @@
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 
+use apeireth_core::storage_atomic;
 use apeireth_credentials::keyring::{
     AuditSink, CountingAudit, KeyringBackend, KeyringError, NoopAudit,
 };
@@ -174,6 +175,9 @@ fn keyring_error_class(error: &KeyringError) -> &'static str {
         KeyringError::ServiceNameTooLong { .. } => "service_name_too_long",
         KeyringError::BackendUnavailable(_) => "backend_unavailable",
         KeyringError::AccessDenied { .. } => "access_denied",
+        KeyringError::Io { source, .. } if storage_atomic::target_replaced(source) => {
+            "durability_unconfirmed"
+        }
         KeyringError::Io { .. } => "io",
         KeyringError::Crypto(_) => "crypto",
         KeyringError::Format(_) => "format",
@@ -194,7 +198,7 @@ impl HotCredentialWriter {
                 return Err(format!(
                     "keyring read failed ({})",
                     keyring_error_class(&error)
-                ))
+                ));
             }
         };
         let referenced = is_bound_credential_reference(&original)
@@ -250,7 +254,7 @@ impl HotCredentialWriter {
                 return Err(format!(
                     "keyring read failed ({})",
                     keyring_error_class(&error)
-                ))
+                ));
             }
         };
         backend.set(&companion, &encoded).map_err(|error| {
@@ -263,10 +267,15 @@ impl HotCredentialWriter {
             return Ok(());
         }
         if let Err(error) = backend.set(name, &bound_credential_reference()) {
+            let class = keyring_error_class(&error);
+            if !backend.set_rejected_before_publish(&error) {
+                return Err(format!(
+                    "keyring credential reference outcome unconfirmed ({class}). Companion retained."
+                ));
+            }
             let cleanup_failed = backend.delete(&companion).is_err();
             return Err(format!(
-                "keyring credential reference persistence failed ({}); companion cleanup {}",
-                keyring_error_class(&error),
+                "keyring credential reference persistence failed ({class}); companion cleanup {}",
                 if cleanup_failed {
                     "failed"
                 } else {
@@ -378,12 +387,20 @@ mod tests {
         }
     }
 
-    struct MarkerRejectingBackend {
-        marker_name: String,
-        values: Mutex<BTreeMap<String, Vec<u8>>>,
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    enum MarkerFailure {
+        Refused,
+        Published,
+        Unknown,
     }
 
-    impl KeyringBackend for MarkerRejectingBackend {
+    struct MarkerFailingBackend {
+        marker_name: String,
+        values: Mutex<BTreeMap<String, Vec<u8>>>,
+        failure: MarkerFailure,
+    }
+
+    impl KeyringBackend for MarkerFailingBackend {
         fn get(&self, service: &str) -> apeireth_credentials::keyring::Result<SecretBuf> {
             self.values
                 .lock()
@@ -400,16 +417,23 @@ mod tests {
             service: &str,
             secret: &SecretBuf,
         ) -> apeireth_credentials::keyring::Result<()> {
-            if service == self.marker_name {
+            let writes_marker = service == self.marker_name;
+            if !writes_marker || self.failure == MarkerFailure::Published {
+                self.values
+                    .lock()
+                    .unwrap()
+                    .insert(service.to_string(), secret.expose().to_vec());
+            }
+            if writes_marker {
                 return Err(KeyringError::Backend(
-                    "marker rejection containing sk-must-not-escape".to_string(),
+                    "marker failure containing sk-must-not-escape".to_string(),
                 ));
             }
-            self.values
-                .lock()
-                .unwrap()
-                .insert(service.to_string(), secret.expose().to_vec());
             Ok(())
+        }
+
+        fn set_rejected_before_publish(&self, _error: &KeyringError) -> bool {
+            self.failure == MarkerFailure::Refused
         }
 
         fn delete(&self, service: &str) -> apeireth_credentials::keyring::Result<()> {
@@ -428,7 +452,7 @@ mod tests {
         }
 
         fn backend_name(&self) -> &'static str {
-            "synthetic-marker-rejecting"
+            "synthetic-marker-failing"
         }
     }
 
@@ -455,9 +479,10 @@ mod tests {
     #[test]
     fn failed_reference_write_rolls_back_the_unreferenced_companion() {
         let name = "provider.marker-failure.api_key";
-        let backend = Arc::new(MarkerRejectingBackend {
+        let backend = Arc::new(MarkerFailingBackend {
             marker_name: name.to_string(),
             values: Mutex::new(BTreeMap::new()),
+            failure: MarkerFailure::Refused,
         });
         let store = Arc::new(HotCredentialStore::new());
         let writer = HotCredentialWriter {
@@ -475,6 +500,47 @@ mod tests {
         assert!(!error.contains("sk-must-not-escape"));
         assert!(store.resolve(name).is_none());
         assert!(backend.get(&bound_record_service(name)).is_err());
+    }
+
+    #[test]
+    fn unconfirmed_reference_keeps_the_companion_without_updating_the_hot_store() {
+        let name = "provider.marker-outcome.api_key";
+        let endpoints = vec!["https://endpoint.example".to_string()];
+        let credential = "synthetic-bound-value";
+        for failure in [MarkerFailure::Published, MarkerFailure::Unknown] {
+            let backend = Arc::new(MarkerFailingBackend {
+                marker_name: name.to_string(),
+                values: Mutex::new(BTreeMap::new()),
+                failure,
+            });
+            let store = Arc::new(HotCredentialStore::new());
+            store.set(name, "synthetic-previous-value");
+            let writer = HotCredentialWriter {
+                store: Arc::clone(&store),
+                durable: Some(backend.clone()),
+            };
+
+            let error = writer
+                .write_with_endpoints(name, credential, &endpoints)
+                .expect_err("unconfirmed reference must report a failure");
+            assert!(error.contains("outcome unconfirmed"));
+            assert!(!error.contains("sk-must-not-escape"));
+            assert!(!error.contains(credential));
+            let hot = store.resolve_snapshot(name).expect("previous hot value");
+            assert_eq!(hot.secret().expose(), "synthetic-previous-value");
+            assert_eq!(hot.bound_endpoints(), None);
+            assert!(backend.get(&bound_record_service(name)).is_ok());
+
+            let restarted = KeyringCredentialResolver::new(backend);
+            let snapshot = restarted.resolve_snapshot(name);
+            if failure == MarkerFailure::Published {
+                let snapshot = snapshot.expect("published marker must resolve after restart");
+                assert_eq!(snapshot.secret().expose(), credential);
+                assert_eq!(snapshot.bound_endpoints(), Some(endpoints.as_slice()));
+            } else {
+                assert!(snapshot.is_none());
+            }
+        }
     }
 
     #[test]

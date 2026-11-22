@@ -60,10 +60,43 @@ pub fn write_atomic(path: &Path, bytes: &[u8], mode: u32) -> io::Result<()> {
 /// 与 [`write_atomic`] 的差异: 内容先 `sync_all` 再替换 (unix 追加父目录 fsync;
 /// Windows 无父目录 fsync 等价语义, 如实跳过并在此标注平台差异)。
 /// 适合配置/凭据类数据: 落盘后进程或机器崩溃, 不会回退到旧版本。
+/// 返回错误时可用 [`target_replaced`] 区分替换已完成但目录项落盘未确认。
 ///
 /// `mode` 为 unix 权限位, 最终目标文件恰为该 mode; 非 unix 平台忽略。
 pub fn write_atomic_durable(path: &Path, bytes: &[u8], mode: u32) -> io::Result<()> {
     write_via_tmp(path, bytes, mode, true)
+}
+
+/// 是否已完成目标替换，仅后续目录同步失败。
+///
+/// 对 [`write_atomic_durable`] 直接返回的错误判定。新内容已发布，崩溃后的持久性仍未确认。
+pub fn target_replaced(error: &io::Error) -> bool {
+    error
+        .get_ref()
+        .is_some_and(|source| source.is::<PostReplacementSyncError>())
+}
+
+#[derive(Debug)]
+struct PostReplacementSyncError {
+    path: PathBuf,
+    source: io::Error,
+}
+
+impl std::fmt::Display for PostReplacementSyncError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            formatter,
+            "目标已替换，父目录落盘失败 {}: {}",
+            self.path.display(),
+            self.source
+        )
+    }
+}
+
+impl std::error::Error for PostReplacementSyncError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.source)
+    }
 }
 
 fn write_via_tmp(path: &Path, bytes: &[u8], mode: u32, durable: bool) -> io::Result<()> {
@@ -73,7 +106,7 @@ fn write_via_tmp(path: &Path, bytes: &[u8], mode: u32, durable: bool) -> io::Res
         }
     }
     let tmp = tmp_sibling(path)?;
-    write_at_tmp(path, &tmp, bytes, mode, durable)
+    write_at_tmp(path, &tmp, bytes, mode, durable, sync_parent_dir)
 }
 
 /// 在**已定名**的临时路径上完成「独占创建 → 写入 → 替换 → 失败清理」。
@@ -82,12 +115,18 @@ fn write_via_tmp(path: &Path, bytes: &[u8], mode: u32, durable: bool) -> io::Res
 /// 确定性地预置**那一格**临时名, 而进程内序号 [`TMP_SEQ`] 会被同二进制的并行
 /// 测试推进, 无法在测试里预测下一个序号 (D27: 靠预占序号窗口猜必中在并行负载下
 /// 失手, 本函数让测试钉定临时名而不猜)。
-fn write_at_tmp(path: &Path, tmp: &Path, bytes: &[u8], mode: u32, durable: bool) -> io::Result<()> {
+fn write_at_tmp(
+    path: &Path,
+    tmp: &Path,
+    bytes: &[u8],
+    mode: u32,
+    durable: bool,
+    sync_parent: impl FnOnce(&Path) -> io::Result<()>,
+) -> io::Result<()> {
+    // 只有独占创建成功后才属于本次写入。预占文件或链接不能被清理。
+    let mut file =
+        create_exclusive(tmp, mode).map_err(|e| contextualize(e, "独占创建临时文件", tmp))?;
     let result = (|| -> io::Result<()> {
-        // create_new(true) 独占创建: 同名文件 (含预置 symlink) 已存在时直接失败,
-        // 拒绝覆盖/写穿, 而不是静默接管别人的临时文件。
-        let mut file =
-            create_exclusive(tmp, mode).map_err(|e| contextualize(e, "独占创建临时文件", tmp))?;
         file.write_all(bytes)
             .map_err(|e| contextualize(e, "写入临时文件", tmp))?;
         if durable {
@@ -97,19 +136,25 @@ fn write_at_tmp(path: &Path, tmp: &Path, bytes: &[u8], mode: u32, durable: bool)
         }
         // 关闭句柄后再替换 (部分平台不允许替换仍被打开的目标)。
         drop(file);
-        replace_target(tmp, path).map_err(|e| contextualize(e, "替换目标文件", path))?;
-        if durable {
-            // 持久档收尾: unix 保证目录项也落盘; Windows 无父目录 fsync
-            // 等价语义, 如实跳过 (平台差异)。
-            sync_parent_dir(path).map_err(|e| contextualize(e, "父目录落盘", path))?;
-        }
-        Ok(())
+        replace_target(tmp, path).map_err(|e| contextualize(e, "替换目标文件", path))
     })();
     if result.is_err() {
         // 失败清理是尽力而为: 半成品临时文件绝不能被读为目标内容。
         let _ = fs::remove_file(tmp);
     }
-    result
+    result?;
+    if durable {
+        sync_parent(path).map_err(|source| {
+            io::Error::new(
+                source.kind(),
+                PostReplacementSyncError {
+                    path: path.to_path_buf(),
+                    source,
+                },
+            )
+        })?;
+    }
+    Ok(())
 }
 
 /// 给底层错误补操作与路径上下文 (保留 `ErrorKind`, 便于调用方按类别处理)。
@@ -622,12 +667,17 @@ mod tests {
             TEST_SEQ.fetch_add(1, Ordering::Relaxed)
         ));
         fs::write(&planted, "occupied").unwrap();
-        let err = write_at_tmp(&target, &planted, b"new", DEFAULT_FILE_MODE, false).unwrap_err();
+        let err = write_at_tmp(&target, &planted, b"new", DEFAULT_FILE_MODE, true, |_| {
+            panic!("替换前失败时不能同步父目录")
+        })
+        .unwrap_err();
         assert!(
             matches!(err.kind(), io::ErrorKind::AlreadyExists),
             "预置临时名必须拒绝写入: {err:?}"
         );
+        assert!(!target_replaced(&err));
         assert_eq!(fs::read(&target).unwrap(), b"old", "目标不得被改动");
+        assert_eq!(fs::read(&planted).unwrap(), b"occupied");
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -646,7 +696,15 @@ mod tests {
             TEST_SEQ.fetch_add(1, Ordering::Relaxed)
         ));
         std::os::unix::fs::symlink(&victim, &planted).unwrap();
-        let err = write_at_tmp(&target, &planted, b"new", DEFAULT_FILE_MODE, false).unwrap_err();
+        let err = write_at_tmp(
+            &target,
+            &planted,
+            b"new",
+            DEFAULT_FILE_MODE,
+            false,
+            sync_parent_dir,
+        )
+        .unwrap_err();
         assert!(
             matches!(err.kind(), io::ErrorKind::AlreadyExists),
             "预置 symlink 必须拒绝写入: {err:?}"
@@ -657,6 +715,27 @@ mod tests {
             "symlink 目标不得被写穿"
         );
         assert!(!target.exists());
+        assert_eq!(fs::read_link(&planted).unwrap(), victim);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn durable_tier_reports_sync_failure_after_target_replacement() {
+        let dir = test_dir("parent-sync-failure");
+        let target = dir.join("x.bin");
+        let tmp = dir.join("x.part");
+        fs::write(&target, b"old").unwrap();
+        let error = write_at_tmp(&target, &tmp, b"new", DEFAULT_FILE_MODE, true, |path| {
+            assert_eq!(fs::read(path).unwrap(), b"new");
+            assert!(!tmp.exists());
+            fs::write(&tmp, b"another writer").unwrap();
+            Err(io::Error::from(io::ErrorKind::PermissionDenied))
+        })
+        .unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
+        assert!(target_replaced(&error));
+        assert_eq!(fs::read(&target).unwrap(), b"new");
+        assert_eq!(fs::read(&tmp).unwrap(), b"another writer");
         let _ = fs::remove_dir_all(&dir);
     }
 

@@ -131,21 +131,9 @@ fn run_recovery_export(args: &[String]) -> Result<String, String> {
         .add_recovery_slot(&dek, &recovery)
         .map_err(|error| error.to_string())?;
     let updated_json = updated.to_json().map_err(|error| error.to_string())?;
-    write_new_secret(
-        &out_path,
-        format!("{}\n", recovery.to_hex()).as_bytes(),
-        "恢复件",
-    )?;
-    if let Err(error) = replace_if_unchanged(&keys_path, &observed, updated_json.as_bytes()) {
-        let cleanup = std::fs::remove_file(&out_path);
-        return Err(match cleanup {
-            Ok(()) => format!("{error}；新恢复件未生效且已移除"),
-            Err(cleanup) => format!(
-                "{error}；新恢复件未生效，且临时恢复件清理失败 {}: {cleanup}",
-                out_path.display()
-            ),
-        });
-    }
+    persist_recovery(&out_path, &recovery, || {
+        replace_if_unchanged(&keys_path, &observed, updated_json.as_bytes())
+    })?;
 
     Ok(format!(
         "crypto recovery-export: ok partition={} recovery={} (旧恢复件已作废; {})",
@@ -266,21 +254,72 @@ fn sync_secret_parent(_path: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
-fn replace_if_unchanged(path: &Path, observed: &[u8], replacement: &[u8]) -> Result<(), String> {
+#[derive(Debug)]
+enum ReplacementFailure {
+    Refused(String),
+    Published(String),
+}
+
+fn persist_recovery(
+    out_path: &Path,
+    recovery: &RecoveryKey,
+    replace: impl FnOnce() -> Result<(), ReplacementFailure>,
+) -> Result<(), String> {
+    write_new_secret(
+        out_path,
+        format!("{}\n", recovery.to_hex()).as_bytes(),
+        "恢复件",
+    )?;
+    match replace() {
+        Ok(()) => Ok(()),
+        Err(ReplacementFailure::Published(error)) => Err(format!(
+            "{error}。密钥文件已替换，落盘未确认。请保留新旧恢复件，并核对新恢复件 {}",
+            out_path.display()
+        )),
+        Err(ReplacementFailure::Refused(error)) => Err(match std::fs::remove_file(out_path) {
+            Ok(()) => format!("{error}。新恢复件未生效且已移除"),
+            Err(cleanup) => format!(
+                "{error}。新恢复件未生效，且临时恢复件清理失败 {}: {cleanup}",
+                out_path.display()
+            ),
+        }),
+    }
+}
+
+fn replace_if_unchanged(
+    path: &Path,
+    observed: &[u8],
+    replacement: &[u8],
+) -> Result<(), ReplacementFailure> {
     let lock_path = storage_atomic::lock_path_for(path);
     storage_atomic::with_file_lock(&lock_path, || {
-        let current = std::fs::read(path)
-            .map_err(|error| format!("密钥文件替换前复核失败 {}: {error}", path.display()))?;
+        let current = std::fs::read(path).map_err(|error| {
+            ReplacementFailure::Refused(format!(
+                "密钥文件替换前复核失败 {}: {error}",
+                path.display()
+            ))
+        })?;
         if current != observed {
-            return Err(format!(
+            return Err(ReplacementFailure::Refused(format!(
                 "密钥文件在操作期间已变化，拒绝覆盖: {}",
                 path.display()
-            ));
+            )));
         }
-        storage_atomic::write_atomic_durable(path, replacement, OWNER_ONLY_MODE)
-            .map_err(|error| format!("密钥文件原子替换失败 {}: {error}", path.display()))
+        storage_atomic::write_atomic_durable(path, replacement, OWNER_ONLY_MODE).map_err(|error| {
+            let message = format!("密钥文件保存未确认 {}: {error}", path.display());
+            if storage_atomic::target_replaced(&error) {
+                ReplacementFailure::Published(message)
+            } else {
+                ReplacementFailure::Refused(message)
+            }
+        })
     })
-    .map_err(|error| format!("密钥文件锁获取失败 {}: {error}", lock_path.display()))?
+    .map_err(|error| {
+        ReplacementFailure::Refused(format!(
+            "密钥文件锁获取失败 {}: {error}",
+            lock_path.display()
+        ))
+    })?
 }
 
 /// 从 stdin 读一行口令 (终端回显 —— 未接无回显输入, 见文件头 0 装诚实)。
@@ -419,12 +458,65 @@ mod tests {
 
         let error = replace_if_unchanged(&target, &observed, b"replacement")
             .expect_err("stale writer must fail");
-        assert!(error.contains("操作期间已变化"), "{error}");
+        assert!(
+            matches!(error, ReplacementFailure::Refused(message) if message.contains("操作期间已变化"))
+        );
         assert_eq!(std::fs::read(&target).expect("read"), b"concurrent");
 
         let current = std::fs::read(&target).expect("observe current");
         replace_if_unchanged(&target, &current, b"replacement").expect("fresh replace");
         assert_eq!(std::fs::read(&target).expect("read"), b"replacement");
+    }
+
+    #[test]
+    fn unconfirmed_replacement_preserves_the_recovery_that_unlocks_the_published_file() {
+        let dir = temp_dir("unconfirmed-recovery");
+        let keys = dir.path().join("keys.json");
+        let out = dir.path().join("new-recovery.txt");
+        let partition = PartitionId::new("recovery-test").expect("partition");
+        let dek = PartitionKey::generate(partition.clone());
+        let old_recovery = RecoveryKey::generate();
+        let replacement = RecoveryKey::generate();
+        let kdf = KdfParams::pbkdf2_hmac_sha256(8, b"cli-recovery-test").expect("params");
+        let mut wrap =
+            KeyWrapFile::seal_new(&partition, &dek, b"test passphrase", &old_recovery, kdf, 0)
+                .expect("wrap");
+        let observed = wrap.to_json().expect("original");
+        std::fs::write(&keys, observed.as_bytes()).expect("seed target");
+        wrap.add_recovery_slot(&dek, &replacement).expect("rotate");
+        let updated = wrap.to_json().expect("updated");
+
+        let refused = persist_recovery(&out, &replacement, || {
+            replace_if_unchanged(&keys, b"stale bytes", updated.as_bytes())
+        })
+        .expect_err("stale replacement must fail before publication");
+        assert!(refused.contains("新恢复件未生效且已移除"));
+        assert!(!out.exists());
+        assert_eq!(
+            std::fs::read(&keys).expect("original target"),
+            observed.as_bytes()
+        );
+
+        let uncertain = persist_recovery(&out, &replacement, || {
+            replace_if_unchanged(&keys, observed.as_bytes(), updated.as_bytes())?;
+            Err(ReplacementFailure::Published(
+                "injected parent sync failure".into(),
+            ))
+        })
+        .expect_err("published target has unconfirmed durability");
+        assert!(uncertain.contains("密钥文件已替换，落盘未确认"));
+        assert!(!uncertain.contains(&replacement.to_hex()));
+        let exported =
+            RecoveryKey::from_hex(&std::fs::read_to_string(&out).expect("retained recovery"))
+                .expect("parse retained recovery");
+        let published = read_key_wrap(&keys).expect("read published target");
+        let unlocked = published
+            .unlock(&UnlockKey::Recovery(exported))
+            .expect("new recovery works");
+        assert_eq!(unlocked.expose_dek(), dek.expose_dek());
+        assert!(published
+            .unlock(&UnlockKey::Recovery(old_recovery))
+            .is_err());
     }
 
     /// 全链路 (wrap 文件形态 → engine 解包 → recovery-export 换新恢复件):

@@ -43,8 +43,8 @@ pub trait CredentialWriter: Send + Sync {
     /// # 为什么默认实现是 **Err**（而不是静默忽略）
     ///
     /// 「静默丢弃绑定」会让部署方以为绑定生效了（实际没生效 ⇒ 保护是假的）。
-    /// ⇒ 不支持绑定的写入端**必须如实报失败**，且返回 `Err` 时不得先写入
-    /// 凭据，否则一个失败的复合操作仍会留下部分状态。
+    /// 不支持绑定的写入端必须在写入前拒绝。支持绑定的写入端必须成对发布值和绑定。
+    /// 发布后若耐久性尚未确认，仍须返回 `Err`，保留已发布记录以便核对。
     fn write_with_endpoints(
         &self,
         _name: &str,
@@ -265,11 +265,8 @@ pub async fn admin_config_update(
         }
     }
 
-    // A compound credential+endpoint write must succeed before any gateway or
-    // provider state is changed. This is failure atomicity: the trait contract
-    // guarantees that `Err` means no credential-side mutation, including for
-    // writers that do not support endpoint metadata at all. It does not claim
-    // a coherent credential+binding read across concurrent provider requests.
+    // Publish the live configuration only after the credential writer confirms
+    // the bound record. On error the durable record may need reconciliation.
     let compound_credential_written = match (patch.base_url.as_deref(), patch.api_key.as_deref()) {
         (Some(endpoint), Some(api_key)) => {
             let Some(writer) = &state.services.credentials else {
@@ -287,7 +284,7 @@ pub async fn admin_config_update(
                 return Err(ErrorFrame::response(
                     StatusCode::SERVICE_UNAVAILABLE,
                     ErrorCode::Internal,
-                    "凭据与端点未能成对保存；配置保持不变",
+                    "凭据与端点的持久保存未确认，当前运行配置保持不变。请核对后再重试",
                 ));
             }
             true
