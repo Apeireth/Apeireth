@@ -30,20 +30,23 @@
 //!
 //! # Determinism
 //!
-//! Nothing here reads the wall clock implicitly. [`Event`] and [`Timestamp`] take
+//! Nothing here reads the wall clock implicitly. `Event` and `Timestamp` take
 //! a `&dyn Clock`, which is what lets the end-to-end runtime test assert on
 //! timing without sleeping.
 
 pub mod error;
+#[cfg(feature = "clock")]
 pub mod event;
 pub mod ids;
 pub mod lifecycle;
 pub mod memory;
 pub mod metadata;
 pub mod stream_kind;
+#[cfg(feature = "clock")]
 pub mod time;
 
 pub use error::{CoreError, CoreResult};
+#[cfg(feature = "clock")]
 pub use event::{Event, Topic};
 pub use ids::{
     AgentId, ApprovalId, CapabilityId, ModelId, ModuleInstanceId, NamespaceId, NodeId, PluginId,
@@ -53,6 +56,7 @@ pub use lifecycle::Lifecycle;
 pub use metadata::Metadata;
 pub use stream_kind::StreamKind;
 pub use stream_kind::StreamKindExt;
+#[cfg(feature = "clock")]
 pub use time::{system_clock, Clock, SystemClock, Timestamp, VirtualClock};
 // Domain types (Episode / Note / Session / IdentityCard / Migration) live in
 // `crate::kernel::memory` — accessed as `apeireth_core::kernel::memory::Episode`.
@@ -84,6 +88,7 @@ mod tests {
 
     /// The primitives have to compose without any subsystem's help; if this stops
     /// being true, something layered has leaked into core.
+    #[cfg(feature = "clock")]
     #[test]
     fn the_primitives_compose_into_a_correlated_record() {
         let clock = VirtualClock::new(

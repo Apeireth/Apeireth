@@ -1,6 +1,12 @@
 # 独立 workspace: 与 Apeireth 主 workspace (root Cargo.toml) 隔离, 不强行加入 upstream members
 [workspace]
-exclude = ["vendor/glib", "vendor/glib-macros", "vendor/gtk3-macros", "vendor/tauri-plugin-single-instance"]
+exclude = [
+    "vendor/glib",
+    "vendor/glib-macros",
+    "vendor/gtk3-macros",
+    "vendor/tauri-plugin-single-instance",
+    "vendor/tauri-utils",
+]
 
 [package]
 name = "companion-desktop"
@@ -21,7 +27,7 @@ tauri = { version = "2", features = ["tray-icon", "image-png"] }
 tauri-plugin-autostart = "2"
 tauri-plugin-single-instance = { path = "vendor/tauri-plugin-single-instance" }
 # 存储文档信封 (配置严格打开 / 显式迁移): 主 workspace 存储基础件, path 依赖。
-apeireth-core = { path = "../../../crates/foundation/core" }
+apeireth-core = { path = "../../../crates/foundation/core", default-features = false }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }
@@ -82,3 +88,5 @@ strip = true
 glib = { path = "vendor/glib" }
 glib-macros = { path = "vendor/glib-macros" }
 gtk3-macros = { path = "vendor/gtk3-macros" }
+# Config types only use its serialization macro.
+tauri-utils = { path = "vendor/tauri-utils" }
