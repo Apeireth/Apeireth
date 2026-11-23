@@ -90,6 +90,35 @@ class SecretScanTests(unittest.TestCase):
         self.assertIn("History coverage: refs=1", result.stdout)
         self.assertNotIn(credential, result.stdout + result.stderr)
 
+    def test_staged_scan_reads_index_after_working_file_changes(self):
+        credential = "sk" + "-" + "W7Q8" * 8
+        path = self.repo / "凭证 [fixture].rs"
+        path.write_text("// clean\n")
+        self.commit()
+        path.write_text('let value = "' + credential + '";\n')
+        self.git("add", ".")
+        path.unlink()
+        result = self.scan("scan-staged")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("凭证 [fixture].rs:1:", result.stdout)
+        self.assertNotIn(credential, result.stdout + result.stderr)
+
+        path.write_text("// staged clean\n")
+        self.git("add", ".")
+        path.write_text('let value = "' + credential + '";\n')
+        result = self.scan("scan-staged")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_staged_scan_reads_config_from_index(self):
+        credential = "sk" + "-" + "Y8D5" * 8
+        self.commit()
+        (self.repo / "new.rs").write_text('let value = "' + credential + '";\n')
+        self.git("add", ".")
+        (self.repo / ".gitleaks.toml").write_text('[allowlist]\npaths = [\n"new.rs",\n]\n')
+        result = self.scan("scan-staged")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertNotIn(credential, result.stdout + result.stderr)
+
     def test_history_scans_only_the_explicitly_selected_ref(self):
         (self.repo / "clean.txt").write_text("clean\n")
         self.commit()
@@ -183,6 +212,13 @@ class SecretScanTests(unittest.TestCase):
                 out.write("// any change invalidates the reviewed blob\n")
             result = self.scan("scan-all")
             self.assertEqual(result.returncode, 1)
+            self.assertNotIn(credential, result.stdout + result.stderr)
+
+            self.git("add", ".")
+            path.write_text('let value = "' + credential + '";\n')
+            result = self.scan("scan-staged")
+            self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+            self.assertIn("immutable current fixtures: 0", result.stdout)
             self.assertNotIn(credential, result.stdout + result.stderr)
 
     def test_reviewed_history_exception_requires_every_immutable_identity_field(self):

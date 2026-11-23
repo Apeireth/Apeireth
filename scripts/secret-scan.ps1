@@ -122,9 +122,8 @@ $AllowlistPaths = @(
 # 加载 .gitleaks.toml 里的 [allowlist] 段 (本脚本支持的最小子集: paths + regexes)
 # ============================================================================
 function Get-GitleaksAllowlist {
-    param([string]$Path)
-    if (-not (Test-Path $Path)) { return $null }
-    $content = Get-Content $Path -Raw
+    param([string]$Content)
+    if ([string]::IsNullOrEmpty($Content)) { return $null }
     $allowlist = @{ Paths = @(); Regexes = @() }
     $m = [regex]::Match($content, "(?s)\[allowlist\](.*?)(?:(\r?\n\[\w+)|$)")
     if ($m.Success) {
@@ -223,18 +222,64 @@ function Scan-Content {
     return $findings
 }
 
+function Read-GitText {
+    param([string[]]$Arguments)
+    $startInfo = [Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = 'git'
+    $startInfo.UseShellExecute = $false
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    $startInfo.StandardOutputEncoding = [Text.Encoding]::UTF8
+    foreach ($argument in @('-C', $RepoRoot, '--no-replace-objects') + $Arguments) {
+        [void]$startInfo.ArgumentList.Add($argument)
+    }
+    $process = [Diagnostics.Process]::Start($startInfo)
+    try {
+        $stderr = $process.StandardError.ReadToEndAsync()
+        $output = $process.StandardOutput.ReadToEnd()
+        $process.WaitForExit()
+        [void]$stderr.GetAwaiter().GetResult()
+        if ($process.ExitCode -ne 0) { throw "git staged scan command failed (exit $($process.ExitCode))" }
+        return $output
+    } finally {
+        $process.Dispose()
+    }
+}
+
+function Read-StagedConfig {
+    $entry = Read-GitText -Arguments @('--literal-pathspecs', 'ls-files', '--stage', '-z', '--', $ConfigFile)
+    if (-not $entry) { return $null }
+    if ($entry -notmatch '^100(?:644|755) ([0-9a-f]{40,64}) 0\t[^\x00]+\x00$') {
+        throw 'staged allowlist does not resolve to one regular file'
+    }
+    return Read-GitText -Arguments @('cat-file', 'blob', $Matches[1])
+}
+
 function Invoke-ScanStaged {
-    $findings = @()
-    $diff = & git diff --cached --diff-filter=ACMR --name-only --no-color 2>$null
-    foreach ($file in $diff) {
-        $abs = Join-Path $RepoRoot $file
-        if (Test-Path $abs -PathType Leaf) {
-            $content = Get-Content $abs -Raw -ErrorAction SilentlyContinue
-            if ($null -eq $content) { continue }
-            $findings += Scan-Content -Content $content -FilePath $file
+    # Raw, NUL-delimited records preserve Git paths and bind each read to the
+    # destination blob in the index even when the working file has changed.
+    $diff = Read-GitText -Arguments @('diff', '--cached', '--raw', '--no-abbrev', '-z', '--no-renames', '--no-ext-diff')
+    if (-not $diff) { return }
+    $records = $diff.Split([char]0)
+    if ($records.Count % 2 -ne 1 -or $records[-1] -ne '') {
+        throw 'staged diff returned incomplete records'
+    }
+    for ($index = 0; $index -lt $records.Count - 1; $index += 2) {
+        if ($records[$index] -notmatch '^:[0-7]{6} ([0-7]{6}) [0-9a-f]{40,64} ([0-9a-f]{40,64}) ([AMTDU])$' -or
+            -not $records[$index + 1]) {
+            throw 'staged diff returned an invalid record'
+        }
+        $mode = $Matches[1]
+        $blob = $Matches[2]
+        $status = $Matches[3]
+        if ($status -eq 'U') { throw 'staged scan found an unmerged index entry' }
+        if ($status -eq 'D' -or $mode -eq '160000') { continue }
+        $file = $records[$index + 1]
+        $content = Read-GitText -Arguments @('cat-file', 'blob', $blob)
+        foreach ($finding in (Scan-Content -Content $content -FilePath $file)) {
+            $finding | Add-Member -NotePropertyName StagedBlob -NotePropertyValue $blob -PassThru
         }
     }
-    return $findings
 }
 
 function Invoke-ScanAll {
@@ -453,8 +498,20 @@ Write-Host "[secret-scan] Mode: $Mode" -ForegroundColor Cyan
 Write-Host "[secret-scan] Repo: $RepoRoot"
 Write-Host "[secret-scan] Patterns: $($SecretPatterns.Count)"
 
-$configPath = Join-Path $RepoRoot $ConfigFile
-$allowlist = Get-GitleaksAllowlist -Path $configPath
+try {
+    $configContent = if ($Mode -eq 'scan-staged') {
+        Read-StagedConfig
+    } else {
+        $configPath = Join-Path $RepoRoot $ConfigFile
+        if (Test-Path -LiteralPath $configPath -PathType Leaf) {
+            Get-Content -LiteralPath $configPath -Raw -ErrorAction Stop
+        }
+    }
+    $allowlist = Get-GitleaksAllowlist -Content $configContent
+} catch {
+    Write-Host "[FAIL] Allowlist load failed closed." -ForegroundColor Red
+    exit 2
+}
 if ($allowlist) {
     Write-Host "[secret-scan] Allowlist: paths=$($allowlist.Paths.Count) regexes=$($allowlist.Regexes.Count)"
 }
@@ -480,7 +537,13 @@ if (Test-Path $currentFixtureFile) {
 }
 
 switch ($Mode) {
-    'scan-staged'   { $findings = Invoke-ScanStaged }
+    'scan-staged'   {
+        try { $findings = Invoke-ScanStaged }
+        catch {
+            Write-Host "[FAIL] Staged scan infrastructure failed closed." -ForegroundColor Red
+            exit 2
+        }
+    }
     'scan-all'      { $findings = Invoke-ScanAll }
     'scan-history'  {
         try { $findings = Invoke-ScanHistory }
@@ -497,7 +560,7 @@ switch ($Mode) {
 $reviewedHistoryCount = 0
 $reviewedCurrentCount = 0
 $filtered = foreach ($f in $findings) {
-    $checkPath = $f.File -replace '^\[history\]\s*', ''
+    $checkPath = if ($f.HistoryBlob) { $f.File.Substring('[history] '.Length) } else { $f.File }
     $matchHash = Get-MatchSha256 -Match $f.Match
     if ($f.HistoryBlob) {
         $reviewed = @($historyFixtures | Where-Object {
@@ -506,10 +569,14 @@ $filtered = foreach ($f in $findings) {
         })
         if ($reviewed.Count -gt 0) { $reviewedHistoryCount++; continue }
     } else {
-        $absolutePath = Join-Path $RepoRoot $checkPath
-        $blob = if (Test-Path $absolutePath -PathType Leaf) {
-            (& git hash-object -- $checkPath 2>$null | Select-Object -First 1)
-        } else { $null }
+        $blob = if ($Mode -eq 'scan-staged') {
+            $f.StagedBlob
+        } else {
+            $absolutePath = Join-Path $RepoRoot $checkPath
+            if (Test-Path -LiteralPath $absolutePath -PathType Leaf) {
+                (& git -C $RepoRoot hash-object -- $checkPath 2>$null | Select-Object -First 1)
+            }
+        }
         $reviewed = @($currentFixtures | Where-Object {
             $_.Blob -ceq $blob -and $_.Path -ceq $checkPath -and
             $_.Line -eq $f.Line -and $_.MatchSha256 -ceq $matchHash
