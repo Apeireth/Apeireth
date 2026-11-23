@@ -55,6 +55,7 @@ jobs:
             libayatana-appindicator3-dev \
             librsvg2-dev \
             libdbus-1-dev \
+            dbus-daemon \
             pkg-config \
             build-essential \
             curl wget file
@@ -72,16 +73,21 @@ jobs:
 
       - name: cargo check (Tauri shell)
         working-directory: frontend/companion-desktop/src-tauri
-        run: cargo check --workspace --all-targets
+        run: cargo check --locked --workspace --all-targets
 
       # 测试资产进入执行面：B1 sql_readonly_gate / B2 provider_proxy_ssrf /
       # B3 desktop_file_roots 的单元断言此前只有 cargo check 编译、从不执行。
       # src-tauri 是独立 [workspace], 必须在自身目录跑, 不能落到根 workspace。
+      # Linux 的 gtk3_variant_iterator 回归也由 --all-targets 执行。
       # 注: tests/supervisor_lifecycle.rs 需要根 workspace 的 apeireth 可执行件,
       # 本 job 不构建它, 故该集成测试在 CI 走 SKIP 分支 (显式 eprintln, 不静默通过)。
       - name: cargo test (Tauri shell)
         working-directory: frontend/companion-desktop/src-tauri
-        run: cargo test --workspace --all-targets
+        run: cargo test --locked --workspace --all-targets
+
+      - name: Test single-instance behavior over a Linux session bus
+        working-directory: frontend/companion-desktop/src-tauri
+        run: dbus-run-session -- cargo test --locked --test single_instance_dbus -- --ignored
 
   # =========================================================================
   # 2. Svelte 5 UI 类型/语法检查 (pnpm + svelte-check)
