@@ -385,6 +385,17 @@ fn the_production_composition_root_registers_the_guard_hook_in_the_governance_pi
     );
 }
 
+fn production_function_lines<'a>(
+    source: &'a str,
+    declaration: &str,
+) -> impl Iterator<Item = &'a str> + Clone {
+    let (_, rest) = source
+        .split_once(declaration)
+        .unwrap_or_else(|| panic!("缺少生产函数声明 {declaration}"));
+    // Rustfmt keeps the closing brace of a top-level function unindented.
+    rest.lines().take_while(|line| *line != "}")
+}
+
 /// **接线实证（静态）**：网关生产入口**真的**按护栏口径造可信意图。
 ///
 /// 没有意图 ⇒ 护栏的对齐层降级 ⇒ 越权判定会弱化（`intent_missing_assessment`）。
@@ -392,18 +403,45 @@ fn the_production_composition_root_registers_the_guard_hook_in_the_governance_pi
 #[test]
 fn the_gateway_production_entry_builds_the_trusted_intent_the_guard_aligns_against() {
     assert!(
-        GATEWAY_ENTRY.contains(".route(\"/v1/chat\", native_http::route())")
-            && NATIVE_HTTP.contains("post(native_chat)")
-            && NATIVE_HTTP.contains("execute_chat_attributed_operation("),
-        "原生对话入口必须调用构造可信意图的回合适配器"
+        production_function_lines(GATEWAY_ENTRY, "pub fn canonical_router_with_state(")
+            .any(|line| line.contains(".merge(native_http::routes())")),
+        "生产网关必须装配原生对话路由"
+    );
+    let mut routes = production_function_lines(NATIVE_HTTP, "pub(super) fn routes()");
+    assert!(
+        routes
+            .clone()
+            .any(|line| line.contains(".route(\"/v1/chat\", post(native_chat))"))
+            && routes.any(|line| line.contains(".route(WORKSPACE_CHAT, post(workspace_chat))"))
+            && NATIVE_HTTP.contains("const WORKSPACE_CHAT: &str = \"/v1/workspace-chat\";"),
+        "生产路由必须接到原生对话和项目工作区对话处理器"
+    );
+    for declaration in ["async fn native_chat(", "async fn workspace_chat("] {
+        assert!(
+            production_function_lines(NATIVE_HTTP, declaration)
+                .any(|line| line.trim_start().starts_with("dispatch(")),
+            "{declaration} 必须进入共享的回合派发路径"
+        );
+    }
+    assert!(
+        production_function_lines(NATIVE_HTTP, "async fn dispatch(")
+            .any(|line| line.contains("execute_chat_attributed_operation(")),
+        "共享回合派发必须调用构造可信意图的回合适配器"
+    );
+    let mut adapter = production_function_lines(
+        SERIALIZED_TURN,
+        "async fn execute_chat_attributed_operation(",
     );
     assert!(
-        SERIALIZED_TURN.contains("RuleIntentInterpreter.interpret("),
+        adapter.any(|line| line.contains("RuleIntentInterpreter.interpret(")),
         "网关生产入口必须用护栏的意图解释器造可信信封"
     );
     assert!(
-        SERIALIZED_TURN.contains("with_intent(intent)")
-            && SERIALIZED_TURN.contains(".with_security_context(context)"),
+        adapter.any(|line| line.contains("TurnSecurityContext::new(")
+            && line.contains(".with_intent(intent)"))
+            && adapter.any(|line| line.contains("TurnRequest::new(")
+                && line.contains(".with_security_context(context)"))
+            && adapter.any(|line| line.contains("run_turn_serialized(runtime, turn,")),
         "可信意图必须绑进 TurnSecurityContext 送进 runtime"
     );
 }
