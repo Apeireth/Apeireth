@@ -20,7 +20,6 @@ tauri = { version = "2", features = ["tray-icon", "image-png"] }
 tauri-plugin-autostart = "2"
 tauri-plugin-notification = "2"
 tauri-plugin-single-instance = "2"
-tauri-plugin-opener = "2"
 # 存储文档信封 (配置严格打开 / 显式迁移): 主 workspace 存储基础件, path 依赖。
 apeireth-core = { path = "../../../crates/foundation/core" }
 serde = { version = "1", features = ["derive"] }
