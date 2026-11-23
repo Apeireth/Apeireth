@@ -15,7 +15,7 @@
 #
 # 0 装口径：没有证据的声明不写在这里；grep 不到的写进 notes 而不是假装验证。
 version: 1
-updated_at: "2026-11-22"
+updated_at: "2026-11-23"
 
 claims:
   - id: rt.provider_router
@@ -29,7 +29,7 @@ claims:
     tests:
       - crates/engine/runtime/src/canonical/provider/compat_tests.rs
       - crates/engine/runtime/tests/canonical_multi_provider.rs
-    verified_at: 146aec08ab2415dd79974f825893b89d3006128f
+    verified_at: "df725ac53cae0a556c2a3fdc58180048e41218a9"
     verify_cmd: "cargo test -p apeireth-runtime --test canonical_multi_provider"
     owner: runtime
     next_review: "2026-11-20"
@@ -45,8 +45,9 @@ claims:
       - crates/adapters/cli/src/lib.rs
     tests:
       - crates/foundation/core/src/cost_router.rs
-    verified_at: "ade8a8f73e91e599dc0bd480e30d0799a971c16c"
-    verify_cmd: "cargo test -p apeireth-core cost_router"
+      - crates/adapters/cli/tests/production_knobs.rs
+    verified_at: "df725ac53cae0a556c2a3fdc58180048e41218a9"
+    verify_cmd: "cargo test -p apeireth-core cost_router && cargo test -p apeireth-cli --test production_knobs cost_routing --locked -j 2"
     owner: core
     next_review: "2026-11-20"
     notes: "默认关 fail-closed；CLI chat 任务选型已接；网关任务源路由/显式档 CLI 旗标未接线（H-P2 记录）。；2026-10-22 批次复核：core cost_router 12 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）；2026-10-28 生产收敛复核：源码变更及回归证据见 kernel-convergence-final-acceptance-2026-10-28.md；不将 Legacy SubLoop 或旧数据 Profile 映射宣称已迁移。；2026-10-29 S5：CLI 变更限于 Host bootstrap，任务选型与该可选成本路由开关的原分支未改；本批作源码差异复核，bootstrap 与所触包 clippy 通过，不声称网关任务选型新增接线。 证据见 kernel-convergence-s5-2026-10-29.md。；2026-11-10 PR31 rebase 到 #94 之后复核：四档成本路由回归通过（cargo test -p apeireth-core cost_router）；本批 crates/adapters/cli/src/lib.rs 变更仅为新增 mesh_cli 模块，成本路由的档位、fail-closed 默认关与开关 env 均未改；2026-11-12 记忆自动化批源码范围复核：来源固定到 ba5466500aca。CLI 的差异限官方记忆 journal、来源资格适配、数据根和 Host 日历偏移装配；本条原功能分支、权限及默认开关未调整。本段只记录源码范围复核，不替代本条 verify_cmd；同提交完整工作区、严格检查及适用 CI 仍待最终验证，原等级、默认值与历史证据保留。；2026-11-17 后端合同批源码范围复核：来源固定到 ea4acf270e9。本批改动仅为尺寸棘轮压回的行为等价搬迁（模块拆分 + 再导出，被搬走代码逐字相同），本条声明描述的能力、权限边界与默认开关一律未变；本条 verify_cmd 实跑：12 passed / 0 failed（本条 verify_cmd 命中 lib 内联测试 cost_router::tests::* 共 12 个；cargo 对其余集成测试二进制报 0 passed/N filtered out 是过滤后的正常表现，不是恒绿——2026-11-17 复核时曾因只看输出尾部误判为恒绿，实测全量计数后已更正）。本段只记录源码范围复核，不替代本条 verify_cmd；同提交完整工作区、严格检查及适用 CI 仍待最终验证，原等级、默认值与历史证据保留。；2026-11-17 B3b-1 批源码范围复核：来源固定到 b7bcbacc04。本批改动是「会话 agent 绑定 HTTP 面 ＋ 回合入口只读闸」，另含 RuntimeBuilder / classify_runtime_error / expire_active_approval_if_needed 三处**行为等价搬迁**（函数体逐字相同）；本条 sources 里的文件因此变更。本条 verify_cmd 实跑：12 passed / 0 failed / 0 ignored。本条描述的能力、权限边界与默认开关一律未变；本段只记录源码范围复核与验证时点，不抬高等级、不改默认开关；同提交完整工作区、严格检查及适用 CI 仍待最终验证，原等级、默认值与历史证据保留。；2026-11-18 B3b-2 复核：本批仅新增 agent 绑定/记忆作用域装配接线，并把 collect_tool_module 等价搬迁到 production_helpers.rs；本声明的语义、接线点、开关与默认均未变，定向测试与门禁证据见 PR #138。；2026-11-18 文本成果线主干合并复核：来源固定到 e636339d07f23f00f150adc0353c0f99714f98ef。本批新增受管文本成果与不可变版本内核（CLI runtime_entry 提取与成果工具/服务、网关可选 artifacts 字段与成果路由、运行时装配导出），并仅启用已锁定的 workspace uuid 依赖；本条能力语义、权限边界与默认开关未改，本条 verify_cmd 未在本批重跑。本段只记录源码范围复核，不替代本条 verify_cmd；同提交全量与适用 CI 仍待最终验证，原等级、默认值与历史证据保留。；2026-11-19 受管桌面模型连接批源码范围复核（来源固定到 7f91de399）：cli/lib.rs 仅在受管启动时跳过 minimax/anthropic provider、跳过多户管理面注入、使用受管默认操作者表，并在运行时装配前准备模型连接；该声明的语义、接线点、开关与默认值均未变。本段只记录源码范围复核，不替代本条 verify_cmd。；2026-11-21 安全批源码范围复核。共享文件的改动限于非回环认证和 TLS、凭据快照、默认模型脱敏、按显式配置挂账本或会话封缄。该声明的接线入口与默认值保持。此处记录源码范围，完整测试与门禁结果见安全报告。"
@@ -63,8 +64,8 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/task_board_tool.rs
       - crates/adapters/cli/tests/task_board_knob.rs
-    verified_at: "ade8a8f73e91e599dc0bd480e30d0799a971c16c"
-    verify_cmd: "cargo test -p apeireth-runtime-assembly --test task_board_tool"
+    verified_at: "df725ac53cae0a556c2a3fdc58180048e41218a9"
+    verify_cmd: "cargo test -p apeireth-runtime-assembly --test task_board_tool && cargo test -p apeireth-cli --test task_board_knob --locked -j 2"
     owner: runtime-assembly
     next_review: "2026-11-20"
     notes: "写面每次人批；失败只能人判；无 failed/retry 动作面。；2026-10-22 批次复核：assembly task_board_tool 6 + cli task_board_knob 2 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）；2026-10-28 生产收敛复核：源码变更及回归证据见 kernel-convergence-final-acceptance-2026-10-28.md；不将 Legacy SubLoop 或旧数据 Profile 映射宣称已迁移。；2026-10-29 S5：完整请求适配保留生产所选工具、显式授权和冻结审批；task_board 注册/开关/写入治理分支未改。本批作源码差异复核并通过 bootstrap、生产认知与包级 clippy，未扩展工具动作或默认开关。 证据见 kernel-convergence-s5-2026-10-29.md。；2026-11-10 PR31 rebase 到 #94 之后复核：任务簿写面回归通过（cargo test -p apeireth-runtime-assembly --test task_board_tool）；本批 cli/lib.rs 仅新增 mesh_cli 模块、runtime 侧为 rebase 语义合并，任务簿的动作面（写面每次人批、失败只能人判）与默认关未改；2026-11-12 记忆自动化批源码范围复核：来源固定到 ba5466500aca。CLI 的差异限官方记忆 journal、来源资格适配、数据根和 Host 日历偏移装配；本条原功能分支、权限及默认开关未调整。本段只记录源码范围复核，不替代本条 verify_cmd；同提交完整工作区、严格检查及适用 CI 仍待最终验证，原等级、默认值与历史证据保留。；2026-11-17 后端合同批源码范围复核：来源固定到 ea4acf270e9。本批改动仅为尺寸棘轮压回的行为等价搬迁（模块拆分 + 再导出，被搬走代码逐字相同），本条声明描述的能力、权限边界与默认开关一律未变；本条 verify_cmd 实跑：6 passed / 0 failed。本段只记录源码范围复核，不替代本条 verify_cmd；同提交完整工作区、严格检查及适用 CI 仍待最终验证，原等级、默认值与历史证据保留。；2026-11-17 B3b-1 批源码范围复核：来源固定到 b7bcbacc04。本批改动是「会话 agent 绑定 HTTP 面 ＋ 回合入口只读闸」，另含 RuntimeBuilder / classify_runtime_error / expire_active_approval_if_needed 三处**行为等价搬迁**（函数体逐字相同）；本条 sources 里的文件因此变更。本条 verify_cmd 实跑：6 passed / 0 failed / 0 ignored。本条描述的能力、权限边界与默认开关一律未变；本段只记录源码范围复核与验证时点，不抬高等级、不改默认开关；同提交完整工作区、严格检查及适用 CI 仍待最终验证，原等级、默认值与历史证据保留。；2026-11-18 B3b-2 复核：本批仅新增 agent 绑定/记忆作用域装配接线，并把 collect_tool_module 等价搬迁到 production_helpers.rs；本声明的语义、接线点、开关与默认均未变，定向测试与门禁证据见 PR #138。；2026-11-18 文本成果线主干合并复核：来源固定到 e636339d07f23f00f150adc0353c0f99714f98ef。本批新增受管文本成果与不可变版本内核（CLI runtime_entry 提取与成果工具/服务、网关可选 artifacts 字段与成果路由、运行时装配导出），并仅启用已锁定的 workspace uuid 依赖；本条能力语义、权限边界与默认开关未改，本条 verify_cmd 未在本批重跑。本段只记录源码范围复核，不替代本条 verify_cmd；同提交全量与适用 CI 仍待最终验证，原等级、默认值与历史证据保留。；2026-11-19 受管桌面模型连接批源码范围复核（来源固定到 7f91de399）：cli/lib.rs 仅在受管启动时跳过 minimax/anthropic provider、跳过多户管理面注入、使用受管默认操作者表，并在运行时装配前准备模型连接；该声明的语义、接线点、开关与默认值均未变。本段只记录源码范围复核，不替代本条 verify_cmd。；2026-11-21 安全批源码范围复核。共享文件的改动限于非回环认证和 TLS、凭据快照、默认模型脱敏、按显式配置挂账本或会话封缄。该声明的接线入口与默认值保持。此处记录源码范围，完整测试与门禁结果见安全报告。"
@@ -108,8 +109,9 @@ claims:
       - crates/adapters/cli/src/lib.rs
     tests:
       - crates/capabilities/tools/tests/voice_speak.rs
-    verified_at: "ade8a8f73e91e599dc0bd480e30d0799a971c16c"
-    verify_cmd: "cargo test -p apeireth-tools-canonical --test voice_speak"
+      - crates/adapters/cli/tests/voice_speak_knob.rs
+    verified_at: "df725ac53cae0a556c2a3fdc58180048e41218a9"
+    verify_cmd: "cargo test -p apeireth-tools-canonical --test voice_speak && cargo test -p apeireth-cli --test voice_speak_knob --locked -j 2"
     owner: tools
     next_review: "2026-11-20"
     notes: "2026-10-31 复核：**情绪源已接线**（CLI lib.rs:2161 with_emotion_reader），下面「未接线」表述作废（保留历史）；定制音色后置。；情绪→语气微调生产情绪源未接线（无数据 = 零微调，如实）；定制音色后置。；2026-10-22 批次复核：voice_speak 16 passed / 2 ignored；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）；2026-10-28 生产收敛复核：源码变更及回归证据见 kernel-convergence-final-acceptance-2026-10-28.md；不将 Legacy SubLoop 或旧数据 Profile 映射宣称已迁移。；2026-10-29 S5：CLI 变更限于 Host bootstrap，语音注册、权限及默认开关的原分支未改；本批作源码差异复核并通过 bootstrap 与包级 clippy，无硬件/播放实测声明。 证据见 kernel-convergence-s5-2026-10-29.md。；2026-11-10 PR31 rebase 到 #94 之后复核：语音播报回归通过（cargo test -p apeireth-tools-canonical --test voice_speak）；本批未改 voice/playback/ledger 任一文件，播报语义与默认开关未变；2026-11-12 记忆自动化批源码范围复核：来源固定到 ba5466500aca。CLI 的差异限官方记忆 journal、来源资格适配、数据根和 Host 日历偏移装配；本条原功能分支、权限及默认开关未调整。本段只记录源码范围复核，不替代本条 verify_cmd；同提交完整工作区、严格检查及适用 CI 仍待最终验证，原等级、默认值与历史证据保留。；2026-11-17 后端合同批源码范围复核：来源固定到 ea4acf270e9。本批改动仅为尺寸棘轮压回的行为等价搬迁（模块拆分 + 再导出，被搬走代码逐字相同），本条声明描述的能力、权限边界与默认开关一律未变；本条 verify_cmd 实跑：16 passed / 0 failed / 2 ignored。本段只记录源码范围复核，不替代本条 verify_cmd；同提交完整工作区、严格检查及适用 CI 仍待最终验证，原等级、默认值与历史证据保留。；2026-11-17 B3b-1 批源码范围复核：来源固定到 b7bcbacc04。本批改动是「会话 agent 绑定 HTTP 面 ＋ 回合入口只读闸」，另含 RuntimeBuilder / classify_runtime_error / expire_active_approval_if_needed 三处**行为等价搬迁**（函数体逐字相同）；本条 sources 里的文件因此变更。本条 verify_cmd 实跑：16 passed / 0 failed / 2 ignored。本条描述的能力、权限边界与默认开关一律未变；本段只记录源码范围复核与验证时点，不抬高等级、不改默认开关；同提交完整工作区、严格检查及适用 CI 仍待最终验证，原等级、默认值与历史证据保留。；2026-11-18 B3b-2 复核：本批仅新增 agent 绑定/记忆作用域装配接线，并把 collect_tool_module 等价搬迁到 production_helpers.rs；本声明的语义、接线点、开关与默认均未变，定向测试与门禁证据见 PR #138。；2026-11-18 文本成果线主干合并复核：来源固定到 e636339d07f23f00f150adc0353c0f99714f98ef。本批新增受管文本成果与不可变版本内核（CLI runtime_entry 提取与成果工具/服务、网关可选 artifacts 字段与成果路由、运行时装配导出），并仅启用已锁定的 workspace uuid 依赖；本条能力语义、权限边界与默认开关未改，本条 verify_cmd 未在本批重跑。本段只记录源码范围复核，不替代本条 verify_cmd；同提交全量与适用 CI 仍待最终验证，原等级、默认值与历史证据保留。；2026-11-19 受管桌面模型连接批源码范围复核（来源固定到 7f91de399）：cli/lib.rs 仅在受管启动时跳过 minimax/anthropic provider、跳过多户管理面注入、使用受管默认操作者表，并在运行时装配前准备模型连接；该声明的语义、接线点、开关与默认值均未变。本段只记录源码范围复核，不替代本条 verify_cmd。；2026-11-21 安全批源码范围复核。共享文件的改动限于非回环认证和 TLS、凭据快照、默认模型脱敏、按显式配置挂账本或会话封缄。该声明的接线入口与默认值保持。此处记录源码范围，完整测试与门禁结果见安全报告。"
@@ -128,7 +130,7 @@ claims:
     tests:
       - crates/capabilities/tools/src/egress.rs
       - crates/capabilities/tools/src/fetch.rs
-    verified_at: 3431a5ff1bb1efcd8e738a2c22c5a2635017e667
+    verified_at: "df725ac53cae0a556c2a3fdc58180048e41218a9"
     verify_cmd: "cargo test -p apeireth-tools-canonical --lib egress"
     owner: capabilities
     next_review: "2026-12-01"
@@ -221,7 +223,7 @@ claims:
       - crates/capabilities/tools/src/accountability_view.rs
       - crates/foundation/governance/src/authorization.rs
       - crates/adapters/cli/src/egress_command.rs
-    verified_at: "372a6f838cc9e988343df0fa0b7f2d44a5e9b8d1"
+    verified_at: "df725ac53cae0a556c2a3fdc58180048e41218a9"
     verify_cmd: "cargo test -p apeireth-runtime --lib egress && cargo test -p apeireth-runtime-assembly --lib egress_gate"
     owner: runtime
     next_review: "2026-12-01"
@@ -261,7 +263,7 @@ claims:
     tests:
       - crates/adapters/gateway/tests/panel_routes.rs
       - crates/engine/memory/tests/memory_2_tests.rs
-    verified_at: 7f91de399aad8b461b0840d8a77f97492e5a33ea
+    verified_at: "df725ac53cae0a556c2a3fdc58180048e41218a9"
     verify_cmd: "cargo test -p apeireth-gateway --test panel_routes update_episode"
     owner: gateway
     next_review: "2026-11-20"
@@ -312,7 +314,7 @@ claims:
     tests:
       - crates/adapters/gateway/tests/tls_serve.rs
       - crates/adapters/cli/tests/remote_access_e2e.rs
-    verified_at: "5e3a08b2215f15cfffba3ddf87aa70ee5eeef9f4"
+    verified_at: "df725ac53cae0a556c2a3fdc58180048e41218a9"
     verify_cmd: "cargo test -p apeireth-gateway --test tls_serve --locked -j 2 && cargo test -p apeireth-cli --test remote_access_e2e --locked -j 2"
     owner: gateway
     next_review: "2026-12-06"
@@ -382,7 +384,7 @@ claims:
     tests:
       - crates/foundation/governance/src/chain.rs
       - crates/adapters/cli/tests/governance_chain_equivalence.rs
-    verified_at: "ade8a8f73e91e599dc0bd480e30d0799a971c16c"
+    verified_at: "df725ac53cae0a556c2a3fdc58180048e41218a9"
     # ⚠️ **2026-11-07 收窄**（声明核验批，与兄弟声明同形）：原命令跑的是
     # **governance crate 全部 lib 单测**（241 条）⇒ ⇒ 而本条真正相关的只有
     # `chain.rs` 的 25 条 + CLI 装配根四态等价性 4 条
@@ -526,7 +528,7 @@ claims:
       - crates/adapters/gateway/tests/admin_binding_warning.rs
       - crates/adapters/gateway/tests/admin_config.rs
       - crates/adapters/cli/src/keyring_bootstrap.rs
-    verified_at: "be53f8f3d8329817a5603f81a3c2b0532dac79fe"
+    verified_at: "df725ac53cae0a556c2a3fdc58180048e41218a9"
     verify_cmd: "cargo test -p apeireth-provider --test endpoint_binding --locked && cargo test -p apeireth-gateway --test admin_binding_warning --test admin_config --locked && cargo test -p apeireth-cli --lib keyring_bootstrap --locked"
     owner: provider
     next_review: "2026-12-01"
@@ -631,7 +633,7 @@ claims:
     tests:
       - crates/engine/runtime/tests/bio_pain_wiring.rs
       - crates/engine/organ/src/nociception.rs
-    verified_at: "ade8a8f73e91e599dc0bd480e30d0799a971c16c"
+    verified_at: "df725ac53cae0a556c2a3fdc58180048e41218a9"
     # ⚠️ **2026-11-07 收窄**（声明核验批）：原命令只跑 **organ 侧的 nociception 内核**（24 条）
     # ⇒ ⇒ 而本条标题是「痛觉→**失败链**」⇒ ⇒ 核心证据是本条自己列的
     # `crates/engine/runtime/tests/bio_pain_wiring.rs`（4 条接线用例）⇒ ⇒ **原命令没跑**
@@ -700,7 +702,7 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/bio_quorum_immune_wiring.rs
       - crates/engine/guard/src/immune_memory.rs
-    verified_at: "ade8a8f73e91e599dc0bd480e30d0799a971c16c"
+    verified_at: "df725ac53cae0a556c2a3fdc58180048e41218a9"
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_quorum_immune_wiring"
     owner: guard
     next_review: "2026-11-20"
@@ -920,7 +922,7 @@ claims:
       - crates/adapters/cli/tests/gateway_panels.rs
       - crates/engine/runtime-assembly/tests/production_cognitive_v1.rs
       - crates/engine/runtime-assembly/tests/profile_memory_authorization.rs
-    verified_at: "ade8a8f73e91e599dc0bd480e30d0799a971c16c"
+    verified_at: "df725ac53cae0a556c2a3fdc58180048e41218a9"
     verify_cmd: "cargo test -p apeireth-runtime --test registry_runtime_v1 --locked && cargo test -p apeireth-runtime-assembly --test capability_modules_v1 --locked"
     owner: runtime
     next_review: "2026-11-28"
@@ -964,7 +966,7 @@ claims:
       - crates/engine/runtime-assembly/tests/managed_main.rs
       - crates/adapters/cli/tests/canonical_cli_bootstrap.rs
       - crates/adapters/cli/tests/care_heartbeat_host.rs
-    verified_at: "ade8a8f73e91e599dc0bd480e30d0799a971c16c"
+    verified_at: "df725ac53cae0a556c2a3fdc58180048e41218a9"
     verify_cmd: "cargo test -p apeireth-runtime --test cognitive_module_abi --locked -j 2 && cargo test -p apeireth-runtime --test canonical_subloop --locked -j 2 && cargo test -p apeireth-runtime-assembly --test convergence_agents --locked -j 2 && cargo test -p apeireth-runtime-assembly --test memory_namespace_production --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
@@ -994,7 +996,7 @@ claims:
       - crates/engine/runtime-assembly/tests/convergence_memory.rs
       - crates/engine/runtime-assembly/tests/profile_memory_authorization.rs
       - crates/engine/runtime-assembly/tests/memory_namespace_production.rs
-    verified_at: "ade8a8f73e91e599dc0bd480e30d0799a971c16c"
+    verified_at: "df725ac53cae0a556c2a3fdc58180048e41218a9"
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test profile_memory_authorization --locked -j 2 && cargo test -p apeireth-runtime-assembly --test convergence_memory --locked -j 2 && cargo test -p apeireth-runtime-assembly --test memory_namespace_production --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
@@ -1020,7 +1022,7 @@ claims:
       - crates/engine/runtime-assembly/tests/managed_main.rs
       - crates/engine/runtime-assembly/tests/production_cognitive_v1.rs
       - crates/engine/runtime-assembly/tests/portable_host.rs
-    verified_at: "ade8a8f73e91e599dc0bd480e30d0799a971c16c"
+    verified_at: "df725ac53cae0a556c2a3fdc58180048e41218a9"
     verify_cmd: "cargo test -p apeireth-cli --test canonical_cli_bootstrap --test care_heartbeat_host --locked -j 2 && cargo test -p apeireth-runtime-assembly --test managed_main --test production_cognitive_v1 --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
@@ -1047,7 +1049,7 @@ claims:
       - crates/engine/runtime-assembly/tests/modular_ale.rs
       - crates/engine/runtime-assembly/tests/module_contract_wiring.rs
       - crates/adapters/cli/tests/module_contract_production.rs
-    verified_at: 6cd73e9c5e1a193b984a182a013399a420160111
+    verified_at: "df725ac53cae0a556c2a3fdc58180048e41218a9"
     verify_cmd: "cargo test -p apeireth-plugin --test module_contract --locked -j 2 && cargo test -p apeireth-runtime-assembly --test modular_ale --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
@@ -1075,7 +1077,8 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/system_one_execution.rs
       - crates/engine/runtime-assembly/tests/modular_ale.rs
-    verified_at: "ade8a8f73e91e599dc0bd480e30d0799a971c16c"
+      - crates/adapters/cli/tests/system_one_knob.rs
+    verified_at: "df725ac53cae0a556c2a3fdc58180048e41218a9"
     # ⚠️ **2026-11-07 收窄 + 修缺陷**（声明核验批）：
     # ① 原命令只跑 **CLI 旋钮**那一个测试目标（5 条）⇒ ⇒ 而本条自己列的
     #    `crates/engine/runtime-assembly/tests/system_one_execution.rs`（11 条）**没跑**
@@ -1109,7 +1112,7 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/module_message_pipeline.rs
       - crates/engine/runtime-assembly/tests/desktop_message_policy.rs
-    verified_at: 6cd73e9c5e1a193b984a182a013399a420160111
+    verified_at: "df725ac53cae0a556c2a3fdc58180048e41218a9"
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test module_message_pipeline --locked -j 2 && cargo test -p apeireth-runtime-assembly --test desktop_message_policy --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
@@ -1130,7 +1133,7 @@ claims:
       - crates/engine/runtime-assembly/tests/mesh_execution.rs
       - crates/engine/runtime-assembly/tests/module_message_pipeline.rs
       - crates/engine/runtime-assembly/tests/mesh_production_host.rs
-    verified_at: e636339d07f23f00f150adc0353c0f99714f98ef
+    verified_at: "df725ac53cae0a556c2a3fdc58180048e41218a9"
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test mesh_execution --test module_message_pipeline --locked -j 2 && cargo test -p apeireth-runtime-assembly --test mesh_production_host --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
@@ -1249,7 +1252,7 @@ claims:
     tests:
       - crates/engine/runtime/tests/committed_evidence.rs
       - crates/engine/runtime-assembly/tests/memory_autonomy_production.rs
-    verified_at: "2869c46c6183204820946e2a2598b47263a28592"
+    verified_at: "df725ac53cae0a556c2a3fdc58180048e41218a9"
     verify_cmd: "cargo test -p apeireth-runtime --test committed_evidence --locked -j 2 && cargo test -p apeireth-runtime-assembly --test memory_autonomy_production --locked -j 2"
     owner: runtime
     next_review: "2026-11-26"
@@ -1274,7 +1277,7 @@ claims:
       - crates/engine/memory/tests/memory_automatic_correction.rs
       - crates/engine/runtime-assembly/tests/memory_automatic_correction.rs
       - crates/engine/runtime-assembly/tests/memory_autonomy_production.rs
-    verified_at: "ade8a8f73e91e599dc0bd480e30d0799a971c16c"
+    verified_at: "df725ac53cae0a556c2a3fdc58180048e41218a9"
     verify_cmd: "cargo test -p apeireth-memory --test memory_automatic_correction --locked -j 2 && cargo test -p apeireth-runtime-assembly --test memory_automatic_correction --test memory_autonomy_production --locked -j 2"
     owner: memory
     next_review: "2026-11-26"
@@ -1312,7 +1315,7 @@ claims:
       - crates/engine/memory/tests/memory_automatic_correction.rs
       - crates/engine/runtime-assembly/tests/memory_writeback_recovery.rs
       - crates/engine/runtime-assembly/tests/memory_autonomy_production.rs
-    verified_at: "ade8a8f73e91e599dc0bd480e30d0799a971c16c"
+    verified_at: "df725ac53cae0a556c2a3fdc58180048e41218a9"
     verify_cmd: "cargo test -p apeireth-memory --test writeback_recovery --test memory_automatic_correction --locked -j 2 && cargo test -p apeireth-runtime-assembly --test memory_writeback_recovery --test memory_autonomy_production --locked -j 2"
     owner: memory
     next_review: "2026-11-26"
@@ -1349,7 +1352,7 @@ claims:
       - crates/engine/runtime-assembly/tests/memory_autonomy_production.rs
       - crates/engine/memory/src/context_compiler.rs
       - crates/engine/runtime/tests/context_budget.rs
-    verified_at: "ade8a8f73e91e599dc0bd480e30d0799a971c16c"
+    verified_at: "df725ac53cae0a556c2a3fdc58180048e41218a9"
     verify_cmd: "cargo test -p apeireth-memory --lib context_compiler --locked -j 2 && cargo test -p apeireth-memory --test memory_source_evidence --locked -j 2 && cargo test -p apeireth-runtime-assembly --test memory_autonomy_production --locked -j 2 && cargo test -p apeireth-runtime --test context_budget --locked -j 2 && cargo test -p apeireth-memory --lib coordinator --locked -j 2 && cargo test -p apeireth-memory --lib retrieval --locked -j 2"
     owner: memory
     next_review: "2026-11-26"
@@ -1420,8 +1423,8 @@ claims:
     tests:
       - crates/engine/runtime-assembly/examples/memory_longterm_eval/tests.rs
       - crates/engine/provider/tests/canonical_openai_compatible.rs
-    verified_at: "ade8a8f73e91e599dc0bd480e30d0799a971c16c"
-    verify_cmd: "cargo test -p apeireth-runtime-assembly --example memory_longterm_eval --locked -j 2"
+    verified_at: "df725ac53cae0a556c2a3fdc58180048e41218a9"
+    verify_cmd: "cargo test -p apeireth-runtime-assembly --example memory_longterm_eval --locked -j 2 && cargo test -p apeireth-provider --test canonical_openai_compatible --locked -j 2"
     owner: runtime-assembly
     next_review: "2026-11-20"
     notes: "2026-11-13 IMPLEMENTED，仅显式手动 example，不是默认产品请求入口。本条覆盖长历史多会话回答质量评测与规模压力契约：四类前提（直接用户证据、Host 授权、当前作用域、修订 CAS）逐例留痕并各配一条差分探针；引用必须可追溯到证据条目（证据 id、episode、修订、正文散列、可引用资格、锚点命中与缺失）；负控覆盖伪造引用 id、错值、错主体、少引用、状态不符、重复事实与环状步骤。规模与持续运行分别报告：存储规模与并发、全链路并发、规模下召回延迟、故障注入与恢复、真实墙钟持续与虚拟时域各占一项；虚拟时域写明只拨了时钟、不是持续运行。封存（seal）闭环按 append-only 台账实现：首次揭封成功、二次运行被拒退出码 1、仅凭 custody 文件可独立复核。独立保管（需另一持有人或另一台机器）与真实计价（价格表接线）本轮未接线，产物如实标注未实现，费用不是 0 元。题集是本仓自编回归集，不是独立盲测，产物显式标注；确定性生成器与种子一并写出。真实模型路径已接线并实测一轮（deepseek-flash，厂商 OpenAI 兼容端点）：6 例 4 通过 2 失败、36 次负控全被拒、4 类前提成立、6 条探针全绿、8 次提供方调用、提问阶段 p50 1.17 秒 p95 1.57 秒；两例失败是模型侧质量失败（歧义主体答成已知、跨作用域答成已知），不是夹具或门禁失败；单轮结果不构成质量水平结论。该端点默认开启推理模式，历史里带工具调用的助手轮缺推理内容会被厂商拒绝（400）；本仓规范化协议没有该字段，因此只提供显式可选且默认不变的厂商私有请求字段透传（厂商字段与协议保留键的守护在 provider 侧），协议级回传未实现。凭据只经环境变量按轮解析，不进参数、仓库、产物或报告；产物中密钥形态串一律脱敏，并有测试断言产物不含密钥形态串与环境变量值。；2026-11-18 文本成果线主干合并复核：来源固定到 e636339d07f23f00f150adc0353c0f99714f98ef。本批新增受管文本成果与不可变版本内核（CLI runtime_entry 提取与成果工具/服务、网关可选 artifacts 字段与成果路由、运行时装配导出），并仅启用已锁定的 workspace uuid 依赖；本条能力语义、权限边界与默认开关未改，本条 verify_cmd 未在本批重跑。本段只记录源码范围复核，不替代本条 verify_cmd；同提交全量与适用 CI 仍待最终验证，原等级、默认值与历史证据保留。；2026-11-21 安全批源码范围复核。共享文件的改动限于非回环认证和 TLS、凭据快照、默认模型脱敏、按显式配置挂账本或会话封缄。该声明的接线入口与默认值保持。此处记录源码范围，完整测试与门禁结果见安全报告。"
@@ -1470,8 +1473,8 @@ claims:
       - crates/engine/runtime-assembly/src/artifact_tools_tests.rs
       - crates/adapters/gateway/src/artifacts/tests.rs
       - crates/adapters/gateway/tests/artifact_candidates_http.rs
-    verified_at: "ade8a8f73e91e599dc0bd480e30d0799a971c16c"
-    verify_cmd: "cargo test -p apeireth-protocol -p apeireth-runtime-assembly -p apeireth-gateway -p apeireth-cli --lib --locked --offline -j 2"
+    verified_at: "df725ac53cae0a556c2a3fdc58180048e41218a9"
+    verify_cmd: "cargo test -p apeireth-protocol -p apeireth-runtime-assembly -p apeireth-gateway -p apeireth-cli --lib --locked --offline -j 2 && cargo test -p apeireth-gateway --test artifact_candidates_http --locked -j 2"
     owner: runtime-assembly
     next_review: "2026-11-27"
     notes: "首批仅默认域且用户表未激活的本机single_operator；服务端可信scope/author，不接受自报owner，work_id/session引用不作授权。固定数据根SQLite将expected-head CAS、不可变revision和operation幂等回执放入同一事务；恢复追加历史，UTF8指定已提交版本带SHA/ETag导出。CLI显式同Arc装配受治理artifact_read/artifact_write与HTTP；人明确保存，agent每次写保留原审批底线，read_only拒写。用户表出现或active UserAccess/非default域失败关闭，不回落默认库。后端四个受影响lib回归通过；实际主API/原生链覆盖迟到与丢回执、旧AI候选、冲突/rebase、历史恢复、精确导出及重开。独立canonical工具链23项断言通过，6次本机受控调用：原审批后agent创建、HTTP人工v2、agent同库读回。本仓验证台账：docs/status/text-artifact-versions-2026-11-13-verification.json，进度见同目录text-artifact-versions-2026-11-13.md。独立工具链为根代理实际有界观测；verify_cmd只核本仓四个lib，不引用跨仓实现或私有证据。不宣称多用户、非default域成果协作、DOCX保真编辑、外部模型质量或硬件验证；默认开指上述本机装配，非agent免审批写。全workspace/strict Clippy等最终门禁另按进度页记录，本条不冒充全量已通过或用户视觉签收。；2026-11-18 主干合并复核：verified_at 固定到 e636339d07f23f00f150adc0353c0f99714f98ef。本批以 cherry-pick 只带入成果线 29 个文件，保留主干 native handler，成果路由经 artifacts::routes_with_panels() 与顶层 protect_response 接入，legacy PanelData 不造版本库，真实服务由组合根注入；canonical_entry.rs 保持 2291 行。四包 --lib 回归通过，gateway 两例 cache-control 断言首轮暴露保护层顺序问题并已修复；fmt/clippy/arch_guard/audit_unwired/budget 均通过。未跑全量 workspace、live E2E 或外部模型。；2026-11-18 只读候选回合源码范围复核（来源固定到 e51327a5d）：artifacts.rs 新增 POST /v1/artifacts/:id/candidates 只读候选端点（不落库、不自动产生 revision），runtime 新增逐轮无工具策略/read_only 模块状态并搬迁 TurnRequest；既有 Artifact/Revision/CAS/operation 幂等/export/restore 合同与默认开未变。本批 artifact_candidates_http 9 passed、gateway --lib 145 passed、runtime --lib 195 passed、tls_serve 7 passed；本条 verify_cmd 中 protocol 与 runtime-assembly lib 未在本批重跑。本段只记录源码范围复核，不替代本条完整 verify_cmd。；2026-11-19 受管桌面模型连接批源码范围复核（来源固定到 7f91de399）：gateway/artifacts.rs 的成果契约与只读候选端点未改，仅在严格受管单操作者形态放行成果面；cli/lib.rs 在受管启动时跳过其他 provider 与多户管理面。候选 9 项 HTTP 回归通过，旧成果 store/head/版本数/摘要核对不变。本段只记录源码范围复核，不替代本条 verify_cmd。；2026-11-19 会话读面批源码范围复核（来源固定到 7f520ef37）：canonical_entry.rs 只新增只读会话恢复路由与保护层，artifacts.rs 未改；成果/版本/CAS/幂等/候选合同与默认开未变。本段只记录源码范围复核，不替代本条 verify_cmd。；2026-11-20 源码范围复核（783b50c71）：原生 /v1/chat 的执行所有权修复继续调用原 canonical 运行路径。成果存储和版本路由无变更。；2026-11-20 桌面并线复核：canonical 网关原生回合和联系人入口改动。成果路由、版本事务和候选写入边界保持，四包库回归及候选 HTTP 9 项通过。；2026-11-21 安全批源码范围复核。共享文件的改动限于非回环认证和 TLS、凭据快照、默认模型脱敏、按显式配置挂账本或会话封缄。该声明的接线入口与默认值保持。此处记录源码范围，完整测试与门禁结果见安全报告。"
@@ -1497,7 +1500,7 @@ claims:
       - crates/adapters/cli/src/desktop_model_connection_tests.rs
       - crates/adapters/cli/tests/desktop_model_connection.rs
       - crates/adapters/gateway/src/model_connection.rs
-    verified_at: "be53f8f3d8329817a5603f81a3c2b0532dac79fe"
+    verified_at: "df725ac53cae0a556c2a3fdc58180048e41218a9"
     verify_cmd: "cargo test -p apeireth-cli --lib desktop_model_connection --locked -j 2 && cargo test -p apeireth-cli --test desktop_model_connection --locked -j 2 && cargo test -p apeireth-gateway --lib model_connection --locked -j 2"
     owner: cli
     next_review: "2026-12-03"

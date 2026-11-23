@@ -3,7 +3,7 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: 131bd0339f4a5763d1eeef2c5b6297ee2e3e4747257be231f685dd2b075417a4
+claims_sha256: 0a792f88ad623a7e9f6c7c0f7607a2283aa3aad24413e37df3048d33fc07a8f6
 claims_total: 63
 items:
   - id: "rt.provider_router"
@@ -39,6 +39,7 @@ items:
     validated:
       tests:
         - "crates/foundation/core/src/cost_router.rs"
+        - "crates/adapters/cli/tests/production_knobs.rs"
       claims_id: "core.cost_router"
     gaps:
       []
@@ -117,6 +118,7 @@ items:
     validated:
       tests:
         - "crates/capabilities/tools/tests/voice_speak.rs"
+        - "crates/adapters/cli/tests/voice_speak_knob.rs"
       claims_id: "tool.voice_speak"
     gaps:
       []
@@ -1266,6 +1268,7 @@ items:
       tests:
         - "crates/engine/runtime-assembly/tests/system_one_execution.rs"
         - "crates/engine/runtime-assembly/tests/modular_ale.rs"
+        - "crates/adapters/cli/tests/system_one_knob.rs"
       claims_id: "rt.system_one_internal"
     gaps:
       []
