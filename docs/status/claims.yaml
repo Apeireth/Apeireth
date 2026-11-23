@@ -15,7 +15,7 @@
 #
 # 0 装口径：没有证据的声明不写在这里；grep 不到的写进 notes 而不是假装验证。
 version: 1
-updated_at: "2026-11-21"
+updated_at: "2026-11-22"
 
 claims:
   - id: rt.provider_router
@@ -160,15 +160,17 @@ claims:
     sources:
       - crates/adapters/gateway/src/user_admin.rs
       - crates/adapters/cli/src/user_admin.rs
+      - crates/foundation/core/src/storage_atomic.rs
     tests:
       - crates/adapters/gateway/tests/user_admin_endpoints.rs
       - crates/adapters/cli/tests/user_admin.rs
       - crates/adapters/cli/tests/user_admin_dual_entry.rs
-    verified_at: 9574f0145e4e31811518ebed75e233fb3c2b29a5
-    verify_cmd: "cargo test -p apeireth-gateway --test user_admin_endpoints --locked -j 2 && cargo test -p apeireth-cli --test user_admin --test user_admin_dual_entry --locked -j 2"
+      - crates/adapters/gateway/src/user_admin.rs
+    verified_at: be53f8f3d8329817a5603f81a3c2b0532dac79fe
+    verify_cmd: "cargo test -p apeireth-gateway --test user_admin_endpoints --locked -j 2 && cargo test -p apeireth-cli --test user_admin --test user_admin_dual_entry --locked -j 2 && cargo test -p apeireth-gateway --lib governed_removal_receipts_distinguish_failure_before_and_after_replacement --locked -j 2"
     owner: gateway
     next_review: "2026-12-05"
-    notes: "两入口共用预检及结果确认；用户管理入口可用时强制启用。任何账本未确认均保留用户记录。受管桌面模式不开放普通多用户面。HTTP 独立用户域拒绝使用默认账本。遗忘按现有逻辑删除语义，无介质清除和外部副本清除承诺。"
+    notes: "两入口共用预检及结果确认；用户管理入口可用时强制启用。任何账本未确认均保留用户记录。受管桌面模式不开放普通多用户面。HTTP 独立用户域拒绝使用默认账本。遗忘按现有逻辑删除语义，无介质清除和外部副本清除承诺。 2026-11-22 Windows 复验通过。HTTP 管理端点 14 项、CLI 5 项、双入口 5 项及替换前后回执故障测试通过。五账确认后如果用户表已替换、持久性未确认，回执报告账号已从当前表移除、遗忘已完成及不可直接重试，要求核对存储状态。替换前失败仍按原合同保留账号。"
 
   - id: sec.exposure_audit
     title: "暴露面体检（六个暴露面只读扫描 + 同一内核两出口）"
@@ -310,11 +312,11 @@ claims:
     tests:
       - crates/adapters/gateway/tests/tls_serve.rs
       - crates/adapters/cli/tests/remote_access_e2e.rs
-    verified_at: "ade8a8f73e91e599dc0bd480e30d0799a971c16c"
-    verify_cmd: "cargo test -p apeireth-gateway --test tls_serve -p apeireth-cli --test remote_access_e2e --locked -j 2"
+    verified_at: "5e3a08b2215f15cfffba3ddf87aa70ee5eeef9f4"
+    verify_cmd: "cargo test -p apeireth-gateway --test tls_serve --locked -j 2 && cargo test -p apeireth-cli --test remote_access_e2e --locked -j 2"
     owner: gateway
-    next_review: "2026-11-20"
-    notes: "APEIRETH_TLS_CERT + APEIRETH_TLS_KEY 指向 PEM 才启用；缺/坏 PEM fail-closed；状态三态 + 审计事件 gateway.tls_enabled；非默认开。；2026-10-22 批次复核：gateway tls_serve 7 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）；2026-10-28 生产收敛复核：源码变更及回归证据见 kernel-convergence-final-acceptance-2026-10-28.md；不将 Legacy SubLoop 或旧数据 Profile 映射宣称已迁移。；2026-10-29 S5：listener/TLS/CORS 与域/用户归属逻辑未改；同一 gateway Runtime 执行入口委托 managed main。原 HTTP、审批、多客户端、域隔离和真实 bootstrap 回归通过，不新增暴露面或提升默认开关。 证据见 kernel-convergence-s5-2026-10-29.md。；2026-11-10 PR31 rebase 到 #94 之后复核：网关 TLS 回归通过（cargo test -p apeireth-gateway --test tls_serve）；本批未改 adapters/gateway 任一文件，TLS 服务语义与默认开关未变；2026-11-12 记忆自动化批源码范围复核：来源固定到 ba5466500aca。CLI 的差异限官方记忆 journal、来源资格适配、数据根和 Host 日历偏移装配；本条原功能分支、权限及默认开关未调整。本段只记录源码范围复核，不替代本条 verify_cmd；同提交完整工作区、严格检查及适用 CI 仍待最终验证，原等级、默认值与历史证据保留。；2026-11-17 后端合同批源码范围复核：来源固定到 ea4acf270e9。本批改动仅为尺寸棘轮压回的行为等价搬迁（模块拆分 + 再导出，被搬走代码逐字相同），本条声明描述的能力、权限边界与默认开关一律未变；本条 verify_cmd 实跑：7 passed / 0 failed。本段只记录源码范围复核，不替代本条 verify_cmd；同提交完整工作区、严格检查及适用 CI 仍待最终验证，原等级、默认值与历史证据保留。；2026-11-17 B3b-1 批源码范围复核：来源固定到 b7bcbacc04。本批改动是「会话 agent 绑定 HTTP 面 ＋ 回合入口只读闸」，另含 RuntimeBuilder / classify_runtime_error / expire_active_approval_if_needed 三处**行为等价搬迁**（函数体逐字相同）；本条 sources 里的文件因此变更。本条 verify_cmd 实跑：7 passed / 0 failed / 0 ignored。本条描述的能力、权限边界与默认开关一律未变；本段只记录源码范围复核与验证时点，不抬高等级、不改默认开关；同提交完整工作区、严格检查及适用 CI 仍待最终验证，原等级、默认值与历史证据保留。；2026-11-17 C1 批次后复核（PR #135）：本条 sources 里的 crates/adapters/gateway/src/canonical_entry.rs 与 crates/adapters/gateway/src/lib.rs 因 C1 新增规范流面路由与模块声明而变更，既有路由字符串与 TLS 语义未动；实测 cargo test -p apeireth-gateway --test tls_serve => 7 passed / 0 failed（2026-11-17，Windows，cargo 1.97.1）；PEM 真加载 fail-closed、三态状态面、审计事件 gateway.tls_enabled 与默认关（APEIRETH_TLS_CERT）均未变；本段只记录源码范围复核与验证时点，不抬高等级、不改默认开关。；2026-11-17 合主干后复核（PR #135 合并主干 c526472bb）：本条 sources 里的文件随主干合入而变更（后端合同批次的接线与尺寸棘轮压回的行为等价搬迁）；本条 verify_cmd 在合并后的工作区实跑：cargo test -p apeireth-gateway --test tls_serve => 7 passed / 0 failed；2026-11-17 合主干后复核（PR #135 合并主干 9b91de8fe，含 PR #137 B3b-1 合并提交 9b91de8fe）：本条 sources 里的文件随主干合入再次变更（B3b-1 的接线与尺寸棘轮压回）；本条 verify_cmd 在合并后的工作区实跑：cargo test -p apeireth-gateway --test tls_serve => 7 passed / 0 failed；本条描述的能力、权限边界与默认开关一律未变；本段只记录源码范围复核与验证时点，不抬高等级、不改默认开关。；2026-11-18 B3b-2 复核：本批仅新增 agent 绑定/记忆作用域装配接线，并把 collect_tool_module 等价搬迁到 production_helpers.rs；本声明的语义、接线点、开关与默认均未变，定向测试与门禁证据见 PR #138。；2026-11-18 文本成果线主干合并复核：来源固定到 e636339d07f23f00f150adc0353c0f99714f98ef。本批新增受管文本成果与不可变版本内核（CLI runtime_entry 提取与成果工具/服务、网关可选 artifacts 字段与成果路由、运行时装配导出），并仅启用已锁定的 workspace uuid 依赖；本条能力语义、权限边界与默认开关未改，本条 verify_cmd 未在本批重跑。本段只记录源码范围复核，不替代本条 verify_cmd；同提交全量与适用 CI 仍待最终验证，原等级、默认值与历史证据保留。；2026-11-18 只读候选回合源码范围复核（来源固定到 e51327a5d）：canonical_entry.rs 仅将 runtime_error_frame 提升为 pub(crate)，TLS 加载/路由/状态面与默认开关未变；本条 verify_cmd 实跑 7 passed / 0 failed。本段只记录源码范围复核与验证时点，不替代同提交全量检查，原等级与历史证据保留。；2026-11-19 受管桌面模型连接批源码范围复核（来源固定到 7f91de399）：canonical_entry.rs 只新增模型连接路由与保护层别名并保持 2291 行，gateway/lib.rs 只注册新模块，cli/lib.rs 只在受管启动时调整 provider/管理面装配；该声明的语义、接线点、开关与默认值均未变。本段只记录源码范围复核，不替代本条 verify_cmd。；2026-11-19 会话读面批源码范围复核（来源固定到 7f520ef37）：canonical_entry.rs 只新增 turn_results 路由合并与只读响应保护层，gateway/lib.rs 只注册新模块，TLS 加载/路由/状态面与默认开关未变；本条 verify_cmd 未在本批重跑。本段只记录源码范围复核，不替代同提交全量检查，原等级与历史证据保留。；2026-11-20 源码范围复核（783b50c71）：原生会话执行独立持有。TLS 装配及入口权限未变，tls_serve 回归已复核。；2026-11-20 桌面并线复核：差异为原生回合和联系人绑定，TLS 装配及默认值保持。并线后 tls_serve 7 项通过。；2026-11-21 非回环绑定必须有令牌和有效 TLS 配置，CLI 预检与实际 listener 均强制。回环的默认 TLS 状态保持关闭。网关 TLS 与 CLI 远程入口专项通过。"
+    next_review: "2026-12-06"
+    notes: "APEIRETH_TLS_CERT + APEIRETH_TLS_KEY 指向 PEM 才启用；缺/坏 PEM fail-closed；状态三态 + 审计事件 gateway.tls_enabled；非默认开。；2026-10-22 批次复核：gateway tls_serve 7 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）；2026-10-28 生产收敛复核：源码变更及回归证据见 kernel-convergence-final-acceptance-2026-10-28.md；不将 Legacy SubLoop 或旧数据 Profile 映射宣称已迁移。；2026-10-29 S5：listener/TLS/CORS 与域/用户归属逻辑未改；同一 gateway Runtime 执行入口委托 managed main。原 HTTP、审批、多客户端、域隔离和真实 bootstrap 回归通过，不新增暴露面或提升默认开关。 证据见 kernel-convergence-s5-2026-10-29.md。；2026-11-10 PR31 rebase 到 #94 之后复核：网关 TLS 回归通过（cargo test -p apeireth-gateway --test tls_serve）；本批未改 adapters/gateway 任一文件，TLS 服务语义与默认开关未变；2026-11-12 记忆自动化批源码范围复核：来源固定到 ba5466500aca。CLI 的差异限官方记忆 journal、来源资格适配、数据根和 Host 日历偏移装配；本条原功能分支、权限及默认开关未调整。本段只记录源码范围复核，不替代本条 verify_cmd；同提交完整工作区、严格检查及适用 CI 仍待最终验证，原等级、默认值与历史证据保留。；2026-11-17 后端合同批源码范围复核：来源固定到 ea4acf270e9。本批改动仅为尺寸棘轮压回的行为等价搬迁（模块拆分 + 再导出，被搬走代码逐字相同），本条声明描述的能力、权限边界与默认开关一律未变；本条 verify_cmd 实跑：7 passed / 0 failed。本段只记录源码范围复核，不替代本条 verify_cmd；同提交完整工作区、严格检查及适用 CI 仍待最终验证，原等级、默认值与历史证据保留。；2026-11-17 B3b-1 批源码范围复核：来源固定到 b7bcbacc04。本批改动是「会话 agent 绑定 HTTP 面 ＋ 回合入口只读闸」，另含 RuntimeBuilder / classify_runtime_error / expire_active_approval_if_needed 三处**行为等价搬迁**（函数体逐字相同）；本条 sources 里的文件因此变更。本条 verify_cmd 实跑：7 passed / 0 failed / 0 ignored。本条描述的能力、权限边界与默认开关一律未变；本段只记录源码范围复核与验证时点，不抬高等级、不改默认开关；同提交完整工作区、严格检查及适用 CI 仍待最终验证，原等级、默认值与历史证据保留。；2026-11-17 C1 批次后复核（PR #135）：本条 sources 里的 crates/adapters/gateway/src/canonical_entry.rs 与 crates/adapters/gateway/src/lib.rs 因 C1 新增规范流面路由与模块声明而变更，既有路由字符串与 TLS 语义未动；实测 cargo test -p apeireth-gateway --test tls_serve => 7 passed / 0 failed（2026-11-17，Windows，cargo 1.97.1）；PEM 真加载 fail-closed、三态状态面、审计事件 gateway.tls_enabled 与默认关（APEIRETH_TLS_CERT）均未变；本段只记录源码范围复核与验证时点，不抬高等级、不改默认开关。；2026-11-17 合主干后复核（PR #135 合并主干 c526472bb）：本条 sources 里的文件随主干合入而变更（后端合同批次的接线与尺寸棘轮压回的行为等价搬迁）；本条 verify_cmd 在合并后的工作区实跑：cargo test -p apeireth-gateway --test tls_serve => 7 passed / 0 failed；2026-11-17 合主干后复核（PR #135 合并主干 9b91de8fe，含 PR #137 B3b-1 合并提交 9b91de8fe）：本条 sources 里的文件随主干合入再次变更（B3b-1 的接线与尺寸棘轮压回）；本条 verify_cmd 在合并后的工作区实跑：cargo test -p apeireth-gateway --test tls_serve => 7 passed / 0 failed；本条描述的能力、权限边界与默认开关一律未变；本段只记录源码范围复核与验证时点，不抬高等级、不改默认开关。；2026-11-18 B3b-2 复核：本批仅新增 agent 绑定/记忆作用域装配接线，并把 collect_tool_module 等价搬迁到 production_helpers.rs；本声明的语义、接线点、开关与默认均未变，定向测试与门禁证据见 PR #138。；2026-11-18 文本成果线主干合并复核：来源固定到 e636339d07f23f00f150adc0353c0f99714f98ef。本批新增受管文本成果与不可变版本内核（CLI runtime_entry 提取与成果工具/服务、网关可选 artifacts 字段与成果路由、运行时装配导出），并仅启用已锁定的 workspace uuid 依赖；本条能力语义、权限边界与默认开关未改，本条 verify_cmd 未在本批重跑。本段只记录源码范围复核，不替代本条 verify_cmd；同提交全量与适用 CI 仍待最终验证，原等级、默认值与历史证据保留。；2026-11-18 只读候选回合源码范围复核（来源固定到 e51327a5d）：canonical_entry.rs 仅将 runtime_error_frame 提升为 pub(crate)，TLS 加载/路由/状态面与默认开关未变；本条 verify_cmd 实跑 7 passed / 0 failed。本段只记录源码范围复核与验证时点，不替代同提交全量检查，原等级与历史证据保留。；2026-11-19 受管桌面模型连接批源码范围复核（来源固定到 7f91de399）：canonical_entry.rs 只新增模型连接路由与保护层别名并保持 2291 行，gateway/lib.rs 只注册新模块，cli/lib.rs 只在受管启动时调整 provider/管理面装配；该声明的语义、接线点、开关与默认值均未变。本段只记录源码范围复核，不替代本条 verify_cmd。；2026-11-19 会话读面批源码范围复核（来源固定到 7f520ef37）：canonical_entry.rs 只新增 turn_results 路由合并与只读响应保护层，gateway/lib.rs 只注册新模块，TLS 加载/路由/状态面与默认开关未变；本条 verify_cmd 未在本批重跑。本段只记录源码范围复核，不替代同提交全量检查，原等级与历史证据保留。；2026-11-20 源码范围复核（783b50c71）：原生会话执行独立持有。TLS 装配及入口权限未变，tls_serve 回归已复核。；2026-11-20 桌面并线复核：差异为原生回合和联系人绑定，TLS 装配及默认值保持。并线后 tls_serve 7 项通过。；2026-11-21 非回环绑定必须有令牌和有效 TLS 配置，CLI 预检与实际 listener 均强制。回环的默认 TLS 状态保持关闭。网关 TLS 与 CLI 远程入口专项通过。 2026-11-22 Windows 复验通过。网关 TLS 7 项与 CLI 远程入口 5 项分别从所属 crate 运行。两组测试覆盖实际 TLS 握手、非回环令牌及 TLS 门禁，以及无效配置启动拒绝。"
 
   - id: sec.storage_envelope_crypto
     title: "会话与已提交操作证据静态封缄（显式开启，事务迁移与密钥探针）"
@@ -326,16 +328,18 @@ claims:
       - crates/adapters/cli/src/crypto_keys.rs
       - crates/engine/runtime-assembly/src/canonical/session_seal.rs
       - crates/engine/runtime-assembly/src/sqlite_session.rs
+      - crates/foundation/core/src/storage_atomic.rs
     tests:
       - crates/engine/storage/tests/crypto_invariants.rs
       - crates/engine/storage/tests/sealed_backup_restore.rs
       - crates/engine/runtime-assembly/src/canonical/session_seal.rs
       - crates/engine/runtime-assembly/src/sqlite_session.rs
-    verified_at: "2869c46c6183204820946e2a2598b47263a28592"
+      - crates/adapters/cli/src/crypto_keys.rs
+    verified_at: "be53f8f3d8329817a5603f81a3c2b0532dac79fe"
     verify_cmd: "cargo test -p apeireth-runtime-assembly --lib sqlite_session --locked -j 2 && cargo test -p apeireth-runtime-assembly --lib session_seal --locked -j 2 && cargo test -p apeireth-cli --lib crypto_keys --locked -j 2"
     owner: storage
-    next_review: "2026-11-20"
-    notes: "PRODUCTION WIRED（默认关，仅 sessions.data 试点；其余 P0 列未接）。B6 库级：分区 DEK / AES-256-GCM 密封字段 / KEK 双槽包裹 / 恢复件 / 密钥丢失边界；盲索引与 SqliteFieldSink 接缝有库内测试。B6-2a（2026-10-22）：APEIRETH_ENABLE_SESSION_SEAL=1 + APEIRETH_SESSION_SEAL_KEY_FILE（0600）→ 会话 JSON 落盘封缄（hex SealedField，与 SqliteFieldSink 同格式），读路径双兼容（密文解封 / 明文旧行照读 / 篡改硬错误），开关关 = 不读密钥且落盘逐字节同旧路径，开关开而密钥缺失 = 启动失败；密钥出口 apeireth crypto unlock --out 已交付。未接线：memory_items / episodes 等其余 P0 列、桌面 keychain 锚定、批量迁移 CLI（惰性迁移已生效）。；2026-11-12 记忆自动化批源码范围复核：来源固定到 ba5466500aca。新增 module_operation_evidence.data 在既有 sealer 启用时沿用同一封缄/解封路径；不表示认知库 episodes、恢复队列或全部列已加密，既有默认关闭策略保持。本段只记录源码范围复核，不替代本条 verify_cmd；同提交完整工作区、严格检查及适用 CI 仍待最终验证，原等级、默认值与历史证据保留。；2026-11-21 Windows 合成夹具通过。显式开启时事务迁移会话及操作证据，探针校验和行绑定密文拒绝错误密钥、行串换和无钥降级。默认关闭。WAL、旧页、历史备份、记忆及桌面存储不在逻辑行转换范围。"
+    next_review: "2026-12-06"
+    notes: "PRODUCTION WIRED（默认关，仅 sessions.data 试点；其余 P0 列未接）。B6 库级：分区 DEK / AES-256-GCM 密封字段 / KEK 双槽包裹 / 恢复件 / 密钥丢失边界；盲索引与 SqliteFieldSink 接缝有库内测试。B6-2a（2026-10-22）：APEIRETH_ENABLE_SESSION_SEAL=1 + APEIRETH_SESSION_SEAL_KEY_FILE（0600）→ 会话 JSON 落盘封缄（hex SealedField，与 SqliteFieldSink 同格式），读路径双兼容（密文解封 / 明文旧行照读 / 篡改硬错误），开关关 = 不读密钥且落盘逐字节同旧路径，开关开而密钥缺失 = 启动失败；密钥出口 apeireth crypto unlock --out 已交付。未接线：memory_items / episodes 等其余 P0 列、桌面 keychain 锚定、批量迁移 CLI（惰性迁移已生效）。；2026-11-12 记忆自动化批源码范围复核：来源固定到 ba5466500aca。新增 module_operation_evidence.data 在既有 sealer 启用时沿用同一封缄/解封路径；不表示认知库 episodes、恢复队列或全部列已加密，既有默认关闭策略保持。本段只记录源码范围复核，不替代本条 verify_cmd；同提交完整工作区、严格检查及适用 CI 仍待最终验证，原等级、默认值与历史证据保留。；2026-11-21 Windows 合成夹具通过。显式开启时事务迁移会话及操作证据，探针校验和行绑定密文拒绝错误密钥、行串换和无钥降级。默认关闭。WAL、旧页、历史备份、记忆及桌面存储不在逻辑行转换范围。 2026-11-22 Windows 复验通过。SQLite 会话 13 项、封缄 10 项、密钥 CLI 6 项通过。轮换时如果密钥文件已替换、持久性未确认，保留新旧恢复件并要求核对。故障注入确认新恢复件仍能解开已发布的密钥文件。"
 
   - id: gov.chain_skeleton
     title: "R8-A 治理链六段骨架 + R8-B2 生产单入口（每次治理评估过 chain.run）"
@@ -516,16 +520,17 @@ claims:
       - crates/foundation/credentials/src/credential_record.rs
       - crates/adapters/gateway/src/admin.rs
       - crates/adapters/cli/src/keyring_bootstrap.rs
+      - crates/foundation/credentials/src/keyring.rs
     tests:
       - crates/engine/provider/tests/endpoint_binding.rs
       - crates/adapters/gateway/tests/admin_binding_warning.rs
       - crates/adapters/gateway/tests/admin_config.rs
       - crates/adapters/cli/src/keyring_bootstrap.rs
-    verified_at: "2869c46c6183204820946e2a2598b47263a28592"
+    verified_at: "be53f8f3d8329817a5603f81a3c2b0532dac79fe"
     verify_cmd: "cargo test -p apeireth-provider --test endpoint_binding --locked && cargo test -p apeireth-gateway --test admin_binding_warning --test admin_config --locked && cargo test -p apeireth-cli --lib keyring_bootstrap --locked"
     owner: provider
     next_review: "2026-12-01"
-    notes: "2026-11-01 安全审计 P1 的设计落点：凭据与端点是两份独立配置，只改端点那一份会把旧凭据发给新主机。判定（并集口径）：允许集合 = audience（构造时确定）∪ 显式绑定（凭据库维度：HotCredentialStore::set_with_endpoints；admin 同笔提交 base_url+api_key 时自动登记）；两者皆空则不拦截，否则端点不在集合内即拒绝。audience：厂商 provider（anthropic/minimax）的 from_env() = {厂商默认端点} ∪ {启动时配置的端点}；协议族 provider（openai-compatible）= **空**（端点本就由部署方选，且 admin 的合法热更新必须能工作）。⇒ 真正被挡住的是**运行时**换端点（admin 热改 base_url / apply_hot_config）：新主机不在允许集合里 ⇒ 拿不到凭据。校验点在 resolve_key 取密钥之前 ⇒ 未绑定的端点根本取不到凭据；错误里只有端点与凭据名，没有凭据内容。残余边界（如实）：① 绑定是部署方的显式声明，不是密码学证明，防的是「只改端点就泄漏」，不防能同时改端点与声明的对手；② 启动时的端点配置不拦（同一份配置里也放着凭据，能改它的人本来就能读到凭据）；③ 协议族未声明绑定时不拦（否则打死自建端点与 admin 热更新）—— 想要保护就显式声明绑定；④ 绑定只活在进程内（OS keyring 的值模型没有附加元数据的位置）⇒ 重启后需重新声明。；2026-11-21：普通网关的跨来源或跨供应商配置更新要求显式声明，未通过检查时保留旧配置。端点归一修正 IPv6 与端口语义，供应商绑定集成回归通过。厂商 audience 并集、进程内绑定和请求侧凭据读取竞态仍保留，详见安全工作线。；2026-11-21 单次请求按同一修订读取凭据、端点绑定和目标 URL。显式 origin 绑定替代厂商 fallback，持久值及绑定同一密钥环记录。未绑定的旧兼容协议凭据按原合同读取。最终 provider 与 CLI keyring 专项通过；真实平台 keyring 和跨进程写入见安全报告边界。"
+    notes: "2026-11-01 安全审计 P1 的设计落点：凭据与端点是两份独立配置，只改端点那一份会把旧凭据发给新主机。判定（并集口径）：允许集合 = audience（构造时确定）∪ 显式绑定（凭据库维度：HotCredentialStore::set_with_endpoints；admin 同笔提交 base_url+api_key 时自动登记）；两者皆空则不拦截，否则端点不在集合内即拒绝。audience：厂商 provider（anthropic/minimax）的 from_env() = {厂商默认端点} ∪ {启动时配置的端点}；协议族 provider（openai-compatible）= **空**（端点本就由部署方选，且 admin 的合法热更新必须能工作）。⇒ 真正被挡住的是**运行时**换端点（admin 热改 base_url / apply_hot_config）：新主机不在允许集合里 ⇒ 拿不到凭据。校验点在 resolve_key 取密钥之前 ⇒ 未绑定的端点根本取不到凭据；错误里只有端点与凭据名，没有凭据内容。残余边界（如实）：① 绑定是部署方的显式声明，不是密码学证明，防的是「只改端点就泄漏」，不防能同时改端点与声明的对手；② 启动时的端点配置不拦（同一份配置里也放着凭据，能改它的人本来就能读到凭据）；③ 协议族未声明绑定时不拦（否则打死自建端点与 admin 热更新）—— 想要保护就显式声明绑定；④ 绑定只活在进程内（OS keyring 的值模型没有附加元数据的位置）⇒ 重启后需重新声明。；2026-11-21：普通网关的跨来源或跨供应商配置更新要求显式声明，未通过检查时保留旧配置。端点归一修正 IPv6 与端口语义，供应商绑定集成回归通过。厂商 audience 并集、进程内绑定和请求侧凭据读取竞态仍保留，详见安全工作线。；2026-11-21 单次请求按同一修订读取凭据、端点绑定和目标 URL。显式 origin 绑定替代厂商 fallback，持久值及绑定同一密钥环记录。未绑定的旧兼容协议凭据按原合同读取。最终 provider 与 CLI keyring 专项通过；真实平台 keyring 和跨进程写入见安全报告边界。 2026-11-22 Windows 复验通过。供应商绑定 7 项、网关管理配置 10 项、CLI 凭据写入 10 项通过。持久写入未确认时保留当前运行配置与旧热快照。凭据主引用的写入结果未确认时保留其配套绑定记录，供核对后恢复或重试。"
 
   - id: sec.provider_proxy_ssrf
     title: "Provider 中继 SSRF 面收紧（B2：目标类闸 + DNS 钉址 + 重定向逐跳闸 + 头白名单）"
@@ -1487,12 +1492,13 @@ claims:
       - crates/adapters/gateway/src/lib.rs
       - crates/foundation/credentials/src/keyring.rs
       - crates/foundation/credentials/src/hot_store.rs
+      - crates/foundation/core/src/storage_atomic.rs
     tests:
       - crates/adapters/cli/src/desktop_model_connection_tests.rs
       - crates/adapters/cli/tests/desktop_model_connection.rs
       - crates/adapters/gateway/src/model_connection.rs
-    verified_at: "2869c46c6183204820946e2a2598b47263a28592"
+    verified_at: "be53f8f3d8329817a5603f81a3c2b0532dac79fe"
     verify_cmd: "cargo test -p apeireth-cli --lib desktop_model_connection --locked -j 2 && cargo test -p apeireth-cli --test desktop_model_connection --locked -j 2 && cargo test -p apeireth-gateway --lib model_connection --locked -j 2"
     owner: cli
     next_review: "2026-12-03"
-    notes: "2026-11-19 从集成线 2f0e9e360 移植到主干 7f91de399：新增 GET/POST /v1/admin/model-connection，strict 请求、端点/模型/凭据校验、Windows 凭据管理器持久化、数据根原子档案、重开加载、受管单操作者门与拒绝 /v1/admin/config 热替换；受管启动只装配 openai-compatible 协议族 provider，成果与候选服务仅对严格受管单操作者放行。隔离验收：旧日常档案与 Windows 凭据读为 available，重开仍 available；旧成果 store/head/版本数/摘要逐项不变；候选 200 且零成果写入，stale/digest 在调用 provider 前 409，模型要求工具 422 且零派发；坏库启动退出码 1 并报 file is not a database，未生成空库。未做真实提供方调用、桌面 C41 实机联调、多进程或跨平台凭据后端；PRODUCTION WIRED，非 HARDWARE VALIDATED。；2026-11-19 会话读面批源码范围复核（来源固定到 7f520ef37）：canonical_entry.rs 只新增只读恢复路由与保护层，gateway/lib.rs 只注册新模块；模型连接路由、凭据装配与受管门未变。本段只记录源码范围复核，不替代本条 verify_cmd。；2026-11-20 源码范围复核（783b50c71）：原生 /v1/chat 断连修复无改动受管模型配置路由或 Windows 凭据装配。；2026-11-20 桌面并线复核：变更限原生回合和联系人绑定接线，模型连接路由与凭据装配保持。CLI 模型连接 HTTP 4 项和包含配置用例的 CLI、网关库回归通过。；2026-11-21：源码范围复核。普通网关配置入口、端点解析和共享凭据写入端修改，受管桌面仍用独立模型连接服务与令牌约束，未调整其接口及默认值。验证范围见安全工作线。；2026-11-21 安全批源码范围复核。共享文件的改动限于非回环认证和 TLS、凭据快照、默认模型脱敏、按显式配置挂账本或会话封缄。该声明的接线入口与默认值保持。此处记录源码范围，完整测试与门禁结果见安全报告。"
+    notes: "2026-11-19 从集成线 2f0e9e360 移植到主干 7f91de399：新增 GET/POST /v1/admin/model-connection，strict 请求、端点/模型/凭据校验、Windows 凭据管理器持久化、数据根原子档案、重开加载、受管单操作者门与拒绝 /v1/admin/config 热替换；受管启动只装配 openai-compatible 协议族 provider，成果与候选服务仅对严格受管单操作者放行。隔离验收：旧日常档案与 Windows 凭据读为 available，重开仍 available；旧成果 store/head/版本数/摘要逐项不变；候选 200 且零成果写入，stale/digest 在调用 provider 前 409，模型要求工具 422 且零派发；坏库启动退出码 1 并报 file is not a database，未生成空库。未做真实提供方调用、桌面 C41 实机联调、多进程或跨平台凭据后端；PRODUCTION WIRED，非 HARDWARE VALIDATED。；2026-11-19 会话读面批源码范围复核（来源固定到 7f520ef37）：canonical_entry.rs 只新增只读恢复路由与保护层，gateway/lib.rs 只注册新模块；模型连接路由、凭据装配与受管门未变。本段只记录源码范围复核，不替代本条 verify_cmd。；2026-11-20 源码范围复核（783b50c71）：原生 /v1/chat 断连修复无改动受管模型配置路由或 Windows 凭据装配。；2026-11-20 桌面并线复核：变更限原生回合和联系人绑定接线，模型连接路由与凭据装配保持。CLI 模型连接 HTTP 4 项和包含配置用例的 CLI、网关库回归通过。；2026-11-21：源码范围复核。普通网关配置入口、端点解析和共享凭据写入端修改，受管桌面仍用独立模型连接服务与令牌约束，未调整其接口及默认值。验证范围见安全工作线。；2026-11-21 安全批源码范围复核。共享文件的改动限于非回环认证和 TLS、凭据快照、默认模型脱敏、按显式配置挂账本或会话封缄。该声明的接线入口与默认值保持。此处记录源码范围，完整测试与门禁结果见安全报告。 2026-11-22 Windows 复验通过。CLI 模型连接单测 9 项、HTTP 集成 5 项、网关校验 1 项通过。合成测试覆盖档案替换前失败时回收新凭据槽，以及已替换但持久性未确认时保留新旧凭据槽。测试使用合成凭据，真实 Windows 凭据后端的既有验收记录保留。"

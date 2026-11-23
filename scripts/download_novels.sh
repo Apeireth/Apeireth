@@ -60,6 +60,14 @@ mkdir -p "$OUT_DIR"
 
 sha_of() { sha256sum "$1" | cut -d' ' -f1; }
 
+novel_staging=''
+cleanup_staging() {
+  if [ -n "$novel_staging" ]; then
+    rm -f -- "$novel_staging"
+  fi
+}
+trap cleanup_staging EXIT
+
 for entry in "${NOVELS[@]}"; do
   IFS='|' read -r id filename title expected chapters <<<"$entry"
   target="$OUT_DIR/$filename"
@@ -70,39 +78,33 @@ for entry in "${NOVELS[@]}"; do
       echo "跳过（已存在且校验通过）：$title → $target"
       continue
     fi
-    echo "⚠️ 已存在但校验和不同 ⇒ 重下：$title" >&2
-    mv "$target" "$target.bak.$(date +%s)"
+    echo "⚠️ 已存在但校验和不同，重新获取：$title" >&2
   fi
 
-  url="https://www.gutenberg.org/cache/epub/$id/pg$id.txt"
   echo "下载 $title（PG #$id）→ $target"
-  # Gutenberg 的 eBook 在部分镜像上会走 http ⇒ 只允许 https（明文 http 会被中间人改内容）。
-  # ⚠️ **断点续传 + 强重试**：本机到 gutenberg.org 的连接会**中途断流**
-  # （`SSL_read: unexpected eof`）⇒ 单次下载会半途而废。
-  # ⇒ `--continue-at -`（续传）+ `--retry 8` + `--retry-all-errors`（含 SSL 断流）
-  #   + 失败后**删掉半截文件**（半截文件会被下一次当成"已存在但校验不符"⇒ 噪声）。
-  for attempt in 1 2 3 4 5; do
+  # The official PGLAF mirror serves the same generated collection. Each
+  # origin starts a separate transfer, and the pins apply to both origins.
+  for host in www.gutenberg.org gutenberg.pglaf.org; do
+    novel_staging="$(mktemp "$OUT_DIR/.${filename}.download.XXXXXX")"
+    url="https://$host/cache/epub/$id/pg$id.txt"
     if curl --fail --silent --show-error --location --http1.1 \
-      --retry 8 --retry-delay 3 --retry-all-errors --retry-max-time 180 \
-      --continue-at - --output "$target" "$url"; then
-      break
+      --proto '=https' --proto-redir '=https' --connect-timeout 15 --max-time 360 \
+      --retry 2 --retry-delay 3 --retry-all-errors --retry-max-time 180 \
+      --output "$novel_staging" "$url"; then
+      if [ "$(sha_of "$novel_staging")" = "$expected" ]; then
+        if [ -f "$target" ]; then
+          cp -p -- "$target" "$target.bak.$(date +%s)"
+        fi
+        mv -fT -- "$novel_staging" "$target"
+        novel_staging=''
+        break
+      fi
+      echo "  $host 的内容与锁定摘要不符" >&2
     fi
-    echo "  第 $attempt 次下载中断 ⇒ 重试（续传）" >&2
-    sleep $((attempt * 3))
-    if [ "$attempt" -eq 5 ]; then
-      echo "✗ 连试 5 次仍失败：$title" >&2
-      rm -f "$target"
-      exit 1
-    fi
+    cleanup_staging
   done
-
-  actual="$(sha_of "$target")"
-  if [ "$actual" != "$expected" ]; then
-    echo "✗ 校验和不符：$title" >&2
-    echo "  期望 $expected" >&2
-    echo "  实际 $actual" >&2
-    echo "  ⇒ Gutenberg 内容可能已修订 ⇒ **不要**把新内容当同一份语料用" >&2
-    echo "  （要么把新校验和写进本脚本并记档，要么换一本）" >&2
+  if [ -n "$novel_staging" ]; then
+    echo "✗ 全部来源均未提供匹配锁定摘要的完整语料：$title" >&2
     exit 1
   fi
 
