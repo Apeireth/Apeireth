@@ -15,8 +15,8 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use apeireth_core::agent_contact::{
-    Contact, ContactCapabilities, ContactError, ContactIn, ContactRegistry, ContactStatus,
-    ContractMemoryScope, InMemoryContactRegistry,
+    Contact, ContactCapabilities, ContactError, ContactIn, ContactPatch, ContactRegistry,
+    ContactStatus, ContactWorkspaceBinding, ContractMemoryScope, InMemoryContactRegistry,
 };
 use apeireth_core::kernel::ids::ContactId;
 use apeireth_core::storage_atomic;
@@ -58,8 +58,8 @@ struct ContactBindingOverlay {
 ///
 /// 真落盘:
 /// - 联系人记录走 B1 的 [`FileContactRegistry`] (`<data_dir>/agents/contacts/<id>/contact.json`);
-/// - 工作区绑定走**宿主侧绑定档** (`<data_dir>/agents/contact-bindings.json`) —— B1 的领域
-///   类型里没有 workspace_binding 字段 (B1 只做领域层)。
+/// - PATCH 将工作区绑定与其它字段写进同一份联系人记录。
+/// - 旧记录和现有登记流程的绑定可从宿主侧绑定档读取。
 ///
 /// 绑定档**只存 id + 修订号**, 不存工作区快照 (设计稿裁决 20): 每回合现查现校验。
 ///
@@ -151,7 +151,7 @@ impl CliContactPanel {
         .map_err(|_| contact_storage_fault())?
     }
 
-    /// 把领域记录投影成合同 DTO (状态/作用域显式映射; 绑定来自宿主侧绑定档)。
+    /// 把领域记录投影成合同 DTO；显式解绑不会从旧绑定档回读。
     fn project_contact(&self, contact: &Contact) -> ContactDto {
         let out = contact.to_out();
         let contact_id = out.contact_id.to_string();
@@ -164,7 +164,13 @@ impl CliContactPanel {
             status: map_contact_status(out.status),
             persona_revision: out.persona_revision,
             memory_scope: map_memory_scope(out.memory_scope),
-            workspace_binding: self.binding_of(&contact_id),
+            workspace_binding: match contact.workspace_binding() {
+                Some(binding) => binding.map(|binding| ContactWorkspaceBindingDto {
+                    workspace_id: binding.workspace_id.to_string(),
+                    revision: binding.revision,
+                }),
+                None => self.binding_of(&contact_id),
+            },
             capabilities: ContactCapabilitiesDto {
                 read: out.capabilities.read,
                 write: out.capabilities.write,
@@ -183,7 +189,7 @@ impl CliContactPanel {
 ///
 /// 联系人合同面 (B3a 批: `GET/POST /v1/agents/contacts` + 单体读写 + 归档写面):
 /// 真实持有 B1 的联系人注册表, **落盘**在数据根下 ⇒ 重启后仍是同一批联系人;
-/// 工作区绑定存**宿主侧绑定档** (只存 id + 修订号, 不存工作区快照)。
+/// 工作区绑定只存 id + 修订号；PATCH 与联系人修订号一并保存。
 /// 开不出来 ⇒ **fail-closed** (启动失败), 不降级成进程内注册表假装成功。
 pub fn wire_contacts(
     services: &mut GatewayServices,
@@ -400,45 +406,27 @@ impl ContactPanel for CliContactPanel {
             workspace_binding,
         } = command;
         let id = parse_contact_id(&contact_id)?;
-        let now_ms = now_millis().max(0) as u64;
-        let mut contact: Option<Contact> = None;
-        if let Some(persona) = persona {
-            contact = Some(
-                self.registry
-                    .update_persona(&id, expected_revision, persona, now_ms)
-                    .map_err(map_contact_error)?,
-            );
-        }
-        if let Some(capabilities) = capabilities {
-            // 接着上一步的新修订号走: 一次 PATCH 里的两处改动是一笔写。
-            let expected = contact
-                .as_ref()
-                .map(Contact::revision)
-                .unwrap_or(expected_revision);
-            contact = Some(
-                self.registry
-                    .update_capabilities(&id, expected, map_capabilities(capabilities), now_ms)
-                    .map_err(map_contact_error)?,
-            );
-        }
-        // 绑定只存 id + 修订号 (宿主侧绑定档), 领域记录里没有这个字段。
-        self.write_binding(&contact_id, &workspace_binding)?;
-        let contact = match contact {
-            Some(contact) => contact,
-            None => {
-                // 只改绑定 ⇒ 领域记录没动 ⇒ 修订号不变。补一次**幂等**的能力写入,
-                // 让「任何写面改动 ⇒ 修订号 +1」成立 (绑定也在乐观并发的保护里)。
-                let current =
-                    self.registry
-                        .get(&id)
-                        .ok_or_else(|| ContactPanelError::NotFound {
-                            contact_id: contact_id.clone(),
-                        })?;
-                self.registry
-                    .update_capabilities(&id, expected_revision, current.capabilities(), now_ms)
-                    .map_err(map_contact_error)?
-            }
+        let workspace_binding = match workspace_binding {
+            ContactBindingChange::Keep => None,
+            ContactBindingChange::Clear => Some(None),
+            ContactBindingChange::Bind(binding) => Some(Some(ContactWorkspaceBinding {
+                workspace_id: binding.workspace_id.parse().map_err(|_| {
+                    ContactPanelError::InvalidRequest {
+                        reason: "workspace_id 格式非法".into(),
+                    }
+                })?,
+                revision: binding.revision,
+            })),
         };
+        let patch = ContactPatch {
+            persona,
+            capabilities: capabilities.map(map_capabilities),
+            workspace_binding,
+        };
+        let contact = self
+            .registry
+            .update(&id, expected_revision, patch, now_millis().max(0) as u64)
+            .map_err(map_contact_error)?;
         Ok(self.project_contact(&contact))
     }
 

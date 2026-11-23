@@ -26,6 +26,9 @@ async-trait = { workspace = true }
 jsonschema = { version = "0.33", default-features = false }
 parking_lot = "0.12"
 
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_System_WindowsProgramming"] }
+
 [dev-dependencies]
 tempfile = "3"
 chrono = { workspace = true }

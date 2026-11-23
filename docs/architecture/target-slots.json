@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated_at": "2026-11-17",
+  "updated_at": "2026-11-21",
   "purpose": "构建产物槽位登记表 —— 唯一真源。谁在哪个目录里长构建产物，先登记再长；没登记的目录叫「游离」，审计脚本按体积判红。",
   "policy": [
     "只有本表登记的目录才允许承载 Rust 构建产物；新建目录前先登记 owner 与用途。",
@@ -64,6 +64,12 @@
       "path": "C:\\Apeireth\\cargo-target-check",
       "max_gb": 1,
       "reason": "历史遗留（一次性检查任务自建）⇒ 棘轮项：只许缩不许涨"
+    },
+    {
+      "path": "C:\\Apeireth\\cargo-target-ui-manual-20261118",
+      "owner": "apeireth-ui-engine-usage",
+      "max_gb": 1.18,
+      "reason": "2026-11-18 UI 引擎使用验证的历史产物。Cargo dep-info 指向 ui-engine-usage-20261118 工作树。2026-11-21 审计实测 1.17 GiB，按百分位向上保留上限。新构建使用登记槽位，迁出后删除本条。"
     }
   ]
 }

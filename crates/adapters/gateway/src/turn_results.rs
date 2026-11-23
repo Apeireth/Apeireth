@@ -32,9 +32,14 @@ pub(crate) fn routes() -> axum::Router<GatewayState> {
             "/v1/sessions/:session_id/turn-result",
             axum::routing::get(get_turn_result),
         )
+        .route(
+            provider_context::ENDPOINT,
+            axum::routing::get(provider_context::read),
+        )
 }
 
 mod history;
+mod provider_context;
 pub(crate) use history::get_session_turns;
 
 /// Outside the token gate so refusal frames cannot become cached results either.
@@ -43,7 +48,11 @@ pub(crate) async fn protect_read_response(request: Request, next: Next) -> Respo
         .uri()
         .path()
         .strip_prefix("/v1/sessions/")
-        .is_some_and(|path| path.ends_with("/turn-result") || path.ends_with("/turns"));
+        .is_some_and(|path| {
+            path.ends_with("/turn-result")
+                || path.ends_with("/turns")
+                || path.ends_with("/provider-context")
+        });
     let mut response = next.run(request).await;
     if sensitive {
         response

@@ -14,10 +14,10 @@ use std::path::{Path, PathBuf};
 
 use apeireth_core::agent_contact::{
     Contact, ContactCapabilities, ContactCreateRequest, ContactError, ContactIn, ContactOut,
-    ContactRegistry, ContactStatus, ContractMemoryScope, FileContactRegistry,
-    InMemoryContactRegistry, PersonaText, MAX_PERSONA_BYTES,
+    ContactPatch, ContactRegistry, ContactStatus, ContactWorkspaceBinding, ContractMemoryScope,
+    FileContactRegistry, InMemoryContactRegistry, PersonaText, MAX_PERSONA_BYTES,
 };
-use apeireth_core::kernel::ids::{ContactAgentId, ContactId};
+use apeireth_core::kernel::ids::{ContactAgentId, ContactId, WorkspaceId};
 use uuid::Uuid;
 
 /// 固定时间戳（毫秒），保证断言可复核。
@@ -451,6 +451,58 @@ fn 落盘后重启读回逐字段一致() {
     );
     assert_eq!(restored.memory_scope(), ContractMemoryScope::Contact);
 
+    cleanup(&root);
+}
+
+#[test]
+fn concurrent_contact_patches_compare_revision_inside_the_file_lock() {
+    let root = temp_root("atomic-binding");
+    let first = FileContactRegistry::open(&root).expect("first registry");
+    let contact = first
+        .create(ContactCreateRequest {
+            display_name: "阿岚".into(),
+            subtitle: None,
+            avatar_ref: None,
+            persona: None,
+            memory_scope: ContractMemoryScope::None,
+            now_ms: NOW_MS,
+        })
+        .expect("create");
+    let stale = FileContactRegistry::open(&root).expect("second registry");
+    let binding = ContactWorkspaceBinding {
+        workspace_id: WorkspaceId::new(),
+        revision: 3,
+    };
+    let updated = first
+        .update(
+            &contact.contact_id(),
+            0,
+            ContactPatch {
+                persona: Some(PersonaText::new("新版人设").unwrap()),
+                workspace_binding: Some(Some(binding)),
+                ..ContactPatch::default()
+            },
+            LATER_MS,
+        )
+        .expect("combined edit");
+    assert_eq!(updated.revision(), 1);
+    assert_eq!(updated.persona_revision(), 1);
+    assert_eq!(updated.workspace_binding(), Some(Some(binding)));
+    assert_eq!(updated.workspace_binding_revision(), Some(1));
+    assert!(matches!(
+        stale.update(
+            &contact.contact_id(),
+            0,
+            ContactPatch {
+                workspace_binding: Some(None),
+                ..ContactPatch::default()
+            },
+            LATER_MS
+        ),
+        Err(ContactError::RevisionConflict { actual: 1, .. })
+    ));
+    let reopened = FileContactRegistry::open(&root).expect("reopen");
+    assert_eq!(reopened.get(&contact.contact_id()), Some(updated));
     cleanup(&root);
 }
 

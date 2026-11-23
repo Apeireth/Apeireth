@@ -348,11 +348,7 @@ pub fn query_sqlite_file(path: String, sql: String) -> Result<SqlQueryResult, St
     let mut stmt = conn
         .prepare(checked)
         .map_err(|error| format!("语句准备失败（如实报）：{error}"))?;
-    let columns: Vec<String> = stmt
-        .column_names()
-        .iter()
-        .map(|name| name.to_string())
-        .collect();
+    let columns: Vec<String> = stmt.column_names().map(str::to_owned).collect();
 
     let mut rows: Vec<Vec<serde_json::Value>> = Vec::new();
     let mut truncated = false;

@@ -7,6 +7,8 @@
 use apeireth_core::kernel::{RequestId, SessionId};
 use apeireth_governance::TurnSecurityContext;
 
+use super::project_workspace::ProjectWorkspaceBinding;
+
 /// Whether this turn may use tools at all.
 ///
 /// A caller-scoped turn switch, not a session or task mode: a no-tools turn
@@ -45,6 +47,7 @@ pub struct TurnRequest {
     pub request: Option<RequestId>,
     /// Per-turn tool policy; normal turns advertise tools.
     pub tool_policy: TurnToolPolicy,
+    pub(super) project_workspace: Option<ProjectWorkspaceBinding>,
     skip_stream_replay: bool,
 }
 
@@ -59,6 +62,7 @@ impl TurnRequest {
             security_context: None,
             request: None,
             tool_policy: TurnToolPolicy::Advertise,
+            project_workspace: None,
             skip_stream_replay: false,
         }
     }
@@ -80,6 +84,13 @@ impl TurnRequest {
     #[must_use]
     pub fn with_security_context(mut self, context: TurnSecurityContext) -> Self {
         self.security_context = Some(context);
+        self
+    }
+
+    /// Claim an exact project workspace binding for canonical admission.
+    #[must_use]
+    pub fn with_project_workspace(mut self, binding: ProjectWorkspaceBinding) -> Self {
+        self.project_workspace = Some(binding);
         self
     }
 

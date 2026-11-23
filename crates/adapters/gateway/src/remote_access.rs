@@ -5,9 +5,7 @@
 //!
 //! 1. **默认仅本机**: 绑定地址由 `APEIRETH_LISTEN` (缺省 `127.0.0.1`) 或
 //!    `--bind` 显式给出; 回环绑定永远不需要令牌;
-//! 2. **非回环绑定 fail-closed**: 没有任何令牌可校验 (env 单令牌面与客户端
-//!    令牌表两面皆空) 时**拒绝启动** —— 不裸奔、不警告后照跑; 逃生阀
-//!    (`APEIRETH_GATEWAY_TOKEN=none`) 是操作者的显式自担声明, 放行但**留审计**;
+//! 2. **非回环绑定 fail-closed**: 必须具备认证令牌和可用 TLS 材料。
 //! 3. **TLS 面真接线** (B5 起接线, 原 "接口桩" 已退役): `APEIRETH_TLS_CERT` /
 //!    `APEIRETH_TLS_KEY` 两旋钮指向 PEM 文件时**真加载** (证书链 + 私钥, 含配对
 //!    校验), 服务面走 TLS listener (能力口径: PRODUCTION WIRED —— 接线真、默认
@@ -87,25 +85,13 @@ pub fn bind_scope(bind: &str) -> BindScope {
     }
 }
 
-/// 回环判定: host 段命中本机回环字面量才认 (剥方括号 / 剥尾随 `:端口`)。
+/// 回环配置预检。实际监听地址在开始服务时再核验。
 pub fn is_loopback_bind(bind: &str) -> bool {
     let host = bind_host(bind);
-    if host.is_empty() {
-        return false;
-    }
-    let lower = host.to_ascii_lowercase();
-    if lower == "localhost" {
-        return true;
-    }
-    if lower == "::1" || lower == "0:0:0:0:0:0:0:1" {
-        return true;
-    }
-    // IPv4 回环 = 127.0.0.0/8。
-    lower.starts_with("127.")
-        && lower.split('.').count() == 4
-        && lower
-            .split('.')
-            .all(|octet| !octet.is_empty() && octet.chars().all(|c| c.is_ascii_digit()))
+    host.eq_ignore_ascii_case("localhost")
+        || host
+            .parse::<std::net::IpAddr>()
+            .is_ok_and(|ip| ip.is_loopback())
 }
 
 /// host 段提取: 剥 IPv6 方括号 (端口在括号外), 剥尾随 `:<纯数字端口>`
@@ -137,6 +123,16 @@ pub struct RemoteBindClearance {
     pub audit_facts: Vec<(String, Option<String>)>,
 }
 
+impl RemoteBindClearance {
+    /// Non-loopback listeners require validated TLS at the serving boundary.
+    pub fn require_tls(&self, enabled: bool) -> Result<(), RemoteBindError> {
+        if self.scope == BindScope::NonLoopback && !enabled {
+            return Err(RemoteBindError::NonLoopbackWithoutTls);
+        }
+        Ok(())
+    }
+}
+
 /// 远程绑定闸的拒绝与输入缺陷。
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum RemoteBindError {
@@ -147,25 +143,24 @@ pub enum RemoteBindError {
     #[error(
         "refusing to bind non-loopback address {bind} without an enforceable token: set \
          {token_env} (or configure {table_env}) so every API call must authenticate, or bind a \
-         loopback address; declaring {token_env}={sentinel} is the explicit unprotected escape \
-         valve (audit-traced)",
+         loopback address",
         token_env = GatewayTokenGate::ENV,
         table_env = crate::client_tokens::CLIENT_TOKENS_ENV,
-        sentinel = GatewayTokenGate::UNPROTECTED_SENTINEL,
     )]
     NonLoopbackWithoutToken {
         /// 被拒的绑定地址。
         bind: String,
     },
+    /// Remote cleartext transport cannot carry gateway credentials safely.
+    #[error("refusing to bind a non-loopback address without TLS; configure {TLS_CERT_ENV} and {TLS_KEY_ENV}")]
+    NonLoopbackWithoutTls,
 }
 
 /// 非回环绑定强制令牌闸 (fail-closed 即帧):
 ///
 /// * 回环绑定 —— 恒放行 (本机面, 桌面/TUI 零回归);
 /// * 非回环 + 令牌族在场 (env 单令牌或客户端令牌表任一) —— 放行, 留审计事实;
-/// * 非回环 + 逃生阀 (`APEIRETH_GATEWAY_TOKEN=none`) —— 放行, **明示可裸奔,
-///   留审计**;
-/// * 非回环 + 令牌族两面皆空 —— **拒绝启动**。
+/// * 非回环 + 无认证（包括显式 `none`）—— **拒绝启动**。
 ///
 /// 逃生阀与令牌表互斥的配置矛盾由
 /// [`crate::client_tokens::validate_gate_table_pair`] 另闸拒开, 本函数假定
@@ -184,17 +179,6 @@ pub fn enforce_remote_bind(
     }
     let bind = bind.trim();
     match gate {
-        // 逃生阀: 操作者明示不设防 —— 可裸奔但每次装配留痕。
-        GatewayTokenGate::UnprotectedDeclared => Ok(RemoteBindClearance {
-            scope,
-            audit_facts: vec![(
-                "gateway.remote_bind".to_string(),
-                Some(format!(
-                    "bind={bind} mode=declared_none detail=operator explicitly declared an \
-                     unprotected gateway on a non-loopback bind (escape valve)"
-                )),
-            )],
-        }),
         // 令牌族在场 (env 单令牌 / 客户端令牌表任一) = 全 API 面强制校验。
         GatewayTokenGate::Enforced(_) => Ok(RemoteBindClearance {
             scope,
@@ -214,7 +198,7 @@ pub fn enforce_remote_bind(
             )],
         }),
         // 令牌族两面皆空: fail-closed 拒绝启动。
-        GatewayTokenGate::UnprotectedDefault => Err(RemoteBindError::NonLoopbackWithoutToken {
+        _ => Err(RemoteBindError::NonLoopbackWithoutToken {
             bind: bind.to_string(),
         }),
     }
@@ -617,18 +601,17 @@ mod tests {
     }
 
     #[test]
-    fn non_loopback_escape_valve_runs_but_leaves_the_audit_trace() {
-        let cleared = enforce_remote_bind(
+    fn non_loopback_rejects_declared_none_even_with_a_token_table() {
+        let error = enforce_remote_bind(
             "0.0.0.0",
             &GatewayTokenGate::UnprotectedDeclared,
-            &ClientTokenTable::default(),
+            &table_with_one(),
         )
-        .expect("逃生阀放行 (操作者明示自担)");
-        let (event, detail) = cleared.audit_facts[0].clone();
-        assert_eq!(event, "gateway.remote_bind");
-        let detail = detail.unwrap_or_default();
-        assert!(detail.contains("mode=declared_none"), "{detail}");
-        assert!(detail.contains("escape valve"), "{detail}");
+        .unwrap_err();
+        assert!(matches!(
+            error,
+            RemoteBindError::NonLoopbackWithoutToken { .. }
+        ));
     }
 
     #[test]

@@ -1,22 +1,15 @@
 # ============================================================================
 # audit.toml — cargo-audit ignore 配置 (CI fix 2026-08)
 # ============================================================================
-# 与 deny.toml [advisories].ignore 同步 (两处检查都跑, ignore 理由一致)。
-# 2026-10-06 复核批 (交接工作包 §4.4): 原 20 条 ignore (gtk-rs 系 / paste /
-# proc-macro-error(-2) / unic-* / Authorization / bincode) 在当前 Cargo.lock 全部
-# unmatched —— 不带 ignore 的全量审计 0 unmaintained 命中。与 deny.toml 的 10 条、
-# cargo-audit.yml 的 21 条同属过期残留 (三处口径本就漂移: 20/10/21)。按 0-ignore
-# austere 模式 (见 deny.toml 注释) 全部清空, 三处同步为空; 新增 ignore 须三处同步
-# 并写理由。收敛为单一来源的重构留后续工作包。
+# 这份文件与 deny.toml [advisories].ignore、cargo-audit.yml 的显式
+# `--ignore` 以及 scripts/vet.sh 保持完全相同。新增或删除条目时，四处必须同批
+# 更新；scripts/test_advisory_policy.py 会阻止清单静默漂移。
 
 [advisories]
 ignore = [
-    # 2026-10-18 D5 对账批：与 deny.toml [advisories].ignore / cargo-audit.yml
-    # --ignore 三处同步（复核日 2026-10-18）。4 条全为 unmaintained 类、transitive、
-    # 0 直接业务依赖、0 known vulnerability：
-    #   paste            ← pulp ← exr ← 图像核心家族（EXR 支撑链）
-    #   zbus_names/zvariant/zvariant_derive 5.x ← zbus ← xcap ← apeireth-perception
-    # 均无安全升级路径（paste 已归档；zbus 6 迁移需等 xcap 升），只能上游解决。
+    # paste 1.0.15：unmaintained 类公告；经 pulp/exr 图像链进入，运行时不执行
+    # paste proc macro。上游已归档且当前无安全升级路径。若依赖链移除即删本条。
+    # 完整理由及复审条件见 deny.toml 同名条目。
     "RUSTSEC-2024-0436",
     # 2026-11-17 供应链公告批：RUSTSEC-2026-0543（chrono 0.4.45 · unmaintained）。
     # 类型＝unmaintained（非漏洞：无 exploit / 无 unsafe 缺陷 / 无数据泄漏面）；
@@ -25,27 +18,4 @@ ignore = [
     # 复审条件：迁移完成后即删；上游恢复维护 ⇒ 变 advisory-not-detected ⇒ 即删。
     # 理由全文与同步面见 deny.toml [advisories].ignore 同名条目。
     "RUSTSEC-2026-0543",
-    "RUSTSEC-2026-0370",
-    "RUSTSEC-2026-0371",
-    "RUSTSEC-2026-0372",
-    # 2026-10-25 D6 对账批：quinn-proto 0.11.16 的 5 条新 advisory
-    # （RUSTSEC-2026-0338/0339/0340/0341/0342：零长帧 panic / CID 退休队列无界增长 /
-    #  ACK_FREQUENCY 下 min-ack-delay panic / 流重组内存耗尽绕过 / 零长 DATAGRAM 绕过
-    #  接收缓冲上限）。
-    # **为什么可 ignore**：
-    #   ① quinn-proto 是 **reqwest 的可选 http3 特性**引入的 transitive 依赖，
-    #      本仓**未启用该特性** ⇒ `cargo tree -i quinn-proto` 实测「nothing to print」
-    #      ⇒ **不进构建产物、不进运行时**；
-    #   ② 上游**暂无修复版本**（advisory 无 patched 版本）⇒ 升级也解决不了；
-    #   ③ 0 直接业务依赖。
-    # **复审条件**：本仓启用 reqwest 的 http3 特性，或上游发布修复版 ⇒ **必须复审并删掉这些 ignore**。
-    "RUSTSEC-2026-0338",
-    "RUSTSEC-2026-0339",
-    "RUSTSEC-2026-0340",
-    "RUSTSEC-2026-0341",
-    "RUSTSEC-2026-0342",
-    # 2026-10-03 曾短接 3 条 (apeireth-tui → ratatui 0.29 → paste / lru 0.12
-    # transitive 未修复面)。2026-10-12 零债清偿批: ratatui 0.30 迁移落地,
-    # 依赖树复核 paste 已不存在、lru 单一 0.18.5 修复线 —— 三条面已消, ignore
-    # 清空, 回归 0-ignore austere 模式。与 deny.toml / cargo-audit.yml 三处同步。
 ]

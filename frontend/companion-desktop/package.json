@@ -17,7 +17,6 @@
     "@pixiv/three-vrm": "^3.5.5",
     "@tauri-apps/api": "^2.8.0",
     "@tauri-apps/plugin-autostart": "^2.5.1",
-    "@tauri-apps/plugin-notification": "^2.3.3",
     "dompurify": "^3.4.17",
     "highlight.js": "^11.11.1",
     "katex": "^0.18.2",

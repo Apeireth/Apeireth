@@ -54,6 +54,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod credential_record;
 pub mod error;
 pub mod gate;
 pub mod hook;
@@ -64,6 +65,11 @@ pub mod secret;
 pub mod service_token;
 pub mod store;
 
+pub use credential_record::{
+    bound_credential_reference, bound_record_service, decode_credential_record,
+    encode_credential_record, is_bound_credential_reference, CredentialRecord,
+    CredentialRecordError,
+};
 pub use error::{CredentialsError, Result};
 pub use gate::{
     AllowAllGate, CredentialGate, CredentialOp, DenyAllGate, GateDecision, GatedCredentialsStore,

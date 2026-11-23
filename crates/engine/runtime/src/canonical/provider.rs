@@ -42,6 +42,8 @@ use apeireth_plugin::{ProviderCapability, ProviderError, ProviderHotConfig};
 use apeireth_protocol::canonical::{
     ModelDescriptor, NormalizedRequest, NormalizedResponse, NormalizedTool,
 };
+
+use super::provider_request_context::{routed_model, RoutedRequestModel};
 use parking_lot::RwLock;
 
 use super::egress_gate::{AllowAllEgress, EgressGate, EgressVerdict};
@@ -86,6 +88,7 @@ pub struct RoutedCompletion {
     pub served_by: CapabilityId,
     /// What it answered.
     pub response: NormalizedResponse,
+    pub(super) request_model: Option<RoutedRequestModel>,
     /// Providers that failed transiently before one succeeded, in the order
     /// they were tried. Empty on a first-try success.
     pub failed_attempts: Vec<(CapabilityId, ProviderError)>,
@@ -311,7 +314,8 @@ impl ProviderRouter {
         // 出网闸：请求发出前判定一次（ADR-0014 §1.2 —— 上下文出境即行动）。
         // 默认 AllowAll 时这一支恒为 Pass，零行为变化。
         let redacted_request: Option<NormalizedRequest>;
-        let request: &NormalizedRequest = match self.egress.vet(request) {
+        let (verdict, restorer) = self.egress.prepare(request);
+        let request: &NormalizedRequest = match verdict {
             EgressVerdict::Pass => request,
             EgressVerdict::Redacted(next) => {
                 redacted_request = Some(next);
@@ -436,10 +440,30 @@ impl ProviderRouter {
                     self.record_success(&id, elapsed);
                     // 受控回程还原（ADR-0014 §1.2 双闸的闸二）：把回信里的占位符
                     // 换回本地真值。默认闸不做任何事 = 零行为变化。
-                    self.egress.restore(&mut response);
+                    if let Some(restore) = restorer {
+                        restore(&mut response);
+                    } else {
+                        self.egress.restore(&mut response);
+                    }
+                    let models = provider.models();
+                    let request_model = routed_model(
+                        models
+                            .iter()
+                            .filter(|model| model.provider == id)
+                            .map(|model| {
+                                (
+                                    &model.id,
+                                    model.display_name.as_deref(),
+                                    model.context_window,
+                                )
+                            }),
+                        &candidate_request.model,
+                        &response.model,
+                    );
                     return Ok(RoutedCompletion {
                         served_by: id,
                         response,
+                        request_model,
                         failed_attempts,
                     });
                 }

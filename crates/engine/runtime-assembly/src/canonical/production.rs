@@ -819,11 +819,9 @@ impl ProductionModules {
         // 已声明影响回填 `failed`。归属（action_id ↔ tool_call_id）**由调用方显式登记**
         // （`apeireth egress bind`），登记不到 ⇒ 不动 —— 系统不推断归属。
         //
-        // **默认关**：与问责面共用同一个开关（`APEIRETH_ENABLE_EGRESS_GATE`）——
-        // 开闸才装（闸 = 影响声明 + 后果账 + 自动回填这一整套）；关时**零注册**、
-        // 零行为变化（未启用 = 不注册）。
+        // 仅在显式配置出网闸记录时装配问责回填。默认脱敏无出网账本。
         // `confirmed` **绝不**自动填（本地成功 ≠ 影响已确认 = 替外部背书）。
-        if crate::egress_gate::egress_gate_enabled_from_env() {
+        if crate::egress_gate::egress_accountability_enabled_from_env() {
             modules.push(Arc::new(ConsequenceBackfillModule::from_data_root(
                 &default_data_root(),
             )) as Arc<dyn Module>);

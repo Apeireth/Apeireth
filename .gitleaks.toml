@@ -16,7 +16,7 @@ useDefault = false
 
 # 自定义 allowlist (PowerShell 扫描器也读这段)
 [allowlist]
-description = "R215 防御 allowlist — 测试 placeholder + 已 redact 历史报告 + 真凭证存放位置"
+description = "R215 防御 allowlist — precise synthetic placeholders only"
 paths = [
     # PII detection test cases (借 RealWorldCoverage, 非真凭证)
     '''crates/apeireth-guard/.*''',
@@ -32,15 +32,9 @@ paths = [
     '''apikey-.*\.txt''',
     '''.*\.git-credentials''',
     '''Users.*\.git-credentials''',
-    # 历史已 redact 的报告 (per R215 git filter-repo, 留形态占位)
-    '''reports/.*real-key.*''',
-    '''reports/.*real-llm.*''',
-    '''reports/.*minimax-hello.*''',
-    # 本防御配置文件本身 (gitleaks config 是 .toml, 不含凭证)
-    '''\.gitleaks\.toml''',
-    # 旧 task 报告里的 test verification key (借 prefix 但含 test/dummy/verify 标记)
-    '''reports/.*''',
-    '''legacy/.*''',
+    # Test/source paths retained from the original policy. Legacy and report
+    # trees are intentionally not exempted wholesale; reviewed fixtures there
+    # are bound by blob/path/line/match hash in the scanner registry.
     '''frontend/companion-desktop/tests/.*''',
     '''crates/adapters/cli/tests/.*''',
     '''crates/adapters/sdk/examples/.*''',
@@ -95,8 +89,8 @@ regexes = [
     '''AKIAIOSFODNN7EXAMPLE''',
     '''api_key=os_environ_or_default''',
     '''r[0-9]+-[0-9]+-verify-test-key.*''',
-    # 历史 Bocha 调研脚本密钥 baseline (已报告，需在平台端 rotate/revoke)
-    '''sk-905b4204278848a08e84e2de0b570271'''
+    # Never allowlist a known credential literal here. Rotation/revocation and
+    # history remediation are tracked separately from scanner policy.
 ]
 regexTarget = "match"
 stopwords = []

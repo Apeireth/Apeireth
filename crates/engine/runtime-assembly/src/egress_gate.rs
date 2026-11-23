@@ -11,10 +11,7 @@
 //!   回程还原由 `RedactionBridge::restore_for_local` 在受控回程面负责）；
 //! - **Deny**：闸自身出错（读不到策略、桥内部失败）→ **拒绝即帧**（fail-closed）。
 //!
-//! # 为什么默认关
-//!
-//! 脱敏会改写请求内容 —— 那是**行为变化**，不是「更安全的默认值」。
-//! 因此闸由 env 显式开启（`APEIRETH_ENABLE_EGRESS_GATE`），关时逐字节零变化。
+//! 生产装配默认开启脱敏。显式设置 `APEIRETH_ENABLE_EGRESS_GATE=0` 或 `false` 可退出保护。
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -22,14 +19,14 @@ use std::sync::{Arc, Mutex};
 use apeireth_core::kernel::Clock;
 use apeireth_governance::authorization::{AuthorizationAction, AuthorizationPolicy};
 use apeireth_protocol::canonical::{ContentPart, NormalizedRequest, NormalizedResponse};
-use apeireth_runtime::canonical::egress_gate::{EgressGate, EgressVerdict};
-use apeireth_tools_canonical::redaction_bridge::RedactionBridge;
+use apeireth_runtime::canonical::egress_gate::{EgressGate, EgressVerdict, ResponseRestorer};
+use apeireth_tools_canonical::redaction_bridge::{RedactionBridge, RedactionHit};
 
 use crate::accountability::{AccountabilityLedger, Affected, Boundary, ImpactStatement, Outcome};
 use crate::consequence::{ConsequenceTracker, OutcomeSource};
 use crate::egress_ledger::{EgressLedger, EgressLedgerEntry};
 
-/// 出网闸开关 env（未设 / 非 `"1"` = 关，fail-closed 于「开启侧」）。
+/// 出网闸的配置变量。
 pub const EGRESS_GATE_ENV: &str = "APEIRETH_ENABLE_EGRESS_GATE";
 
 /// 授权判定用的资源名（固定）——「把内容送出」这一个资源。
@@ -43,9 +40,9 @@ pub const EGRESS_USAGE_CHAT: &str = "chat";
 
 /// 生产出网闸：用 `RedactionBridge` 把请求里的 PII 换成不可逆占位。
 ///
-/// 线程安全：`RedactionBridge` 内部有本会话登记簿（真值驻留处），用互斥量串行化。
+/// 生产路由的出境与回程共享单次请求专有的登记簿。
 pub struct RedactionEgressGate {
-    bridge: Mutex<RedactionBridge>,
+    legacy_bridge: Option<Mutex<RedactionBridge>>,
     /// **出网动作序号**（单调递增）：与毫秒时间戳一起组成 `action_id`。
     ///
     /// 修「同毫秒两次出网 ⇒ 同 `action_id`」的碰撞（2026-10-25 实测发现）：
@@ -55,6 +52,7 @@ pub struct RedactionEgressGate {
     action_seq: AtomicU64,
     /// 出域账本（承诺措辞里「记录已知流向」的载体；零真值、append-only）。
     ledger: Arc<EgressLedger>,
+    record_ledger: bool,
     /// 授权策略对象（可携带/可委托/可过期/可追溯）。
     ///
     /// `None` = **不按授权判定**（旧行为：只做脱敏，不因「没授权」拒绝）。
@@ -74,17 +72,19 @@ pub struct RedactionEgressGate {
 }
 
 impl RedactionEgressGate {
-    /// 新建闸（新会话键 = 新登记簿），账本走内存（不持久）。
+    /// 新建闸，账本走内存（不持久）。
     pub fn new() -> Self {
         Self::with_ledger(Arc::new(EgressLedger::new(None)))
     }
 
-    /// 用指定会话键新建（同一会话的占位恒同、跨会话换别名）。
+    /// 为直接使用 `vet` 和 `restore` 的调用方建立独立登记簿。
+    /// `prepare` 始终为单次请求生成新登记簿。
     pub fn with_session_key(session_key: [u8; 32]) -> Self {
         Self {
-            bridge: Mutex::new(RedactionBridge::with_session_key(session_key)),
+            legacy_bridge: Some(Mutex::new(RedactionBridge::with_session_key(session_key))),
             action_seq: AtomicU64::new(0),
             ledger: Arc::new(EgressLedger::new(None)),
+            record_ledger: true,
             authorization: None,
             clock: Arc::new(apeireth_core::kernel::SystemClock),
             accountability: None,
@@ -95,9 +95,10 @@ impl RedactionEgressGate {
     /// 用指定账本新建（生产接线：账本落盘）。
     pub fn with_ledger(ledger: Arc<EgressLedger>) -> Self {
         Self {
-            bridge: Mutex::new(RedactionBridge::new_session()),
+            legacy_bridge: None,
             action_seq: AtomicU64::new(0),
             ledger,
+            record_ledger: true,
             authorization: None,
             clock: Arc::new(apeireth_core::kernel::SystemClock),
             accountability: None,
@@ -149,11 +150,14 @@ impl RedactionEgressGate {
     fn record(
         &self,
         verdict: &str,
-        hits: &[apeireth_tools_canonical::redaction_bridge::RedactionHit],
+        hits: &[RedactionHit],
         destination: &str,
         usage: &str,
         reason: Option<String>,
     ) {
+        if !self.record_ledger {
+            return;
+        }
         let entry = EgressLedgerEntry {
             ts_unix_ms: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -235,7 +239,7 @@ impl EgressGate for RedactionEgressGate {
     /// 且只还原本会话登记簿登记过的指纹；未登记占位**不还原、照实留痕**。
     /// 对出境面不可逆：出去的请求里只有占位，没有真值。
     fn restore(&self, response: &mut NormalizedResponse) {
-        let Ok(mut bridge) = self.bridge.lock() else {
+        let Some(Ok(mut bridge)) = self.legacy_bridge.as_ref().map(Mutex::lock) else {
             // 登记簿不可用 → 不还原（占位保留）。**不泄漏**：保持占位比还原错更安全。
             return;
         };
@@ -244,6 +248,49 @@ impl EgressGate for RedactionEgressGate {
     }
 
     fn vet(&self, request: &NormalizedRequest) -> EgressVerdict {
+        match &self.legacy_bridge {
+            Some(bridge) => match bridge.lock() {
+                Ok(mut bridge) => self.vet_with_bridge(request, &mut bridge),
+                Err(_) => self.deny("出境脱敏登记簿不可用".into()),
+            },
+            None => self.prepare(request).0,
+        }
+    }
+
+    fn prepare(&self, request: &NormalizedRequest) -> (EgressVerdict, Option<ResponseRestorer>) {
+        let mut bridge = RedactionBridge::new_session();
+        let verdict = self.vet_with_bridge(request, &mut bridge);
+        let restore: Option<ResponseRestorer> = match verdict {
+            EgressVerdict::Redacted(_) => {
+                Some(Box::new(move |response: &mut NormalizedResponse| {
+                    response.content = bridge.restore_for_local(&response.content).text;
+                }))
+            }
+            EgressVerdict::Pass => Some(Box::new(|_| {})),
+            EgressVerdict::Deny { .. } => None,
+        };
+        (verdict, restore)
+    }
+}
+
+impl RedactionEgressGate {
+    fn deny(&self, reason: String) -> EgressVerdict {
+        self.record(
+            "deny",
+            &[],
+            "provider",
+            EGRESS_USAGE_CHAT,
+            Some(reason.clone()),
+        );
+        self.declare_impact("provider", false);
+        EgressVerdict::Deny { reason }
+    }
+
+    fn vet_with_bridge(
+        &self,
+        request: &NormalizedRequest,
+        bridge: &mut RedactionBridge,
+    ) -> EgressVerdict {
         // 授权判定**先于**脱敏：没授权就不必做脱敏工作量，也不必进登记簿。
         //
         // 粒度：资源固定 `egress`，scope 装**用途**（当前唯一用途 `chat`）。
@@ -264,41 +311,32 @@ impl EgressGate for RedactionEgressGate {
                          `{EGRESS_USAGE_CHAT}` 用途出网权限 —— 已拒绝本次出网"
                     )
                 };
-                self.record(
-                    "deny",
-                    &[],
-                    "provider",
-                    EGRESS_USAGE_CHAT,
-                    Some(reason.clone()),
-                );
-                self.declare_impact("provider", false);
-                return EgressVerdict::Deny { reason };
+                return self.deny(reason);
             }
         }
-        let Ok(mut bridge) = self.bridge.lock() else {
-            // 登记簿锁被 poison = 无法保证「真值不出境」→ 拒绝即帧。
-            return EgressVerdict::Deny {
-                reason: "出境脱敏闸不可用（登记簿锁被污染）—— 已拒绝本次出网".to_string(),
-            };
-        };
+        if request
+            .messages
+            .iter()
+            .flat_map(|message| &message.content)
+            .any(|part| matches!(part, ContentPart::ImageUrl { .. }))
+        {
+            return self.deny("出境脱敏闸无法检查图像内容，已拒绝本次出网".into());
+        }
         let mut replaced = request.clone();
-        let mut any_hit = false;
         let mut hits = Vec::new();
         for message in &mut replaced.messages {
             for part in &mut message.content {
                 if let ContentPart::Text { text } = part {
-                    let redaction = bridge.redact_for_egress(text);
-                    if !redaction.hits.is_empty() {
-                        any_hit = true;
-                        hits.extend(redaction.hits);
-                        *text = redaction.text;
-                    }
+                    redact_text(bridge, text, &mut hits);
                 }
+            }
+            for call in &mut message.tool_calls {
+                redact_arguments(bridge, &mut call.arguments, &mut hits);
             }
         }
         // 出域账本：每次判定记一行（**零真值**：只记对象类型与指纹）。
         // 记账失败**不阻断出网**（账本是观测面，不是闸）。
-        if any_hit {
+        if !hits.is_empty() {
             self.record("redacted", &hits, "provider", EGRESS_USAGE_CHAT, None);
             self.declare_impact("provider", true);
             EgressVerdict::Redacted(replaced)
@@ -310,38 +348,63 @@ impl EgressGate for RedactionEgressGate {
     }
 }
 
-/// 闸 env 的**生效判定**（值语义；不含 env 读取）。
-///
-/// 未设 / 空 / `"0"` / `"false"`（大小写不敏感）= **关**；其余（`"1"` 或授权策略
-/// JSON）= **开**。
-///
-/// 装配根（模块表）与闸工厂**共用这一条判据** —— 两边各判一次必然漂移。
-pub fn egress_gate_enabled_from_value(raw: &str) -> bool {
-    let trimmed = raw.trim();
-    !(trimmed.is_empty() || trimmed == "0" || trimmed.eq_ignore_ascii_case("false"))
-}
-
-/// 闸 env 是否**开启**（读 env；未设 = 关）。
-///
-/// 问责闭环第 ③ 步的**自动回填面**与问责面共用这一个开关：
-/// 开闸 = 装影响声明 + 后果账 + 自动回填；关闸 = 一样都不装（零注册）。
-pub fn egress_gate_enabled_from_env() -> bool {
-    match std::env::var(EGRESS_GATE_ENV) {
-        Ok(raw) => egress_gate_enabled_from_value(&raw),
-        Err(_) => false,
+fn redact_text(bridge: &mut RedactionBridge, text: &mut String, hits: &mut Vec<RedactionHit>) {
+    let report = bridge.redact_for_egress(text);
+    if !report.hits.is_empty() {
+        *text = report.text;
+        hits.extend(report.hits);
     }
 }
 
-/// 按 env 决定是否装配闸。**两种形态**（不新增第二个开关 —— env 名数有棘轮）：
+fn redact_arguments(
+    bridge: &mut RedactionBridge,
+    value: &mut serde_json::Value,
+    hits: &mut Vec<RedactionHit>,
+) {
+    use serde_json::Value;
+    let mut pending = vec![value];
+    while let Some(value) = pending.pop() {
+        match value {
+            Value::String(text) => redact_text(bridge, text, hits),
+            Value::Array(array) => pending.extend(array),
+            Value::Object(object) => pending.extend(object.values_mut()),
+            _ => {}
+        }
+    }
+}
+
+/// 闸 env 的**生效判定**（值语义；不含 env 读取）。
 ///
-/// - 未设 / 其它值 → `None`（runtime 侧默认放行，零行为变化）；
-/// - `"1"` → 装配闸，**只做脱敏**；
-/// - `"<授权策略 JSON>"` → 装配闸**并挂上授权策略对象**（未授权即拒绝出网，fail-closed）。
+/// 只有显式 `"0"` 或 `"false"`（大小写不敏感）关闭保护。
+pub fn egress_gate_enabled_from_value(raw: &str) -> bool {
+    let trimmed = raw.trim();
+    !(trimmed == "0" || trimmed.eq_ignore_ascii_case("false"))
+}
+
+fn configured_value(value: Result<String, std::env::VarError>) -> String {
+    match value {
+        Ok(value) => value,
+        Err(std::env::VarError::NotPresent) => String::new(),
+        // Preserve the fail-closed behavior without exposing the invalid bytes.
+        Err(std::env::VarError::NotUnicode(_)) => "invalid configuration encoding".into(),
+    }
+}
+
+/// 生产问责回填要求显式启用记录。
+pub(crate) fn egress_accountability_enabled_from_env() -> bool {
+    let raw = configured_value(std::env::var(EGRESS_GATE_ENV));
+    !raw.trim().is_empty() && egress_gate_enabled_from_value(&raw)
+}
+
+/// 生产出网闸的总开关。
+pub fn egress_gate_enabled_from_env() -> bool {
+    egress_gate_enabled_from_value(&configured_value(std::env::var(EGRESS_GATE_ENV)))
+}
+
+/// 按配置装配出网闸。
 ///
-/// 授权策略是一行可携带的 JSON，形如：
-/// `{"subject":"user-1","issuer":"owner","grants":[{"resource":"egress","action":"egress"}]}`
-///
-/// 授权写坏了 = 不猜：**fail-closed**（不装配闸）+ stderr 如实报错（不静默）。
+/// 未设、空值、`"1"` 启用脱敏，授权策略 JSON 额外要求授权。
+/// 策略无效时拒绝出网。`"0"` 或 `"false"` 显式关闭。
 pub fn egress_gate_from_env() -> Option<std::sync::Arc<dyn EgressGate>> {
     egress_gate_from_env_with_ledger(None)
 }
@@ -374,11 +437,24 @@ pub fn egress_gate_from_env_with_all(
     accountability_path: Option<std::path::PathBuf>,
     consequence_path: Option<std::path::PathBuf>,
 ) -> Option<std::sync::Arc<dyn EgressGate>> {
-    let raw = std::env::var(EGRESS_GATE_ENV).ok()?;
-    let trimmed = raw.trim();
-    // 生效判据与装配根共用（`egress_gate_enabled_from_value`）。
-    if !egress_gate_enabled_from_value(&raw) {
+    let raw = configured_value(std::env::var(EGRESS_GATE_ENV));
+    gate_from_config(&raw, ledger_path, accountability_path, consequence_path)
+}
+
+fn gate_from_config(
+    value: &str,
+    ledger_path: Option<std::path::PathBuf>,
+    accountability_path: Option<std::path::PathBuf>,
+    consequence_path: Option<std::path::PathBuf>,
+) -> Option<Arc<dyn EgressGate>> {
+    let trimmed = value.trim();
+    if !egress_gate_enabled_from_value(trimmed) {
         return None;
+    }
+    if trimmed.is_empty() {
+        let mut gate = RedactionEgressGate::new();
+        gate.record_ledger = false;
+        return Some(Arc::new(gate));
     }
     let ledger = Arc::new(EgressLedger::new(ledger_path));
     let mut gate = RedactionEgressGate::with_ledger(ledger);
@@ -395,19 +471,8 @@ pub fn egress_gate_from_env_with_all(
         GateAuthorizationPlan::WithPolicy(policy) => {
             gate = gate.with_authorization(policy, Arc::new(apeireth_core::kernel::SystemClock));
         }
-        GateAuthorizationPlan::DenyAll { error } => {
-            // ⚠️ **fail-closed**（2026-10-31 · 静态安全审计复核）。
-            //
-            // 旧行为是 `return None` ⇒ **闸根本不装配** ⇒ 脱敏与授权**双双失效**
-            // ⇒ 而启用判定（`egress_gate_enabled_from_value`）对「非 1 非空」的值
-            //   一律为**真** ⇒ ⇒ 操作者以为闸开着，实际**全裸出网**（fail-open）。
-            //
-            // ⇒ 新行为：闸**照常装配**（脱敏仍在），但挂一个**空授权策略**
-            //   （无 grant ⇒ `allows_at` 必假 ⇒ 出网一律 `Deny`）
-            //   ⇒ ⇒ 配置写错 ⇒ **显式拒绝**，而不是静默放行。
-            eprintln!(
-                "[egress] 授权策略解析失败（{error}）—— **按 fail-closed 处理**：闸照常装配，出网一律拒绝"
-            );
+        GateAuthorizationPlan::DenyAll { .. } => {
+            eprintln!("[egress] 授权策略无效，已拒绝出网");
             gate = gate.with_authorization(
                 AuthorizationPolicy::new(
                     "egress-gate",
@@ -426,14 +491,14 @@ pub fn egress_gate_from_env_with_all(
 ///
 /// | env 值 | 计划 | 语义 |
 /// |---|---|---|
-/// | `"1"` | `RedactionOnly` | 闸照常装配，**只做脱敏**（无授权判定）|
+/// | 空或 `"1"` | `RedactionOnly` | 只做脱敏 |
 /// | 合法策略 JSON | `WithPolicy` | 闸 + 授权策略（未授权即拒绝，fail-closed）|
 /// | **其它非空值（畸形）** | `DenyAll` | **fail-closed**：闸照常装配，但出网一律拒绝 |
 ///
 /// ⚠️ 畸形值**不能**当成「没配」（那会 fail-open ⇒ 脱敏与授权一起消失）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GateAuthorizationPlan {
-    /// `"1"` ⇒ 只脱敏。
+    /// 只脱敏。
     RedactionOnly,
     /// 合法策略 ⇒ 挂上它。
     WithPolicy(AuthorizationPolicy),
@@ -444,7 +509,7 @@ pub enum GateAuthorizationPlan {
 /// 判定 env 值对应的授权装配计划（**纯函数**）。
 pub fn plan_authorization(trimmed: &str) -> GateAuthorizationPlan {
     let trimmed = trimmed.trim();
-    if trimmed == "1" {
+    if trimmed.is_empty() || trimmed == "1" {
         return GateAuthorizationPlan::RedactionOnly;
     }
     match AuthorizationPolicy::from_carryable(trimmed) {
@@ -515,6 +580,48 @@ mod tests {
     }
 
     #[test]
+    fn unscannable_image_content_is_denied_without_recording_the_url() {
+        let gate = RedactionEgressGate::new();
+        let mut request = request_with("图像描述");
+        request.messages[0].content.push(ContentPart::ImageUrl {
+            url: "https://images.example.test/private-object".into(),
+            detail: None,
+        });
+        assert!(matches!(gate.vet(&request), EgressVerdict::Deny { .. }));
+        let entries = gate.ledger().entries();
+        assert_eq!(entries[0].verdict, "deny");
+        assert!(!serde_json::to_string(&entries)
+            .unwrap()
+            .contains("private-object"));
+    }
+
+    #[test]
+    fn nested_tool_arguments_are_redacted_without_changing_their_shape() {
+        use apeireth_protocol::canonical::ToolCall;
+        let gate = RedactionEgressGate::new();
+        let mut request = request_with("历史工具参数");
+        request.messages[0].tool_calls.push(ToolCall {
+            id: "test-call".into(),
+            name: "test-tool".into(),
+            arguments: serde_json::json!({"recipients": ["alice@example.test"], "limit": 1}),
+        });
+        let EgressVerdict::Redacted(redacted) = gate.vet(&request) else {
+            panic!("tool argument should be redacted");
+        };
+        let call = &redacted.messages[0].tool_calls[0];
+        assert_eq!(call.id, "test-call");
+        assert_eq!(call.arguments["limit"], 1);
+        assert!(call.arguments["recipients"][0]
+            .as_str()
+            .unwrap()
+            .starts_with("__AP_"));
+        assert_eq!(
+            request.messages[0].tool_calls[0].arguments["recipients"][0],
+            "alice@example.test"
+        );
+    }
+
+    #[test]
     fn pii_is_replaced_by_placeholder() {
         let gate = RedactionEgressGate::new();
         // 一个能被 PII 检出的样本：邮箱。
@@ -543,7 +650,8 @@ mod tests {
 
         let gate = RedactionEgressGate::new();
         let request = request_with("联系 alice@example.com 就行");
-        let redacted = match gate.vet(&request) {
+        let (verdict, restorer) = gate.prepare(&request);
+        let redacted = match verdict {
             EgressVerdict::Redacted(redacted) => redacted,
             other => panic!("应脱敏: {other:?}"),
         };
@@ -564,7 +672,7 @@ mod tests {
             tool_calls: Vec::new(),
             raw_metadata: Default::default(),
         };
-        gate.restore(&mut response);
+        restorer.expect("redacted request has a response restorer")(&mut response);
         // 回程面换回真值。
         assert!(
             response.content.contains("alice@example.com"),
@@ -588,12 +696,30 @@ mod tests {
             tool_calls: Vec::new(),
             raw_metadata: Default::default(),
         };
-        gate.restore(&mut response);
+        let (_, restorer) = gate.prepare(&request_with("alice@example.com"));
+        restorer.expect("redacted request has a response restorer")(&mut response);
         assert!(
             response.content.contains("__AP_EMAIL_deadbeef0000__"),
             "未登记占位应原样留痕: {}",
             response.content
         );
+    }
+
+    #[test]
+    fn one_requests_restorer_does_not_reveal_another_requests_value() {
+        let gate = RedactionEgressGate::new();
+        let (verdict_a, restore_a) = gate.prepare(&request_with("alice@example.com"));
+        let EgressVerdict::Redacted(redacted_a) = verdict_a else {
+            panic!("request A must be redacted");
+        };
+        let alias_a = ContentPart::join_text(&redacted_a.messages[0].content);
+        let (_, restore_b) = gate.prepare(&request_with("bob@example.com"));
+        let mut response_b = NormalizedResponse::text("b", "test-model", &alias_a);
+        restore_b.unwrap()(&mut response_b);
+        assert_eq!(response_b.content, alias_a);
+        let mut response_a = NormalizedResponse::text("a", "test-model", alias_a);
+        restore_a.unwrap()(&mut response_a);
+        assert_eq!(response_a.content, "alice@example.com");
     }
 
     /// 出网闸每次判定都记一行（零真值：只有对象类型与指纹）。
@@ -757,13 +883,58 @@ mod tests {
     }
 
     #[test]
-    fn env_switch_is_off_by_default() {
-        // 不设置 env → 不装配闸（runtime 侧默认放行）。
-        // 注意：测试进程里可能已被别处设置，故只断言「非 1 时不装配」。
-        let value = std::env::var(EGRESS_GATE_ENV).ok();
-        if value.as_deref() != Some("1") {
-            assert!(egress_gate_from_env().is_none());
+    fn env_switch_requires_explicit_opt_out() {
+        let default = configured_value(Err(std::env::VarError::NotPresent));
+        for value in [default.as_str(), " ", "1"] {
+            assert!(egress_gate_enabled_from_value(value));
+            assert_eq!(
+                plan_authorization(value),
+                GateAuthorizationPlan::RedactionOnly
+            );
         }
+        for value in ["0", " FALSE "] {
+            assert!(!egress_gate_enabled_from_value(value));
+        }
+        let invalid = configured_value(Err(std::env::VarError::NotUnicode("fixture".into())));
+        assert!(egress_gate_enabled_from_value(&invalid));
+        assert!(matches!(
+            plan_authorization(&invalid),
+            GateAuthorizationPlan::DenyAll { .. }
+        ));
+    }
+
+    #[test]
+    fn embedded_factory_matches_the_public_activation_query() {
+        assert_eq!(
+            egress_gate_from_env().is_some(),
+            egress_gate_enabled_from_env()
+        );
+    }
+
+    #[test]
+    fn default_factory_redacts_without_writing_audit_files() {
+        let temp = tempfile::tempdir().unwrap();
+        let paths = ["egress", "impact", "consequence"].map(|name| temp.path().join(name));
+        let make_gate = |value| {
+            gate_from_config(
+                value,
+                Some(paths[0].clone()),
+                Some(paths[1].clone()),
+                Some(paths[2].clone()),
+            )
+        };
+        let request = request_with("Email test.user@example.com");
+        let gate = make_gate("").unwrap();
+        assert!(matches!(
+            gate.prepare(&request).0,
+            EgressVerdict::Redacted(_)
+        ));
+        assert!(paths.iter().all(|path| !path.exists()));
+        assert!(make_gate("0").is_none());
+        assert!(matches!(
+            make_gate("invalid").unwrap().prepare(&request).0,
+            EgressVerdict::Deny { .. }
+        ));
     }
 
     // ===== 2026-10-31 · 静态安全审计复核：畸形策略必须 fail-closed =====

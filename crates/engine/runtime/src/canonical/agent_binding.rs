@@ -35,7 +35,8 @@
 //! # Fail-closed, in one paragraph
 //!
 //! A binding is a claim about the world that can go stale: the contact can be
-//! archived, the persona can change, the workspace can be revoked or moved.
+//! archived, the persona or registered binding can change, and the workspace
+//! can be revoked or moved.
 //! When that happens the turn is **refused** — no message is appended, no
 //! model call is made — because the alternative (answering as the default
 //! agent) is indistinguishable, from the user's side, from "the persona I
@@ -49,7 +50,9 @@
 //! unbound session, and no caller invokes [`admit_turn`] yet. The wiring
 //! point (and the HTTP surface) belongs to the next batch.
 
-use apeireth_core::agent_contact::{Contact, ContactRegistry, ContactStatus, ContractMemoryScope};
+use apeireth_core::agent_contact::{
+    Contact, ContactRegistry, ContactStatus, ContactWorkspaceBinding, ContractMemoryScope,
+};
 use apeireth_core::kernel::ids::{ContactAgentId, ContactId, WorkspaceId};
 use apeireth_core::kernel::Clock;
 use apeireth_protocol::canonical::NormalizedMessage;
@@ -295,6 +298,8 @@ pub struct AgentBinding {
     workspace_id: WorkspaceId,
     workspace_revision: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    contact_workspace_revision: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     context_key: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     incarnation: Option<String>,
@@ -326,6 +331,11 @@ impl AgentBinding {
     /// The workspace revision this binding was made against.
     pub fn workspace_revision(&self) -> u64 {
         self.workspace_revision
+    }
+
+    /// The exact contact registration revision used to select this workspace.
+    pub fn contact_workspace_revision(&self) -> Option<u64> {
+        self.contact_workspace_revision
     }
 
     /// The host-owned context key, echoed back verbatim.
@@ -485,6 +495,7 @@ pub enum AgentBindingError {
 /// 5. workspace not found → [`AgentBindingError::WorkspaceNotFound`]
 /// 6. workspace revoked → [`AgentBindingError::WorkspaceRevoked`]
 /// 7. workspace version mismatch → [`AgentBindingError::WorkspaceRevisionMismatch`]
+/// 8. contact registration points elsewhere or was detached → [`AgentBindingError::BindingConflict`]
 ///
 /// Archived and revoked are checked **before** the revision checks on
 /// purpose: both are terminal states, and a terminal state must never be
@@ -526,12 +537,14 @@ pub fn resolve_agent_binding(
             actual: workspace.revision,
         });
     }
+    check_contact_workspace(&contact, request.workspace_id, request.workspace_revision)?;
     Ok(AgentBinding {
         contact_id: contact.contact_id(),
         agent_id: contact.agent_id(),
         persona_revision: contact.persona_revision(),
         workspace_id: workspace.workspace_id,
         workspace_revision: workspace.revision,
+        contact_workspace_revision: contact.workspace_binding_revision(),
         context_key: request.context_key.clone(),
         incarnation: request.incarnation.clone(),
         revision: 0,
@@ -601,6 +614,9 @@ pub fn rebind_agent_binding(
         });
     }
     let mut next = resolve_agent_binding(request, contacts, workspaces, now_ms)?;
+    if existing.contact_workspace_revision() != next.contact_workspace_revision() {
+        return Err(contact_workspace_conflict());
+    }
     next.revision = existing.revision().saturating_add(1);
     Ok(next)
 }
@@ -757,5 +773,38 @@ fn revalidate_binding(
             actual: workspace.revision,
         });
     }
+    check_contact_workspace(
+        &contact,
+        binding.workspace_id(),
+        binding.workspace_revision(),
+    )?;
+    if contact.workspace_binding_revision() != binding.contact_workspace_revision() {
+        return Err(contact_workspace_conflict());
+    }
     Ok(contact)
+}
+
+fn check_contact_workspace(
+    contact: &Contact,
+    workspace_id: WorkspaceId,
+    revision: u64,
+) -> Result<(), AgentBindingError> {
+    if let Some(registered) = contact.workspace_binding() {
+        if registered
+            != Some(ContactWorkspaceBinding {
+                workspace_id,
+                revision,
+            })
+        {
+            return Err(contact_workspace_conflict());
+        }
+    }
+    Ok(())
+}
+
+fn contact_workspace_conflict() -> AgentBindingError {
+    AgentBindingError::BindingConflict {
+        expected: "currently registered contact workspace".into(),
+        actual: "historical or unregistered contact workspace".into(),
+    }
 }

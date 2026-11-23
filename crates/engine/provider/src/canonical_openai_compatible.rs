@@ -213,7 +213,7 @@ impl OpenAiCompatibleProviderCapability {
 
     /// is permanent (§40): the legacy config made `api_key_env` mandatory, so a
     /// missing key is a misconfiguration, not an anonymous request (§19/§20).
-    fn resolve_key(&self) -> Result<Secret, ProviderError> {
+    fn resolve_key(&self, base_url: &str) -> Result<Secret, ProviderError> {
         let resolver = {
             let guard = self
                 .resolver
@@ -243,18 +243,13 @@ impl OpenAiCompatibleProviderCapability {
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
             guard.clone()
         };
-        crate::endpoint_binding::ensure_credential_bound_to_endpoint(
+        crate::endpoint_binding::resolve_credential_for_endpoint(
             resolver.as_ref(),
+            self.id.as_str(),
             &self.credential_key,
-            &self.base_url(),
+            base_url,
             audience.as_deref(),
-        )?;
-        resolver
-            .resolve(&self.credential_key)
-            .ok_or_else(|| ProviderError::AuthFailed {
-                provider: self.id.to_string(),
-                detail: format!("missing API key for {}", self.credential_key),
-            })
+        )
     }
 
     /// Translate a canonical request into the OpenAI Chat Completions body.
@@ -376,9 +371,9 @@ impl ProviderCapability for OpenAiCompatibleProviderCapability {
         request: &NormalizedRequest,
     ) -> Result<apeireth_protocol::canonical::NormalizedResponse, ProviderError> {
         // One HTTP attempt. The router, not this provider, owns fallback.
-        let key = self.resolve_key()?;
-        let body = self.adapt_request(request)?;
         let base_url = self.base_url();
+        let key = self.resolve_key(&base_url)?;
+        let body = self.adapt_request(request)?;
         let url = openai_chat::join_endpoint(&base_url, "chat/completions");
 
         let send_result = self
@@ -434,11 +429,11 @@ impl ProviderCapability for OpenAiCompatibleProviderCapability {
         request: &NormalizedRequest,
         on_delta: Arc<dyn Fn(String) + Send + Sync>,
     ) -> Result<apeireth_protocol::canonical::NormalizedResponse, ProviderError> {
-        let key = self.resolve_key()?;
+        let base_url = self.base_url();
+        let key = self.resolve_key(&base_url)?;
         let mut body = self.adapt_request(request)?;
         body["stream"] = serde_json::Value::Bool(true);
         body["stream_options"] = serde_json::json!({"include_usage": true});
-        let base_url = self.base_url();
         let url = openai_chat::join_endpoint(&base_url, "chat/completions");
 
         let send_result = self
@@ -495,6 +490,7 @@ impl ProviderCapability for OpenAiCompatibleProviderCapability {
         let mut tool_args: BTreeMap<usize, String> = BTreeMap::new();
         let mut finish_reason: Option<String> = None;
         let mut usage: Option<serde_json::Value> = None;
+        let mut response_model: Option<String> = None;
 
         loop {
             let chunk = response
@@ -534,6 +530,11 @@ impl ProviderCapability for OpenAiCompatibleProviderCapability {
                     };
                     if let Some(usage_value) = value.get("usage").filter(|u| !u.is_null()) {
                         usage = Some(usage_value.clone());
+                    }
+                    if let Some(model) = value.get("model").and_then(serde_json::Value::as_str) {
+                        if !model.is_empty() {
+                            response_model = Some(model.to_string());
+                        }
                     }
                     let Some(choices) = value.get("choices").and_then(|c| c.as_array()) else {
                         continue;
@@ -608,6 +609,9 @@ impl ProviderCapability for OpenAiCompatibleProviderCapability {
         });
         if let Some(usage) = usage {
             synthetic["usage"] = usage;
+        }
+        if let Some(model) = response_model {
+            synthetic["model"] = model.into();
         }
         self.adapt_response(synthetic, &request.model)
     }
@@ -909,6 +913,92 @@ mod tests {
         format!("http://{addr}")
     }
 
+    #[tokio::test]
+    async fn one_request_uses_the_same_url_snapshot_for_binding_and_transport() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::Weak;
+
+        async fn response_server() -> (String, Arc<AtomicBool>) {
+            use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let addr = listener.local_addr().unwrap();
+            let received = Arc::new(AtomicBool::new(false));
+            let observed = Arc::clone(&received);
+            tokio::spawn(async move {
+                let Ok((mut socket, _)) = listener.accept().await else {
+                    return;
+                };
+                observed.store(true, Ordering::SeqCst);
+                let mut request = [0u8; 4096];
+                let _ = socket.read(&mut request).await;
+                let body = r#"{"id":"chatcmpl-snapshot","choices":[{"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}"#;
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    body.len(),
+                    body
+                );
+                let _ = socket.write_all(response.as_bytes()).await;
+            });
+            (format!("http://{addr}"), received)
+        }
+
+        struct RepointingResolver {
+            capability: Mutex<Option<Weak<OpenAiCompatibleProviderCapability>>>,
+            attacker_url: String,
+            allowed_url: String,
+        }
+
+        impl CredentialResolver for RepointingResolver {
+            fn resolve(&self, _name: &str) -> Option<Secret> {
+                Some(Secret::new("synthetic-snapshot-key"))
+            }
+
+            fn resolve_snapshot(&self, _name: &str) -> Option<apeireth_plugin::CredentialSnapshot> {
+                if let Some(capability) = self
+                    .capability
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .as_ref()
+                    .and_then(Weak::upgrade)
+                {
+                    capability.set_base_url(self.attacker_url.clone());
+                }
+                Some(apeireth_plugin::CredentialSnapshot::new(
+                    Secret::new("synthetic-snapshot-key"),
+                    Some(vec![self.allowed_url.clone()]),
+                ))
+            }
+        }
+
+        let (allowed_url, allowed_received) = response_server().await;
+        let (attacker_url, attacker_received) = response_server().await;
+        let resolver = Arc::new(RepointingResolver {
+            capability: Mutex::new(None),
+            attacker_url,
+            allowed_url: allowed_url.clone(),
+        });
+        let slot: ResolverSlot = Arc::new(Mutex::new(Some(resolver.clone())));
+        let capability = Arc::new(
+            OpenAiCompatibleProviderCapability::new(
+                allowed_url,
+                vec!["gpt-4o-mini".into()],
+                http(),
+                DEFAULT_TIMEOUT_MS,
+                slot,
+            )
+            .expect("capability builds"),
+        );
+        *resolver
+            .capability
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(Arc::downgrade(&capability));
+
+        capability.complete(&request()).await.expect("complete");
+        assert!(allowed_received.load(Ordering::SeqCst));
+        assert!(!attacker_received.load(Ordering::SeqCst));
+    }
+
     /// **推理字段归一化的端到端证明**：经真实 provider 的 `complete()` 路径。
     ///
     /// mock 厂商在 `message` 里同时给 `content` 与 `reasoning_content`；
@@ -1060,7 +1150,7 @@ mod tests {
     #[tokio::test]
     async fn complete_streaming_forwards_incremental_deltas() {
         let base_url = sse_mock_server(&[
-            "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\"}}]}",
+            "data: {\"model\":\"gpt-4o-mini-served\",\"choices\":[{\"delta\":{\"role\":\"assistant\"}}]}",
             "data: {\"choices\":[{\"delta\":{\"content\":\"你\"}}]}",
             "data: {\"choices\":[{\"delta\":{\"content\":\"好\"}}]}",
             "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":5,\"completion_tokens\":2,\"total_tokens\":7}}",
@@ -1094,6 +1184,8 @@ mod tests {
         let deltas = deltas.lock().unwrap().clone();
         assert_eq!(deltas, vec!["你".to_string(), "好".to_string()]);
         assert_eq!(response.content, "你好");
+        assert_eq!(response.model, "gpt-4o-mini-served");
+        assert_eq!(response.provider_context_input(), Some(5));
         assert_eq!(
             response.finish_reason,
             Some(NormalizedFinishReason::Stop),

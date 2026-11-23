@@ -337,7 +337,7 @@ impl From<ClientTokenTable> for ClientTokenConfig {
 }
 
 /// 恒定时间字节比较 (防时序侧信道; 与令牌门口径同实现语义)。
-fn constant_time_eq(left: &[u8], right: &[u8]) -> bool {
+pub(crate) fn constant_time_eq(left: &[u8], right: &[u8]) -> bool {
     if left.len() != right.len() {
         return false;
     }

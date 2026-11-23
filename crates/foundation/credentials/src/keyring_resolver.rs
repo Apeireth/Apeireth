@@ -21,8 +21,11 @@
 
 use std::sync::Arc;
 
-use apeireth_plugin::{CredentialResolver, Secret};
+use apeireth_plugin::{CredentialResolver, CredentialSnapshot, Secret};
 
+use crate::credential_record::{
+    bound_record_service, decode_credential_record, is_bound_credential_reference, CredentialRecord,
+};
 use crate::keyring::KeyringBackend;
 
 /// 把 `KeyringBackend` 包成 `CredentialResolver` trait。
@@ -56,31 +59,86 @@ impl KeyringCredentialResolver {
     pub fn keyring(&self) -> &Arc<dyn KeyringBackend> {
         &self.keyring
     }
+
+    fn record(&self, name: &str) -> Option<CredentialRecord> {
+        let legacy = self.keyring.get(name).ok()?;
+        let referenced = is_bound_credential_reference(&legacy)
+            .map_err(|error| {
+                eprintln!(
+                    "[apeireth-credentials] keyring credential reference refused: service={} error={}",
+                    name, error
+                );
+            })
+            .ok()?;
+        let stored = if referenced {
+            self.keyring.get(&bound_record_service(name)).ok()?
+        } else {
+            legacy
+        };
+        let record = decode_credential_record(&stored)
+            .map_err(|error| {
+                eprintln!(
+                    "[apeireth-credentials] keyring credential record refused: service={} error={}",
+                    name, error
+                );
+            })
+            .ok()?;
+        if !referenced && record.endpoints().is_some() {
+            eprintln!(
+                "[apeireth-credentials] unreferenced bound credential refused: service={} error=unsafe record placement",
+                name
+            );
+            return None;
+        }
+        if referenced && record.endpoints().is_none() {
+            eprintln!(
+                "[apeireth-credentials] keyring bound credential companion refused: service={} error=missing binding",
+                name
+            );
+            return None;
+        }
+        Some(record)
+    }
+
+    fn snapshot(&self, name: &str) -> Option<CredentialSnapshot> {
+        let (secret, endpoints) = self.record(name)?.into_parts();
+        if secret.is_empty() {
+            return None;
+        }
+        let value = std::str::from_utf8(secret.expose())
+            .map_err(|error| {
+                eprintln!(
+                    "[apeireth-credentials] keyring secret not utf-8: service={} error={}",
+                    name, error
+                );
+            })
+            .ok()?;
+        Some(CredentialSnapshot::new(
+            Secret::new(value.to_string()),
+            endpoints,
+        ))
+    }
 }
 
 impl CredentialResolver for KeyringCredentialResolver {
     fn resolve(&self, name: &str) -> Option<Secret> {
-        // 0 装 PASS: 任何 KeyringError 都转 None（不污染调用方）
-        // 真实错误在 keyring 自己的 audit sink / 日志里可见
-        let buf = self.keyring.get(name).ok()?;
-        // SecretBuf 是 bytes；CredentialResolver 的 Secret 是 String (new)
-        // UTF-8 转换失败（罕见）→ None（不假装）
-        // 0 装 PASS (v2.0): 走 stderr 调试日志。v2.1 接 tracing + 审计 sink
-        let s = std::str::from_utf8(buf.expose())
-            .map_err(|e| {
-                eprintln!(
-                    "[apeireth-credentials] keyring secret not utf-8: service={} error={}",
-                    name, e
-                );
-            })
-            .ok()?;
-        Some(Secret::new(s.to_string()))
+        self.snapshot(name).map(CredentialSnapshot::into_secret)
+    }
+
+    fn bound_endpoints(&self, name: &str) -> Option<Vec<String>> {
+        self.record(name)
+            .and_then(|record| record.endpoints().map(|endpoints| endpoints.to_vec()))
+    }
+
+    fn resolve_snapshot(&self, name: &str) -> Option<CredentialSnapshot> {
+        self.snapshot(name)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::credential_record::encode_credential_record;
     use crate::keyring::{InMemoryKeyring, KeyringError};
     use std::sync::Arc;
 
@@ -135,5 +193,90 @@ mod tests {
         let _: KeyringError = KeyringError::UnknownService {
             service: "x".into(),
         };
+    }
+
+    #[test]
+    fn one_companion_record_restores_the_value_and_binding() {
+        let keyring = Arc::new(InMemoryKeyring::new(Arc::new(crate::keyring::NoopAudit)));
+        keyring
+            .set(
+                &bound_record_service("provider.bound.api_key"),
+                &encode_credential_record(
+                    "synthetic-bound-value",
+                    Some(&["https://model.example/v1".to_string()]),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        keyring
+            .set(
+                "provider.bound.api_key",
+                &crate::bound_credential_reference(),
+            )
+            .unwrap();
+        let resolver = KeyringCredentialResolver::new(keyring);
+        let snapshot = resolver
+            .resolve_snapshot("provider.bound.api_key")
+            .expect("bound snapshot");
+        assert_eq!(snapshot.secret().expose(), "synthetic-bound-value");
+        assert_eq!(
+            snapshot.bound_endpoints(),
+            Some(["https://model.example/v1".to_string()].as_slice())
+        );
+    }
+
+    #[test]
+    fn malformed_bound_record_fails_closed() {
+        let keyring = Arc::new(InMemoryKeyring::new(Arc::new(crate::keyring::NoopAudit)));
+        keyring
+            .set(
+                &bound_record_service("provider.bound.api_key"),
+                &crate::SecretBuf::from_str("apeireth:bound-credential:v1:{bad"),
+            )
+            .unwrap();
+        keyring
+            .set(
+                "provider.bound.api_key",
+                &crate::bound_credential_reference(),
+            )
+            .unwrap();
+        let resolver = KeyringCredentialResolver::new(keyring);
+        assert!(resolver
+            .resolve_snapshot("provider.bound.api_key")
+            .is_none());
+    }
+
+    #[test]
+    fn envelope_under_legacy_name_is_refused() {
+        let keyring = Arc::new(InMemoryKeyring::new(Arc::new(crate::keyring::NoopAudit)));
+        keyring
+            .set(
+                "provider.bound.api_key",
+                &encode_credential_record(
+                    "synthetic-bound-value",
+                    Some(&["https://model.example".to_string()]),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        let resolver = KeyringCredentialResolver::new(keyring);
+        assert!(resolver
+            .resolve_snapshot("provider.bound.api_key")
+            .is_none());
+    }
+
+    #[test]
+    fn missing_bound_companion_fails_closed() {
+        let keyring = Arc::new(InMemoryKeyring::new(Arc::new(crate::keyring::NoopAudit)));
+        keyring
+            .set(
+                "provider.bound.api_key",
+                &crate::bound_credential_reference(),
+            )
+            .unwrap();
+        let resolver = KeyringCredentialResolver::new(keyring);
+        assert!(resolver
+            .resolve_snapshot("provider.bound.api_key")
+            .is_none());
     }
 }

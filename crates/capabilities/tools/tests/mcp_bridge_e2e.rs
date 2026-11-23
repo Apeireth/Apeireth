@@ -437,7 +437,7 @@ async fn startup_log_never_carries_token_parameters() {
     let spec = McpServerSpec::remote(
         "remote-demo",
         McpTransportKind::Http,
-        "https://user:pass@example.test/mcp?token=very-secret&region=eu",
+        "https://example.test/mcp?token=very-secret&region=eu",
     );
     let config = McpServerConfig::new(vec![
         spec,

@@ -34,6 +34,9 @@ pub enum EgressVerdict {
     },
 }
 
+/// Restores only the values captured while preparing the current request.
+pub type ResponseRestorer = Box<dyn FnOnce(&mut NormalizedResponse) + Send>;
+
 /// 出网闸端口：所有 provider 请求在发出前经过这里。
 ///
 /// 实现方（assembly 层）负责接入脱敏闸、对象级判定与授权策略；
@@ -41,6 +44,11 @@ pub enum EgressVerdict {
 pub trait EgressGate: Send + Sync {
     /// 判定一次出网请求。
     fn vet(&self, request: &NormalizedRequest) -> EgressVerdict;
+
+    /// Prepare the outbound request and optionally carry private state to its reply.
+    fn prepare(&self, request: &NormalizedRequest) -> (EgressVerdict, Option<ResponseRestorer>) {
+        (self.vet(request), None)
+    }
 
     /// **受控回程还原**（双闸的闸二）：把模型回信里的占位符换回本地真值。
     ///

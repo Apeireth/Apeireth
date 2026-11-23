@@ -604,7 +604,6 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
         ))
-        .plugin(tauri_plugin_notification::init())
         .manage(supervisor.clone())
         .manage(logger.clone())
         .manage(allowed_servers.clone())

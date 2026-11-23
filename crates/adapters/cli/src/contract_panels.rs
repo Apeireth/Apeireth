@@ -11,8 +11,10 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use apeireth_core::kernel::ids::WorkspaceId;
+use apeireth_gateway::workspace_panel::{NativeFolderGrant, NativeFolderGrantToken};
 use apeireth_gateway::{
-    GatewayServices, WorkspaceCreateCommand, WorkspaceDto, WorkspacePanel, WorkspacePanelError,
+    GatewayServices, GatewayTokenGate, WorkspaceCreateCommand, WorkspaceDto, WorkspacePanel,
+    WorkspacePanelError,
 };
 use apeireth_runtime::canonical::workspace::{
     InMemoryWorkspaceRegistry, Workspace, WorkspaceCreateRequest as DomainWorkspaceCreateRequest,
@@ -21,6 +23,10 @@ use apeireth_runtime::canonical::workspace::{
 use async_trait::async_trait;
 
 use crate::gateway_panels::{errstr, now_millis};
+
+#[cfg(windows)]
+mod native_folder_input;
+
 /// 宿主策略: 本宿主可授予的作用域上限 (请求值高于上限时被截断到上限)。
 ///
 /// 这是**宿主策略常量**, 不是可插拔的构建器: 上限由宿主定, 客户端提交的
@@ -37,7 +43,7 @@ pub const HOST_SCOPE_CEILING: WorkspacePermissionScope = WorkspacePermissionScop
 /// - **作用域宿主确认** —— 客户端提交的是 requested scope, 生效的是宿主确认值
 ///   (被宿主策略上限 [`HOST_SCOPE_CEILING`] 截断);
 /// - **读面不含绝对根路径** —— 出口只给 `root_display` (叶子名), 根路径不出适配器;
-/// - **只装配受管根** —— temporary / preset 的根装配属后续批, 本适配如实拒开。
+/// - 普通登记使用受管根。配对桌面经原生凭据提交的临时目录使用独立只读授权入口。
 ///
 /// 存储口径 (A3 批): 注册表可以是**进程内**的 ([`CliWorkspacePanel::new`],
 /// 供测试与一次性进程使用), 也可以是**落盘**的
@@ -48,6 +54,8 @@ pub struct CliWorkspacePanel {
     managed_root: PathBuf,
     scope_ceiling: WorkspacePermissionScope,
     source: String,
+    allow_isolated_creation: bool,
+    native_folder_grant_token: Option<NativeFolderGrantToken>,
 }
 
 impl CliWorkspacePanel {
@@ -64,6 +72,8 @@ impl CliWorkspacePanel {
             managed_root: managed_root.into(),
             scope_ceiling: HOST_SCOPE_CEILING,
             source: "cli".to_string(),
+            allow_isolated_creation: false,
+            native_folder_grant_token: None,
         }
     }
 
@@ -87,7 +97,14 @@ impl CliWorkspacePanel {
             managed_root: managed_root.into(),
             scope_ceiling: HOST_SCOPE_CEILING,
             source: "cli".to_string(),
+            allow_isolated_creation: false,
+            native_folder_grant_token: None,
         })
+    }
+
+    fn enable_isolated_creation(mut self) -> Self {
+        self.allow_isolated_creation = true;
+        self
     }
 
     /// 换掉工作区来源标签 (写进 `source` 字段)。
@@ -166,6 +183,23 @@ fn project_workspace(workspace: &Workspace) -> WorkspaceDto {
     }
 }
 
+fn validate_managed_create(command: &WorkspaceCreateCommand) -> Result<(), WorkspacePanelError> {
+    if command.root_kind != WorkspaceRootKind::Managed {
+        return Err(WorkspacePanelError::InvalidRequest {
+            reason: format!(
+                "宿主只装配受管根, 暂不支持 {} 根",
+                command.root_kind.source_label()
+            ),
+        });
+    }
+    if command.expires_at.is_some() {
+        return Err(WorkspacePanelError::InvalidRequest {
+            reason: "受管工作区不接受 expires_at (过期时间只属于临时工作区)".to_string(),
+        });
+    }
+    Ok(())
+}
+
 #[async_trait]
 impl WorkspacePanel for CliWorkspacePanel {
     async fn list_workspaces(&self) -> Result<Vec<WorkspaceDto>, String> {
@@ -191,20 +225,7 @@ impl WorkspacePanel for CliWorkspacePanel {
         &self,
         command: WorkspaceCreateCommand,
     ) -> Result<WorkspaceDto, WorkspacePanelError> {
-        // 宿主只装配受管根: 其它根类型如实拒开, 不假装支持。
-        if command.root_kind != WorkspaceRootKind::Managed {
-            return Err(WorkspacePanelError::InvalidRequest {
-                reason: format!(
-                    "宿主只装配受管根, 暂不支持 {} 根",
-                    command.root_kind.source_label()
-                ),
-            });
-        }
-        if command.expires_at.is_some() {
-            return Err(WorkspacePanelError::InvalidRequest {
-                reason: "受管工作区不接受 expires_at (过期时间只属于临时工作区)".to_string(),
-            });
-        }
+        validate_managed_create(&command)?;
         let request = DomainWorkspaceCreateRequest {
             root_kind: WorkspaceRootKind::Managed,
             root: self.managed_root.clone(),
@@ -218,6 +239,50 @@ impl WorkspacePanel for CliWorkspacePanel {
             Ok(workspace) => Ok(project_workspace(&workspace)),
             Err(error) => Err(map_workspace_error(error)),
         }
+    }
+
+    async fn create_isolated_workspace(
+        &self,
+        command: WorkspaceCreateCommand,
+    ) -> Result<WorkspaceDto, WorkspacePanelError> {
+        if !self.allow_isolated_creation {
+            return Err(WorkspacePanelError::InvalidRequest {
+                reason: "宿主未装配独立工作区目录".to_string(),
+            });
+        }
+        validate_managed_create(&command)?;
+        self.registry
+            .create_desktop_workspace(
+                &command.display_name,
+                command.permission_scope,
+                now_millis().max(0) as u64,
+            )
+            .map(|workspace| project_workspace(&workspace))
+            .map_err(map_workspace_error)
+    }
+
+    fn native_folder_grant_token(&self) -> Option<&NativeFolderGrantToken> {
+        self.native_folder_grant_token.as_ref()
+    }
+
+    async fn grant_native_folder(
+        &self,
+        command: NativeFolderGrant,
+    ) -> Result<WorkspaceDto, WorkspacePanelError> {
+        if self.native_folder_grant_token.is_none() {
+            return Err(WorkspacePanelError::InvalidRequest {
+                reason: "宿主未装配临时目录授权。".to_string(),
+            });
+        }
+        self.registry
+            .grant_desktop_folder(
+                &command.display_name,
+                &command.directory,
+                &command.directory_identity,
+                now_millis().max(0) as u64,
+            )
+            .map(|workspace| project_workspace(&workspace))
+            .map_err(map_workspace_error)
     }
 
     async fn select_workspace(
@@ -289,8 +354,48 @@ pub fn bind_managed_workspace(
     }
 }
 
+/// Read the native launcher credential once before runtime assembly or child processes.
+#[cfg(windows)]
+pub(crate) fn take_native_folder_grant_token(
+    bind: &str,
+    gate: &GatewayTokenGate,
+) -> Result<Option<NativeFolderGrantToken>, String> {
+    if !crate::desktop_model_connection::managed() {
+        return Ok(None);
+    }
+    let loopback_literal = bind
+        .trim_start_matches('[')
+        .trim_end_matches(']')
+        .parse::<std::net::IpAddr>()
+        .is_ok_and(|ip| ip.is_loopback());
+    if !loopback_literal {
+        return Ok(None);
+    }
+    let Some(token) = native_folder_input::read_token() else {
+        return Ok(None);
+    };
+    if !gate
+        .enforced_token()
+        .is_some_and(|bearer| bearer.len() >= 32 && !token.matches(bearer))
+    {
+        return Err("native folder grant and gateway credentials must be separate".to_string());
+    }
+    Ok(Some(token))
+}
+
+#[cfg(not(windows))]
+pub(crate) fn take_native_folder_grant_token(
+    _bind: &str,
+    _gate: &GatewayTokenGate,
+) -> Result<Option<NativeFolderGrantToken>, String> {
+    Ok(None)
+}
+
 /// 把工作区合同面接进网关服务容器 (组合根接线)。
-pub(crate) fn wire_workspace_panel(services: &mut GatewayServices) -> Result<(), String> {
+pub(crate) fn wire_workspace_panel(
+    services: &mut GatewayServices,
+    native_folder_grant_token: Option<NativeFolderGrantToken>,
+) -> Result<(), String> {
     // 工作区合同面 (A2 批: `GET /v1/panel/workspaces` + `/v1/workspaces*` 写面):
     // 真实持有工作区注册表 + **宿主受管根** (进程唯一根 = 当前工作目录, 与
     // 组合根既有的唯一根口径同源)。受管根由宿主决定: 客户端只提交身份字段,
@@ -298,13 +403,23 @@ pub(crate) fn wire_workspace_panel(services: &mut GatewayServices) -> Result<(),
     // A3 批: 注册表**落盘**在数据根 (`APEIRETH_DATA_DIR` / `~/.apeireth`) 下 ⇒
     // 重启后 `GET /v1/panel/workspaces` 仍列出同一批工作区, revision 单调。
     // 落盘开不出来 ⇒ **fail-closed** (启动失败), 不降级成进程内注册表假装成功。
-    let workspace_panel = Arc::new(CliWorkspacePanel::new_persistent(
+    let workspace_panel = CliWorkspacePanel::new_persistent(
         std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")),
         crate::default_panel_data_dir(),
-    )?);
+    )?;
+    let mut workspace_panel = if crate::desktop_model_connection::managed() {
+        workspace_panel.enable_isolated_creation()
+    } else {
+        workspace_panel
+    };
+    workspace_panel.native_folder_grant_token = native_folder_grant_token;
     // 宿主把受管根绑成一个工作区 (身份 + 叶子名展示; 路径不出宿主)。
     // 幂等: 受管根已登记过就复用那一个身份, 不新铸。
     bind_managed_workspace(&workspace_panel, "默认工作区")?;
-    services.workspaces = Some(workspace_panel as Arc<dyn WorkspacePanel>);
+    services.workspaces = Some(Arc::new(workspace_panel));
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "desktop_workspace_tests.rs"]
+mod desktop_workspace_tests;

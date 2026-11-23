@@ -27,7 +27,7 @@
 
 use std::path::{Path, PathBuf};
 
-use apeireth_core::user_domain::DomainUserId;
+use apeireth_core::{storage_atomic, stored_doc::StoredDocError, user_domain::DomainUserId};
 use apeireth_governance::{UserAccessError, UserRecord, UserRole, UserTable};
 use axum::extract::{Extension, Path as AxumPath, State};
 use axum::http::StatusCode;
@@ -39,6 +39,7 @@ use crate::client_tokens::{
     record_user_action, validate_client_user_bindings, ClientTokenTable, UserContext,
 };
 use crate::panels::GatewayState;
+use crate::principal_forget::PrincipalForgetDto;
 
 /// 用户管理行 (稳定合同字段; 改名须同步 `docs/gateway-api-contract.md` 与
 /// `docs/02-guides/frontend-data-contract.md`)。
@@ -68,6 +69,111 @@ impl UserAdminDto {
         }
     }
 }
+
+/// 已通过用户表侧删户预检、但尚未触碰记忆或账号存储的计划。
+///
+/// 字段保持私有，调用方不能伪造一个跳过末 owner / 令牌绑定检查的计划。
+#[derive(Debug, Clone)]
+pub struct GovernedUserRemovalPlan {
+    target: UserAdminDto,
+}
+
+impl GovernedUserRemovalPlan {
+    /// 待删用户（只读，供调用方选择正确的域级记忆权威）。
+    pub fn target(&self) -> &UserAdminDto {
+        &self.target
+    }
+}
+
+/// 调用方对主体遗忘面的实际尝试。端口或目标域权威缺席必须显式传入，不能用
+/// 一份全 `true` 的合成结果代替。
+#[derive(Debug)]
+pub enum PrincipalForgetAttempt {
+    /// 当前装配没有主体遗忘端口。
+    Unavailable(String),
+    /// 目标在非默认域，但当前端口只能操作默认域；绝不拿默认账本代跑。
+    ScopeUnavailable(String),
+    /// 已调用与目标同域的权威遗忘端口。
+    Attempted(Result<PrincipalForgetDto, String>),
+}
+
+/// 「五账确认清空 + users.json 原子写入删除」的成功结果。
+///
+/// 这不是跨 SQLite/users.json 的分布式原子事务；失败状态分开报告遗忘完成度、
+/// 账号是否已从当前用户表删除，以及持久性待核对的情况。
+#[derive(Debug, Clone)]
+pub struct GovernedUserRemoval {
+    /// 实际从用户表删除的行。
+    pub removed: UserAdminDto,
+    /// 五账逐项确认状态（沿用 HTTP 既有 `memory_note` 合同）。
+    pub memory_note: String,
+}
+
+/// 级联删除未能确认完成。账号可能已从当前用户表删除，此时须先核对，不能盲重试。
+#[derive(Debug, Clone)]
+pub struct GovernedUserRemovalError {
+    code: &'static str,
+    detail: String,
+    target: UserAdminDto,
+    memory_forgotten: bool,
+    memory_note: String,
+    user_error: Option<UserAdminError>,
+}
+
+impl GovernedUserRemovalError {
+    /// 稳定错误码。
+    pub fn code(&self) -> &'static str {
+        self.code
+    }
+
+    /// 可行动真因。
+    pub fn detail(&self) -> &str {
+        &self.detail
+    }
+
+    /// 操作目标。
+    pub fn target(&self) -> &UserAdminDto {
+        &self.target
+    }
+
+    /// 账号是否已从当前用户表删除（这种情况下崩溃持久性尚未确认）。
+    pub fn deleted(&self) -> bool {
+        self.user_error()
+            .is_some_and(UserAdminError::target_replaced)
+    }
+
+    /// 五账是否全部确认清空。
+    pub fn memory_forgotten(&self) -> bool {
+        self.memory_forgotten
+    }
+
+    /// 五账逐项状态或端口/域缺席说明。
+    pub fn memory_note(&self) -> &str {
+        &self.memory_note
+    }
+
+    /// 遗忘完成后，用户表第二次校验/落盘失败的底层错误。
+    pub fn user_error(&self) -> Option<&UserAdminError> {
+        self.user_error.as_ref()
+    }
+}
+
+impl std::fmt::Display for GovernedUserRemovalError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let deleted = self.deleted();
+        write!(
+            f,
+            "{}: {}; deleted={deleted} memory_forgotten={} ({})",
+            self.code, self.detail, self.memory_forgotten, self.memory_note
+        )?;
+        if deleted {
+            f.write_str(" account_durability_confirmed=false retryable=false")?;
+        }
+        Ok(())
+    }
+}
+
+impl std::error::Error for GovernedUserRemovalError {}
 
 /// `POST /v1/admin/users` 请求体 (字段合同见契约文档)。
 #[derive(Debug, Clone, Deserialize)]
@@ -104,16 +210,23 @@ pub enum UserAdminError {
     Conflict(String),
     /// 配置/存储拒开 (坏 `users.json` / IO): 500 `runtime_error`。
     Storage(String),
+    /// 当前用户表已替换，崩溃持久性未确认: 500 `runtime_error`。
+    StorageDurabilityUnconfirmed(String),
 }
 
 impl UserAdminError {
+    fn target_replaced(&self) -> bool {
+        matches!(self, Self::StorageDurabilityUnconfirmed(_))
+    }
+
     /// 真因文本 (审计/CLI/错误帧)。
     pub fn message(&self) -> &str {
         match self {
             Self::Invalid(message)
             | Self::NotFound(message)
             | Self::Conflict(message)
-            | Self::Storage(message) => message,
+            | Self::Storage(message)
+            | Self::StorageDurabilityUnconfirmed(message) => message,
         }
     }
 
@@ -123,7 +236,9 @@ impl UserAdminError {
             Self::Invalid(_) => StatusCode::BAD_REQUEST,
             Self::NotFound(_) => StatusCode::NOT_FOUND,
             Self::Conflict(_) => StatusCode::CONFLICT,
-            Self::Storage(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::Storage(_) | Self::StorageDurabilityUnconfirmed(_) => {
+                StatusCode::INTERNAL_SERVER_ERROR
+            }
         }
     }
 
@@ -133,7 +248,7 @@ impl UserAdminError {
             Self::Invalid(_) => "invalid_request",
             Self::NotFound(_) => "not_found",
             Self::Conflict(_) => "conflict",
-            Self::Storage(_) => "runtime_error",
+            Self::Storage(_) | Self::StorageDurabilityUnconfirmed(_) => "runtime_error",
         }
     }
 }
@@ -258,23 +373,165 @@ impl UserAdminService {
         Ok(UserAdminDto::from_record(record))
     }
 
-    /// 删户 (末 owner 不可删; 令牌仍引用的用户删不得 —— 先摘绑定后删用户)。
-    pub fn remove(&self, user_id: &str) -> Result<UserAdminDto, UserAdminError> {
+    /// 级联删户第一阶段：只做用户表侧预检，不落盘、不触碰记忆。
+    pub fn prepare_governed_remove(
+        &self,
+        user_id: &str,
+    ) -> Result<GovernedUserRemovalPlan, UserAdminError> {
+        let target = self.preflight_remove(user_id)?;
+        Ok(GovernedUserRemovalPlan { target })
+    }
+
+    /// 级联删户第二阶段：只接受第一阶段产生的计划。遗忘端口缺席、域错配、调用
+    /// 失败、显式拒绝或五账任一未确认清空时，一律不删账号。
+    pub fn finish_governed_remove(
+        &self,
+        plan: GovernedUserRemovalPlan,
+        attempt: PrincipalForgetAttempt,
+    ) -> Result<GovernedUserRemoval, GovernedUserRemovalError> {
+        self.finish_governed_remove_with(plan, attempt, |users| self.save_user_table(users))
+    }
+
+    fn finish_governed_remove_with(
+        &self,
+        plan: GovernedUserRemovalPlan,
+        attempt: PrincipalForgetAttempt,
+        save: impl FnOnce(&UserTable) -> Result<(), UserAdminError>,
+    ) -> Result<GovernedUserRemoval, GovernedUserRemovalError> {
+        let target = plan.target;
+        let outcome = match attempt {
+            PrincipalForgetAttempt::Unavailable(detail) => {
+                return Err(GovernedUserRemovalError {
+                    code: "memory.forget_unavailable",
+                    memory_note: detail.clone(),
+                    detail,
+                    target,
+                    memory_forgotten: false,
+                    user_error: None,
+                });
+            }
+            PrincipalForgetAttempt::ScopeUnavailable(detail) => {
+                return Err(GovernedUserRemovalError {
+                    code: "memory.forget_scope_unavailable",
+                    memory_note: detail.clone(),
+                    detail,
+                    target,
+                    memory_forgotten: false,
+                    user_error: None,
+                });
+            }
+            PrincipalForgetAttempt::Attempted(Err(detail)) => {
+                return Err(GovernedUserRemovalError {
+                    code: "memory.forget_refused",
+                    memory_note: format!("memory forget failed: {detail}"),
+                    detail,
+                    target,
+                    memory_forgotten: false,
+                    user_error: None,
+                });
+            }
+            PrincipalForgetAttempt::Attempted(Ok(outcome)) => outcome,
+        };
+        let memory_note = principal_forget_note(&outcome);
+        if let Some((code, detail)) = principal_forget_error(&target.user_id, &outcome) {
+            return Err(GovernedUserRemovalError {
+                code,
+                detail,
+                target,
+                memory_forgotten: false,
+                memory_note,
+                user_error: None,
+            });
+        }
+
+        match self.remove_after_forget(&target, save) {
+            Ok(removed) => Ok(GovernedUserRemoval {
+                removed,
+                memory_note,
+            }),
+            Err(error) => Err(GovernedUserRemovalError {
+                code: if error.target_replaced() {
+                    "user.remove_durability_unconfirmed"
+                } else {
+                    "user.remove_failed"
+                },
+                detail: error.message().to_string(),
+                target,
+                memory_forgotten: true,
+                memory_note,
+                user_error: Some(error),
+            }),
+        }
+    }
+
+    /// 账号落盘只允许从 [`Self::finish_governed_remove`] 进入，避免生产调用方绕过
+    /// 遗忘确认直接删 `users.json`。这里重读并逐字段比较预检目标，可检测遗忘
+    /// 期间的行变化；没有声称提供跨进程锁或跨存储 CAS。
+    fn remove_after_forget(
+        &self,
+        expected: &UserAdminDto,
+        save: impl FnOnce(&UserTable) -> Result<(), UserAdminError>,
+    ) -> Result<UserAdminDto, UserAdminError> {
+        let (users, removed) = self.prepare_remove(&expected.user_id)?;
+        if &removed != expected {
+            return Err(UserAdminError::Conflict(format!(
+                "user {:?} changed while principal forget was in flight; account retained for a fresh retry",
+                expected.user_id
+            )));
+        }
+        self.commit_with(&users, save)?;
+        Ok(removed)
+    }
+
+    /// 无落盘删户预检。HTTP 的「删账号 + 全量遗忘」先用它确认用户表侧可删，
+    /// 避免末 owner / 令牌绑定本就会拒绝时先把记忆清掉。
+    fn preflight_remove(&self, user_id: &str) -> Result<UserAdminDto, UserAdminError> {
+        let (users, removed) = self.prepare_remove(user_id)?;
+        self.validate_bindings(&users)?;
+        Ok(removed)
+    }
+
+    /// 构造删户后的候选表；只改内存副本，不写盘。
+    fn prepare_remove(&self, user_id: &str) -> Result<(UserTable, UserAdminDto), UserAdminError> {
         let user_id = checked_id(user_id)?;
         let mut users = self.load()?;
         let removed = users.remove(&user_id)?;
-        self.commit(&users)?;
-        Ok(UserAdminDto::from_record(&removed))
+        Ok((users, UserAdminDto::from_record(&removed)))
     }
 
-    /// 落盘前的最后闸: 令牌表↔用户表绑定一致性 (问责链不得断) + 持久化。
-    fn commit(&self, users: &UserTable) -> Result<(), UserAdminError> {
+    /// 落盘前的令牌表↔用户表绑定一致性闸（预检与真实提交共用）。
+    fn validate_bindings(&self, users: &UserTable) -> Result<(), UserAdminError> {
         let tokens = ClientTokenTable::load(Some(&self.data_dir)).map_err(|error| {
             UserAdminError::Storage(format!("client token table refused to open: {error}"))
         })?;
         validate_client_user_bindings(&tokens, users)?;
-        users.save(&self.data_dir).map_err(|error| {
-            UserAdminError::Storage(format!("user table refused to save: {error}"))
+        Ok(())
+    }
+
+    /// 落盘前的最后闸: 令牌表↔用户表绑定一致性 (问责链不得断) + 持久化。
+    fn commit(&self, users: &UserTable) -> Result<(), UserAdminError> {
+        self.commit_with(users, |users| self.save_user_table(users))
+    }
+
+    fn commit_with(
+        &self,
+        users: &UserTable,
+        save: impl FnOnce(&UserTable) -> Result<(), UserAdminError>,
+    ) -> Result<(), UserAdminError> {
+        self.validate_bindings(users)?;
+        save(users)
+    }
+
+    fn save_user_table(&self, users: &UserTable) -> Result<(), UserAdminError> {
+        users.save(&self.data_dir).map_err(|error| match &error {
+            UserAccessError::Stored(StoredDocError::Io { source, .. })
+                if storage_atomic::target_replaced(source) =>
+            {
+                UserAdminError::StorageDurabilityUnconfirmed(format!(
+                    "user table update was published, but durability could not be confirmed: {error}. Verify the current user table before retrying"
+                ))
+            }
+            _ => UserAdminError::Storage(format!("user table refused to save: {error}")),
         })
     }
 }
@@ -312,6 +569,123 @@ fn checked_domain_ref(raw: &str) -> Result<String, UserAdminError> {
 /// 角色词表冻结: 只认 `owner|member|guest`。
 fn parse_role(raw: &str) -> Result<UserRole, UserAdminError> {
     UserRole::parse(raw).map_err(|error| UserAdminError::Invalid(error.to_string()))
+}
+
+/// 五账遗忘状态的稳定文本；成功响应沿用既有 `memory_note` 合同，失败响应也用
+/// 同一口径公开哪些账尚未确认清空。
+fn principal_forget_note(outcome: &PrincipalForgetDto) -> String {
+    format!(
+        "episode={} preference={} commitment={} temporal={} persona={}",
+        outcome.episode, outcome.preference, outcome.commitment, outcome.temporal, outcome.persona
+    )
+}
+
+/// `Ok` 只代表治理端口完成了一次调用，不代表五账都已确认清空。主体错配、显式
+/// 拒绝或任一账为 `false` 都必须保留账号作为重试入口。
+fn principal_forget_error(
+    expected_user_id: &str,
+    outcome: &PrincipalForgetDto,
+) -> Option<(&'static str, String)> {
+    if outcome.principal_id != expected_user_id {
+        return Some((
+            "memory.forget_incomplete",
+            format!(
+                "memory forget returned principal {:?}, expected {:?}",
+                outcome.principal_id, expected_user_id
+            ),
+        ));
+    }
+    if outcome.refused {
+        return Some((
+            "memory.forget_refused",
+            outcome
+                .reason
+                .clone()
+                .unwrap_or_else(|| "memory governance refused principal forget".to_string()),
+        ));
+    }
+
+    let missing = [
+        ("episode", outcome.episode),
+        ("preference", outcome.preference),
+        ("commitment", outcome.commitment),
+        ("temporal", outcome.temporal),
+        ("persona", outcome.persona),
+    ]
+    .into_iter()
+    .filter_map(|(name, complete)| (!complete).then_some(name))
+    .collect::<Vec<_>>();
+    (!missing.is_empty()).then(|| {
+        (
+            "memory.forget_incomplete",
+            format!(
+                "memory forget did not confirm all stores; incomplete={}",
+                missing.join(",")
+            ),
+        )
+    })
+}
+
+/// 遗忘与删户分别回执。如果账号已经从当前表删除，调用方应先核对存储状态。
+fn deletion_error_response(error: &GovernedUserRemovalError) -> Response {
+    let status = error
+        .user_error()
+        .map(UserAdminError::http_status)
+        .unwrap_or(StatusCode::CONFLICT);
+    let deleted = error.deleted();
+    let mut body = serde_json::json!({
+        "error": error.code(),
+        "user_id": error.target().user_id,
+        "detail": error.detail(),
+        "deleted": deleted,
+        "memory_forgotten": error.memory_forgotten(),
+        "memory_note": error.memory_note(),
+        "retryable": !deleted,
+    });
+    if deleted {
+        body["account_durability_confirmed"] = serde_json::Value::Bool(false);
+    }
+    (status, Json(body)).into_response()
+}
+
+fn record_user_remove(
+    state: &GatewayState,
+    user: &UserContext,
+    endpoint: &str,
+    allowed: bool,
+    domain_label: Option<&str>,
+) {
+    record_user_action(
+        Some(state.observations.as_ref()),
+        user.user_id(),
+        user.role(),
+        "user_remove",
+        endpoint,
+        allowed,
+        domain_label,
+    );
+}
+
+/// 判断待删用户是否实际落在默认记忆域。网关目前只注入一份默认域
+/// `memory_governance`；已开非默认域没有按目标选取的治理端口，因此必须拒绝，
+/// 绝不能拿默认账本代跑后对目标报成功。
+fn require_default_forget_scope(state: &GatewayState, target: &UserAdminDto) -> Result<(), String> {
+    let Some(domains) = state.domains.as_ref() else {
+        // 兼容装配没有域平面：唯一记忆面就是默认原位库。
+        return Ok(());
+    };
+    let domain_ref = target.domain.as_deref().unwrap_or(&target.user_id);
+    let domain = domains
+        .resolve(Some(domain_ref))
+        .map_err(|error| format!("target memory domain refused to resolve: {error}"))?;
+    if domain.is_default() {
+        Ok(())
+    } else {
+        Err(format!(
+            "target user {:?} resolves to non-default memory domain {:?}, but no target-scoped governance port is available",
+            target.user_id, domain.user_id
+        ))
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -440,93 +814,57 @@ pub async fn delete_user(
         return crate::panels::unsupported("users.admin.write");
     };
     let endpoint = format!("/v1/admin/users/{user_id}");
-    match service.remove(&user_id) {
-        Ok(removed) => {
-            // **被遗忘权**：删用户 ⇒ 连记忆一起删。
-            //
-            // 此前这里只删用户表，**用户的记忆还留着** —— 而「删除主体」在隐私
-            // 语义上是「连记忆一起删」。单条 episode 遗忘不够（那是用户手动点某条）。
-            //
-            // 顺序很重要：**先清记忆，再落用户表**。反过来会在清记忆失败时留下
-            // 「用户已删、记忆还在」的中间态 —— 那比没删更糟（用户以为已删，
-            // 实际还留着）。
-            //
-            // 记忆面**未注入**时不阻断删户（网关可能本就没接记忆），但要在
-            // 响应里**如实说清**（`memory_forgotten: false` + 原因），
-            // 不让调用方以为「记忆也清了」。
-            let mut memory_forgotten = false;
-            let memory_note: Option<String>;
-            match state.services.memory_governance.as_ref() {
-                Some(governance) => {
-                    match governance
-                        .forget_principal(&removed.user_id, Some("user removed"))
-                        .await
-                    {
-                        Ok(outcome) => {
-                            memory_forgotten = true;
-                            memory_note = Some(format!(
-                                "episode={} preference={} commitment={} temporal={} persona={}",
-                                outcome.episode,
-                                outcome.preference,
-                                outcome.commitment,
-                                outcome.temporal,
-                                outcome.persona
-                            ));
-                        }
-                        Err(error) => {
-                            // 记忆面**拒绝**（例如有 protected 人格记录）——
-                            // 硬失败：不能「用户已删、记忆还在」却返回 200。
-                            return (
-                                StatusCode::CONFLICT,
-                                Json(serde_json::json!({
-                                    "error": "memory.forget_refused",
-                                    "user_id": removed.user_id,
-                                    "detail": error,
-                                })),
-                            )
-                                .into_response();
-                        }
-                    }
-                }
-                None => {
-                    memory_note = Some("记忆面未注入（memory.governance 未装配）".to_string());
-                }
-            }
-            // V2-c 域标注: 管理动作 = 目标域 (被删用户的实际域引用)。
-            let domain_label = target_domain_label(removed.domain.as_deref(), &removed.user_id);
-            record_user_action(
-                Some(state.observations.as_ref()),
-                user.user_id(),
-                user.role(),
-                "user_remove",
-                &endpoint,
-                true,
-                domain_label.as_deref(),
-            );
+    // 先做不落盘预检：末 owner / 令牌仍引用 / 坏表等本就删不了的状态，不应
+    // 先清记忆。预检通过后，账号仍在表中，因此遗忘失败时保留可靠重试入口。
+    let plan = match service.prepare_governed_remove(&user_id) {
+        Ok(plan) => plan,
+        Err(error) => {
+            let domain_label = target_user_domain(service, &user_id);
+            record_user_remove(&state, &user, &endpoint, false, domain_label.as_deref());
+            return error_response(&error);
+        }
+    };
+    let domain_label = target_domain_label(plan.target().domain.as_deref(), &plan.target().user_id);
+
+    // **被遗忘权**：只有目标域五账全部确认清空后才能删账号。端口缺席不是
+    // 「没有记忆」的证据；非默认域也绝不拿默认账本代跑。
+    let attempt = match require_default_forget_scope(&state, plan.target()) {
+        Err(detail) => PrincipalForgetAttempt::ScopeUnavailable(detail),
+        Ok(()) => match state.services.memory_governance.as_ref() {
+            Some(governance) => PrincipalForgetAttempt::Attempted(
+                governance
+                    .forget_principal(&plan.target().user_id, Some("user removed"))
+                    .await,
+            ),
+            None => PrincipalForgetAttempt::Unavailable(
+                "记忆面未注入（memory.governance 未装配）".to_string(),
+            ),
+        },
+    };
+
+    match service.finish_governed_remove(plan, attempt) {
+        Ok(completed) => {
+            record_user_remove(&state, &user, &endpoint, true, domain_label.as_deref());
             (
                 StatusCode::OK,
                 Json(serde_json::json!({
                     "deleted": true,
-                    "user_id": removed.user_id,
-                    "memory_forgotten": memory_forgotten,
-                    "memory_note": memory_note,
+                    "user_id": completed.removed.user_id,
+                    "memory_forgotten": true,
+                    "memory_note": completed.memory_note,
                 })),
             )
                 .into_response()
         }
         Err(error) => {
-            // V2-c 域标注: 失败行按查表的目标域标注 (查无 = 不标注)。
-            let domain_label = target_user_domain(service, &user_id);
-            record_user_action(
-                Some(state.observations.as_ref()),
-                user.user_id(),
-                user.role(),
-                "user_remove",
+            record_user_remove(
+                &state,
+                &user,
                 &endpoint,
-                false,
+                error.deleted(),
                 domain_label.as_deref(),
             );
-            error_response(&error)
+            deletion_error_response(&error)
         }
     }
 }
@@ -544,6 +882,7 @@ pub(crate) fn error_response(error: &UserAdminError) -> Response {
         UserAdminError::Storage(_) => {
             "重启 Companion 后重试, 若复现请提交日志 (坏用户表拒开, 0 静默回退)"
         }
+        UserAdminError::StorageDurabilityUnconfirmed(_) => "先核对当前用户表，再决定是否重试",
     };
     crate::panels::admin_error(error.http_status(), error.code(), error.message(), solution)
 }
@@ -589,6 +928,19 @@ mod tests {
         .unwrap();
     }
 
+    fn complete_attempt(principal_id: &str) -> PrincipalForgetAttempt {
+        PrincipalForgetAttempt::Attempted(Ok(PrincipalForgetDto {
+            principal_id: principal_id.to_string(),
+            episode: true,
+            preference: true,
+            commitment: true,
+            temporal: true,
+            persona: true,
+            refused: false,
+            reason: None,
+        }))
+    }
+
     #[test]
     fn unsafe_user_ids_are_refused_before_any_lookup() {
         let service = UserAdminService::new(temp_dir("id-safety"));
@@ -618,7 +970,9 @@ mod tests {
                 matches!(error, UserAdminError::Invalid(_)),
                 "{bad:?}: {error}"
             );
-            let error = service.remove(bad).expect_err(&format!("{bad:?} 必须拒"));
+            let error = service
+                .prepare_governed_remove(bad)
+                .expect_err(&format!("{bad:?} 必须拒"));
             assert!(
                 matches!(error, UserAdminError::Invalid(_)),
                 "{bad:?}: {error}"
@@ -672,7 +1026,9 @@ mod tests {
             .set_role("owner-1", "member")
             .expect_err("末 owner 不可降");
         assert!(matches!(error, UserAdminError::Conflict(_)), "{error}");
-        let error = service.remove("owner-1").expect_err("末 owner 不可删");
+        let error = service
+            .prepare_governed_remove("owner-1")
+            .expect_err("末 owner 不可删");
         assert!(matches!(error, UserAdminError::Conflict(_)), "{error}");
     }
 
@@ -700,7 +1056,7 @@ mod tests {
         );
 
         let error = service
-            .remove("member-1")
+            .prepare_governed_remove("member-1")
             .expect_err("令牌仍引用的用户删不得");
         assert!(matches!(error, UserAdminError::Conflict(_)), "{error}");
 
@@ -709,7 +1065,72 @@ mod tests {
             &dir,
             &[("tui", "tok-owner-0123456789abcdef", Some("owner-1"))],
         );
-        let removed = service.remove("member-1").expect("摘绑定后可删");
-        assert_eq!(removed.user_id, "member-1");
+        let plan = service
+            .prepare_governed_remove("member-1")
+            .expect("摘绑定后可进入遗忘");
+        let completed = service
+            .finish_governed_remove(plan, complete_attempt("member-1"))
+            .expect("完整遗忘后可删");
+        assert_eq!(completed.removed.user_id, "member-1");
+    }
+
+    #[tokio::test]
+    async fn governed_removal_receipts_distinguish_failure_before_and_after_replacement() {
+        for published in [false, true] {
+            let dir = temp_dir(&format!("remove-save-failure-{published}"));
+            let service = UserAdminService::new(&dir);
+            service.add("owner-1", "owner", vec![], None).unwrap();
+            service.add("member-1", "member", vec![], None).unwrap();
+            let plan = service.prepare_governed_remove("member-1").unwrap();
+            let error = service
+                .finish_governed_remove_with(plan, complete_attempt("member-1"), |users| {
+                    // Inject a storage outcome after the real forget and account checks.
+                    // For the post-replacement case make the new table visible on disk first.
+                    if published {
+                        service.save_user_table(users)?;
+                        Err(UserAdminError::StorageDurabilityUnconfirmed(
+                            "injected parent directory sync failure".to_string(),
+                        ))
+                    } else {
+                        Err(UserAdminError::Storage(
+                            "injected failure before replacement".to_string(),
+                        ))
+                    }
+                })
+                .expect_err("the write's durability was not confirmed");
+
+            let users = service.load().unwrap();
+            assert!(users.identity_for_user("owner-1").is_some());
+            assert_eq!(users.identity_for_user("member-1").is_none(), published);
+
+            let response = deletion_error_response(&error);
+            assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+            let bytes = axum::body::to_bytes(response.into_body(), 8192)
+                .await
+                .unwrap();
+            let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+            assert_eq!(body["user_id"], "member-1");
+            assert_eq!(body["deleted"], published);
+            assert_eq!(body["memory_forgotten"], true);
+            assert_eq!(body["retryable"], !published);
+
+            let cli = error.to_string();
+            assert!(
+                cli.contains(&format!("deleted={published} memory_forgotten=true")),
+                "{cli}"
+            );
+            if published {
+                assert_eq!(body["error"], "user.remove_durability_unconfirmed");
+                assert_eq!(body["account_durability_confirmed"], false);
+                assert!(
+                    cli.contains("account_durability_confirmed=false retryable=false"),
+                    "{cli}"
+                );
+            } else {
+                assert_eq!(body["error"], "user.remove_failed");
+                assert!(body.get("account_durability_confirmed").is_none());
+                assert!(!cli.contains("account_durability_confirmed="), "{cli}");
+            }
+        }
     }
 }

@@ -2,10 +2,9 @@
 //!
 //! # What belongs here
 //!
-//! Identifiers, time, lifecycle, events, annotations, and the errors those
-//! produce. Nothing else. The test for membership is: *would two unrelated
-//! subsystems both need this in order to talk to each other?* If only one
-//! subsystem needs it, it belongs to that subsystem.
+//! Identifiers, time, lifecycle, events, annotations, and the errors they produce.
+//! Primitives belong here when unrelated subsystems need them to communicate.
+//! A type used by one subsystem belongs to that subsystem.
 //!
 //! # What must never be added here
 //!
@@ -15,35 +14,32 @@
 //!
 //! # Why this is a submodule rather than the crate root
 //!
-//! `apeireth-core` presently also carries a large body of historical work —
-//! memory items, philosophy gates, permission onions, a cognitive lifecycle —
-//! re-exported at the crate root and depended on by 38 crates. That content does
-//! not satisfy the rule above, but it cannot be evicted without breaking the
-//! workspace, and doing so is tracked as a migration item rather than performed
-//! here.
+//! `apeireth-core` still re-exports historical memory items, philosophy gates,
+//! permission onions and the cognitive lifecycle for 38 crates. Moving them
+//! to their owners is a tracked migration because it breaks workspace imports.
 //!
-//! Confining the canonical vocabulary to `apeireth_core::kernel` gives new code
-//! an unambiguous namespace today, and keeps `pub use kernel::*` off the crate
-//! root so that the legacy re-exports cannot silently shadow a primitive. When
-//! the legacy content has moved to its rightful owners, this module becomes the
-//! crate.
+//! `apeireth_core::kernel` gives new code an unambiguous namespace. Keeping
+//! `pub use kernel::*` off the crate root prevents legacy re-exports from shadowing it.
+//! This module becomes the crate once those re-exports move to their owners.
 //!
 //! # Determinism
 //!
-//! Nothing here reads the wall clock implicitly. [`Event`] and [`Timestamp`] take
-//! a `&dyn Clock`, which is what lets the end-to-end runtime test assert on
-//! timing without sleeping.
+//! `Event` and `Timestamp` take a `&dyn Clock` explicitly, so the runtime
+//! end-to-end test can assert on timing without sleeping.
 
 pub mod error;
+#[cfg(feature = "clock")]
 pub mod event;
 pub mod ids;
 pub mod lifecycle;
 pub mod memory;
 pub mod metadata;
 pub mod stream_kind;
+#[cfg(feature = "clock")]
 pub mod time;
 
 pub use error::{CoreError, CoreResult};
+#[cfg(feature = "clock")]
 pub use event::{Event, Topic};
 pub use ids::{
     AgentId, ApprovalId, CapabilityId, ModelId, ModuleInstanceId, NamespaceId, NodeId, PluginId,
@@ -53,6 +49,7 @@ pub use lifecycle::Lifecycle;
 pub use metadata::Metadata;
 pub use stream_kind::StreamKind;
 pub use stream_kind::StreamKindExt;
+#[cfg(feature = "clock")]
 pub use time::{system_clock, Clock, SystemClock, Timestamp, VirtualClock};
 // Domain types (Episode / Note / Session / IdentityCard / Migration) live in
 // `crate::kernel::memory` — accessed as `apeireth_core::kernel::memory::Episode`.
@@ -84,6 +81,7 @@ mod tests {
 
     /// The primitives have to compose without any subsystem's help; if this stops
     /// being true, something layered has leaked into core.
+    #[cfg(feature = "clock")]
     #[test]
     fn the_primitives_compose_into_a_correlated_record() {
         let clock = VirtualClock::new(

@@ -8,6 +8,10 @@ license.workspace = true
 authors.workspace = true
 description = "Apeireth 主路径核心类型 (Episode/Note/Session/IdentityCard) — R14 Phase 1 入口"
 
+[features]
+default = ["clock"]
+clock = ["dep:chrono"]
+
 [dependencies]
 sha2 = { workspace = true }
 tokio = { workspace = true }
@@ -16,7 +20,7 @@ serde_json = { workspace = true }
 anyhow = { workspace = true }
 thiserror = { workspace = true }
 uuid = { workspace = true }
-chrono = { workspace = true }
+chrono = { workspace = true, optional = true }
 
 [lib]
 name = "apeireth_core"

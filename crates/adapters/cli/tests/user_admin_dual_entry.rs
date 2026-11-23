@@ -15,10 +15,12 @@ use std::sync::Arc;
 
 use apeireth_cli::user_admin::run_user_admin_at;
 use apeireth_core::stored_doc::StoredDoc;
+use apeireth_core::user_domain::{DomainRegistry, DomainRole};
 use apeireth_gateway::{
     build_gateway_state_with_services, canonical_router_with_state, ClientTokenConfig,
-    ClientTokenSpec, ClientTokenTable, GatewayServices, GatewayTokenGate, UserAccess,
-    UserAdminService, CLIENT_TOKENS_DOC_NAME, CLIENT_TOKENS_DOC_VERSION, CLIENT_TOKENS_FILE,
+    ClientTokenSpec, ClientTokenTable, EpisodeMutationDto, GatewayServices, GatewayTokenGate,
+    MemoryGovernanceCommand, PrincipalForgetDto, UserAccess, UserAdminService,
+    CLIENT_TOKENS_DOC_NAME, CLIENT_TOKENS_DOC_VERSION, CLIENT_TOKENS_FILE,
 };
 use apeireth_runtime::canonical::Runtime;
 use axum::body::Body;
@@ -30,6 +32,54 @@ use common::{owner_record, write_users};
 
 const GATE_TOKEN: &str = "gate-token-0123456789abcdef";
 const OWNER_TOKEN: &str = "tok-owner-0123456789abcdef";
+
+/// HTTP 侧纯合成的完整遗忘端口；双入口测试只验证共享删户状态机与同一用户表。
+struct CompleteForget;
+
+#[async_trait::async_trait]
+impl MemoryGovernanceCommand for CompleteForget {
+    async fn protect_episode(
+        &self,
+        _id: &str,
+        _expected_rev: u64,
+    ) -> Result<EpisodeMutationDto, String> {
+        Err("unused synthetic protect".to_string())
+    }
+
+    async fn unprotect_episode(
+        &self,
+        _id: &str,
+        _expected_rev: u64,
+    ) -> Result<EpisodeMutationDto, String> {
+        Err("unused synthetic unprotect".to_string())
+    }
+
+    async fn forget_episode(
+        &self,
+        _id: &str,
+        _expected_rev: u64,
+        _reason: Option<&str>,
+    ) -> Result<EpisodeMutationDto, String> {
+        Err("unused synthetic episode forget".to_string())
+    }
+
+    async fn forget_principal(
+        &self,
+        principal_id: &str,
+        _reason: Option<&str>,
+    ) -> Result<PrincipalForgetDto, String> {
+        Ok(PrincipalForgetDto {
+            principal_id: principal_id.to_string(),
+            episode: true,
+            preference: true,
+            commitment: true,
+            temporal: true,
+            persona: true,
+            refused: false,
+            reason: None,
+        })
+    }
+}
 
 fn args(items: &[&str]) -> Vec<String> {
     items.iter().map(|item| (*item).to_string()).collect()
@@ -43,6 +93,17 @@ fn temp_dir(tag: &str) -> PathBuf {
     let _ = fs_err::remove_dir_all(&dir);
     fs_err::create_dir_all(&dir).expect("temp dir");
     dir
+}
+
+fn seed_memory_attribution(path: &Path, principal_id: &str) {
+    let store = apeireth_memory::SqliteMemoryStore::open(path).expect("synthetic memory store");
+    apeireth_memory::principal_sessions::record_principal_session(
+        &store,
+        principal_id,
+        "synthetic-session",
+        1,
+    )
+    .expect("synthetic attribution");
 }
 
 /// 写一份客户端令牌表 (`client-tokens.json`, StoredDoc 信封)。
@@ -73,6 +134,7 @@ async fn router_over(dir: &Path) -> axum::Router {
     std::env::remove_var(apeireth_gateway::CLIENT_TOKENS_ENV);
     let runtime = Arc::new(Runtime::builder().build().await.unwrap());
     let services = GatewayServices {
+        memory_governance: Some(Arc::new(CompleteForget)),
         user_admin: Some(Arc::new(UserAdminService::new(dir))),
         ..GatewayServices::default()
     };
@@ -394,4 +456,145 @@ async fn a_user_still_referenced_by_a_token_cannot_be_removed_from_either_entry(
     )
     .expect_err("事实只有一份: 第二次删除必须找不到人");
     assert!(error.contains("not in the user table"), "{error}");
+}
+
+/// CLI 不能再直删账号：权威库缺席不创建空库，归属不完整不删；补齐归属后同一
+/// 共享状态机才允许删除。
+#[test]
+fn cli_remove_keeps_a_retry_entry_until_memory_is_fully_confirmed() {
+    let dir = temp_dir("cli-retry");
+    write_tokens(&dir, &[("tui", OWNER_TOKEN, Some("owner-1"))]);
+    run_user_admin_at(
+        &dir,
+        &args(&[
+            "add",
+            "--user-id",
+            "owner-1",
+            "--role",
+            "owner",
+            "--clients",
+            "tui",
+        ]),
+    )
+    .expect("bootstrap owner");
+    run_user_admin_at(
+        &dir,
+        &args(&[
+            "add",
+            "--user-id",
+            "member-1",
+            "--role",
+            "member",
+            "--token",
+            OWNER_TOKEN,
+        ]),
+    )
+    .expect("add deletion target");
+
+    let memory_db = dir.join("cognitive.sqlite3");
+    let error = run_user_admin_at(
+        &dir,
+        &args(&["remove", "--user-id", "member-1", "--token", OWNER_TOKEN]),
+    )
+    .expect_err("missing authority must retain account");
+    assert!(error.contains("memory.forget_unavailable"), "{error}");
+    assert!(!memory_db.exists(), "缺席权威不得被创建为空库");
+    assert!(apeireth_governance::UserTable::load(&dir)
+        .unwrap()
+        .unwrap()
+        .identity_for_user("member-1")
+        .is_some());
+
+    // 库在但没有主体→会话归属：五账 DTO 的 episode/preference 为 false，仍拒删。
+    drop(apeireth_memory::SqliteMemoryStore::open(&memory_db).expect("empty authority"));
+    let error = run_user_admin_at(
+        &dir,
+        &args(&["remove", "--user-id", "member-1", "--token", OWNER_TOKEN]),
+    )
+    .expect_err("unattributable outcome must retain account");
+    assert!(error.contains("memory.forget_incomplete"), "{error}");
+    assert!(error.contains("episode=false"), "{error}");
+
+    seed_memory_attribution(&memory_db, "member-1");
+    let summary = run_user_admin_at(
+        &dir,
+        &args(&["remove", "--user-id", "member-1", "--token", OWNER_TOKEN]),
+    )
+    .expect("retry after attribution");
+    assert!(summary.contains("memory_forgotten=true"), "{summary}");
+    assert!(apeireth_governance::UserTable::load(&dir)
+        .unwrap()
+        .unwrap()
+        .identity_for_user("member-1")
+        .is_none());
+}
+
+/// 已开非默认域必须使用自己的 cognitive.sqlite3；即使默认库能给完整结果，也
+/// 不能代替目标库。目标库缺席先拒，补齐目标库后才可删。
+#[test]
+fn cli_remove_never_uses_default_memory_for_a_non_default_domain() {
+    let dir = temp_dir("cli-domain-scope");
+    write_tokens(&dir, &[("tui", OWNER_TOKEN, Some("owner-1"))]);
+    run_user_admin_at(
+        &dir,
+        &args(&[
+            "add",
+            "--user-id",
+            "owner-1",
+            "--role",
+            "owner",
+            "--clients",
+            "tui",
+        ]),
+    )
+    .expect("bootstrap owner");
+    let registry = DomainRegistry::open(&dir).unwrap();
+    let private = registry
+        .create("private-domain", "Private", DomainRole::Owner)
+        .unwrap();
+    run_user_admin_at(
+        &dir,
+        &args(&[
+            "add",
+            "--user-id",
+            "member-1",
+            "--role",
+            "member",
+            "--domain",
+            "private-domain",
+            "--token",
+            OWNER_TOKEN,
+        ]),
+    )
+    .expect("add scoped target");
+
+    let default_db = dir.join("cognitive.sqlite3");
+    seed_memory_attribution(&default_db, "member-1");
+    let private_db = registry
+        .layout()
+        .data_dir(&private.user_id)
+        .join("cognitive.sqlite3");
+    assert!(!private_db.exists());
+    let error = run_user_admin_at(
+        &dir,
+        &args(&["remove", "--user-id", "member-1", "--token", OWNER_TOKEN]),
+    )
+    .expect_err("default authority must not substitute for target domain");
+    assert!(error.contains("memory.forget_unavailable"), "{error}");
+    assert!(error.contains("private-domain"), "{error}");
+    assert!(!private_db.exists(), "目标库缺席不得创建空库");
+    assert!(apeireth_governance::UserTable::load(&dir)
+        .unwrap()
+        .unwrap()
+        .identity_for_user("member-1")
+        .is_some());
+
+    fs_err::create_dir_all(private_db.parent().unwrap()).unwrap();
+    seed_memory_attribution(&private_db, "member-1");
+    let summary = run_user_admin_at(
+        &dir,
+        &args(&["remove", "--user-id", "member-1", "--token", OWNER_TOKEN]),
+    )
+    .expect("target-scoped authority permits retry");
+    assert!(summary.contains("memory_forgotten=true"), "{summary}");
 }

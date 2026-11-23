@@ -470,7 +470,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # scan-history 需要全历史
+          # Keep full history on PRs until a validated base..head blob-range
+          # scanner exists. Otherwise a credential added and removed inside
+          # the PR could evade the final-tree scan.
+          fetch-depth: 0
 
       - name: Bootstrap Ubuntu DNS for system dependencies
         if: runner.os == 'Linux'
@@ -515,4 +518,7 @@ jobs:
 
       - name: "Secret scan: git history (scan-history, 防御 force-push 偷渡)"
         shell: pwsh
-        run: pwsh scripts/secret-scan.ps1 -Mode scan-history
+        # HEAD is deliberate: on pull_request checkout it contains the merge
+        # commit plus every PR/base ancestor, including an add-then-delete
+        # credential commit, without scanning unrelated server-side refs.
+        run: pwsh scripts/secret-scan.ps1 -Mode scan-history -HistoryRef HEAD

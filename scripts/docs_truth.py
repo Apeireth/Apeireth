@@ -569,7 +569,7 @@ def render_status() -> str:
 
 def cmd_gen() -> int:
     STATUS_DOC.parent.mkdir(parents=True, exist_ok=True)
-    STATUS_DOC.write_text(render_status(), encoding="utf-8")
+    STATUS_DOC.write_text(render_status(), encoding="utf-8", newline="\n")
     print(f"generated: {STATUS_DOC.relative_to(ROOT)}")
     return 0
 

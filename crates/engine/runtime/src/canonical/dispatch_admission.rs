@@ -1,5 +1,6 @@
 //! Canonical resolve/validate/governance/frozen-approval admission and invocation.
 //! Extracted from execute without changing the approval state machine.
+use super::super::project_workspace::ProjectFileCapability;
 use super::super::tool_route::ToolRouteError;
 use super::*;
 use std::future::Future;
@@ -181,13 +182,27 @@ impl Runtime {
         automatic: bool,
     ) -> RuntimeResult<ToolAdmission> {
         let clock = self.clock.as_ref();
+        let project_workspace = session.project_workspace_binding();
+        if !self.project_dispatch_allowed(session, &call.name, automatic) {
+            return Ok(ToolAdmission::Resolved(
+                crate::canonical::dispatcher::failure(
+                    call,
+                    crate::canonical::dispatcher::DispatchErrorCode::ScopeDenied,
+                    "tool is outside the authorized project workspace scope",
+                ),
+            ));
+        }
 
         // Internal control commands are registered surfaces, not business-name
         // branches. They are runtime-owned state requests: no capability lookup,
         // no governance verdict, and no human approval over a pure state flip.
         // The registry guarantees unique names; if a tool somehow appears under
         // the same name later, the dispatch fails closed instead of picking one.
-        if let Some(control) = self.capabilities.find_control_by_name(&call.name) {
+        if let Some(control) = project_workspace
+            .is_none()
+            .then(|| self.capabilities.find_control_by_name(&call.name))
+            .flatten()
+        {
             if !self.dispatcher.allows(*session_id, control.id()) {
                 return Ok(ToolAdmission::Resolved(
                     crate::canonical::dispatcher::failure(
@@ -220,8 +235,18 @@ impl Runtime {
         // lookup: a contested name fails closed instead of silently picking
         // one owner, and a locally owned capability is never rerouted to a
         // peer.
-        match self.tool_route_table().resolve(&call.name) {
-            Ok(entry) => {
+        let routes = project_workspace.is_none().then(|| self.tool_route_table());
+        match routes.as_ref().map(|routes| routes.resolve(&call.name)) {
+            Some(Ok(entry)) => {
+                if ProjectFileCapability::classify(&entry.capability_id).is_some() {
+                    return Ok(ToolAdmission::Resolved(
+                        crate::canonical::dispatcher::failure(
+                            call,
+                            crate::canonical::dispatcher::DispatchErrorCode::ScopeDenied,
+                            "tool requires an authorized project workspace",
+                        ),
+                    ));
+                }
                 if let Some(route) = entry.target.remote_route() {
                     // Remote advert. Local first: when this runtime owns the
                     // name too, the local implementation runs — a local owner
@@ -246,10 +271,10 @@ impl Runtime {
                     }
                 }
             }
-            Err(ToolRouteError::Ambiguous {
+            Some(Err(ToolRouteError::Ambiguous {
                 tool_name,
                 candidates,
-            }) => {
+            })) => {
                 return Ok(Self::dispatch_unavailable(
                     trace,
                     session,
@@ -264,7 +289,7 @@ impl Runtime {
                     ),
                 ));
             }
-            Err(ToolRouteError::NotFound { .. }) => {}
+            Some(Err(ToolRouteError::NotFound { .. })) | None => {}
         }
 
         let Some(tool) = self.resolve_tool(&call.name) else {
@@ -486,6 +511,7 @@ impl Runtime {
                 request_id,
                 trace_id,
                 security_context,
+                project_workspace,
                 true,
                 automatic,
             ) {
@@ -514,9 +540,14 @@ impl Runtime {
                     .with_optional_security_context(security_context),
             )
             .await;
+        let project_write = matches!(
+            ProjectFileCapability::classify(tool.id()),
+            Some(ProjectFileCapability::Write)
+        );
         let (hook, owner, decision) = if matches!(verdict.decision, Decision::Allow)
-            && tool.execution_policy().permission
-                == apeireth_plugin::ToolPermissionPolicy::RequireApproval
+            && (project_write
+                || tool.execution_policy().permission
+                    == apeireth_plugin::ToolPermissionPolicy::RequireApproval)
         {
             (
                 "tool.execution_policy".to_string(),
@@ -625,6 +656,7 @@ impl Runtime {
             request_id,
             trace_id,
             security_context,
+            project_workspace,
             false,
             automatic,
         ) {

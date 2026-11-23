@@ -201,6 +201,7 @@ async fn open_locked(
                 && saved.persona_revision() == binding.persona_revision()
                 && saved.workspace_id() == binding.workspace_id()
                 && saved.workspace_revision() == binding.workspace_revision()
+                && saved.contact_workspace_revision() == binding.contact_workspace_revision()
                 && saved.context_key() == binding.context_key()
                 && saved.incarnation().is_some()
         });

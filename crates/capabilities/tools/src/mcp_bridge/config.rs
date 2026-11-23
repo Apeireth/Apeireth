@@ -20,6 +20,7 @@ use thiserror::Error;
 
 use apeireth_plugin::mcp::is_valid_mcp_name;
 
+use crate::egress::{is_public_ip, EgressDestination};
 use crate::exec_pipeline::DEFAULT_MAX_TIMEOUT_MS;
 
 /// Environment variable carrying the server list (JSON array).
@@ -200,10 +201,10 @@ impl McpServerSpec {
                         reason: format!("{} transport requires url", self.transport.as_str()),
                     });
                 }
-                if !is_http_url(url) {
+                if remote_target(url).is_none() {
                     return Err(McpConfigError::InvalidSpec {
                         name,
-                        reason: "url must be an http(s) URL".to_string(),
+                        reason: "url must be HTTPS on a public destination or HTTP(S) on a loopback IP, without userinfo or a fragment".to_string(),
                     });
                 }
             }
@@ -473,11 +474,17 @@ pub fn is_valid_server_name(name: &str) -> bool {
     chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '-')
 }
 
-/// Whether `raw` is an absolute http(s) URL.
-pub fn is_http_url(raw: &str) -> bool {
-    match url::Url::parse(raw) {
-        Ok(url) => matches!(url.scheme(), "http" | "https") && url.host_str().is_some(),
-        Err(_) => false,
+pub(super) fn remote_target(raw: &str) -> Option<(url::Url, EgressDestination)> {
+    let url = url::Url::parse(raw).ok()?;
+    let destination = EgressDestination::parse(&url).ok()?;
+    if url.fragment().is_some() {
+        return None;
+    }
+    match destination.address {
+        Some(ip) if ip.is_loopback() => Some((url, destination)),
+        Some(ip) if !is_public_ip(ip) => None,
+        _ if url.scheme() == "https" => Some((url, destination)),
+        _ => None,
     }
 }
 

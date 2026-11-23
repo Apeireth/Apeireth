@@ -59,6 +59,7 @@ pub mod escalation;
 pub mod exposure_audit;
 pub mod fetch;
 pub mod filesystem;
+pub mod project_files;
 // git 写分级生产工具面 (`tool.git_write`, 干活能力轴 P1): 分级词表
 // (L1 可逆/L2 出网/L3 毁灭拒绝即帧) + 词法分级执行面 + 受控通道 + 分级风险映射。
 pub mod git_write;

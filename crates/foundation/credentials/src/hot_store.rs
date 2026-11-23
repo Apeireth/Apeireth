@@ -18,13 +18,19 @@
 //! 值不进入任何客户端/能力对象; 每次请求现解析出的 `Secret` 只活过该次请求
 //! (请求构造 → 发出 → drop), 无"构造时烧进内存"的步骤。
 //!
-//! **0 触碰 LOCKED**: 不改 `apeireth-plugin` 的 trait 边界, 不改 provider 实现。
+//! Provider 通过 `resolve_snapshot` 一次取出值与绑定，避免跨版本拼接。
 
 use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::{Arc, RwLock};
 
-use apeireth_plugin::{CredentialResolver, Secret};
+use apeireth_plugin::{CredentialResolver, CredentialSnapshot, Secret};
+
+#[derive(Clone)]
+struct HotCredentialEntry {
+    secret: Secret,
+    endpoints: Option<Vec<String>>,
+}
 
 /// admin 运行时凭据库: 逻辑凭据名 → 运行时值 (脱敏存储)。
 ///
@@ -33,13 +39,9 @@ use apeireth_plugin::{CredentialResolver, Secret};
 /// 所以一次写入对**下一次**请求立即生效, 无失效窗口、无缓存清理问题。
 #[derive(Default)]
 pub struct HotCredentialStore {
-    entries: RwLock<BTreeMap<String, Secret>>,
-    /// **端点绑定声明**（2026-11-01 安全审计 P1 的「凭据库维度」）：
-    /// 逻辑凭据名 → 该凭据被授权发送到的端点列表。
-    ///
-    /// 与凭据**存在同一个库** ⇒ 换端点（`APEIRETH_*_URL` / 热更 `base_url`）
-    /// **改不到**这份绑定 ⇒ 未绑定的端点拿不到凭据。
-    bindings: RwLock<BTreeMap<String, Vec<String>>>,
+    /// One lock protects both the value and binding. Provider reads therefore
+    /// cannot combine fields from two revisions of a hot credential.
+    entries: RwLock<BTreeMap<String, HotCredentialEntry>>,
 }
 
 impl HotCredentialStore {
@@ -61,7 +63,18 @@ impl HotCredentialStore {
         if value.is_empty() {
             entries.remove(name);
         } else {
-            entries.insert(name.to_string(), Secret::new(value));
+            match entries.get_mut(name) {
+                Some(entry) => entry.secret = Secret::new(value),
+                None => {
+                    entries.insert(
+                        name.to_string(),
+                        HotCredentialEntry {
+                            secret: Secret::new(value),
+                            endpoints: None,
+                        },
+                    );
+                }
+            }
         }
     }
 
@@ -71,7 +84,7 @@ impl HotCredentialStore {
             .read()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .get(name)
-            .cloned()
+            .map(|entry| entry.secret.clone())
     }
 
     /// **写入**一个逻辑凭据名，并**同时声明**它被授权发送到的端点。
@@ -87,37 +100,40 @@ impl HotCredentialStore {
         value: impl Into<String>,
         endpoints: impl IntoIterator<Item = String>,
     ) {
-        self.set(name, value);
-        let mut bindings = self
-            .bindings
+        let value = value.into();
+        let mut entries = self
+            .entries
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        bindings.insert(name.to_string(), endpoints.into_iter().collect());
+        if value.is_empty() {
+            entries.remove(name);
+        } else {
+            entries.insert(
+                name.to_string(),
+                HotCredentialEntry {
+                    secret: Secret::new(value),
+                    endpoints: Some(endpoints.into_iter().collect()),
+                },
+            );
+        }
     }
 
     /// 该凭据已声明的端点（未声明 ⇒ `None`，即「不参与绑定」）。
     pub fn declared_endpoints(&self, name: &str) -> Option<Vec<String>> {
-        self.bindings
+        self.entries
             .read()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .get(name)
-            .cloned()
+            .and_then(|entry| entry.endpoints.clone())
     }
 
     /// 移除一个运行时值 (回落到启动值解析)。返回是否确有条目被移除。
     pub fn remove(&self, name: &str) -> bool {
-        let removed = self
-            .entries
+        self.entries
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .remove(name)
-            .is_some();
-        // 凭据被移除 ⇒ 绑定**一并**移除（不留悬空绑定）。
-        self.bindings
-            .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .remove(name);
-        removed
+            .is_some()
     }
 
     /// 当前条目数 (仅计数, 无凭据名/值)。
@@ -142,6 +158,18 @@ impl CredentialResolver for HotCredentialStore {
     /// 已声明绑定 ⇒ `Some(表)`；未声明 ⇒ `None`（不参与绑定）。
     fn bound_endpoints(&self, name: &str) -> Option<Vec<String>> {
         self.declared_endpoints(name)
+    }
+
+    fn resolve_snapshot(&self, name: &str) -> Option<CredentialSnapshot> {
+        let entries = self
+            .entries
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let entry = entries.get(name)?;
+        Some(CredentialSnapshot::new(
+            entry.secret.clone(),
+            entry.endpoints.clone(),
+        ))
     }
 }
 
@@ -182,34 +210,24 @@ impl LayeredCredentialResolver {
 
 impl CredentialResolver for LayeredCredentialResolver {
     fn resolve(&self, name: &str) -> Option<Secret> {
-        self.primary
-            .resolve(name)
-            .or_else(|| self.fallback.resolve(name))
+        self.resolve_snapshot(name)
+            .map(CredentialSnapshot::into_secret)
     }
 
-    /// **任一层**声明了绑定就算数（取并集）。
-    ///
-    /// 为什么取并集而不是「跟随取到值的那一层」：绑定是**凭据名**的属性，
-    /// 而值可能来自任一层（运行时热写 > keyring > env）⇒ 绑定声明也允许来自任一层。
-    /// ⚠️ 这是**部署方的显式声明**（不是密码学证明）：它防的是「只改端点就泄漏」。
+    /// Binding follows the layer that supplied the value; metadata from a
+    /// different layer must never authorize that credential.
     fn bound_endpoints(&self, name: &str) -> Option<Vec<String>> {
-        let mut merged: Vec<String> = Vec::new();
-        let mut declared = false;
-        for layer in [&self.primary, &self.fallback] {
-            if let Some(list) = layer.bound_endpoints(name) {
-                declared = true;
-                for endpoint in list {
-                    if !merged.contains(&endpoint) {
-                        merged.push(endpoint);
-                    }
-                }
-            }
-        }
-        if declared {
-            Some(merged)
-        } else {
-            None
-        }
+        self.resolve_snapshot(name).and_then(|snapshot| {
+            snapshot
+                .bound_endpoints()
+                .map(|endpoints| endpoints.to_vec())
+        })
+    }
+
+    fn resolve_snapshot(&self, name: &str) -> Option<CredentialSnapshot> {
+        self.primary
+            .resolve_snapshot(name)
+            .or_else(|| self.fallback.resolve_snapshot(name))
     }
 }
 
@@ -227,6 +245,18 @@ impl fmt::Debug for LayeredCredentialResolver {
 mod tests {
     use super::*;
     use apeireth_plugin::StaticCredentials;
+
+    struct MetadataOnlyResolver;
+
+    impl CredentialResolver for MetadataOnlyResolver {
+        fn resolve(&self, _name: &str) -> Option<Secret> {
+            None
+        }
+
+        fn bound_endpoints(&self, _name: &str) -> Option<Vec<String>> {
+            Some(vec!["https://wrong-layer.example".to_string()])
+        }
+    }
 
     #[test]
     fn runtime_override_wins_over_the_startup_layer() {
@@ -252,6 +282,19 @@ mod tests {
     }
 
     #[test]
+    fn fallback_secret_never_inherits_binding_from_another_layer() {
+        let layered = LayeredCredentialResolver::new(
+            Arc::new(MetadataOnlyResolver),
+            Arc::new(StaticCredentials::new().with("provider.x.api_key", "sk-startup")),
+        );
+        let snapshot = layered
+            .resolve_snapshot("provider.x.api_key")
+            .expect("fallback snapshot");
+        assert_eq!(snapshot.secret().expose(), "sk-startup");
+        assert!(snapshot.bound_endpoints().is_none());
+    }
+
+    #[test]
     fn a_write_is_visible_to_the_next_resolve_without_rebuild() {
         // 真热更核心断言: 同一个 resolver 句柄, 写入后下一次 resolve 现取新值
         // (凭据不被任何长生命周期对象缓存)。
@@ -273,6 +316,34 @@ mod tests {
         assert_eq!(
             layered.resolve("provider.x.api_key").unwrap().expose(),
             "sk-startup"
+        );
+    }
+
+    #[test]
+    fn a_hot_snapshot_keeps_the_value_and_binding_from_one_revision() {
+        let hot = HotCredentialStore::new();
+        hot.set_with_endpoints(
+            "provider.x.api_key",
+            "sk-bound",
+            ["https://model.example/v1".to_string()],
+        );
+        let snapshot = hot
+            .resolve_snapshot("provider.x.api_key")
+            .expect("snapshot");
+        assert_eq!(snapshot.secret().expose(), "sk-bound");
+        assert_eq!(
+            snapshot.bound_endpoints(),
+            Some(["https://model.example/v1".to_string()].as_slice())
+        );
+
+        hot.set("provider.x.api_key", "sk-rotated");
+        let rotated = hot
+            .resolve_snapshot("provider.x.api_key")
+            .expect("rotated snapshot");
+        assert_eq!(rotated.secret().expose(), "sk-rotated");
+        assert_eq!(
+            rotated.bound_endpoints(),
+            Some(["https://model.example/v1".to_string()].as_slice())
         );
     }
 

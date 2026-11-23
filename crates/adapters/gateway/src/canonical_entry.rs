@@ -289,7 +289,7 @@ pub async fn execute_chat_attributed(
     request: CanonicalChatRequest,
     attribution: SessionAttribution,
 ) -> Result<CanonicalChatOutcome, CanonicalEntryError> {
-    execute_chat_attributed_operation(runtime, request, attribution, None, None).await
+    execute_chat_attributed_operation(runtime, request, attribution, None, None, None).await
 }
 
 /// Resolve a pending approval through the canonical runtime API.
@@ -1235,7 +1235,7 @@ pub fn canonical_router_with_state(state: GatewayState) -> Router {
         .route("/v1/providers", get(list_providers))
         .route("/v1/runtime/snapshot", get(runtime_snapshot))
         .route("/v1/apeireth/runtime/snapshot", get(runtime_snapshot))
-        .route("/v1/chat", native_http::route())
+        .merge(native_http::routes())
         .route("/v1/chat/completions", post(openai_chat))
         .route("/v1/approvals", get(list_pending_approvals))
         .route("/v1/approvals/resolve", post(native_resolve_approval))
@@ -1272,6 +1272,8 @@ pub fn canonical_router_with_state(state: GatewayState) -> Router {
         )
         .merge(crate::artifacts::routes_with_panels())
         .merge(crate::model_connection::routes())
+        .merge(crate::desktop_capabilities::routes())
+        .merge(crate::desktop_web_reader::routes())
         .merge(crate::turn_results::routes())
         // G-P1 指标端点 (指标数据面路由文件), 同在整面令牌门内。
         .merge(crate::panel_metrics::metrics_routes())
@@ -1315,7 +1317,13 @@ pub fn canonical_router_with_state(state: GatewayState) -> Router {
                 .allow_headers(tower_http::cors::Any),
         )
         .layer(middleware::from_fn(mc::protect_response))
+        .layer(middleware::from_fn(
+            crate::desktop_capabilities::protect_response,
+        ))
         .layer(middleware::from_fn(crate::artifacts::protect_response))
+        .layer(middleware::from_fn(
+            crate::desktop_web_reader::protect_response,
+        ))
         .layer(middleware::from_fn(
             crate::turn_results::protect_read_response,
         ))
@@ -1324,10 +1332,7 @@ pub fn canonical_router_with_state(state: GatewayState) -> Router {
 /// Serve over an explicit [`GatewayState`] until the listener closes or a
 /// shutdown fires (see [`serve_with_shutdown`] for the shutdown contract).
 ///
-/// TLS 面 (B5 真接线): `APEIRETH_TLS_CERT` / `APEIRETH_TLS_KEY` 旋钮在场时
-/// **真加载**材料并走 TLS listener; 材料坏 = fail-closed **拒绝启动** ——
-/// 错误在任何端点被服务前帧化返回, 绝不静默降级明文。未设旋钮 = 明文,
-/// 回环缺省语义不变。
+/// 非回环监听强制 TLS；回环允许明文。TLS 材料不完整或无效时拒绝启动。
 ///
 /// Keeping the state explicit lets embedders and tests hold the observation
 /// sink handle across the shutdown boundary — which is exactly what the
@@ -1347,17 +1352,22 @@ pub async fn serve_state_with_shutdown(
 }
 
 /// [`serve_state_with_shutdown`] 的显式材料形态: `tls = Some(..)` 走 TLS
-/// listener, `None` 保持明文 —— 组合根/测试可直接给材料, 不经环境旋钮。
+/// listener。`None` 只允许用于回环监听。
 pub async fn serve_state_with_tls(
     listener: tokio::net::TcpListener,
     state: GatewayState,
     tls: Option<crate::remote_access::TlsMaterial>,
     external_shutdown: impl std::future::Future<Output = ()> + Send + 'static,
 ) -> std::io::Result<()> {
-    let endpoint = listener
-        .local_addr()
-        .map(|addr| addr.to_string())
-        .unwrap_or_else(|_| "unknown".to_string());
+    let address = listener.local_addr()?;
+    crate::remote_access::enforce_remote_bind(
+        &address.ip().to_string(),
+        &state.token_gate,
+        &state.client_tokens,
+    )
+    .and_then(|clearance| clearance.require_tls(tls.is_some()))
+    .map_err(|error| std::io::Error::new(std::io::ErrorKind::PermissionDenied, error))?;
+    let endpoint = address.to_string();
     state.events.publish(GatewayEvent::new(
         "backend_ready",
         serde_json::json!({ "service": "apeireth-gateway-2.0", "endpoint": endpoint }),

@@ -612,8 +612,14 @@ impl Runtime {
     pub fn tool_declarations(&self) -> Vec<apeireth_protocol::canonical::NormalizedTool> {
         let routes = self.tool_route_table();
         let mut declarations = self.local_tool_declarations();
-        declarations.retain(|tool| !routes.is_ambiguous(&tool.name));
         declarations.extend(routes.remote_model_catalog());
+        declarations.retain(|tool| {
+            !routes.is_ambiguous(&tool.name)
+                && !routes.resolve(&tool.name).is_ok_and(|entry| {
+                    super::project_workspace::ProjectFileCapability::classify(&entry.capability_id)
+                        .is_some()
+                })
+        });
         declarations
     }
 

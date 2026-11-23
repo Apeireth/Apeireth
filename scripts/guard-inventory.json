@@ -765,7 +765,12 @@
       "ci_workflows": [],
       "has_baseline": false,
       "notes": "严格 YAML 重复键守卫（2026-11-03 加，防 cargo-audit.yml 那类病复发）",
-      "flags": []
+      "flags": [
+        "--check",
+        "--help",
+        "--path",
+        "-h"
+      ]
     },
     {
       "id": "clean-test-binaries",
@@ -1197,6 +1202,28 @@
       ]
     },
     {
+      "id": "update-cosign-key-docs",
+      "path": "scripts/update_cosign_key_docs.py",
+      "kind": "generator",
+      "is_guard": false,
+      "blocking": true,
+      "invocation": [
+        "python3 scripts/update_cosign_key_docs.py --pubkey docs/security/cosign.pub --document docs/security/cosign-keys.md --recorded-date \"${RECORDED_DATE}\""
+      ],
+      "ci_workflows": [
+        ".github/workflows/cosign.yml"
+      ],
+      "has_baseline": false,
+      "notes": "Prepare a reviewable cosign public-key document update.",
+      "flags": [
+        "--document",
+        "--help",
+        "--pubkey",
+        "--recorded-date",
+        "-h"
+      ]
+    },
+    {
       "id": "v2-0-0-alpha-to-v1-0-0",
       "path": "scripts/upgrade/v2.0.0-alpha-to-v1.0.0.sh",
       "kind": "generator",
@@ -1252,7 +1279,11 @@
       ],
       "has_baseline": false,
       "notes": "四层验收台账（verification-ledger.yaml）只读校验器",
-      "flags": []
+      "flags": [
+        "--help",
+        "--quiet",
+        "-h"
+      ]
     },
     {
       "id": "vet",

@@ -11,7 +11,7 @@
 //! | ECDSA P-256 测试链 (加载 + 握手) | 已实测 | `ecdsa_p256_material_loads_and_really_handshakes` |
 //! | 冷启动换证书轮换 + 旧信任面拒 | 已实测 | `certificate_rotation_is_a_cold_start_swap_and_stale_trust_is_refused` |
 //! | 坏文件 / 半套配置拒启动 | 已实测 | `unset_knobs_keep_plaintext_loopback_while_bad_material_refuses_to_start`、`half_configured_knobs_refuse_to_start` |
-//! | 未设旋钮明文回环 / 逃生阀不变 | 已实测 | `unset_knobs_keep_plaintext_loopback_while_bad_material_refuses_to_start`、`loopback_and_escape_valve_semantics_are_unchanged` |
+//! | 明文回环 / 非回环认证和 TLS | 本地测试 | `unset_knobs_keep_plaintext_loopback_while_bad_material_refuses_to_start`、`non_loopback_requires_both_token_and_tls` |
 //! | 生产 (非自签) 证书面 | **未实测** | 无真实生产证书可用 (自签材料零真实信任价值); 验证清单见下 |
 //! | 运行中热重载证书 | **未接线** | 如实标注: 材料只在启动加载一次, 换证书 = 重启 (见轮换测试注释) |
 //!
@@ -32,7 +32,7 @@
 //! `tests/fixtures/tls/README.md`; 私钥仅测试用途、无任何真实信任价值。
 //!
 //! 每条钉住的行为: 合法证书链真启用并真握手 / 坏文件拒启动 / 半套配置拒启动 /
-//! 未设旋钮明文回环不变 / 非回环逃生阀与回环语义不变 / 分协议版本握手 /
+//! 明文回环及非回环强制认证 / 分协议版本握手 /
 //! ECC 材料加载与握手 / 冷启动轮换语义 (旧信任面拒)。
 
 use std::sync::Arc;
@@ -62,12 +62,14 @@ async fn a_valid_chain_really_serves_tls_and_the_handshake_completes() {
         .expect("合法材料必须真加载成功");
     assert_eq!(material.chain_len(), 2);
 
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
+    let mut state = gateway_state().await;
+    state.token_gate = GatewayTokenGate::Enforced("synthetic-test-gateway-token".into());
     let server = tokio::spawn(serve_state_with_tls(
         listener,
-        gateway_state().await,
+        state,
         Some(material),
         async move {
             let _ = shutdown_rx.await;
@@ -88,6 +90,12 @@ async fn a_valid_chain_really_serves_tls_and_the_handshake_completes() {
     assert_eq!(response.status(), reqwest::StatusCode::OK);
     let body = response.text().await.unwrap();
     assert!(body.contains("\"ok\""), "{body}");
+    let response = client
+        .get(format!("https://127.0.0.1:{port}/v1/models"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::UNAUTHORIZED);
 
     // 明文客户端撞 TLS 口: 拿不到任何明文响应字节 (无降级口子)。
     let mut plain = tokio::net::TcpStream::connect(("127.0.0.1", port))
@@ -230,9 +238,8 @@ async fn half_configured_knobs_refuse_to_start() {
     assert!(refusal.contains("refusing to start"), "{refusal}");
 }
 
-/// 回环语义与非回环逃生阀语义不变 (TLS 接线零回归)。
 #[tokio::test]
-async fn loopback_and_escape_valve_semantics_are_unchanged() {
+async fn non_loopback_requires_both_token_and_tls() {
     assert_eq!(bind_scope("127.0.0.1:8080"), BindScope::Loopback);
 
     // 回环绑定: 恒放行, 无需令牌。
@@ -245,17 +252,30 @@ async fn loopback_and_escape_valve_semantics_are_unchanged() {
     assert_eq!(cleared.scope, BindScope::Loopback);
     assert!(cleared.audit_facts.is_empty(), "回环不额外留痕");
 
-    // 非回环逃生阀 (`APEIRETH_GATEWAY_TOKEN=none`): 放行但留审计。
-    let cleared = enforce_remote_bind(
-        "0.0.0.0",
-        &GatewayTokenGate::UnprotectedDeclared,
-        &Default::default(),
-    )
-    .expect("逃生阀放行 (操作者明示自担)");
-    assert_eq!(cleared.scope, BindScope::NonLoopback);
-    let detail = cleared.audit_facts[0].1.clone().unwrap_or_default();
-    assert!(detail.contains("mode=declared_none"), "{detail}");
-    assert!(detail.contains("escape valve"), "{detail}");
+    for (gate, tls, reason) in [
+        (
+            GatewayTokenGate::UnprotectedDeclared,
+            Some(
+                load_tls_material(&fixture("server-chain.pem"), &fixture("server-key.pem"))
+                    .unwrap(),
+            ),
+            "without an enforceable token",
+        ),
+        (
+            GatewayTokenGate::Enforced("synthetic-test-gateway-token".into()),
+            None,
+            "without TLS",
+        ),
+    ] {
+        let listener = tokio::net::TcpListener::bind("0.0.0.0:0").await.unwrap();
+        let mut state = gateway_state().await;
+        state.token_gate = gate;
+        let error = serve_state_with_tls(listener, state, tls, async {})
+            .await
+            .unwrap_err();
+        assert_eq!(error.kind(), std::io::ErrorKind::PermissionDenied);
+        assert!(error.to_string().contains(reason), "{error}");
+    }
 }
 
 // ── B5-TEST 补测面: 协议矩阵 / ECC 材料 / 冷启动轮换 ────────────────────────

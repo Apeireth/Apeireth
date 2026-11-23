@@ -1,10 +1,17 @@
 # 独立 workspace: 与 Apeireth 主 workspace (root Cargo.toml) 隔离, 不强行加入 upstream members
 [workspace]
+exclude = [
+    "vendor/glib",
+    "vendor/glib-macros",
+    "vendor/gtk3-macros",
+    "vendor/tauri-plugin-single-instance",
+    "vendor/tauri-utils",
+]
 
 [package]
 name = "companion-desktop"
 version = "2.0.0-rc.5"
-description = "Apeireth 桌面伙伴 — 薄 Tauri shell (窗口/托盘/通知), 保留 legacy companion 兼容接入"
+description = "Apeireth 桌面伙伴 — 薄 Tauri shell (窗口/托盘), 保留 legacy companion 兼容接入"
 edition = "2021"
 rust-version = "1.77.2"
 
@@ -18,11 +25,9 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = ["tray-icon", "image-png"] }
 tauri-plugin-autostart = "2"
-tauri-plugin-notification = "2"
-tauri-plugin-single-instance = "2"
-tauri-plugin-opener = "2"
+tauri-plugin-single-instance = { path = "vendor/tauri-plugin-single-instance" }
 # 存储文档信封 (配置严格打开 / 显式迁移): 主 workspace 存储基础件, path 依赖。
-apeireth-core = { path = "../../../crates/foundation/core" }
+apeireth-core = { path = "../../../crates/foundation/core", default-features = false }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }
@@ -35,9 +40,9 @@ rand = "0.8"
 keyring = "3.6.3"
 # Workspace policy (clippy.toml): fs_err over std::fs for path-carrying errors.
 fs-err = "3.0"
-# 矿脉数据库面: 只读 SQL 查询引擎。版本对齐主 workspace 硬锁 0.32 (bundled)，
-# 防 libsqlite3-sys 生态漂移——本 crate 独立 workspace，同版即同栈。
-rusqlite = { version = "0.32", features = ["bundled"] }
+# 矿脉数据库面: 只读 SQL 查询引擎。独立壳固定已修复的 rusqlite/libsqlite3-sys
+# 兼容线，并保留 bundled SQLite，避免依赖宿主机动态库。
+rusqlite = { version = "0.41", features = ["bundled"] }
 # 信使 SMTP 发送面: 传输件对齐既有依赖树版本（经 reqwest 带入的同栈），
 # 零树膨胀。隐式 TLS 走 ring 提供者；明文通道需显式 insecure 标志（如实命名）。
 tokio-rustls = "0.26"
@@ -56,10 +61,32 @@ sha1 = "0.10"
 # Win32_Graphics_Dwm: 主窗标题栏配色 (src/titlebar.rs); Foundation/Credentials 供 keychain。
 windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Security_Credentials", "Win32_Graphics_Dwm"] }
 
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+glib = "0.18"
+tauri = { version = "2", features = ["test"] }
+zbus = "6.5"
+
+[[test]]
+name = "single_instance_dbus"
+path = "vendor/tauri-plugin-single-instance/tests/dbus_errors.rs"
+
 # 构建缓存治理（2026-10-16 建议书 P0-1 同款）：第三方依赖不生成调试信息
 [profile.dev.package."*"]
 debug = 0
+# The iterator regression exercises the optimized C out-parameter call.
+[profile.test.package.glib]
+opt-level = 2
+
 [profile.release]
 codegen-units = 1
 lto = true
 strip = true
+
+[patch.crates-io]
+# Keep the GTK 3 API required by the Linux shell while carrying the iterator
+# soundness backport and removing the old macro diagnostic dependency.
+glib = { path = "vendor/glib" }
+glib-macros = { path = "vendor/glib-macros" }
+gtk3-macros = { path = "vendor/gtk3-macros" }
+# Config types only use its serialization macro.
+tauri-utils = { path = "vendor/tauri-utils" }

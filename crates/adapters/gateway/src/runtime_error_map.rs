@@ -40,6 +40,9 @@ pub(crate) fn classify_runtime_error(error: &RuntimeError) -> (StatusCode, Error
         RuntimeError::AgentBindingRejected { .. } => {
             (StatusCode::CONFLICT, ErrorCode::AgentBindingRejected)
         }
+        RuntimeError::ProjectWorkspaceRejected { .. } => {
+            (StatusCode::CONFLICT, ErrorCode::WorkspaceConflict)
+        }
         // C2-1 操作幂等: 同键异载荷 / 上次执行中断 ⇒ 409 conflict; 同键在飞 ⇒ 409 in_progress。
         RuntimeError::OperationConflict { .. } => {
             (StatusCode::CONFLICT, ErrorCode::OperationConflict)

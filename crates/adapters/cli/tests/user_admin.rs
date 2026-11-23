@@ -55,6 +55,18 @@ fn write_tokens(dir: &Path, entries: &[(&str, &str, Option<&str>)]) {
     .unwrap();
 }
 
+fn seed_memory_attribution(dir: &Path, principal_id: &str) {
+    let store = apeireth_memory::SqliteMemoryStore::open(dir.join("cognitive.sqlite3"))
+        .expect("synthetic memory store");
+    apeireth_memory::principal_sessions::record_principal_session(
+        &store,
+        principal_id,
+        "synthetic-session",
+        1,
+    )
+    .expect("synthetic attribution");
+}
+
 /// 引导 + 事后管理的全链: 首用户免令牌但必须 owner; 之后 owner 令牌可
 /// add / list / role / remove, 全部落盘可回读。
 #[test]
@@ -146,6 +158,7 @@ fn bootstrap_the_first_owner_then_manage_with_the_owner_token() {
 
     // 摘掉令牌绑定后才可删 (先收令牌, 后删用户)。
     write_tokens(&dir, &[("tui", OWNER_TOKEN, Some("owner-1"))]);
+    seed_memory_attribution(&dir, "member-1");
     let summary = run_user_admin_at(
         &dir,
         &args(&["remove", "--user-id", "member-1", "--token", OWNER_TOKEN]),

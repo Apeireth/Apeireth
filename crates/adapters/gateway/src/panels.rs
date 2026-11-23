@@ -552,6 +552,9 @@ pub struct GatewayServices {
     pub credentials: Option<Arc<dyn crate::admin::CredentialWriter>>,
     /// Managed single-operator profile backed by the composition root keyring.
     pub model_connection: Option<Arc<dyn crate::model_connection::ModelConnectionService>>,
+    /// Versioned startup switches for the managed desktop.
+    pub desktop_capabilities:
+        Option<Arc<dyn crate::desktop_capabilities::DesktopCapabilityService>>,
     pub safety_guard: Option<Arc<dyn SafetyGuardQuery>>,
     pub workbench: Option<Arc<dyn WorkbenchQuery>>,
     /// 用户管理面 (W3-② HTTP 面): 与 CLI `apeireth user` **同一** UserTable 服务
@@ -616,6 +619,7 @@ impl GatewayServices {
             modules: modules.then(|| adapter as Arc<dyn ModuleQuery>),
             credentials: None,
             model_connection: None,
+            desktop_capabilities: None,
             safety_guard: None,
             workbench: None,
             // 用户/域/技能库/任务面板/关怀/性格面板面走文件事实服务或持久队列
@@ -756,6 +760,7 @@ pub fn panel_admin_face(endpoint: &str) -> bool {
 pub fn panel_routes() -> Router<GatewayState> {
     Router::new()
         .route("/v1/panel/sessions", get(list_sessions))
+        .merge(crate::workspace_panel::folder_grant_routes())
         .route("/v1/panel/traces", get(list_traces))
         .route("/v1/panel/traces/:trace_id", get(trace_detail))
         .route("/v1/tools/list", get(list_tools))

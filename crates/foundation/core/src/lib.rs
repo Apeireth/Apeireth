@@ -25,7 +25,8 @@ use serde::{Deserialize, Serialize};
 // (2026-08-27 O-6 锚 #9 兑现 #11: legacy compat shim 删, 12 consumer 已迁 `apeireth_core::kernel::memory::*`, 真 drain 完成)
 // pub mod memory;
 // (legacy compat shim — see Refactor-5 in v2-arch-refactor-batch.md; 真实域类型定义在 crate::kernel::memory)
-// 可注入时钟 (SystemClock / VirtualClock): 时间敏感机制测试与模拟快进
+/// Injectable system and virtual clocks, available with the default `clock` feature.
+#[cfg(feature = "clock")]
 pub mod clock;
 // reconstruct_v2 canonical convergence: stable primitives shared by every
 // canonical subsystem (ids / time / lifecycle / event / metadata / errors).
@@ -66,6 +67,7 @@ pub mod stored_doc;
 // 用户域 (W3-① 多户数据隔离·星群数据层): 域模型 + 域注册表 + 单户兼容采用。
 /// 用户域模型 (`UserDomain`/`DomainUserId`/`DomainRole`) + 域注册表 + 首次启动
 /// 「默认域原位采用」(零迁移) + 域级授权拒绝即帧 (404/403 语义钉死)。
+#[cfg(feature = "clock")]
 pub mod user_domain;
 // 联系人 / Agent 身份 (后端合同 B1 批): 身份铸造 + 人设校验 + 归档墓碑 + 落盘注册表。
 /// 联系人领域 (`Contact`/`ContactId`/`ContactAgentId`/`PersonaText`): 身份后端铸造、人设构造即校验 (字节上限 + 控制字符)、revision 乐观并发、归档墓碑不可复活。
