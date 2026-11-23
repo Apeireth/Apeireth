@@ -1,5 +1,4 @@
 //! Last provider request readback, with no transcript or estimated context.
-#![allow(dead_code)]
 
 mod common;
 
