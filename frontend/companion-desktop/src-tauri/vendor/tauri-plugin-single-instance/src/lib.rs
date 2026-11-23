@@ -17,14 +17,6 @@
 
 use tauri::{AppHandle, Manager, Resource, ResourceId, Runtime, plugin::TauriPlugin};
 
-#[cfg(target_os = "windows")]
-#[path = "platform_impl/windows.rs"]
-mod platform_impl;
-#[cfg(target_os = "linux")]
-#[path = "platform_impl/linux.rs"]
-mod platform_impl;
-#[cfg(target_os = "macos")]
-#[path = "platform_impl/macos.rs"]
 mod platform_impl;
 
 #[cfg(feature = "semver")]

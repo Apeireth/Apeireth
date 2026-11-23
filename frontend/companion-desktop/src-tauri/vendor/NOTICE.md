@@ -10,6 +10,8 @@
 | [`tauri-plugin-single-instance 2.5.5`](https://crates.io/crates/tauri-plugin-single-instance/2.5.5) | `726b6da0dd5bd1344f84f4108a622c07d01923baacb5c803a605189672c5352f` | Linux 使用 zbus 6 及其公开同步入口，避免 [RUSTSEC-2026-0370](https://rustsec.org/advisories/RUSTSEC-2026-0370.html)、[0371](https://rustsec.org/advisories/RUSTSEC-2026-0371.html)、[0372](https://rustsec.org/advisories/RUSTSEC-2026-0372.html) 中停止维护的包。保留原 D-Bus 名称、对象路径、调用参数和清理时序。 |
 | [`tauri-utils 2.10.4`](https://crates.io/crates/tauri-utils/2.10.4) | `28d1d33d4453c5df0bf1672dbc7ada69d8ed74f56a4316d964a4aa73d4ecd3ad` | `serde_with` 仅启用 `macros`。两个配置模块继续使用同一个序列化宏，锁文件不再解析未使用的日期适配器。 |
 
+`tauri-plugin-single-instance` 的平台分派集中在 `src/platform_impl/mod.rs`，由单一入口按目标操作系统选择对应实现。
+
 `cargo audit --deny warnings` 继续检查整个锁文件。RustSec 用注册表来源识别发布包，上表的本地源码靠独立的上游压缩包比对和行为回归验证。
 
 在 `src-tauri` 中执行 Linux 回归。
