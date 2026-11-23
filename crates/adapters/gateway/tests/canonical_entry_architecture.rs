@@ -13,10 +13,11 @@ const SERIALIZED_TURN: &str = include_str!("../src/canonical_entry/serialized_tu
 #[test]
 fn canonical_gateway_entry_delegates_semantics_to_runtime_execute() {
     assert!(
-        CANONICAL_ENTRY.contains(".route(\"/v1/chat\", native_http::route())")
-            && NATIVE_HTTP.contains("post(native_chat)")
+        CANONICAL_ENTRY.contains(".merge(native_http::routes())")
+            && NATIVE_HTTP.contains(".route(\"/v1/chat\", post(native_chat))")
+            && NATIVE_HTTP.contains(".route(WORKSPACE_CHAT, post(workspace_chat))")
             && NATIVE_HTTP.contains("execute_chat_attributed_operation("),
-        "the native route must delegate to the attributed canonical adapter"
+        "the native chat routes must delegate to the attributed canonical adapter"
     );
     assert!(
         SERIALIZED_TURN.contains("run_turn_serialized(runtime, turn,")
