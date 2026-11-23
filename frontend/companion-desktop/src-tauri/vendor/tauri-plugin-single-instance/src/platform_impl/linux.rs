@@ -1,0 +1,147 @@
+// Copyright 2019-2023 Tauri Programme within The Commons Conservancy
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: MIT
+
+#[cfg(feature = "semver")]
+use crate::semver_compat::semver_compat_string;
+
+use crate::{SingleInstanceCallback, manage_instance_lock};
+use tauri::{
+    AppHandle, Resource, Runtime,
+    plugin::{self, TauriPlugin},
+};
+use zbus::{
+    Address, Connection, block_on, connection::Builder, interface, names::WellKnownName,
+    wire::ObjectPath,
+};
+
+/// Owns the D-Bus name, released when the app exits (see [`crate::destroy`]).
+struct InstanceLock {
+    connection: Connection,
+    name: String,
+}
+
+impl Resource for InstanceLock {}
+
+impl Drop for InstanceLock {
+    fn drop(&mut self) {
+        if let Ok(name) = WellKnownName::try_from(self.name.as_str()) {
+            let _ = block_on(self.connection.release_name(name));
+        }
+    }
+}
+
+struct SingleInstanceDBus<R: Runtime> {
+    callback: Box<SingleInstanceCallback<R>>,
+    app_handle: AppHandle<R>,
+}
+
+#[interface(name = "org.SingleInstance.DBus")]
+impl<R: Runtime> SingleInstanceDBus<R> {
+    fn execute_callback(&mut self, argv: Vec<String>, cwd: String) {
+        (self.callback)(&self.app_handle, argv, cwd);
+    }
+}
+
+pub fn init<R: Runtime>(
+    callback: Box<SingleInstanceCallback<R>>,
+    dbus_id: Option<String>,
+) -> TauriPlugin<R> {
+    plugin::Builder::new("single-instance")
+        .setup(move |app, _api| {
+            let mut dbus_name = dbus_id.unwrap_or_else(|| app.config().identifier.clone());
+            dbus_name.push_str(".SingleInstance");
+
+            #[cfg(feature = "semver")]
+            {
+                dbus_name.push('_');
+                dbus_name.push_str(semver_compat_string(&app.package_info().version).as_str());
+            }
+
+            let mut dbus_path = dbus_name.replace('.', "/").replace('-', "_");
+            if !dbus_path.starts_with('/') {
+                dbus_path = format!("/{dbus_path}");
+            }
+
+            let single_instance_dbus = SingleInstanceDBus {
+                callback,
+                app_handle: app.clone(),
+            };
+
+            let address = match Address::session() {
+                Ok(address) => address,
+                Err(error) => {
+                    tracing::warn!(
+                        "single-instance: invalid D-Bus session address, launching normally: {error}"
+                    );
+                    return Ok(());
+                }
+            };
+
+            // Validate before opening the bus. Builder errors also include transport
+            // failures, which retain the existing start-without-a-bus behavior.
+            let name = WellKnownName::try_from(dbus_name.as_str())?;
+            let path = ObjectPath::try_from(dbus_path.as_str())?;
+            let result = block_on(
+                Builder::address(address)
+                    .name(name)
+                    .replace_existing_names(false)
+                    .allow_name_replacements(false)
+                    .serve_at(path, single_instance_dbus)
+                    .build(),
+            );
+            match result {
+                Ok(connection) => {
+                    manage_instance_lock(
+                        app,
+                        InstanceLock {
+                            connection,
+                            name: dbus_name,
+                        },
+                    );
+                }
+                Err(zbus::Error::NameTaken) => {
+                    let forwarded: Result<_, Box<dyn std::error::Error>> = block_on(async {
+                        let connection = Connection::session().await?;
+                        connection
+                            .call_method(
+                                Some(dbus_name.as_str()),
+                                dbus_path.as_str(),
+                                Some("org.SingleInstance.DBus"),
+                                "ExecuteCallback",
+                                &(
+                                    std::env::args_os()
+                                        .map(|arg| arg.to_string_lossy().into_owned())
+                                        .collect::<Vec<String>>(),
+                                    std::env::current_dir()
+                                        .unwrap_or_default()
+                                        .to_string_lossy()
+                                        .as_ref(),
+                                ),
+                            )
+                            .await
+                            .map_err(|error| {
+                                format!(
+                                    "failed to forward arguments to the running instance: {error}"
+                                )
+                                .into()
+                            })
+                    });
+                    forwarded?;
+                    // Exit successfully only after the primary accepted the arguments.
+                    app.cleanup_before_exit();
+                    std::process::exit(0);
+                }
+                Err(error) => {
+                    // Without a session bus there is no way to find other instances.
+                    tracing::warn!(
+                        "single-instance: D-Bus session bus unavailable, launching normally: {error}"
+                    );
+                    return Ok(());
+                }
+            }
+
+            Ok(())
+        })
+        .build()
+}

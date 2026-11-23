@@ -164,7 +164,10 @@ mod tests {
         let app = PathBuf::from("C:\\Users\\me\\AppData\\Local\\Apeireth");
         // 期望值用同一 join 语义构造：Windows 字面量 + join 在 Unix 上会产生混排分隔符
         //（CI ubuntu 实测 "C:\\...\\workspace/.apeireth"），硬编码会跨平台红。
-        assert_eq!(resolve_store_dir(Some(&ws), Some(&app)), Some(ws.join(".apeireth")));
+        assert_eq!(
+            resolve_store_dir(Some(&ws), Some(&app)),
+            Some(ws.join(".apeireth"))
+        );
     }
 
     #[test]

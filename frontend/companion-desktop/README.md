@@ -11,7 +11,7 @@ Svelte 5 + Tauri 2 桌面 App，**独立的薄 Tauri shell + 前端 canonical ga
 
 ```
 ┌─────────────────────────────────────────┐
-│ Tauri shell (Rust)                      │   窗口 + 托盘 + 通知 + 单实例
+│ Tauri shell (Rust)                      │   窗口 + 托盘 + 单实例
 │  frontend/companion-desktop/src-tauri/  │   0 apeireth-* 依赖 (进程隔离)
 │  backend_supervisor.rs                  │   spawn + 探活 + 优雅回收侧车
 └────────────────┬────────────────────────┘
@@ -34,6 +34,8 @@ Svelte 5 + Tauri 2 桌面 App，**独立的薄 Tauri shell + 前端 canonical ga
   API 显式报"不支持"（0 装），不伪造数据
 - **装机实证 (2026-09-08)**：装机 E2E 确认桌面端启动后自行拉起
   `apeireth gateway serve` 并探活——bundled-backend 设计真机验证通过
+
+历史桌面壳的依赖维护目标是保留 Windows、macOS 和 Linux 的窗口与单实例行为，并以全平台锁文件严格审计验证依赖修复。系统通知此前没有调用入口，已移除插件和对应窗口权限。
 
 ## 开发
 
