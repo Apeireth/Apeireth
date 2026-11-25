@@ -59,7 +59,7 @@ jobs:
       #     note: `the 'wasm32-unknown-unknown' target may not be installed`
       #   ⇒ ⇒ （看着像编译错，实为环境错 —— 与本文件 wasm job 2026-10-24 的实测同款）。
       - name: Install Rust stable + wasm32 target
-        uses: dtolnay/rust-toolchain@1.97.1
+        uses: dtolnay/rust-toolchain@1.120.0
         with:
           targets: wasm32-unknown-unknown
 
@@ -140,7 +140,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@1.97.1
+        uses: dtolnay/rust-toolchain@1.120.0
 
       - name: Cache cargo (crates-ui)
         uses: Swatinem/rust-cache@v2
@@ -164,7 +164,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@1.97.1
+        uses: dtolnay/rust-toolchain@1.120.0
 
       - name: cargo fmt --check (crates-ui)
         run: cargo fmt --all -- --check
@@ -183,7 +183,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@1.97.1
+        uses: dtolnay/rust-toolchain@1.120.0
 
       - name: Cache cargo (crates-ui)
         uses: Swatinem/rust-cache@v2
@@ -273,7 +273,7 @@ jobs:
       # ⚠️ 必须显式加 wasm32 target：runner 的默认 toolchain 不含它，
       # 而 dtolnay/rust-toolchain@1.97.1 只装 default host target。
       - name: Install Rust stable + wasm32 target
-        uses: dtolnay/rust-toolchain@1.97.1
+        uses: dtolnay/rust-toolchain@1.120.0
         with:
           targets: wasm32-unknown-unknown
 
@@ -350,7 +350,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@1.97.1
+        uses: dtolnay/rust-toolchain@1.120.0
 
       - name: Cache cargo (crates-ui)
         uses: Swatinem/rust-cache@v2
@@ -391,7 +391,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@1.97.1
+        uses: dtolnay/rust-toolchain@1.120.0
 
       - name: Cache cargo (crates-ui)
         # ⚠️ 初版写 `Swatinem/cargo-cache@v1` ⇒ **该 action 仓库不存在**
@@ -422,7 +422,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Rust stable + wasm32 target
-        uses: dtolnay/rust-toolchain@1.97.1
+        uses: dtolnay/rust-toolchain@1.120.0
         with:
           targets: wasm32-unknown-unknown
 
@@ -534,7 +534,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Rust stable + wasm32 target
-        uses: dtolnay/rust-toolchain@1.97.1
+        uses: dtolnay/rust-toolchain@1.120.0
         with:
           targets: wasm32-unknown-unknown
 

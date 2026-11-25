@@ -53,7 +53,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: dtolnay/rust-toolchain@1.97.1
+      - uses: dtolnay/rust-toolchain@1.120.0
 
       # ⚠️ **语料必须先到位**（2026-11-06 主指挥补）。
       # 此前本 workflow **没有下载语料** ⇒ ⇒ 脚本「缺语料时如实跳过并退出 0」
